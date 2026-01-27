@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { StyleSheet, View, FlatList, Pressable, TextInput, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, RouteProp } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
@@ -20,7 +19,6 @@ type ScreenRouteProp = RouteProp<RootStackParamList, "Chat">;
 
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
   const route = useRoute<ScreenRouteProp>();
   const { theme } = useTheme();
   const { jobId } = route.params;
@@ -117,7 +115,7 @@ export default function ChatScreen() {
             styles.messageList,
             {
               paddingTop: messages.length > 0 ? Spacing.md : 0,
-              paddingBottom: headerHeight + Spacing.md,
+              paddingBottom: Spacing.md,
             },
           ]}
           showsVerticalScrollIndicator={false}

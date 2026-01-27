@@ -217,6 +217,8 @@ export default function RootStackNavigator() {
         component={ChatScreen}
         options={{
           headerTitle: "Messages",
+          headerTransparent: false,
+          headerBlurEffect: undefined,
         }}
       />
       <Stack.Screen
