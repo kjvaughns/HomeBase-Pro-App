@@ -16,12 +16,17 @@ The application is structured into a client-side React Native Expo app and an Ex
 - **Authentication**: Backend-driven user management with email/password signup (bcrypt hashing), JWT-like session management, and a password reset flow. Includes an onboarding process for first property setup.
 - **Access Control**: Three distinct access states: Guest Mode, Homeowner Mode, and Provider Mode, each with tailored functionalities.
 - **AI Integration**: "Ask Homebase AI" feature leverages OpenAI GPT-4o-mini via Replit AI Integrations for instant answers on home maintenance and repairs.
+- **AI Smart Intake**: Natural language problem descriptions are analyzed by AI to classify service categories, generate follow-up questions, estimate price ranges, and match with top providers.
+- **Dynamic Quote Engine**: AI-powered price estimates based on service type, home data, location, and complexity. Generates realistic ranges with material and labor breakdowns.
+- **Smart Provider Matching**: Algorithm ranks providers using trust scores (job completion rate, on-time performance, satisfaction ratings) and shows top 3-5 curated matches instead of full directory.
+- **Provider Capability Tags**: Skill-based tags (Licensed, Insured, 24/7 Emergency, etc.) displayed on provider cards with years of experience.
+- **Service Summary Cards**: AI-generated scope of work summaries with itemized breakdowns shown to homeowners and providers during booking.
 - **Data Management**: Full CRUD operations for appointments, clients, jobs, and invoices, with real-time status tracking and notifications.
 - **Provider Portal**: Comprehensive dashboard displaying real-time statistics (revenue MTD, jobs completed, active clients), a Clients CRM, Schedule management with various calendar views, and a complete invoicing system.
-- **Homeowner Tools**: Includes a Survival Kit, Home Health Score, HouseFax for property history, and a Budgeter.
+- **Homeowner Tools**: Includes a Survival Kit, Home Health Score, HouseFax for property history, Budgeter, and Service History with maintenance reminders.
 - **Design System**: Reusable UI components like `PrimaryButton`, `GlassCard`, `ListRow`, `StatusPill`, `TextField`, `Avatar`, `EmptyState`, `SkeletonLoader`, and various cards for categories, providers, bookings, messages, and stats.
 - **State Management**: Uses Zustand for client-side state management, with separate stores for authentication, homeowner, and provider data.
-- **Database Schema**: PostgreSQL database with Drizzle ORM managing `users`, `homes`, `providers`, `appointments`, `notifications`, `reviews`, `clients`, `jobs`, `invoices`, and `payments` tables.
+- **Database Schema**: PostgreSQL database with Drizzle ORM managing `users`, `homes`, `providers`, `appointments`, `notifications`, `reviews`, `clients`, `jobs`, `invoices`, `payments`, and `maintenanceReminders` tables.
 - **API Endpoints**: A comprehensive set of RESTful API endpoints for authentication, managing homes, appointments, notifications, AI chat, and all provider portal functionalities (clients, jobs, invoices, payments).
 
 ### Project Structure

@@ -289,11 +289,12 @@ export default function HomeScreen() {
             <Pressable
               style={[styles.quickAction, { backgroundColor: theme.cardBackground }]}
               onPress={() => navigation.navigate("ServiceHistory")}
+              testID="quick-action-service-history"
             >
               <View style={[styles.quickActionIcon, { backgroundColor: Colors.accentLight }]}>
                 <Feather name="clock" size={20} color={Colors.accent} />
               </View>
-              <ThemedText style={styles.quickActionText}>History</ThemedText>
+              <ThemedText style={styles.quickActionText}>Service History</ThemedText>
             </Pressable>
 
             <Pressable
