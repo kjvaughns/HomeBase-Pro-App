@@ -128,7 +128,7 @@ export default function ScheduleScreen() {
 
   const renderEmpty = () => (
     <EmptyState
-      image={require("../../../assets/images/empty-jobs.png")}
+      image={require("../../../assets/images/empty-bookings.png")}
       title={filter === "all" ? "No jobs yet" : `No ${filter.replace("_", " ")} jobs`}
       description={
         filter === "all"
