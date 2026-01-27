@@ -4,6 +4,10 @@ import { openai, HOMEBASE_SYSTEM_PROMPT } from "./openai";
 import { storage } from "./storage";
 import { seedDatabase } from "./seed";
 import { insertUserSchema, loginSchema, insertHomeSchema, insertAppointmentSchema, insertProviderSchema, insertClientSchema, insertJobSchema, insertInvoiceSchema, insertPaymentSchema } from "@shared/schema";
+import { stripeService } from "./stripeService";
+import { getStripePublishableKey } from "./stripeClient";
+import { db } from "./db";
+import { sql } from "drizzle-orm";
 
 interface IdParams { id: string; }
 interface UserIdParams { userId: string; }
@@ -814,6 +818,148 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Create payment error:", error);
       res.status(500).json({ error: "Failed to create payment" });
+    }
+  });
+
+  // Stripe Routes
+  app.get("/api/stripe/config", async (req: Request, res: Response) => {
+    try {
+      const publishableKey = await getStripePublishableKey();
+      res.json({ publishableKey });
+    } catch (error) {
+      console.error("Get Stripe config error:", error);
+      res.status(500).json({ error: "Failed to get Stripe configuration" });
+    }
+  });
+
+  app.get("/api/stripe/products", async (req: Request, res: Response) => {
+    try {
+      const result = await db.execute(
+        sql`SELECT * FROM stripe.products WHERE active = true`
+      );
+      res.json({ products: result.rows });
+    } catch (error) {
+      console.error("Get products error:", error);
+      res.status(500).json({ error: "Failed to get products" });
+    }
+  });
+
+  app.get("/api/stripe/products-with-prices", async (req: Request, res: Response) => {
+    try {
+      const result = await db.execute(
+        sql`
+          SELECT 
+            p.id as product_id,
+            p.name as product_name,
+            p.description as product_description,
+            p.active as product_active,
+            p.metadata as product_metadata,
+            pr.id as price_id,
+            pr.unit_amount,
+            pr.currency,
+            pr.recurring,
+            pr.active as price_active
+          FROM stripe.products p
+          LEFT JOIN stripe.prices pr ON pr.product = p.id AND pr.active = true
+          WHERE p.active = true
+          ORDER BY p.id, pr.unit_amount
+        `
+      );
+
+      const productsMap = new Map();
+      for (const row of result.rows as any[]) {
+        if (!productsMap.has(row.product_id)) {
+          productsMap.set(row.product_id, {
+            id: row.product_id,
+            name: row.product_name,
+            description: row.product_description,
+            active: row.product_active,
+            metadata: row.product_metadata,
+            prices: []
+          });
+        }
+        if (row.price_id) {
+          productsMap.get(row.product_id).prices.push({
+            id: row.price_id,
+            unit_amount: row.unit_amount,
+            currency: row.currency,
+            recurring: row.recurring,
+            active: row.price_active,
+          });
+        }
+      }
+
+      res.json({ products: Array.from(productsMap.values()) });
+    } catch (error) {
+      console.error("Get products with prices error:", error);
+      res.status(500).json({ error: "Failed to get products" });
+    }
+  });
+
+  app.post("/api/stripe/create-payment-intent", async (req: Request, res: Response) => {
+    try {
+      const { amount, currency = 'usd', customerId } = req.body;
+      if (!amount) {
+        return res.status(400).json({ error: "Amount is required" });
+      }
+      const paymentIntent = await stripeService.createPaymentIntent(amount, currency, customerId);
+      res.json({ 
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id 
+      });
+    } catch (error) {
+      console.error("Create payment intent error:", error);
+      res.status(500).json({ error: "Failed to create payment intent" });
+    }
+  });
+
+  app.post("/api/stripe/create-customer", async (req: Request, res: Response) => {
+    try {
+      const { email, userId } = req.body;
+      if (!email || !userId) {
+        return res.status(400).json({ error: "Email and userId are required" });
+      }
+      const customer = await stripeService.createCustomer(email, userId);
+      res.json({ customerId: customer.id });
+    } catch (error) {
+      console.error("Create customer error:", error);
+      res.status(500).json({ error: "Failed to create customer" });
+    }
+  });
+
+  app.post("/api/stripe/create-checkout-session", async (req: Request, res: Response) => {
+    try {
+      const { customerId, priceId, successUrl, cancelUrl } = req.body;
+      if (!customerId || !priceId) {
+        return res.status(400).json({ error: "customerId and priceId are required" });
+      }
+      const session = await stripeService.createCheckoutSession(
+        customerId,
+        priceId,
+        successUrl || `${req.protocol}://${req.get('host')}/checkout/success`,
+        cancelUrl || `${req.protocol}://${req.get('host')}/checkout/cancel`
+      );
+      res.json({ url: session.url, sessionId: session.id });
+    } catch (error) {
+      console.error("Create checkout session error:", error);
+      res.status(500).json({ error: "Failed to create checkout session" });
+    }
+  });
+
+  app.post("/api/stripe/customer-portal", async (req: Request, res: Response) => {
+    try {
+      const { customerId, returnUrl } = req.body;
+      if (!customerId) {
+        return res.status(400).json({ error: "customerId is required" });
+      }
+      const session = await stripeService.createCustomerPortalSession(
+        customerId,
+        returnUrl || `${req.protocol}://${req.get('host')}/`
+      );
+      res.json({ url: session.url });
+    } catch (error) {
+      console.error("Create customer portal error:", error);
+      res.status(500).json({ error: "Failed to create customer portal session" });
     }
   });
 
