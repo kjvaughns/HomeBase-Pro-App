@@ -30,7 +30,11 @@ export default function BookingScheduleScreen() {
   const { theme } = useTheme();
   const params = route.params;
 
-  const availability = useHomeownerStore((s) => s.getProviderAvailability(params.providerId));
+  const getProviderAvailability = useHomeownerStore((s) => s.getProviderAvailability);
+  
+  const availability = useMemo(() => {
+    return getProviderAvailability(params.providerId);
+  }, [getProviderAvailability, params.providerId]);
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);

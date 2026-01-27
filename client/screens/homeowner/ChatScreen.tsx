@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { StyleSheet, View, FlatList, Pressable, TextInput, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -25,10 +25,12 @@ export default function ChatScreen() {
   const { theme } = useTheme();
   const { jobId } = route.params;
 
-  const thread = useHomeownerStore((s) => s.getThreadByJobId(jobId));
+  const messageThreads = useHomeownerStore((s) => s.messageThreads);
   const sendMessage = useHomeownerStore((s) => s.sendMessage);
   const markThreadAsRead = useHomeownerStore((s) => s.markThreadAsRead);
   const profile = useHomeownerStore((s) => s.profile);
+  
+  const thread = useMemo(() => messageThreads.find((t) => t.jobId === jobId), [messageThreads, jobId]);
 
   const [inputText, setInputText] = useState("");
   const flatListRef = useRef<FlatList>(null);

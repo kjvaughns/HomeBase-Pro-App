@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { StyleSheet, View, ScrollView, Pressable, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -28,9 +28,11 @@ export default function PaymentScreen() {
   const { theme } = useTheme();
   const { jobId, invoiceId } = route.params;
 
-  const invoice = useHomeownerStore((s) => s.getInvoiceById(invoiceId));
+  const invoices = useHomeownerStore((s) => s.invoices);
   const profile = useHomeownerStore((s) => s.profile);
   const payInvoice = useHomeownerStore((s) => s.payInvoice);
+  
+  const invoice = useMemo(() => invoices.find((i) => i.id === invoiceId), [invoices, invoiceId]);
 
   const paymentMethods = profile?.paymentMethods || [];
   const defaultMethod = paymentMethods.find((m) => m.isDefault);

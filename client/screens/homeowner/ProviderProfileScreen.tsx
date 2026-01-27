@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { StyleSheet, View, ScrollView, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -34,10 +34,18 @@ export default function ProviderProfileScreen() {
   const { theme } = useTheme();
   const { providerId } = route.params;
 
-  const provider = useHomeownerStore((s) => s.getProviderById(providerId));
-  const reviews = useHomeownerStore((s) => s.getProviderReviews(providerId));
+  const providers = useHomeownerStore((s) => s.providers);
+  const allReviews = useHomeownerStore((s) => s.reviews);
   const categories = useHomeownerStore((s) => s.categories);
   const { isAuthenticated, login } = useAuthStore();
+  
+  const provider = useMemo(() => {
+    return providers.find((p) => p.id === providerId);
+  }, [providers, providerId]);
+  
+  const reviews = useMemo(() => {
+    return allReviews.filter((r) => r.providerId === providerId);
+  }, [allReviews, providerId]);
 
   const [activeTab, setActiveTab] = useState<TabType>("about");
   const [showAccountGate, setShowAccountGate] = useState(false);

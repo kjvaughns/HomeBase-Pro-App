@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { StyleSheet, View, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -41,9 +41,11 @@ export default function BookingConfirmScreen() {
   const { theme } = useTheme();
   const params = route.params;
 
-  const provider = useHomeownerStore((s) => s.getProviderById(params.providerId));
+  const providers = useHomeownerStore((s) => s.providers);
   const profile = useHomeownerStore((s) => s.profile);
   const createBooking = useHomeownerStore((s) => s.createBooking);
+  
+  const provider = useMemo(() => providers.find((p) => p.id === params.providerId), [providers, params.providerId]);
 
   const address = profile?.addresses.find((a) => a.id === params.addressId);
 

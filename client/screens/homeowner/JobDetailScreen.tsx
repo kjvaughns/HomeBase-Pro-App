@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { StyleSheet, View, ScrollView, Pressable, Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -42,11 +42,16 @@ export default function JobDetailScreen() {
   const { theme } = useTheme();
   const { jobId } = route.params;
 
-  const job = useHomeownerStore((s) => s.getJobById(jobId));
-  const invoice = useHomeownerStore((s) => s.getInvoiceByJobId(jobId));
-  const receipt = useHomeownerStore((s) => s.getReceiptByJobId(jobId));
-  const review = useHomeownerStore((s) => s.getReviewByJobId(jobId));
+  const jobs = useHomeownerStore((s) => s.jobs);
+  const invoices = useHomeownerStore((s) => s.invoices);
+  const receipts = useHomeownerStore((s) => s.receipts);
+  const allReviews = useHomeownerStore((s) => s.reviews);
   const advanceJobStatus = useHomeownerStore((s) => s.advanceJobStatus);
+  
+  const job = useMemo(() => jobs.find((j) => j.id === jobId), [jobs, jobId]);
+  const invoice = useMemo(() => invoices.find((i) => i.jobId === jobId), [invoices, jobId]);
+  const receipt = useMemo(() => receipts.find((r) => r.jobId === jobId), [receipts, jobId]);
+  const review = useMemo(() => allReviews.find((r) => r.jobId === jobId), [allReviews, jobId]);
 
   if (!job) {
     return (

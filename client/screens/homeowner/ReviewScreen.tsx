@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { StyleSheet, View, Pressable, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -30,8 +30,10 @@ export default function ReviewScreen() {
   const { theme } = useTheme();
   const { jobId } = route.params;
 
-  const job = useHomeownerStore((s) => s.getJobById(jobId));
+  const jobs = useHomeownerStore((s) => s.jobs);
   const submitReview = useHomeownerStore((s) => s.submitReview);
+  
+  const job = useMemo(() => jobs.find((j) => j.id === jobId), [jobs, jobId]);
 
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");

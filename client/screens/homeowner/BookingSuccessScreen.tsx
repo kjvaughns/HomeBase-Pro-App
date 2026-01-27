@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRoute, useNavigation, RouteProp, CommonActions } from "@react-navigation/native";
@@ -26,7 +26,8 @@ export default function BookingSuccessScreen() {
   const { theme } = useTheme();
   const { jobId } = route.params;
 
-  const job = useHomeownerStore((s) => s.getJobById(jobId));
+  const jobs = useHomeownerStore((s) => s.jobs);
+  const job = useMemo(() => jobs.find((j) => j.id === jobId), [jobs, jobId]);
 
   useEffect(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
