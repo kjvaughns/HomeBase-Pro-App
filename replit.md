@@ -48,7 +48,7 @@ Homebase is a unified iOS mobile app that combines homeowner and provider portal
 ### Components Built
 - PrimaryButton, SecondaryButton
 - GlassCard with blur effect
-- ListRow, StatusPill
+- ListRow, StatusPill (with cancelled status support)
 - TextField with icons
 - Avatar with initials fallback
 - EmptyState with illustrations
@@ -57,6 +57,7 @@ Homebase is a unified iOS mobile app that combines homeowner and provider portal
 - MessageRow, LeadCard, JobCard, StatCard
 - AccountGateModal for authentication gating
 - SectionHeader
+- FilterChips (generic, reusable filter chip component with optional counts and scrollable modes)
 
 ### Screens Implemented
 
@@ -74,11 +75,11 @@ Homebase is a unified iOS mobile app that combines homeowner and provider portal
 - BudgeterScreen - Home maintenance budget tracking
 
 **Provider Portal:**
-- ProviderHomeScreen - Dashboard with stats and upcoming jobs
-- LeadsScreen - Lead cards with contact/decline actions
-- ScheduleScreen - Job list with filter tabs
-- MoneyScreen - Earnings, balance, transaction history
-- ProviderMoreScreen - Business settings, role switching
+- ProviderHomeScreen - Dashboard with Today's Summary (4 metrics), earnings card, rating, upcoming/in-progress jobs
+- LeadsScreen - Filter chips with counts (All, New, Contacted, Quoted, Won, Lost), lead cards with contact/decline actions
+- ScheduleScreen - Stats card (scheduled/in-progress/completed), filter chips, job cards
+- MoneyScreen - Balance card with withdraw button, jobs/avg stats, transaction list with filter (All, Invoices, Payouts)
+- ProviderMoreScreen - Provider profile with rating, availability toggle, notifications toggle, business settings
 
 **Shared Screens:**
 - RoleSwitchConfirmationScreen - Confirmation before switching roles
@@ -120,6 +121,7 @@ client/
 │   └── provider/          # Provider portal screens
 └── state/
     ├── authStore.ts       # Zustand auth state
+    ├── providerStore.ts   # Zustand provider state (leads, jobs, invoices, payouts) with AsyncStorage persistence
     └── mockData.ts        # Mock data for development
 
 server/
@@ -148,6 +150,16 @@ assets/
 - Clean, minimal design with proper spacing
 
 ## Recent Updates (January 27, 2026)
+- **Provider Portal Enhancements:**
+  - Created providerStore with comprehensive mock data: 26 leads (all statuses), 24 jobs, 5 message threads, 12 invoices, 3 payouts
+  - All provider screens now use providerStore with AsyncStorage persistence
+  - Created FilterChips component for consistent filtering UI across screens
+  - ProviderHomeScreen: Today's Summary with 4 metrics (leads, scheduled, messages, pending earnings)
+  - LeadsScreen: Filter bar with counts, contact/decline actions
+  - ScheduleScreen: Stats card + filter chips for job management
+  - MoneyScreen: Balance summary, withdraw button, transaction history with invoices/payouts
+  - ProviderMoreScreen: Fixed double-toggle bug using absolute positioning pattern
+  - StatusPill now supports "cancelled" status type
 - Fixed infinite loop issues in Zustand selectors across 9+ screens by using useMemo with direct array access
 - Pattern: `const items = useStore(s => s.items); const item = useMemo(() => items.find(...), [items, id]);`
 - All screens now properly use Zustand store data instead of mockData imports
