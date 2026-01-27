@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, View, ScrollView, Switch, Alert } from "react-native";
+import { StyleSheet, View, ScrollView, Switch } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -15,7 +15,7 @@ import { GlassCard } from "@/components/GlassCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { AccountGateModal } from "@/components/AccountGateModal";
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, Colors, BorderRadius } from "@/constants/theme";
+import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 
 export default function MoreScreen() {
@@ -27,11 +27,8 @@ export default function MoreScreen() {
   const {
     isAuthenticated,
     user,
-    activeRole,
-    providerProfile,
     hasProviderProfile,
     canAccessProviderMode,
-    setActiveRole,
     login,
     logout,
   } = useAuthStore();
@@ -70,11 +67,8 @@ export default function MoreScreen() {
             <View style={styles.guestProfile}>
               <Avatar size="large" />
               <View style={styles.guestInfo}>
-                <ThemedText type="h2">Welcome to Homebase</ThemedText>
-                <ThemedText
-                  type="body"
-                  style={{ color: theme.textSecondary, marginTop: Spacing.xs }}
-                >
+                <ThemedText style={styles.welcomeTitle}>Welcome to Homebase</ThemedText>
+                <ThemedText style={[styles.welcomeSubtitle, { color: theme.textSecondary }]}>
                   Sign in to manage your home services
                 </ThemedText>
                 <PrimaryButton
@@ -92,22 +86,22 @@ export default function MoreScreen() {
 
     return (
       <Animated.View entering={FadeInDown.delay(100).duration(400)}>
-        <GlassCard style={styles.profileCard}>
+        <GlassCard style={styles.profileCard} onPress={() => {}}>
           <View style={styles.profileContent}>
             <Avatar uri={user?.avatarUrl} name={user?.name} size="large" />
             <View style={styles.profileInfo}>
-              <ThemedText type="h2">{user?.name}</ThemedText>
-              <ThemedText type="small" style={{ color: theme.textSecondary }}>
+              <ThemedText style={styles.profileName}>{user?.name}</ThemedText>
+              <ThemedText style={[styles.profileEmail, { color: theme.textSecondary }]}>
                 {user?.email}
               </ThemedText>
               <View style={styles.roleIndicator}>
                 <Feather name="home" size={14} color={Colors.accent} />
-                <ThemedText type="caption" style={{ color: Colors.accent }}>
+                <ThemedText style={styles.roleText}>
                   Homeowner
                 </ThemedText>
               </View>
             </View>
-            <Feather name="edit-2" size={20} color={theme.textSecondary} />
+            <Feather name="chevron-right" size={20} color={theme.textTertiary} />
           </View>
         </GlassCard>
       </Animated.View>
@@ -118,9 +112,9 @@ export default function MoreScreen() {
     <ThemedView style={styles.container}>
       <ScrollView
         contentContainerStyle={{
-          paddingTop: headerHeight + Spacing.xl,
+          paddingTop: headerHeight + Spacing.lg,
           paddingBottom: tabBarHeight + Spacing.xl,
-          paddingHorizontal: Spacing.lg,
+          paddingHorizontal: Spacing.screenPadding,
         }}
         scrollIndicatorInsets={{ bottom: insets.bottom }}
         showsVerticalScrollIndicator={false}
@@ -130,65 +124,56 @@ export default function MoreScreen() {
         {isAuthenticated ? (
           <>
             <Animated.View entering={FadeInDown.delay(200).duration(400)}>
-              <ThemedText type="label" style={styles.sectionTitle}>
+              <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
                 Account
               </ThemedText>
-              <View
-                style={[
-                  styles.section,
-                  { backgroundColor: theme.backgroundDefault },
-                ]}
-              >
+              <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
                 <ListRow
                   title="Payment Methods"
                   leftIcon="credit-card"
                   onPress={() => {}}
+                  isFirst
                 />
-                <View style={[styles.divider, { backgroundColor: theme.border }]} />
                 <ListRow
                   title="Addresses"
                   leftIcon="map-pin"
                   onPress={() => {}}
                 />
-                <View style={[styles.divider, { backgroundColor: theme.border }]} />
                 <ListRow
                   title="Saved Providers"
                   leftIcon="heart"
                   onPress={() => {}}
+                  isLast
                 />
               </View>
             </Animated.View>
 
             <Animated.View entering={FadeInDown.delay(300).duration(400)}>
-              <ThemedText type="label" style={styles.sectionTitle}>
+              <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
                 Settings
               </ThemedText>
-              <View
-                style={[
-                  styles.section,
-                  { backgroundColor: theme.backgroundDefault },
-                ]}
-              >
+              <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
                 <ListRow
                   title="Notifications"
                   leftIcon="bell"
                   showChevron={false}
+                  isFirst
                   rightElement={
                     <Switch
                       value={notificationsEnabled}
                       onValueChange={setNotificationsEnabled}
-                      trackColor={{ false: theme.border, true: Colors.accent }}
+                      trackColor={{ false: theme.backgroundTertiary, true: Colors.accent }}
                       thumbColor="#FFFFFF"
                     />
                   }
                 />
-                <View style={[styles.divider, { backgroundColor: theme.border }]} />
                 {hasProviderProfile() && canAccessProviderMode() ? (
                   <ListRow
                     title="Switch to Provider Mode"
                     subtitle="Access your provider dashboard"
                     leftIcon="briefcase"
                     onPress={handleSwitchToProvider}
+                    isLast
                   />
                 ) : (
                   <ListRow
@@ -196,6 +181,7 @@ export default function MoreScreen() {
                     subtitle="Earn money by helping homeowners"
                     leftIcon="briefcase"
                     onPress={handleBecomeProvider}
+                    isLast
                   />
                 )}
               </View>
@@ -204,65 +190,53 @@ export default function MoreScreen() {
         ) : null}
 
         <Animated.View entering={FadeInDown.delay(400).duration(400)}>
-          <ThemedText type="label" style={styles.sectionTitle}>
+          <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
             Support
           </ThemedText>
-          <View
-            style={[
-              styles.section,
-              { backgroundColor: theme.backgroundDefault },
-            ]}
-          >
+          <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
             <ListRow
               title="Help Center"
               leftIcon="help-circle"
               onPress={() => {}}
+              isFirst
             />
-            <View style={[styles.divider, { backgroundColor: theme.border }]} />
             <ListRow
               title="Contact Us"
               leftIcon="message-circle"
               onPress={() => {}}
             />
-            <View style={[styles.divider, { backgroundColor: theme.border }]} />
             <ListRow
               title="Terms of Service"
               leftIcon="file-text"
               onPress={() => {}}
             />
-            <View style={[styles.divider, { backgroundColor: theme.border }]} />
             <ListRow
               title="Privacy Policy"
               leftIcon="shield"
               onPress={() => {}}
+              isLast
             />
           </View>
         </Animated.View>
 
         {isAuthenticated ? (
           <Animated.View entering={FadeInDown.delay(500).duration(400)}>
-            <View
-              style={[
-                styles.section,
-                { backgroundColor: theme.backgroundDefault, marginTop: Spacing.xl },
-              ]}
-            >
+            <View style={[styles.section, { backgroundColor: theme.cardBackground, marginTop: Spacing.lg }]}>
               <ListRow
                 title="Sign Out"
                 leftIcon="log-out"
                 destructive
                 showChevron={false}
                 onPress={handleLogout}
+                isFirst
+                isLast
               />
             </View>
           </Animated.View>
         ) : null}
 
         <Animated.View entering={FadeInDown.delay(600).duration(400)}>
-          <ThemedText
-            type="caption"
-            style={[styles.version, { color: theme.textTertiary }]}
-          >
+          <ThemedText style={[styles.version, { color: theme.textTertiary }]}>
             Version 1.0.0
           </ThemedText>
         </Animated.View>
@@ -292,6 +266,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: Spacing.lg,
   },
+  welcomeTitle: {
+    ...Typography.title2,
+  },
+  welcomeSubtitle: {
+    ...Typography.subhead,
+    marginTop: Spacing.xs,
+  },
   signInButton: {
     marginTop: Spacing.lg,
     minWidth: 200,
@@ -304,27 +285,39 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: Spacing.lg,
   },
+  profileName: {
+    ...Typography.title3,
+  },
+  profileEmail: {
+    ...Typography.subhead,
+    marginTop: 2,
+  },
   roleIndicator: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.xs,
     marginTop: Spacing.xs,
   },
+  roleText: {
+    ...Typography.caption1,
+    color: Colors.accent,
+    fontWeight: "500",
+  },
   sectionTitle: {
+    ...Typography.footnote,
+    fontWeight: "500",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
     marginBottom: Spacing.sm,
     marginLeft: Spacing.xs,
-    color: "#6B7280",
   },
   section: {
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.card,
     marginBottom: Spacing.lg,
     overflow: "hidden",
   },
-  divider: {
-    height: 1,
-    marginLeft: Spacing.lg + 36 + Spacing.md,
-  },
   version: {
+    ...Typography.caption1,
     textAlign: "center",
     marginTop: Spacing.xl,
   },

@@ -3,8 +3,7 @@ import { StyleSheet, View, Pressable } from "react-native";
 import { Feather } from "@expo/vector-icons";
 
 import { ThemedText } from "@/components/ThemedText";
-import { useTheme } from "@/hooks/useTheme";
-import { Spacing, Colors } from "@/constants/theme";
+import { Spacing, Colors, Typography } from "@/constants/theme";
 
 interface SectionHeaderProps {
   title: string;
@@ -17,21 +16,20 @@ export function SectionHeader({
   actionLabel,
   onAction,
 }: SectionHeaderProps) {
-  const { theme } = useTheme();
-
   return (
     <View style={styles.container}>
-      <ThemedText type="h3">{title}</ThemedText>
+      <ThemedText style={styles.title}>{title}</ThemedText>
 
       {actionLabel && onAction ? (
         <Pressable
           onPress={onAction}
+          hitSlop={8}
           style={({ pressed }) => [
             styles.action,
             { opacity: pressed ? 0.7 : 1 },
           ]}
         >
-          <ThemedText type="label" style={{ color: Colors.accent }}>
+          <ThemedText style={styles.actionText}>
             {actionLabel}
           </ThemedText>
           <Feather name="chevron-right" size={16} color={Colors.accent} />
@@ -48,9 +46,18 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: Spacing.md,
   },
+  title: {
+    ...Typography.title3,
+    fontWeight: "600",
+  },
   action: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.xs,
+    gap: Spacing.xxs,
+  },
+  actionText: {
+    ...Typography.subhead,
+    color: Colors.accent,
+    fontWeight: "500",
   },
 });

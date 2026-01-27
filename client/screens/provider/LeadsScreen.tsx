@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, FlatList, RefreshControl, View } from "react-native";
+import { StyleSheet, FlatList, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -10,7 +10,6 @@ import { ThemedView } from "@/components/ThemedView";
 import { LeadCard } from "@/components/LeadCard";
 import { EmptyState } from "@/components/EmptyState";
 import { SkeletonCard } from "@/components/SkeletonLoader";
-import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors } from "@/constants/theme";
 import { mockLeads, Lead } from "@/state/mockData";
 
@@ -18,7 +17,6 @@ export default function LeadsScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
-  const { theme } = useTheme();
 
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -75,9 +73,9 @@ export default function LeadsScreen() {
           renderItem={() => <SkeletonCard />}
           keyExtractor={(item) => item.toString()}
           contentContainerStyle={{
-            paddingTop: headerHeight + Spacing.xl,
+            paddingTop: headerHeight + Spacing.lg,
             paddingBottom: tabBarHeight + Spacing.xl,
-            paddingHorizontal: Spacing.lg,
+            paddingHorizontal: Spacing.screenPadding,
           }}
         />
       </ThemedView>
@@ -92,9 +90,9 @@ export default function LeadsScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={[
           {
-            paddingTop: headerHeight + Spacing.xl,
+            paddingTop: headerHeight + Spacing.lg,
             paddingBottom: tabBarHeight + Spacing.xl,
-            paddingHorizontal: Spacing.lg,
+            paddingHorizontal: Spacing.screenPadding,
           },
           leads.length === 0 && styles.emptyContainer,
         ]}

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, View, FlatList, Pressable, RefreshControl } from "react-native";
+import { StyleSheet, View, FlatList, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -14,7 +14,7 @@ import { ProviderCard } from "@/components/ProviderCard";
 import { SectionHeader } from "@/components/SectionHeader";
 import { AccountGateModal } from "@/components/AccountGateModal";
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, Colors } from "@/constants/theme";
+import { Spacing, Colors, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import {
   serviceCategories,
@@ -75,10 +75,10 @@ export default function FindScreen() {
         style={styles.locationRow}
       >
         <Feather name="map-pin" size={16} color={Colors.accent} />
-        <ThemedText type="label" style={{ color: Colors.accent }}>
+        <ThemedText style={styles.locationText}>
           San Francisco, CA
         </ThemedText>
-        <Feather name="chevron-down" size={16} color={Colors.accent} />
+        <Feather name="chevron-down" size={14} color={Colors.accent} />
       </Animated.View>
 
       <Animated.View entering={FadeInDown.delay(300).duration(400)}>
@@ -89,7 +89,7 @@ export default function FindScreen() {
         entering={FadeInDown.delay(400).duration(400)}
         style={styles.categoriesGrid}
       >
-        {serviceCategories.slice(0, 8).map((category, index) => (
+        {serviceCategories.slice(0, 8).map((category) => (
           <View key={category.id} style={styles.categoryItem}>
             <CategoryCard
               name={category.name}
@@ -136,9 +136,9 @@ export default function FindScreen() {
         keyExtractor={(item) => item.id}
         ListHeaderComponent={renderHeader}
         contentContainerStyle={{
-          paddingTop: headerHeight + Spacing.xl,
+          paddingTop: headerHeight + Spacing.lg,
           paddingBottom: tabBarHeight + Spacing.xl,
-          paddingHorizontal: Spacing.lg,
+          paddingHorizontal: Spacing.screenPadding,
         }}
         scrollIndicatorInsets={{ bottom: insets.bottom }}
         showsVerticalScrollIndicator={false}
@@ -173,13 +173,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: Spacing.xs,
     marginTop: Spacing.md,
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.sectionGap,
+  },
+  locationText: {
+    ...Typography.subhead,
+    color: Colors.accent,
+    fontWeight: "500",
   },
   categoriesGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: Spacing.md,
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.sectionGap,
   },
   categoryItem: {
     width: "47%",

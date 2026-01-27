@@ -14,7 +14,7 @@ import { StatCard } from "@/components/StatCard";
 import { JobCard } from "@/components/JobCard";
 import { SectionHeader } from "@/components/SectionHeader";
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, Colors } from "@/constants/theme";
+import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { providerStats, mockJobs } from "@/state/mockData";
 
@@ -23,7 +23,7 @@ export default function ProviderHomeScreen() {
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
   const { theme } = useTheme();
-  const { user, providerProfile } = useAuthStore();
+  const { user } = useAuthStore();
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -45,9 +45,9 @@ export default function ProviderHomeScreen() {
     <ThemedView style={styles.container}>
       <ScrollView
         contentContainerStyle={{
-          paddingTop: headerHeight + Spacing.xl,
+          paddingTop: headerHeight + Spacing.lg,
           paddingBottom: tabBarHeight + Spacing.xl,
-          paddingHorizontal: Spacing.lg,
+          paddingHorizontal: Spacing.screenPadding,
         }}
         scrollIndicatorInsets={{ bottom: insets.bottom }}
         showsVerticalScrollIndicator={false}
@@ -64,10 +64,10 @@ export default function ProviderHomeScreen() {
             <View style={styles.greetingContent}>
               <Avatar uri={user?.avatarUrl} name={user?.name} size="medium" />
               <View style={styles.greetingText}>
-                <ThemedText type="body" style={{ color: theme.textSecondary }}>
+                <ThemedText style={[styles.greetingLabel, { color: theme.textSecondary }]}>
                   {getGreeting()},
                 </ThemedText>
-                <ThemedText type="h2">{user?.name?.split(" ")[0]}</ThemedText>
+                <ThemedText style={styles.greetingName}>{user?.name?.split(" ")[0]}</ThemedText>
               </View>
               <View style={styles.notificationIcon}>
                 <Feather name="bell" size={24} color={theme.text} />
@@ -115,63 +115,35 @@ export default function ProviderHomeScreen() {
           <GlassCard style={styles.quickActions}>
             <View style={styles.quickActionsRow}>
               <View style={styles.quickAction}>
-                <View
-                  style={[
-                    styles.quickActionIcon,
-                    { backgroundColor: `${Colors.accent}15` },
-                  ]}
-                >
-                  <Feather name="users" size={20} color={Colors.accent} />
+                <View style={[styles.quickActionIcon, { backgroundColor: Colors.accentLight }]}>
+                  <Feather name="users" size={Spacing.iconSizeSmall} color={Colors.accent} />
                 </View>
-                <ThemedText type="label">{providerStats.newLeads}</ThemedText>
-                <ThemedText
-                  type="caption"
-                  style={{ color: theme.textSecondary }}
-                >
+                <ThemedText style={styles.quickActionValue}>{providerStats.newLeads}</ThemedText>
+                <ThemedText style={[styles.quickActionLabel, { color: theme.textSecondary }]}>
                   New Leads
                 </ThemedText>
               </View>
 
-              <View
-                style={[styles.quickActionDivider, { backgroundColor: theme.border }]}
-              />
+              <View style={[styles.quickActionDivider, { backgroundColor: theme.separator }]} />
 
               <View style={styles.quickAction}>
-                <View
-                  style={[
-                    styles.quickActionIcon,
-                    { backgroundColor: `${Colors.accent}15` },
-                  ]}
-                >
-                  <Feather name="calendar" size={20} color={Colors.accent} />
+                <View style={[styles.quickActionIcon, { backgroundColor: Colors.accentLight }]}>
+                  <Feather name="calendar" size={Spacing.iconSizeSmall} color={Colors.accent} />
                 </View>
-                <ThemedText type="label">{providerStats.upcomingJobs}</ThemedText>
-                <ThemedText
-                  type="caption"
-                  style={{ color: theme.textSecondary }}
-                >
+                <ThemedText style={styles.quickActionValue}>{providerStats.upcomingJobs}</ThemedText>
+                <ThemedText style={[styles.quickActionLabel, { color: theme.textSecondary }]}>
                   Upcoming
                 </ThemedText>
               </View>
 
-              <View
-                style={[styles.quickActionDivider, { backgroundColor: theme.border }]}
-              />
+              <View style={[styles.quickActionDivider, { backgroundColor: theme.separator }]} />
 
               <View style={styles.quickAction}>
-                <View
-                  style={[
-                    styles.quickActionIcon,
-                    { backgroundColor: `${Colors.accent}15` },
-                  ]}
-                >
-                  <Feather name="percent" size={20} color={Colors.accent} />
+                <View style={[styles.quickActionIcon, { backgroundColor: Colors.accentLight }]}>
+                  <Feather name="percent" size={Spacing.iconSizeSmall} color={Colors.accent} />
                 </View>
-                <ThemedText type="label">{providerStats.responseRate}%</ThemedText>
-                <ThemedText
-                  type="caption"
-                  style={{ color: theme.textSecondary }}
-                >
+                <ThemedText style={styles.quickActionValue}>{providerStats.responseRate}%</ThemedText>
+                <ThemedText style={[styles.quickActionLabel, { color: theme.textSecondary }]}>
                   Response
                 </ThemedText>
               </View>
@@ -215,13 +187,20 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: Spacing.md,
   },
+  greetingLabel: {
+    ...Typography.subhead,
+  },
+  greetingName: {
+    ...Typography.title2,
+  },
   notificationIcon: {
     position: "relative",
+    padding: Spacing.xs,
   },
   notificationBadge: {
     position: "absolute",
-    top: -2,
-    right: -2,
+    top: 2,
+    right: 2,
     width: 10,
     height: 10,
     borderRadius: 5,
@@ -235,7 +214,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   quickActions: {
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.sectionGap,
   },
   quickActionsRow: {
     flexDirection: "row",
@@ -247,15 +226,22 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   quickActionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.iconContainer,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: Spacing.xs,
   },
+  quickActionValue: {
+    ...Typography.headline,
+    marginBottom: 2,
+  },
+  quickActionLabel: {
+    ...Typography.caption1,
+  },
   quickActionDivider: {
-    width: 1,
-    height: 60,
+    width: StyleSheet.hairlineWidth,
+    height: 56,
   },
 });
