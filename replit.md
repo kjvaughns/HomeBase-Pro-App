@@ -1,7 +1,7 @@
 # Homebase - Unified Home Services App
 
 ## Overview
-Homebase is a unified iOS mobile app that combines homeowner and provider portals into one seamless experience. Built with Expo React Native and Express.js backend with PostgreSQL database.
+Homebase is a unified iOS mobile app that combines homeowner and provider portals into one seamless experience. Built with Expo React Native and Express.js backend with Supabase PostgreSQL database.
 
 ## Current State
 - **Version**: 1.2.0
@@ -99,6 +99,12 @@ Homebase is a unified iOS mobile app that combines homeowner and provider portal
 - ProviderHomeScreen, ClientsScreen, ClientDetailScreen, ScheduleScreen, MoneyScreen, ProviderMoreScreen
 
 ## Database Schema
+
+### Database Configuration
+- **Provider**: Supabase (PostgreSQL)
+- **Connection**: Uses connection pooler (Transaction mode) via SUPABASE_DATABASE_URL
+- **ORM**: Drizzle ORM with SSL enabled
+- **Pooler endpoint**: aws-1-us-east-2.pooler.supabase.com:5432
 
 ### Tables (PostgreSQL with Drizzle ORM)
 - **users**: id, email, password, firstName, lastName, phone, isProvider, createdAt, updatedAt
