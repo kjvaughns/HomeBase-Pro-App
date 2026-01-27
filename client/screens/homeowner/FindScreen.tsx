@@ -17,6 +17,7 @@ import { ProviderCard } from "@/components/ProviderCard";
 import { SectionHeader } from "@/components/SectionHeader";
 import { AccountGateModal } from "@/components/AccountGateModal";
 import { GlassCard } from "@/components/GlassCard";
+import { StatusPill } from "@/components/StatusPill";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
@@ -35,6 +36,15 @@ interface HomeTool {
   description: string;
   icon: keyof typeof Feather.glyphMap;
   screen: keyof RootStackParamList;
+}
+
+interface RecentActivity {
+  id: string;
+  type: "booking" | "quote" | "message";
+  title: string;
+  provider: string;
+  date: string;
+  status: "completed" | "upcoming" | "pending";
 }
 
 const HOME_TOOLS: HomeTool[] = [
@@ -68,13 +78,40 @@ const HOME_TOOLS: HomeTool[] = [
   },
 ];
 
+const RECENT_ACTIVITY: RecentActivity[] = [
+  {
+    id: "1",
+    type: "booking",
+    title: "Plumbing Repair",
+    provider: "Mike's Plumbing",
+    date: "Jan 20, 2026",
+    status: "completed",
+  },
+  {
+    id: "2",
+    type: "booking",
+    title: "HVAC Maintenance",
+    provider: "CoolAir Services",
+    date: "Feb 5, 2026",
+    status: "upcoming",
+  },
+  {
+    id: "3",
+    type: "quote",
+    title: "Kitchen Remodel",
+    provider: "HomeReno Pro",
+    date: "Jan 25, 2026",
+    status: "pending",
+  },
+];
+
 export default function FindScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
-  const { isAuthenticated, login } = useAuthStore();
+  const { isAuthenticated, user, login } = useAuthStore();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
@@ -112,6 +149,32 @@ export default function FindScreen() {
       email: "alex@example.com",
     });
     setShowAccountGate(false);
+  };
+
+  const getStatusVariant = (status: RecentActivity["status"]) => {
+    switch (status) {
+      case "completed":
+        return "success";
+      case "upcoming":
+        return "info";
+      case "pending":
+        return "warning";
+      default:
+        return "neutral";
+    }
+  };
+
+  const getActivityIcon = (type: RecentActivity["type"]): keyof typeof Feather.glyphMap => {
+    switch (type) {
+      case "booking":
+        return "calendar";
+      case "quote":
+        return "file-text";
+      case "message":
+        return "message-circle";
+      default:
+        return "circle";
+    }
   };
 
   const renderHeader = () => (
@@ -157,12 +220,108 @@ export default function FindScreen() {
         <Feather name="chevron-down" size={14} color={Colors.accent} />
       </Animated.View>
 
-      <Animated.View entering={FadeInDown.delay(250).duration(400)}>
+      {isAuthenticated ? (
+        <>
+          <Animated.View entering={FadeInDown.delay(250).duration(400)}>
+            <SectionHeader title="Recent Activity" actionLabel="View All" onAction={() => {}} />
+          </Animated.View>
+
+          <Animated.View
+            entering={FadeInDown.delay(300).duration(400)}
+            style={styles.activityContainer}
+          >
+            {RECENT_ACTIVITY.map((activity, index) => (
+              <Pressable
+                key={activity.id}
+                style={[
+                  styles.activityCard,
+                  {
+                    backgroundColor: theme.cardBackground,
+                    borderColor: theme.borderLight,
+                  },
+                ]}
+              >
+                <View style={[styles.activityIcon, { backgroundColor: Colors.accentLight }]}>
+                  <Feather name={getActivityIcon(activity.type)} size={16} color={Colors.accent} />
+                </View>
+                <View style={styles.activityContent}>
+                  <ThemedText style={styles.activityTitle}>{activity.title}</ThemedText>
+                  <ThemedText style={[styles.activityProvider, { color: theme.textSecondary }]}>
+                    {activity.provider}
+                  </ThemedText>
+                </View>
+                <View style={styles.activityRight}>
+                  <StatusPill
+                    label={activity.status.charAt(0).toUpperCase() + activity.status.slice(1)}
+                    variant={getStatusVariant(activity.status) as any}
+                    size="small"
+                  />
+                  <ThemedText style={[styles.activityDate, { color: theme.textTertiary }]}>
+                    {activity.date}
+                  </ThemedText>
+                </View>
+              </Pressable>
+            ))}
+          </Animated.View>
+        </>
+      ) : null}
+
+      <Animated.View entering={FadeInDown.delay(isAuthenticated ? 350 : 250).duration(400)}>
+        <SectionHeader title="Services" actionLabel="See All" onAction={() => {}} />
+      </Animated.View>
+
+      <Animated.View
+        entering={FadeInDown.delay(isAuthenticated ? 400 : 300).duration(400)}
+        style={styles.categoriesGrid}
+      >
+        {serviceCategories.slice(0, 6).map((category) => (
+          <View key={category.id} style={styles.categoryItem}>
+            <CategoryCard
+              name={category.name}
+              icon={category.icon as any}
+              onPress={() => handleCategoryPress(category)}
+              testID={`category-${category.id}`}
+              compact
+            />
+          </View>
+        ))}
+      </Animated.View>
+
+      <Animated.View entering={FadeInDown.delay(isAuthenticated ? 450 : 350).duration(400)}>
+        <SectionHeader
+          title="Featured Pros"
+          actionLabel="See All"
+          onAction={() => {}}
+        />
+      </Animated.View>
+    </View>
+  );
+
+  const renderProvider = ({ item, index }: { item: typeof featuredProviders[0]; index: number }) => (
+    <Animated.View entering={FadeInDown.delay((isAuthenticated ? 500 : 400) + index * 100).duration(400)}>
+      <ProviderCard
+        name={item.name}
+        businessName={item.businessName}
+        avatarUrl={item.avatarUrl}
+        rating={item.rating}
+        reviewCount={item.reviewCount}
+        services={item.services}
+        hourlyRate={item.hourlyRate}
+        verified={item.verified}
+        onPress={handleProviderPress}
+        testID={`provider-${item.id}`}
+      />
+    </Animated.View>
+  );
+
+  const renderFooter = () => (
+    <View style={styles.footerContent}>
+      <Animated.View entering={FadeInDown.delay(700).duration(400)}>
         <SectionHeader title="Homeowner Tools" />
       </Animated.View>
 
       <Animated.View
-        entering={FadeInDown.delay(300).duration(400)}
+        entering={FadeInDown.delay(750).duration(400)}
         style={styles.toolsGrid}
       >
         {HOME_TOOLS.map((tool) => (
@@ -181,53 +340,7 @@ export default function FindScreen() {
           </Pressable>
         ))}
       </Animated.View>
-
-      <Animated.View entering={FadeInDown.delay(350).duration(400)}>
-        <SectionHeader title="Services" actionLabel="See All" onAction={() => {}} />
-      </Animated.View>
-
-      <Animated.View
-        entering={FadeInDown.delay(400).duration(400)}
-        style={styles.categoriesGrid}
-      >
-        {serviceCategories.slice(0, 6).map((category) => (
-          <View key={category.id} style={styles.categoryItem}>
-            <CategoryCard
-              name={category.name}
-              icon={category.icon as any}
-              onPress={() => handleCategoryPress(category)}
-              testID={`category-${category.id}`}
-              compact
-            />
-          </View>
-        ))}
-      </Animated.View>
-
-      <Animated.View entering={FadeInDown.delay(450).duration(400)}>
-        <SectionHeader
-          title="Featured Pros"
-          actionLabel="See All"
-          onAction={() => {}}
-        />
-      </Animated.View>
     </View>
-  );
-
-  const renderProvider = ({ item, index }: { item: typeof featuredProviders[0]; index: number }) => (
-    <Animated.View entering={FadeInDown.delay(500 + index * 100).duration(400)}>
-      <ProviderCard
-        name={item.name}
-        businessName={item.businessName}
-        avatarUrl={item.avatarUrl}
-        rating={item.rating}
-        reviewCount={item.reviewCount}
-        services={item.services}
-        hourlyRate={item.hourlyRate}
-        verified={item.verified}
-        onPress={handleProviderPress}
-        testID={`provider-${item.id}`}
-      />
-    </Animated.View>
   );
 
   return (
@@ -237,6 +350,7 @@ export default function FindScreen() {
         renderItem={renderProvider}
         keyExtractor={(item) => item.id}
         ListHeaderComponent={renderHeader}
+        ListFooterComponent={renderFooter}
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,
           paddingBottom: tabBarHeight + Spacing.xl,
@@ -307,11 +421,59 @@ const styles = StyleSheet.create({
     color: Colors.accent,
     fontWeight: "500",
   },
-  toolsGrid: {
+  activityContainer: {
+    gap: Spacing.sm,
+    marginBottom: Spacing.sectionGap,
+  },
+  activityCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  activityIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: Spacing.md,
+  },
+  activityContent: {
+    flex: 1,
+  },
+  activityTitle: {
+    ...Typography.subhead,
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  activityProvider: {
+    ...Typography.caption1,
+  },
+  activityRight: {
+    alignItems: "flex-end",
+    gap: Spacing.xs,
+  },
+  activityDate: {
+    ...Typography.caption2,
+  },
+  categoriesGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: Spacing.sm,
     marginBottom: Spacing.sectionGap,
+  },
+  categoryItem: {
+    width: "48%",
+  },
+  footerContent: {
+    marginTop: Spacing.lg,
+  },
+  toolsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
   },
   toolCard: {
     width: "48%",
@@ -334,14 +496,5 @@ const styles = StyleSheet.create({
   },
   toolDesc: {
     ...Typography.caption1,
-  },
-  categoriesGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.sm,
-    marginBottom: Spacing.sectionGap,
-  },
-  categoryItem: {
-    width: "48%",
   },
 });
