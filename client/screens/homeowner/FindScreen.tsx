@@ -144,7 +144,7 @@ export default function FindScreen() {
 
       <Animated.View entering={FadeInDown.delay(175).duration(400)}>
         <Pressable
-          style={[styles.aiCard, { backgroundColor: theme.card }]}
+          style={[styles.aiCard, { backgroundColor: theme.cardBackground }]}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             navigation.navigate("AIChat");
