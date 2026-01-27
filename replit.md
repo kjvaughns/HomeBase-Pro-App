@@ -13,7 +13,7 @@ Homebase is a unified iOS mobile app that combines homeowner and provider portal
 ### Three Access States
 1. **Guest Mode**: Browse marketplace, view providers, gated actions prompt sign-in
 2. **Homeowner Mode**: Full access to Find, Manage bookings, Messages, More
-3. **Provider Mode**: Dashboard, Leads, Schedule, Money management, More
+3. **Provider Mode**: Dashboard, Clients CRM, Schedule (with List/Day/Week/Month views), Money management, More
 
 ### AI Features
 - **Ask Homebase AI**: AI-powered chat assistant for home services questions
@@ -76,8 +76,13 @@ Homebase is a unified iOS mobile app that combines homeowner and provider portal
 
 **Provider Portal:**
 - ProviderHomeScreen - Dashboard with Today's Summary (4 metrics), earnings card, rating, upcoming/in-progress jobs
-- LeadsScreen - Filter chips with counts (All, New, Contacted, Quoted, Won, Lost), lead cards with contact/decline actions
-- ScheduleScreen - Stats card (scheduled/in-progress/completed), filter chips, job cards
+- ClientsScreen - Client CRM with search, filter chips (All/Active/Leads/Inactive/Archived), client cards with avatar, status
+- ClientDetailScreen - Profile header with LTV, action buttons (call/message/invoice), tabs (Overview/Activity/Billing)
+- ScheduleScreen - Redesigned with date navigator, 4 view modes:
+  - List view: Job cards with time, client, service (green), address, status pill
+  - Day view: Timeline with hourly slots (7 AM - 6 PM) and job blocks
+  - Week view: Horizontal day selector, job list for selected day
+  - Month view: Calendar grid with job indicator dots, summary card
 - MoneyScreen - Balance card with withdraw button, jobs/avg stats, transaction list with filter (All, Invoices, Payouts)
 - ProviderMoreScreen - Provider profile with rating, availability toggle, notifications toggle, business settings
 
@@ -92,7 +97,7 @@ Homebase is a unified iOS mobile app that combines homeowner and provider portal
   - BlurView on iOS, solid rgba background on web
 - Role-based tab bars that change based on authentication and active role
 - Homeowner tabs: Find, Manage, Messages (when auth'd), More
-- Provider tabs: Home, Leads, Schedule, Money, More
+- Provider tabs: Home, Clients, Schedule, Money, More
 - Modal presentations for role switching and account gate
 - Stack navigation for AI chat and homeowner tools
 
