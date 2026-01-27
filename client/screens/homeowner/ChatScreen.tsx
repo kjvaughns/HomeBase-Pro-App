@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { StyleSheet, View, FlatList, Pressable, TextInput, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRoute, RouteProp } from "@react-navigation/native";
+import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import * as Haptics from "expo-haptics";
@@ -16,10 +17,12 @@ import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { ChatMessage } from "@/state/types";
 
 type ScreenRouteProp = RouteProp<RootStackParamList, "Chat">;
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const route = useRoute<ScreenRouteProp>();
+  const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
   const { jobId } = route.params;
 
@@ -35,9 +38,10 @@ export default function ChatScreen() {
 
   useEffect(() => {
     if (thread) {
+      navigation.setOptions({ headerTitle: thread.providerName });
       markThreadAsRead(thread.id);
     }
-  }, [thread?.id]);
+  }, [thread?.id, thread?.providerName, navigation]);
 
   const handleSend = () => {
     if (!inputText.trim() || !thread) return;
