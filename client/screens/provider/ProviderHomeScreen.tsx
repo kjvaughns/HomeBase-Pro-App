@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from "react";
-import { StyleSheet, View, ScrollView, RefreshControl, Pressable } from "react-native";
+import { StyleSheet, View, ScrollView, RefreshControl, Pressable, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -16,7 +17,34 @@ import { SectionHeader } from "@/components/SectionHeader";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
-import { useProviderStore } from "@/state/providerStore";
+
+interface ProviderStats {
+  revenueMTD: number;
+  jobsCompleted: number;
+  activeClients: number;
+  upcomingJobs: number;
+}
+
+interface Job {
+  id: string;
+  providerId: string;
+  clientId: string;
+  title: string;
+  description?: string;
+  scheduledDate: string;
+  scheduledTime?: string;
+  status: "scheduled" | "in_progress" | "completed" | "cancelled";
+  estimatedPrice?: string;
+  address?: string;
+}
+
+interface Client {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email?: string;
+  phone?: string;
+}
 
 export default function ProviderHomeScreen() {
   const insets = useSafeAreaInsets();
@@ -24,22 +52,42 @@ export default function ProviderHomeScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<any>();
   const { theme } = useTheme();
-  const { user } = useAuthStore();
+  const { user, providerProfile } = useAuthStore();
+  const queryClient = useQueryClient();
 
-  const jobs = useProviderStore((s) => s.jobs);
-  const leads = useProviderStore((s) => s.leads);
-  const messages = useProviderStore((s) => s.messages);
-  const invoices = useProviderStore((s) => s.invoices);
-  const getStats = useProviderStore((s) => s.getStats);
+  const providerId = providerProfile?.id;
+
+  const { data: statsData, isLoading: statsLoading, refetch: refetchStats } = useQuery<{ stats: ProviderStats }>({
+    queryKey: ["/api/provider", providerId, "stats"],
+    enabled: !!providerId,
+  });
+
+  const { data: jobsData, isLoading: jobsLoading, refetch: refetchJobs } = useQuery<{ jobs: Job[] }>({
+    queryKey: ["/api/provider", providerId, "jobs"],
+    enabled: !!providerId,
+  });
+
+  const { data: clientsData } = useQuery<{ clients: Client[] }>({
+    queryKey: ["/api/provider", providerId, "clients"],
+    enabled: !!providerId,
+  });
 
   const [refreshing, setRefreshing] = useState(false);
 
-  const stats = useMemo(() => getStats(), [jobs, leads, invoices, messages]);
+  const stats = statsData?.stats || {
+    revenueMTD: 0,
+    jobsCompleted: 0,
+    activeClients: 0,
+    upcomingJobs: 0,
+  };
+
+  const jobs = jobsData?.jobs || [];
+  const clients = clientsData?.clients || [];
 
   const upcomingJobs = useMemo(() => {
     return jobs
       .filter((job) => job.status === "scheduled" || job.status === "in_progress")
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .sort((a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime())
       .slice(0, 3);
   }, [jobs]);
 
@@ -47,9 +95,10 @@ export default function ProviderHomeScreen() {
     return jobs.filter((job) => job.status === "in_progress");
   }, [jobs]);
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
+    await Promise.all([refetchStats(), refetchJobs()]);
+    setRefreshing(false);
   };
 
   const getGreeting = () => {
@@ -59,9 +108,37 @@ export default function ProviderHomeScreen() {
     return "Good evening";
   };
 
-  const unreadCount = useMemo(() => {
-    return messages.reduce((sum, m) => sum + m.unreadCount, 0);
-  }, [messages]);
+  const getClientName = (clientId: string): string => {
+    const client = clients.find((c) => c.id === clientId);
+    if (client) {
+      return `${client.firstName} ${client.lastName}`;
+    }
+    return "Unknown Client";
+  };
+
+  const formatJobForCard = (job: Job) => ({
+    id: job.id,
+    customerName: getClientName(job.clientId),
+    service: job.title,
+    address: job.address || "",
+    date: job.scheduledDate,
+    time: job.scheduledTime || "",
+    status: job.status,
+    price: parseFloat(job.estimatedPrice || "0"),
+    description: job.description,
+  });
+
+  const isLoading = statsLoading || jobsLoading;
+
+  if (!providerId) {
+    return (
+      <ThemedView style={styles.container}>
+        <View style={styles.centerContent}>
+          <ThemedText style={styles.noProviderText}>Provider profile not found</ThemedText>
+        </View>
+      </ThemedView>
+    );
+  }
 
   return (
     <ThemedView style={styles.container}>
@@ -91,11 +168,11 @@ export default function ProviderHomeScreen() {
                 </ThemedText>
                 <ThemedText style={styles.greetingName}>{user?.name?.split(" ")[0]}</ThemedText>
               </View>
-              <Pressable style={styles.notificationIcon}>
+              <Pressable 
+                style={styles.notificationIcon}
+                onPress={() => navigation.navigate("Notifications")}
+              >
                 <Feather name="bell" size={24} color={theme.text} />
-                {unreadCount > 0 ? (
-                  <View style={[styles.notificationBadge, { borderColor: theme.backgroundRoot }]} />
-                ) : null}
               </Pressable>
             </View>
           </GlassCard>
@@ -104,61 +181,68 @@ export default function ProviderHomeScreen() {
         <Animated.View entering={FadeInDown.delay(200).duration(400)}>
           <GlassCard style={styles.todaySummary}>
             <ThemedText style={[styles.todayTitle, { color: theme.textSecondary }]}>
-              Today's Summary
+              Dashboard
             </ThemedText>
-            <View style={styles.summaryGrid}>
-              <Pressable 
-                style={styles.summaryItem}
-                onPress={() => navigation.navigate("LeadsTab")}
-              >
-                <View style={[styles.summaryIcon, { backgroundColor: Colors.accentLight }]}>
-                  <Feather name="users" size={18} color={Colors.accent} />
-                </View>
-                <ThemedText style={styles.summaryValue}>{stats.newLeads}</ThemedText>
-                <ThemedText style={[styles.summaryLabel, { color: theme.textSecondary }]}>
-                  New Leads
-                </ThemedText>
-              </Pressable>
+            {isLoading ? (
+              <ActivityIndicator size="small" color={Colors.accent} />
+            ) : (
+              <View style={styles.summaryGrid}>
+                <Pressable 
+                  style={styles.summaryItem}
+                  onPress={() => navigation.navigate("ClientsTab")}
+                >
+                  <View style={[styles.summaryIcon, { backgroundColor: Colors.accentLight }]}>
+                    <Feather name="users" size={18} color={Colors.accent} />
+                  </View>
+                  <ThemedText style={styles.summaryValue}>{stats.activeClients}</ThemedText>
+                  <ThemedText style={[styles.summaryLabel, { color: theme.textSecondary }]}>
+                    Clients
+                  </ThemedText>
+                </Pressable>
 
-              <View style={[styles.summaryDivider, { backgroundColor: theme.separator }]} />
+                <View style={[styles.summaryDivider, { backgroundColor: theme.separator }]} />
 
-              <Pressable style={styles.summaryItem}>
-                <View style={[styles.summaryIcon, { backgroundColor: Colors.accentLight }]}>
-                  <Feather name="calendar" size={18} color={Colors.accent} />
-                </View>
-                <ThemedText style={styles.summaryValue}>{stats.upcomingJobs}</ThemedText>
-                <ThemedText style={[styles.summaryLabel, { color: theme.textSecondary }]}>
-                  Scheduled
-                </ThemedText>
-              </Pressable>
+                <Pressable 
+                  style={styles.summaryItem}
+                  onPress={() => navigation.navigate("ScheduleTab")}
+                >
+                  <View style={[styles.summaryIcon, { backgroundColor: Colors.accentLight }]}>
+                    <Feather name="calendar" size={18} color={Colors.accent} />
+                  </View>
+                  <ThemedText style={styles.summaryValue}>{stats.upcomingJobs}</ThemedText>
+                  <ThemedText style={[styles.summaryLabel, { color: theme.textSecondary }]}>
+                    Upcoming
+                  </ThemedText>
+                </Pressable>
 
-              <View style={[styles.summaryDivider, { backgroundColor: theme.separator }]} />
+                <View style={[styles.summaryDivider, { backgroundColor: theme.separator }]} />
 
-              <Pressable style={styles.summaryItem}>
-                <View style={[styles.summaryIcon, { backgroundColor: Colors.accentLight }]}>
-                  <Feather name="message-circle" size={18} color={Colors.accent} />
-                </View>
-                <ThemedText style={styles.summaryValue}>{unreadCount}</ThemedText>
-                <ThemedText style={[styles.summaryLabel, { color: theme.textSecondary }]}>
-                  Messages
-                </ThemedText>
-              </Pressable>
+                <Pressable style={styles.summaryItem}>
+                  <View style={[styles.summaryIcon, { backgroundColor: Colors.accentLight }]}>
+                    <Feather name="check-circle" size={18} color={Colors.accent} />
+                  </View>
+                  <ThemedText style={styles.summaryValue}>{stats.jobsCompleted}</ThemedText>
+                  <ThemedText style={[styles.summaryLabel, { color: theme.textSecondary }]}>
+                    Completed
+                  </ThemedText>
+                </Pressable>
 
-              <View style={[styles.summaryDivider, { backgroundColor: theme.separator }]} />
+                <View style={[styles.summaryDivider, { backgroundColor: theme.separator }]} />
 
-              <Pressable 
-                style={styles.summaryItem}
-                onPress={() => navigation.navigate("MoneyTab")}
-              >
-                <View style={[styles.summaryIcon, { backgroundColor: Colors.accentLight }]}>
-                  <Feather name="dollar-sign" size={18} color={Colors.accent} />
-                </View>
-                <ThemedText style={styles.summaryValue}>${stats.pendingEarnings.toLocaleString()}</ThemedText>
-                <ThemedText style={[styles.summaryLabel, { color: theme.textSecondary }]}>
-                  Pending
-                </ThemedText>
-              </Pressable>
-            </View>
+                <Pressable 
+                  style={styles.summaryItem}
+                  onPress={() => navigation.navigate("MoneyTab")}
+                >
+                  <View style={[styles.summaryIcon, { backgroundColor: Colors.accentLight }]}>
+                    <Feather name="dollar-sign" size={18} color={Colors.accent} />
+                  </View>
+                  <ThemedText style={styles.summaryValue}>${stats.revenueMTD.toLocaleString()}</ThemedText>
+                  <ThemedText style={[styles.summaryLabel, { color: theme.textSecondary }]}>
+                    This Month
+                  </ThemedText>
+                </Pressable>
+              </View>
+            )}
           </GlassCard>
         </Animated.View>
 
@@ -170,17 +254,14 @@ export default function ProviderHomeScreen() {
             <View style={styles.earningsContent}>
               <View>
                 <ThemedText style={[styles.earningsLabel, { color: theme.textSecondary }]}>
-                  This Month
+                  Revenue MTD
                 </ThemedText>
                 <ThemedText style={styles.earningsValue}>
-                  ${stats.totalEarnings.toLocaleString()}
+                  ${stats.revenueMTD.toLocaleString()}
                 </ThemedText>
               </View>
               <View style={[styles.trendBadge, { backgroundColor: Colors.accentLight }]}>
                 <Feather name="trending-up" size={14} color={Colors.accent} />
-                <ThemedText style={[styles.trendText, { color: Colors.accent }]}>
-                  12%
-                </ThemedText>
               </View>
             </View>
           </GlassCard>
@@ -189,10 +270,10 @@ export default function ProviderHomeScreen() {
             <View style={styles.ratingContent}>
               <View style={styles.ratingStars}>
                 <Feather name="star" size={20} color={Colors.warning} />
-                <ThemedText style={styles.ratingValue}>{stats.rating}</ThemedText>
+                <ThemedText style={styles.ratingValue}>{providerProfile?.rating || 0}</ThemedText>
               </View>
               <ThemedText style={[styles.ratingLabel, { color: theme.textSecondary }]}>
-                {stats.reviewCount} reviews
+                {providerProfile?.reviewCount || 0} reviews
               </ThemedText>
             </View>
           </GlassCard>
@@ -204,7 +285,7 @@ export default function ProviderHomeScreen() {
             {inProgressJobs.map((job) => (
               <JobCard
                 key={job.id}
-                job={job}
+                job={formatJobForCard(job)}
                 onPress={() => {}}
                 testID={`job-${job.id}`}
               />
@@ -220,21 +301,37 @@ export default function ProviderHomeScreen() {
           />
         </Animated.View>
 
-        {upcomingJobs.length > 0 ? (
+        {isLoading ? (
+          <Animated.View entering={FadeInDown.delay(500).duration(400)}>
+            <GlassCard style={styles.emptyCard}>
+              <ActivityIndicator size="small" color={Colors.accent} />
+            </GlassCard>
+          </Animated.View>
+        ) : upcomingJobs.length > 0 ? (
           upcomingJobs.map((job, index) => (
             <Animated.View
               key={job.id}
               entering={FadeInDown.delay((inProgressJobs.length > 0 ? 600 : 500) + index * 100).duration(400)}
             >
-              <JobCard job={job} onPress={() => {}} testID={`job-${job.id}`} />
+              <JobCard job={formatJobForCard(job)} onPress={() => {}} testID={`job-${job.id}`} />
             </Animated.View>
           ))
         ) : (
           <Animated.View entering={FadeInDown.delay(500).duration(400)}>
             <GlassCard style={styles.emptyCard}>
+              <Feather name="calendar" size={32} color={theme.textSecondary} style={{ marginBottom: Spacing.sm }} />
               <ThemedText style={[styles.emptyText, { color: theme.textSecondary }]}>
                 No upcoming jobs scheduled
               </ThemedText>
+              <Pressable 
+                style={[styles.addJobButton, { backgroundColor: Colors.accentLight }]}
+                onPress={() => navigation.navigate("ScheduleTab")}
+              >
+                <Feather name="plus" size={16} color={Colors.accent} />
+                <ThemedText style={[styles.addJobText, { color: Colors.accent }]}>
+                  Add a Job
+                </ThemedText>
+              </Pressable>
             </GlassCard>
           </Animated.View>
         )}
@@ -246,6 +343,14 @@ export default function ProviderHomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  centerContent: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  noProviderText: {
+    ...Typography.body,
   },
   greetingCard: {
     marginBottom: Spacing.lg,
@@ -267,16 +372,6 @@ const styles = StyleSheet.create({
   notificationIcon: {
     position: "relative",
     padding: Spacing.xs,
-  },
-  notificationBadge: {
-    position: "absolute",
-    top: 4,
-    right: 4,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.accent,
-    borderWidth: 2,
   },
   todaySummary: {
     marginBottom: Spacing.lg,
@@ -343,10 +438,6 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.sm,
     gap: 4,
   },
-  trendText: {
-    ...Typography.caption1,
-    fontWeight: "600",
-  },
   ratingCard: {
     flex: 1,
   },
@@ -372,5 +463,18 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     ...Typography.body,
+    marginBottom: Spacing.md,
+  },
+  addJobButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.xs,
+  },
+  addJobText: {
+    ...Typography.callout,
+    fontWeight: "600",
   },
 });

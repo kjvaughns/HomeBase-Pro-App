@@ -33,6 +33,8 @@ import AddressesScreen from "@/screens/homeowner/AddressesScreen";
 import PaymentMethodsScreen from "@/screens/homeowner/PaymentMethodsScreen";
 import NotificationsScreen from "@/screens/homeowner/NotificationsScreen";
 import ClientDetailScreen from "@/screens/provider/ClientDetailScreen";
+import AddClientScreen from "@/screens/provider/AddClientScreen";
+import AddJobScreen from "@/screens/provider/AddJobScreen";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuthStore, UserRole } from "@/state/authStore";
@@ -102,6 +104,8 @@ export type RootStackParamList = {
   PaymentMethods: undefined;
   Notifications: undefined;
   ClientDetail: { clientId: string };
+  AddClient: undefined;
+  AddJob: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -330,6 +334,20 @@ export default function RootStackNavigator() {
         component={ClientDetailScreen}
         options={{
           headerTitle: "",
+        }}
+      />
+      <Stack.Screen
+        name="AddClient"
+        component={AddClientScreen}
+        options={{
+          headerTitle: "Add Client",
+        }}
+      />
+      <Stack.Screen
+        name="AddJob"
+        component={AddJobScreen}
+        options={{
+          headerTitle: "Add Job",
         }}
       />
     </Stack.Navigator>

@@ -1,10 +1,12 @@
 import React, { useState, useMemo, useCallback } from "react";
-import { StyleSheet, View, FlatList, RefreshControl, Pressable, ScrollView } from "react-native";
+import { StyleSheet, View, FlatList, RefreshControl, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
-import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
+import { useNavigation } from "@react-navigation/native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
+import { useQuery } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -13,9 +15,28 @@ import { StatusPill } from "@/components/StatusPill";
 import { EmptyState } from "@/components/EmptyState";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
-import { useProviderStore, Job } from "@/state/providerStore";
+import { useAuthStore } from "@/state/authStore";
 
 type ViewMode = "list" | "day" | "week" | "month";
+
+interface Job {
+  id: string;
+  providerId: string;
+  clientId: string;
+  title: string;
+  description?: string;
+  scheduledDate: string;
+  scheduledTime?: string;
+  status: "scheduled" | "in_progress" | "completed" | "cancelled";
+  estimatedPrice?: string;
+  address?: string;
+}
+
+interface Client {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
 
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -200,8 +221,19 @@ function DateNavigator({ date, viewMode, onPrevious, onNext, onToday }: DateNavi
   );
 }
 
+interface FormattedJob {
+  id: string;
+  customerName: string;
+  service: string;
+  address: string;
+  date: string;
+  time: string;
+  status: "scheduled" | "in_progress" | "completed" | "cancelled";
+  price: number;
+}
+
 interface JobListItemProps {
-  job: Job;
+  job: FormattedJob;
   onPress: () => void;
   showTime?: boolean;
 }
@@ -216,7 +248,7 @@ function JobListItem({ job, onPress, showTime = true }: JobListItemProps) {
           {showTime ? (
             <View style={styles.timeColumn}>
               <ThemedText type="body" style={{ fontWeight: "600" }}>
-                {job.time}
+                {job.time || "TBD"}
               </ThemedText>
             </View>
           ) : null}
@@ -225,9 +257,11 @@ function JobListItem({ job, onPress, showTime = true }: JobListItemProps) {
             <ThemedText type="caption" style={{ color: Colors.accent }}>
               {job.service}
             </ThemedText>
-            <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-              {job.address}
-            </ThemedText>
+            {job.address ? (
+              <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+                {job.address}
+              </ThemedText>
+            ) : null}
             <StatusPill status={getStatusType(job.status)} label={getStatusLabel(job.status)} />
           </View>
           <Feather name="chevron-right" size={20} color={theme.textSecondary} />
@@ -238,8 +272,8 @@ function JobListItem({ job, onPress, showTime = true }: JobListItemProps) {
 }
 
 interface DayTimelineProps {
-  jobs: Job[];
-  onJobPress: (job: Job) => void;
+  jobs: FormattedJob[];
+  onJobPress: (job: FormattedJob) => void;
 }
 
 function DayTimeline({ jobs, onJobPress }: DayTimelineProps) {
@@ -248,6 +282,7 @@ function DayTimeline({ jobs, onJobPress }: DayTimelineProps) {
 
   const getJobsForHour = (hour: number) => {
     return jobs.filter((job) => {
+      if (!job.time) return false;
       const timeParts = job.time.match(/(\d+):(\d+)\s*(AM|PM)/i);
       if (!timeParts) return false;
       let jobHour = parseInt(timeParts[1]);
@@ -296,9 +331,9 @@ function DayTimeline({ jobs, onJobPress }: DayTimelineProps) {
 
 interface WeekViewProps {
   selectedDate: Date;
-  jobs: Job[];
+  jobs: FormattedJob[];
   onDateSelect: (date: Date) => void;
-  onJobPress: (job: Job) => void;
+  onJobPress: (job: FormattedJob) => void;
 }
 
 function WeekView({ selectedDate, jobs, onDateSelect, onJobPress }: WeekViewProps) {
@@ -376,9 +411,9 @@ function WeekView({ selectedDate, jobs, onDateSelect, onJobPress }: WeekViewProp
 
 interface MonthViewProps {
   selectedDate: Date;
-  jobs: Job[];
+  jobs: FormattedJob[];
   onDateSelect: (date: Date) => void;
-  onJobPress: (job: Job) => void;
+  onJobPress: (job: FormattedJob) => void;
 }
 
 function MonthView({ selectedDate, jobs, onDateSelect, onJobPress }: MonthViewProps) {
@@ -463,7 +498,7 @@ function MonthView({ selectedDate, jobs, onDateSelect, onJobPress }: MonthViewPr
                 <View style={[styles.monthJobDot, { backgroundColor: Colors.accent }]} />
                 <View style={{ flex: 1 }}>
                   <ThemedText type="caption" style={{ fontWeight: "600" }}>
-                    {job.time} - {job.service}
+                    {job.time || "TBD"} - {job.service}
                   </ThemedText>
                   <ThemedText type="small" style={{ color: theme.textSecondary }}>
                     {job.customerName}
@@ -486,31 +521,67 @@ export default function ScheduleScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
+  const navigation = useNavigation<any>();
   const { theme } = useTheme();
+  const { providerProfile } = useAuthStore();
 
-  const jobs = useProviderStore((s) => s.jobs);
+  const providerId = providerProfile?.id;
+
+  const { data: jobsData, isLoading, refetch } = useQuery<{ jobs: Job[] }>({
+    queryKey: ["/api/provider", providerId, "jobs"],
+    enabled: !!providerId,
+  });
+
+  const { data: clientsData } = useQuery<{ clients: Client[] }>({
+    queryKey: ["/api/provider", providerId, "clients"],
+    enabled: !!providerId,
+  });
 
   const [refreshing, setRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedDate, setSelectedDate] = useState(new Date());
 
-  const filteredJobs = useMemo(() => {
+  const jobs = jobsData?.jobs || [];
+  const clients = clientsData?.clients || [];
+
+  const getClientName = (clientId: string): string => {
+    const client = clients.find((c) => c.id === clientId);
+    if (client) {
+      return `${client.firstName} ${client.lastName}`;
+    }
+    return "Unknown Client";
+  };
+
+  const formatJobForDisplay = (job: Job): FormattedJob => ({
+    id: job.id,
+    customerName: getClientName(job.clientId),
+    service: job.title,
+    address: job.address || "",
+    date: job.scheduledDate,
+    time: job.scheduledTime || "",
+    status: job.status,
+    price: parseFloat(job.estimatedPrice || "0"),
+  });
+
+  const formattedJobs = useMemo(() => {
     return jobs
       .filter((job) => job.status !== "cancelled")
+      .map(formatJobForDisplay)
       .sort((a, b) => {
         const dateA = new Date(a.date);
         const dateB = new Date(b.date);
         return dateA.getTime() - dateB.getTime();
       });
-  }, [jobs]);
+  }, [jobs, clients]);
 
   const dayJobs = useMemo(() => {
-    return filteredJobs.filter((job) => isSameDay(new Date(job.date), selectedDate));
-  }, [filteredJobs, selectedDate]);
+    return formattedJobs.filter((job) => isSameDay(new Date(job.date), selectedDate));
+  }, [formattedJobs, selectedDate]);
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
+    await refetch();
+    setRefreshing(false);
   };
 
   const handlePrevious = useCallback(() => {
@@ -551,36 +622,50 @@ export default function ScheduleScreen() {
     setSelectedDate(new Date());
   }, []);
 
-  const handleJobPress = (job: Job) => {
-    // Navigate to job details
+  const handleJobPress = (job: FormattedJob) => {
+    // TODO: Navigate to job details
   };
 
-  const renderListView = () => (
-    <FlatList
-      data={dayJobs}
-      renderItem={({ item, index }) => (
-        <Animated.View entering={FadeInDown.delay(index * 50).duration(300)}>
-          <JobListItem job={item} onPress={() => handleJobPress(item)} />
-        </Animated.View>
-      )}
-      keyExtractor={(item) => item.id}
-      contentContainerStyle={[
-        styles.listContent,
-        dayJobs.length === 0 && styles.emptyContainer,
-      ]}
-      ListEmptyComponent={
-        <EmptyState
-          image={require("../../../assets/images/empty-bookings.png")}
-          title="No jobs scheduled"
-          description="You don't have any jobs scheduled for this day."
-        />
-      }
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
-      }
-    />
-  );
+  const handleAddJob = () => {
+    navigation.navigate("AddJob" as any);
+  };
+
+  const renderListView = () => {
+    if (isLoading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.accent} />
+        </View>
+      );
+    }
+
+    return (
+      <FlatList
+        data={dayJobs}
+        renderItem={({ item, index }) => (
+          <Animated.View entering={FadeInDown.delay(index * 50).duration(300)}>
+            <JobListItem job={item} onPress={() => handleJobPress(item)} />
+          </Animated.View>
+        )}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={[
+          styles.listContent,
+          dayJobs.length === 0 && styles.emptyContainer,
+        ]}
+        ListEmptyComponent={
+          <EmptyState
+            image={require("../../../assets/images/empty-bookings.png")}
+            title="No jobs scheduled"
+            description="You don't have any jobs scheduled for this day."
+          />
+        }
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
+        }
+      />
+    );
+  };
 
   return (
     <ThemedView style={styles.container}>
@@ -590,13 +675,21 @@ export default function ScheduleScreen() {
           { paddingTop: headerHeight + Spacing.md },
         ]}
       >
-        <DateNavigator
-          date={selectedDate}
-          viewMode={viewMode}
-          onPrevious={handlePrevious}
-          onNext={handleNext}
-          onToday={handleToday}
-        />
+        <View style={styles.headerRow}>
+          <DateNavigator
+            date={selectedDate}
+            viewMode={viewMode}
+            onPrevious={handlePrevious}
+            onNext={handleNext}
+            onToday={handleToday}
+          />
+          <Pressable
+            style={[styles.addButton, { backgroundColor: Colors.accent }]}
+            onPress={handleAddJob}
+          >
+            <Feather name="plus" size={20} color="white" />
+          </Pressable>
+        </View>
         <ViewModeTabs selected={viewMode} onSelect={setViewMode} />
       </View>
 
@@ -608,7 +701,7 @@ export default function ScheduleScreen() {
         {viewMode === "week" && (
           <WeekView
             selectedDate={selectedDate}
-            jobs={filteredJobs}
+            jobs={formattedJobs}
             onDateSelect={setSelectedDate}
             onJobPress={handleJobPress}
           />
@@ -616,7 +709,7 @@ export default function ScheduleScreen() {
         {viewMode === "month" && (
           <MonthView
             selectedDate={selectedDate}
-            jobs={filteredJobs}
+            jobs={formattedJobs}
             onDateSelect={setSelectedDate}
             onJobPress={handleJobPress}
           />
@@ -634,9 +727,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.screenPadding,
     paddingBottom: Spacing.md,
   },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+  },
+  addButton: {
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.full,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   dateNavigator: {
     alignItems: "center",
     marginBottom: Spacing.md,
+    flex: 1,
   },
   dateNavRow: {
     flexDirection: "row",
@@ -672,6 +778,11 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   listContent: {
     paddingHorizontal: Spacing.screenPadding,
@@ -736,13 +847,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.md,
-    gap: 2,
   },
   weekDayDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: Colors.accent,
+    marginTop: 4,
   },
   weekJobList: {
     flex: 1,
@@ -750,6 +861,7 @@ const styles = StyleSheet.create({
   },
   emptyDay: {
     alignItems: "center",
+    justifyContent: "center",
     paddingVertical: Spacing.xl,
   },
   monthView: {
@@ -758,7 +870,7 @@ const styles = StyleSheet.create({
   },
   calendarHeader: {
     flexDirection: "row",
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
   calendarHeaderDay: {
     flex: 1,

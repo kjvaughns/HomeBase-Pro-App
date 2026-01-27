@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { StyleSheet, FlatList, RefreshControl, View, TextInput, Pressable } from "react-native";
+import { StyleSheet, FlatList, RefreshControl, View, TextInput, Pressable, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -7,65 +7,48 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
+import { useQuery } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
-import { FilterChips, FilterOption } from "@/components/FilterChips";
 import { EmptyState } from "@/components/EmptyState";
-import { StatusPill, StatusType } from "@/components/StatusPill";
 import { GlassCard } from "@/components/GlassCard";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
-import { useProviderStore, Client } from "@/state/providerStore";
+import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
-type ClientFilter = "all" | "active" | "lead" | "inactive" | "archived";
-
-const filterOptions: FilterOption<ClientFilter>[] = [
-  { key: "all", label: "All" },
-  { key: "active", label: "Active" },
-  { key: "lead", label: "Leads" },
-  { key: "inactive", label: "Inactive" },
-  { key: "archived", label: "Archived" },
-];
-
-function getStatusType(status: Client["status"]): StatusType {
-  switch (status) {
-    case "active":
-      return "success";
-    case "lead":
-      return "info";
-    case "inactive":
-      return "warning";
-    case "archived":
-      return "neutral";
-    default:
-      return "neutral";
-  }
+interface Client {
+  id: string;
+  providerId: string;
+  firstName: string;
+  lastName: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
-function getStatusLabel(status: Client["status"]): string {
-  switch (status) {
-    case "active":
-      return "Active";
-    case "lead":
-      return "Lead";
-    case "inactive":
-      return "Inactive";
-    case "archived":
-      return "Archived";
-    default:
-      return status;
-  }
+function getInitials(firstName: string, lastName: string): string {
+  return `${firstName[0] || ""}${lastName[0] || ""}`.toUpperCase();
 }
 
-function getInitials(name: string): string {
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+function formatDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays} days ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 interface ClientCardProps {
@@ -81,20 +64,26 @@ function ClientCard({ client, onPress }: ClientCardProps) {
       <GlassCard style={styles.clientCard}>
         <View style={styles.clientRow}>
           <View style={[styles.avatar, { backgroundColor: Colors.accent + "20" }]}>
-            {client.avatar ? (
-              <Animated.Image source={{ uri: client.avatar }} style={styles.avatarImage} />
-            ) : (
-              <ThemedText type="body" style={{ color: Colors.accent, fontWeight: "600" }}>
-                {getInitials(client.name)}
-              </ThemedText>
-            )}
+            <ThemedText type="body" style={{ color: Colors.accent, fontWeight: "600" }}>
+              {getInitials(client.firstName, client.lastName)}
+            </ThemedText>
           </View>
           <View style={styles.clientInfo}>
-            <ThemedText type="body" style={{ fontWeight: "600" }}>{client.name}</ThemedText>
-            <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-              Last seen: {client.lastSeen}
+            <ThemedText type="body" style={{ fontWeight: "600" }}>
+              {client.firstName} {client.lastName}
             </ThemedText>
-            <StatusPill status={getStatusType(client.status)} label={getStatusLabel(client.status)} />
+            {client.phone ? (
+              <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+                {client.phone}
+              </ThemedText>
+            ) : client.email ? (
+              <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+                {client.email}
+              </ThemedText>
+            ) : null}
+            <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+              Added {formatDate(client.createdAt)}
+            </ThemedText>
           </View>
           <Feather name="chevron-right" size={20} color={theme.textSecondary} />
         </View>
@@ -109,42 +98,46 @@ export default function ClientsScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const { theme } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { providerProfile } = useAuthStore();
 
-  const clients = useProviderStore((s) => s.clients);
+  const providerId = providerProfile?.id;
+
+  const { data: clientsData, isLoading, refetch } = useQuery<{ clients: Client[] }>({
+    queryKey: ["/api/provider", providerId, "clients"],
+    enabled: !!providerId,
+  });
 
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<ClientFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
+  const clients = clientsData?.clients || [];
+
   const filteredClients = useMemo(() => {
-    let result = clients;
+    if (!searchQuery.trim()) return clients;
     
-    if (filter !== "all") {
-      result = result.filter((c) => c.status === filter);
-    }
-    
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
-      result = result.filter(
-        (c) =>
-          c.name.toLowerCase().includes(query) ||
-          c.email.toLowerCase().includes(query) ||
-          c.phone.includes(query)
-      );
-    }
-    
-    return result;
-  }, [clients, filter, searchQuery]);
+    const query = searchQuery.toLowerCase().trim();
+    return clients.filter(
+      (c) =>
+        `${c.firstName} ${c.lastName}`.toLowerCase().includes(query) ||
+        (c.email && c.email.toLowerCase().includes(query)) ||
+        (c.phone && c.phone.includes(query))
+    );
+  }, [clients, searchQuery]);
 
   const totalCount = clients.length;
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
+    await refetch();
+    setRefreshing(false);
   };
 
   const handleClientPress = (client: Client) => {
     navigation.navigate("ClientDetail", { clientId: client.id });
+  };
+
+  const handleAddClient = () => {
+    navigation.navigate("AddClient" as any);
   };
 
   const renderHeader = () => (
@@ -157,10 +150,10 @@ export default function ClientsScreen() {
           </ThemedText>
         </View>
         <Pressable
-          style={[styles.menuButton, { backgroundColor: theme.cardBackground }]}
-          onPress={() => {}}
+          style={[styles.addButton, { backgroundColor: Colors.accent }]}
+          onPress={handleAddClient}
         >
-          <Feather name="more-horizontal" size={20} color={theme.text} />
+          <Feather name="plus" size={20} color="white" />
         </Pressable>
       </View>
 
@@ -179,13 +172,6 @@ export default function ClientsScreen() {
           </Pressable>
         ) : null}
       </View>
-
-      <FilterChips
-        options={filterOptions}
-        selected={filter}
-        onSelect={setFilter}
-        style={styles.filterChips}
-      />
     </View>
   );
 
@@ -195,17 +181,23 @@ export default function ClientsScreen() {
     </Animated.View>
   );
 
-  const renderEmpty = () => (
-    <EmptyState
-      image={require("../../../assets/images/empty-leads.png")}
-      title={filter === "all" ? "No clients yet" : `No ${filter} clients`}
-      description={
-        filter === "all"
-          ? "Your clients will appear here once you start working with homeowners."
-          : `You don't have any ${filter} clients at the moment.`
-      }
-    />
-  );
+  const renderEmpty = () => {
+    if (isLoading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.accent} />
+        </View>
+      );
+    }
+    
+    return (
+      <EmptyState
+        image={require("../../../assets/images/empty-leads.png")}
+        title="No clients yet"
+        description="Add your first client to start managing your business."
+      />
+    );
+  };
 
   return (
     <ThemedView style={styles.container}>
@@ -250,7 +242,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     marginBottom: Spacing.md,
   },
-  menuButton: {
+  addButton: {
     width: 40,
     height: 40,
     borderRadius: BorderRadius.full,
@@ -271,10 +263,6 @@ const styles = StyleSheet.create({
     ...Typography.body,
     padding: 0,
   },
-  filterChips: {
-    paddingHorizontal: 0,
-    marginBottom: Spacing.sm,
-  },
   clientCard: {
     marginHorizontal: Spacing.screenPadding,
     marginBottom: Spacing.sm,
@@ -292,11 +280,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     overflow: "hidden",
   },
-  avatarImage: {
-    width: 48,
-    height: 48,
-    borderRadius: BorderRadius.full,
-  },
   clientInfo: {
     flex: 1,
     gap: 2,
@@ -305,5 +288,9 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
     paddingHorizontal: Spacing.screenPadding,
+  },
+  loadingContainer: {
+    padding: Spacing["2xl"],
+    alignItems: "center",
   },
 });
