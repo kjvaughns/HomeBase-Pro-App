@@ -5,10 +5,10 @@ import {
   FlatList,
   TextInput,
   Pressable,
-  KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
 } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { Feather } from "@expo/vector-icons";
@@ -177,28 +177,26 @@ export default function AIChatScreen() {
     <ThemedView style={styles.container}>
       <KeyboardAvoidingView
         style={styles.keyboardView}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={headerHeight}
+        behavior="padding"
+        keyboardVerticalOffset={0}
       >
         <FlatList
           ref={flatListRef}
-          data={messages}
+          data={messages.length > 0 ? [...messages].reverse() : []}
           renderItem={renderMessage}
           keyExtractor={(item) => item.id}
+          inverted={messages.length > 0}
           contentContainerStyle={[
             styles.messagesContent,
             {
-              paddingTop: headerHeight + Spacing.lg,
-              paddingBottom: Spacing.lg,
+              paddingTop: Spacing.lg,
+              paddingBottom: headerHeight + Spacing.lg,
             },
           ]}
           ListEmptyComponent={renderEmptyState}
           showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => {
-            if (messages.length > 0) {
-              flatListRef.current?.scrollToEnd({ animated: true });
-            }
-          }}
+          keyboardDismissMode="interactive"
+          keyboardShouldPersistTaps="handled"
         />
 
         <View
@@ -207,7 +205,7 @@ export default function AIChatScreen() {
             {
               backgroundColor: isDark ? theme.backgroundSecondary : theme.backgroundRoot,
               borderTopColor: theme.borderLight,
-              paddingBottom: insets.bottom > 0 ? insets.bottom : Spacing.md,
+              paddingBottom: Math.max(insets.bottom, Spacing.md),
             },
           ]}
         >
@@ -229,8 +227,9 @@ export default function AIChatScreen() {
               multiline
               maxLength={500}
               editable={!isLoading}
-              onSubmitEditing={handleSend}
               returnKeyType="send"
+              blurOnSubmit={false}
+              onSubmitEditing={handleSend}
             />
             <Pressable
               onPress={handleSend}

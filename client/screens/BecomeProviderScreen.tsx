@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, View, ScrollView, Alert } from "react-native";
+import { StyleSheet, View, Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation } from "@react-navigation/native";
@@ -12,7 +12,7 @@ import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { TextField } from "@/components/TextField";
 import { PrimaryButton } from "@/components/PrimaryButton";
-import { ListRow } from "@/components/ListRow";
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
@@ -58,7 +58,6 @@ export default function BecomeProviderScreen() {
     setLoading(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    // Simulate API call
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
     createProviderProfile({
@@ -66,7 +65,7 @@ export default function BecomeProviderScreen() {
       userId: user?.id || "1",
       businessName: businessName.trim(),
       services: ["Plumbing"],
-      status: "approved", // For demo, auto-approve
+      status: "approved",
       rating: 0,
       reviewCount: 0,
       completedJobs: 0,
@@ -79,7 +78,7 @@ export default function BecomeProviderScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <ScrollView
+      <KeyboardAwareScrollViewCompat
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.xl,
           paddingBottom: insets.bottom + Spacing.xl,
@@ -87,6 +86,7 @@ export default function BecomeProviderScreen() {
         }}
         scrollIndicatorInsets={{ bottom: insets.bottom }}
         showsVerticalScrollIndicator={false}
+        bottomOffset={Spacing.xl}
       >
         <Animated.View
           entering={FadeInDown.delay(100).duration(400)}
@@ -194,7 +194,7 @@ export default function BecomeProviderScreen() {
             acknowledge our Provider Guidelines.
           </ThemedText>
         </Animated.View>
-      </ScrollView>
+      </KeyboardAwareScrollViewCompat>
     </ThemedView>
   );
 }
