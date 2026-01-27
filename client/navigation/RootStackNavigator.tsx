@@ -6,6 +6,11 @@ import HomeownerTabNavigator from "@/navigation/HomeownerTabNavigator";
 import ProviderTabNavigator from "@/navigation/ProviderTabNavigator";
 import RoleSwitchConfirmationScreen from "@/screens/RoleSwitchConfirmationScreen";
 import BecomeProviderScreen from "@/screens/BecomeProviderScreen";
+import WelcomeScreen from "@/screens/auth/WelcomeScreen";
+import LoginScreen from "@/screens/auth/LoginScreen";
+import SignUpScreen from "@/screens/auth/SignUpScreen";
+import ForgotPasswordScreen from "@/screens/auth/ForgotPasswordScreen";
+import OnboardingScreen from "@/screens/auth/OnboardingScreen";
 import AIChatScreen from "@/screens/homeowner/AIChatScreen";
 import SurvivalKitScreen from "@/screens/homeowner/SurvivalKitScreen";
 import HealthScoreScreen from "@/screens/homeowner/HealthScoreScreen";
@@ -32,6 +37,11 @@ import { useAuthStore, UserRole } from "@/state/authStore";
 import { UrgencyLevel, JobSize } from "@/state/types";
 
 export type RootStackParamList = {
+  Welcome: undefined;
+  Login: undefined;
+  SignUp: undefined;
+  ForgotPassword: undefined;
+  Onboarding: undefined;
   Main: undefined;
   RoleSwitchConfirmation: { targetRole: UserRole };
   BecomeProvider: undefined;
@@ -95,7 +105,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export default function RootStackNavigator() {
   const screenOptions = useScreenOptions();
   const { theme } = useTheme();
-  const { isAuthenticated, activeRole, canAccessProviderMode } = useAuthStore();
+  const { isAuthenticated, isHydrated, activeRole, canAccessProviderMode } = useAuthStore();
 
   const getMainComponent = () => {
     if (isAuthenticated && activeRole === "provider" && canAccessProviderMode()) {
@@ -104,11 +114,44 @@ export default function RootStackNavigator() {
     return HomeownerTabNavigator;
   };
 
+  if (!isHydrated) {
+    return null;
+  }
+
   return (
     <Stack.Navigator screenOptions={screenOptions}>
+      {!isAuthenticated ? (
+        <>
+          <Stack.Screen
+            name="Welcome"
+            component={WelcomeScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="Login"
+            component={LoginScreen}
+            options={{ headerTitle: "Sign In" }}
+          />
+          <Stack.Screen
+            name="SignUp"
+            component={SignUpScreen}
+            options={{ headerTitle: "Create Account" }}
+          />
+          <Stack.Screen
+            name="ForgotPassword"
+            component={ForgotPasswordScreen}
+            options={{ headerTitle: "Reset Password" }}
+          />
+        </>
+      ) : null}
       <Stack.Screen
         name="Main"
         component={getMainComponent()}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="Onboarding"
+        component={OnboardingScreen}
         options={{ headerShown: false }}
       />
       <Stack.Screen

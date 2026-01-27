@@ -13,12 +13,47 @@ interface ChatMessage {
   content: string;
 }
 
+function formatUserResponse(user: { firstName?: string | null; lastName?: string | null; [key: string]: unknown }) {
+  const { firstName, lastName, password, ...rest } = user;
+  const name = [firstName, lastName].filter(Boolean).join(" ") || null;
+  return { ...rest, name };
+}
+
+function parseUserName(name?: string): { firstName?: string; lastName?: string } {
+  if (!name) return {};
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) {
+    return { firstName: parts[0] };
+  }
+  return {
+    firstName: parts[0],
+    lastName: parts.slice(1).join(" "),
+  };
+}
+
+function formatHomeResponse(home: { label: string; street: string; zip: string; [key: string]: unknown }) {
+  const { label, street, zip, ...rest } = home;
+  return {
+    ...rest,
+    label,
+    street,
+    zip,
+    nickname: label,
+    address: street,
+    zipCode: zip,
+  };
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   await seedDatabase();
 
   app.post("/api/auth/signup", async (req: Request, res: Response) => {
     try {
-      const parsed = insertUserSchema.safeParse(req.body);
+      const { name, ...restBody } = req.body;
+      const nameFields = parseUserName(name);
+      const userData = { ...restBody, ...nameFields };
+      
+      const parsed = insertUserSchema.safeParse(userData);
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
       }
@@ -29,8 +64,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const user = await storage.createUser(parsed.data);
-      const { password: _, ...safeUser } = user;
-      res.status(201).json({ user: safeUser });
+      res.status(201).json({ user: formatUserResponse(user) });
     } catch (error) {
       console.error("Signup error:", error);
       res.status(500).json({ error: "Failed to create account" });
@@ -49,8 +83,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Invalid email or password" });
       }
 
-      const { password: _, ...safeUser } = user;
-      res.json({ user: safeUser });
+      res.json({ user: formatUserResponse(user) });
     } catch (error) {
       console.error("Login error:", error);
       res.status(500).json({ error: "Failed to login" });
@@ -63,8 +96,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
-      const { password: _, ...safeUser } = user;
-      res.json({ user: safeUser });
+      res.json({ user: formatUserResponse(user) });
     } catch (error) {
       console.error("Get user error:", error);
       res.status(500).json({ error: "Failed to get user" });
@@ -73,12 +105,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/user/:id", async (req: Request<IdParams>, res: Response) => {
     try {
-      const user = await storage.updateUser(req.params.id, req.body);
+      const { name, ...restBody } = req.body;
+      const nameFields = name ? parseUserName(name) : {};
+      const updateData = { ...restBody, ...nameFields };
+      
+      const user = await storage.updateUser(req.params.id, updateData);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
-      const { password: _, ...safeUser } = user;
-      res.json({ user: safeUser });
+      res.json({ user: formatUserResponse(user) });
     } catch (error) {
       console.error("Update user error:", error);
       res.status(500).json({ error: "Failed to update user" });
@@ -88,7 +123,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/homes/:userId", async (req: Request<UserIdParams>, res: Response) => {
     try {
       const homes = await storage.getHomes(req.params.userId);
-      res.json({ homes });
+      res.json({ homes: homes.map(formatHomeResponse) });
     } catch (error) {
       console.error("Get homes error:", error);
       res.status(500).json({ error: "Failed to get homes" });
@@ -97,12 +132,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/homes", async (req: Request, res: Response) => {
     try {
-      const parsed = insertHomeSchema.safeParse(req.body);
+      const { nickname, address, zipCode, label, street, zip, ...rest } = req.body;
+      const homeData = {
+        ...rest,
+        label: nickname || label || "My Home",
+        street: address || street,
+        zip: zipCode || zip,
+      };
+      
+      const parsed = insertHomeSchema.safeParse(homeData);
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
       }
       const home = await storage.createHome(parsed.data);
-      res.status(201).json({ home });
+      res.status(201).json({ home: formatHomeResponse(home) });
     } catch (error) {
       console.error("Create home error:", error);
       res.status(500).json({ error: "Failed to create home" });
@@ -111,11 +154,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/homes/:id", async (req: Request<IdParams>, res: Response) => {
     try {
-      const home = await storage.updateHome(req.params.id, req.body);
+      const { nickname, address, zipCode, ...rest } = req.body;
+      const updateData: Record<string, unknown> = { ...rest };
+      if (nickname !== undefined) updateData.label = nickname;
+      if (address !== undefined) updateData.street = address;
+      if (zipCode !== undefined) updateData.zip = zipCode;
+      
+      const home = await storage.updateHome(req.params.id, updateData);
       if (!home) {
         return res.status(404).json({ error: "Home not found" });
       }
-      res.json({ home });
+      res.json({ home: formatHomeResponse(home) });
     } catch (error) {
       console.error("Update home error:", error);
       res.status(500).json({ error: "Failed to update home" });
