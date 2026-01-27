@@ -35,6 +35,8 @@ import NotificationsScreen from "@/screens/homeowner/NotificationsScreen";
 import ClientDetailScreen from "@/screens/provider/ClientDetailScreen";
 import AddClientScreen from "@/screens/provider/AddClientScreen";
 import AddJobScreen from "@/screens/provider/AddJobScreen";
+import AddInvoiceScreen from "@/screens/provider/AddInvoiceScreen";
+import InvoiceDetailScreen from "@/screens/provider/InvoiceDetailScreen";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuthStore, UserRole } from "@/state/authStore";
@@ -106,6 +108,8 @@ export type RootStackParamList = {
   ClientDetail: { clientId: string };
   AddClient: undefined;
   AddJob: undefined;
+  AddInvoice: undefined;
+  InvoiceDetail: { invoiceId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -348,6 +352,20 @@ export default function RootStackNavigator() {
         component={AddJobScreen}
         options={{
           headerTitle: "Add Job",
+        }}
+      />
+      <Stack.Screen
+        name="AddInvoice"
+        component={AddInvoiceScreen}
+        options={{
+          headerTitle: "New Invoice",
+        }}
+      />
+      <Stack.Screen
+        name="InvoiceDetail"
+        component={InvoiceDetailScreen}
+        options={{
+          headerTitle: "Invoice",
         }}
       />
     </Stack.Navigator>

@@ -778,6 +778,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/invoices/:id/cancel", async (req: Request<IdParams>, res: Response) => {
+    try {
+      const invoice = await storage.cancelInvoice(req.params.id);
+      if (!invoice) {
+        return res.status(404).json({ error: "Invoice not found" });
+      }
+      res.json({ invoice });
+    } catch (error) {
+      console.error("Cancel invoice error:", error);
+      res.status(500).json({ error: "Failed to cancel invoice" });
+    }
+  });
+
   // ============ PAYMENTS ROUTES ============
 
   app.get("/api/provider/:providerId/payments", async (req: Request<ProviderIdParams>, res: Response) => {
