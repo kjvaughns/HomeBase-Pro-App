@@ -28,7 +28,6 @@ import BookingConfirmScreen from "@/screens/homeowner/BookingConfirmScreen";
 import BookingSuccessScreen from "@/screens/homeowner/BookingSuccessScreen";
 import JobDetailScreen from "@/screens/homeowner/JobDetailScreen";
 import AppointmentDetailScreen from "@/screens/homeowner/AppointmentDetailScreen";
-import ChatScreen from "@/screens/homeowner/ChatScreen";
 import PaymentScreen from "@/screens/homeowner/PaymentScreen";
 import ReviewScreen from "@/screens/homeowner/ReviewScreen";
 import ProfileEditScreen from "@/screens/homeowner/ProfileEditScreen";
@@ -108,7 +107,6 @@ export type RootStackParamList = {
   BookingSuccess: { jobId: string };
   JobDetail: { jobId: string };
   AppointmentDetail: { appointmentId: string };
-  Chat: { jobId: string; threadId?: string };
   Payment: { jobId: string; invoiceId: string };
   Review: { jobId: string };
   ProfileEdit: undefined;
@@ -304,18 +302,6 @@ export default function RootStackNavigator() {
         component={AppointmentDetailScreen}
         options={{
           headerTitle: "Appointment Details",
-        }}
-      />
-      <Stack.Screen
-        name="Chat"
-        component={ChatScreen}
-        options={{
-          headerTitle: "Messages",
-          headerTransparent: false,
-          headerBlurEffect: undefined,
-          headerStyle: {
-            backgroundColor: theme.backgroundRoot,
-          },
         }}
       />
       <Stack.Screen

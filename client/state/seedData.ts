@@ -40,6 +40,7 @@ export const PROVIDERS: Provider[] = [
     responseTime: "Usually responds in 1 hour",
     distance: 2.3,
     gallery: [],
+    phone: "5551234567",
   },
   {
     id: "prov-2",
@@ -57,6 +58,7 @@ export const PROVIDERS: Provider[] = [
     responseTime: "Usually responds in 30 min",
     distance: 1.8,
     gallery: [],
+    phone: "5552345678",
   },
   {
     id: "prov-3",
@@ -74,6 +76,7 @@ export const PROVIDERS: Provider[] = [
     responseTime: "Usually responds in 2 hours",
     distance: 3.1,
     gallery: [],
+    phone: "5553456789",
   },
   {
     id: "prov-4",
@@ -91,6 +94,7 @@ export const PROVIDERS: Provider[] = [
     responseTime: "Usually responds in 1 hour",
     distance: 4.2,
     gallery: [],
+    phone: "5554567890",
   },
   {
     id: "prov-5",
@@ -108,6 +112,7 @@ export const PROVIDERS: Provider[] = [
     responseTime: "Usually responds in 3 hours",
     distance: 5.0,
     gallery: [],
+    phone: "5555678901",
   },
   {
     id: "prov-6",
@@ -125,6 +130,7 @@ export const PROVIDERS: Provider[] = [
     responseTime: "Usually responds in 2 hours",
     distance: 2.7,
     gallery: [],
+    phone: "5556789012",
   },
   {
     id: "prov-7",
@@ -142,6 +148,7 @@ export const PROVIDERS: Provider[] = [
     responseTime: "Usually responds in 4 hours",
     distance: 6.1,
     gallery: [],
+    phone: "5557890123",
   },
   {
     id: "prov-8",
@@ -159,6 +166,7 @@ export const PROVIDERS: Provider[] = [
     responseTime: "Usually responds in 1 hour",
     distance: 1.5,
     gallery: [],
+    phone: "5558901234",
   },
   {
     id: "prov-9",
@@ -176,6 +184,7 @@ export const PROVIDERS: Provider[] = [
     responseTime: "Usually responds in 2 hours",
     distance: 3.4,
     gallery: [],
+    phone: "5559012345",
   },
   {
     id: "prov-10",
@@ -193,6 +202,7 @@ export const PROVIDERS: Provider[] = [
     responseTime: "Usually responds in 20 min",
     distance: 2.1,
     gallery: [],
+    phone: "5550123456",
   },
   {
     id: "prov-11",

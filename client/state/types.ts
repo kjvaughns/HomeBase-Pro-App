@@ -85,6 +85,7 @@ export interface Provider {
   responseTime: string;
   distance?: number;
   gallery: string[];
+  phone?: string;
 }
 
 export interface TimelineEvent {
@@ -156,25 +157,6 @@ export interface Job {
   reviewId?: string;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface MessageAttachment {
-  id: string;
-  type: "image" | "document";
-  url: string;
-  name: string;
-}
-
-export interface ChatMessage {
-  id: string;
-  threadId: string;
-  senderId: string;
-  senderName: string;
-  senderType: "homeowner" | "provider";
-  content: string;
-  attachments: MessageAttachment[];
-  timestamp: string;
-  read: boolean;
 }
 
 export interface Quote {

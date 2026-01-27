@@ -2,8 +2,6 @@ import { useHomeownerStore } from "@/state/homeownerStore";
 import {
   Job,
   JobStatus,
-  MessageThread,
-  ChatMessage,
   Invoice,
   Receipt,
   Review,
@@ -150,32 +148,6 @@ export const api = {
     async advanceStatus(jobId: string): Promise<void> {
       await delay(100);
       useHomeownerStore.getState().advanceJobStatus(jobId);
-    },
-  },
-
-  messages: {
-    async getThreads(): Promise<MessageThread[]> {
-      await delay(150);
-      return useHomeownerStore.getState().messageThreads;
-    },
-
-    async getThreadByJobId(jobId: string): Promise<MessageThread | undefined> {
-      await delay(50);
-      return useHomeownerStore.getState().getThreadByJobId(jobId);
-    },
-
-    async sendMessage(
-      threadId: string,
-      content: string,
-      attachments?: ChatMessage["attachments"]
-    ): Promise<void> {
-      await delay(150);
-      useHomeownerStore.getState().sendMessage(threadId, content, attachments);
-    },
-
-    async markAsRead(threadId: string): Promise<void> {
-      await delay(50);
-      useHomeownerStore.getState().markThreadAsRead(threadId);
     },
   },
 

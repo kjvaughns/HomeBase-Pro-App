@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { StyleSheet, View, ScrollView, Pressable } from "react-native";
+import { StyleSheet, View, ScrollView, Pressable, Linking, Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
@@ -81,6 +81,36 @@ export default function ProviderProfileScreen() {
   const handleSignUp = () => {
     setShowAccountGate(false);
     navigation.navigate("SignUp");
+  };
+
+  const handleCall = async () => {
+    const phoneNumber = provider.phone || "5551234567";
+    const url = `tel:${phoneNumber}`;
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert("Unable to Call", "Phone calls are not supported on this device.");
+      }
+    } catch (error) {
+      Alert.alert("Error", "Could not open phone dialer.");
+    }
+  };
+
+  const handleText = async () => {
+    const phoneNumber = provider.phone || "5551234567";
+    const url = `sms:${phoneNumber}`;
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert("Unable to Text", "SMS is not supported on this device.");
+      }
+    } catch (error) {
+      Alert.alert("Error", "Could not open messaging app.");
+    }
   };
 
   const renderStars = (rating: number) => {
@@ -268,6 +298,22 @@ export default function ProviderProfileScreen() {
       </ScrollView>
 
       <View style={[styles.bottomBar, { backgroundColor: theme.backgroundRoot, paddingBottom: insets.bottom + Spacing.md }]}>
+        <View style={styles.contactButtons}>
+          <Pressable
+            style={[styles.contactButton, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}
+            onPress={handleCall}
+          >
+            <Feather name="phone" size={20} color={Colors.accent} />
+            <ThemedText style={[styles.contactButtonText, { color: theme.text }]}>Call</ThemedText>
+          </Pressable>
+          <Pressable
+            style={[styles.contactButton, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}
+            onPress={handleText}
+          >
+            <Feather name="message-circle" size={20} color={Colors.accent} />
+            <ThemedText style={[styles.contactButtonText, { color: theme.text }]}>Text</ThemedText>
+          </Pressable>
+        </View>
         <PrimaryButton onPress={handleBookPress}>Book Now</PrimaryButton>
       </View>
 
@@ -447,5 +493,24 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "rgba(0,0,0,0.1)",
+  },
+  contactButtons: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  contactButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: Spacing.xs,
+  },
+  contactButtonText: {
+    ...Typography.subhead,
+    fontWeight: "600",
   },
 });
