@@ -4,13 +4,12 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
-  WithSpringConfig,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
-import { BorderRadius, Spacing, Colors } from "@/constants/theme";
+import { BorderRadius, Spacing, Colors, Animation, Typography } from "@/constants/theme";
 
 interface PrimaryButtonProps {
   onPress?: () => void;
@@ -21,13 +20,6 @@ interface PrimaryButtonProps {
   icon?: React.ReactNode;
   testID?: string;
 }
-
-const springConfig: WithSpringConfig = {
-  damping: 15,
-  mass: 0.3,
-  stiffness: 150,
-  overshootClamping: true,
-};
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -49,17 +41,17 @@ export function PrimaryButton({
 
   const handlePressIn = () => {
     if (!disabled && !loading) {
-      scale.value = withSpring(0.97, springConfig);
+      scale.value = withSpring(Animation.pressScale, Animation.spring.fast);
     }
   };
 
   const handlePressOut = () => {
-    scale.value = withSpring(1, springConfig);
+    scale.value = withSpring(1, Animation.spring.fast);
   };
 
   const handlePress = () => {
     if (!disabled && !loading && onPress) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       onPress();
     }
   };
@@ -74,22 +66,18 @@ export function PrimaryButton({
       style={[
         styles.button,
         {
-          backgroundColor: Colors.accent,
-          opacity: disabled ? 0.5 : 1,
+          backgroundColor: disabled ? theme.backgroundTertiary : Colors.accent,
         },
         style,
         animatedStyle,
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={theme.buttonText} size="small" />
+        <ActivityIndicator color="#FFFFFF" size="small" />
       ) : (
         <>
           {icon}
-          <ThemedText
-            type="body"
-            style={[styles.buttonText, { color: theme.buttonText }]}
-          >
+          <ThemedText style={styles.buttonText}>
             {children}
           </ThemedText>
         </>
@@ -101,7 +89,7 @@ export function PrimaryButton({
 const styles = StyleSheet.create({
   button: {
     height: Spacing.buttonHeight,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.button,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -109,6 +97,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xl,
   },
   buttonText: {
+    ...Typography.callout,
     fontWeight: "600",
+    color: "#FFFFFF",
   },
 });

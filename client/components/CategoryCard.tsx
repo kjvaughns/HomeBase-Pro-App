@@ -11,7 +11,7 @@ import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
-import { BorderRadius, Spacing, Colors } from "@/constants/theme";
+import { BorderRadius, Spacing, Colors, Animation, GlassEffect } from "@/constants/theme";
 
 interface CategoryCardProps {
   name: string;
@@ -31,11 +31,11 @@ export function CategoryCard({ name, icon, onPress, testID }: CategoryCardProps)
   }));
 
   const handlePressIn = () => {
-    scale.value = withSpring(0.95);
+    scale.value = withSpring(Animation.pressScale, Animation.spring.fast);
   };
 
   const handlePressOut = () => {
-    scale.value = withSpring(1);
+    scale.value = withSpring(1, Animation.spring.fast);
   };
 
   const handlePress = () => {
@@ -52,28 +52,22 @@ export function CategoryCard({ name, icon, onPress, testID }: CategoryCardProps)
       style={[
         styles.card,
         {
-          backgroundColor:
-            Platform.OS === "ios" ? "transparent" : theme.glassBackground,
-          borderColor: theme.glassBorder,
+          backgroundColor: Platform.OS === "ios" ? "transparent" : theme.cardBackground,
+          borderColor: theme.borderLight,
         },
         animatedStyle,
       ]}
     >
       {Platform.OS === "ios" ? (
         <BlurView
-          intensity={40}
+          intensity={GlassEffect.intensity.light}
           tint={isDark ? "dark" : "light"}
           style={StyleSheet.absoluteFill}
         />
       ) : null}
 
-      <View
-        style={[
-          styles.iconContainer,
-          { backgroundColor: `${Colors.accent}15` },
-        ]}
-      >
-        <Feather name={icon} size={24} color={Colors.accent} />
+      <View style={[styles.iconContainer, { backgroundColor: Colors.accentLight }]}>
+        <Feather name={icon} size={Spacing.iconSize} color={Colors.accent} />
       </View>
 
       <ThemedText type="label" style={styles.name} numberOfLines={1}>
@@ -87,16 +81,17 @@ const styles = StyleSheet.create({
   card: {
     flex: 1,
     alignItems: "center",
+    justifyContent: "center",
     padding: Spacing.lg,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    minHeight: 100,
+    borderRadius: BorderRadius.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    minHeight: 96,
     overflow: "hidden",
   },
   iconContainer: {
     width: 48,
     height: 48,
-    borderRadius: 14,
+    borderRadius: BorderRadius.md,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: Spacing.sm,

@@ -2,7 +2,7 @@ import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
-import { Platform, StyleSheet } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 
 import FindScreen from "@/screens/homeowner/FindScreen";
 import ManageScreen from "@/screens/homeowner/ManageScreen";
@@ -12,7 +12,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
 import { HeaderTitle } from "@/components/HeaderTitle";
 import { useAuthStore } from "@/state/authStore";
-import { Colors } from "@/constants/theme";
+import { Colors, Spacing } from "@/constants/theme";
 
 export type HomeownerTabParamList = {
   FindTab: undefined;
@@ -35,20 +35,33 @@ export default function HomeownerTabNavigator() {
         ...screenOptions,
         tabBarActiveTintColor: Colors.accent,
         tabBarInactiveTintColor: theme.tabIconDefault,
+        tabBarShowLabel: true,
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: "500",
+          marginTop: -2,
+        },
+        tabBarIconStyle: {
+          marginTop: 2,
+        },
         tabBarStyle: {
           position: "absolute",
           backgroundColor: Platform.select({
             ios: "transparent",
             android: theme.backgroundRoot,
+            web: theme.glassOverlay,
           }),
-          borderTopWidth: 0,
+          borderTopWidth: Platform.OS === "ios" ? 0 : StyleSheet.hairlineWidth,
+          borderTopColor: theme.separator,
           elevation: 0,
+          height: Spacing.tabBarHeight + 34,
+          paddingBottom: 34,
         },
         tabBarBackground: () =>
           Platform.OS === "ios" ? (
             <BlurView
               intensity={100}
-              tint={isDark ? "dark" : "light"}
+              tint={isDark ? "systemMaterialDark" : "systemMaterial"}
               style={StyleSheet.absoluteFill}
             />
           ) : null,
@@ -60,8 +73,8 @@ export default function HomeownerTabNavigator() {
         options={{
           title: "Find",
           headerTitle: () => <HeaderTitle title="Homebase" />,
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="search" size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Feather name="search" size={22} color={color} />
           ),
         }}
       />
@@ -71,8 +84,8 @@ export default function HomeownerTabNavigator() {
         options={{
           title: "Manage",
           headerTitle: "Manage",
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="clipboard" size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Feather name="clipboard" size={22} color={color} />
           ),
         }}
       />
@@ -83,8 +96,8 @@ export default function HomeownerTabNavigator() {
           options={{
             title: "Messages",
             headerTitle: "Messages",
-            tabBarIcon: ({ color, size }) => (
-              <Feather name="message-circle" size={size} color={color} />
+            tabBarIcon: ({ color, focused }) => (
+              <Feather name="message-circle" size={22} color={color} />
             ),
           }}
         />
@@ -95,8 +108,8 @@ export default function HomeownerTabNavigator() {
         options={{
           title: "More",
           headerTitle: "More",
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="menu" size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Feather name="menu" size={22} color={color} />
           ),
         }}
       />

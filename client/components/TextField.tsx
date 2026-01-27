@@ -1,10 +1,10 @@
 import React, { useState } from "react";
-import { StyleSheet, View, TextInput, TextInputProps } from "react-native";
+import { StyleSheet, View, TextInput, TextInputProps, Pressable } from "react-native";
 import { Feather } from "@expo/vector-icons";
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, BorderRadius, Colors } from "@/constants/theme";
+import { Spacing, BorderRadius, Colors, Typography } from "@/constants/theme";
 
 interface TextFieldProps extends TextInputProps {
   label?: string;
@@ -23,19 +23,23 @@ export function TextField({
   style,
   ...props
 }: TextFieldProps) {
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
   const [isFocused, setIsFocused] = useState(false);
 
   const borderColor = error
-    ? "#EF4444"
+    ? Colors.error
     : isFocused
     ? Colors.accent
-    : theme.border;
+    : "transparent";
+
+  const backgroundColor = isFocused
+    ? theme.backgroundSecondary
+    : theme.backgroundSecondary;
 
   return (
     <View style={styles.container}>
       {label ? (
-        <ThemedText type="label" style={styles.label}>
+        <ThemedText type="label" style={[styles.label, { color: theme.textSecondary }]}>
           {label}
         </ThemedText>
       ) : null}
@@ -44,15 +48,16 @@ export function TextField({
         style={[
           styles.inputContainer,
           {
-            backgroundColor: theme.backgroundDefault,
+            backgroundColor,
             borderColor,
+            borderWidth: isFocused || error ? 1.5 : 0,
           },
         ]}
       >
         {leftIcon ? (
           <Feather
             name={leftIcon}
-            size={20}
+            size={Spacing.iconSizeSmall}
             color={isFocused ? Colors.accent : theme.textTertiary}
             style={styles.leftIcon}
           />
@@ -61,25 +66,24 @@ export function TextField({
         <TextInput
           style={[
             styles.input,
-            {
-              color: theme.text,
-            },
+            { color: theme.text },
             style,
           ]}
           placeholderTextColor={theme.textTertiary}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
+          selectionColor={Colors.accent}
           {...props}
         />
 
         {rightIcon ? (
-          <Feather
-            name={rightIcon}
-            size={20}
-            color={theme.textTertiary}
-            style={styles.rightIcon}
-            onPress={onRightIconPress}
-          />
+          <Pressable onPress={onRightIconPress} hitSlop={8}>
+            <Feather
+              name={rightIcon}
+              size={Spacing.iconSizeSmall}
+              color={theme.textTertiary}
+            />
+          </Pressable>
         ) : null}
       </View>
 
@@ -97,29 +101,26 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
   },
   label: {
-    marginBottom: Spacing.xs,
+    marginBottom: Spacing.xxs,
+    fontWeight: "500",
   },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
     height: Spacing.inputHeight,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.input,
+    paddingHorizontal: Spacing.md,
   },
   leftIcon: {
     marginRight: Spacing.sm,
   },
-  rightIcon: {
-    marginLeft: Spacing.sm,
-  },
   input: {
     flex: 1,
-    fontSize: 16,
+    ...Typography.body,
     height: "100%",
   },
   error: {
-    color: "#EF4444",
-    marginTop: Spacing.xs,
+    color: Colors.error,
+    marginTop: Spacing.xxs,
   },
 });

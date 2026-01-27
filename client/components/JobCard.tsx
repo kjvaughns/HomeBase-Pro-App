@@ -14,7 +14,7 @@ import { Avatar } from "@/components/Avatar";
 import { ThemedText } from "@/components/ThemedText";
 import { StatusPill } from "@/components/StatusPill";
 import { useTheme } from "@/hooks/useTheme";
-import { BorderRadius, Spacing, Colors } from "@/constants/theme";
+import { BorderRadius, Spacing, Colors, Animation, GlassEffect } from "@/constants/theme";
 import { Job } from "@/state/mockData";
 
 interface JobCardProps {
@@ -28,11 +28,11 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 const getStatusType = (status: Job["status"]) => {
   switch (status) {
     case "scheduled":
-      return "info";
+      return "scheduled";
     case "in_progress":
-      return "warning";
+      return "inProgress";
     case "completed":
-      return "success";
+      return "completed";
     default:
       return "neutral";
   }
@@ -51,11 +51,11 @@ export function JobCard({ job, onPress, testID }: JobCardProps) {
   }));
 
   const handlePressIn = () => {
-    scale.value = withSpring(0.98);
+    scale.value = withSpring(Animation.pressScale, Animation.spring.fast);
   };
 
   const handlePressOut = () => {
-    scale.value = withSpring(1);
+    scale.value = withSpring(1, Animation.spring.fast);
   };
 
   const handlePress = () => {
@@ -91,16 +91,15 @@ export function JobCard({ job, onPress, testID }: JobCardProps) {
       style={[
         styles.card,
         {
-          backgroundColor:
-            Platform.OS === "ios" ? "transparent" : theme.glassBackground,
-          borderColor: theme.glassBorder,
+          backgroundColor: Platform.OS === "ios" ? "transparent" : theme.cardBackground,
+          borderColor: theme.borderLight,
         },
         animatedStyle,
       ]}
     >
       {Platform.OS === "ios" ? (
         <BlurView
-          intensity={40}
+          intensity={GlassEffect.intensity.light}
           tint={isDark ? "dark" : "light"}
           style={StyleSheet.absoluteFill}
         />
@@ -124,10 +123,11 @@ export function JobCard({ job, onPress, testID }: JobCardProps) {
           <StatusPill
             status={getStatusType(job.status)}
             label={formatStatus(job.status)}
+            size="small"
           />
         </View>
 
-        <View style={styles.details}>
+        <View style={[styles.details, { borderTopColor: theme.separator }]}>
           <View style={styles.detailRow}>
             <Feather name="calendar" size={14} color={theme.textSecondary} />
             <ThemedText type="small" style={{ color: theme.textSecondary }}>
@@ -146,7 +146,7 @@ export function JobCard({ job, onPress, testID }: JobCardProps) {
           </View>
         </View>
 
-        <View style={styles.footer}>
+        <View style={[styles.footer, { borderTopColor: theme.separator }]}>
           <ThemedText type="h3" style={{ color: Colors.accent }}>
             ${job.price}
           </ThemedText>
@@ -158,13 +158,13 @@ export function JobCard({ job, onPress, testID }: JobCardProps) {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
+    borderRadius: BorderRadius.card,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
     marginBottom: Spacing.md,
   },
   content: {
-    padding: Spacing.lg,
+    padding: Spacing.cardPadding,
   },
   header: {
     flexDirection: "row",
@@ -178,9 +178,8 @@ const styles = StyleSheet.create({
   details: {
     marginTop: Spacing.md,
     paddingTop: Spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.05)",
-    gap: Spacing.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: Spacing.sm,
   },
   detailRow: {
     flexDirection: "row",
@@ -190,7 +189,6 @@ const styles = StyleSheet.create({
   footer: {
     marginTop: Spacing.md,
     paddingTop: Spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.05)",
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
 });

@@ -12,7 +12,7 @@ import ProviderMoreScreen from "@/screens/provider/ProviderMoreScreen";
 import { useTheme } from "@/hooks/useTheme";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
 import { HeaderTitle } from "@/components/HeaderTitle";
-import { Colors } from "@/constants/theme";
+import { Colors, Spacing } from "@/constants/theme";
 
 export type ProviderTabParamList = {
   HomeTab: undefined;
@@ -35,20 +35,33 @@ export default function ProviderTabNavigator() {
         ...screenOptions,
         tabBarActiveTintColor: Colors.accent,
         tabBarInactiveTintColor: theme.tabIconDefault,
+        tabBarShowLabel: true,
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: "500",
+          marginTop: -2,
+        },
+        tabBarIconStyle: {
+          marginTop: 2,
+        },
         tabBarStyle: {
           position: "absolute",
           backgroundColor: Platform.select({
             ios: "transparent",
             android: theme.backgroundRoot,
+            web: theme.glassOverlay,
           }),
-          borderTopWidth: 0,
+          borderTopWidth: Platform.OS === "ios" ? 0 : StyleSheet.hairlineWidth,
+          borderTopColor: theme.separator,
           elevation: 0,
+          height: Spacing.tabBarHeight + 34,
+          paddingBottom: 34,
         },
         tabBarBackground: () =>
           Platform.OS === "ios" ? (
             <BlurView
               intensity={100}
-              tint={isDark ? "dark" : "light"}
+              tint={isDark ? "systemMaterialDark" : "systemMaterial"}
               style={StyleSheet.absoluteFill}
             />
           ) : null,
@@ -60,8 +73,8 @@ export default function ProviderTabNavigator() {
         options={{
           title: "Home",
           headerTitle: () => <HeaderTitle title="Homebase Pro" />,
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="home" size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Feather name="home" size={22} color={color} />
           ),
         }}
       />
@@ -71,8 +84,8 @@ export default function ProviderTabNavigator() {
         options={{
           title: "Leads",
           headerTitle: "Leads",
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="users" size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Feather name="users" size={22} color={color} />
           ),
         }}
       />
@@ -82,8 +95,8 @@ export default function ProviderTabNavigator() {
         options={{
           title: "Schedule",
           headerTitle: "Schedule",
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="calendar" size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Feather name="calendar" size={22} color={color} />
           ),
         }}
       />
@@ -93,8 +106,8 @@ export default function ProviderTabNavigator() {
         options={{
           title: "Money",
           headerTitle: "Money",
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="dollar-sign" size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Feather name="dollar-sign" size={22} color={color} />
           ),
         }}
       />
@@ -104,8 +117,8 @@ export default function ProviderTabNavigator() {
         options={{
           title: "More",
           headerTitle: "More",
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="menu" size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Feather name="menu" size={22} color={color} />
           ),
         }}
       />

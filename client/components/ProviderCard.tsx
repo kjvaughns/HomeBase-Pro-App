@@ -14,7 +14,7 @@ import { Avatar } from "@/components/Avatar";
 import { ThemedText } from "@/components/ThemedText";
 import { StatusPill } from "@/components/StatusPill";
 import { useTheme } from "@/hooks/useTheme";
-import { BorderRadius, Spacing, Colors } from "@/constants/theme";
+import { BorderRadius, Spacing, Colors, Animation, GlassEffect } from "@/constants/theme";
 
 interface ProviderCardProps {
   name: string;
@@ -51,11 +51,11 @@ export function ProviderCard({
   }));
 
   const handlePressIn = () => {
-    scale.value = withSpring(0.98);
+    scale.value = withSpring(Animation.pressScale, Animation.spring.fast);
   };
 
   const handlePressOut = () => {
-    scale.value = withSpring(1);
+    scale.value = withSpring(1, Animation.spring.fast);
   };
 
   const handlePress = () => {
@@ -72,16 +72,15 @@ export function ProviderCard({
       style={[
         styles.card,
         {
-          backgroundColor:
-            Platform.OS === "ios" ? "transparent" : theme.glassBackground,
-          borderColor: theme.glassBorder,
+          backgroundColor: Platform.OS === "ios" ? "transparent" : theme.cardBackground,
+          borderColor: theme.borderLight,
         },
         animatedStyle,
       ]}
     >
       {Platform.OS === "ios" ? (
         <BlurView
-          intensity={40}
+          intensity={GlassEffect.intensity.light}
           tint={isDark ? "dark" : "light"}
           style={StyleSheet.absoluteFill}
         />
@@ -92,13 +91,11 @@ export function ProviderCard({
           <Avatar uri={avatarUrl} name={name} size="medium" />
           <View style={styles.headerInfo}>
             <View style={styles.nameRow}>
-              <ThemedText type="h4" numberOfLines={1} style={styles.name}>
+              <ThemedText type="h4" numberOfLines={1} style={styles.businessName}>
                 {businessName}
               </ThemedText>
               {verified ? (
-                <View style={styles.verifiedBadge}>
-                  <Feather name="check-circle" size={14} color={Colors.accent} />
-                </View>
+                <Feather name="check-circle" size={16} color={Colors.accent} />
               ) : null}
             </View>
             <ThemedText
@@ -111,9 +108,9 @@ export function ProviderCard({
           </View>
         </View>
 
-        <View style={styles.meta}>
+        <View style={[styles.meta, { borderTopColor: theme.separator }]}>
           <View style={styles.ratingContainer}>
-            <Feather name="star" size={14} color="#F59E0B" />
+            <Feather name="star" size={14} color={Colors.warning} />
             <ThemedText type="label" style={styles.rating}>
               {rating.toFixed(1)}
             </ThemedText>
@@ -134,7 +131,7 @@ export function ProviderCard({
 
         <View style={styles.services}>
           {services.slice(0, 2).map((service, index) => (
-            <StatusPill key={index} status="neutral" label={service} />
+            <StatusPill key={index} status="neutral" label={service} size="small" />
           ))}
         </View>
       </View>
@@ -144,13 +141,13 @@ export function ProviderCard({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
+    borderRadius: BorderRadius.card,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
     marginBottom: Spacing.md,
   },
   content: {
-    padding: Spacing.lg,
+    padding: Spacing.cardPadding,
   },
   header: {
     flexDirection: "row",
@@ -163,12 +160,10 @@ const styles = StyleSheet.create({
   nameRow: {
     flexDirection: "row",
     alignItems: "center",
+    gap: Spacing.xs,
   },
-  name: {
+  businessName: {
     flex: 1,
-  },
-  verifiedBadge: {
-    marginLeft: Spacing.xs,
   },
   meta: {
     flexDirection: "row",
@@ -176,8 +171,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginTop: Spacing.md,
     paddingTop: Spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.05)",
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   ratingContainer: {
     flexDirection: "row",
@@ -194,7 +188,7 @@ const styles = StyleSheet.create({
   services: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: Spacing.xs,
+    gap: Spacing.sm,
     marginTop: Spacing.md,
   },
 });

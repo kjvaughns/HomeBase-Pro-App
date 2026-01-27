@@ -1,30 +1,41 @@
 import React from "react";
-import { StyleSheet, View, Platform } from "react-native";
-import { BlurView } from "expo-blur";
+import { StyleSheet, View } from "react-native";
 
 import { ThemedText } from "@/components/ThemedText";
-import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, Colors } from "@/constants/theme";
 
-type StatusType = "success" | "warning" | "error" | "info" | "neutral" | "pending";
+type StatusType = "success" | "warning" | "error" | "info" | "neutral" | "pending" | "scheduled" | "inProgress" | "completed";
 
 interface StatusPillProps {
   status: StatusType;
   label: string;
+  size?: "small" | "default";
 }
 
-const statusColors: Record<StatusType, { bg: string; text: string }> = {
-  success: { bg: "rgba(56, 174, 95, 0.15)", text: Colors.accent },
-  warning: { bg: "rgba(245, 158, 11, 0.15)", text: "#F59E0B" },
-  error: { bg: "rgba(239, 68, 68, 0.15)", text: "#EF4444" },
-  info: { bg: "rgba(59, 130, 246, 0.15)", text: "#3B82F6" },
-  neutral: { bg: "rgba(107, 114, 128, 0.15)", text: "#6B7280" },
-  pending: { bg: "rgba(245, 158, 11, 0.15)", text: "#F59E0B" },
+const getStatusColors = (status: StatusType): { bg: string; text: string } => {
+  switch (status) {
+    case "success":
+    case "completed":
+      return { bg: `${Colors.accent}14`, text: Colors.accent };
+    case "warning":
+    case "pending":
+      return { bg: `${Colors.warning}14`, text: Colors.warning };
+    case "error":
+      return { bg: `${Colors.error}14`, text: Colors.error };
+    case "info":
+    case "scheduled":
+      return { bg: "rgba(59, 130, 246, 0.12)", text: "#3B82F6" };
+    case "inProgress":
+      return { bg: `${Colors.accent}14`, text: Colors.accent };
+    case "neutral":
+    default:
+      return { bg: "rgba(128, 128, 128, 0.12)", text: "#808080" };
+  }
 };
 
-export function StatusPill({ status, label }: StatusPillProps) {
-  const { isDark } = useTheme();
-  const colors = statusColors[status];
+export function StatusPill({ status, label, size = "default" }: StatusPillProps) {
+  const colors = getStatusColors(status);
+  const isSmall = size === "small";
 
   return (
     <View
@@ -32,19 +43,19 @@ export function StatusPill({ status, label }: StatusPillProps) {
         styles.pill,
         {
           backgroundColor: colors.bg,
+          paddingVertical: isSmall ? Spacing.xxs : Spacing.xs,
+          paddingHorizontal: isSmall ? Spacing.sm : Spacing.md,
         },
       ]}
     >
-      {Platform.OS === "ios" ? (
-        <BlurView
-          intensity={20}
-          tint={isDark ? "dark" : "light"}
-          style={StyleSheet.absoluteFill}
-        />
-      ) : null}
       <ThemedText
-        type="caption"
-        style={[styles.label, { color: colors.text }]}
+        style={[
+          styles.label,
+          {
+            color: colors.text,
+            fontSize: isSmall ? 11 : 12,
+          },
+        ]}
       >
         {label}
       </ThemedText>
@@ -54,13 +65,12 @@ export function StatusPill({ status, label }: StatusPillProps) {
 
 const styles = StyleSheet.create({
   pill: {
-    paddingVertical: Spacing.xs,
-    paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.xs,
-    overflow: "hidden",
+    borderRadius: BorderRadius.sm,
+    alignSelf: "flex-start",
   },
   label: {
     fontWeight: "600",
     textTransform: "capitalize",
+    letterSpacing: 0.2,
   },
 });

@@ -5,7 +5,7 @@ import { Feather } from "@expo/vector-icons";
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
-import { BorderRadius, Spacing, Colors } from "@/constants/theme";
+import { BorderRadius, Spacing, Colors, GlassEffect } from "@/constants/theme";
 
 interface StatCardProps {
   title: string;
@@ -32,15 +32,14 @@ export function StatCard({
       style={[
         styles.card,
         {
-          backgroundColor:
-            Platform.OS === "ios" ? "transparent" : theme.glassBackground,
-          borderColor: theme.glassBorder,
+          backgroundColor: Platform.OS === "ios" ? "transparent" : theme.cardBackground,
+          borderColor: theme.borderLight,
         },
       ]}
     >
       {Platform.OS === "ios" ? (
         <BlurView
-          intensity={40}
+          intensity={GlassEffect.intensity.light}
           tint={isDark ? "dark" : "light"}
           style={StyleSheet.absoluteFill}
         />
@@ -48,13 +47,8 @@ export function StatCard({
 
       <View style={styles.content}>
         <View style={styles.header}>
-          <View
-            style={[
-              styles.iconContainer,
-              { backgroundColor: `${Colors.accent}15` },
-            ]}
-          >
-            <Feather name={icon} size={20} color={Colors.accent} />
+          <View style={[styles.iconContainer, { backgroundColor: Colors.accentLight }]}>
+            <Feather name={icon} size={Spacing.iconSizeSmall} color={Colors.accent} />
           </View>
 
           {trend ? (
@@ -62,12 +56,12 @@ export function StatCard({
               <Feather
                 name={trend.positive ? "trending-up" : "trending-down"}
                 size={14}
-                color={trend.positive ? Colors.accent : "#EF4444"}
+                color={trend.positive ? Colors.accent : Colors.error}
               />
               <ThemedText
                 type="caption"
                 style={{
-                  color: trend.positive ? Colors.accent : "#EF4444",
+                  color: trend.positive ? Colors.accent : Colors.error,
                   fontWeight: "600",
                 }}
               >
@@ -100,13 +94,13 @@ export function StatCard({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
+    borderRadius: BorderRadius.card,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
     flex: 1,
   },
   content: {
-    padding: Spacing.lg,
+    padding: Spacing.cardPadding,
   },
   header: {
     flexDirection: "row",
@@ -115,9 +109,9 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.iconContainer,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -127,9 +121,9 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   value: {
-    marginBottom: Spacing.xs,
+    marginBottom: Spacing.xxs,
   },
   subtitle: {
-    marginTop: Spacing.xs,
+    marginTop: Spacing.xxs,
   },
 });

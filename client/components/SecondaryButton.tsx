@@ -4,12 +4,12 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
-  WithSpringConfig,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "@/components/ThemedText";
-import { BorderRadius, Spacing, Colors } from "@/constants/theme";
+import { useTheme } from "@/hooks/useTheme";
+import { BorderRadius, Spacing, Colors, Animation, Typography } from "@/constants/theme";
 
 interface SecondaryButtonProps {
   onPress?: () => void;
@@ -20,13 +20,6 @@ interface SecondaryButtonProps {
   icon?: React.ReactNode;
   testID?: string;
 }
-
-const springConfig: WithSpringConfig = {
-  damping: 15,
-  mass: 0.3,
-  stiffness: 150,
-  overshootClamping: true,
-};
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -39,6 +32,7 @@ export function SecondaryButton({
   icon,
   testID,
 }: SecondaryButtonProps) {
+  const { theme } = useTheme();
   const scale = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -47,12 +41,12 @@ export function SecondaryButton({
 
   const handlePressIn = () => {
     if (!disabled && !loading) {
-      scale.value = withSpring(0.97, springConfig);
+      scale.value = withSpring(Animation.pressScale, Animation.spring.fast);
     }
   };
 
   const handlePressOut = () => {
-    scale.value = withSpring(1, springConfig);
+    scale.value = withSpring(1, Animation.spring.fast);
   };
 
   const handlePress = () => {
@@ -72,7 +66,7 @@ export function SecondaryButton({
       style={[
         styles.button,
         {
-          borderColor: Colors.accent,
+          backgroundColor: theme.backgroundSecondary,
           opacity: disabled ? 0.5 : 1,
         },
         style,
@@ -80,14 +74,11 @@ export function SecondaryButton({
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={Colors.accent} size="small" />
+        <ActivityIndicator color={theme.text} size="small" />
       ) : (
         <>
           {icon}
-          <ThemedText
-            type="body"
-            style={[styles.buttonText, { color: Colors.accent }]}
-          >
+          <ThemedText style={[styles.buttonText, { color: theme.text }]}>
             {children}
           </ThemedText>
         </>
@@ -99,16 +90,15 @@ export function SecondaryButton({
 const styles = StyleSheet.create({
   button: {
     height: Spacing.buttonHeight,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.button,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
     gap: Spacing.sm,
     paddingHorizontal: Spacing.xl,
-    borderWidth: 1.5,
-    backgroundColor: "transparent",
   },
   buttonText: {
+    ...Typography.callout,
     fontWeight: "600",
   },
 });

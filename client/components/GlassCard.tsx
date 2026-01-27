@@ -5,27 +5,21 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
-  WithSpringConfig,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, BorderRadius } from "@/constants/theme";
+import { Spacing, BorderRadius, Animation, GlassEffect } from "@/constants/theme";
 
 interface GlassCardProps {
   children: React.ReactNode;
   onPress?: () => void;
   style?: ViewStyle;
-  intensity?: number;
+  contentStyle?: ViewStyle;
+  intensity?: "light" | "medium" | "heavy";
+  noPadding?: boolean;
   testID?: string;
 }
-
-const springConfig: WithSpringConfig = {
-  damping: 15,
-  mass: 0.3,
-  stiffness: 150,
-  overshootClamping: true,
-};
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -33,11 +27,15 @@ export function GlassCard({
   children,
   onPress,
   style,
-  intensity = 40,
+  contentStyle,
+  intensity = "light",
+  noPadding = false,
   testID,
 }: GlassCardProps) {
   const { theme, isDark } = useTheme();
   const scale = useSharedValue(1);
+
+  const blurIntensity = GlassEffect.intensity[intensity];
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -45,13 +43,13 @@ export function GlassCard({
 
   const handlePressIn = () => {
     if (onPress) {
-      scale.value = withSpring(0.98, springConfig);
+      scale.value = withSpring(Animation.pressScale, Animation.spring.fast);
     }
   };
 
   const handlePressOut = () => {
     if (onPress) {
-      scale.value = withSpring(1, springConfig);
+      scale.value = withSpring(1, Animation.spring.fast);
     }
   };
 
@@ -62,16 +60,27 @@ export function GlassCard({
     }
   };
 
+  const cardStyles = [
+    styles.card,
+    {
+      backgroundColor: Platform.OS === "ios" ? "transparent" : theme.cardBackground,
+      borderColor: theme.borderLight,
+    },
+    style,
+  ];
+
   const content = (
     <>
       {Platform.OS === "ios" ? (
         <BlurView
-          intensity={intensity}
+          intensity={blurIntensity}
           tint={isDark ? "dark" : "light"}
           style={StyleSheet.absoluteFill}
         />
       ) : null}
-      <View style={styles.content}>{children}</View>
+      <View style={[styles.content, noPadding && styles.noPadding, contentStyle]}>
+        {children}
+      </View>
     </>
   );
 
@@ -82,16 +91,7 @@ export function GlassCard({
         onPress={handlePress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
-        style={[
-          styles.card,
-          {
-            backgroundColor:
-              Platform.OS === "ios" ? "transparent" : theme.glassBackground,
-            borderColor: theme.glassBorder,
-          },
-          style,
-          animatedStyle,
-        ]}
+        style={[cardStyles, animatedStyle]}
       >
         {content}
       </AnimatedPressable>
@@ -99,29 +99,22 @@ export function GlassCard({
   }
 
   return (
-    <Animated.View
-      style={[
-        styles.card,
-        {
-          backgroundColor:
-            Platform.OS === "ios" ? "transparent" : theme.glassBackground,
-          borderColor: theme.glassBorder,
-        },
-        style,
-      ]}
-    >
+    <View style={cardStyles}>
       {content}
-    </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
+    borderRadius: BorderRadius.card,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
   },
   content: {
-    padding: Spacing.lg,
+    padding: Spacing.cardPadding,
+  },
+  noPadding: {
+    padding: 0,
   },
 });

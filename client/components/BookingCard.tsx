@@ -14,7 +14,7 @@ import { Avatar } from "@/components/Avatar";
 import { ThemedText } from "@/components/ThemedText";
 import { StatusPill } from "@/components/StatusPill";
 import { useTheme } from "@/hooks/useTheme";
-import { BorderRadius, Spacing, Colors } from "@/constants/theme";
+import { BorderRadius, Spacing, Colors, Animation, GlassEffect } from "@/constants/theme";
 import { Booking } from "@/state/mockData";
 
 interface BookingCardProps {
@@ -32,9 +32,9 @@ const getStatusType = (status: Booking["status"]) => {
     case "pending":
       return "pending";
     case "in_progress":
-      return "info";
+      return "inProgress";
     case "completed":
-      return "neutral";
+      return "completed";
     case "cancelled":
       return "error";
     default:
@@ -55,11 +55,11 @@ export function BookingCard({ booking, onPress, testID }: BookingCardProps) {
   }));
 
   const handlePressIn = () => {
-    scale.value = withSpring(0.98);
+    scale.value = withSpring(Animation.pressScale, Animation.spring.fast);
   };
 
   const handlePressOut = () => {
-    scale.value = withSpring(1);
+    scale.value = withSpring(1, Animation.spring.fast);
   };
 
   const handlePress = () => {
@@ -85,16 +85,15 @@ export function BookingCard({ booking, onPress, testID }: BookingCardProps) {
       style={[
         styles.card,
         {
-          backgroundColor:
-            Platform.OS === "ios" ? "transparent" : theme.glassBackground,
-          borderColor: theme.glassBorder,
+          backgroundColor: Platform.OS === "ios" ? "transparent" : theme.cardBackground,
+          borderColor: theme.borderLight,
         },
         animatedStyle,
       ]}
     >
       {Platform.OS === "ios" ? (
         <BlurView
-          intensity={40}
+          intensity={GlassEffect.intensity.light}
           tint={isDark ? "dark" : "light"}
           style={StyleSheet.absoluteFill}
         />
@@ -118,10 +117,11 @@ export function BookingCard({ booking, onPress, testID }: BookingCardProps) {
           <StatusPill
             status={getStatusType(booking.status)}
             label={formatStatus(booking.status)}
+            size="small"
           />
         </View>
 
-        <View style={styles.details}>
+        <View style={[styles.details, { borderTopColor: theme.separator }]}>
           <View style={styles.detailRow}>
             <Feather name="calendar" size={14} color={theme.textSecondary} />
             <ThemedText type="small" style={{ color: theme.textSecondary }}>
@@ -140,7 +140,7 @@ export function BookingCard({ booking, onPress, testID }: BookingCardProps) {
           </View>
         </View>
 
-        <View style={styles.footer}>
+        <View style={[styles.footer, { borderTopColor: theme.separator }]}>
           <ThemedText type="h3" style={{ color: Colors.accent }}>
             ${booking.price}
           </ThemedText>
@@ -158,13 +158,13 @@ export function BookingCard({ booking, onPress, testID }: BookingCardProps) {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
+    borderRadius: BorderRadius.card,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
     marginBottom: Spacing.md,
   },
   content: {
-    padding: Spacing.lg,
+    padding: Spacing.cardPadding,
   },
   header: {
     flexDirection: "row",
@@ -178,9 +178,8 @@ const styles = StyleSheet.create({
   details: {
     marginTop: Spacing.md,
     paddingTop: Spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.05)",
-    gap: Spacing.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: Spacing.sm,
   },
   detailRow: {
     flexDirection: "row",
@@ -193,8 +192,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginTop: Spacing.md,
     paddingTop: Spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.05)",
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   footerAction: {
     flexDirection: "row",
