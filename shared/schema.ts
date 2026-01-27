@@ -7,6 +7,9 @@ export const propertyTypeEnum = pgEnum("property_type", ["single_family", "condo
 export const appointmentStatusEnum = pgEnum("appointment_status", ["pending", "confirmed", "in_progress", "completed", "cancelled"]);
 export const urgencyEnum = pgEnum("urgency", ["flexible", "soon", "urgent"]);
 export const jobSizeEnum = pgEnum("job_size", ["small", "medium", "large"]);
+export const jobStatusEnum = pgEnum("job_status", ["scheduled", "in_progress", "completed", "cancelled"]);
+export const invoiceStatusEnum = pgEnum("invoice_status", ["draft", "sent", "paid", "overdue", "cancelled"]);
+export const paymentMethodEnum = pgEnum("payment_method", ["cash", "card", "bank_transfer", "check", "other"]);
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -96,6 +99,10 @@ export const providersRelations = relations(providers, ({ one, many }) => ({
   user: one(users, { fields: [providers.userId], references: [users.id] }),
   services: many(providerServices),
   appointments: many(appointments),
+  clients: many(clients),
+  jobs: many(jobs),
+  invoices: many(invoices),
+  payments: many(payments),
 }));
 
 export const providerServices = pgTable("provider_services", {
@@ -172,6 +179,100 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
   user: one(users, { fields: [notifications.userId], references: [users.id] }),
 }));
 
+// Provider's clients (their customers)
+export const clients = pgTable("clients", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name"),
+  email: text("email"),
+  phone: text("phone"),
+  address: text("address"),
+  city: text("city"),
+  state: text("state"),
+  zip: text("zip"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const clientsRelations = relations(clients, ({ one, many }) => ({
+  provider: one(providers, { fields: [clients.providerId], references: [providers.id] }),
+  jobs: many(jobs),
+  invoices: many(invoices),
+}));
+
+// Provider-initiated jobs (work orders)
+export const jobs = pgTable("jobs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  serviceId: varchar("service_id").references(() => services.id, { onDelete: "set null" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  scheduledDate: timestamp("scheduled_date").notNull(),
+  scheduledTime: text("scheduled_time"),
+  estimatedDuration: integer("estimated_duration"), // in minutes
+  status: jobStatusEnum("status").default("scheduled"),
+  address: text("address"),
+  estimatedPrice: decimal("estimated_price", { precision: 10, scale: 2 }),
+  finalPrice: decimal("final_price", { precision: 10, scale: 2 }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const jobsRelations = relations(jobs, ({ one, many }) => ({
+  provider: one(providers, { fields: [jobs.providerId], references: [providers.id] }),
+  client: one(clients, { fields: [jobs.clientId], references: [clients.id] }),
+  service: one(services, { fields: [jobs.serviceId], references: [services.id] }),
+  invoices: many(invoices),
+}));
+
+// Invoices for jobs
+export const invoices = pgTable("invoices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  jobId: varchar("job_id").references(() => jobs.id, { onDelete: "set null" }),
+  invoiceNumber: text("invoice_number").notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  tax: decimal("tax", { precision: 10, scale: 2 }).default("0"),
+  total: decimal("total", { precision: 10, scale: 2 }).notNull(),
+  status: invoiceStatusEnum("status").default("draft"),
+  dueDate: timestamp("due_date"),
+  notes: text("notes"),
+  lineItems: text("line_items"), // JSON string of line items
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  sentAt: timestamp("sent_at"),
+  paidAt: timestamp("paid_at"),
+});
+
+export const invoicesRelations = relations(invoices, ({ one, many }) => ({
+  provider: one(providers, { fields: [invoices.providerId], references: [providers.id] }),
+  client: one(clients, { fields: [invoices.clientId], references: [clients.id] }),
+  job: one(jobs, { fields: [invoices.jobId], references: [jobs.id] }),
+  payments: many(payments),
+}));
+
+// Payments received
+export const payments = pgTable("payments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  invoiceId: varchar("invoice_id").notNull().references(() => invoices.id, { onDelete: "cascade" }),
+  providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  method: paymentMethodEnum("method").default("card"),
+  reference: text("reference"), // transaction ID or check number
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const paymentsRelations = relations(payments, ({ one }) => ({
+  invoice: one(invoices, { fields: [payments.invoiceId], references: [invoices.id] }),
+  provider: one(providers, { fields: [payments.providerId], references: [providers.id] }),
+}));
+
 export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
   password: true,
@@ -199,6 +300,36 @@ export const insertAppointmentSchema = createInsertSchema(appointments).omit({
   cancelledAt: true,
 });
 
+export const insertClientSchema = createInsertSchema(clients).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertJobSchema = createInsertSchema(jobs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  completedAt: true,
+});
+
+export const insertInvoiceSchema = createInsertSchema(invoices).omit({
+  id: true,
+  createdAt: true,
+  sentAt: true,
+  paidAt: true,
+});
+
+export const insertPaymentSchema = createInsertSchema(payments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertProviderSchema = createInsertSchema(providers).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type Home = typeof homes.$inferSelect;
@@ -206,7 +337,16 @@ export type InsertHome = z.infer<typeof insertHomeSchema>;
 export type ServiceCategory = typeof serviceCategories.$inferSelect;
 export type Service = typeof services.$inferSelect;
 export type Provider = typeof providers.$inferSelect;
+export type InsertProvider = z.infer<typeof insertProviderSchema>;
 export type Appointment = typeof appointments.$inferSelect;
 export type InsertAppointment = z.infer<typeof insertAppointmentSchema>;
 export type Review = typeof reviews.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
+export type Client = typeof clients.$inferSelect;
+export type InsertClient = z.infer<typeof insertClientSchema>;
+export type Job = typeof jobs.$inferSelect;
+export type InsertJob = z.infer<typeof insertJobSchema>;
+export type Invoice = typeof invoices.$inferSelect;
+export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
+export type Payment = typeof payments.$inferSelect;
+export type InsertPayment = z.infer<typeof insertPaymentSchema>;
