@@ -6,7 +6,7 @@ import { Platform, StyleSheet, View, useWindowDimensions, Text } from "react-nat
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import ProviderHomeScreen from "@/screens/provider/ProviderHomeScreen";
-import LeadsScreen from "@/screens/provider/LeadsScreen";
+import ClientsScreen from "@/screens/provider/ClientsScreen";
 import ScheduleScreen from "@/screens/provider/ScheduleScreen";
 import MoneyScreen from "@/screens/provider/MoneyScreen";
 import ProviderMoreScreen from "@/screens/provider/ProviderMoreScreen";
@@ -16,7 +16,7 @@ import { Colors, Spacing, Typography, BorderRadius } from "@/constants/theme";
 
 export type ProviderTabParamList = {
   HomeTab: undefined;
-  LeadsTab: undefined;
+  ClientsTab: undefined;
   ScheduleTab: undefined;
   MoneyTab: undefined;
   MoreTab: undefined;
@@ -28,7 +28,7 @@ function getIconName(routeName: string): keyof typeof Feather.glyphMap {
   switch (routeName) {
     case "HomeTab":
       return "home";
-    case "LeadsTab":
+    case "ClientsTab":
       return "users";
     case "ScheduleTab":
       return "calendar";
@@ -136,7 +136,6 @@ export default function ProviderTabNavigator() {
       screenOptions={{
         headerTitleAlign: "center",
         headerTransparent: true,
-        headerBlurEffect: isDark ? "systemMaterialDark" : "systemMaterial",
         headerTintColor: theme.text,
         headerTitleStyle: {
           ...Typography.headline,
@@ -161,11 +160,11 @@ export default function ProviderTabNavigator() {
         }}
       />
       <Tab.Screen
-        name="LeadsTab"
-        component={LeadsScreen}
+        name="ClientsTab"
+        component={ClientsScreen}
         options={{
-          title: "Leads",
-          headerTitle: "Leads",
+          title: "Clients",
+          headerShown: false,
         }}
       />
       <Tab.Screen

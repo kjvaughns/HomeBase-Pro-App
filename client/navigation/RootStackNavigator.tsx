@@ -25,6 +25,7 @@ import ReviewScreen from "@/screens/homeowner/ReviewScreen";
 import ProfileEditScreen from "@/screens/homeowner/ProfileEditScreen";
 import AddressesScreen from "@/screens/homeowner/AddressesScreen";
 import PaymentMethodsScreen from "@/screens/homeowner/PaymentMethodsScreen";
+import ClientDetailScreen from "@/screens/provider/ClientDetailScreen";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuthStore, UserRole } from "@/state/authStore";
@@ -86,6 +87,7 @@ export type RootStackParamList = {
   ProfileEdit: undefined;
   Addresses: undefined;
   PaymentMethods: undefined;
+  ClientDetail: { clientId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -260,6 +262,13 @@ export default function RootStackNavigator() {
         component={PaymentMethodsScreen}
         options={{
           headerTitle: "Payment Methods",
+        }}
+      />
+      <Stack.Screen
+        name="ClientDetail"
+        component={ClientDetailScreen}
+        options={{
+          headerTitle: "",
         }}
       />
     </Stack.Navigator>
