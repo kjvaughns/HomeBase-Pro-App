@@ -12,6 +12,7 @@ import SignUpScreen from "@/screens/auth/SignUpScreen";
 import ForgotPasswordScreen from "@/screens/auth/ForgotPasswordScreen";
 import OnboardingScreen from "@/screens/auth/OnboardingScreen";
 import AIChatScreen from "@/screens/homeowner/AIChatScreen";
+import SmartIntakeScreen from "@/screens/homeowner/SmartIntakeScreen";
 import SurvivalKitScreen from "@/screens/homeowner/SurvivalKitScreen";
 import HealthScoreScreen from "@/screens/homeowner/HealthScoreScreen";
 import HouseFaxScreen from "@/screens/homeowner/HouseFaxScreen";
@@ -52,6 +53,7 @@ export type RootStackParamList = {
   RoleSwitchConfirmation: { targetRole: UserRole };
   BecomeProvider: undefined;
   AIChat: undefined;
+  SmartIntake: undefined;
   SurvivalKit: undefined;
   HealthScore: undefined;
   HouseFax: undefined;
@@ -182,6 +184,13 @@ export default function RootStackNavigator() {
         component={AIChatScreen}
         options={{
           headerTitle: "Ask Homebase AI",
+        }}
+      />
+      <Stack.Screen
+        name="SmartIntake"
+        component={SmartIntakeScreen}
+        options={{
+          headerTitle: "Get Help",
         }}
       />
       <Stack.Screen

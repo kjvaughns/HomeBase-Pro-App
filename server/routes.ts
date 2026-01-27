@@ -450,6 +450,199 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============ SMART INTAKE ROUTES ============
+
+  const INTAKE_SYSTEM_PROMPT = `You are HomeBase's Smart Intake AI. Your job is to understand home service problems and classify them accurately.
+
+Available service categories:
+- plumbing: Pipes, fixtures, water heaters, drainage, leaks, toilets, sinks, showers
+- electrical: Wiring, outlets, lighting, panels, switches, circuits, ceiling fans
+- hvac: Heating, cooling, ventilation, AC, furnace, air quality, thermostats
+- cleaning: Deep cleaning, regular maintenance, move-in/out cleaning
+- landscaping: Lawn care, gardening, tree services, irrigation, outdoor lighting
+- painting: Interior painting, exterior painting, staining, wallpaper
+- roofing: Repairs, replacements, inspections, gutters, leaks
+- handyman: General repairs, installations, assembly, minor fixes
+
+When analyzing a problem, you must respond with valid JSON only, no markdown. The JSON must have these fields:
+- category: one of the category IDs above (plumbing, electrical, hvac, cleaning, landscaping, painting, roofing, handyman)
+- confidence: number 0-100 indicating how confident you are
+- summary: brief 1-sentence summary of the issue
+- severity: "low", "medium", "high", or "emergency"
+- questions: array of 2-4 follow-up questions to better understand the issue
+- estimatedPriceRange: object with "min" and "max" numbers in USD based on typical costs for this type of issue`;
+
+  const ESTIMATE_SYSTEM_PROMPT = `You are HomeBase's pricing AI. Based on service details, provide realistic price estimates.
+
+Respond with valid JSON only containing:
+- priceRange: object with "min" and "max" in USD
+- confidence: number 0-100
+- factors: array of strings explaining what affects the price
+- recommendation: brief recommendation for the homeowner`;
+
+  app.post("/api/intake/analyze", async (req: Request, res: Response) => {
+    try {
+      const { problem, conversationHistory } = req.body as { 
+        problem: string; 
+        conversationHistory?: { role: string; content: string }[];
+      };
+
+      if (!problem) {
+        return res.status(400).json({ error: "Problem description is required" });
+      }
+
+      const messages: { role: "system" | "user" | "assistant"; content: string }[] = [
+        { role: "system", content: INTAKE_SYSTEM_PROMPT },
+      ];
+
+      if (conversationHistory && conversationHistory.length > 0) {
+        for (const msg of conversationHistory) {
+          messages.push({ role: msg.role as "user" | "assistant", content: msg.content });
+        }
+      }
+
+      messages.push({ role: "user", content: problem });
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages,
+        max_tokens: 1024,
+        response_format: { type: "json_object" },
+      });
+
+      const content = response.choices[0]?.message?.content || "{}";
+      const analysis = JSON.parse(content);
+
+      res.json({ 
+        success: true,
+        analysis: {
+          category: analysis.category || "handyman",
+          confidence: analysis.confidence || 70,
+          summary: analysis.summary || "General home service request",
+          severity: analysis.severity || "medium",
+          questions: analysis.questions || [],
+          estimatedPriceRange: analysis.estimatedPriceRange || { min: 100, max: 300 },
+        }
+      });
+    } catch (error) {
+      console.error("Error in intake analysis:", error);
+      res.status(500).json({ error: "Failed to analyze problem" });
+    }
+  });
+
+  app.post("/api/intake/refine", async (req: Request, res: Response) => {
+    try {
+      const { originalAnalysis, answers } = req.body as {
+        originalAnalysis: {
+          category: string;
+          summary: string;
+          severity: string;
+        };
+        answers: { question: string; answer: string }[];
+      };
+
+      if (!originalAnalysis || !answers) {
+        return res.status(400).json({ error: "Original analysis and answers required" });
+      }
+
+      const refinementPrompt = `Based on this home service issue:
+Category: ${originalAnalysis.category}
+Summary: ${originalAnalysis.summary}
+Severity: ${originalAnalysis.severity}
+
+The homeowner answered these clarifying questions:
+${answers.map(a => `Q: ${a.question}\nA: ${a.answer}`).join("\n\n")}
+
+Provide an updated JSON analysis with:
+- refinedSummary: a more detailed summary incorporating the answers
+- severity: updated severity if needed (low/medium/high/emergency)
+- priceRange: updated min/max estimate in USD
+- confidence: 0-100 confidence in this estimate
+- scopeOfWork: array of what the job likely includes
+- scopeExclusions: array of what might not be included
+- recommendedUrgency: "flexible", "soon", "urgent", or "emergency"`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: "You are HomeBase's pricing AI. Respond with valid JSON only." },
+          { role: "user", content: refinementPrompt },
+        ],
+        max_tokens: 1024,
+        response_format: { type: "json_object" },
+      });
+
+      const content = response.choices[0]?.message?.content || "{}";
+      const refinedAnalysis = JSON.parse(content);
+
+      res.json({ 
+        success: true,
+        refinedAnalysis: {
+          refinedSummary: refinedAnalysis.refinedSummary || originalAnalysis.summary,
+          severity: refinedAnalysis.severity || originalAnalysis.severity,
+          priceRange: refinedAnalysis.priceRange || { min: 100, max: 300 },
+          confidence: refinedAnalysis.confidence || 75,
+          scopeOfWork: refinedAnalysis.scopeOfWork || [],
+          scopeExclusions: refinedAnalysis.scopeExclusions || [],
+          recommendedUrgency: refinedAnalysis.recommendedUrgency || "flexible",
+        }
+      });
+    } catch (error) {
+      console.error("Error refining intake:", error);
+      res.status(500).json({ error: "Failed to refine analysis" });
+    }
+  });
+
+  app.post("/api/intake/match-providers", async (req: Request, res: Response) => {
+    try {
+      const { category, zipCode } = req.body as { category: string; zipCode?: string };
+
+      if (!category) {
+        return res.status(400).json({ error: "Category is required" });
+      }
+
+      const categoryMap: Record<string, string> = {
+        plumbing: "cat-1",
+        electrical: "cat-2",
+        hvac: "cat-3",
+        cleaning: "cat-4",
+        landscaping: "cat-5",
+        painting: "cat-6",
+        roofing: "cat-7",
+        handyman: "cat-8",
+      };
+
+      const categoryId = categoryMap[category] || "cat-8";
+      const allProviders = await storage.getProviders(categoryId);
+      
+      const rankedProviders = allProviders
+        .map(provider => ({
+          ...provider,
+          trustScore: calculateTrustScore(provider),
+        }))
+        .sort((a, b) => b.trustScore - a.trustScore)
+        .slice(0, 5);
+
+      res.json({ 
+        success: true,
+        providers: rankedProviders,
+        totalAvailable: allProviders.length,
+      });
+    } catch (error) {
+      console.error("Error matching providers:", error);
+      res.status(500).json({ error: "Failed to match providers" });
+    }
+  });
+
+  function calculateTrustScore(provider: { rating?: string | number | null; reviewCount?: number | null; yearsExperience?: number | null; verified?: boolean | null }): number {
+    const rating = typeof provider.rating === 'string' ? parseFloat(provider.rating) : (provider.rating || 4);
+    const ratingScore = rating * 15;
+    const reviewScore = Math.min((provider.reviewCount || 0) / 5, 20);
+    const experienceScore = Math.min((provider.yearsExperience || 0) * 2, 20);
+    const verifiedBonus = provider.verified ? 15 : 0;
+    return Math.round(ratingScore + reviewScore + experienceScore + verifiedBonus);
+  }
+
   // ============ PROVIDER PORTAL ROUTES ============
 
   // Provider registration/onboarding
