@@ -102,7 +102,7 @@ export default function OnboardingScreen() {
               Welcome, {user?.name?.split(" ")[0] || "there"}!
             </ThemedText>
             <ThemedText type="body" style={[styles.welcomeSubtitle, { color: theme.textSecondary }]}>
-              Your account is ready. Let's add your first home to get started with Homebase.
+              Your account is ready. Let's add your first home to get started with HomeBase.
             </ThemedText>
           </View>
 

@@ -123,7 +123,7 @@ export default function SignUpScreen({ navigation }: Props) {
             Create account
           </ThemedText>
           <ThemedText type="body" style={[styles.subtitle, { color: theme.textSecondary }]}>
-            Join Homebase to manage your home services
+            Join HomeBase to manage your home services
           </ThemedText>
         </View>
 

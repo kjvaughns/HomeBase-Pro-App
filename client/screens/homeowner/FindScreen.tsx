@@ -155,7 +155,7 @@ export default function FindScreen() {
             <Feather name="message-circle" size={24} color={Colors.accent} />
           </View>
           <View style={styles.aiCardContent}>
-            <ThemedText style={styles.aiCardTitle}>Ask Homebase AI</ThemedText>
+            <ThemedText style={styles.aiCardTitle}>Ask HomeBase AI</ThemedText>
             <ThemedText style={[styles.aiCardSubtitle, { color: theme.textSecondary }]}>
               Get instant answers or find the right pro
             </ThemedText>

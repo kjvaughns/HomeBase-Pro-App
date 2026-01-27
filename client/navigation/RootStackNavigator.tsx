@@ -189,7 +189,7 @@ export default function RootStackNavigator() {
         name="AIChat"
         component={AIChatScreen}
         options={{
-          headerTitle: "Ask Homebase AI",
+          headerTitle: "Ask HomeBase AI",
         }}
       />
       <Stack.Screen

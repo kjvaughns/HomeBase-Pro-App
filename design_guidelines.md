@@ -1,4 +1,4 @@
-# Homebase App - Design Guidelines
+# HomeBase App - Design Guidelines
 
 ## Brand Identity
 

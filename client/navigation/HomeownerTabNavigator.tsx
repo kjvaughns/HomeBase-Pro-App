@@ -155,7 +155,7 @@ export default function HomeownerTabNavigator() {
           component={HomeScreen}
           options={{
             title: "Home",
-            headerTitle: () => <HeaderTitle title="Homebase" />,
+            headerTitle: () => <HeaderTitle title="HomeBase" />,
           }}
         />
       ) : null}
@@ -164,7 +164,7 @@ export default function HomeownerTabNavigator() {
         component={FindScreen}
         options={{
           title: "Find",
-          headerTitle: isAuthenticated ? "Find a Pro" : () => <HeaderTitle title="Homebase" />,
+          headerTitle: isAuthenticated ? "Find a Pro" : () => <HeaderTitle title="HomeBase" />,
         }}
       />
       <Tab.Screen

@@ -26,7 +26,7 @@ export default function WelcomeScreen({ navigation }: Props) {
             <Feather name="home" size={48} color="#FFFFFF" />
           </View>
           <ThemedText type="h1" style={styles.appName}>
-            Homebase
+            HomeBase
           </ThemedText>
           <ThemedText type="body" style={[styles.tagline, { color: theme.textSecondary }]}>
             Your home, simplified

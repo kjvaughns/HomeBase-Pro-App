@@ -70,7 +70,7 @@ export default function MoreScreen() {
             <View style={styles.guestProfile}>
               <Avatar size="large" />
               <View style={styles.guestInfo}>
-                <ThemedText style={styles.welcomeTitle}>Welcome to Homebase</ThemedText>
+                <ThemedText style={styles.welcomeTitle}>Welcome to HomeBase</ThemedText>
                 <ThemedText style={[styles.welcomeSubtitle, { color: theme.textSecondary }]}>
                   Sign in to manage your home services
                 </ThemedText>

@@ -188,7 +188,7 @@ export default function AIChatScreen() {
       </Animated.View>
 
       <Animated.View entering={FadeIn.delay(200).duration(400)}>
-        <ThemedText style={styles.emptyTitle}>Ask Homebase AI</ThemedText>
+        <ThemedText style={styles.emptyTitle}>Ask HomeBase AI</ThemedText>
         <ThemedText style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
           Get instant answers about home maintenance, repairs, and finding service providers.
         </ThemedText>

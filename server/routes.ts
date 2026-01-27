@@ -426,7 +426,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  const ENHANCED_CHAT_PROMPT = `You are Homebase AI, a helpful home assistant. Answer questions about home maintenance, repairs, and services.
+  const ENHANCED_CHAT_PROMPT = `You are HomeBase AI, a helpful home assistant. Answer questions about home maintenance, repairs, and services.
 
 IMPORTANT: If the user describes a home problem, issue, or mentions needing service (leak, broken, not working, repair, install, fix, etc.), you MUST:
 1. Provide helpful initial guidance about the issue

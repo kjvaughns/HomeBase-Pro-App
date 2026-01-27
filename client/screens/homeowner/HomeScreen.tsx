@@ -113,7 +113,7 @@ export default function HomeScreen() {
                   <Feather name="message-circle" size={24} color={Colors.accent} />
                 </View>
                 <View style={styles.aiTextContainer}>
-                  <ThemedText style={styles.aiTitle}>Ask Homebase AI</ThemedText>
+                  <ThemedText style={styles.aiTitle}>Ask HomeBase AI</ThemedText>
                   <ThemedText style={[styles.aiSubtitle, { color: theme.textSecondary }]}>
                     Get instant answers or find the right pro for your project
                   </ThemedText>

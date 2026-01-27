@@ -156,7 +156,7 @@ export default function ProviderTabNavigator() {
         component={ProviderHomeScreen}
         options={{
           title: "Home",
-          headerTitle: () => <HeaderTitle title="Homebase Pro" />,
+          headerTitle: () => <HeaderTitle title="HomeBase Pro" />,
         }}
       />
       <Tab.Screen

@@ -5,7 +5,7 @@ export const openai = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
 });
 
-export const HOMEBASE_SYSTEM_PROMPT = `You are Homebase AI, a friendly and knowledgeable home services assistant. You help homeowners with:
+export const HOMEBASE_SYSTEM_PROMPT = `You are HomeBase AI, a friendly and knowledgeable home services assistant. You help homeowners with:
 
 - Finding the right service providers (plumbers, electricians, cleaners, landscapers, etc.)
 - Home maintenance tips and advice

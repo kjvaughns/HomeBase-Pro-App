@@ -1,7 +1,7 @@
-# Homebase - Unified Home Services App
+# HomeBase - Unified Home Services App
 
 ## Overview
-Homebase is an iOS mobile application built with Expo React Native, featuring a unified platform for homeowners and service providers. It aims to streamline home service management, from finding providers and booking appointments to managing client relationships, jobs, and invoicing. The application integrates an Express.js backend with a Supabase PostgreSQL database to offer a comprehensive solution for the home services market. Key capabilities include a robust authentication system, distinct homeowner and provider portals, AI-powered assistance, and full CRUD operations for appointments, clients, jobs, and invoices.
+HomeBase is an iOS mobile application built with Expo React Native, featuring a unified platform for homeowners and service providers. It aims to streamline home service management, from finding providers and booking appointments to managing client relationships, jobs, and invoicing. The application integrates an Express.js backend with a Supabase PostgreSQL database to offer a comprehensive solution for the home services market. Key capabilities include a robust authentication system, distinct homeowner and provider portals, AI-powered assistance, and full CRUD operations for appointments, clients, jobs, and invoices.
 
 ## User Preferences
 - No emojis in the app
@@ -15,7 +15,7 @@ The application is structured into a client-side React Native Expo app and an Ex
 ### Technical Implementations
 - **Authentication**: Backend-driven user management with email/password signup (bcrypt hashing), JWT-like session management, and a password reset flow. Includes an onboarding process for first property setup.
 - **Access Control**: Three distinct access states: Guest Mode, Homeowner Mode, and Provider Mode, each with tailored functionalities.
-- **AI Integration**: "Ask Homebase AI" feature leverages OpenAI GPT-4o-mini via Replit AI Integrations for instant answers on home maintenance and repairs.
+- **AI Integration**: "Ask HomeBase AI" feature leverages OpenAI GPT-4o-mini via Replit AI Integrations for instant answers on home maintenance and repairs.
 - **AI Smart Intake**: Natural language problem descriptions are analyzed by AI to classify service categories, generate follow-up questions, estimate price ranges, and match with top providers.
 - **Dynamic Quote Engine**: AI-powered price estimates based on service type, home data, location, and complexity. Generates realistic ranges with material and labor breakdowns.
 - **Smart Provider Matching**: Algorithm ranks providers using trust scores (job completion rate, on-time performance, satisfaction ratings) and shows top 3-5 curated matches instead of full directory.
