@@ -35,7 +35,6 @@ export default function MoreScreen() {
   } = useAuthStore();
 
   const [showAccountGate, setShowAccountGate] = useState(false);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   
   const toggleDarkMode = useThemeStore((s) => s.toggleDarkMode);
   const { isDark } = useTheme();
@@ -133,10 +132,15 @@ export default function MoreScreen() {
               </ThemedText>
               <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
                 <ListRow
+                  title="Notifications"
+                  leftIcon="bell"
+                  onPress={() => navigation.navigate("Notifications")}
+                  isFirst
+                />
+                <ListRow
                   title="Payment Methods"
                   leftIcon="credit-card"
                   onPress={() => navigation.navigate("PaymentMethods")}
-                  isFirst
                 />
                 <ListRow
                   title="Addresses"
@@ -157,26 +161,13 @@ export default function MoreScreen() {
                 Settings
               </ThemedText>
               <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
-                <ListRow
-                  title="Notifications"
-                  leftIcon="bell"
-                  showChevron={false}
-                  isFirst
-                  rightElement={
-                    <Switch
-                      value={notificationsEnabled}
-                      onValueChange={setNotificationsEnabled}
-                      trackColor={{ false: theme.backgroundTertiary, true: Colors.accent }}
-                      thumbColor="#FFFFFF"
-                    />
-                  }
-                />
                 {hasProviderProfile() && canAccessProviderMode() ? (
                   <ListRow
                     title="Switch to Provider Mode"
                     subtitle="Access your provider dashboard"
                     leftIcon="briefcase"
                     onPress={handleSwitchToProvider}
+                    isFirst
                     isLast
                   />
                 ) : (
@@ -185,6 +176,7 @@ export default function MoreScreen() {
                     subtitle="Earn money by helping homeowners"
                     leftIcon="briefcase"
                     onPress={handleBecomeProvider}
+                    isFirst
                     isLast
                   />
                 )}
