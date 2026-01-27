@@ -44,7 +44,6 @@ export default function HomeScreen() {
   const { user } = useAuthStore();
   
   const jobs = useHomeownerStore((s) => s.jobs);
-  const messageThreads = useHomeownerStore((s) => s.messageThreads);
   const categories = useHomeownerStore((s) => s.categories);
 
   const upcomingJobs = useMemo(() => 
@@ -57,11 +56,6 @@ export default function HomeScreen() {
     [jobs]
   );
   
-  const unreadMessages = useMemo(() => 
-    messageThreads.reduce((sum, t) => sum + t.unreadCount, 0), 
-    [messageThreads]
-  );
-  
   const recentJobs = useMemo(() => jobs.slice(0, 3), [jobs]);
 
   const handleJobPress = (job: Job) => {
@@ -71,10 +65,6 @@ export default function HomeScreen() {
 
   const handleViewAllJobs = () => {
     navigation.getParent()?.navigate("ManageTab");
-  };
-
-  const handleMessagesPress = () => {
-    navigation.getParent()?.navigate("MessagesTab");
   };
 
   const handleAIPress = () => {
@@ -148,13 +138,6 @@ export default function HomeScreen() {
                 title="Active"
                 value={activeJobs.length.toString()}
                 icon="clock"
-              />
-            </Pressable>
-            <Pressable onPress={handleMessagesPress} style={styles.statCard}>
-              <StatCard
-                title="Messages"
-                value={unreadMessages.toString()}
-                icon="message-square"
               />
             </Pressable>
           </View>

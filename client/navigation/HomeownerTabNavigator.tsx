@@ -8,7 +8,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import HomeScreen from "@/screens/homeowner/HomeScreen";
 import FindScreen from "@/screens/homeowner/FindScreen";
 import ManageScreen from "@/screens/homeowner/ManageScreen";
-import MessagesScreen from "@/screens/homeowner/MessagesScreen";
 import MoreScreen from "@/screens/homeowner/MoreScreen";
 import { useTheme } from "@/hooks/useTheme";
 import { HeaderTitle } from "@/components/HeaderTitle";
@@ -19,7 +18,6 @@ export type HomeownerTabParamList = {
   HomeTab: undefined;
   FindTab: undefined;
   ManageTab: undefined;
-  MessagesTab: undefined;
   MoreTab: undefined;
 };
 
@@ -33,8 +31,6 @@ function getIconName(routeName: string): keyof typeof Feather.glyphMap {
       return "search";
     case "ManageTab":
       return "clipboard";
-    case "MessagesTab":
-      return "message-circle";
     case "MoreTab":
       return "menu";
     default:
@@ -179,16 +175,6 @@ export default function HomeownerTabNavigator() {
           headerTitle: "Manage",
         }}
       />
-      {isAuthenticated ? (
-        <Tab.Screen
-          name="MessagesTab"
-          component={MessagesScreen}
-          options={{
-            title: "Messages",
-            headerTitle: "Messages",
-          }}
-        />
-      ) : null}
       <Tab.Screen
         name="MoreTab"
         component={MoreScreen}
