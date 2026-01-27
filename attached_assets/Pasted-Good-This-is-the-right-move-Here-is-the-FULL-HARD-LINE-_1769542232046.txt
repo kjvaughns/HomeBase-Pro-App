@@ -1,0 +1,295 @@
+Good. This is the right move.
+Here is the **FULL, HARD-LINE MVP OUTLINE FOR THE PROVIDER PORTAL**. This is what **must exist and must work** before you even think about scaling, AI, teams, or fancy analytics.
+
+This is written like a product spec, not a dream board.
+
+---
+
+# HomeBase Provider Portal MVP
+
+## Core principle
+
+The provider portal exists to:
+
+1. Get providers paid
+2. Keep their schedule organized
+3. Make HomeBase feel like a real business tool, not a toy
+
+If it does not help a provider **make money or save time**, it is not MVP.
+
+---
+
+## 1. Authentication and Account Basics REQUIRED
+
+Must work flawlessly.
+
+* Provider signup
+* Login
+* Password reset
+* Ability to exist as both homeowner and provider under one account
+* Profile switching must work instantly
+
+Failure here kills trust immediately.
+
+---
+
+## 2. Provider Onboarding MVP
+
+Purpose: Get a provider ready to accept jobs fast.
+
+Required steps:
+
+1. Welcome screen explaining how HomeBase helps them get jobs and get paid
+2. Business basics
+
+   * Business name
+   * Service category (single or multiple)
+   * Service area (city or radius)
+3. Payout setup prompt (can be “connect later”)
+4. Done → Provider dashboard
+
+Do NOT:
+
+* Force logo upload
+* Force long surveys
+* Force service pricing logic yet
+
+Goal: First job possible within minutes.
+
+---
+
+## 3. Provider Dashboard (Home Tab)
+
+This is their command center.
+
+Must show:
+
+* Revenue MTD
+* Jobs completed
+* Active clients
+* Upcoming appointments
+
+Optional but good:
+
+* Attention cards (unpaid invoice, confirm appointment)
+
+Every card must link somewhere real.
+
+---
+
+## 4. Schedule (Schedule Tab)
+
+This is the heart of the app.
+
+Must support:
+
+* Day and list view
+* View upcoming jobs
+* Job detail page
+* Job status changes
+
+  * Scheduled
+  * In progress
+  * Completed
+
+Required actions:
+
+* Add job
+* Reschedule job
+* Mark complete
+
+If schedule is broken or confusing, providers churn.
+
+---
+
+## 5. Client Management (Clients Tab)
+
+Absolute MVP requirement.
+
+Must support:
+
+* Client list
+* Add client
+* Client detail page
+
+  * Contact info
+  * Job history
+  * Invoice history
+
+Clients must be reusable across jobs.
+
+This is where your CRM credibility lives.
+
+---
+
+## 6. Job Creation Flow MUST WORK
+
+Non negotiable.
+
+Required:
+
+1. Select existing client or create new
+2. Select service
+3. Select date and time
+4. Add notes
+5. Create job
+
+Once created:
+
+* Job appears in schedule
+* Client is linked
+* Can generate invoice later
+
+No AI required yet.
+
+---
+
+## 7. Invoices and Payments (Money Tab)
+
+This is critical for adoption.
+
+Must support:
+
+* Create invoice
+* Send invoice
+* Mark paid
+* View payment history
+
+Stripe integration can be basic:
+
+* Payment link
+* Manual mark paid
+
+If providers cannot get paid easily, they leave.
+
+---
+
+## 8. Services Management (Simple MVP)
+
+Keep it light.
+
+Must support:
+
+* Create service
+
+  * Name
+  * Description
+  * Base price or “quote required”
+* Edit service
+* Select service during job creation
+
+No dynamic pricing yet.
+
+---
+
+## 9. Marketplace Profile (Read Only MVP)
+
+Purpose: Let providers look legit.
+
+Must show:
+
+* Business name
+* Description
+* Services offered
+* Service area
+
+Publishing toggle can exist but does not need ranking logic.
+
+---
+
+## 10. Notifications MVP
+
+Bare minimum:
+
+* New booking
+* Job reminder
+* Payment received
+
+Push or in app is fine. One must work.
+
+---
+
+## 11. Settings and More Tab
+
+Keep it clean.
+
+Must include:
+
+* Business profile
+* Payout settings
+* Switch to homeowner
+* Support
+* Logout
+
+Avoid overloading this tab.
+
+---
+
+## 12. Data Model MVP (Critical)
+
+This determines if HomeBase scales or collapses.
+
+Required entities:
+
+* Provider
+* Client
+* Job
+* Service
+* Invoice
+* Payment
+
+Relationships must be:
+Provider → Clients → Jobs → Invoices → Payments
+
+No shortcuts here.
+
+---
+
+## What is NOT MVP for Provider
+
+Be brutal.
+
+Not MVP:
+
+* Teams
+* AI job assignment
+* Route optimization
+* Advanced analytics
+* Subscription plans
+* Automation rules
+* CRM insights
+
+These come after providers trust the platform.
+
+---
+
+## MVP Success Criteria
+
+You are provider-ready when:
+
+* A provider can sign up
+* Add a client
+* Create a job
+* Complete the job
+* Send an invoice
+* Get paid
+
+If any of those steps fail or feel janky, **do not onboard more providers**.
+
+---
+
+## My strong recommendation
+
+Before doing anything else:
+
+1. Lock this MVP
+2. Remove every non-essential feature
+3. Fix schedule, clients, jobs, invoices until they are bulletproof
+
+If you want, next I can:
+
+* Map this provider MVP directly to your current screens and call out what to delete
+* Create a Natively build checklist in exact order
+* Help you design the **post-MVP phase 2** without breaking MVP focus
+
+Tell me which one.
