@@ -78,21 +78,23 @@ export default function ProviderMoreScreen() {
             Business
           </ThemedText>
           <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
-            <ListRow
-              title="Available for Work"
-              subtitle="Accept new job requests"
-              leftIcon="toggle-left"
-              showChevron={false}
-              isFirst
-              rightElement={
+            <View style={styles.switchRow}>
+              <ListRow
+                title="Available for Work"
+                subtitle="Accept new job requests"
+                leftIcon="toggle-left"
+                showChevron={false}
+                isFirst
+              />
+              <View style={styles.switchContainer}>
                 <Switch
                   value={availableForWork}
                   onValueChange={setAvailableForWork}
                   trackColor={{ false: theme.backgroundTertiary, true: Colors.accent }}
                   thumbColor="#FFFFFF"
                 />
-              }
-            />
+              </View>
+            </View>
             <ListRow
               title="Services & Pricing"
               leftIcon="tool"
@@ -143,20 +145,22 @@ export default function ProviderMoreScreen() {
             Settings
           </ThemedText>
           <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
-            <ListRow
-              title="Notifications"
-              leftIcon="bell"
-              showChevron={false}
-              isFirst
-              rightElement={
+            <View style={styles.switchRow}>
+              <ListRow
+                title="Notifications"
+                leftIcon="bell"
+                showChevron={false}
+                isFirst
+              />
+              <View style={styles.switchContainer}>
                 <Switch
                   value={notificationsEnabled}
                   onValueChange={setNotificationsEnabled}
                   trackColor={{ false: theme.backgroundTertiary, true: Colors.accent }}
                   thumbColor="#FFFFFF"
                 />
-              }
-            />
+              </View>
+            </View>
             <ListRow
               title="Switch to Homeowner Mode"
               subtitle="Browse and book services"
@@ -265,6 +269,16 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.card,
     marginBottom: Spacing.lg,
     overflow: "hidden",
+  },
+  switchRow: {
+    position: "relative",
+  },
+  switchContainer: {
+    position: "absolute",
+    right: Spacing.md,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
   },
   version: {
     ...Typography.caption1,
