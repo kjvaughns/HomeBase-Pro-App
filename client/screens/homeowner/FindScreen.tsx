@@ -16,14 +16,12 @@ import { CategoryCard } from "@/components/CategoryCard";
 import { ProviderCard } from "@/components/ProviderCard";
 import { SectionHeader } from "@/components/SectionHeader";
 import { AccountGateModal } from "@/components/AccountGateModal";
-import { GlassCard } from "@/components/GlassCard";
-import { StatusPill } from "@/components/StatusPill";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useHomeownerStore } from "@/state/homeownerStore";
-import { ServiceCategory, Job, JobStatus } from "@/state/types";
+import { ServiceCategory } from "@/state/types";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -34,7 +32,6 @@ interface HomeTool {
   icon: keyof typeof Feather.glyphMap;
   screen: keyof RootStackParamList;
 }
-
 
 const HOME_TOOLS: HomeTool[] = [
   {
@@ -67,29 +64,17 @@ const HOME_TOOLS: HomeTool[] = [
   },
 ];
 
-const STATUS_MAP: Record<JobStatus, { label: string; variant: "success" | "info" | "warning" | "neutral" }> = {
-  requested: { label: "Requested", variant: "info" },
-  scheduled: { label: "Upcoming", variant: "info" },
-  in_progress: { label: "In Progress", variant: "warning" },
-  awaiting_payment: { label: "Payment Due", variant: "warning" },
-  completed: { label: "Completed", variant: "success" },
-  paid: { label: "Paid", variant: "success" },
-  closed: { label: "Closed", variant: "neutral" },
-};
-
 export default function FindScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
-  const { isAuthenticated, user, login } = useAuthStore();
+  const { isAuthenticated, login } = useAuthStore();
   
   const categories = useHomeownerStore((s) => s.categories);
   const providers = useHomeownerStore((s) => s.providers);
-  const jobs = useHomeownerStore((s) => s.jobs);
 
-  const recentJobs = React.useMemo(() => jobs.slice(0, 3), [jobs]);
   const featuredProviders = React.useMemo(() => providers.slice(0, 5), [providers]);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -101,23 +86,12 @@ export default function FindScreen() {
     setTimeout(() => setRefreshing(false), 1000);
   };
 
-  const handleProviderPress = () => {
-    if (!isAuthenticated) {
-      setShowAccountGate(true);
-    }
-  };
-
   const handleCategoryPress = (category: ServiceCategory) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     navigation.navigate("ProviderList", {
       categoryId: category.id,
       categoryName: category.name,
     });
-  };
-
-  const handleAIPress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    navigation.navigate("AIChat");
   };
 
   const handleToolPress = (tool: HomeTool) => {
@@ -134,10 +108,6 @@ export default function FindScreen() {
     setShowAccountGate(false);
   };
 
-  const handleJobPress = (job: Job) => {
-    navigation.navigate("JobDetail", { jobId: job.id });
-  };
-
   const handleProviderCardPress = (providerId: string) => {
     if (!isAuthenticated) {
       setShowAccountGate(true);
@@ -149,25 +119,6 @@ export default function FindScreen() {
   const renderHeader = () => (
     <View style={styles.headerContent}>
       <Animated.View entering={FadeInDown.delay(100).duration(400)}>
-        <Pressable onPress={handleAIPress}>
-          <GlassCard style={styles.aiCard}>
-            <View style={styles.aiCardContent}>
-              <View style={[styles.aiIconContainer, { backgroundColor: Colors.accentLight }]}>
-                <Feather name="message-circle" size={24} color={Colors.accent} />
-              </View>
-              <View style={styles.aiTextContainer}>
-                <ThemedText style={styles.aiTitle}>Ask Homebase AI</ThemedText>
-                <ThemedText style={[styles.aiSubtitle, { color: theme.textSecondary }]}>
-                  Get instant answers about home services
-                </ThemedText>
-              </View>
-              <Feather name="chevron-right" size={20} color={theme.textTertiary} />
-            </View>
-          </GlassCard>
-        </Pressable>
-      </Animated.View>
-
-      <Animated.View entering={FadeInDown.delay(150).duration(400)}>
         <TextField
           placeholder="Search services..."
           value={searchQuery}
@@ -179,7 +130,7 @@ export default function FindScreen() {
       </Animated.View>
 
       <Animated.View
-        entering={FadeInDown.delay(200).duration(400)}
+        entering={FadeInDown.delay(150).duration(400)}
         style={styles.locationRow}
       >
         <Feather name="map-pin" size={16} color={Colors.accent} />
@@ -189,62 +140,12 @@ export default function FindScreen() {
         <Feather name="chevron-down" size={14} color={Colors.accent} />
       </Animated.View>
 
-      {isAuthenticated && recentJobs.length > 0 ? (
-        <>
-          <Animated.View entering={FadeInDown.delay(250).duration(400)}>
-            <SectionHeader title="Recent Activity" actionLabel="View All" onAction={() => navigation.navigate("Main")} />
-          </Animated.View>
-
-          <Animated.View
-            entering={FadeInDown.delay(300).duration(400)}
-            style={styles.activityContainer}
-          >
-            {recentJobs.map((job) => {
-              const statusInfo = STATUS_MAP[job.status];
-              return (
-                <Pressable
-                  key={job.id}
-                  onPress={() => handleJobPress(job)}
-                  style={[
-                    styles.activityCard,
-                    {
-                      backgroundColor: theme.cardBackground,
-                      borderColor: theme.borderLight,
-                    },
-                  ]}
-                >
-                  <View style={[styles.activityIcon, { backgroundColor: Colors.accentLight }]}>
-                    <Feather name="calendar" size={16} color={Colors.accent} />
-                  </View>
-                  <View style={styles.activityContent}>
-                    <ThemedText style={styles.activityTitle}>{job.service}</ThemedText>
-                    <ThemedText style={[styles.activityProvider, { color: theme.textSecondary }]}>
-                      {job.providerName}
-                    </ThemedText>
-                  </View>
-                  <View style={styles.activityRight}>
-                    <StatusPill
-                      label={statusInfo.label}
-                      variant={statusInfo.variant}
-                      size="small"
-                    />
-                    <ThemedText style={[styles.activityDate, { color: theme.textTertiary }]}>
-                      {job.scheduledDate || "TBD"}
-                    </ThemedText>
-                  </View>
-                </Pressable>
-              );
-            })}
-          </Animated.View>
-        </>
-      ) : null}
-
-      <Animated.View entering={FadeInDown.delay(isAuthenticated ? 350 : 250).duration(400)}>
+      <Animated.View entering={FadeInDown.delay(200).duration(400)}>
         <SectionHeader title="Services" actionLabel="See All" onAction={() => {}} />
       </Animated.View>
 
       <Animated.View
-        entering={FadeInDown.delay(isAuthenticated ? 400 : 300).duration(400)}
+        entering={FadeInDown.delay(250).duration(400)}
         style={styles.categoriesGrid}
       >
         {categories.slice(0, 6).map((category) => (
@@ -260,7 +161,7 @@ export default function FindScreen() {
         ))}
       </Animated.View>
 
-      <Animated.View entering={FadeInDown.delay(isAuthenticated ? 450 : 350).duration(400)}>
+      <Animated.View entering={FadeInDown.delay(300).duration(400)}>
         <SectionHeader
           title="Featured Pros"
           actionLabel="See All"
@@ -271,7 +172,7 @@ export default function FindScreen() {
   );
 
   const renderProvider = ({ item, index }: { item: typeof featuredProviders[0]; index: number }) => (
-    <Animated.View entering={FadeInDown.delay((isAuthenticated ? 500 : 400) + index * 100).duration(400)}>
+    <Animated.View entering={FadeInDown.delay(350 + index * 100).duration(400)}>
       <ProviderCard
         name={item.name}
         businessName={item.businessName}
@@ -289,30 +190,34 @@ export default function FindScreen() {
 
   const renderFooter = () => (
     <View style={styles.footerContent}>
-      <Animated.View entering={FadeInDown.delay(700).duration(400)}>
-        <SectionHeader title="Homeowner Tools" />
-      </Animated.View>
+      {!isAuthenticated ? (
+        <>
+          <Animated.View entering={FadeInDown.delay(600).duration(400)}>
+            <SectionHeader title="Homeowner Tools" />
+          </Animated.View>
 
-      <Animated.View
-        entering={FadeInDown.delay(750).duration(400)}
-        style={styles.toolsGrid}
-      >
-        {HOME_TOOLS.map((tool) => (
-          <Pressable
-            key={tool.id}
-            onPress={() => handleToolPress(tool)}
-            style={[styles.toolCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}
+          <Animated.View
+            entering={FadeInDown.delay(650).duration(400)}
+            style={styles.toolsGrid}
           >
-            <View style={[styles.toolIconContainer, { backgroundColor: Colors.accentLight }]}>
-              <Feather name={tool.icon} size={20} color={Colors.accent} />
-            </View>
-            <ThemedText style={styles.toolName} numberOfLines={1}>{tool.name}</ThemedText>
-            <ThemedText style={[styles.toolDesc, { color: theme.textSecondary }]} numberOfLines={1}>
-              {tool.description}
-            </ThemedText>
-          </Pressable>
-        ))}
-      </Animated.View>
+            {HOME_TOOLS.map((tool) => (
+              <Pressable
+                key={tool.id}
+                onPress={() => handleToolPress(tool)}
+                style={[styles.toolCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}
+              >
+                <View style={[styles.toolIconContainer, { backgroundColor: Colors.accentLight }]}>
+                  <Feather name={tool.icon} size={20} color={Colors.accent} />
+                </View>
+                <ThemedText style={styles.toolName} numberOfLines={1}>{tool.name}</ThemedText>
+                <ThemedText style={[styles.toolDesc, { color: theme.textSecondary }]} numberOfLines={1}>
+                  {tool.description}
+                </ThemedText>
+              </Pressable>
+            ))}
+          </Animated.View>
+        </>
+      ) : null}
     </View>
   );
 
@@ -357,31 +262,6 @@ const styles = StyleSheet.create({
   headerContent: {
     marginBottom: Spacing.md,
   },
-  aiCard: {
-    marginBottom: Spacing.md,
-  },
-  aiCardContent: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  aiIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: Spacing.md,
-  },
-  aiTextContainer: {
-    flex: 1,
-  },
-  aiTitle: {
-    ...Typography.headline,
-    marginBottom: 2,
-  },
-  aiSubtitle: {
-    ...Typography.subhead,
-  },
   locationRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -393,43 +273,6 @@ const styles = StyleSheet.create({
     ...Typography.subhead,
     color: Colors.accent,
     fontWeight: "500",
-  },
-  activityContainer: {
-    gap: Spacing.sm,
-    marginBottom: Spacing.sectionGap,
-  },
-  activityCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  activityIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: Spacing.md,
-  },
-  activityContent: {
-    flex: 1,
-  },
-  activityTitle: {
-    ...Typography.subhead,
-    fontWeight: "600",
-    marginBottom: 2,
-  },
-  activityProvider: {
-    ...Typography.caption1,
-  },
-  activityRight: {
-    alignItems: "flex-end",
-    gap: Spacing.xs,
-  },
-  activityDate: {
-    ...Typography.caption2,
   },
   categoriesGrid: {
     flexDirection: "row",

@@ -13,7 +13,7 @@ import MoreScreen from "@/screens/homeowner/MoreScreen";
 import { useTheme } from "@/hooks/useTheme";
 import { HeaderTitle } from "@/components/HeaderTitle";
 import { useAuthStore } from "@/state/authStore";
-import { Colors, Spacing, Typography, BorderRadius } from "@/constants/theme";
+import { Colors, Typography } from "@/constants/theme";
 
 export type HomeownerTabParamList = {
   HomeTab: undefined;
@@ -24,157 +24,6 @@ export type HomeownerTabParamList = {
 };
 
 const Tab = createBottomTabNavigator<HomeownerTabParamList>();
-
-function FloatingTabBar({ state, descriptors, navigation, isDark, theme }: any) {
-  const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
-  
-  const horizontalMargin = Math.max(16, width * 0.04);
-  const maxWidth = Math.min(width - horizontalMargin * 2, 400);
-  const tabBarWidth = width - horizontalMargin * 2;
-  const finalWidth = Math.min(tabBarWidth, maxWidth);
-  
-  const iconSize = width < 375 ? 20 : 22;
-  const tabHeight = width < 375 ? 56 : 64;
-  const bottomOffset = Math.max(insets.bottom > 0 ? insets.bottom : 16, 16);
-
-  return (
-    <View
-      style={[
-        styles.tabBarContainer,
-        {
-          bottom: bottomOffset,
-          left: (width - finalWidth) / 2,
-          width: finalWidth,
-          height: tabHeight,
-        },
-      ]}
-    >
-      {Platform.OS === "ios" ? (
-        <BlurView
-          intensity={80}
-          tint={isDark ? "systemMaterialDark" : "systemMaterial"}
-          style={[StyleSheet.absoluteFill, styles.blurView]}
-        />
-      ) : (
-        <View
-          style={[
-            StyleSheet.absoluteFill,
-            styles.androidBackground,
-            {
-              backgroundColor: isDark ? "rgba(28, 28, 30, 0.92)" : "rgba(255, 255, 255, 0.92)",
-              borderColor: isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.08)",
-            },
-          ]}
-        />
-      )}
-
-      <View style={styles.tabItemsContainer}>
-        {state.routes.map((route: any, index: number) => {
-          const { options } = descriptors[route.key];
-          const label = options.title ?? route.name;
-          const isFocused = state.index === index;
-
-          const onPress = () => {
-            const event = navigation.emit({
-              type: "tabPress",
-              target: route.key,
-              canPreventDefault: true,
-            });
-
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name);
-            }
-          };
-
-          const iconName = getIconName(route.name);
-          const color = isFocused ? Colors.accent : theme.tabIconDefault;
-
-          return (
-            <View key={route.key} style={styles.tabItem}>
-              <View
-                style={styles.tabButton}
-                onTouchEnd={onPress}
-                accessibilityRole="button"
-                accessibilityState={isFocused ? { selected: true } : {}}
-                accessibilityLabel={options.tabBarAccessibilityLabel}
-              >
-                <Feather name={iconName} size={iconSize} color={color} />
-                <View style={styles.labelContainer}>
-                  <Feather
-                    name={iconName}
-                    size={iconSize}
-                    color={color}
-                    style={styles.hiddenIcon}
-                  />
-                  <View style={styles.labelWrapper}>
-                    <View style={[styles.label, { opacity: 1 }]}>
-                      <Feather name={iconName} size={iconSize} color={color} style={styles.hiddenIcon} />
-                    </View>
-                  </View>
-                </View>
-                <View style={styles.tabLabelWrapper}>
-                  <View style={styles.actualLabel}>
-                    <Feather name={iconName} size={iconSize} color={color} />
-                  </View>
-                </View>
-              </View>
-              <View style={styles.tabContent} onTouchEnd={onPress}>
-                <Feather name={iconName} size={iconSize} color={color} style={styles.tabIcon} />
-                <View
-                  style={[
-                    styles.tabLabel,
-                    { color },
-                  ]}
-                >
-                  <Feather name={iconName} size={10} color="transparent" />
-                </View>
-              </View>
-            </View>
-          );
-        })}
-      </View>
-
-      <View style={styles.tabsRow}>
-        {state.routes.map((route: any, index: number) => {
-          const { options } = descriptors[route.key];
-          const label = options.title ?? route.name.replace("Tab", "");
-          const isFocused = state.index === index;
-
-          const onPress = () => {
-            const event = navigation.emit({
-              type: "tabPress",
-              target: route.key,
-              canPreventDefault: true,
-            });
-
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name);
-            }
-          };
-
-          const iconName = getIconName(route.name);
-          const color = isFocused ? Colors.accent : theme.tabIconDefault;
-
-          return (
-            <View
-              key={route.key}
-              style={styles.tab}
-              onTouchEnd={onPress}
-              accessibilityRole="button"
-              accessibilityState={isFocused ? { selected: true } : {}}
-            >
-              <Feather name={iconName} size={iconSize} color={color} style={styles.icon} />
-              <View>
-                <Feather name={iconName} size={10} color="transparent" />
-              </View>
-            </View>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
 
 function getIconName(routeName: string): keyof typeof Feather.glyphMap {
   switch (routeName) {
@@ -194,183 +43,6 @@ function getIconName(routeName: string): keyof typeof Feather.glyphMap {
 }
 
 function CustomTabBar({ state, descriptors, navigation }: any) {
-  const { theme, isDark } = useTheme();
-  const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
-  
-  const horizontalMargin = Math.max(16, width * 0.04);
-  const maxWidth = Math.min(width - horizontalMargin * 2, 400);
-  const tabBarWidth = width - horizontalMargin * 2;
-  const finalWidth = Math.min(tabBarWidth, maxWidth);
-  
-  const iconSize = width < 375 ? 20 : 22;
-  const tabHeight = width < 375 ? 56 : 64;
-  const bottomOffset = Math.max(insets.bottom > 0 ? insets.bottom : 16, 16);
-
-  return (
-    <View
-      style={[
-        styles.tabBarContainer,
-        {
-          bottom: bottomOffset,
-          left: (width - finalWidth) / 2,
-          width: finalWidth,
-          height: tabHeight,
-        },
-      ]}
-    >
-      {Platform.OS === "ios" ? (
-        <BlurView
-          intensity={80}
-          tint={isDark ? "systemMaterialDark" : "systemMaterial"}
-          style={[StyleSheet.absoluteFill, styles.blurView]}
-        />
-      ) : (
-        <View
-          style={[
-            StyleSheet.absoluteFill,
-            styles.androidBackground,
-            {
-              backgroundColor: isDark ? "rgba(28, 28, 30, 0.92)" : "rgba(255, 255, 255, 0.92)",
-              borderColor: isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.08)",
-            },
-          ]}
-        />
-      )}
-
-      <View style={styles.tabsRow}>
-        {state.routes.map((route: any, index: number) => {
-          const { options } = descriptors[route.key];
-          const label = options.title ?? route.name.replace("Tab", "");
-          const isFocused = state.index === index;
-
-          const onPress = () => {
-            const event = navigation.emit({
-              type: "tabPress",
-              target: route.key,
-              canPreventDefault: true,
-            });
-
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name);
-            }
-          };
-
-          const iconName = getIconName(route.name);
-          const color = isFocused ? Colors.accent : theme.tabIconDefault;
-
-          return (
-            <View
-              key={route.key}
-              style={styles.tab}
-              onTouchEnd={onPress}
-              accessibilityRole="button"
-              accessibilityState={isFocused ? { selected: true } : {}}
-            >
-              <Feather name={iconName} size={iconSize} color={color} style={styles.icon} />
-              <View style={styles.labelTextContainer}>
-                <View style={[styles.labelText, { color }]}>
-                  <Feather name="circle" size={9} color="transparent" />
-                </View>
-              </View>
-            </View>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
-function ActualCustomTabBar({ state, descriptors, navigation }: any) {
-  const { theme, isDark } = useTheme();
-  const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
-  
-  const horizontalMargin = Math.max(16, width * 0.04);
-  const maxWidth = 400;
-  const tabBarWidth = width - horizontalMargin * 2;
-  const finalWidth = Math.min(tabBarWidth, maxWidth);
-  
-  const iconSize = width < 375 ? 18 : 20;
-  const fontSize = width < 375 ? 9 : 10;
-  const tabHeight = width < 375 ? 52 : 60;
-  const bottomOffset = Math.max(insets.bottom > 0 ? insets.bottom + 8 : 20, 20);
-
-  return (
-    <View
-      style={[
-        styles.tabBarContainer,
-        {
-          bottom: bottomOffset,
-          left: (width - finalWidth) / 2,
-          width: finalWidth,
-          height: tabHeight,
-        },
-      ]}
-    >
-      {Platform.OS === "ios" ? (
-        <BlurView
-          intensity={80}
-          tint={isDark ? "systemMaterialDark" : "systemMaterial"}
-          style={[StyleSheet.absoluteFill, styles.blurView]}
-        />
-      ) : (
-        <View
-          style={[
-            StyleSheet.absoluteFill,
-            styles.androidBackground,
-            {
-              backgroundColor: isDark ? "rgba(28, 28, 30, 0.92)" : "rgba(255, 255, 255, 0.92)",
-              borderColor: isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.08)",
-            },
-          ]}
-        />
-      )}
-
-      <View style={styles.tabsRow}>
-        {state.routes.map((route: any, index: number) => {
-          const { options } = descriptors[route.key];
-          const label = options.title ?? route.name.replace("Tab", "");
-          const isFocused = state.index === index;
-
-          const onPress = () => {
-            const event = navigation.emit({
-              type: "tabPress",
-              target: route.key,
-              canPreventDefault: true,
-            });
-
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name);
-            }
-          };
-
-          const iconName = getIconName(route.name);
-          const color = isFocused ? Colors.accent : theme.tabIconDefault;
-
-          return (
-            <View
-              key={route.key}
-              style={styles.tab}
-              onTouchEnd={onPress}
-              accessibilityRole="button"
-              accessibilityState={isFocused ? { selected: true } : {}}
-            >
-              <Feather name={iconName} size={iconSize} color={color} style={styles.icon} />
-              <View style={[styles.tabLabelText, { marginTop: 2 }]}>
-                <View style={{ fontSize, fontWeight: "500", color } as any}>
-                  <Feather name="circle" size={fontSize} color="transparent" />
-                </View>
-              </View>
-            </View>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
-function FinalCustomTabBar({ state, descriptors, navigation }: any) {
   const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -462,11 +134,10 @@ export default function HomeownerTabNavigator() {
   return (
     <Tab.Navigator
       initialRouteName={isAuthenticated ? "HomeTab" : "FindTab"}
-      tabBar={(props) => <FinalCustomTabBar {...props} />}
+      tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerTitleAlign: "center",
         headerTransparent: true,
-        headerBlurEffect: isDark ? "systemMaterialDark" : "systemMaterial",
         headerTintColor: theme.text,
         headerTitleStyle: {
           ...Typography.headline,
@@ -476,7 +147,7 @@ export default function HomeownerTabNavigator() {
           backgroundColor: Platform.select({
             ios: undefined,
             android: theme.backgroundRoot,
-            web: "transparent",
+            web: isDark ? "rgba(28, 28, 30, 0.8)" : "rgba(255, 255, 255, 0.8)",
           }),
         },
         headerShadowVisible: false,
@@ -567,50 +238,5 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontWeight: "500",
-  },
-  tabItemsContainer: {
-    display: "none",
-  },
-  tabItem: {
-    display: "none",
-  },
-  tabButton: {
-    display: "none",
-  },
-  labelContainer: {
-    display: "none",
-  },
-  hiddenIcon: {
-    display: "none",
-  },
-  labelWrapper: {
-    display: "none",
-  },
-  label: {
-    display: "none",
-  },
-  tabLabelWrapper: {
-    display: "none",
-  },
-  actualLabel: {
-    display: "none",
-  },
-  tabContent: {
-    display: "none",
-  },
-  tabIcon: {
-    display: "none",
-  },
-  tabLabel: {
-    display: "none",
-  },
-  labelTextContainer: {
-    display: "none",
-  },
-  labelText: {
-    display: "none",
-  },
-  tabLabelText: {
-    display: "none",
   },
 });

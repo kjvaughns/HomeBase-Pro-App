@@ -15,12 +15,13 @@ import { GlassCard } from "@/components/GlassCard";
 import { StatCard } from "@/components/StatCard";
 import { Avatar } from "@/components/Avatar";
 import { StatusPill } from "@/components/StatusPill";
+import { CategoryCard } from "@/components/CategoryCard";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useHomeownerStore } from "@/state/homeownerStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
-import { Job, JobStatus } from "@/state/types";
+import { Job, JobStatus, ServiceCategory } from "@/state/types";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -44,6 +45,7 @@ export default function HomeScreen() {
   
   const jobs = useHomeownerStore((s) => s.jobs);
   const messageThreads = useHomeownerStore((s) => s.messageThreads);
+  const categories = useHomeownerStore((s) => s.categories);
 
   const upcomingJobs = useMemo(() => 
     jobs.filter((j) => j.status === "scheduled" || j.status === "requested"), 
@@ -80,6 +82,14 @@ export default function HomeScreen() {
     navigation.navigate("AIChat");
   };
 
+  const handleCategoryPress = (category: ServiceCategory) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    navigation.navigate("ProviderList", {
+      categoryId: category.id,
+      categoryName: category.name,
+    });
+  };
+
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -102,10 +112,26 @@ export default function HomeScreen() {
               <ThemedText style={styles.welcomeText}>Welcome back,</ThemedText>
               <ThemedText style={styles.userName}>{user?.name?.split(" ")[0] || "Homeowner"}</ThemedText>
             </View>
-            <Pressable onPress={handleAIPress} style={[styles.aiButton, { backgroundColor: Colors.accent }]}>
-              <Feather name="message-circle" size={20} color="#FFFFFF" />
-            </Pressable>
           </View>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(150).duration(400)}>
+          <Pressable onPress={handleAIPress}>
+            <GlassCard style={styles.aiCard}>
+              <View style={styles.aiCardContent}>
+                <View style={[styles.aiIconContainer, { backgroundColor: Colors.accentLight }]}>
+                  <Feather name="message-circle" size={24} color={Colors.accent} />
+                </View>
+                <View style={styles.aiTextContainer}>
+                  <ThemedText style={styles.aiTitle}>Ask Homebase AI</ThemedText>
+                  <ThemedText style={[styles.aiSubtitle, { color: theme.textSecondary }]}>
+                    Get instant answers about home services
+                  </ThemedText>
+                </View>
+                <Feather name="chevron-right" size={20} color={theme.textTertiary} />
+              </View>
+            </GlassCard>
+          </Pressable>
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(200).duration(400)}>
@@ -143,7 +169,7 @@ export default function HomeScreen() {
           </View>
 
           {recentJobs.length > 0 ? (
-            recentJobs.map((job, index) => {
+            recentJobs.map((job) => {
               const statusInfo = STATUS_MAP[job.status];
               return (
                 <GlassCard
@@ -190,20 +216,32 @@ export default function HomeScreen() {
 
         <Animated.View entering={FadeInDown.delay(400).duration(400)}>
           <View style={styles.sectionHeader}>
-            <ThemedText style={styles.sectionTitle}>Quick Actions</ThemedText>
+            <ThemedText style={styles.sectionTitle}>Quick Search</ThemedText>
+            <Pressable onPress={() => navigation.getParent()?.navigate("FindTab")}>
+              <ThemedText style={[styles.viewAll, { color: Colors.accent }]}>See All</ThemedText>
+            </Pressable>
+          </View>
+
+          <View style={styles.categoriesGrid}>
+            {categories.slice(0, 6).map((category) => (
+              <View key={category.id} style={styles.categoryItem}>
+                <CategoryCard
+                  name={category.name}
+                  icon={category.icon as any}
+                  onPress={() => handleCategoryPress(category)}
+                  compact
+                />
+              </View>
+            ))}
+          </View>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(500).duration(400)}>
+          <View style={styles.sectionHeader}>
+            <ThemedText style={styles.sectionTitle}>Home Tools</ThemedText>
           </View>
 
           <View style={styles.quickActions}>
-            <Pressable
-              style={[styles.quickAction, { backgroundColor: theme.cardBackground }]}
-              onPress={() => navigation.getParent()?.navigate("FindTab")}
-            >
-              <View style={[styles.quickActionIcon, { backgroundColor: Colors.accentLight }]}>
-                <Feather name="search" size={20} color={Colors.accent} />
-              </View>
-              <ThemedText style={styles.quickActionText}>Find a Pro</ThemedText>
-            </Pressable>
-
             <Pressable
               style={[styles.quickAction, { backgroundColor: theme.cardBackground }]}
               onPress={() => navigation.navigate("SurvivalKit")}
@@ -222,6 +260,16 @@ export default function HomeScreen() {
                 <Feather name="activity" size={20} color={Colors.accent} />
               </View>
               <ThemedText style={styles.quickActionText}>Health Score</ThemedText>
+            </Pressable>
+
+            <Pressable
+              style={[styles.quickAction, { backgroundColor: theme.cardBackground }]}
+              onPress={() => navigation.navigate("HouseFax")}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: Colors.accentLight }]}>
+                <Feather name="file-text" size={20} color={Colors.accent} />
+              </View>
+              <ThemedText style={styles.quickActionText}>HouseFax</ThemedText>
             </Pressable>
 
             <Pressable
@@ -257,12 +305,30 @@ const styles = StyleSheet.create({
   userName: {
     ...Typography.largeTitle,
   },
-  aiButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  aiCard: {
+    marginBottom: Spacing.lg,
+  },
+  aiCardContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  aiIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
+    marginRight: Spacing.md,
+  },
+  aiTextContainer: {
+    flex: 1,
+  },
+  aiTitle: {
+    ...Typography.headline,
+    marginBottom: 2,
+  },
+  aiSubtitle: {
+    ...Typography.subhead,
   },
   statsRow: {
     flexDirection: "row",
@@ -270,12 +336,6 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xl,
   },
   statCard: {
-    flex: 1,
-  },
-  statCardPressable: {
-    flex: 1,
-  },
-  statCardFull: {
     flex: 1,
   },
   sectionHeader: {
@@ -336,6 +396,15 @@ const styles = StyleSheet.create({
   emptySubtext: {
     ...Typography.subhead,
     marginTop: Spacing.xs,
+  },
+  categoriesGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+    marginBottom: Spacing.xl,
+  },
+  categoryItem: {
+    width: "31%",
   },
   quickActions: {
     flexDirection: "row",
