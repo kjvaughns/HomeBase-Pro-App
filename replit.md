@@ -4,9 +4,9 @@
 Homebase is a unified iOS mobile app that combines homeowner and provider portals into one seamless experience. Built with Expo React Native and Express.js backend with Supabase PostgreSQL database.
 
 ## Current State
-- **Version**: 1.2.0
+- **Version**: 1.3.0
 - **Last Updated**: January 27, 2026
-- **Status**: Complete UI/UX with database-backed authentication, booking, and notifications
+- **Status**: Complete Provider Portal MVP with database-backed clients, jobs, invoices, and payments
 
 ## Features Implemented
 
@@ -40,6 +40,21 @@ Homebase is a unified iOS mobile app that combines homeowner and provider portal
   - Mark as read functionality
   - Navigation to related appointments
   - Automatic notification creation on booking events
+
+### Provider Portal (NEW - Full Backend)
+- **Dashboard**: Real-time stats (revenue MTD, jobs completed, active clients, upcoming jobs)
+- **Clients CRM**: Full client management with search, add, detail views
+  - ClientsScreen with search and list view
+  - AddClientScreen for creating new clients
+  - ClientDetailScreen with job/invoice history
+- **Schedule**: Calendar views (List, Day, Week, Month) with real jobs data
+  - AddJobScreen for creating jobs with client selection
+  - Job status tracking (scheduled, in_progress, completed, cancelled)
+- **Money/Invoices**: Complete invoicing system
+  - MoneyScreen with revenue stats and invoice list
+  - AddInvoiceScreen for creating invoices linked to clients/jobs
+  - InvoiceDetailScreen for viewing, sending, marking paid, canceling
+  - Invoice statuses: draft, sent, paid, overdue, cancelled
 
 ### Homeowner Tools
 1. **Survival Kit**: Emergency preparedness checklist with progress tracking
@@ -95,8 +110,17 @@ Homebase is a unified iOS mobile app that combines homeowner and provider portal
 **Homeowner Tools:**
 - AIChatScreen, SurvivalKitScreen, HealthScoreScreen, HouseFaxScreen, BudgeterScreen
 
-**Provider Portal:**
-- ProviderHomeScreen, ClientsScreen, ClientDetailScreen, ScheduleScreen, MoneyScreen, ProviderMoreScreen
+**Provider Portal (Database-Connected):**
+- ProviderHomeScreen - Dashboard with real stats from API
+- ClientsScreen - Client list with search, fetches from API
+- AddClientScreen - Create new client form
+- ClientDetailScreen - Client details with job/invoice history
+- ScheduleScreen - Calendar views with real jobs from API
+- AddJobScreen - Create job with client picker
+- MoneyScreen - Revenue stats and invoice list from API
+- AddInvoiceScreen - Create invoice linked to client/job
+- InvoiceDetailScreen - View/manage invoice (send, mark paid, cancel)
+- ProviderMoreScreen - Provider settings
 
 ## Database Schema
 
@@ -113,6 +137,12 @@ Homebase is a unified iOS mobile app that combines homeowner and provider portal
 - **appointments**: id, userId, homeId, providerId, serviceName, description, scheduledDate, scheduledTime, urgency, jobSize, estimatedPrice, status
 - **notifications**: id, userId, title, message, type, isRead, data, createdAt
 - **reviews**: id, appointmentId, userId, providerId, rating, comment, createdAt
+
+**Provider Portal Tables:**
+- **clients**: id, providerId, firstName, lastName, email, phone, address, notes, createdAt, updatedAt
+- **jobs**: id, providerId, clientId, title, description, scheduledDate, scheduledTime, status, estimatedPrice, address, createdAt, updatedAt
+- **invoices**: id, providerId, clientId, jobId, amount, status (draft/sent/paid/overdue/cancelled), dueDate, sentAt, paidAt, notes, createdAt
+- **payments**: id, providerId, invoiceId, amount, paymentMethod, transactionId, createdAt
 
 ### Field Mappings
 - **User**: Frontend uses `name`, backend stores as `firstName`/`lastName` (formatUserResponse helper)
@@ -147,6 +177,40 @@ Homebase is a unified iOS mobile app that combines homeowner and provider portal
 ### AI Chat
 - `POST /api/chat` - Streaming AI chat response (SSE)
 - `POST /api/chat/simple` - Non-streaming AI chat response
+
+### Provider Portal
+**Provider Registration:**
+- `POST /api/providers/register` - Register as provider (creates provider profile)
+- `GET /api/providers/:userId` - Get provider by user ID
+
+**Provider Stats:**
+- `GET /api/provider/:providerId/stats` - Get dashboard stats (revenueMTD, jobsCompleted, activeClients, upcomingJobs)
+
+**Clients:**
+- `GET /api/provider/:providerId/clients` - Get provider's clients
+- `GET /api/clients/:id` - Get single client with jobs/invoices
+- `POST /api/clients` - Create new client
+- `PUT /api/clients/:id` - Update client
+- `DELETE /api/clients/:id` - Delete client
+
+**Jobs:**
+- `GET /api/provider/:providerId/jobs` - Get provider's jobs
+- `GET /api/jobs/:id` - Get single job
+- `POST /api/jobs` - Create new job
+- `PUT /api/jobs/:id` - Update job
+
+**Invoices:**
+- `GET /api/provider/:providerId/invoices` - Get provider's invoices
+- `GET /api/invoices/:id` - Get single invoice
+- `POST /api/invoices` - Create new invoice
+- `PUT /api/invoices/:id` - Update invoice
+- `POST /api/invoices/:id/send` - Send invoice (status -> sent)
+- `POST /api/invoices/:id/mark-paid` - Mark invoice as paid
+- `POST /api/invoices/:id/cancel` - Cancel invoice
+
+**Payments:**
+- `GET /api/provider/:providerId/payments` - Get provider's payments
+- `POST /api/payments` - Record a payment
 
 ## Project Structure
 ```
@@ -191,25 +255,28 @@ shared/
 - Clean, minimal design with proper spacing
 
 ## Recent Updates (January 27, 2026)
-- **Full Authentication System**: Sign up, login, forgot password screens connected to PostgreSQL backend
-- **Onboarding Flow**: Add first property after signup
-- **Database-Connected Booking Flow**: Complete flow from provider selection to appointment creation
-- **Appointment Management**: ManageScreen shows real appointments, AppointmentDetailScreen for viewing/rescheduling/canceling
-- **Notification System**: NotificationsScreen with database-backed notifications, mark as read, navigation to appointments
-- **API Endpoints**: Full REST API for auth, homes, appointments, notifications
-- **Field Mapping Helpers**: formatUserResponse, formatHomeResponse for frontend/backend compatibility
-- **Component Prop Fixes**: StatusPill uses `status` prop, buttons use `children`, Avatar uses string sizes
+- **Provider Portal Backend**: Complete data model with clients, jobs, invoices, payments tables
+- **Provider Dashboard**: Real-time stats from database (revenue MTD, jobs completed, active clients)
+- **Clients CRM**: Full CRUD with search, detail views including job/invoice history
+- **Job Management**: Create jobs with client picker, calendar views with real data
+- **Invoice System**: Create, send, mark paid, cancel invoices with full status tracking
+- **React Query Integration**: All Provider Portal screens use react-query for data fetching
+- **Navigation Routes**: AddClient, AddJob, AddInvoice, InvoiceDetail screens added
 
 ## Technical Notes
 - **StatusPill**: Use `status` prop (not `variant`): "success", "info", "warning", "neutral", "cancelled"
 - **Buttons**: Use `children` for label: `<PrimaryButton>Click Me</PrimaryButton>`
 - **Avatar**: Use size="small"|"medium"|"large" (not numeric)
 - **apiRequest**: Takes (method, route, data?) params
+- **React Query Keys**: Provider data uses pattern `["/api/provider", providerId, resource]`
+- **Date Handling**: Backend converts ISO strings to Date objects for Drizzle ORM
+- **Provider Stats Calculation**: revenueMTD from paid invoices this month, jobsCompleted, activeClients (unique), upcomingJobs
 - **Expo Web**: Known compatibility issues in Replit browser - test on mobile via Expo Go
 
 ## Next Steps (Phase 2+)
 - Real-time messaging with WebSockets
 - Push notifications (expo-notifications)
-- Payment processing integration
+- Payment processing integration (Stripe)
 - Provider approval workflow
 - Email notifications for password reset
+- Job status change notifications for providers
