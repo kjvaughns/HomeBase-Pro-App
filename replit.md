@@ -147,6 +147,13 @@ assets/
 - Liquid Glass styling for headers, tab bars, key cards, modals
 - Clean, minimal design with proper spacing
 
+## Recent Updates (January 27, 2026)
+- Fixed infinite loop issues in Zustand selectors across 9+ screens by using useMemo with direct array access
+- Pattern: `const items = useStore(s => s.items); const item = useMemo(() => items.find(...), [items, id]);`
+- All screens now properly use Zustand store data instead of mockData imports
+- Complete booking flow tested and working: category → providers → profile → sign-in → request → schedule
+- Developer feature: Long-press on JobDetailScreen advances job through status lifecycle for testing
+
 ## Next Steps (Phase 2+)
 - Real authentication backend (Replit Auth with Apple, Google, email)
 - Database integration for bookings, messages, leads
