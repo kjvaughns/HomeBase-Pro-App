@@ -1,0 +1,121 @@
+Paste this prompt into your builder agent. It tells them to analyze both uploaded codebases, keep the same screens, and refine the full design with the iOS Liquid Glass nav.
+
+Analyze the two uploaded codebases in full. One is the Homeowner portal and one is the Service Provider portal. You must keep the exact same screens, routes, and feature flows that exist in these codebases. Do not remove pages. Do not change product logic. Your job is to refine and unify the entire design system and apply it across the whole app so it looks consistent, premium, and iOS native.
+
+App behavior and navigation requirements
+Default entry is the Homeowner portal experience.
+The user must be able to navigate to the Service Provider portal from within the app using a role switch entry point inside More or Settings.
+The homeowner and provider experiences must feel like one app with one design system, not two stitched apps.
+
+Design goals
+Simple and obvious to use.
+Luxury minimal.
+No clutter.
+Fix all spacing alignment text overflow and inconsistent sizing issues.
+Use exactly one accent color only: #38AE5F. No other accent colors anywhere. Everything else must be neutral grayscale.
+
+Liquid Glass and iOS 26+ native features requirement
+Implement a Liquid Glass style navigation system across the entire app.
+This must include
+A frosted glass top navigation bar that supports iOS large titles, collapsible behavior, and smooth scroll transitions.
+A frosted glass bottom tab bar with proper safe area handling and subtle blur.
+Native feeling sheets, bottom sheets, and modals with glass blur.
+Smooth interactive transitions, haptics on primary actions, and polished press states.
+Use only subtle glass. It should still feel like a simple app first.
+
+Navigation bar specifics
+Use a unified top navigation bar component across all screens.
+Supports
+Large title mode and inline mode
+Back button with iOS style
+Right side actions icons
+Blurred background that adapts to scroll and content behind it
+Dark mode and light mode
+No harsh borders. Use subtle separators only when needed.
+
+Bottom tab bar specifics
+One shared tab bar component with glass blur.
+Clear active state using #38AE5F.
+Consistent icon sizes and labels.
+No floating outlined random icons or widget clutter.
+
+Structure to keep
+You must preserve the page and screen structure from the uploaded codebases.
+Homeowner portal screens remain in the homeowner section.
+Provider portal screens remain in the provider section.
+Do not rename screens unless required for routing consistency.
+Do not change the user flows.
+
+Unification tasks you must do
+1 Create one theme token system and use it everywhere
+Accent: #38AE5F
+Neutral palette for light and dark
+Spacing scale
+Typography scale
+Radius scale
+Shadow and blur scale
+
+2 Create a shared UI component kit and replace duplicated UI patterns across both portals
+GlassNavBar
+GlassTabBar
+Card
+PrimaryButton
+SecondaryButton
+ListRow
+StatusPill
+TextField
+BottomSheet
+Modal
+SkeletonLoader
+EmptyState
+
+3 Apply consistent layout rules everywhere
+8 point spacing system
+Consistent margins and paddings
+One consistent corner radius
+Consistent icon sizing
+Consistent header patterns
+Consistent list patterns
+
+4 Fix all visual bugs
+Text bleeding outside containers
+Misaligned icons and labels
+Inconsistent padding
+Off center logos
+Overlapping elements
+Broken dark mode contrast
+
+Role switching requirement
+Add a clear navigation entry point in More or Settings labeled Switch to Provider or Provider Portal.
+Switching must route the user into the provider portal root screen.
+Add a corresponding entry to return to Homeowner.
+This should not feel like opening a separate app, it should be a seamless role switch.
+
+Deliverables
+First produce an audit
+List every major inconsistency you found across the two codebases
+List screens with layout problems
+List duplicated components
+List typography and spacing mismatches
+
+Then produce the design system
+Theme tokens and component specs
+Navigation bar and tab bar specs
+Light and dark mode rules
+
+Then implement
+Apply changes across the entire codebase while preserving all screens and flows.
+Replace old navigation and tab UI with the Liquid Glass versions.
+Confirm every screen still exists and is reachable.
+
+Output requirements
+Show
+A screen by screen checklist confirming it matches the original structure but improved
+Before and after notes per major screen group
+Any required manual steps to run
+
+Hard rules
+Do not introduce any new accent colors besides #38AE5F.
+Do not remove or merge screens.
+Do not change the business logic.
+Do not redesign flows into something different. Only refine visuals and consistency.

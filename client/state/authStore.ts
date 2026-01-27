@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type UserRole = "guest" | "homeowner" | "provider";
@@ -29,6 +28,7 @@ interface AuthState {
   user: User | null;
   activeRole: UserRole;
   providerProfile: ProviderProfile | null;
+  isHydrated: boolean;
   
   login: (user: User) => void;
   logout: () => void;
@@ -37,66 +37,106 @@ interface AuthState {
   updateProviderStatus: (status: ProviderStatus) => void;
   hasProviderProfile: () => boolean;
   canAccessProviderMode: () => boolean;
+  hydrate: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set, get) => ({
+const STORAGE_KEY = "auth-storage";
+
+export const useAuthStore = create<AuthState>()((set, get) => ({
+  isAuthenticated: false,
+  user: null,
+  activeRole: "guest",
+  providerProfile: null,
+  isHydrated: false,
+
+  login: (user: User) => {
+    const newState = {
+      isAuthenticated: true,
+      user,
+      activeRole: "homeowner" as UserRole,
+    };
+    set(newState);
+    saveToStorage(get());
+  },
+
+  logout: () => {
+    const newState = {
       isAuthenticated: false,
       user: null,
-      activeRole: "guest",
+      activeRole: "guest" as UserRole,
       providerProfile: null,
+    };
+    set(newState);
+    saveToStorage(get());
+  },
 
-      login: (user: User) => {
-        set({
-          isAuthenticated: true,
-          user,
-          activeRole: "homeowner",
-        });
-      },
-
-      logout: () => {
-        set({
-          isAuthenticated: false,
-          user: null,
-          activeRole: "guest",
-          providerProfile: null,
-        });
-      },
-
-      setActiveRole: (role: UserRole) => {
-        const state = get();
-        if (role === "provider" && !state.canAccessProviderMode()) {
-          return;
-        }
-        set({ activeRole: role });
-      },
-
-      createProviderProfile: (profile: ProviderProfile) => {
-        set({ providerProfile: profile });
-      },
-
-      updateProviderStatus: (status: ProviderStatus) => {
-        const { providerProfile } = get();
-        if (providerProfile) {
-          set({
-            providerProfile: { ...providerProfile, status },
-          });
-        }
-      },
-
-      hasProviderProfile: () => {
-        return get().providerProfile !== null;
-      },
-
-      canAccessProviderMode: () => {
-        const { providerProfile } = get();
-        return providerProfile?.status === "approved";
-      },
-    }),
-    {
-      name: "auth-storage",
-      storage: createJSONStorage(() => AsyncStorage),
+  setActiveRole: (role: UserRole) => {
+    const state = get();
+    if (role === "provider" && !state.canAccessProviderMode()) {
+      return;
     }
-  )
-);
+    set({ activeRole: role });
+    saveToStorage(get());
+  },
+
+  createProviderProfile: (profile: ProviderProfile) => {
+    set({ providerProfile: profile });
+    saveToStorage(get());
+  },
+
+  updateProviderStatus: (status: ProviderStatus) => {
+    const { providerProfile } = get();
+    if (providerProfile) {
+      set({
+        providerProfile: { ...providerProfile, status },
+      });
+      saveToStorage(get());
+    }
+  },
+
+  hasProviderProfile: () => {
+    return get().providerProfile !== null;
+  },
+
+  canAccessProviderMode: () => {
+    const { providerProfile } = get();
+    return providerProfile?.status === "approved";
+  },
+
+  hydrate: async () => {
+    try {
+      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const data = JSON.parse(stored);
+        set({
+          isAuthenticated: data.isAuthenticated || false,
+          user: data.user || null,
+          activeRole: data.activeRole || "guest",
+          providerProfile: data.providerProfile || null,
+          isHydrated: true,
+        });
+      } else {
+        set({ isHydrated: true });
+      }
+    } catch (error) {
+      console.error("Failed to hydrate auth store:", error);
+      set({ isHydrated: true });
+    }
+  },
+}));
+
+async function saveToStorage(state: AuthState) {
+  try {
+    const data = {
+      isAuthenticated: state.isAuthenticated,
+      user: state.user,
+      activeRole: state.activeRole,
+      providerProfile: state.providerProfile,
+    };
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch (error) {
+    console.error("Failed to save auth state:", error);
+  }
+}
+
+useAuthStore.getState().hydrate();
