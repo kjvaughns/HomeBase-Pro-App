@@ -153,6 +153,8 @@ assets/
 - All screens now properly use Zustand store data instead of mockData imports
 - Complete booking flow tested and working: category → providers → profile → sign-in → request → schedule
 - Developer feature: Long-press on JobDetailScreen advances job through status lifecycle for testing
+- Fixed dark mode toggle: ListRow with Switch inside causes double-toggle. Fix: position Switch absolutely, remove onPress from ListRow
+- Screen organization: HomeScreen (auth only) has Ask AI + Recent Activity + Quick Search + Home Tools; FindScreen is marketplace-focused
 
 ## Next Steps (Phase 2+)
 - Real authentication backend (Replit Auth with Apple, Google, email)
