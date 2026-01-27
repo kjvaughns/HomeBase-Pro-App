@@ -142,6 +142,28 @@ export default function FindScreen() {
         <Feather name="chevron-down" size={14} color={Colors.accent} />
       </Animated.View>
 
+      <Animated.View entering={FadeInDown.delay(175).duration(400)}>
+        <Pressable
+          style={[styles.aiCard, { backgroundColor: theme.card }]}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            navigation.navigate("AIChat");
+          }}
+          testID="ask-homebase-ai-card"
+        >
+          <View style={[styles.aiIconContainer, { backgroundColor: Colors.accentLight }]}>
+            <Feather name="message-circle" size={24} color={Colors.accent} />
+          </View>
+          <View style={styles.aiCardContent}>
+            <ThemedText style={styles.aiCardTitle}>Ask Homebase AI</ThemedText>
+            <ThemedText style={[styles.aiCardSubtitle, { color: theme.textSecondary }]}>
+              Get instant answers or find the right pro
+            </ThemedText>
+          </View>
+          <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+        </Pressable>
+      </Animated.View>
+
       <Animated.View entering={FadeInDown.delay(200).duration(400)}>
         <SectionHeader title="Services" actionLabel="See All" onAction={() => {}} />
       </Animated.View>
@@ -275,6 +297,32 @@ const styles = StyleSheet.create({
     ...Typography.subhead,
     color: Colors.accent,
     fontWeight: "500",
+  },
+  aiCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    marginBottom: Spacing.sectionGap,
+    gap: Spacing.md,
+  },
+  aiIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  aiCardContent: {
+    flex: 1,
+  },
+  aiCardTitle: {
+    ...Typography.headline,
+    fontWeight: "600",
+    marginBottom: Spacing.xxs,
+  },
+  aiCardSubtitle: {
+    ...Typography.subhead,
   },
   categoriesGrid: {
     flexDirection: "row",
