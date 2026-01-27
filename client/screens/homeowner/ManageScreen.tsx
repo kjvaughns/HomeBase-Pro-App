@@ -10,7 +10,6 @@ import { BookingCard } from "@/components/BookingCard";
 import { EmptyState } from "@/components/EmptyState";
 import { AccountGateModal } from "@/components/AccountGateModal";
 import { SkeletonCard } from "@/components/SkeletonLoader";
-import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { mockBookings, Booking } from "@/state/mockData";
@@ -19,7 +18,6 @@ export default function ManageScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
-  const { theme } = useTheme();
   const { isAuthenticated, login } = useAuthStore();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -92,9 +90,9 @@ export default function ManageScreen() {
           renderItem={() => <SkeletonCard />}
           keyExtractor={(item) => item.toString()}
           contentContainerStyle={{
-            paddingTop: headerHeight + Spacing.xl,
+            paddingTop: headerHeight + Spacing.lg,
             paddingBottom: tabBarHeight + Spacing.xl,
-            paddingHorizontal: Spacing.lg,
+            paddingHorizontal: Spacing.screenPadding,
           }}
         />
       </ThemedView>
@@ -109,9 +107,9 @@ export default function ManageScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={[
           {
-            paddingTop: headerHeight + Spacing.xl,
+            paddingTop: headerHeight + Spacing.lg,
             paddingBottom: tabBarHeight + Spacing.xl,
-            paddingHorizontal: Spacing.lg,
+            paddingHorizontal: Spacing.screenPadding,
           },
           bookings.length === 0 && styles.emptyContainer,
         ]}

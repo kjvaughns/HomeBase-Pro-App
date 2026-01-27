@@ -43,9 +43,7 @@ export default function MessagesScreen() {
         testID={`message-${item.id}`}
       />
       {index < messages.length - 1 ? (
-        <View
-          style={[styles.divider, { backgroundColor: theme.border }]}
-        />
+        <View style={[styles.divider, { backgroundColor: theme.separator }]} />
       ) : null}
     </Animated.View>
   );
@@ -70,7 +68,7 @@ export default function MessagesScreen() {
           renderItem={() => <SkeletonListRow />}
           keyExtractor={(item) => item.toString()}
           contentContainerStyle={{
-            paddingTop: headerHeight + Spacing.xl,
+            paddingTop: headerHeight + Spacing.lg,
             paddingBottom: tabBarHeight + Spacing.xl,
           }}
         />
@@ -86,7 +84,7 @@ export default function MessagesScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={[
           {
-            paddingTop: headerHeight + Spacing.xl,
+            paddingTop: headerHeight + Spacing.lg,
             paddingBottom: tabBarHeight + Spacing.xl,
           },
           messages.length === 0 && styles.emptyContainer,
@@ -114,7 +112,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   divider: {
-    height: 1,
-    marginLeft: Spacing.lg + 56 + Spacing.md,
+    height: StyleSheet.hairlineWidth,
+    marginLeft: Spacing.screenPadding + 56 + Spacing.md,
   },
 });

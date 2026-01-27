@@ -10,9 +10,8 @@ import ScheduleScreen from "@/screens/provider/ScheduleScreen";
 import MoneyScreen from "@/screens/provider/MoneyScreen";
 import ProviderMoreScreen from "@/screens/provider/ProviderMoreScreen";
 import { useTheme } from "@/hooks/useTheme";
-import { useScreenOptions } from "@/hooks/useScreenOptions";
 import { HeaderTitle } from "@/components/HeaderTitle";
-import { Colors, Spacing } from "@/constants/theme";
+import { Colors, Spacing, Typography } from "@/constants/theme";
 
 export type ProviderTabParamList = {
   HomeTab: undefined;
@@ -26,13 +25,27 @@ const Tab = createBottomTabNavigator<ProviderTabParamList>();
 
 export default function ProviderTabNavigator() {
   const { theme, isDark } = useTheme();
-  const screenOptions = useScreenOptions();
 
   return (
     <Tab.Navigator
       initialRouteName="HomeTab"
       screenOptions={{
-        ...screenOptions,
+        headerTitleAlign: "center",
+        headerTransparent: true,
+        headerBlurEffect: isDark ? "systemMaterialDark" : "systemMaterial",
+        headerTintColor: theme.text,
+        headerTitleStyle: {
+          ...Typography.headline,
+          color: theme.text,
+        },
+        headerStyle: {
+          backgroundColor: Platform.select({
+            ios: undefined,
+            android: theme.backgroundRoot,
+            web: "transparent",
+          }),
+        },
+        headerShadowVisible: false,
         tabBarActiveTintColor: Colors.accent,
         tabBarInactiveTintColor: theme.tabIconDefault,
         tabBarShowLabel: true,
@@ -73,7 +86,7 @@ export default function ProviderTabNavigator() {
         options={{
           title: "Home",
           headerTitle: () => <HeaderTitle title="Homebase Pro" />,
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: ({ color }) => (
             <Feather name="home" size={22} color={color} />
           ),
         }}
@@ -84,7 +97,7 @@ export default function ProviderTabNavigator() {
         options={{
           title: "Leads",
           headerTitle: "Leads",
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: ({ color }) => (
             <Feather name="users" size={22} color={color} />
           ),
         }}
@@ -95,7 +108,7 @@ export default function ProviderTabNavigator() {
         options={{
           title: "Schedule",
           headerTitle: "Schedule",
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: ({ color }) => (
             <Feather name="calendar" size={22} color={color} />
           ),
         }}
@@ -106,7 +119,7 @@ export default function ProviderTabNavigator() {
         options={{
           title: "Money",
           headerTitle: "Money",
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: ({ color }) => (
             <Feather name="dollar-sign" size={22} color={color} />
           ),
         }}
@@ -117,7 +130,7 @@ export default function ProviderTabNavigator() {
         options={{
           title: "More",
           headerTitle: "More",
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: ({ color }) => (
             <Feather name="menu" size={22} color={color} />
           ),
         }}

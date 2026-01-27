@@ -9,10 +9,9 @@ import * as Haptics from "expo-haptics";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
-import { PrimaryButton } from "@/components/PrimaryButton";
-import { SecondaryButton } from "@/components/SecondaryButton";
+import { Button } from "@/components/Button";
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, Colors } from "@/constants/theme";
+import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore, UserRole } from "@/state/authStore";
 
 type RouteParams = {
@@ -59,14 +58,11 @@ export default function RoleSwitchConfirmationScreen() {
           entering={FadeInDown.delay(200).duration(400)}
           style={styles.textContent}
         >
-          <ThemedText type="h1" style={styles.title}>
+          <ThemedText style={styles.title}>
             Switching to {isProvider ? "Provider" : "Homeowner"} Mode
           </ThemedText>
 
-          <ThemedText
-            type="body"
-            style={[styles.description, { color: theme.textSecondary }]}
-          >
+          <ThemedText style={[styles.description, { color: theme.textSecondary }]}>
             {isProvider
               ? "You're about to switch to your provider dashboard. You'll be able to manage leads, jobs, and earnings."
               : "You're about to switch to homeowner mode. You'll be able to browse and book services."}
@@ -76,26 +72,18 @@ export default function RoleSwitchConfirmationScreen() {
         <Animated.View entering={FadeInDown.delay(300).duration(400)}>
           <GlassCard style={styles.infoCard}>
             <View style={styles.infoRow}>
-              <View
-                style={[
-                  styles.iconContainer,
-                  { backgroundColor: `${Colors.accent}15` },
-                ]}
-              >
+              <View style={[styles.iconContainer, { backgroundColor: Colors.accentLight }]}>
                 <Feather
                   name={isProvider ? "briefcase" : "home"}
-                  size={24}
+                  size={Spacing.iconSize}
                   color={Colors.accent}
                 />
               </View>
               <View style={styles.infoText}>
-                <ThemedText type="h4">
+                <ThemedText style={styles.infoTitle}>
                   {isProvider ? "Provider Dashboard" : "Home Services"}
                 </ThemedText>
-                <ThemedText
-                  type="small"
-                  style={{ color: theme.textSecondary }}
-                >
+                <ThemedText style={[styles.infoSubtitle, { color: theme.textSecondary }]}>
                   {isProvider
                     ? "Home, Leads, Schedule, Money, More"
                     : "Find, Manage, Messages, More"}
@@ -110,12 +98,12 @@ export default function RoleSwitchConfirmationScreen() {
         entering={FadeInDown.delay(400).duration(400)}
         style={styles.actions}
       >
-        <PrimaryButton onPress={handleContinue} style={styles.button}>
+        <Button variant="primary" onPress={handleContinue} style={styles.button}>
           Continue
-        </PrimaryButton>
-        <SecondaryButton onPress={handleCancel} style={styles.button}>
+        </Button>
+        <Button variant="secondary" onPress={handleCancel} style={styles.button}>
           Cancel
-        </SecondaryButton>
+        </Button>
       </Animated.View>
     </ThemedView>
   );
@@ -124,7 +112,7 @@ export default function RoleSwitchConfirmationScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: Spacing.screenPadding,
   },
   content: {
     flex: 1,
@@ -141,10 +129,12 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xl,
   },
   title: {
+    ...Typography.largeTitle,
     textAlign: "center",
     marginBottom: Spacing.md,
   },
   description: {
+    ...Typography.body,
     textAlign: "center",
     maxWidth: 300,
   },
@@ -159,13 +149,20 @@ const styles = StyleSheet.create({
   iconContainer: {
     width: 48,
     height: 48,
-    borderRadius: 14,
+    borderRadius: BorderRadius.iconContainer,
     alignItems: "center",
     justifyContent: "center",
   },
   infoText: {
     marginLeft: Spacing.md,
     flex: 1,
+  },
+  infoTitle: {
+    ...Typography.headline,
+  },
+  infoSubtitle: {
+    ...Typography.subhead,
+    marginTop: 2,
   },
   actions: {
     gap: Spacing.md,
