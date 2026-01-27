@@ -153,9 +153,10 @@ export class DatabaseStorage implements IStorage {
       
       if (providerIds.length === 0) return [];
       
-      const ids = providerIds.map(p => p.providerId);
+      // Deduplicate provider IDs
+      const uniqueIds = [...new Set(providerIds.map(p => p.providerId))];
       const results: Provider[] = [];
-      for (const id of ids) {
+      for (const id of uniqueIds) {
         const [provider] = await db.select().from(providers).where(eq(providers.id, id));
         if (provider && provider.isActive) {
           results.push(provider);
