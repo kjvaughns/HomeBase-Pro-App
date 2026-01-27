@@ -1,14 +1,21 @@
 # Homebase - Unified Home Services App
 
 ## Overview
-Homebase is a unified iOS mobile app that combines homeowner and provider portals into one seamless experience. Built with Expo React Native and Express.js backend.
+Homebase is a unified iOS mobile app that combines homeowner and provider portals into one seamless experience. Built with Expo React Native and Express.js backend with PostgreSQL database.
 
 ## Current State
-- **Version**: 1.1.0
+- **Version**: 1.2.0
 - **Last Updated**: January 27, 2026
-- **Status**: Complete UI/UX implementation with AI features and homeowner tools
+- **Status**: Complete UI/UX with database-backed authentication, booking, and notifications
 
 ## Features Implemented
+
+### Authentication System
+- **Real Authentication Backend**: PostgreSQL-backed user management
+  - Sign up with email/password (bcrypt hashing with 10 salt rounds)
+  - Login with JWT-like session management
+  - Password reset flow (forgot password screen ready for email integration)
+  - Onboarding flow to add first property after signup
 
 ### Three Access States
 1. **Guest Mode**: Browse marketplace, view providers, gated actions prompt sign-in
@@ -22,22 +29,23 @@ Homebase is a unified iOS mobile app that combines homeowner and provider portal
   - Suggested questions for quick access
   - Streaming-capable API (non-streaming endpoint used for mobile compatibility)
 
+### Database-Backed Features
+- **Appointments**: Full CRUD with status tracking (pending, confirmed, in_progress, completed, cancelled)
+  - Create appointments through booking flow
+  - View appointments in ManageScreen with sections (Upcoming, In Progress, Completed)
+  - AppointmentDetailScreen with reschedule and cancel functionality
+  - Real-time status updates
+- **Notifications**: Database-stored notifications for booking updates
+  - NotificationsScreen accessible from MoreScreen
+  - Mark as read functionality
+  - Navigation to related appointments
+  - Automatic notification creation on booking events
+
 ### Homeowner Tools
 1. **Survival Kit**: Emergency preparedness checklist with progress tracking
-   - Categories: Water & Food, Power & Light, First Aid & Medical, Documents
-   - Interactive checklist with completion percentage
 2. **Health Score**: Home systems assessment dashboard
-   - Overall home health score
-   - Individual system scores (HVAC, Plumbing, Electrical, Roof, Appliances, Safety)
-   - Status indicators and service dates
 3. **HouseFax**: Property history and information
-   - Property details (address, year built, sq ft, beds/baths)
-   - Property value tracking with appreciation percentage
-   - Timeline of property events (purchases, renovations, repairs, permits)
 4. **Budgeter**: Home maintenance budget tracker
-   - Monthly budget summary with progress bar
-   - Category-based budgeting (Repairs, Utilities, Landscaping, Cleaning, Upgrades, Emergency)
-   - Recent transactions list
 
 ### Design System
 - **Accent Color**: #38AE5F (the only accent color used)
@@ -46,107 +54,129 @@ Homebase is a unified iOS mobile app that combines homeowner and provider portal
 - **Typography**: SF Pro system font with defined type scale
 
 ### Components Built
-- PrimaryButton, SecondaryButton
+- PrimaryButton, SecondaryButton (use `children` prop, not `label`)
 - GlassCard with blur effect
-- ListRow, StatusPill (with cancelled status support)
+- ListRow, StatusPill (use `status` prop, not `variant`)
 - TextField with icons
-- Avatar with initials fallback
+- Avatar (use size="small"|"medium"|"large", not numeric values)
 - EmptyState with illustrations
 - SkeletonLoader for loading states
-- CategoryCard (with compact mode), ProviderCard, BookingCard
+- CategoryCard, ProviderCard, BookingCard
 - MessageRow, LeadCard, JobCard, StatCard
 - AccountGateModal for authentication gating
-- SectionHeader
-- FilterChips (generic, reusable filter chip component with optional counts and scrollable modes)
+- SectionHeader, FilterChips
 
 ### Screens Implemented
 
+**Auth Screens:**
+- WelcomeScreen - Landing page with sign in/sign up buttons
+- LoginScreen - Email/password login connected to backend
+- SignUpScreen - Registration with name, email, password
+- ForgotPasswordScreen - Password reset flow
+- OnboardingScreen - Add first property after signup
+
 **Homeowner Portal:**
 - FindScreen - AI chat card, Search, Homeowner Tools, Service categories, Featured providers
-- ManageScreen - Booking list with status indicators
+- ManageScreen - Real appointments from database with status sections
 - MessagesScreen - Conversation list
-- MoreScreen - Profile, settings, become provider option
+- MoreScreen - Profile, notifications link, settings, become provider option
+- AppointmentDetailScreen - View appointment details, reschedule, cancel
+- NotificationsScreen - View and manage notifications
+
+**Booking Flow (Database-Connected):**
+- ProviderListScreen - Browse providers by category
+- ProviderProfileScreen - Provider details and reviews
+- BookingRequestScreen - Describe the job
+- BookingScheduleScreen - Select date and time
+- BookingAddressScreen - Select home address (fetches from API)
+- BookingConfirmScreen - Creates real appointment in database
+- BookingSuccessScreen - Confirmation with navigation to ManageScreen
 
 **Homeowner Tools:**
-- AIChatScreen - AI assistant with suggested questions and conversation interface
-- SurvivalKitScreen - Emergency preparedness checklist
-- HealthScoreScreen - Home systems health assessment
-- HouseFaxScreen - Property history and information
-- BudgeterScreen - Home maintenance budget tracking
+- AIChatScreen, SurvivalKitScreen, HealthScoreScreen, HouseFaxScreen, BudgeterScreen
 
 **Provider Portal:**
-- ProviderHomeScreen - Dashboard with Today's Summary (4 metrics), earnings card, rating, upcoming/in-progress jobs
-- ClientsScreen - Client CRM with search, filter chips (All/Active/Leads/Inactive/Archived), client cards with avatar, status
-- ClientDetailScreen - Profile header with LTV, action buttons (call/message/invoice), tabs (Overview/Activity/Billing)
-- ScheduleScreen - Redesigned with date navigator, 4 view modes:
-  - List view: Job cards with time, client, service (green), address, status pill
-  - Day view: Timeline with hourly slots (7 AM - 6 PM) and job blocks
-  - Week view: Horizontal day selector, job list for selected day
-  - Month view: Calendar grid with job indicator dots, summary card
-- MoneyScreen - Balance card with withdraw button, jobs/avg stats, transaction list with filter (All, Invoices, Payouts)
-- ProviderMoreScreen - Provider profile with rating, availability toggle, notifications toggle, business settings
+- ProviderHomeScreen, ClientsScreen, ClientDetailScreen, ScheduleScreen, MoneyScreen, ProviderMoreScreen
 
-**Shared Screens:**
-- RoleSwitchConfirmationScreen - Confirmation before switching roles
-- BecomeProviderScreen - Provider onboarding flow
+## Database Schema
 
-### Navigation Architecture
-- **Floating Liquid Glass Tab Bar**: Pill-shaped, floating nav bar with rounded corners (24px radius)
-  - Positioned 24px from bottom, 16px from sides
-  - Semi-transparent glass background with subtle border
-  - BlurView on iOS, solid rgba background on web
-- Role-based tab bars that change based on authentication and active role
-- Homeowner tabs: Find, Manage, Messages (when auth'd), More
-- Provider tabs: Home, Clients, Schedule, Money, More
-- Modal presentations for role switching and account gate
-- Stack navigation for AI chat and homeowner tools
+### Tables (PostgreSQL with Drizzle ORM)
+- **users**: id, email, password, firstName, lastName, phone, isProvider, createdAt, updatedAt
+- **homes**: id, userId, label (nickname), street (address), city, state, zip (zipCode), homeType, squareFeet, yearBuilt, bedrooms, bathrooms
+- **providers**: id, userId, businessName, category, description, rating, reviewCount, hourlyRate, isVerified
+- **appointments**: id, userId, homeId, providerId, serviceName, description, scheduledDate, scheduledTime, urgency, jobSize, estimatedPrice, status
+- **notifications**: id, userId, title, message, type, isRead, data, createdAt
+- **reviews**: id, appointmentId, userId, providerId, rating, comment, createdAt
+
+### Field Mappings
+- **User**: Frontend uses `name`, backend stores as `firstName`/`lastName` (formatUserResponse helper)
+- **Home**: Frontend uses `nickname`/`address`/`zipCode`, backend stores as `label`/`street`/`zip` (formatHomeResponse helper)
+
+## API Endpoints
+
+### Authentication
+- `POST /api/auth/signup` - Create new user account
+- `POST /api/auth/login` - Login with email/password
+- `POST /api/auth/logout` - Logout user
+- `GET /api/auth/me` - Get current user
+
+### Homes
+- `GET /api/homes/:userId` - Get user's homes
+- `POST /api/homes` - Create new home
+- `PUT /api/homes/:id` - Update home
+- `DELETE /api/homes/:id` - Delete home
+
+### Appointments
+- `GET /api/appointments/:userId` - Get user's appointments
+- `GET /api/appointments/:id` - Get single appointment
+- `POST /api/appointments` - Create appointment
+- `PUT /api/appointments/:id` - Update appointment
+- `POST /api/appointments/:id/cancel` - Cancel appointment
+- `POST /api/appointments/:id/reschedule` - Reschedule appointment
+
+### Notifications
+- `GET /api/notifications/:userId` - Get user's notifications
+- `POST /api/notifications/:id/read` - Mark notification as read
+
+### AI Chat
+- `POST /api/chat` - Streaming AI chat response (SSE)
+- `POST /api/chat/simple` - Non-streaming AI chat response
 
 ## Project Structure
 ```
 client/
 ├── App.tsx                 # Root app component
 ├── components/             # Reusable UI components
-├── constants/
-│   └── theme.ts           # Colors, spacing, typography
+├── constants/theme.ts      # Colors, spacing, typography
 ├── hooks/                  # Custom React hooks
-├── lib/
-│   └── query-client.ts    # API client configuration
-├── navigation/            # Navigation configuration
-│   ├── RootStackNavigator.tsx
-│   ├── HomeownerTabNavigator.tsx
-│   └── ProviderTabNavigator.tsx
+├── lib/query-client.ts     # API client (apiRequest helper)
+├── navigation/             # Navigation configuration
 ├── screens/
+│   ├── auth/              # Authentication screens
 │   ├── homeowner/         # Homeowner portal screens
-│   │   ├── FindScreen.tsx
-│   │   ├── AIChatScreen.tsx
-│   │   ├── SurvivalKitScreen.tsx
-│   │   ├── HealthScoreScreen.tsx
-│   │   ├── HouseFaxScreen.tsx
-│   │   └── BudgeterScreen.tsx
 │   └── provider/          # Provider portal screens
 └── state/
-    ├── authStore.ts       # Zustand auth state
-    ├── providerStore.ts   # Zustand provider state (leads, jobs, invoices, payouts) with AsyncStorage persistence
-    └── mockData.ts        # Mock data for development
+    ├── authStore.ts       # Zustand auth state with AsyncStorage
+    ├── homeownerStore.ts  # Homeowner state
+    ├── providerStore.ts   # Provider state
+    └── types.ts           # TypeScript types
 
 server/
 ├── index.ts               # Express server setup
-├── routes.ts              # API routes (includes /api/chat endpoints)
+├── routes.ts              # API routes
+├── storage.ts             # DatabaseStorage with IStorage interface
+├── db.ts                  # Drizzle database connection
 ├── openai.ts              # OpenAI client configuration
-└── templates/
-    └── landing-page.html  # Web landing page
+└── templates/             # Web templates
 
-assets/
-└── images/                # App icons, empty states, illustrations
+shared/
+└── schema.ts              # Drizzle schema definitions
 ```
-
-## API Endpoints
-- `POST /api/chat` - Streaming AI chat response (SSE)
-- `POST /api/chat/simple` - Non-streaming AI chat response (JSON)
 
 ## Running the App
 1. Backend: `npm run server:dev` (port 5000)
 2. Frontend: `npm run expo:dev` (port 8081)
+3. Database: PostgreSQL via DATABASE_URL environment variable
 
 ## User Preferences
 - No emojis in the app
@@ -155,29 +185,25 @@ assets/
 - Clean, minimal design with proper spacing
 
 ## Recent Updates (January 27, 2026)
-- **Provider Portal Enhancements:**
-  - Created providerStore with comprehensive mock data: 26 leads (all statuses), 24 jobs, 5 message threads, 12 invoices, 3 payouts
-  - All provider screens now use providerStore with AsyncStorage persistence
-  - Created FilterChips component for consistent filtering UI across screens
-  - ProviderHomeScreen: Today's Summary with 4 metrics (leads, scheduled, messages, pending earnings)
-  - LeadsScreen: Filter bar with counts, contact/decline actions
-  - ScheduleScreen: Stats card + filter chips for job management
-  - MoneyScreen: Balance summary, withdraw button, transaction history with invoices/payouts
-  - ProviderMoreScreen: Fixed double-toggle bug using absolute positioning pattern
-  - StatusPill now supports "cancelled" status type
-- Fixed infinite loop issues in Zustand selectors across 9+ screens by using useMemo with direct array access
-- Pattern: `const items = useStore(s => s.items); const item = useMemo(() => items.find(...), [items, id]);`
-- All screens now properly use Zustand store data instead of mockData imports
-- Complete booking flow tested and working: category → providers → profile → sign-in → request → schedule
-- Developer feature: Long-press on JobDetailScreen advances job through status lifecycle for testing
-- Fixed dark mode toggle: ListRow with Switch inside causes double-toggle. Fix: position Switch absolutely, remove onPress from ListRow
-- Screen organization: HomeScreen (auth only) has Ask AI + Recent Activity + Quick Search + Home Tools; FindScreen is marketplace-focused
+- **Full Authentication System**: Sign up, login, forgot password screens connected to PostgreSQL backend
+- **Onboarding Flow**: Add first property after signup
+- **Database-Connected Booking Flow**: Complete flow from provider selection to appointment creation
+- **Appointment Management**: ManageScreen shows real appointments, AppointmentDetailScreen for viewing/rescheduling/canceling
+- **Notification System**: NotificationsScreen with database-backed notifications, mark as read, navigation to appointments
+- **API Endpoints**: Full REST API for auth, homes, appointments, notifications
+- **Field Mapping Helpers**: formatUserResponse, formatHomeResponse for frontend/backend compatibility
+- **Component Prop Fixes**: StatusPill uses `status` prop, buttons use `children`, Avatar uses string sizes
+
+## Technical Notes
+- **StatusPill**: Use `status` prop (not `variant`): "success", "info", "warning", "neutral", "cancelled"
+- **Buttons**: Use `children` for label: `<PrimaryButton>Click Me</PrimaryButton>`
+- **Avatar**: Use size="small"|"medium"|"large" (not numeric)
+- **apiRequest**: Takes (method, route, data?) params
+- **Expo Web**: Known compatibility issues in Replit browser - test on mobile via Expo Go
 
 ## Next Steps (Phase 2+)
-- Real authentication backend (Replit Auth with Apple, Google, email)
-- Database integration for bookings, messages, leads
+- Real-time messaging with WebSockets
+- Push notifications (expo-notifications)
 - Payment processing integration
-- Real-time messaging
-- Push notifications
 - Provider approval workflow
-- Persistent storage for checklist progress and budget data
+- Email notifications for password reset
