@@ -5,6 +5,7 @@ import { BlurView } from "expo-blur";
 import { Platform, StyleSheet, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import HomeScreen from "@/screens/homeowner/HomeScreen";
 import FindScreen from "@/screens/homeowner/FindScreen";
 import ManageScreen from "@/screens/homeowner/ManageScreen";
 import MessagesScreen from "@/screens/homeowner/MessagesScreen";
@@ -15,6 +16,7 @@ import { useAuthStore } from "@/state/authStore";
 import { Colors, Spacing, Typography, BorderRadius } from "@/constants/theme";
 
 export type HomeownerTabParamList = {
+  HomeTab: undefined;
   FindTab: undefined;
   ManageTab: undefined;
   MessagesTab: undefined;
@@ -176,6 +178,8 @@ function FloatingTabBar({ state, descriptors, navigation, isDark, theme }: any) 
 
 function getIconName(routeName: string): keyof typeof Feather.glyphMap {
   switch (routeName) {
+    case "HomeTab":
+      return "home";
     case "FindTab":
       return "search";
     case "ManageTab":
@@ -459,7 +463,7 @@ export default function HomeownerTabNavigator() {
 
   return (
     <Tab.Navigator
-      initialRouteName="FindTab"
+      initialRouteName={isAuthenticated ? "HomeTab" : "FindTab"}
       tabBar={(props) => <FinalCustomTabBar {...props} />}
       screenOptions={{
         headerTitleAlign: "center",
@@ -480,12 +484,22 @@ export default function HomeownerTabNavigator() {
         headerShadowVisible: false,
       }}
     >
+      {isAuthenticated ? (
+        <Tab.Screen
+          name="HomeTab"
+          component={HomeScreen}
+          options={{
+            title: "Home",
+            headerTitle: () => <HeaderTitle title="Homebase" />,
+          }}
+        />
+      ) : null}
       <Tab.Screen
         name="FindTab"
         component={FindScreen}
         options={{
           title: "Find",
-          headerTitle: () => <HeaderTitle title="Homebase" />,
+          headerTitle: isAuthenticated ? "Find a Pro" : () => <HeaderTitle title="Homebase" />,
         }}
       />
       <Tab.Screen
