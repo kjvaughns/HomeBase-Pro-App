@@ -1,0 +1,248 @@
+Alright, here’s a **clean, no-BS MVP outline for the Homeowner portal**. This is what **must exist and must work** for HomeBase to be promotable, usable, and not fall apart under real users. No fluff, no future fantasies.
+
+---
+
+# HomeBase Homeowner Portal MVP
+
+## Core principle
+
+The homeowner MVP exists to:
+
+1. Let users understand their home
+2. Let them manage appointments and homes
+3. Let them find and book providers easily
+4. Make HomeBase feel immediately useful on day one
+
+Anything that does not directly serve those goals is **not MVP**.
+
+---
+
+## 1. Authentication and Account Basics REQUIRED
+
+Must work 100%.
+
+* Email and password signup
+* Login
+* Password reset
+* One account can own multiple homes
+* Same email can later become a provider without breaking data
+* Profile switching must exist but can be simple
+
+If this breaks, nothing else matters.
+
+---
+
+## 2. Homeowner Onboarding MVP
+
+Purpose: Get value in under 3 minutes.
+
+Required flow:
+
+1. Welcome screen explaining what HomeBase does
+2. Add first home
+
+   * Address
+   * Property type
+   * Bedrooms
+   * Bathrooms
+   * Square footage
+3. Confirm home summary
+4. Land on Home dashboard
+
+Nice to have but optional:
+
+* Roof age
+* HVAC type
+
+Hard stop rule:
+Do not block them with long surveys yet.
+
+---
+
+## 3. Home Dashboard (Home Tab)
+
+This is the “why this app exists” screen.
+
+Must show:
+
+* Primary home selector
+* Upcoming appointment if any
+* Ask HomeBase AI entry point
+* Quick category actions (Plumbing, HVAC, Cleaning, Lawn)
+
+Each element must be tappable and go somewhere real.
+
+If the dashboard feels empty or fake, users churn.
+
+---
+
+## 4. Explore Marketplace (Find Tab)
+
+This is where money is made.
+
+Must include:
+
+* Search by provider name or service
+* Category browse
+* Provider cards showing:
+
+  * Name
+  * Rating
+  * Service type
+* Provider profile page
+* Book button that works
+
+MVP rule:
+Filters can be basic. Search must work.
+
+---
+
+## 5. Booking Flow MUST WORK
+
+This is non negotiable.
+
+Required:
+
+1. Select service
+2. Select date and time
+3. Confirm home
+4. Confirm booking
+5. See success screen
+6. Appointment appears in Manage tab
+
+No AI required yet. No complex pricing logic required yet.
+
+If booking fails, the app is dead.
+
+---
+
+## 6. Manage Tab (Appointments and Homes)
+
+This is where users return.
+
+### Appointments
+
+Must support:
+
+* View upcoming appointments
+* View past appointments
+* Appointment detail screen
+* Reschedule
+* Cancel
+
+Buttons must do something real.
+
+### Homes
+
+Must support:
+
+* View all homes
+* Add a home
+* Edit home details
+* Delete a home
+* See which appointments belong to which home
+
+---
+
+## 7. Provider Profile Page
+
+Required for trust.
+
+Must show:
+
+* Provider name
+* Description
+* Services
+* Reviews placeholder
+* Book button
+
+No reviews system needed yet, but the page must not feel empty.
+
+---
+
+## 8. Notifications MVP
+
+Bare minimum:
+
+* Booking confirmation
+* Appointment reminder
+* Status update
+
+Push or in app is fine. One must work.
+
+---
+
+## 9. Profile and Settings (More Tab)
+
+Keep this simple.
+
+Must include:
+
+* Profile info
+* Payment method placeholder
+* Switch to provider option
+* Support contact
+* Logout
+
+No advanced settings required.
+
+---
+
+## 10. Data Model MVP (Critical)
+
+If this is wrong, everything breaks later.
+
+Required entities:
+
+* User
+* Home
+* Appointment
+* Provider
+* Service
+* Review placeholder
+
+Relationships must be clean and future proof.
+
+---
+
+## What is NOT MVP for Homeowner
+
+Be ruthless here.
+
+Not MVP:
+
+* Advanced AI assessments
+* Health scores
+* Budget tools
+* Survival kits
+* Exporting PDFs
+* Deep analytics
+* Subscription logic
+
+These come after retention is proven.
+
+---
+
+## MVP Success Criteria
+
+You are MVP ready when:
+
+* A homeowner can sign up
+* Add a home
+* Book a service
+* See and manage the appointment
+* Feel like HomeBase helped them
+
+If any of those steps are confusing or broken, **do not market yet**.
+
+---
+
+## Next step I recommend
+
+If you want, I can:
+
+* Turn this into a **single “MVP scope lock” document**
+* Or create a **build order checklist** for Natively so you stop thrashing
+* Or map this MVP directly to your current app and show what to cut
+
+Just say which one.
