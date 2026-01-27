@@ -70,7 +70,7 @@ export default function FindScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
-  const { isAuthenticated, login } = useAuthStore();
+  const { isAuthenticated } = useAuthStore();
   
   const categories = useHomeownerStore((s) => s.categories);
   const providers = useHomeownerStore((s) => s.providers);
@@ -99,13 +99,14 @@ export default function FindScreen() {
     navigation.navigate(tool.screen as any);
   };
 
-  const handleMockSignIn = () => {
-    login({
-      id: "1",
-      name: "Alex Johnson",
-      email: "alex@example.com",
-    });
+  const handleSignIn = () => {
     setShowAccountGate(false);
+    navigation.navigate("Login");
+  };
+
+  const handleSignUp = () => {
+    setShowAccountGate(false);
+    navigation.navigate("SignUp");
   };
 
   const handleProviderCardPress = (providerId: string) => {
@@ -248,8 +249,8 @@ export default function FindScreen() {
       <AccountGateModal
         visible={showAccountGate}
         onClose={() => setShowAccountGate(false)}
-        onSignIn={handleMockSignIn}
-        onSignUp={handleMockSignIn}
+        onSignIn={handleSignIn}
+        onSignUp={handleSignUp}
       />
     </ThemedView>
   );

@@ -64,7 +64,7 @@ export default function ManageScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
-  const { isAuthenticated, user, login } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -118,13 +118,14 @@ export default function ManageScreen() {
     navigation.navigate("AppointmentDetail", { appointmentId: appointment.id });
   };
 
-  const handleMockSignIn = () => {
-    login({
-      id: "1",
-      name: "Alex Johnson",
-      email: "alex@example.com",
-    });
+  const handleSignIn = () => {
     setShowAccountGate(false);
+    navigation.navigate("Login");
+  };
+
+  const handleSignUp = () => {
+    setShowAccountGate(false);
+    navigation.navigate("SignUp");
   };
 
   const formatDate = (dateString: string) => {
@@ -253,8 +254,8 @@ export default function ManageScreen() {
         <AccountGateModal
           visible={showAccountGate}
           onClose={() => setShowAccountGate(false)}
-          onSignIn={handleMockSignIn}
-          onSignUp={handleMockSignIn}
+          onSignIn={handleSignIn}
+          onSignUp={handleSignUp}
         />
       </ThemedView>
     );

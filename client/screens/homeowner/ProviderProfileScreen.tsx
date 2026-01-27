@@ -37,7 +37,7 @@ export default function ProviderProfileScreen() {
   const providers = useHomeownerStore((s) => s.providers);
   const allReviews = useHomeownerStore((s) => s.reviews);
   const categories = useHomeownerStore((s) => s.categories);
-  const { isAuthenticated, login } = useAuthStore();
+  const { isAuthenticated } = useAuthStore();
   
   const provider = useMemo(() => {
     return providers.find((p) => p.id === providerId);
@@ -73,13 +73,14 @@ export default function ProviderProfileScreen() {
     });
   };
 
-  const handleMockSignIn = () => {
-    login({
-      id: "1",
-      name: "Alex Johnson",
-      email: "alex@example.com",
-    });
+  const handleSignIn = () => {
     setShowAccountGate(false);
+    navigation.navigate("Login");
+  };
+
+  const handleSignUp = () => {
+    setShowAccountGate(false);
+    navigation.navigate("SignUp");
   };
 
   const renderStars = (rating: number) => {
@@ -219,7 +220,7 @@ export default function ProviderProfileScreen() {
         <Animated.View entering={FadeInDown.duration(400)}>
           <GlassCard style={styles.profileCard}>
             <View style={styles.profileHeader}>
-              <Avatar name={provider.name} size={80} imageUrl={provider.avatarUrl} />
+              <Avatar name={provider.name} size="large" uri={provider.avatarUrl} />
               <View style={styles.profileInfo}>
                 <ThemedText style={styles.providerName}>{provider.name}</ThemedText>
                 <ThemedText style={[styles.businessName, { color: theme.textSecondary }]}>
@@ -234,7 +235,7 @@ export default function ProviderProfileScreen() {
               </View>
             </View>
             {provider.verified && (
-              <StatusPill label="Verified Pro" variant="success" size="small" />
+              <StatusPill label="Verified Pro" status="success" />
             )}
           </GlassCard>
         </Animated.View>
@@ -266,15 +267,15 @@ export default function ProviderProfileScreen() {
         {activeTab === "reviews" && renderReviewsTab()}
       </ScrollView>
 
-      <View style={[styles.bottomBar, { backgroundColor: theme.background, paddingBottom: insets.bottom + Spacing.md }]}>
-        <PrimaryButton label="Book Now" onPress={handleBookPress} />
+      <View style={[styles.bottomBar, { backgroundColor: theme.backgroundRoot, paddingBottom: insets.bottom + Spacing.md }]}>
+        <PrimaryButton onPress={handleBookPress}>Book Now</PrimaryButton>
       </View>
 
       <AccountGateModal
         visible={showAccountGate}
         onClose={() => setShowAccountGate(false)}
-        onSignIn={handleMockSignIn}
-        onSignUp={handleMockSignIn}
+        onSignIn={handleSignIn}
+        onSignUp={handleSignUp}
       />
     </ThemedView>
   );
