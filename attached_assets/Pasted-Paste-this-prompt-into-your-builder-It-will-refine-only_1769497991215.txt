@@ -1,0 +1,160 @@
+Paste this prompt into your builder. It will refine only the homeowner portal and make the whole booking and job management experience fully usable with mock data.
+
+Refine the HomeBase Homeowner portal only. Keep every existing screen and route that already exists in the uploaded homeowner codebase, but make the entire experience feel production ready and fully interactive using mock data. Do not require a backend. Every feature must work end to end in a simulated way.
+
+Non negotiables
+This is an iOS mobile app using Expo React Native.
+Use exactly one accent color only #38AE5F and no other accent colors.
+Everything else is neutral grayscale.
+Light and dark mode must work.
+Use subtle Liquid Glass UI only for top nav bar, bottom tab bar, key cards, modals, and bottom sheets.
+Keep the same screens and pages already in the homeowner codebase. Do not delete screens.
+
+Primary goal
+A realistic simulated homeowner experience where I can browse, request a pro, book, message, pay, and then see that job move through statuses and show up later in previous jobs. Everything must be wired with mock data and local state persistence.
+
+What “fully working with mock data” means
+All lists render from mock data sources.
+Tapping anything opens real detail screens with populated data.
+Forms validate and advance.
+Buttons change state and update the mock store.
+Status changes reflect across the app.
+Search and filters behave realistically.
+Data persists between app restarts using AsyncStorage so it feels real.
+
+Mock data requirements
+Create a mock database layer and seed data for
+Users homeowner profile
+Addresses
+Service categories
+Providers and provider profiles
+Provider availability time slots
+Quotes
+Bookings
+Jobs with timeline events
+Messages per job thread
+Invoices and payments
+Receipts
+Reviews
+
+Seed at least
+12 providers across 4 categories
+10 completed past jobs
+3 active jobs
+2 upcoming bookings
+Multiple message threads with attachments for at least 3 jobs
+
+State management
+Use Zustand for app state.
+Use AsyncStorage persistence for the mock store.
+Use React Query for fetching mock data through a fake API layer so it can later be swapped to real endpoints.
+Build a typed API client that currently calls the mock adapters.
+
+Homeowner portal navigation
+Default entry is homeowner portal.
+Guest browsing can remain if it already exists, but homeowner logged in flow must be the main focus.
+Tabs expected
+Find
+Manage
+Messages
+More
+Keep whichever tabs already exist in the homeowner codebase, but make them fully functional with mock data.
+
+Simulated booking flow end to end
+Implement a realistic multi step booking flow using existing screens
+1 Choose category
+2 Browse providers list with filters and sorting
+Filters include distance rating availability price range
+3 Provider profile detail
+Gallery services reviews about
+4 Request details
+Describe issue, add photos, select urgency, select job size
+5 Schedule
+Pick date and time slot from provider availability mock data
+6 Address
+Choose saved address or add new address
+7 Review and confirm
+Show pricing estimate or quote range
+Confirm triggers booking creation in mock store
+8 Confirmation screen
+Shows next steps and creates a job record with status Scheduled
+
+Job lifecycle simulation
+A booking becomes a job with a timeline and status changes.
+Statuses to support
+Requested
+Scheduled
+In Progress
+Awaiting Payment
+Completed
+Paid
+Closed
+Make it possible to simulate status changes via a hidden debug option in the job detail screen called Simulate update so I can tap and move the job forward and watch the whole app update.
+
+Manage tab requirements
+Upcoming section
+Shows bookings and scheduled jobs
+Active section
+Shows In Progress and Awaiting Payment
+Past section
+Shows Completed Paid Closed
+Each list item opens Job Detail with full mock data populated.
+
+Job detail screen must be fully built out
+Header summary card with provider name service status
+Timeline section with timestamps
+Scope and notes
+Photos before and after
+Invoice and payments section
+Receipt screen
+Chat entry and message thread
+Support and issue report
+Review prompt after completion and ability to submit a review which updates provider rating mock data
+
+Messages tab requirements
+Unified inbox across jobs
+Threads show mock messages
+Send message must append to thread and persist
+Support attachments selection simulated
+
+Payments simulation
+No real payment processor.
+Implement
+Pay invoice button that opens a payment method picker mock
+Confirm payment updates job status to Paid and adds a receipt record
+Show transaction in a Payments or Receipts area if it exists in the codebase
+
+Find tab requirements
+Search should filter providers and categories.
+Category browse works.
+Provider list uses mock data.
+Provider profile deep pages work.
+
+More tab requirements
+Profile
+Addresses CRUD
+Payment methods mock CRUD
+Settings including accent and theme already fixed
+Support screen
+Legal screen
+
+UI refinement requirements
+Audit every homeowner screen for
+Spacing inconsistencies
+Text overflow
+Misaligned icons
+Inconsistent components
+Replace with unified components and tokens.
+Implement a Liquid Glass top nav bar and tab bar consistent across the homeowner portal.
+
+Deliverables
+1 A brief audit list of issues found in the homeowner portal UI and where
+2 The mock data schema and seeded dataset summary
+3 The fake API layer and how screens call it
+4 Confirmation checklist that every homeowner screen is functional using mock data
+5 Run instructions
+
+Hard rules
+Do not add new screens unless absolutely necessary for missing booking steps, and if you add any, match existing routing conventions.
+Do not use any accent color other than #38AE5F.
+Do not require a backend to test. Everything must run locally with mock data.
