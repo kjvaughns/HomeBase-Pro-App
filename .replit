@@ -73,3 +73,9 @@ task = "shell.exec"
 args = "npm run expo:dev"
 waitForPort = 8081
 ensurePreviewReachable = "/status"
+
+[userenv]
+
+[userenv.shared]
+EXPO_PUBLIC_REVENUECAT_API_KEY = "test_zZYZBXWbDqGeSvZkzZudxxaoCwj"
+EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY = "pk_test_51SGSjDIPJg4hfhnF7O1wPHht6zWQEHY9SVbaR89Bas9ID7BWzIvMpYukdTmwR0TW9fBdwiaU2wWdvyu5v2JEWkZD00pjoE91Ri"
