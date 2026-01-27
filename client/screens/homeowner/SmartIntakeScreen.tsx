@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -10,7 +10,7 @@ import {
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated";
@@ -30,6 +30,7 @@ import { getApiUrl } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+type ScreenRouteProp = RouteProp<RootStackParamList, "SmartIntake">;
 
 interface IntakeQuestion {
   id: string;
@@ -108,11 +109,15 @@ export default function SmartIntakeScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const navigation = useNavigation<NavigationProp>();
+  const route = useRoute<ScreenRouteProp>();
   const { theme } = useTheme();
   const { isAuthenticated } = useAuthStore();
+  
+  const prefillCategory = route.params?.prefillCategory;
+  const prefillProblem = route.params?.prefillProblem;
 
   const [step, setStep] = useState<IntakeStep>("describe");
-  const [problemText, setProblemText] = useState("");
+  const [problemText, setProblemText] = useState(prefillProblem || "");
   const [isLoading, setIsLoading] = useState(false);
   const [analysis, setAnalysis] = useState<ServiceAnalysis | null>(null);
   const [refinedAnalysis, setRefinedAnalysis] = useState<RefinedAnalysis | null>(null);
@@ -120,6 +125,7 @@ export default function SmartIntakeScreen() {
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
   const [selectedOption, setSelectedOption] = useState<ServiceOption | null>(null);
   const [showAccountGate, setShowAccountGate] = useState(false);
+  const [hasAutoAnalyzed, setHasAutoAnalyzed] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
   const analyzeProblem = useCallback(async (problem: string) => {
@@ -147,6 +153,13 @@ export default function SmartIntakeScreen() {
       setIsLoading(false);
     }
   }, []);
+  
+  useEffect(() => {
+    if (prefillProblem && !hasAutoAnalyzed) {
+      setHasAutoAnalyzed(true);
+      analyzeProblem(prefillProblem);
+    }
+  }, [prefillProblem, hasAutoAnalyzed, analyzeProblem]);
 
   const handleDescribeSubmit = () => {
     if (problemText.trim()) {

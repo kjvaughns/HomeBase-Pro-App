@@ -54,7 +54,7 @@ export type RootStackParamList = {
   RoleSwitchConfirmation: { targetRole: UserRole };
   BecomeProvider: undefined;
   AIChat: undefined;
-  SmartIntake: undefined;
+  SmartIntake: { prefillCategory?: string; prefillProblem?: string } | undefined;
   SurvivalKit: undefined;
   HealthScore: undefined;
   HouseFax: undefined;

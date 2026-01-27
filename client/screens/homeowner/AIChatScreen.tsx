@@ -11,6 +11,8 @@ import {
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -20,11 +22,17 @@ import { ThemedView } from "@/components/ThemedView";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { getApiUrl } from "@/lib/query-client";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
+  needsService?: boolean;
+  category?: string | null;
+  problemSummary?: string | null;
 }
 
 const SUGGESTED_QUESTIONS = [
@@ -37,12 +45,17 @@ const SUGGESTED_QUESTIONS = [
 export default function AIChatScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const navigation = useNavigation<NavigationProp>();
   const { theme, isDark } = useTheme();
   const flatListRef = useRef<FlatList>(null);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [pendingServiceRequest, setPendingServiceRequest] = useState<{
+    category: string;
+    problemSummary: string;
+  } | null>(null);
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isLoading) return;
@@ -60,10 +73,12 @@ export default function AIChatScreen() {
 
     try {
       const apiUrl = getApiUrl();
+      const history = messages.map(m => ({ role: m.role, content: m.content }));
+      
       const response = await fetch(new URL("/api/chat/simple", apiUrl).toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text.trim() }),
+        body: JSON.stringify({ message: text.trim(), history }),
       });
 
       if (!response.ok) throw new Error("Failed to get response");
@@ -73,9 +88,19 @@ export default function AIChatScreen() {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: data.response,
+        needsService: data.needsService,
+        category: data.category,
+        problemSummary: data.problemSummary,
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
+      
+      if (data.needsService && data.category && data.problemSummary) {
+        setPendingServiceRequest({
+          category: data.category,
+          problemSummary: data.problemSummary,
+        });
+      }
     } catch (error) {
       console.error("Chat error:", error);
       const errorMessage: Message = {
@@ -87,7 +112,15 @@ export default function AIChatScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading]);
+  }, [isLoading, messages]);
+  
+  const handleFindPro = (category?: string | null, problemSummary?: string | null) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    navigation.navigate("SmartIntake", {
+      prefillCategory: category || undefined,
+      prefillProblem: problemSummary || undefined,
+    });
+  };
 
   const handleSend = () => {
     sendMessage(inputText);
@@ -113,22 +146,34 @@ export default function AIChatScreen() {
             <Feather name="home" size={16} color={Colors.accent} />
           </View>
         ) : null}
-        <View
-          style={[
-            styles.messageBubble,
-            isUser
-              ? { backgroundColor: Colors.accent }
-              : { backgroundColor: theme.backgroundSecondary },
-          ]}
-        >
-          <ThemedText
+        <View style={styles.messageContent}>
+          <View
             style={[
-              styles.messageText,
-              isUser ? { color: "#FFFFFF" } : { color: theme.text },
+              styles.messageBubble,
+              isUser
+                ? { backgroundColor: Colors.accent }
+                : { backgroundColor: theme.backgroundSecondary },
             ]}
           >
-            {item.content}
-          </ThemedText>
+            <ThemedText
+              style={[
+                styles.messageText,
+                isUser ? { color: "#FFFFFF" } : { color: theme.text },
+              ]}
+            >
+              {item.content}
+            </ThemedText>
+          </View>
+          {!isUser && item.needsService ? (
+            <Pressable
+              onPress={() => handleFindPro(item.category, item.problemSummary)}
+              style={styles.findProButton}
+            >
+              <Feather name="users" size={16} color="#fff" />
+              <ThemedText style={styles.findProText}>Find a Pro</ThemedText>
+              <Feather name="chevron-right" size={16} color="#fff" />
+            </Pressable>
+          ) : null}
         </View>
       </Animated.View>
     );
@@ -286,6 +331,9 @@ const styles = StyleSheet.create({
     marginRight: Spacing.sm,
     marginTop: 2,
   },
+  messageContent: {
+    flex: 1,
+  },
   messageBubble: {
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
@@ -294,6 +342,22 @@ const styles = StyleSheet.create({
   },
   messageText: {
     ...Typography.body,
+  },
+  findProButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.accent,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    marginTop: Spacing.sm,
+    gap: Spacing.xs,
+  },
+  findProText: {
+    ...Typography.subhead,
+    color: "#fff",
+    fontWeight: "600",
+    flex: 1,
   },
   emptyStateContainer: {
     flex: 1,

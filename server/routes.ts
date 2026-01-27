@@ -426,25 +426,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  const ENHANCED_CHAT_PROMPT = `You are Homebase AI, a helpful home assistant. Answer questions about home maintenance, repairs, and services.
+
+IMPORTANT: If the user describes a home problem, issue, or mentions needing service (leak, broken, not working, repair, install, fix, etc.), you MUST:
+1. Provide helpful initial guidance about the issue
+2. Set "needsService": true in your response
+3. Set "category" to the relevant service type: plumbing, electrical, hvac, cleaning, landscaping, painting, roofing, or handyman
+4. Set "problemSummary" to a brief description of their issue
+
+Always respond with valid JSON in this format:
+{
+  "response": "Your helpful response text here",
+  "needsService": boolean,
+  "category": "service category if applicable" or null,
+  "problemSummary": "brief issue summary" or null
+}
+
+Be conversational and helpful. If they just have a question, answer it. If they have a problem needing professional help, guide them AND offer to connect with pros.`;
+
   app.post("/api/chat/simple", async (req: Request, res: Response) => {
     try {
-      const { message } = req.body as { message: string };
+      const { message, history } = req.body as { message: string; history?: Array<{ role: string; content: string }> };
 
       if (!message) {
         return res.status(400).json({ error: "Message is required" });
       }
 
+      const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+        { role: "system", content: ENHANCED_CHAT_PROMPT },
+      ];
+      
+      if (history) {
+        messages.push(...history.map(m => ({
+          role: m.role as "user" | "assistant",
+          content: m.content
+        })));
+      }
+      
+      messages.push({ role: "user", content: message });
+
       const response = await openai.chat.completions.create({
         model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: HOMEBASE_SYSTEM_PROMPT },
-          { role: "user", content: message },
-        ],
+        messages,
         max_tokens: 1024,
+        response_format: { type: "json_object" },
       });
 
-      const content = response.choices[0]?.message?.content || "";
-      res.json({ response: content });
+      const content = response.choices[0]?.message?.content || "{}";
+      
+      try {
+        const parsed = JSON.parse(content);
+        res.json({
+          response: parsed.response || "I'm here to help with your home questions.",
+          needsService: parsed.needsService || false,
+          category: parsed.category || null,
+          problemSummary: parsed.problemSummary || null,
+        });
+      } catch {
+        res.json({ response: content, needsService: false, category: null, problemSummary: null });
+      }
     } catch (error) {
       console.error("Error in simple chat:", error);
       res.status(500).json({ error: "Failed to process chat request" });
