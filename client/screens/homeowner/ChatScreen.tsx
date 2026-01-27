@@ -59,7 +59,7 @@ export default function ChatScreen() {
 
     return (
       <View style={[styles.messageRow, isOwn && styles.messageRowOwn]}>
-        {!isOwn && <Avatar name={item.senderName} size={32} />}
+        {!isOwn && <Avatar name={item.senderName} size="small" />}
         <View
           style={[
             styles.messageBubble,
@@ -68,13 +68,13 @@ export default function ChatScreen() {
               : { backgroundColor: theme.cardBackground, borderColor: theme.borderLight, borderWidth: 1 },
           ]}
         >
-          <ThemedText style={[styles.messageText, isOwn && { color: "#fff" }]}>
+          <ThemedText style={[styles.messageText, { color: isOwn ? "#FFFFFF" : theme.text }]}>
             {item.content}
           </ThemedText>
           <ThemedText
             style={[
               styles.messageTime,
-              { color: isOwn ? "rgba(255,255,255,0.7)" : theme.textTertiary },
+              { color: isOwn ? "rgba(255,255,255,0.7)" : theme.textSecondary },
             ]}
           >
             {formatTime(item.timestamp)}
@@ -127,7 +127,7 @@ export default function ChatScreen() {
           style={[
             styles.inputContainer,
             {
-              backgroundColor: theme.background,
+              backgroundColor: theme.backgroundDefault,
               borderTopColor: theme.borderLight,
               paddingBottom: insets.bottom > 0 ? insets.bottom : Spacing.md,
             },
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: Spacing.xxl,
+    paddingVertical: Spacing["2xl"],
   },
   emptyTitle: {
     ...Typography.headline,

@@ -53,7 +53,7 @@ export default function MessagesScreen() {
         style={[styles.threadCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}
         testID={`thread-${item.id}`}
       >
-        <Avatar name={item.providerName} size={48} imageUrl={item.providerAvatar} />
+        <Avatar name={item.providerName} size="medium" imageUrl={item.providerAvatar} />
         <View style={styles.threadContent}>
           <View style={styles.threadHeader}>
             <ThemedText style={styles.providerName} numberOfLines={1}>
