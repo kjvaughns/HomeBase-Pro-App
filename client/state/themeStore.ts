@@ -31,7 +31,7 @@ export const useThemeStore = create<ThemeState>()((set, get) => ({
   },
 
   toggleDarkMode: () => {
-    const { mode, getColorScheme } = get();
+    const { getColorScheme } = get();
     const currentScheme = getColorScheme();
     const newMode = currentScheme === "dark" ? "light" : "dark";
     set({ mode: newMode });

@@ -96,7 +96,7 @@ export default function FindScreen() {
 
   const handleToolPress = (tool: HomeTool) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    navigation.navigate(tool.screen);
+    navigation.navigate(tool.screen as any);
   };
 
   const handleMockSignIn = () => {

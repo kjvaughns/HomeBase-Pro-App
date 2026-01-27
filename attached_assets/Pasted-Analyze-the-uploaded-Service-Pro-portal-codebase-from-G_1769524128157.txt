@@ -1,0 +1,169 @@
+Analyze the uploaded Service Pro portal codebase from Google AI Studio and keep it as the source of truth for every feature, screen, and route. Do not remove screens. Do not change business logic. Your job is to refine and unify the entire Service Pro portal design so it looks premium, consistent, and iOS native, while preserving the exact screen structure and functionality.
+
+Scope
+Only the Service Pro portal. Do not modify the homeowner portal except for shared UI components if required.
+The Service Pro portal must still be reachable via the in app role switch entry in More or Settings.
+
+Non negotiables
+iOS mobile app using Expo React Native.
+Use exactly one accent color only: #38AE5F. No other accent colors anywhere.
+Everything else is neutral grayscale.
+Light and dark mode must be fully supported.
+All existing Service Pro features must remain, just redesigned and polished.
+
+Design goals
+Luxury minimal but operationally efficient.
+Fast to scan, fast to act.
+Zero clutter.
+Fix all spacing alignment overflow and inconsistent sizing.
+No random floating outlined widgets.
+No noisy icon clouds.
+
+Liquid Glass requirements
+Use subtle Liquid Glass for
+Top navigation bar across all pro screens
+Bottom tab bar across all pro tabs
+Key summary cards
+Modals and bottom sheets
+Use only 2 to 3 elevation levels.
+Blur is subtle and consistent.
+Press states compress slightly and brighten using neutral changes plus the accent only when appropriate.
+Smooth transitions and haptics for key actions.
+
+Navigation requirements
+Preserve the existing pro navigation and tabs from the Google AI Studio code.
+If the codebase has these tabs, keep them
+Home
+Leads
+Schedule
+Money
+More
+If it has different names, keep the original names and routes exactly.
+
+Top navigation bar component
+Replace any inconsistent headers with one shared GlassNavBar component
+Supports iOS large titles and collapsible behavior on scroll.
+Inline title on detail screens.
+Back button iOS style.
+Right side action icons where needed.
+Frosted blur background that adapts in light and dark mode.
+
+Tab bar component
+One shared GlassTabBar component
+Frosted blur background
+Active icon and label use #38AE5F
+Inactive neutral grayscale
+Consistent icon sizes and labels
+Safe area correct on iPhone
+
+Unified design system to apply across the pro portal
+Create a shared theme token file and use it everywhere
+Accent #38AE5F only
+Neutral palette for light and dark
+Spacing scale 8 point
+Typography scale modern readable
+Radius scale consistent
+Shadow and blur scale consistent
+
+Core components to build and use everywhere in the pro portal
+GlassNavBar
+GlassTabBar
+Card
+PrimaryButton
+SecondaryButton
+IconButton
+ListRow
+StatusPill
+TextField
+SearchBar
+FilterChips
+BottomSheet
+Modal
+Toast
+SkeletonLoader
+EmptyState
+
+Information hierarchy patterns for pro screens
+Home dashboard
+Top Today summary card
+New leads count
+Next job
+Unread messages
+Pending payouts
+Alerts expiring docs incomplete profile
+Quick actions row with no more than 2 primary actions visible
+
+Leads list
+Filter bar
+Lead cards scannable in 2 seconds
+Show customer area service type distance requested time
+Status pill New Pending Quoted Won Lost
+Lead detail
+Customer info
+Job description and photos
+Message thread entry
+Quote builder section
+Accept decline actions
+
+Schedule
+Calendar day week agenda
+Job blocks readable
+Tap opens job detail bottom sheet then full screen if needed
+Availability controls in More or Settings if they exist
+
+Money
+Balance summary
+Payouts pending and history
+Invoices list
+Job payment statuses
+Transaction list
+Export actions in More if they exist
+
+Messages
+If the pro portal has a messages section, keep it and unify it visually with threads, attachments, and quick replies
+
+Profile and More
+Public profile preview
+Services and service area
+Availability
+Documents licenses insurance
+Verification status
+Team if exists
+Settings and support
+
+Mock data for a fully usable pro portal
+If backend is not connected, wire all pro screens to mock data so every list, detail view, and action works.
+Use Zustand store plus AsyncStorage persistence.
+Use a mock API adapter layer so it can be swapped later.
+Seed realistic data
+At least 25 leads across statuses
+At least 12 scheduled jobs
+At least 10 completed paid jobs
+Message threads for several jobs
+Invoices and payout history
+
+Interactive behavior required
+Accept lead changes status and moves it in lists
+Send quote creates a quote record and updates lead status
+Schedule job creates calendar entry and job record
+Mark job in progress and complete updates job timeline
+Create invoice and mark paid updates money screens
+All actions should update the store and persist
+
+Audit and implementation steps you must output
+1 Audit the existing pro portal code
+List every screen route
+List inconsistent UI patterns
+List layout and overflow bugs
+2 Create the pro design system spec
+Tokens and components
+Nav bar and tab bar specs
+Light and dark mode rules
+3 Implement across every pro screen while preserving structure
+4 Provide a screen by screen checklist proving every screen still exists and works
+
+Hard rules
+Do not remove or merge screens from the Google AI Studio pro portal code.
+Do not introduce any new accent colors besides #38AE5F.
+Do not change business logic or flows.
+Only refine UI, consistency, and wiring to mock data if needed.

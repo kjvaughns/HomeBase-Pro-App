@@ -198,21 +198,23 @@ export default function MoreScreen() {
             Appearance
           </ThemedText>
           <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
-            <ListRow
-              title="Dark Mode"
-              leftIcon="moon"
-              showChevron={false}
-              isFirst
-              isLast
-              rightElement={
+            <View style={styles.darkModeRow}>
+              <ListRow
+                title="Dark Mode"
+                leftIcon="moon"
+                showChevron={false}
+                isFirst
+                isLast
+              />
+              <View style={styles.switchContainer}>
                 <Switch
                   value={isDark}
                   onValueChange={toggleDarkMode}
                   trackColor={{ false: theme.backgroundTertiary, true: Colors.accent }}
                   thumbColor="#FFFFFF"
                 />
-              }
-            />
+              </View>
+            </View>
           </View>
         </Animated.View>
 
@@ -342,6 +344,16 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.card,
     marginBottom: Spacing.lg,
     overflow: "hidden",
+  },
+  darkModeRow: {
+    position: "relative",
+  },
+  switchContainer: {
+    position: "absolute",
+    right: Spacing.md,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
   },
   version: {
     ...Typography.caption1,
