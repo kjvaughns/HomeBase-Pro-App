@@ -30,7 +30,6 @@ export default function MoreScreen() {
     user,
     hasProviderProfile,
     canAccessProviderMode,
-    login,
     logout,
   } = useAuthStore();
 
@@ -39,13 +38,14 @@ export default function MoreScreen() {
   const toggleDarkMode = useThemeStore((s) => s.toggleDarkMode);
   const { isDark } = useTheme();
 
-  const handleMockSignIn = () => {
-    login({
-      id: "1",
-      name: "Alex Johnson",
-      email: "alex@example.com",
-    });
+  const handleSignIn = () => {
     setShowAccountGate(false);
+    navigation.navigate("Login");
+  };
+
+  const handleSignUp = () => {
+    setShowAccountGate(false);
+    navigation.navigate("SignUp");
   };
 
   const handleBecomeProvider = () => {
@@ -266,8 +266,8 @@ export default function MoreScreen() {
       <AccountGateModal
         visible={showAccountGate}
         onClose={() => setShowAccountGate(false)}
-        onSignIn={handleMockSignIn}
-        onSignUp={handleMockSignIn}
+        onSignIn={handleSignIn}
+        onSignUp={handleSignUp}
       />
     </ThemedView>
   );

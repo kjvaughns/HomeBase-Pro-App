@@ -105,7 +105,7 @@ export function AccountGateModal({
                 icon={<Feather name="user-plus" size={20} color="#FFFFFF" />}
                 style={styles.button}
               >
-                Continue with Apple
+                Get Started
               </PrimaryButton>
 
               <SecondaryButton onPress={onSignIn} style={styles.button}>
