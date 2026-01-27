@@ -503,6 +503,11 @@ export default function HomeownerTabNavigator() {
           options={{
             title: "Messages",
             headerTitle: "Messages",
+            headerTransparent: false,
+            headerBlurEffect: undefined,
+            headerStyle: {
+              backgroundColor: theme.background,
+            },
           }}
         />
       ) : null}
