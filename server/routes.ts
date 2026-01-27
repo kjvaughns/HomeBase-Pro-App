@@ -453,7 +453,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ============ SMART INTAKE ROUTES ============
 
-  const INTAKE_SYSTEM_PROMPT = `You are HomeBase's Smart Intake AI. Your job is to understand home service problems and classify them accurately.
+  const INTAKE_SYSTEM_PROMPT = `You are HomeBase's Smart Intake AI. Your job is to understand home service problems and gather key details that help service professionals provide accurate quotes and close leads.
 
 Available service categories:
 - plumbing: Pipes, fixtures, water heaters, drainage, leaks, toilets, sinks, showers
@@ -465,13 +465,32 @@ Available service categories:
 - roofing: Repairs, replacements, inspections, gutters, leaks
 - handyman: General repairs, installations, assembly, minor fixes
 
-When analyzing a problem, you must respond with valid JSON only, no markdown. The JSON must have these fields:
-- category: one of the category IDs above (plumbing, electrical, hvac, cleaning, landscaping, painting, roofing, handyman)
-- confidence: number 0-100 indicating how confident you are
+You must respond with valid JSON only, no markdown. Generate 3-6 smart follow-up questions with appropriate input types.
+
+JSON fields required:
+- category: one of the category IDs above
+- confidence: number 0-100 for classification confidence
 - summary: brief 1-sentence summary of the issue
 - severity: "low", "medium", "high", or "emergency"
-- questions: array of 2-4 follow-up questions to better understand the issue
-- estimatedPriceRange: object with "min" and "max" numbers in USD based on typical costs for this type of issue`;
+- questions: array of 3-6 question objects with structure:
+  {
+    "id": "q1",
+    "text": "Question text here",
+    "type": "single_choice" | "multiple_choice" | "text" | "number" | "yes_no",
+    "options": ["Option 1", "Option 2", "Option 3"], // Required for single_choice/multiple_choice
+    "placeholder": "Hint text", // Optional, for text/number inputs
+    "required": true
+  }
+- estimatedPriceRange: { "min": number, "max": number } in USD
+
+Question type guidelines:
+- single_choice: "Pick one" questions (Which room? How soon do you need this?)
+- multiple_choice: "Select all that apply" (What symptoms? Which fixtures affected?)
+- yes_no: Simple yes/no questions (Is this an emergency? Is there visible damage?)
+- text: Open-ended details (Describe the sound, Additional notes)
+- number: Quantities (How many rooms? Approximate square footage?)
+
+Focus questions on details that affect pricing and help pros close the lead: scope, urgency, accessibility, age of systems, previous repair attempts.`;
 
   const ESTIMATE_SYSTEM_PROMPT = `You are HomeBase's pricing AI. Based on service details, provide realistic price estimates.
 
@@ -554,22 +573,31 @@ Severity: ${originalAnalysis.severity}
 The homeowner answered these clarifying questions:
 ${answers.map(a => `Q: ${a.question}\nA: ${a.answer}`).join("\n\n")}
 
-Provide an updated JSON analysis with:
-- refinedSummary: a more detailed summary incorporating the answers
-- severity: updated severity if needed (low/medium/high/emergency)
-- priceRange: updated min/max estimate in USD
-- confidence: 0-100 confidence in this estimate
-- scopeOfWork: array of what the job likely includes
-- scopeExclusions: array of what might not be included
-- recommendedUrgency: "flexible", "soon", "urgent", or "emergency"`;
+Provide a comprehensive JSON analysis with:
+- refinedSummary: detailed summary incorporating all the answers
+- severity: updated severity (low/medium/high/emergency)
+- recommendedUrgency: "flexible", "soon", "urgent", or "emergency"
+- scopeOfWork: array of specific tasks the job includes
+- scopeExclusions: array of what might require extra charges
+- serviceOptions: array of 2-3 package options to help close the lead, each with:
+  {
+    "name": "Basic" | "Standard" | "Premium",
+    "description": "What's included in this tier",
+    "priceRange": { "min": number, "max": number },
+    "includes": ["item1", "item2", "item3"],
+    "recommended": boolean (true for the best value option)
+  }
+- materialEstimate: optional breakdown { "materials": min-max, "labor": min-max }
+- timeEstimate: estimated duration (e.g., "2-3 hours", "1-2 days")
+- confidence: 0-100 confidence in these estimates`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
-          { role: "system", content: "You are HomeBase's pricing AI. Respond with valid JSON only." },
+          { role: "system", content: "You are HomeBase's pricing AI. Generate realistic estimates with service package options to help pros close leads. Respond with valid JSON only." },
           { role: "user", content: refinementPrompt },
         ],
-        max_tokens: 1024,
+        max_tokens: 1500,
         response_format: { type: "json_object" },
       });
 
@@ -581,11 +609,13 @@ Provide an updated JSON analysis with:
         refinedAnalysis: {
           refinedSummary: refinedAnalysis.refinedSummary || originalAnalysis.summary,
           severity: refinedAnalysis.severity || originalAnalysis.severity,
-          priceRange: refinedAnalysis.priceRange || { min: 100, max: 300 },
-          confidence: refinedAnalysis.confidence || 75,
+          recommendedUrgency: refinedAnalysis.recommendedUrgency || "flexible",
           scopeOfWork: refinedAnalysis.scopeOfWork || [],
           scopeExclusions: refinedAnalysis.scopeExclusions || [],
-          recommendedUrgency: refinedAnalysis.recommendedUrgency || "flexible",
+          serviceOptions: refinedAnalysis.serviceOptions || [],
+          materialEstimate: refinedAnalysis.materialEstimate || null,
+          timeEstimate: refinedAnalysis.timeEstimate || null,
+          confidence: refinedAnalysis.confidence || 75,
         }
       });
     } catch (error) {

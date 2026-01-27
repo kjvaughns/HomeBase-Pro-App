@@ -2,7 +2,6 @@ import React, { useState, useRef, useCallback } from "react";
 import {
   StyleSheet,
   View,
-  FlatList,
   TextInput,
   Pressable,
   ActivityIndicator,
@@ -32,11 +31,13 @@ import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-interface Message {
+interface IntakeQuestion {
   id: string;
-  role: "user" | "assistant";
-  content: string;
-  type?: "question" | "answer" | "analysis";
+  text: string;
+  type: "single_choice" | "multiple_choice" | "text" | "number" | "yes_no";
+  options?: string[];
+  placeholder?: string;
+  required: boolean;
 }
 
 interface ServiceAnalysis {
@@ -44,18 +45,28 @@ interface ServiceAnalysis {
   confidence: number;
   summary: string;
   severity: "low" | "medium" | "high" | "emergency";
-  questions: string[];
+  questions: IntakeQuestion[];
   estimatedPriceRange: { min: number; max: number };
+}
+
+interface ServiceOption {
+  name: string;
+  description: string;
+  priceRange: { min: number; max: number };
+  includes: string[];
+  recommended?: boolean;
 }
 
 interface RefinedAnalysis {
   refinedSummary: string;
   severity: string;
-  priceRange: { min: number; max: number };
-  confidence: number;
+  recommendedUrgency: string;
   scopeOfWork: string[];
   scopeExclusions: string[];
-  recommendedUrgency: string;
+  serviceOptions: ServiceOption[];
+  materialEstimate?: { materials: string; labor: string };
+  timeEstimate?: string;
+  confidence: number;
 }
 
 interface MatchedProvider {
@@ -63,15 +74,13 @@ interface MatchedProvider {
   businessName: string;
   rating: number;
   reviewCount: number;
-  distance?: number;
   trustScore: number;
   isVerified?: boolean;
-  hourlyRate?: number;
   yearsExperience?: number;
   capabilityTags?: string[];
 }
 
-type IntakeStep = "describe" | "clarify" | "summary" | "providers";
+type IntakeStep = "describe" | "questions" | "options" | "providers";
 
 const CATEGORY_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
   plumbing: "droplet",
@@ -103,17 +112,17 @@ export default function SmartIntakeScreen() {
   const { isAuthenticated } = useAuthStore();
 
   const [step, setStep] = useState<IntakeStep>("describe");
-  const [inputText, setInputText] = useState("");
+  const [problemText, setProblemText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [analysis, setAnalysis] = useState<ServiceAnalysis | null>(null);
   const [refinedAnalysis, setRefinedAnalysis] = useState<RefinedAnalysis | null>(null);
   const [providers, setProviders] = useState<MatchedProvider[]>([]);
-  const [answers, setAnswers] = useState<{ question: string; answer: string }[]>([]);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
+  const [selectedOption, setSelectedOption] = useState<ServiceOption | null>(null);
   const [showAccountGate, setShowAccountGate] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
-  const analyzeProble = useCallback(async (problem: string) => {
+  const analyzeProblem = useCallback(async (problem: string) => {
     if (!problem.trim()) return;
 
     setIsLoading(true);
@@ -130,9 +139,8 @@ export default function SmartIntakeScreen() {
 
       const data = await response.json();
       setAnalysis(data.analysis);
-      setStep("clarify");
-      setCurrentQuestionIndex(0);
-      setAnswers([]);
+      setStep("questions");
+      setAnswers({});
     } catch (error) {
       console.error("Analysis error:", error);
     } finally {
@@ -141,49 +149,77 @@ export default function SmartIntakeScreen() {
   }, []);
 
   const handleDescribeSubmit = () => {
-    if (inputText.trim()) {
-      analyzeProble(inputText);
+    if (problemText.trim()) {
+      analyzeProblem(problemText);
     }
   };
 
-  const handleAnswerSubmit = async () => {
-    if (!inputText.trim() || !analysis) return;
+  const handleAnswerChange = (questionId: string, value: string | string[]) => {
+    setAnswers(prev => ({ ...prev, [questionId]: value }));
+  };
 
-    const currentQuestion = analysis.questions[currentQuestionIndex];
-    const newAnswers = [...answers, { question: currentQuestion, answer: inputText }];
-    setAnswers(newAnswers);
-    setInputText("");
-
-    if (currentQuestionIndex < analysis.questions.length - 1) {
-      setCurrentQuestionIndex((prev) => prev + 1);
+  const handleToggleMultiChoice = (questionId: string, option: string) => {
+    const current = (answers[questionId] as string[]) || [];
+    if (current.includes(option)) {
+      handleAnswerChange(questionId, current.filter(o => o !== option));
     } else {
-      setIsLoading(true);
-      try {
-        const response = await fetch(new URL("/api/intake/refine", getApiUrl()).toString(), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            originalAnalysis: {
-              category: analysis.category,
-              summary: analysis.summary,
-              severity: analysis.severity,
-            },
-            answers: newAnswers,
-          }),
-        });
-
-        if (!response.ok) throw new Error("Failed to refine");
-
-        const data = await response.json();
-        setRefinedAnalysis(data.refinedAnalysis);
-        setStep("summary");
-      } catch (error) {
-        console.error("Refine error:", error);
-        setStep("summary");
-      } finally {
-        setIsLoading(false);
-      }
+      handleAnswerChange(questionId, [...current, option]);
     }
+  };
+
+  const allQuestionsAnswered = () => {
+    if (!analysis) return false;
+    return analysis.questions.every(q => {
+      if (!q.required) return true;
+      const answer = answers[q.id];
+      if (Array.isArray(answer)) return answer.length > 0;
+      return answer && answer.trim().length > 0;
+    });
+  };
+
+  const handleSubmitAnswers = async () => {
+    if (!analysis || !allQuestionsAnswered()) return;
+
+    setIsLoading(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    try {
+      const formattedAnswers = analysis.questions.map(q => ({
+        question: q.text,
+        answer: Array.isArray(answers[q.id]) 
+          ? (answers[q.id] as string[]).join(", ") 
+          : (answers[q.id] as string) || "",
+      }));
+
+      const response = await fetch(new URL("/api/intake/refine", getApiUrl()).toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          originalAnalysis: {
+            category: analysis.category,
+            summary: analysis.summary,
+            severity: analysis.severity,
+          },
+          answers: formattedAnswers,
+        }),
+      });
+
+      if (!response.ok) throw new Error("Failed to refine");
+
+      const data = await response.json();
+      setRefinedAnalysis(data.refinedAnalysis);
+      setStep("options");
+    } catch (error) {
+      console.error("Refine error:", error);
+      setStep("options");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSelectOption = (option: ServiceOption) => {
+    setSelectedOption(option);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   const handleFindProviders = async () => {
@@ -243,30 +279,173 @@ export default function SmartIntakeScreen() {
         <View style={[styles.iconContainer, { backgroundColor: Colors.accentLight }]}>
           <Feather name="message-circle" size={32} color={Colors.accent} />
         </View>
-        <ThemedText style={styles.stepTitle}>Describe Your Problem</ThemedText>
+        <ThemedText style={styles.stepTitle}>What's the issue?</ThemedText>
         <ThemedText style={[styles.stepSubtitle, { color: theme.textSecondary }]}>
-          Tell us what's going on in your own words. Our AI will understand and find the right help.
+          Describe your problem and we'll ask a few quick questions to get you accurate quotes.
         </ThemedText>
       </View>
 
-      <View style={styles.examplesSection}>
-        <ThemedText style={[styles.examplesLabel, { color: theme.textSecondary }]}>Try saying:</ThemedText>
-        {["My sink is leaking under the cabinet", "AC is making a loud noise and not cooling", "Need lawn mowing and hedge trimming"].map((example, index) => (
-          <Pressable
-            key={index}
-            style={[styles.exampleChip, { backgroundColor: theme.backgroundSecondary, borderColor: theme.borderLight }]}
-            onPress={() => setInputText(example)}
-          >
-            <ThemedText style={[styles.exampleText, { color: theme.textSecondary }]}>{example}</ThemedText>
-          </Pressable>
-        ))}
+      <View style={[styles.inputBox, { backgroundColor: theme.backgroundSecondary, borderColor: theme.borderLight }]}>
+        <TextInput
+          ref={inputRef}
+          style={[styles.problemInput, { color: theme.text }]}
+          value={problemText}
+          onChangeText={setProblemText}
+          placeholder="e.g., My kitchen sink is leaking under the cabinet..."
+          placeholderTextColor={theme.textSecondary}
+          multiline
+          maxLength={500}
+          textAlignVertical="top"
+        />
       </View>
+
+      <View style={styles.examplesSection}>
+        <ThemedText style={[styles.examplesLabel, { color: theme.textSecondary }]}>Try these:</ThemedText>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.examplesScroll}>
+          {["Leaking faucet", "AC not cooling", "Outlet sparking", "Lawn needs mowing"].map((example, index) => (
+            <Pressable
+              key={index}
+              style={[styles.exampleChip, { backgroundColor: Colors.accentLight }]}
+              onPress={() => setProblemText(example)}
+            >
+              <ThemedText style={[styles.exampleText, { color: Colors.accent }]}>{example}</ThemedText>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </View>
+
+      <PrimaryButton 
+        onPress={handleDescribeSubmit} 
+        disabled={!problemText.trim() || isLoading}
+        style={styles.submitButton}
+      >
+        {isLoading ? "Analyzing..." : "Continue"}
+      </PrimaryButton>
     </Animated.View>
   );
 
-  const renderClarifyStep = () => {
+  const renderQuestionInput = (question: IntakeQuestion) => {
+    const answer = answers[question.id];
+
+    switch (question.type) {
+      case "single_choice":
+        return (
+          <View style={styles.optionsGrid}>
+            {question.options?.map((option, i) => (
+              <Pressable
+                key={i}
+                style={[
+                  styles.choiceOption,
+                  { backgroundColor: theme.backgroundSecondary, borderColor: theme.borderLight },
+                  answer === option && { backgroundColor: Colors.accentLight, borderColor: Colors.accent },
+                ]}
+                onPress={() => handleAnswerChange(question.id, option)}
+              >
+                <ThemedText style={[
+                  styles.choiceText,
+                  answer === option && { color: Colors.accent, fontWeight: "600" },
+                ]}>
+                  {option}
+                </ThemedText>
+              </Pressable>
+            ))}
+          </View>
+        );
+
+      case "multiple_choice":
+        const selected = (answer as string[]) || [];
+        return (
+          <View style={styles.optionsGrid}>
+            {question.options?.map((option, i) => (
+              <Pressable
+                key={i}
+                style={[
+                  styles.choiceOption,
+                  { backgroundColor: theme.backgroundSecondary, borderColor: theme.borderLight },
+                  selected.includes(option) && { backgroundColor: Colors.accentLight, borderColor: Colors.accent },
+                ]}
+                onPress={() => handleToggleMultiChoice(question.id, option)}
+              >
+                <View style={styles.checkboxRow}>
+                  <View style={[
+                    styles.checkbox,
+                    { borderColor: selected.includes(option) ? Colors.accent : theme.borderLight },
+                    selected.includes(option) && { backgroundColor: Colors.accent },
+                  ]}>
+                    {selected.includes(option) ? (
+                      <Feather name="check" size={12} color="#fff" />
+                    ) : null}
+                  </View>
+                  <ThemedText style={[
+                    styles.choiceText,
+                    selected.includes(option) && { color: Colors.accent },
+                  ]}>
+                    {option}
+                  </ThemedText>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        );
+
+      case "yes_no":
+        return (
+          <View style={styles.yesNoRow}>
+            {["Yes", "No"].map((option) => (
+              <Pressable
+                key={option}
+                style={[
+                  styles.yesNoButton,
+                  { backgroundColor: theme.backgroundSecondary, borderColor: theme.borderLight },
+                  answer === option && { backgroundColor: Colors.accentLight, borderColor: Colors.accent },
+                ]}
+                onPress={() => handleAnswerChange(question.id, option)}
+              >
+                <Feather 
+                  name={option === "Yes" ? "check-circle" : "x-circle"} 
+                  size={20} 
+                  color={answer === option ? Colors.accent : theme.textSecondary} 
+                />
+                <ThemedText style={[
+                  styles.yesNoText,
+                  answer === option && { color: Colors.accent, fontWeight: "600" },
+                ]}>
+                  {option}
+                </ThemedText>
+              </Pressable>
+            ))}
+          </View>
+        );
+
+      case "number":
+        return (
+          <TextInput
+            style={[styles.textInputField, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.borderLight }]}
+            value={(answer as string) || ""}
+            onChangeText={(val) => handleAnswerChange(question.id, val)}
+            placeholder={question.placeholder || "Enter a number"}
+            placeholderTextColor={theme.textSecondary}
+            keyboardType="numeric"
+          />
+        );
+
+      case "text":
+      default:
+        return (
+          <TextInput
+            style={[styles.textInputField, { backgroundColor: theme.backgroundSecondary, color: theme.text, borderColor: theme.borderLight }]}
+            value={(answer as string) || ""}
+            onChangeText={(val) => handleAnswerChange(question.id, val)}
+            placeholder={question.placeholder || "Type your answer..."}
+            placeholderTextColor={theme.textSecondary}
+            multiline
+          />
+        );
+    }
+  };
+
+  const renderQuestionsStep = () => {
     if (!analysis) return null;
-    const currentQuestion = analysis.questions[currentQuestionIndex];
 
     return (
       <Animated.View entering={FadeInDown.duration(400)} style={styles.stepContainer}>
@@ -282,82 +461,72 @@ export default function SmartIntakeScreen() {
               </ThemedText>
             </View>
           </View>
-          <View style={styles.analysisStats}>
-            <StatusPill label={analysis.severity} status={getSeverityStatus(analysis.severity)} />
-            <ThemedText style={[styles.priceRange, { color: theme.textSecondary }]}>
-              Est. ${analysis.estimatedPriceRange.min} - ${analysis.estimatedPriceRange.max}
-            </ThemedText>
-          </View>
         </GlassCard>
 
-        <View style={styles.questionSection}>
-          <ThemedText style={[styles.questionLabel, { color: theme.textSecondary }]}>
-            Question {currentQuestionIndex + 1} of {analysis.questions.length}
-          </ThemedText>
-          <ThemedText style={styles.questionText}>{currentQuestion}</ThemedText>
-        </View>
+        <ThemedText style={styles.questionsTitle}>Help us understand better</ThemedText>
+        <ThemedText style={[styles.questionsSubtitle, { color: theme.textSecondary }]}>
+          Answer these questions to get accurate quotes
+        </ThemedText>
 
-        {answers.length > 0 ? (
-          <View style={styles.answersPreview}>
-            {answers.map((a, i) => (
-              <View key={i} style={[styles.answerRow, { backgroundColor: theme.backgroundSecondary }]}>
-                <ThemedText style={[styles.answerQ, { color: theme.textSecondary }]}>{a.question}</ThemedText>
-                <ThemedText style={styles.answerA}>{a.answer}</ThemedText>
-              </View>
-            ))}
-          </View>
-        ) : null}
+        {analysis.questions.map((question, index) => (
+          <Animated.View 
+            key={question.id} 
+            entering={FadeInDown.delay(index * 100).duration(300)}
+            style={styles.questionCard}
+          >
+            <View style={styles.questionHeader}>
+              <ThemedText style={[styles.questionNumber, { color: Colors.accent }]}>
+                {index + 1}
+              </ThemedText>
+              <ThemedText style={styles.questionText}>{question.text}</ThemedText>
+            </View>
+            {renderQuestionInput(question)}
+          </Animated.View>
+        ))}
+
+        <PrimaryButton 
+          onPress={handleSubmitAnswers} 
+          disabled={!allQuestionsAnswered() || isLoading}
+          style={styles.submitButton}
+        >
+          {isLoading ? "Getting Your Quote..." : "Get My Quote"}
+        </PrimaryButton>
       </Animated.View>
     );
   };
 
-  const renderSummaryStep = () => {
+  const renderOptionsStep = () => {
     if (!analysis) return null;
-    const priceRange = refinedAnalysis?.priceRange || analysis.estimatedPriceRange;
+    const options = refinedAnalysis?.serviceOptions || [];
     const summary = refinedAnalysis?.refinedSummary || analysis.summary;
 
     return (
       <Animated.View entering={FadeInDown.duration(400)} style={styles.stepContainer}>
+        <ThemedText style={styles.optionsTitle}>Your Service Quote</ThemedText>
+        
         <GlassCard style={styles.summaryCard}>
-          <View style={styles.summaryHeader}>
-            <View style={[styles.categoryIconLarge, { backgroundColor: Colors.accentLight }]}>
-              <Feather name={CATEGORY_ICONS[analysis.category] || "tool"} size={28} color={Colors.accent} />
-            </View>
-            <ThemedText style={styles.summaryTitle}>Service Summary</ThemedText>
-          </View>
-
-          <View style={styles.summarySection}>
-            <ThemedText style={[styles.summaryLabel, { color: theme.textSecondary }]}>Issue</ThemedText>
-            <ThemedText style={styles.summaryValue}>{summary}</ThemedText>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryCol}>
-              <ThemedText style={[styles.summaryLabel, { color: theme.textSecondary }]}>Category</ThemedText>
-              <ThemedText style={styles.summaryValue}>{CATEGORY_NAMES[analysis.category]}</ThemedText>
-            </View>
-            <View style={styles.summaryCol}>
-              <ThemedText style={[styles.summaryLabel, { color: theme.textSecondary }]}>Severity</ThemedText>
-              <StatusPill label={refinedAnalysis?.severity || analysis.severity} status={getSeverityStatus(refinedAnalysis?.severity || analysis.severity)} />
-            </View>
-          </View>
-
-          <View style={styles.priceSection}>
-            <ThemedText style={[styles.summaryLabel, { color: theme.textSecondary }]}>Estimated Cost</ThemedText>
-            <ThemedText style={styles.priceText}>${priceRange.min} - ${priceRange.max}</ThemedText>
-            {refinedAnalysis?.confidence ? (
-              <ThemedText style={[styles.confidenceText, { color: theme.textSecondary }]}>
-                {refinedAnalysis.confidence}% confidence
+          <ThemedText style={[styles.summaryLabel, { color: theme.textSecondary }]}>Issue Summary</ThemedText>
+          <ThemedText style={styles.summaryText}>{summary}</ThemedText>
+          
+          <View style={styles.summaryMeta}>
+            <View style={styles.metaItem}>
+              <Feather name="clock" size={14} color={theme.textSecondary} />
+              <ThemedText style={[styles.metaText, { color: theme.textSecondary }]}>
+                {refinedAnalysis?.timeEstimate || "2-4 hours"}
               </ThemedText>
-            ) : null}
+            </View>
+            <StatusPill 
+              label={refinedAnalysis?.recommendedUrgency || analysis.severity} 
+              status={getSeverityStatus(refinedAnalysis?.severity || analysis.severity)} 
+            />
           </View>
 
           {refinedAnalysis?.scopeOfWork && refinedAnalysis.scopeOfWork.length > 0 ? (
             <View style={styles.scopeSection}>
-              <ThemedText style={[styles.summaryLabel, { color: theme.textSecondary }]}>What's Included</ThemedText>
-              {refinedAnalysis.scopeOfWork.map((item, i) => (
+              <ThemedText style={[styles.scopeLabel, { color: theme.textSecondary }]}>What's Included</ThemedText>
+              {refinedAnalysis.scopeOfWork.slice(0, 4).map((item, i) => (
                 <View key={i} style={styles.scopeRow}>
-                  <Feather name="check" size={14} color={Colors.accent} />
+                  <Feather name="check" size={12} color={Colors.accent} />
                   <ThemedText style={styles.scopeText}>{item}</ThemedText>
                 </View>
               ))}
@@ -365,8 +534,54 @@ export default function SmartIntakeScreen() {
           ) : null}
         </GlassCard>
 
-        <PrimaryButton onPress={handleFindProviders} disabled={isLoading}>
-          {isLoading ? "Finding Providers..." : "Find Trusted Providers"}
+        {options.length > 0 ? (
+          <>
+            <ThemedText style={styles.packagesTitle}>Choose Your Service Level</ThemedText>
+            {options.map((option, index) => (
+              <Animated.View key={index} entering={FadeInUp.delay(index * 100).duration(300)}>
+                <Pressable
+                  style={[
+                    styles.optionCard,
+                    { backgroundColor: theme.cardBackground, borderColor: theme.borderLight },
+                    selectedOption?.name === option.name && { borderColor: Colors.accent, borderWidth: 2 },
+                    option.recommended && { borderColor: Colors.accent },
+                  ]}
+                  onPress={() => handleSelectOption(option)}
+                >
+                  {option.recommended ? (
+                    <View style={[styles.recommendedBadge, { backgroundColor: Colors.accent }]}>
+                      <ThemedText style={styles.recommendedText}>Recommended</ThemedText>
+                    </View>
+                  ) : null}
+                  <View style={styles.optionHeader}>
+                    <ThemedText style={styles.optionName}>{option.name}</ThemedText>
+                    <ThemedText style={styles.optionPrice}>
+                      ${option.priceRange.min} - ${option.priceRange.max}
+                    </ThemedText>
+                  </View>
+                  <ThemedText style={[styles.optionDescription, { color: theme.textSecondary }]}>
+                    {option.description}
+                  </ThemedText>
+                  <View style={styles.optionIncludes}>
+                    {option.includes.slice(0, 3).map((item, i) => (
+                      <View key={i} style={styles.includeRow}>
+                        <Feather name="check-circle" size={12} color={Colors.accent} />
+                        <ThemedText style={styles.includeText}>{item}</ThemedText>
+                      </View>
+                    ))}
+                  </View>
+                </Pressable>
+              </Animated.View>
+            ))}
+          </>
+        ) : null}
+
+        <PrimaryButton 
+          onPress={handleFindProviders} 
+          disabled={isLoading}
+          style={styles.submitButton}
+        >
+          {isLoading ? "Finding Providers..." : "Find Available Pros"}
         </PrimaryButton>
       </Animated.View>
     );
@@ -376,8 +591,17 @@ export default function SmartIntakeScreen() {
     <Animated.View entering={FadeInDown.duration(400)} style={styles.stepContainer}>
       <ThemedText style={styles.providersTitle}>Top Matched Providers</ThemedText>
       <ThemedText style={[styles.providersSubtitle, { color: theme.textSecondary }]}>
-        Based on your needs, here are the best available pros
+        Ready to take on your job
       </ThemedText>
+
+      {selectedOption ? (
+        <View style={[styles.selectedOptionBanner, { backgroundColor: Colors.accentLight }]}>
+          <Feather name="check-circle" size={16} color={Colors.accent} />
+          <ThemedText style={[styles.selectedOptionText, { color: Colors.accent }]}>
+            {selectedOption.name}: ${selectedOption.priceRange.min} - ${selectedOption.priceRange.max}
+          </ThemedText>
+        </View>
+      ) : null}
 
       {providers.map((provider, index) => (
         <Animated.View key={provider.id} entering={FadeInUp.delay(index * 100).duration(300)}>
@@ -397,7 +621,7 @@ export default function SmartIntakeScreen() {
                 <View style={styles.ratingRow}>
                   <Feather name="star" size={12} color={Colors.accent} />
                   <ThemedText style={styles.ratingText}>
-                    {typeof provider.rating === 'string' ? provider.rating : provider.rating?.toFixed(1)} ({provider.reviewCount})
+                    {typeof provider.rating === "string" ? provider.rating : provider.rating?.toFixed(1)} ({provider.reviewCount})
                   </ThemedText>
                 </View>
                 {provider.yearsExperience ? (
@@ -405,9 +629,6 @@ export default function SmartIntakeScreen() {
                     {provider.yearsExperience} yrs
                   </ThemedText>
                 ) : null}
-                <ThemedText style={[styles.trustScore, { color: Colors.accent }]}>
-                  Trust: {provider.trustScore}
-                </ThemedText>
               </View>
               {provider.capabilityTags && provider.capabilityTags.length > 0 ? (
                 <View style={styles.capabilityTags}>
@@ -435,27 +656,6 @@ export default function SmartIntakeScreen() {
     </Animated.View>
   );
 
-  const getInputPlaceholder = () => {
-    switch (step) {
-      case "describe":
-        return "Describe your home issue...";
-      case "clarify":
-        return "Type your answer...";
-      default:
-        return "";
-    }
-  };
-
-  const handleSubmit = () => {
-    if (step === "describe") {
-      handleDescribeSubmit();
-    } else if (step === "clarify") {
-      handleAnswerSubmit();
-    }
-  };
-
-  const showInput = step === "describe" || step === "clarify";
-
   return (
     <ThemedView style={styles.container}>
       <KeyboardAvoidingView style={styles.keyboardView} behavior="padding" keyboardVerticalOffset={0}>
@@ -463,48 +663,16 @@ export default function SmartIntakeScreen() {
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingTop: headerHeight + Spacing.md, paddingBottom: Spacing.xl },
+            { paddingTop: headerHeight + Spacing.md, paddingBottom: insets.bottom + Spacing.xl },
           ]}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
           {step === "describe" ? renderDescribeStep() : null}
-          {step === "clarify" ? renderClarifyStep() : null}
-          {step === "summary" ? renderSummaryStep() : null}
+          {step === "questions" ? renderQuestionsStep() : null}
+          {step === "options" ? renderOptionsStep() : null}
           {step === "providers" ? renderProvidersStep() : null}
         </ScrollView>
-
-        {showInput ? (
-          <View style={[styles.inputContainer, { backgroundColor: theme.backgroundRoot, paddingBottom: insets.bottom + Spacing.sm }]}>
-            <View style={[styles.inputWrapper, { backgroundColor: theme.backgroundSecondary, borderColor: theme.borderLight }]}>
-              <TextInput
-                ref={inputRef}
-                style={[styles.textInput, { color: theme.text }]}
-                value={inputText}
-                onChangeText={setInputText}
-                placeholder={getInputPlaceholder()}
-                placeholderTextColor={theme.textSecondary}
-                multiline
-                maxLength={500}
-                onSubmitEditing={handleSubmit}
-                blurOnSubmit={false}
-              />
-              <Pressable
-                style={[
-                  styles.sendButton,
-                  { backgroundColor: inputText.trim() ? Colors.accent : theme.borderLight },
-                ]}
-                onPress={handleSubmit}
-                disabled={!inputText.trim() || isLoading}
-              >
-                {isLoading ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Feather name="arrow-up" size={18} color="#fff" />
-                )}
-              </Pressable>
-            </View>
-          </View>
-        ) : null}
       </KeyboardAvoidingView>
 
       <AccountGateModal
@@ -535,7 +703,7 @@ const styles = StyleSheet.create({
   },
   headerSection: {
     alignItems: "center",
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.lg,
   },
   iconContainer: {
     width: 64,
@@ -554,22 +722,40 @@ const styles = StyleSheet.create({
     ...Typography.subhead,
     textAlign: "center",
   },
+  inputBox: {
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    padding: Spacing.md,
+    minHeight: 120,
+    marginBottom: Spacing.md,
+  },
+  problemInput: {
+    ...Typography.body,
+    flex: 1,
+    minHeight: 100,
+  },
   examplesSection: {
-    marginTop: Spacing.lg,
+    marginBottom: Spacing.lg,
   },
   examplesLabel: {
     ...Typography.caption1,
     marginBottom: Spacing.sm,
   },
+  examplesScroll: {
+    flexGrow: 0,
+  },
   exampleChip: {
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    marginBottom: Spacing.xs,
+    borderRadius: BorderRadius.full,
+    marginRight: Spacing.sm,
   },
   exampleText: {
     ...Typography.subhead,
+    fontWeight: "500",
+  },
+  submitButton: {
+    marginTop: Spacing.lg,
   },
   analysisCard: {
     marginBottom: Spacing.lg,
@@ -577,7 +763,6 @@ const styles = StyleSheet.create({
   analysisHeader: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: Spacing.sm,
   },
   categoryIcon: {
     width: 40,
@@ -597,105 +782,188 @@ const styles = StyleSheet.create({
     ...Typography.subhead,
     marginTop: 2,
   },
-  analysisStats: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingTop: Spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.05)",
+  questionsTitle: {
+    ...Typography.title3,
+    marginBottom: Spacing.xs,
   },
-  priceRange: {
+  questionsSubtitle: {
     ...Typography.subhead,
-  },
-  questionSection: {
     marginBottom: Spacing.lg,
   },
-  questionLabel: {
-    ...Typography.caption1,
-    marginBottom: Spacing.xs,
+  questionCard: {
+    marginBottom: Spacing.lg,
+  },
+  questionHeader: {
+    flexDirection: "row",
+    marginBottom: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  questionNumber: {
+    ...Typography.headline,
+    width: 24,
+    textAlign: "center",
   },
   questionText: {
-    ...Typography.title3,
+    ...Typography.body,
+    flex: 1,
+    fontWeight: "500",
   },
-  answersPreview: {
-    marginTop: Spacing.md,
+  optionsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+    marginLeft: 32,
   },
-  answerRow: {
-    padding: Spacing.sm,
-    borderRadius: BorderRadius.sm,
-    marginBottom: Spacing.xs,
+  choiceOption: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
   },
-  answerQ: {
-    ...Typography.caption1,
-    marginBottom: 2,
-  },
-  answerA: {
+  choiceText: {
     ...Typography.subhead,
+  },
+  checkboxRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 2,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  yesNoRow: {
+    flexDirection: "row",
+    gap: Spacing.md,
+    marginLeft: 32,
+  },
+  yesNoButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: "center",
+  },
+  yesNoText: {
+    ...Typography.body,
+  },
+  textInputField: {
+    marginLeft: 32,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    padding: Spacing.md,
+    ...Typography.body,
+    minHeight: 48,
+  },
+  optionsTitle: {
+    ...Typography.title2,
+    marginBottom: Spacing.lg,
   },
   summaryCard: {
     marginBottom: Spacing.lg,
   },
-  summaryHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: Spacing.md,
-  },
-  categoryIconLarge: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: Spacing.sm,
-  },
-  summaryTitle: {
-    ...Typography.title3,
-  },
-  summarySection: {
-    marginBottom: Spacing.md,
-  },
-  summaryRow: {
-    flexDirection: "row",
-    marginBottom: Spacing.md,
-  },
-  summaryCol: {
-    flex: 1,
-  },
   summaryLabel: {
-    ...Typography.caption2,
-    marginBottom: Spacing.xxs,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+    ...Typography.caption1,
+    marginBottom: Spacing.xs,
   },
-  summaryValue: {
-    ...Typography.subhead,
-  },
-  priceSection: {
-    backgroundColor: Colors.accentLight,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
+  summaryText: {
+    ...Typography.body,
     marginBottom: Spacing.md,
   },
-  priceText: {
-    ...Typography.title1,
-    color: Colors.accent,
+  summaryMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.md,
   },
-  confidenceText: {
+  metaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+  },
+  metaText: {
     ...Typography.caption1,
-    marginTop: Spacing.xxs,
   },
   scopeSection: {
-    marginTop: Spacing.sm,
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0,0,0,0.05)",
+  },
+  scopeLabel: {
+    ...Typography.caption1,
+    marginBottom: Spacing.sm,
   },
   scopeRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: Spacing.xs,
+    gap: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
   scopeText: {
     ...Typography.subhead,
-    marginLeft: Spacing.xs,
+    flex: 1,
+  },
+  packagesTitle: {
+    ...Typography.headline,
+    marginBottom: Spacing.md,
+  },
+  optionCard: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    marginBottom: Spacing.md,
+    position: "relative",
+    overflow: "hidden",
+  },
+  recommendedBadge: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderBottomLeftRadius: BorderRadius.sm,
+  },
+  recommendedText: {
+    ...Typography.caption2,
+    color: "#fff",
+    fontWeight: "600",
+  },
+  optionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Spacing.xs,
+  },
+  optionName: {
+    ...Typography.headline,
+  },
+  optionPrice: {
+    ...Typography.headline,
+    color: Colors.accent,
+  },
+  optionDescription: {
+    ...Typography.subhead,
+    marginBottom: Spacing.sm,
+  },
+  optionIncludes: {
+    marginTop: Spacing.xs,
+  },
+  includeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: 2,
+  },
+  includeText: {
+    ...Typography.caption1,
   },
   providersTitle: {
     ...Typography.title2,
@@ -705,11 +973,23 @@ const styles = StyleSheet.create({
     ...Typography.subhead,
     marginBottom: Spacing.lg,
   },
+  selectedOptionBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.lg,
+  },
+  selectedOptionText: {
+    ...Typography.subhead,
+    fontWeight: "500",
+  },
   providerCard: {
     flexDirection: "row",
     alignItems: "center",
     padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.md,
     borderWidth: 1,
     marginBottom: Spacing.sm,
   },
@@ -728,33 +1008,30 @@ const styles = StyleSheet.create({
   providerStats: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: Spacing.xxs,
     gap: Spacing.md,
+    marginTop: 2,
   },
   ratingRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.xxs,
+    gap: 2,
   },
   ratingText: {
-    ...Typography.subhead,
-  },
-  trustScore: {
     ...Typography.caption1,
   },
   experienceText: {
-    ...Typography.caption2,
+    ...Typography.caption1,
   },
   capabilityTags: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: Spacing.xxs,
+    gap: Spacing.xs,
     marginTop: Spacing.xs,
   },
   capabilityTag: {
     paddingHorizontal: Spacing.sm,
     paddingVertical: 2,
-    borderRadius: BorderRadius.sm,
+    borderRadius: BorderRadius.full,
   },
   capabilityTagText: {
     ...Typography.caption2,
@@ -762,39 +1039,11 @@ const styles = StyleSheet.create({
   },
   noProvidersContainer: {
     alignItems: "center",
-    paddingVertical: Spacing["3xl"],
+    padding: Spacing.xl,
   },
   noProvidersText: {
     ...Typography.subhead,
     textAlign: "center",
     marginTop: Spacing.md,
-  },
-  inputContainer: {
-    paddingHorizontal: Spacing.screenPadding,
-    paddingTop: Spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.05)",
-  },
-  inputWrapper: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
-  },
-  textInput: {
-    flex: 1,
-    ...Typography.body,
-    maxHeight: 100,
-    paddingVertical: Spacing.xs,
-  },
-  sendButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-    marginLeft: Spacing.xs,
   },
 });
