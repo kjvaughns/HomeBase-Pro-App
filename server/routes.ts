@@ -3,7 +3,7 @@ import { createServer, type Server } from "node:http";
 import { openai, HOMEBASE_SYSTEM_PROMPT } from "./openai";
 import { storage } from "./storage";
 import { seedDatabase } from "./seed";
-import { insertUserSchema, loginSchema, insertHomeSchema, insertAppointmentSchema } from "@shared/schema";
+import { insertUserSchema, loginSchema, insertHomeSchema, insertAppointmentSchema, insertProviderSchema, insertClientSchema, insertJobSchema, insertInvoiceSchema, insertPaymentSchema } from "@shared/schema";
 
 interface IdParams { id: string; }
 interface UserIdParams { userId: string; }
@@ -443,6 +443,364 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error in simple chat:", error);
       res.status(500).json({ error: "Failed to process chat request" });
+    }
+  });
+
+  // ============ PROVIDER PORTAL ROUTES ============
+
+  // Provider registration/onboarding
+  app.post("/api/provider/register", async (req: Request, res: Response) => {
+    try {
+      const parsed = insertProviderSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
+      }
+
+      // Check if user already has a provider profile
+      if (parsed.data.userId) {
+        const existing = await storage.getProviderByUserId(parsed.data.userId);
+        if (existing) {
+          return res.status(409).json({ error: "User already has a provider profile" });
+        }
+      }
+
+      const provider = await storage.createProvider(parsed.data);
+      
+      // Mark user as provider
+      if (parsed.data.userId) {
+        await storage.updateUser(parsed.data.userId, { isProvider: true });
+      }
+
+      res.status(201).json({ provider });
+    } catch (error) {
+      console.error("Provider registration error:", error);
+      res.status(500).json({ error: "Failed to register provider" });
+    }
+  });
+
+  // Get provider by user ID
+  app.get("/api/provider/user/:userId", async (req: Request<UserIdParams>, res: Response) => {
+    try {
+      const provider = await storage.getProviderByUserId(req.params.userId);
+      if (!provider) {
+        return res.status(404).json({ error: "Provider not found" });
+      }
+      res.json({ provider });
+    } catch (error) {
+      console.error("Get provider error:", error);
+      res.status(500).json({ error: "Failed to get provider" });
+    }
+  });
+
+  // Update provider profile
+  app.put("/api/provider/:id", async (req: Request<IdParams>, res: Response) => {
+    try {
+      const provider = await storage.updateProvider(req.params.id, req.body);
+      if (!provider) {
+        return res.status(404).json({ error: "Provider not found" });
+      }
+      res.json({ provider });
+    } catch (error) {
+      console.error("Update provider error:", error);
+      res.status(500).json({ error: "Failed to update provider" });
+    }
+  });
+
+  // Provider dashboard stats
+  app.get("/api/provider/:id/stats", async (req: Request<IdParams>, res: Response) => {
+    try {
+      const stats = await storage.getProviderStats(req.params.id);
+      res.json({ stats });
+    } catch (error) {
+      console.error("Get provider stats error:", error);
+      res.status(500).json({ error: "Failed to get provider stats" });
+    }
+  });
+
+  // ============ CLIENTS ROUTES ============
+
+  interface ProviderIdParams { providerId: string; }
+
+  app.get("/api/provider/:providerId/clients", async (req: Request<ProviderIdParams>, res: Response) => {
+    try {
+      const clients = await storage.getClients(req.params.providerId);
+      res.json({ clients });
+    } catch (error) {
+      console.error("Get clients error:", error);
+      res.status(500).json({ error: "Failed to get clients" });
+    }
+  });
+
+  app.get("/api/clients/:id", async (req: Request<IdParams>, res: Response) => {
+    try {
+      const client = await storage.getClient(req.params.id);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+      // Get client's jobs and invoices
+      const jobs = await storage.getJobsByClient(req.params.id);
+      const invoices = await storage.getInvoicesByClient(req.params.id);
+      res.json({ client, jobs, invoices });
+    } catch (error) {
+      console.error("Get client error:", error);
+      res.status(500).json({ error: "Failed to get client" });
+    }
+  });
+
+  app.post("/api/clients", async (req: Request, res: Response) => {
+    try {
+      const parsed = insertClientSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
+      }
+      const client = await storage.createClient(parsed.data);
+      res.status(201).json({ client });
+    } catch (error) {
+      console.error("Create client error:", error);
+      res.status(500).json({ error: "Failed to create client" });
+    }
+  });
+
+  app.put("/api/clients/:id", async (req: Request<IdParams>, res: Response) => {
+    try {
+      const client = await storage.updateClient(req.params.id, req.body);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+      res.json({ client });
+    } catch (error) {
+      console.error("Update client error:", error);
+      res.status(500).json({ error: "Failed to update client" });
+    }
+  });
+
+  app.delete("/api/clients/:id", async (req: Request<IdParams>, res: Response) => {
+    try {
+      const deleted = await storage.deleteClient(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete client error:", error);
+      res.status(500).json({ error: "Failed to delete client" });
+    }
+  });
+
+  // ============ JOBS ROUTES ============
+
+  app.get("/api/provider/:providerId/jobs", async (req: Request<ProviderIdParams>, res: Response) => {
+    try {
+      const jobs = await storage.getJobs(req.params.providerId);
+      res.json({ jobs });
+    } catch (error) {
+      console.error("Get jobs error:", error);
+      res.status(500).json({ error: "Failed to get jobs" });
+    }
+  });
+
+  app.get("/api/jobs/:id", async (req: Request<IdParams>, res: Response) => {
+    try {
+      const job = await storage.getJob(req.params.id);
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+      res.json({ job });
+    } catch (error) {
+      console.error("Get job error:", error);
+      res.status(500).json({ error: "Failed to get job" });
+    }
+  });
+
+  app.post("/api/jobs", async (req: Request, res: Response) => {
+    try {
+      // Convert scheduledDate string to Date
+      const jobData = {
+        ...req.body,
+        scheduledDate: req.body.scheduledDate ? new Date(req.body.scheduledDate) : undefined,
+      };
+      const parsed = insertJobSchema.safeParse(jobData);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
+      }
+      const job = await storage.createJob(parsed.data);
+      res.status(201).json({ job });
+    } catch (error) {
+      console.error("Create job error:", error);
+      res.status(500).json({ error: "Failed to create job" });
+    }
+  });
+
+  app.put("/api/jobs/:id", async (req: Request<IdParams>, res: Response) => {
+    try {
+      const job = await storage.updateJob(req.params.id, req.body);
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+      res.json({ job });
+    } catch (error) {
+      console.error("Update job error:", error);
+      res.status(500).json({ error: "Failed to update job" });
+    }
+  });
+
+  app.post("/api/jobs/:id/complete", async (req: Request<IdParams>, res: Response) => {
+    try {
+      const { finalPrice } = req.body;
+      const job = await storage.completeJob(req.params.id, finalPrice);
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+      res.json({ job });
+    } catch (error) {
+      console.error("Complete job error:", error);
+      res.status(500).json({ error: "Failed to complete job" });
+    }
+  });
+
+  app.post("/api/jobs/:id/start", async (req: Request<IdParams>, res: Response) => {
+    try {
+      const job = await storage.updateJob(req.params.id, { status: "in_progress" });
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+      res.json({ job });
+    } catch (error) {
+      console.error("Start job error:", error);
+      res.status(500).json({ error: "Failed to start job" });
+    }
+  });
+
+  app.delete("/api/jobs/:id", async (req: Request<IdParams>, res: Response) => {
+    try {
+      const deleted = await storage.deleteJob(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete job error:", error);
+      res.status(500).json({ error: "Failed to delete job" });
+    }
+  });
+
+  // ============ INVOICES ROUTES ============
+
+  app.get("/api/provider/:providerId/invoices", async (req: Request<ProviderIdParams>, res: Response) => {
+    try {
+      const invoices = await storage.getInvoices(req.params.providerId);
+      res.json({ invoices });
+    } catch (error) {
+      console.error("Get invoices error:", error);
+      res.status(500).json({ error: "Failed to get invoices" });
+    }
+  });
+
+  app.get("/api/invoices/:id", async (req: Request<IdParams>, res: Response) => {
+    try {
+      const invoice = await storage.getInvoice(req.params.id);
+      if (!invoice) {
+        return res.status(404).json({ error: "Invoice not found" });
+      }
+      const payments = await storage.getPaymentsByInvoice(req.params.id);
+      res.json({ invoice, payments });
+    } catch (error) {
+      console.error("Get invoice error:", error);
+      res.status(500).json({ error: "Failed to get invoice" });
+    }
+  });
+
+  app.get("/api/provider/:providerId/next-invoice-number", async (req: Request<ProviderIdParams>, res: Response) => {
+    try {
+      const invoiceNumber = await storage.getNextInvoiceNumber(req.params.providerId);
+      res.json({ invoiceNumber });
+    } catch (error) {
+      console.error("Get next invoice number error:", error);
+      res.status(500).json({ error: "Failed to get invoice number" });
+    }
+  });
+
+  app.post("/api/invoices", async (req: Request, res: Response) => {
+    try {
+      // Convert dueDate string to Date
+      const invoiceData = {
+        ...req.body,
+        dueDate: req.body.dueDate ? new Date(req.body.dueDate) : undefined,
+      };
+      const parsed = insertInvoiceSchema.safeParse(invoiceData);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
+      }
+      const invoice = await storage.createInvoice(parsed.data);
+      res.status(201).json({ invoice });
+    } catch (error) {
+      console.error("Create invoice error:", error);
+      res.status(500).json({ error: "Failed to create invoice" });
+    }
+  });
+
+  app.put("/api/invoices/:id", async (req: Request<IdParams>, res: Response) => {
+    try {
+      const invoice = await storage.updateInvoice(req.params.id, req.body);
+      if (!invoice) {
+        return res.status(404).json({ error: "Invoice not found" });
+      }
+      res.json({ invoice });
+    } catch (error) {
+      console.error("Update invoice error:", error);
+      res.status(500).json({ error: "Failed to update invoice" });
+    }
+  });
+
+  app.post("/api/invoices/:id/send", async (req: Request<IdParams>, res: Response) => {
+    try {
+      const invoice = await storage.sendInvoice(req.params.id);
+      if (!invoice) {
+        return res.status(404).json({ error: "Invoice not found" });
+      }
+      res.json({ invoice });
+    } catch (error) {
+      console.error("Send invoice error:", error);
+      res.status(500).json({ error: "Failed to send invoice" });
+    }
+  });
+
+  app.post("/api/invoices/:id/mark-paid", async (req: Request<IdParams>, res: Response) => {
+    try {
+      const invoice = await storage.markInvoicePaid(req.params.id);
+      if (!invoice) {
+        return res.status(404).json({ error: "Invoice not found" });
+      }
+      res.json({ invoice });
+    } catch (error) {
+      console.error("Mark invoice paid error:", error);
+      res.status(500).json({ error: "Failed to mark invoice as paid" });
+    }
+  });
+
+  // ============ PAYMENTS ROUTES ============
+
+  app.get("/api/provider/:providerId/payments", async (req: Request<ProviderIdParams>, res: Response) => {
+    try {
+      const payments = await storage.getPayments(req.params.providerId);
+      res.json({ payments });
+    } catch (error) {
+      console.error("Get payments error:", error);
+      res.status(500).json({ error: "Failed to get payments" });
+    }
+  });
+
+  app.post("/api/payments", async (req: Request, res: Response) => {
+    try {
+      const parsed = insertPaymentSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
+      }
+      const payment = await storage.createPayment(parsed.data);
+      res.status(201).json({ payment });
+    } catch (error) {
+      console.error("Create payment error:", error);
+      res.status(500).json({ error: "Failed to create payment" });
     }
   });
 
