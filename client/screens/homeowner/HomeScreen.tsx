@@ -288,22 +288,22 @@ export default function HomeScreen() {
 
             <Pressable
               style={[styles.quickAction, { backgroundColor: theme.cardBackground }]}
+              onPress={() => navigation.navigate("ServiceHistory")}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: Colors.accentLight }]}>
+                <Feather name="clock" size={20} color={Colors.accent} />
+              </View>
+              <ThemedText style={styles.quickActionText}>History</ThemedText>
+            </Pressable>
+
+            <Pressable
+              style={[styles.quickAction, { backgroundColor: theme.cardBackground }]}
               onPress={() => navigation.navigate("HouseFax")}
             >
               <View style={[styles.quickActionIcon, { backgroundColor: Colors.accentLight }]}>
                 <Feather name="file-text" size={20} color={Colors.accent} />
               </View>
               <ThemedText style={styles.quickActionText}>HouseFax</ThemedText>
-            </Pressable>
-
-            <Pressable
-              style={[styles.quickAction, { backgroundColor: theme.cardBackground }]}
-              onPress={() => navigation.navigate("Budgeter")}
-            >
-              <View style={[styles.quickActionIcon, { backgroundColor: Colors.accentLight }]}>
-                <Feather name="dollar-sign" size={20} color={Colors.accent} />
-              </View>
-              <ThemedText style={styles.quickActionText}>Budgeter</ThemedText>
             </Pressable>
           </View>
         </Animated.View>

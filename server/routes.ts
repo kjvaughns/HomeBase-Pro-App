@@ -7,7 +7,8 @@ import { insertUserSchema, loginSchema, insertHomeSchema, insertAppointmentSchem
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
 import { db } from "./db";
-import { sql } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
+import { appointments, maintenanceReminders } from "@shared/schema";
 
 interface IdParams { id: string; }
 interface UserIdParams { userId: string; }
@@ -642,6 +643,102 @@ Provide an updated JSON analysis with:
     const verifiedBonus = provider.isVerified ? 15 : 0;
     return Math.round(ratingScore + reviewScore + experienceScore + verifiedBonus);
   }
+
+  // ============ HOME SERVICE HISTORY & REMINDERS ============
+  
+  // Get service history for a home (completed appointments)
+  app.get("/api/homes/:homeId/service-history", async (req: Request<{ homeId: string }>, res: Response) => {
+    try {
+      const { homeId } = req.params;
+      const serviceHistory = await db.select()
+        .from(appointments)
+        .where(eq(appointments.homeId, homeId))
+        .orderBy(sql`${appointments.completedAt} DESC NULLS LAST, ${appointments.scheduledDate} DESC`);
+      
+      res.json({ serviceHistory });
+    } catch (error) {
+      console.error("Error fetching service history:", error);
+      res.status(500).json({ error: "Failed to fetch service history" });
+    }
+  });
+  
+  // Get maintenance reminders for a home
+  app.get("/api/homes/:homeId/reminders", async (req: Request<{ homeId: string }>, res: Response) => {
+    try {
+      const { homeId } = req.params;
+      const reminders = await db.select()
+        .from(maintenanceReminders)
+        .where(eq(maintenanceReminders.homeId, homeId))
+        .orderBy(maintenanceReminders.nextDueAt);
+      
+      res.json({ reminders });
+    } catch (error) {
+      console.error("Error fetching reminders:", error);
+      res.status(500).json({ error: "Failed to fetch reminders" });
+    }
+  });
+  
+  // Create maintenance reminder
+  app.post("/api/homes/:homeId/reminders", async (req: Request<{ homeId: string }>, res: Response) => {
+    try {
+      const { homeId } = req.params;
+      const { title, description, category, frequency, nextDueAt, userId } = req.body;
+      
+      const [reminder] = await db.insert(maintenanceReminders)
+        .values({
+          homeId,
+          userId,
+          title,
+          description,
+          category,
+          frequency,
+          nextDueAt: new Date(nextDueAt),
+        })
+        .returning();
+      
+      res.json({ reminder });
+    } catch (error) {
+      console.error("Error creating reminder:", error);
+      res.status(500).json({ error: "Failed to create reminder" });
+    }
+  });
+  
+  // Mark reminder as completed (updates lastCompletedAt and nextDueAt)
+  app.put("/api/reminders/:id/complete", async (req: Request<{ id: string }>, res: Response) => {
+    try {
+      const { id } = req.params;
+      
+      const [existing] = await db.select().from(maintenanceReminders).where(eq(maintenanceReminders.id, id));
+      if (!existing) {
+        return res.status(404).json({ error: "Reminder not found" });
+      }
+      
+      const frequencyToMonths: Record<string, number> = {
+        monthly: 1,
+        quarterly: 3,
+        biannually: 6,
+        annually: 12,
+        custom: 12,
+      };
+      
+      const months = frequencyToMonths[existing.frequency || "annually"];
+      const nextDue = new Date();
+      nextDue.setMonth(nextDue.getMonth() + months);
+      
+      const [updated] = await db.update(maintenanceReminders)
+        .set({
+          lastCompletedAt: new Date(),
+          nextDueAt: nextDue,
+        })
+        .where(eq(maintenanceReminders.id, id))
+        .returning();
+      
+      res.json({ reminder: updated });
+    } catch (error) {
+      console.error("Error completing reminder:", error);
+      res.status(500).json({ error: "Failed to complete reminder" });
+    }
+  });
 
   // ============ PROVIDER PORTAL ROUTES ============
 

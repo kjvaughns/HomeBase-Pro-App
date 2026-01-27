@@ -181,6 +181,27 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
   user: one(users, { fields: [notifications.userId], references: [users.id] }),
 }));
 
+export const maintenanceReminderFrequencyEnum = pgEnum("maintenance_reminder_frequency", ["monthly", "quarterly", "biannually", "annually", "custom"]);
+
+export const maintenanceReminders = pgTable("maintenance_reminders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  homeId: varchar("home_id").notNull().references(() => homes.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  category: text("category"),
+  frequency: maintenanceReminderFrequencyEnum("frequency").default("annually"),
+  lastCompletedAt: timestamp("last_completed_at"),
+  nextDueAt: timestamp("next_due_at").notNull(),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const maintenanceRemindersRelations = relations(maintenanceReminders, ({ one }) => ({
+  home: one(homes, { fields: [maintenanceReminders.homeId], references: [homes.id] }),
+  user: one(users, { fields: [maintenanceReminders.userId], references: [users.id] }),
+}));
+
 // Provider's clients (their customers)
 export const clients = pgTable("clients", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

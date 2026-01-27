@@ -17,6 +17,7 @@ import SurvivalKitScreen from "@/screens/homeowner/SurvivalKitScreen";
 import HealthScoreScreen from "@/screens/homeowner/HealthScoreScreen";
 import HouseFaxScreen from "@/screens/homeowner/HouseFaxScreen";
 import BudgeterScreen from "@/screens/homeowner/BudgeterScreen";
+import ServiceHistoryScreen from "@/screens/homeowner/ServiceHistoryScreen";
 import ProviderListScreen from "@/screens/homeowner/ProviderListScreen";
 import ProviderProfileScreen from "@/screens/homeowner/ProviderProfileScreen";
 import BookingRequestScreen from "@/screens/homeowner/BookingRequestScreen";
@@ -58,6 +59,7 @@ export type RootStackParamList = {
   HealthScore: undefined;
   HouseFax: undefined;
   Budgeter: undefined;
+  ServiceHistory: undefined;
   ProviderList: { categoryId: string; categoryName: string };
   ProviderProfile: { providerId: string };
   BookingRequest: {
@@ -219,6 +221,13 @@ export default function RootStackNavigator() {
         component={BudgeterScreen}
         options={{
           headerTitle: "Home Budgeter",
+        }}
+      />
+      <Stack.Screen
+        name="ServiceHistory"
+        component={ServiceHistoryScreen}
+        options={{
+          headerTitle: "Service History",
         }}
       />
       <Stack.Screen
