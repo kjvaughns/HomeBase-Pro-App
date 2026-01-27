@@ -86,7 +86,7 @@ export default function MoreScreen() {
 
     return (
       <Animated.View entering={FadeInDown.delay(100).duration(400)}>
-        <GlassCard style={styles.profileCard} onPress={() => {}}>
+        <GlassCard style={styles.profileCard} onPress={() => navigation.navigate("ProfileEdit")}>
           <View style={styles.profileContent}>
             <Avatar uri={user?.avatarUrl} name={user?.name} size="large" />
             <View style={styles.profileInfo}>
@@ -131,13 +131,13 @@ export default function MoreScreen() {
                 <ListRow
                   title="Payment Methods"
                   leftIcon="credit-card"
-                  onPress={() => {}}
+                  onPress={() => navigation.navigate("PaymentMethods")}
                   isFirst
                 />
                 <ListRow
                   title="Addresses"
                   leftIcon="map-pin"
-                  onPress={() => {}}
+                  onPress={() => navigation.navigate("Addresses")}
                 />
                 <ListRow
                   title="Saved Providers"

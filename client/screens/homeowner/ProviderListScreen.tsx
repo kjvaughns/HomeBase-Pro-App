@@ -37,14 +37,18 @@ export default function ProviderListScreen() {
   const { theme } = useTheme();
   const { categoryId } = route.params;
 
-  const providers = useHomeownerStore((s) => s.getProvidersByCategory(categoryId));
+  const allProviders = useHomeownerStore((s) => s.providers);
+  
+  const categoryProviders = useMemo(() => {
+    return allProviders.filter((p) => p.categoryIds.includes(categoryId));
+  }, [allProviders, categoryId]);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("rating");
   const [showFilters, setShowFilters] = useState(false);
 
   const filteredProviders = useMemo(() => {
-    let result = [...providers];
+    let result = [...categoryProviders];
 
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -72,7 +76,7 @@ export default function ProviderListScreen() {
     }
 
     return result;
-  }, [providers, searchQuery, sortBy]);
+  }, [categoryProviders, searchQuery, sortBy]);
 
   const handleProviderPress = (provider: Provider) => {
     navigation.navigate("ProviderProfile", { providerId: provider.id });
