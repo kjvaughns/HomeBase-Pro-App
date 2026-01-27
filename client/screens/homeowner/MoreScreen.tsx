@@ -37,9 +37,8 @@ export default function MoreScreen() {
   const [showAccountGate, setShowAccountGate] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   
-  const themeMode = useThemeStore((s) => s.mode);
   const toggleDarkMode = useThemeStore((s) => s.toggleDarkMode);
-  const isDarkModeEnabled = useThemeStore((s) => s.getColorScheme()) === "dark";
+  const { isDark } = useTheme();
 
   const handleMockSignIn = () => {
     login({
@@ -207,7 +206,7 @@ export default function MoreScreen() {
               isLast
               rightElement={
                 <Switch
-                  value={isDarkModeEnabled}
+                  value={isDark}
                   onValueChange={toggleDarkMode}
                   trackColor={{ false: theme.backgroundTertiary, true: Colors.accent }}
                   thumbColor="#FFFFFF"
