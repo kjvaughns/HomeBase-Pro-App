@@ -104,6 +104,11 @@ export default function FindScreen() {
     navigation.navigate("Login");
   };
 
+  const handleSmartIntake = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    navigation.navigate("SmartIntake");
+  };
+
   const handleSignUp = () => {
     setShowAccountGate(false);
     navigation.navigate("SignUp");
@@ -119,6 +124,25 @@ export default function FindScreen() {
 
   const renderHeader = () => (
     <View style={styles.headerContent}>
+      <Animated.View entering={FadeInDown.delay(50).duration(400)}>
+        <Pressable
+          onPress={handleSmartIntake}
+          style={[styles.smartIntakeCard, { backgroundColor: Colors.accent }]}
+          testID="get-help-now-button"
+        >
+          <View style={styles.smartIntakeIcon}>
+            <Feather name="zap" size={20} color="#fff" />
+          </View>
+          <View style={styles.smartIntakeText}>
+            <ThemedText style={styles.smartIntakeTitle}>Get Help Now</ThemedText>
+            <ThemedText style={styles.smartIntakeSubtitle}>
+              Describe your problem, get matched with pros
+            </ThemedText>
+          </View>
+          <Feather name="chevron-right" size={20} color="#fff" />
+        </Pressable>
+      </Animated.View>
+
       <Animated.View entering={FadeInDown.delay(100).duration(400)}>
         <TextField
           placeholder="Search services..."
@@ -274,6 +298,34 @@ const styles = StyleSheet.create({
     ...Typography.subhead,
     color: Colors.accent,
     fontWeight: "500",
+  },
+  smartIntakeCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    marginBottom: Spacing.md,
+  },
+  smartIntakeIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: Spacing.sm,
+  },
+  smartIntakeText: {
+    flex: 1,
+  },
+  smartIntakeTitle: {
+    ...Typography.headline,
+    color: "#fff",
+    fontWeight: "600",
+  },
+  smartIntakeSubtitle: {
+    ...Typography.caption1,
+    color: "rgba(255,255,255,0.85)",
   },
   categoriesGrid: {
     flexDirection: "row",

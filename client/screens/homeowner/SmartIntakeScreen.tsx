@@ -65,8 +65,10 @@ interface MatchedProvider {
   reviewCount: number;
   distance?: number;
   trustScore: number;
-  verified?: boolean;
+  isVerified?: boolean;
   hourlyRate?: number;
+  yearsExperience?: number;
+  capabilityTags?: string[];
 }
 
 type IntakeStep = "describe" | "clarify" | "summary" | "providers";
@@ -387,7 +389,7 @@ export default function SmartIntakeScreen() {
             <View style={styles.providerInfo}>
               <View style={styles.providerNameRow}>
                 <ThemedText style={styles.providerName}>{provider.businessName}</ThemedText>
-                {provider.verified ? (
+                {provider.isVerified ? (
                   <Feather name="check-circle" size={14} color={Colors.accent} />
                 ) : null}
               </View>
@@ -398,10 +400,24 @@ export default function SmartIntakeScreen() {
                     {typeof provider.rating === 'string' ? provider.rating : provider.rating?.toFixed(1)} ({provider.reviewCount})
                   </ThemedText>
                 </View>
+                {provider.yearsExperience ? (
+                  <ThemedText style={[styles.experienceText, { color: theme.textSecondary }]}>
+                    {provider.yearsExperience} yrs
+                  </ThemedText>
+                ) : null}
                 <ThemedText style={[styles.trustScore, { color: Colors.accent }]}>
                   Trust: {provider.trustScore}
                 </ThemedText>
               </View>
+              {provider.capabilityTags && provider.capabilityTags.length > 0 ? (
+                <View style={styles.capabilityTags}>
+                  {provider.capabilityTags.slice(0, 3).map((tag, i) => (
+                    <View key={i} style={[styles.capabilityTag, { backgroundColor: Colors.accentLight }]}>
+                      <ThemedText style={[styles.capabilityTagText, { color: Colors.accent }]}>{tag}</ThemedText>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
             </View>
             <Feather name="chevron-right" size={20} color={theme.textSecondary} />
           </Pressable>
@@ -725,6 +741,24 @@ const styles = StyleSheet.create({
   },
   trustScore: {
     ...Typography.caption1,
+  },
+  experienceText: {
+    ...Typography.caption2,
+  },
+  capabilityTags: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.xxs,
+    marginTop: Spacing.xs,
+  },
+  capabilityTag: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.sm,
+  },
+  capabilityTagText: {
+    ...Typography.caption2,
+    fontWeight: "500",
   },
   noProvidersContainer: {
     alignItems: "center",

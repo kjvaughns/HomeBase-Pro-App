@@ -602,17 +602,17 @@ Provide an updated JSON analysis with:
       }
 
       const categoryMap: Record<string, string> = {
-        plumbing: "cat-1",
-        electrical: "cat-2",
-        hvac: "cat-3",
-        cleaning: "cat-4",
-        landscaping: "cat-5",
-        painting: "cat-6",
-        roofing: "cat-7",
-        handyman: "cat-8",
+        plumbing: "plumbing",
+        electrical: "electrical",
+        hvac: "hvac",
+        cleaning: "cleaning",
+        landscaping: "lawn",
+        painting: "painting",
+        roofing: "roofing",
+        handyman: "handyman",
       };
 
-      const categoryId = categoryMap[category] || "cat-8";
+      const categoryId = categoryMap[category.toLowerCase()] || "handyman";
       const allProviders = await storage.getProviders(categoryId);
       
       const rankedProviders = allProviders
@@ -634,12 +634,12 @@ Provide an updated JSON analysis with:
     }
   });
 
-  function calculateTrustScore(provider: { rating?: string | number | null; reviewCount?: number | null; yearsExperience?: number | null; verified?: boolean | null }): number {
+  function calculateTrustScore(provider: { rating?: string | number | null; reviewCount?: number | null; yearsExperience?: number | null; isVerified?: boolean | null }): number {
     const rating = typeof provider.rating === 'string' ? parseFloat(provider.rating) : (provider.rating || 4);
     const ratingScore = rating * 15;
     const reviewScore = Math.min((provider.reviewCount || 0) / 5, 20);
     const experienceScore = Math.min((provider.yearsExperience || 0) * 2, 20);
-    const verifiedBonus = provider.verified ? 15 : 0;
+    const verifiedBonus = provider.isVerified ? 15 : 0;
     return Math.round(ratingScore + reviewScore + experienceScore + verifiedBonus);
   }
 

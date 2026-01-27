@@ -92,6 +92,8 @@ export const providers = pgTable("providers", {
   isVerified: boolean("is_verified").default(false),
   isActive: boolean("is_active").default(true),
   serviceArea: text("service_area"),
+  yearsExperience: integer("years_experience").default(0),
+  capabilityTags: text("capability_tags").array().default(sql`ARRAY[]::text[]`),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
