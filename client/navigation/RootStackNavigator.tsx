@@ -13,6 +13,7 @@ import ForgotPasswordScreen from "@/screens/auth/ForgotPasswordScreen";
 import OnboardingScreen from "@/screens/auth/OnboardingScreen";
 import AIChatScreen from "@/screens/homeowner/AIChatScreen";
 import SmartIntakeScreen from "@/screens/homeowner/SmartIntakeScreen";
+import ServiceIntakeScreen from "@/screens/homeowner/ServiceIntakeScreen";
 import SurvivalKitScreen from "@/screens/homeowner/SurvivalKitScreen";
 import HealthScoreScreen from "@/screens/homeowner/HealthScoreScreen";
 import HouseFaxScreen from "@/screens/homeowner/HouseFaxScreen";
@@ -62,6 +63,11 @@ export type RootStackParamList = {
   ServiceHistory: undefined;
   ProviderList: { categoryId: string; categoryName: string };
   ProviderProfile: { providerId: string };
+  ServiceIntake: {
+    providerId: string;
+    categoryId: string;
+    service: string;
+  };
   BookingRequest: {
     providerId: string;
     categoryId: string;
@@ -193,6 +199,13 @@ export default function RootStackNavigator() {
         component={SmartIntakeScreen}
         options={{
           headerTitle: "Get Help",
+        }}
+      />
+      <Stack.Screen
+        name="ServiceIntake"
+        component={ServiceIntakeScreen}
+        options={{
+          headerTitle: "Service Details",
         }}
       />
       <Stack.Screen

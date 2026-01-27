@@ -714,6 +714,73 @@ Provide a comprehensive JSON analysis with:
     return Math.round(ratingScore + reviewScore + experienceScore + verifiedBonus);
   }
 
+  app.post("/api/intake/explain-issue", async (req: Request, res: Response) => {
+    try {
+      const { problem, category, answers, service, providerName } = req.body as {
+        problem: string;
+        category: string;
+        answers: Record<string, string | string[]>;
+        service?: string;
+        providerName?: string;
+      };
+
+      if (!problem || !category) {
+        return res.status(400).json({ error: "Problem and category are required" });
+      }
+
+      const answersSummary = Object.entries(answers)
+        .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : value}`)
+        .join("\n");
+
+      const prompt = `Based on the following home service issue, provide a clear explanation for the homeowner.
+
+Problem: ${problem}
+Service Category: ${category}
+${service ? `Requested Service: ${service}` : ""}
+${providerName ? `Service Provider: ${providerName}` : ""}
+
+Additional Details:
+${answersSummary}
+
+Respond with JSON only:
+{
+  "explanation": "A 2-3 sentence explanation of the issue in simple terms that helps the homeowner understand what's likely happening",
+  "recommendedService": "The specific service that best matches their needs",
+  "whatToExpect": ["Step 1 the professional will take", "Step 2", "Step 3"],
+  "estimatedDuration": "How long the assessment/repair typically takes",
+  "priceRange": { "min": number, "max": number }
+}`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: "You are a home services expert helping homeowners understand their issues. Be clear, helpful, and reassuring." },
+          { role: "user", content: prompt },
+        ],
+        max_tokens: 800,
+        response_format: { type: "json_object" },
+      });
+
+      const content = response.choices[0]?.message?.content || "{}";
+      const parsed = JSON.parse(content);
+
+      res.json({
+        explanation: parsed.explanation || "Based on your description, we understand your situation and will connect you with a qualified professional.",
+        recommendedService: parsed.recommendedService || service || category,
+        whatToExpect: parsed.whatToExpect || [
+          "A professional will contact you to confirm the appointment",
+          "They'll assess the situation at your location",
+          "You'll receive a final quote before work begins",
+        ],
+        estimatedDuration: parsed.estimatedDuration || "1-2 hours",
+        priceRange: parsed.priceRange || { min: 100, max: 300 },
+      });
+    } catch (error) {
+      console.error("Error explaining issue:", error);
+      res.status(500).json({ error: "Failed to explain issue" });
+    }
+  });
+
   // ============ HOME SERVICE HISTORY & REMINDERS ============
   
   // Get service history for a home (completed appointments)

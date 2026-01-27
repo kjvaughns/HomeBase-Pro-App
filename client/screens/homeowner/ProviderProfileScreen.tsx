@@ -66,7 +66,7 @@ export default function ProviderProfileScreen() {
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    navigation.navigate("BookingRequest", {
+    navigation.navigate("ServiceIntake", {
       providerId: provider.id,
       categoryId: provider.categoryIds[0],
       service: provider.services[0],
@@ -143,7 +143,7 @@ export default function ProviderProfileScreen() {
           style={[styles.serviceRow, { borderColor: theme.borderLight }]}
           onPress={() => {
             if (isAuthenticated) {
-              navigation.navigate("BookingRequest", {
+              navigation.navigate("ServiceIntake", {
                 providerId: provider.id,
                 categoryId: provider.categoryIds[0],
                 service,
