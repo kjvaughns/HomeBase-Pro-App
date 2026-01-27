@@ -11,7 +11,6 @@ import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { StatusPill } from "@/components/StatusPill";
 import { EmptyState } from "@/components/EmptyState";
-import { PrimaryButton, SecondaryButton } from "@/components/Buttons";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useProviderStore, Job } from "@/state/providerStore";
@@ -222,7 +221,7 @@ function JobListItem({ job, onPress, showTime = true }: JobListItemProps) {
             </View>
           ) : null}
           <View style={styles.jobDetails}>
-            <ThemedText type="body" style={{ fontWeight: "600" }}>{job.clientName}</ThemedText>
+            <ThemedText type="body" style={{ fontWeight: "600" }}>{job.customerName}</ThemedText>
             <ThemedText type="caption" style={{ color: Colors.accent }}>
               {job.service}
             </ThemedText>
@@ -282,7 +281,7 @@ function DayTimeline({ jobs, onJobPress }: DayTimelineProps) {
                       {job.service}
                     </ThemedText>
                     <ThemedText type="small" style={{ color: theme.textSecondary }}>
-                      {job.clientName}
+                      {job.customerName}
                     </ThemedText>
                   </View>
                 </Pressable>
@@ -467,7 +466,7 @@ function MonthView({ selectedDate, jobs, onDateSelect, onJobPress }: MonthViewPr
                     {job.time} - {job.service}
                   </ThemedText>
                   <ThemedText type="small" style={{ color: theme.textSecondary }}>
-                    {job.clientName}
+                    {job.customerName}
                   </ThemedText>
                 </View>
               </Pressable>
