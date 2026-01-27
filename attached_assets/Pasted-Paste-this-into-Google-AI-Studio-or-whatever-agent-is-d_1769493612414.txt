@@ -1,0 +1,177 @@
+Paste this into Google AI Studio or whatever agent is doing the rebuild. It includes the two codebases and the exact Replit structure you want.
+
+Rebuild my app into one iOS mobile app in Replit using Expo React Native TypeScript. There are two existing codebases you must use as inputs:
+
+Input codebases
+1 Homeowner portal codebase
+2 Provider portal codebase
+
+You must read both entire codebases and treat them as the source of truth for existing functionality and screen flows. Your job is to combine them into one unified app with one design system, one navigation architecture, and one authentication identity.
+
+Core product behavior that must be implemented
+One app with three access states
+Guest mode
+Homeowner authenticated mode default
+Provider mode as an optional second role attached to the same user
+
+Guest mode behavior
+When you open the app you are a guest by default
+Guest can browse the homeowner marketplace experience freely
+Any attempt to do an action that requires an account must open an Account Gate modal
+Actions to gate
+Find a pro request quote book message save favorite pay review manage bookings
+The guest should be allowed to fill out a request flow up to the final submit step, then gate at submit
+
+Homeowner account
+Standard account type created at signup
+After login the user can fully book manage jobs message and pay
+
+Provider account creation inside Settings
+A logged in homeowner can go to More Settings and tap Become a Service Provider
+This creates a provider profile attached to the same user identity
+No second login ever
+Provider has status draft pending approved rejected paused
+Only approved providers can access provider mode fully
+
+Role switching
+Once provider profile exists, show a Role Switcher only inside More Settings
+Current role Homeowner
+Switch to Provider
+Switch back to Homeowner
+Switching changes the entire bottom tab bar and root navigation stack
+After switching show a one screen confirmation and continue button
+
+Design constraints that must be applied across both portals
+Use exactly one accent color only #38AE5F
+No other accent colors anywhere
+Everything else is neutral grayscale
+Implement light and dark mode
+Use subtle Liquid Glass style only for headers tab bar key cards modals and bottom sheets
+No clutter no random floating outlined widgets
+Fix every spacing alignment overflow and inconsistent component usage
+One unified design system across every screen
+
+How the combined app must be structured
+Architecture principles
+One repo one Expo app one package json
+Shared UI kit and theme tokens used by both portals
+Feature modules separated but reuse shared components
+No duplicated component libraries per portal
+No duplicated navigation patterns per portal
+
+Navigation structure required
+Use Expo Router
+
+Root decision
+If not authenticated
+Show GuestTabs
+
+If authenticated and activeRole is homeowner
+Show HomeownerTabs
+
+If authenticated and activeRole is provider and providerStatus is approved
+Show ProviderTabs
+
+If authenticated and activeRole is provider but providerStatus is not approved
+Show ProviderSetupStack with status screens and the checklist flow
+
+Tab bars
+GuestTabs
+Find
+Manage locked preview
+More
+
+HomeownerTabs
+Find
+Manage
+Messages
+More
+
+ProviderTabs
+Home
+Leads
+Schedule
+Money
+More
+
+Account Gate modal
+Global modal accessible from anywhere
+Triggered when guest taps gated actions
+Must include Continue with Apple as primary
+
+Theme and UI system requirements
+Create a single theme token file
+src theme tokens ts
+accent #38AE5F
+neutrals for light and dark
+semantic tokens must not introduce new colors for warnings errors, handle via icons text and contrast
+
+Reusable components you must build and use everywhere
+GlassHeader
+GlassTabBar
+PrimaryButton
+SecondaryButton
+Card
+ListRow
+StatusPill
+TextField
+BottomSheetModal
+AccountGateModal
+SkeletonLoader
+
+State management
+Pick one and use it consistently
+Zustand preferred
+Auth state persisted with AsyncStorage
+Tokens in Expo SecureStore
+React Query for server data with mock adapters if backend missing
+
+Replit requirements
+The project must run cleanly in Replit and on Expo Go
+Provide scripts
+npm run dev starts expo
+npm run ios opens iOS build instructions
+Include README with exact run steps
+Include env example file
+
+Exact folder structure to implement
+src
+app expo router routes
+theme
+components ui shared
+features
+auth
+marketplace shared homeowner browsing
+homeowner
+provider
+state
+api
+assets
+utils
+
+Merging rules for the two codebases
+1 Extract shared primitives and rebuild as shared components under src components and src theme
+2 Port homeowner screens into src features homeowner and marketplace
+3 Port provider screens into src features provider
+4 Replace both portals styling with the unified theme tokens and components
+5 Remove duplicate navigation implementations and unify into Expo Router
+6 Unify data models and types
+Single User
+HomeownerProfile optional but default created
+ProviderProfile optional created via Become a Provider flow
+7 Ensure all routes use the same auth and role guard logic
+
+Deliverables output format
+First output a migration plan explaining how you will merge homeowner and provider codebases
+Then output the final file tree
+Then provide each file content with path headers in code blocks
+Then provide run instructions and a verification checklist
+
+Hard rules
+Do not invent new features beyond what exists in the two input portals and the role gating flow described here
+Do not use any accent color other than #38AE5F
+Do not leave TODO placeholders unless absolutely required and list them at the end
+Do not break iOS UX patterns
+
+Action you must take first
+Ask me for the two zip files or repo links for the homeowner portal and provider portal, then start the migration plan.
