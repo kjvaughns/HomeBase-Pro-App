@@ -177,20 +177,6 @@ export interface ChatMessage {
   read: boolean;
 }
 
-export interface MessageThread {
-  id: string;
-  jobId: string;
-  homeownerId: string;
-  providerId: string;
-  providerName: string;
-  providerAvatar?: string;
-  service: string;
-  lastMessage: string;
-  lastMessageTime: string;
-  unreadCount: number;
-  messages: ChatMessage[];
-}
-
 export interface Quote {
   id: string;
   jobId?: string;

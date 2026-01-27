@@ -3,8 +3,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   Job,
   JobStatus,
-  MessageThread,
-  ChatMessage,
   Invoice,
   Receipt,
   Review,
@@ -24,7 +22,6 @@ import {
   SEED_INVOICES,
   SEED_RECEIPTS,
   SEED_REVIEWS,
-  SEED_MESSAGE_THREADS,
   SEED_QUOTES,
   DEFAULT_HOMEOWNER,
   generateTimeSlots,
@@ -38,7 +35,6 @@ interface HomeownerState {
   categories: ServiceCategory[];
   providers: Provider[];
   jobs: Job[];
-  messageThreads: MessageThread[];
   invoices: Invoice[];
   receipts: Receipt[];
   reviews: Review[];
@@ -73,10 +69,6 @@ interface HomeownerState {
   updateJobStatus: (jobId: string, status: JobStatus) => void;
   advanceJobStatus: (jobId: string) => void;
 
-  getThreadByJobId: (jobId: string) => MessageThread | undefined;
-  sendMessage: (threadId: string, content: string, attachments?: ChatMessage["attachments"]) => void;
-  markThreadAsRead: (threadId: string) => void;
-
   getInvoiceById: (id: string) => Invoice | undefined;
   getInvoiceByJobId: (jobId: string) => Invoice | undefined;
 
@@ -108,7 +100,6 @@ export const useHomeownerStore = create<HomeownerState>()((set, get) => ({
   categories: SERVICE_CATEGORIES,
   providers: PROVIDERS,
   jobs: [],
-  messageThreads: [],
   invoices: [],
   receipts: [],
   reviews: [],
@@ -122,7 +113,6 @@ export const useHomeownerStore = create<HomeownerState>()((set, get) => ({
         set({
           profile: data.profile || DEFAULT_HOMEOWNER,
           jobs: data.jobs || SEED_JOBS,
-          messageThreads: data.messageThreads || SEED_MESSAGE_THREADS,
           invoices: data.invoices || SEED_INVOICES,
           receipts: data.receipts || SEED_RECEIPTS,
           reviews: data.reviews || SEED_REVIEWS,
@@ -133,7 +123,6 @@ export const useHomeownerStore = create<HomeownerState>()((set, get) => ({
         set({
           profile: DEFAULT_HOMEOWNER,
           jobs: SEED_JOBS,
-          messageThreads: SEED_MESSAGE_THREADS,
           invoices: SEED_INVOICES,
           receipts: SEED_RECEIPTS,
           reviews: SEED_REVIEWS,
@@ -147,7 +136,6 @@ export const useHomeownerStore = create<HomeownerState>()((set, get) => ({
       set({
         profile: DEFAULT_HOMEOWNER,
         jobs: SEED_JOBS,
-        messageThreads: SEED_MESSAGE_THREADS,
         invoices: SEED_INVOICES,
         receipts: SEED_RECEIPTS,
         reviews: SEED_REVIEWS,
@@ -162,7 +150,6 @@ export const useHomeownerStore = create<HomeownerState>()((set, get) => ({
     set({
       profile: DEFAULT_HOMEOWNER,
       jobs: SEED_JOBS,
-      messageThreads: SEED_MESSAGE_THREADS,
       invoices: SEED_INVOICES,
       receipts: SEED_RECEIPTS,
       reviews: SEED_REVIEWS,
@@ -335,35 +322,8 @@ export const useHomeownerStore = create<HomeownerState>()((set, get) => ({
       updatedAt: now,
     };
 
-    const newThread: MessageThread = {
-      id: `thread-${jobId}`,
-      jobId,
-      homeownerId: profile?.id || "homeowner-1",
-      providerId: request.providerId,
-      providerName: provider?.name || "",
-      providerAvatar: provider?.avatarUrl,
-      service: request.service,
-      lastMessage: "Your booking has been confirmed!",
-      lastMessageTime: "Just now",
-      unreadCount: 1,
-      messages: [
-        {
-          id: `msg-${jobId}-1`,
-          threadId: `thread-${jobId}`,
-          senderId: request.providerId,
-          senderName: provider?.name || "",
-          senderType: "provider",
-          content: `Thank you for booking with ${provider?.businessName}! I've confirmed your appointment for ${request.scheduledDate} at ${request.scheduledTime}. Looking forward to helping you!`,
-          attachments: [],
-          timestamp: now,
-          read: false,
-        },
-      ],
-    };
-
     set((state) => ({
       jobs: [newJob, ...state.jobs],
-      messageThreads: [newThread, ...state.messageThreads],
     }));
     saveToStorage(get());
 
@@ -469,60 +429,6 @@ export const useHomeownerStore = create<HomeownerState>()((set, get) => ({
 
       get().updateJobStatus(jobId, nextStatus);
     }
-  },
-
-  getThreadByJobId: (jobId) => {
-    return get().messageThreads.find((t) => t.jobId === jobId);
-  },
-
-  sendMessage: (threadId, content, attachments = []) => {
-    const { profile } = get();
-    const now = new Date().toISOString();
-    const messageId = `msg-${Date.now()}`;
-
-    set((state) => ({
-      messageThreads: state.messageThreads.map((t) => {
-        if (t.id === threadId) {
-          return {
-            ...t,
-            lastMessage: content,
-            lastMessageTime: "Just now",
-            messages: [
-              ...t.messages,
-              {
-                id: messageId,
-                threadId,
-                senderId: profile?.id || "homeowner-1",
-                senderName: profile?.name || "You",
-                senderType: "homeowner",
-                content,
-                attachments,
-                timestamp: now,
-                read: true,
-              },
-            ],
-          };
-        }
-        return t;
-      }),
-    }));
-    saveToStorage(get());
-  },
-
-  markThreadAsRead: (threadId) => {
-    set((state) => ({
-      messageThreads: state.messageThreads.map((t) => {
-        if (t.id === threadId) {
-          return {
-            ...t,
-            unreadCount: 0,
-            messages: t.messages.map((m) => ({ ...m, read: true })),
-          };
-        }
-        return t;
-      }),
-    }));
-    saveToStorage(get());
   },
 
   getInvoiceById: (id) => {
@@ -706,7 +612,6 @@ async function saveToStorage(state: HomeownerState) {
     const data = {
       profile: state.profile,
       jobs: state.jobs,
-      messageThreads: state.messageThreads,
       invoices: state.invoices,
       receipts: state.receipts,
       reviews: state.reviews,
