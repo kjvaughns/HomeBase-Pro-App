@@ -2,7 +2,7 @@ import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
-import { Platform, StyleSheet } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 
 import ProviderHomeScreen from "@/screens/provider/ProviderHomeScreen";
 import LeadsScreen from "@/screens/provider/LeadsScreen";
@@ -11,7 +11,7 @@ import MoneyScreen from "@/screens/provider/MoneyScreen";
 import ProviderMoreScreen from "@/screens/provider/ProviderMoreScreen";
 import { useTheme } from "@/hooks/useTheme";
 import { HeaderTitle } from "@/components/HeaderTitle";
-import { Colors, Spacing, Typography } from "@/constants/theme";
+import { Colors, Spacing, Typography, BorderRadius } from "@/constants/theme";
 
 export type ProviderTabParamList = {
   HomeTab: undefined;
@@ -22,6 +22,32 @@ export type ProviderTabParamList = {
 };
 
 const Tab = createBottomTabNavigator<ProviderTabParamList>();
+
+function FloatingTabBarBackground({ isDark, theme }: { isDark: boolean; theme: any }) {
+  if (Platform.OS === "ios") {
+    return (
+      <BlurView
+        intensity={80}
+        tint={isDark ? "systemMaterialDark" : "systemMaterial"}
+        style={[StyleSheet.absoluteFill, { borderRadius: BorderRadius["2xl"], overflow: "hidden" }]}
+      />
+    );
+  }
+  
+  return (
+    <View
+      style={[
+        StyleSheet.absoluteFill,
+        {
+          backgroundColor: isDark ? "rgba(28, 28, 30, 0.85)" : "rgba(255, 255, 255, 0.85)",
+          borderRadius: BorderRadius["2xl"],
+          borderWidth: 1,
+          borderColor: isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.08)",
+        },
+      ]}
+    />
+  );
+}
 
 export default function ProviderTabNavigator() {
   const { theme, isDark } = useTheme();
@@ -55,29 +81,29 @@ export default function ProviderTabNavigator() {
           marginTop: -2,
         },
         tabBarIconStyle: {
-          marginTop: 2,
+          marginTop: 4,
         },
         tabBarStyle: {
           position: "absolute",
-          backgroundColor: Platform.select({
-            ios: "transparent",
-            android: theme.backgroundRoot,
-            web: theme.glassOverlay,
-          }),
-          borderTopWidth: Platform.OS === "ios" ? 0 : StyleSheet.hairlineWidth,
-          borderTopColor: theme.separator,
+          bottom: 24,
+          left: 16,
+          right: 16,
+          height: 64,
+          borderRadius: BorderRadius["2xl"],
+          backgroundColor: "transparent",
+          borderTopWidth: 0,
+          borderTopColor: "transparent",
           elevation: 0,
-          height: Spacing.tabBarHeight + 34,
-          paddingBottom: 34,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.15,
+          shadowRadius: 24,
+          paddingBottom: 0,
         },
-        tabBarBackground: () =>
-          Platform.OS === "ios" ? (
-            <BlurView
-              intensity={100}
-              tint={isDark ? "systemMaterialDark" : "systemMaterial"}
-              style={StyleSheet.absoluteFill}
-            />
-          ) : null,
+        tabBarItemStyle: {
+          paddingVertical: 8,
+        },
+        tabBarBackground: () => <FloatingTabBarBackground isDark={isDark} theme={theme} />,
       }}
     >
       <Tab.Screen

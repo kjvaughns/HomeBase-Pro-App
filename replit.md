@@ -54,6 +54,10 @@ Homebase is a unified iOS mobile app that combines homeowner and provider portal
 - BecomeProviderScreen - Provider onboarding flow
 
 ### Navigation Architecture
+- **Floating Liquid Glass Tab Bar**: Pill-shaped, floating nav bar with rounded corners (24px radius)
+  - Positioned 24px from bottom, 16px from sides
+  - Semi-transparent glass background with subtle border
+  - BlurView on iOS, solid rgba background on web
 - Role-based tab bars that change based on authentication and active role
 - Homeowner tabs: Find, Manage, Messages (when auth'd), More
 - Provider tabs: Home, Leads, Schedule, Money, More
