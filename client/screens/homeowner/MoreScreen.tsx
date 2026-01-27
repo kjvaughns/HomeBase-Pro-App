@@ -17,6 +17,7 @@ import { AccountGateModal } from "@/components/AccountGateModal";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
+import { useThemeStore } from "@/state/themeStore";
 
 export default function MoreScreen() {
   const insets = useSafeAreaInsets();
@@ -35,6 +36,10 @@ export default function MoreScreen() {
 
   const [showAccountGate, setShowAccountGate] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  
+  const themeMode = useThemeStore((s) => s.mode);
+  const toggleDarkMode = useThemeStore((s) => s.toggleDarkMode);
+  const isDarkModeEnabled = useThemeStore((s) => s.getColorScheme()) === "dark";
 
   const handleMockSignIn = () => {
     login({
@@ -189,7 +194,30 @@ export default function MoreScreen() {
           </>
         ) : null}
 
-        <Animated.View entering={FadeInDown.delay(400).duration(400)}>
+        <Animated.View entering={FadeInDown.delay(isAuthenticated ? 400 : 200).duration(400)}>
+          <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
+            Appearance
+          </ThemedText>
+          <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
+            <ListRow
+              title="Dark Mode"
+              leftIcon="moon"
+              showChevron={false}
+              isFirst
+              isLast
+              rightElement={
+                <Switch
+                  value={isDarkModeEnabled}
+                  onValueChange={toggleDarkMode}
+                  trackColor={{ false: theme.backgroundTertiary, true: Colors.accent }}
+                  thumbColor="#FFFFFF"
+                />
+              }
+            />
+          </View>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(isAuthenticated ? 500 : 300).duration(400)}>
           <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
             Support
           </ThemedText>
@@ -220,7 +248,7 @@ export default function MoreScreen() {
         </Animated.View>
 
         {isAuthenticated ? (
-          <Animated.View entering={FadeInDown.delay(500).duration(400)}>
+          <Animated.View entering={FadeInDown.delay(600).duration(400)}>
             <View style={[styles.section, { backgroundColor: theme.cardBackground, marginTop: Spacing.lg }]}>
               <ListRow
                 title="Sign Out"

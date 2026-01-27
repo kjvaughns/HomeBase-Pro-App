@@ -21,7 +21,7 @@ export function useScreenOptions({
     headerTransparent: transparent,
     headerBlurEffect: isDark ? "systemMaterialDark" : "systemMaterial",
     headerTintColor: theme.text,
-    headerBackTitleVisible: false,
+    headerBackVisible: true,
     headerTitleStyle: {
       ...Typography.headline,
       color: theme.text,

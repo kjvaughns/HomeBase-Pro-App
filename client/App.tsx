@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { StyleSheet } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -11,18 +11,36 @@ import { queryClient } from "@/lib/query-client";
 
 import RootStackNavigator from "@/navigation/RootStackNavigator";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { useThemeStore } from "@/state/themeStore";
+import { useTheme } from "@/hooks/useTheme";
+
+function AppContent() {
+  const { isDark } = useTheme();
+  
+  return (
+    <>
+      <NavigationContainer>
+        <RootStackNavigator />
+      </NavigationContainer>
+      <StatusBar style={isDark ? "light" : "dark"} />
+    </>
+  );
+}
 
 export default function App() {
+  const hydrateTheme = useThemeStore((s) => s.hydrate);
+  
+  useEffect(() => {
+    hydrateTheme();
+  }, []);
+  
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <SafeAreaProvider>
           <GestureHandlerRootView style={styles.root}>
             <KeyboardProvider>
-              <NavigationContainer>
-                <RootStackNavigator />
-              </NavigationContainer>
-              <StatusBar style="auto" />
+              <AppContent />
             </KeyboardProvider>
           </GestureHandlerRootView>
         </SafeAreaProvider>

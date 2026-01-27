@@ -1,4 +1,5 @@
 import React from "react";
+import { Platform } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import HomeownerTabNavigator from "@/navigation/HomeownerTabNavigator";
@@ -25,6 +26,7 @@ import ProfileEditScreen from "@/screens/homeowner/ProfileEditScreen";
 import AddressesScreen from "@/screens/homeowner/AddressesScreen";
 import PaymentMethodsScreen from "@/screens/homeowner/PaymentMethodsScreen";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
+import { useTheme } from "@/hooks/useTheme";
 import { useAuthStore, UserRole } from "@/state/authStore";
 import { UrgencyLevel, JobSize } from "@/state/types";
 
@@ -90,6 +92,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootStackNavigator() {
   const screenOptions = useScreenOptions();
+  const { theme } = useTheme();
   const { isAuthenticated, activeRole, canAccessProviderMode } = useAuthStore();
 
   const getMainComponent = () => {
@@ -219,6 +222,9 @@ export default function RootStackNavigator() {
           headerTitle: "Messages",
           headerTransparent: false,
           headerBlurEffect: undefined,
+          headerStyle: {
+            backgroundColor: theme.backgroundRoot,
+          },
         }}
       />
       <Stack.Screen
