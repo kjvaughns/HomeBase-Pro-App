@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { StyleSheet, View, FlatList, RefreshControl, Pressable, SectionList } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -18,25 +18,44 @@ import { SkeletonCard } from "@/components/SkeletonLoader";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuthStore } from "@/state/authStore";
-import { useHomeownerStore } from "@/state/homeownerStore";
+import { getApiUrl } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
-import { Job, JobStatus } from "@/state/types";
+
+type AppointmentStatus = "pending" | "confirmed" | "in_progress" | "completed" | "cancelled";
+
+interface Appointment {
+  id: string;
+  userId: string;
+  homeId: string;
+  providerId: string;
+  serviceId?: string;
+  serviceName: string;
+  description?: string;
+  urgency?: string;
+  jobSize?: string;
+  scheduledDate: string;
+  scheduledTime: string;
+  status: AppointmentStatus;
+  estimatedPrice?: string;
+  finalPrice?: string;
+  providerNotes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-const STATUS_CONFIG: Record<JobStatus, { label: string; variant: "success" | "info" | "warning" | "neutral" }> = {
-  requested: { label: "Requested", variant: "info" },
-  scheduled: { label: "Scheduled", variant: "info" },
-  in_progress: { label: "In Progress", variant: "warning" },
-  awaiting_payment: { label: "Awaiting Payment", variant: "warning" },
-  completed: { label: "Completed", variant: "success" },
-  paid: { label: "Paid", variant: "success" },
-  closed: { label: "Closed", variant: "neutral" },
+const STATUS_CONFIG: Record<AppointmentStatus, { label: string; status: "success" | "info" | "warning" | "neutral" | "cancelled" }> = {
+  pending: { label: "Pending", status: "info" },
+  confirmed: { label: "Confirmed", status: "info" },
+  in_progress: { label: "In Progress", status: "warning" },
+  completed: { label: "Completed", status: "success" },
+  cancelled: { label: "Cancelled", status: "cancelled" },
 };
 
 type Section = {
   title: string;
-  data: Job[];
+  data: Appointment[];
 };
 
 export default function ManageScreen() {
@@ -45,24 +64,41 @@ export default function ManageScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
-  const { isAuthenticated, login } = useAuthStore();
+  const { isAuthenticated, user, login } = useAuthStore();
 
-  const jobs = useHomeownerStore((s) => s.jobs);
-  const isHydrated = useHomeownerStore((s) => s.isHydrated);
-
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showAccountGate, setShowAccountGate] = useState(false);
 
-  const sections: Section[] = React.useMemo(() => {
-    if (!isAuthenticated || jobs.length === 0) return [];
+  const fetchAppointments = useCallback(async () => {
+    if (!user?.id) {
+      setIsLoading(false);
+      return;
+    }
+    try {
+      const response = await fetch(new URL(`/api/appointments/${user.id}`, getApiUrl()).href);
+      const data = await response.json();
+      setAppointments(data.appointments || []);
+    } catch (error) {
+      console.error("Failed to fetch appointments:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user?.id]);
 
-    const upcoming = jobs.filter((j) => j.status === "scheduled");
-    const active = jobs.filter((j) =>
-      ["requested", "in_progress", "awaiting_payment"].includes(j.status)
-    );
-    const past = jobs.filter((j) =>
-      ["completed", "paid", "closed"].includes(j.status)
-    );
+  useFocusEffect(
+    useCallback(() => {
+      fetchAppointments();
+    }, [fetchAppointments])
+  );
+
+  const sections: Section[] = React.useMemo(() => {
+    if (!isAuthenticated || appointments.length === 0) return [];
+
+    const upcoming = appointments.filter((a) => ["pending", "confirmed"].includes(a.status));
+    const active = appointments.filter((a) => a.status === "in_progress");
+    const past = appointments.filter((a) => ["completed", "cancelled"].includes(a.status));
 
     const result: Section[] = [];
     if (upcoming.length > 0) result.push({ title: "Upcoming", data: upcoming });
@@ -70,15 +106,16 @@ export default function ManageScreen() {
     if (past.length > 0) result.push({ title: "Past", data: past });
 
     return result;
-  }, [jobs, isAuthenticated]);
+  }, [appointments, isAuthenticated]);
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
+    await fetchAppointments();
+    setRefreshing(false);
   };
 
-  const handleJobPress = (job: Job) => {
-    navigation.navigate("JobDetail", { jobId: job.id });
+  const handleAppointmentPress = (appointment: Appointment) => {
+    navigation.navigate("JobDetail", { jobId: appointment.id });
   };
 
   const handleMockSignIn = () => {
@@ -90,31 +127,40 @@ export default function ManageScreen() {
     setShowAccountGate(false);
   };
 
-  const renderJob = ({ item, index }: { item: Job; index: number }) => {
-    const statusConfig = STATUS_CONFIG[item.status];
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    } catch {
+      return dateString;
+    }
+  };
+
+  const renderAppointment = ({ item, index }: { item: Appointment; index: number }) => {
+    const statusConfig = STATUS_CONFIG[item.status] || { label: item.status, status: "neutral" as const };
     return (
       <Animated.View entering={FadeInDown.delay(index * 50).duration(300)}>
         <Pressable
-          onPress={() => handleJobPress(item)}
+          onPress={() => handleAppointmentPress(item)}
           style={[styles.jobCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}
-          testID={`job-${item.id}`}
+          testID={`appointment-${item.id}`}
         >
           <View style={styles.jobHeader}>
-            <Avatar name={item.providerName} size={44} />
+            <Avatar name={item.serviceName} size="medium" />
             <View style={styles.jobInfo}>
-              <ThemedText style={styles.providerName}>{item.providerName}</ThemedText>
+              <ThemedText style={styles.providerName}>{item.serviceName}</ThemedText>
               <ThemedText style={[styles.serviceName, { color: theme.textSecondary }]}>
-                {item.service}
+                {item.description || "Service appointment"}
               </ThemedText>
             </View>
-            <StatusPill label={statusConfig.label} variant={statusConfig.variant} size="small" />
+            <StatusPill label={statusConfig.label} status={statusConfig.status} size="small" />
           </View>
 
           <View style={[styles.jobDetails, { borderTopColor: theme.borderLight }]}>
             <View style={styles.detailItem}>
               <Feather name="calendar" size={14} color={theme.textSecondary} />
               <ThemedText style={[styles.detailText, { color: theme.textSecondary }]}>
-                {item.scheduledDate || "TBD"}
+                {formatDate(item.scheduledDate)}
               </ThemedText>
             </View>
             <View style={styles.detailItem}>
@@ -123,14 +169,14 @@ export default function ManageScreen() {
                 {item.scheduledTime || "TBD"}
               </ThemedText>
             </View>
-            {item.estimatedPrice > 0 && (
+            {item.estimatedPrice ? (
               <View style={styles.detailItem}>
                 <Feather name="dollar-sign" size={14} color={theme.textSecondary} />
                 <ThemedText style={[styles.detailText, { color: theme.textSecondary }]}>
                   ${item.estimatedPrice}
                 </ThemedText>
               </View>
-            )}
+            ) : null}
           </View>
         </Pressable>
       </Animated.View>
@@ -138,7 +184,7 @@ export default function ManageScreen() {
   };
 
   const renderSectionHeader = ({ section }: { section: Section }) => (
-    <View style={[styles.sectionHeader, { backgroundColor: theme.background }]}>
+    <View style={[styles.sectionHeader, { backgroundColor: theme.backgroundDefault }]}>
       <ThemedText style={styles.sectionTitle}>{section.title}</ThemedText>
       <ThemedText style={[styles.sectionCount, { color: theme.textSecondary }]}>
         {section.data.length}
@@ -151,7 +197,7 @@ export default function ManageScreen() {
       return (
         <EmptyState
           image={require("../../../assets/images/empty-bookings.png")}
-          title="Sign in to manage jobs"
+          title="Sign in to manage appointments"
           description="Create an account to book services, track your projects, and manage your home."
           primaryAction={{
             label: "Sign In",
@@ -164,7 +210,7 @@ export default function ManageScreen() {
     return (
       <EmptyState
         image={require("../../../assets/images/empty-bookings.png")}
-        title="No jobs yet"
+        title="No appointments yet"
         description="When you book a service, it will appear here. Start by finding a pro!"
         primaryAction={{
           label: "Find a Pro",
@@ -174,7 +220,7 @@ export default function ManageScreen() {
     );
   };
 
-  if (!isHydrated) {
+  if (isLoading) {
     return (
       <ThemedView style={styles.container}>
         <FlatList
@@ -218,7 +264,7 @@ export default function ManageScreen() {
     <ThemedView style={styles.container}>
       <SectionList
         sections={sections}
-        renderItem={renderJob}
+        renderItem={renderAppointment}
         renderSectionHeader={renderSectionHeader}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{

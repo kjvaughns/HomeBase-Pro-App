@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { StyleSheet, View, ScrollView, ActivityIndicator } from "react-native";
+import { StyleSheet, View, ScrollView, ActivityIndicator, Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
@@ -15,6 +15,8 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useHomeownerStore } from "@/state/homeownerStore";
+import { useAuthStore } from "@/state/authStore";
+import { apiRequest } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type ScreenRouteProp = RouteProp<RootStackParamList, "BookingConfirm">;
@@ -43,7 +45,7 @@ export default function BookingConfirmScreen() {
 
   const providers = useHomeownerStore((s) => s.providers);
   const profile = useHomeownerStore((s) => s.profile);
-  const createBooking = useHomeownerStore((s) => s.createBooking);
+  const user = useAuthStore((s) => s.user);
   
   const provider = useMemo(() => providers.find((p) => p.id === params.providerId), [providers, params.providerId]);
 
@@ -54,34 +56,40 @@ export default function BookingConfirmScreen() {
   const estimatedPrice = provider ? provider.hourlyRate * 2 : 150;
 
   const handleConfirm = async () => {
+    if (!user?.id) {
+      Alert.alert("Error", "Please log in to book a service");
+      return;
+    }
+
     setIsSubmitting(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      const job = createBooking({
-        categoryId: params.categoryId,
+      const response = await apiRequest("POST", "/api/appointments", {
+        userId: user.id,
+        homeId: params.addressId,
         providerId: params.providerId,
-        service: params.service,
+        serviceName: params.service,
         description: params.description,
         urgency: params.urgency,
-        size: params.size,
-        photoUrls: params.photoUrls,
-        scheduledDate: params.scheduledDate,
+        jobSize: params.size,
+        scheduledDate: new Date(params.scheduledDate).toISOString(),
         scheduledTime: params.scheduledTime,
-        addressId: params.addressId,
+        estimatedPrice: estimatedPrice.toString(),
       });
+      
+      const data = await response.json();
 
       navigation.reset({
         index: 0,
         routes: [
           { name: "Main" },
-          { name: "BookingSuccess", params: { jobId: job.id } },
+          { name: "BookingSuccess", params: { jobId: data.appointment.id } },
         ],
       });
     } catch (error) {
       console.error("Booking failed:", error);
+      Alert.alert("Error", "Failed to create booking. Please try again.");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setIsSubmitting(false);
@@ -111,7 +119,7 @@ export default function BookingConfirmScreen() {
 
         <GlassCard style={styles.providerCard}>
           <View style={styles.providerRow}>
-            <Avatar name={provider.name} size={56} imageUrl={provider.avatarUrl} />
+            <Avatar name={provider.name} size="medium" uri={provider.avatarUrl} />
             <View style={styles.providerInfo}>
               <ThemedText style={styles.providerName}>{provider.name}</ThemedText>
               <ThemedText style={[styles.businessName, { color: theme.textSecondary }]}>
@@ -212,15 +220,14 @@ export default function BookingConfirmScreen() {
       <View
         style={[
           styles.bottomBar,
-          { backgroundColor: theme.background, paddingBottom: insets.bottom + Spacing.md },
+          { backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.md },
         ]}
       >
         <PrimaryButton
-          label={isSubmitting ? "" : "Confirm Booking"}
           onPress={handleConfirm}
           disabled={isSubmitting}
         >
-          {isSubmitting && <ActivityIndicator color="#fff" />}
+          {isSubmitting ? <ActivityIndicator color="#fff" /> : <ThemedText style={{ color: "#fff", fontWeight: "600" }}>Confirm Booking</ThemedText>}
         </PrimaryButton>
       </View>
     </ThemedView>

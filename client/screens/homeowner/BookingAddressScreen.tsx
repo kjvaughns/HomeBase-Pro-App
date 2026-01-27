@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { StyleSheet, View, Pressable, ScrollView } from "react-native";
+import React, { useState, useEffect } from "react";
+import { StyleSheet, View, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
@@ -13,9 +13,22 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { SecondaryButton } from "@/components/SecondaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
-import { useHomeownerStore } from "@/state/homeownerStore";
+import { useAuthStore } from "@/state/authStore";
+import { getApiUrl } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
-import { Address } from "@/state/types";
+
+interface Home {
+  id: string;
+  label: string;
+  nickname?: string;
+  street: string;
+  address?: string;
+  city: string;
+  state: string;
+  zip: string;
+  zipCode?: string;
+  isDefault: boolean;
+}
 
 type ScreenRouteProp = RouteProp<RootStackParamList, "BookingAddress">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -28,13 +41,34 @@ export default function BookingAddressScreen() {
   const { theme } = useTheme();
   const params = route.params;
 
-  const profile = useHomeownerStore((s) => s.profile);
-  const addresses = profile?.addresses || [];
+  const user = useAuthStore((s) => s.user);
+  const [homes, setHomes] = useState<Home[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
 
-  const defaultAddress = addresses.find((a) => a.isDefault);
-  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(
-    defaultAddress?.id || addresses[0]?.id || null
-  );
+  useEffect(() => {
+    async function fetchHomes() {
+      if (!user?.id) {
+        setIsLoading(false);
+        return;
+      }
+      try {
+        const response = await fetch(new URL(`/api/homes/${user.id}`, getApiUrl()).href);
+        const data = await response.json();
+        const fetchedHomes = data.homes || [];
+        setHomes(fetchedHomes);
+        const defaultHome = fetchedHomes.find((h: Home) => h.isDefault) || fetchedHomes[0];
+        if (defaultHome) {
+          setSelectedAddressId(defaultHome.id);
+        }
+      } catch (error) {
+        console.error("Failed to fetch homes:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    fetchHomes();
+  }, [user?.id]);
 
   const handleNext = () => {
     if (!selectedAddressId) {
@@ -49,14 +83,17 @@ export default function BookingAddressScreen() {
     });
   };
 
-  const renderAddressCard = (address: Address) => {
-    const isSelected = selectedAddressId === address.id;
+  const renderHomeCard = (home: Home) => {
+    const isSelected = selectedAddressId === home.id;
+    const displayLabel = home.nickname || home.label;
+    const displayStreet = home.address || home.street;
+    const displayZip = home.zipCode || home.zip;
     return (
       <Pressable
-        key={address.id}
+        key={home.id}
         onPress={() => {
           Haptics.selectionAsync();
-          setSelectedAddressId(address.id);
+          setSelectedAddressId(home.id);
         }}
         style={[
           styles.addressCard,
@@ -72,22 +109,22 @@ export default function BookingAddressScreen() {
             { borderColor: isSelected ? Colors.accent : theme.borderLight },
           ]}
         >
-          {isSelected && <View style={styles.radioInner} />}
+          {isSelected ? <View style={styles.radioInner} /> : null}
         </View>
         <View style={styles.addressContent}>
           <View style={styles.addressHeader}>
-            <ThemedText style={styles.addressLabel}>{address.label}</ThemedText>
-            {address.isDefault && (
+            <ThemedText style={styles.addressLabel}>{displayLabel}</ThemedText>
+            {home.isDefault ? (
               <View style={[styles.defaultBadge, { backgroundColor: Colors.accentLight }]}>
                 <ThemedText style={styles.defaultBadgeText}>Default</ThemedText>
               </View>
-            )}
+            ) : null}
           </View>
           <ThemedText style={[styles.addressStreet, { color: theme.textSecondary }]}>
-            {address.street}
+            {displayStreet}
           </ThemedText>
           <ThemedText style={[styles.addressCity, { color: theme.textTertiary }]}>
-            {address.city}, {address.state} {address.zip}
+            {home.city}, {home.state} {displayZip}
           </ThemedText>
         </View>
         <Feather
@@ -98,6 +135,14 @@ export default function BookingAddressScreen() {
       </Pressable>
     );
   };
+
+  if (isLoading) {
+    return (
+      <ThemedView style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color={Colors.accent} />
+      </ThemedView>
+    );
+  }
 
   return (
     <ThemedView style={styles.container}>
@@ -116,40 +161,42 @@ export default function BookingAddressScreen() {
           Select the address for this service
         </ThemedText>
 
-        {addresses.length > 0 ? (
+        {homes.length > 0 ? (
           <View style={styles.addressList}>
-            {addresses.map(renderAddressCard)}
+            {homes.map(renderHomeCard)}
           </View>
         ) : (
           <View style={styles.emptyState}>
             <Feather name="map-pin" size={48} color={theme.textTertiary} />
             <ThemedText style={[styles.emptyTitle, { color: theme.textSecondary }]}>
-              No saved addresses
+              No saved homes
             </ThemedText>
             <ThemedText style={[styles.emptyText, { color: theme.textTertiary }]}>
-              Add an address to continue with your booking
+              Add a home to continue with your booking
             </ThemedText>
           </View>
         )}
 
         <SecondaryButton
-          label="Add New Address"
           onPress={() => navigation.navigate("Addresses")}
           style={styles.addButton}
-        />
+        >
+          <ThemedText style={{ color: Colors.accent, fontWeight: "600" }}>Add New Home</ThemedText>
+        </SecondaryButton>
       </ScrollView>
 
       <View
         style={[
           styles.bottomBar,
-          { backgroundColor: theme.background, paddingBottom: insets.bottom + Spacing.md },
+          { backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.md },
         ]}
       >
         <PrimaryButton
-          label="Review Booking"
           onPress={handleNext}
           disabled={!selectedAddressId}
-        />
+        >
+          <ThemedText style={{ color: "#fff", fontWeight: "600" }}>Review Booking</ThemedText>
+        </PrimaryButton>
       </View>
     </ThemedView>
   );
@@ -158,6 +205,10 @@ export default function BookingAddressScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  centered: {
+    alignItems: "center",
+    justifyContent: "center",
   },
   stepIndicator: {
     ...Typography.caption1,
@@ -231,7 +282,7 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     alignItems: "center",
-    paddingVertical: Spacing.xxl,
+    paddingVertical: Spacing["3xl"],
   },
   emptyTitle: {
     ...Typography.headline,
