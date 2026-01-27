@@ -95,6 +95,31 @@ export interface Payout {
   bankLast4?: string;
 }
 
+export interface Client {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  avatar?: string;
+  status: "active" | "lead" | "inactive" | "archived";
+  lastSeen: string;
+  clientSince?: string;
+  ltv: number;
+  jobCount: number;
+  address?: string;
+  notes?: string;
+}
+
+export interface ClientActivity {
+  id: string;
+  clientId: string;
+  type: "job_completed" | "job_scheduled" | "invoice_sent" | "invoice_paid" | "message_sent" | "quote_sent";
+  description: string;
+  timestamp: string;
+  jobId?: string;
+  invoiceId?: string;
+}
+
 export interface ProviderStats {
   totalEarnings: number;
   pendingEarnings: number;
@@ -262,6 +287,39 @@ const initialPayouts: Payout[] = [
 ];
 
 // ============================================
+// INITIAL MOCK DATA - Clients
+// ============================================
+
+const initialClients: Client[] = [
+  { id: "cl1", name: "Sarah Miller", email: "sarah.miller@example.com", phone: "(555) 123-4567", status: "active", lastSeen: "2 days ago", clientSince: "2023", ltv: 4500, jobCount: 8, address: "123 Pine St, San Francisco, CA" },
+  { id: "cl2", name: "John Doe", email: "john.doe@example.com", phone: "(555) 234-5678", status: "lead", lastSeen: "N/A", clientSince: undefined, ltv: 0, jobCount: 0, address: "456 Oak Ave, Oakland, CA" },
+  { id: "cl3", name: "Emily Clark", email: "emily.clark@example.com", phone: "(555) 345-6789", status: "inactive", lastSeen: "3 months ago", clientSince: "2024", ltv: 850, jobCount: 2, address: "789 Elm St, Berkeley, CA" },
+  { id: "cl4", name: "Michael Brown", email: "michael.brown@example.com", phone: "(555) 456-7890", status: "active", lastSeen: "1 week ago", clientSince: "2022", ltv: 12500, jobCount: 15, address: "321 Maple Dr, San Mateo, CA" },
+  { id: "cl5", name: "Jessica Taylor", email: "jessica.taylor@example.com", phone: "(555) 567-8901", status: "active", lastSeen: "Yesterday", clientSince: "2024", ltv: 2200, jobCount: 4, address: "654 Cedar Ln, Alameda, CA" },
+  { id: "cl6", name: "David Wilson", email: "david.wilson@example.com", phone: "(555) 678-9012", status: "lead", lastSeen: "N/A", clientSince: undefined, ltv: 0, jobCount: 0, address: "987 Birch Rd, Daly City, CA" },
+  { id: "cl7", name: "Amanda Foster", email: "amanda.foster@example.com", phone: "(555) 789-0123", status: "active", lastSeen: "4 days ago", clientSince: "2023", ltv: 7800, jobCount: 11, address: "567 Birch Rd, San Francisco, CA" },
+  { id: "cl8", name: "Robert Taylor", email: "robert.taylor@example.com", phone: "(555) 890-1234", status: "active", lastSeen: "Today", clientSince: "2024", ltv: 1500, jobCount: 3, address: "111 First Ave, San Francisco, CA" },
+  { id: "cl9", name: "Jennifer Lee", email: "jennifer.lee@example.com", phone: "(555) 901-2345", status: "active", lastSeen: "Today", clientSince: "2023", ltv: 3200, jobCount: 6, address: "890 Ash Dr, San Francisco, CA" },
+  { id: "cl10", name: "Christopher Davis", email: "chris.davis@example.com", phone: "(555) 012-3456", status: "archived", lastSeen: "1 year ago", clientSince: "2021", ltv: 5600, jobCount: 9, address: "666 Sixth Ave, Oakland, CA" },
+  { id: "cl11", name: "Michelle Wong", email: "michelle.wong@example.com", phone: "(555) 111-2222", status: "active", lastSeen: "3 days ago", clientSince: "2024", ltv: 1850, jobCount: 3, address: "222 Second St, Oakland, CA" },
+  { id: "cl12", name: "Kevin Wright", email: "kevin.wright@example.com", phone: "(555) 222-3333", status: "lead", lastSeen: "N/A", clientSince: undefined, ltv: 0, jobCount: 0, address: "234 Spruce Way, Oakland, CA" },
+  { id: "cl13", name: "Patricia Moore", email: "patricia.moore@example.com", phone: "(555) 333-4444", status: "active", lastSeen: "1 week ago", clientSince: "2023", ltv: 4100, jobCount: 7, address: "444 Fourth Pl, San Francisco, CA" },
+  { id: "cl14", name: "Daniel Kim", email: "daniel.kim@example.com", phone: "(555) 444-5555", status: "inactive", lastSeen: "2 months ago", clientSince: "2024", ltv: 650, jobCount: 1, address: "555 Fifth Ct, Daly City, CA" },
+  { id: "cl15", name: "Lisa Chen", email: "lisa.chen@example.com", phone: "(555) 555-6666", status: "active", lastSeen: "5 days ago", clientSince: "2024", ltv: 950, jobCount: 2, address: "778 Cedar Ln, Daly City, CA" },
+];
+
+const initialClientActivities: ClientActivity[] = [
+  { id: "ca1", clientId: "cl1", type: "job_completed", description: "Job Completed: Deep Clean", timestamp: "Yesterday at 4:00 PM", jobId: "j13" },
+  { id: "ca2", clientId: "cl1", type: "job_completed", description: "Job Completed: Deep Clean", timestamp: "Yesterday at 4:00 PM", jobId: "j14" },
+  { id: "ca3", clientId: "cl1", type: "job_completed", description: "Job Completed: Deep Clean", timestamp: "Yesterday at 4:00 PM", jobId: "j15" },
+  { id: "ca4", clientId: "cl4", type: "invoice_paid", description: "Invoice Paid: $1,350", timestamp: "3 days ago", invoiceId: "inv4" },
+  { id: "ca5", clientId: "cl4", type: "job_completed", description: "Job Completed: Water Heater Install", timestamp: "5 days ago", jobId: "j16" },
+  { id: "ca6", clientId: "cl5", type: "job_scheduled", description: "Job Scheduled: Pipe Repair", timestamp: "2 days ago", jobId: "j1" },
+  { id: "ca7", clientId: "cl8", type: "message_sent", description: "Message: Great, see you tomorrow at 9!", timestamp: "10 min ago" },
+  { id: "ca8", clientId: "cl9", type: "quote_sent", description: "Quote Sent: $2,500", timestamp: "1 week ago" },
+];
+
+// ============================================
 // STORE INTERFACE
 // ============================================
 
@@ -273,6 +331,8 @@ interface ProviderState {
   messages: ProviderMessage[];
   invoices: Invoice[];
   payouts: Payout[];
+  clients: Client[];
+  clientActivities: ClientActivity[];
   
   // Settings
   availableForWork: boolean;
@@ -315,6 +375,7 @@ interface ProviderState {
   getUnreadMessageCount: () => number;
   getNextJob: () => Job | undefined;
   getRecentEarnings: () => number;
+  getClientActivities: (clientId: string) => ClientActivity[];
 }
 
 // ============================================
@@ -331,6 +392,8 @@ export const useProviderStore = create<ProviderState>()(
       messages: initialMessages,
       invoices: initialInvoices,
       payouts: initialPayouts,
+      clients: initialClients,
+      clientActivities: initialClientActivities,
       
       availableForWork: true,
       notificationsEnabled: true,
@@ -584,6 +647,10 @@ export const useProviderStore = create<ProviderState>()(
           )
           .reduce((sum, i) => sum + i.amount, 0);
       },
+      
+      getClientActivities: (clientId) => {
+        return get().clientActivities.filter((a) => a.clientId === clientId);
+      },
     }),
     {
       name: "provider-store",
@@ -595,6 +662,8 @@ export const useProviderStore = create<ProviderState>()(
         messages: state.messages,
         invoices: state.invoices,
         payouts: state.payouts,
+        clients: state.clients,
+        clientActivities: state.clientActivities,
         availableForWork: state.availableForWork,
         notificationsEnabled: state.notificationsEnabled,
       }),
