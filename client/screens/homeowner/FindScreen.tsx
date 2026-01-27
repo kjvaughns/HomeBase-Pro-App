@@ -1,10 +1,13 @@
 import React, { useState } from "react";
-import { StyleSheet, View, FlatList, RefreshControl } from "react-native";
+import { StyleSheet, View, FlatList, RefreshControl, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -13,19 +16,63 @@ import { CategoryCard } from "@/components/CategoryCard";
 import { ProviderCard } from "@/components/ProviderCard";
 import { SectionHeader } from "@/components/SectionHeader";
 import { AccountGateModal } from "@/components/AccountGateModal";
+import { GlassCard } from "@/components/GlassCard";
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, Colors, Typography } from "@/constants/theme";
+import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import {
   serviceCategories,
   featuredProviders,
   ServiceCategory,
 } from "@/state/mockData";
 
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+interface HomeTool {
+  id: string;
+  name: string;
+  description: string;
+  icon: keyof typeof Feather.glyphMap;
+  screen: keyof RootStackParamList;
+}
+
+const HOME_TOOLS: HomeTool[] = [
+  {
+    id: "survival",
+    name: "Survival Kit",
+    description: "Emergency preparedness",
+    icon: "shield",
+    screen: "SurvivalKit",
+  },
+  {
+    id: "health",
+    name: "Health Score",
+    description: "Home assessment",
+    icon: "activity",
+    screen: "HealthScore",
+  },
+  {
+    id: "housefax",
+    name: "HouseFax",
+    description: "Property history",
+    icon: "file-text",
+    screen: "HouseFax",
+  },
+  {
+    id: "budgeter",
+    name: "Budgeter",
+    description: "Maintenance budget",
+    icon: "dollar-sign",
+    screen: "Budgeter",
+  },
+];
+
 export default function FindScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
+  const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
   const { isAuthenticated, login } = useAuthStore();
 
@@ -48,6 +95,16 @@ export default function FindScreen() {
     // Navigate to category details
   };
 
+  const handleAIPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    navigation.navigate("AIChat");
+  };
+
+  const handleToolPress = (tool: HomeTool) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    navigation.navigate(tool.screen);
+  };
+
   const handleMockSignIn = () => {
     login({
       id: "1",
@@ -60,6 +117,25 @@ export default function FindScreen() {
   const renderHeader = () => (
     <View style={styles.headerContent}>
       <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+        <Pressable onPress={handleAIPress}>
+          <GlassCard style={styles.aiCard}>
+            <View style={styles.aiCardContent}>
+              <View style={[styles.aiIconContainer, { backgroundColor: Colors.accentLight }]}>
+                <Feather name="message-circle" size={24} color={Colors.accent} />
+              </View>
+              <View style={styles.aiTextContainer}>
+                <ThemedText style={styles.aiTitle}>Ask Homebase AI</ThemedText>
+                <ThemedText style={[styles.aiSubtitle, { color: theme.textSecondary }]}>
+                  Get instant answers about home services
+                </ThemedText>
+              </View>
+              <Feather name="chevron-right" size={20} color={theme.textTertiary} />
+            </View>
+          </GlassCard>
+        </Pressable>
+      </Animated.View>
+
+      <Animated.View entering={FadeInDown.delay(150).duration(400)}>
         <TextField
           placeholder="Search services..."
           value={searchQuery}
@@ -81,7 +157,32 @@ export default function FindScreen() {
         <Feather name="chevron-down" size={14} color={Colors.accent} />
       </Animated.View>
 
-      <Animated.View entering={FadeInDown.delay(300).duration(400)}>
+      <Animated.View entering={FadeInDown.delay(250).duration(400)}>
+        <SectionHeader title="Homeowner Tools" />
+      </Animated.View>
+
+      <Animated.View
+        entering={FadeInDown.delay(300).duration(400)}
+        style={styles.toolsGrid}
+      >
+        {HOME_TOOLS.map((tool) => (
+          <Pressable
+            key={tool.id}
+            onPress={() => handleToolPress(tool)}
+            style={[styles.toolCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}
+          >
+            <View style={[styles.toolIconContainer, { backgroundColor: Colors.accentLight }]}>
+              <Feather name={tool.icon} size={20} color={Colors.accent} />
+            </View>
+            <ThemedText style={styles.toolName} numberOfLines={1}>{tool.name}</ThemedText>
+            <ThemedText style={[styles.toolDesc, { color: theme.textSecondary }]} numberOfLines={1}>
+              {tool.description}
+            </ThemedText>
+          </Pressable>
+        ))}
+      </Animated.View>
+
+      <Animated.View entering={FadeInDown.delay(350).duration(400)}>
         <SectionHeader title="Services" actionLabel="See All" onAction={() => {}} />
       </Animated.View>
 
@@ -89,19 +190,20 @@ export default function FindScreen() {
         entering={FadeInDown.delay(400).duration(400)}
         style={styles.categoriesGrid}
       >
-        {serviceCategories.slice(0, 8).map((category) => (
+        {serviceCategories.slice(0, 6).map((category) => (
           <View key={category.id} style={styles.categoryItem}>
             <CategoryCard
               name={category.name}
               icon={category.icon as any}
               onPress={() => handleCategoryPress(category)}
               testID={`category-${category.id}`}
+              compact
             />
           </View>
         ))}
       </Animated.View>
 
-      <Animated.View entering={FadeInDown.delay(500).duration(400)}>
+      <Animated.View entering={FadeInDown.delay(450).duration(400)}>
         <SectionHeader
           title="Featured Pros"
           actionLabel="See All"
@@ -112,7 +214,7 @@ export default function FindScreen() {
   );
 
   const renderProvider = ({ item, index }: { item: typeof featuredProviders[0]; index: number }) => (
-    <Animated.View entering={FadeInDown.delay(600 + index * 100).duration(400)}>
+    <Animated.View entering={FadeInDown.delay(500 + index * 100).duration(400)}>
       <ProviderCard
         name={item.name}
         businessName={item.businessName}
@@ -168,6 +270,31 @@ const styles = StyleSheet.create({
   headerContent: {
     marginBottom: Spacing.md,
   },
+  aiCard: {
+    marginBottom: Spacing.md,
+  },
+  aiCardContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  aiIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: Spacing.md,
+  },
+  aiTextContainer: {
+    flex: 1,
+  },
+  aiTitle: {
+    ...Typography.headline,
+    marginBottom: 2,
+  },
+  aiSubtitle: {
+    ...Typography.subhead,
+  },
   locationRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -180,13 +307,41 @@ const styles = StyleSheet.create({
     color: Colors.accent,
     fontWeight: "500",
   },
+  toolsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+    marginBottom: Spacing.sectionGap,
+  },
+  toolCard: {
+    width: "48%",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  toolIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.sm,
+  },
+  toolName: {
+    ...Typography.subhead,
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  toolDesc: {
+    ...Typography.caption1,
+  },
   categoriesGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: Spacing.md,
+    gap: Spacing.sm,
     marginBottom: Spacing.sectionGap,
   },
   categoryItem: {
-    width: "47%",
+    width: "48%",
   },
 });

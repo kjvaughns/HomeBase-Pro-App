@@ -18,11 +18,12 @@ interface CategoryCardProps {
   icon: keyof typeof Feather.glyphMap;
   onPress: () => void;
   testID?: string;
+  compact?: boolean;
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-export function CategoryCard({ name, icon, onPress, testID }: CategoryCardProps) {
+export function CategoryCard({ name, icon, onPress, testID, compact = false }: CategoryCardProps) {
   const { theme, isDark } = useTheme();
   const scale = useSharedValue(1);
 
@@ -42,6 +43,32 @@ export function CategoryCard({ name, icon, onPress, testID }: CategoryCardProps)
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onPress();
   };
+
+  if (compact) {
+    return (
+      <AnimatedPressable
+        testID={testID}
+        onPress={handlePress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        style={[
+          styles.compactCard,
+          {
+            backgroundColor: theme.cardBackground,
+            borderColor: theme.borderLight,
+          },
+          animatedStyle,
+        ]}
+      >
+        <View style={[styles.compactIconContainer, { backgroundColor: Colors.accentLight }]}>
+          <Feather name={icon} size={18} color={Colors.accent} />
+        </View>
+        <ThemedText style={styles.compactName} numberOfLines={1}>
+          {name}
+        </ThemedText>
+      </AnimatedPressable>
+    );
+  }
 
   return (
     <AnimatedPressable
@@ -98,5 +125,26 @@ const styles = StyleSheet.create({
   },
   name: {
     textAlign: "center",
+  },
+  compactCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: Spacing.sm,
+  },
+  compactIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: BorderRadius.sm,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  compactName: {
+    fontSize: 14,
+    fontWeight: "500",
+    flex: 1,
   },
 });
