@@ -82,11 +82,6 @@ export default function HomeScreen() {
     navigation.navigate("AIChat");
   };
 
-  const handleGetHelpPress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    navigation.navigate("SmartIntake");
-  };
-
   const handleCategoryPress = (category: ServiceCategory) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     navigation.navigate("ProviderList", {
@@ -121,16 +116,16 @@ export default function HomeScreen() {
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(150).duration(400)}>
-          <Pressable onPress={handleGetHelpPress}>
+          <Pressable onPress={handleAIPress} testID="ask-homebase-ai-card">
             <GlassCard style={styles.aiCard}>
               <View style={styles.aiCardContent}>
                 <View style={[styles.aiIconContainer, { backgroundColor: Colors.accentLight }]}>
-                  <Feather name="tool" size={24} color={Colors.accent} />
+                  <Feather name="message-circle" size={24} color={Colors.accent} />
                 </View>
                 <View style={styles.aiTextContainer}>
-                  <ThemedText style={styles.aiTitle}>Get Help Now</ThemedText>
+                  <ThemedText style={styles.aiTitle}>Ask Homebase AI</ThemedText>
                   <ThemedText style={[styles.aiSubtitle, { color: theme.textSecondary }]}>
-                    Describe your problem and we'll find the right pro
+                    Get instant answers or find the right pro for your project
                   </ThemedText>
                 </View>
                 <Feather name="chevron-right" size={20} color={theme.textTertiary} />
@@ -140,45 +135,26 @@ export default function HomeScreen() {
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(200).duration(400)}>
-          <Pressable onPress={handleAIPress}>
-            <GlassCard style={styles.secondaryCard}>
-              <View style={styles.aiCardContent}>
-                <View style={[styles.aiIconSmall, { backgroundColor: Colors.accentLight }]}>
-                  <Feather name="message-circle" size={18} color={Colors.accent} />
-                </View>
-                <View style={styles.aiTextContainer}>
-                  <ThemedText style={styles.secondaryCardTitle}>Ask Homebase AI</ThemedText>
-                  <ThemedText style={[styles.secondaryCardSubtitle, { color: theme.textSecondary }]}>
-                    Get instant answers
-                  </ThemedText>
-                </View>
-                <Feather name="chevron-right" size={18} color={theme.textTertiary} />
-              </View>
-            </GlassCard>
-          </Pressable>
-        </Animated.View>
-
-        <Animated.View entering={FadeInDown.delay(200).duration(400)}>
           <View style={styles.statsRow}>
-            <View style={styles.statCard}>
+            <Pressable onPress={handleViewAllJobs} style={styles.statCard}>
               <StatCard
                 title="Upcoming"
                 value={upcomingJobs.length.toString()}
                 icon="calendar"
               />
-            </View>
-            <View style={styles.statCard}>
+            </Pressable>
+            <Pressable onPress={handleViewAllJobs} style={styles.statCard}>
               <StatCard
                 title="Active"
                 value={activeJobs.length.toString()}
-                icon="tool"
+                icon="clock"
               />
-            </View>
+            </Pressable>
             <Pressable onPress={handleMessagesPress} style={styles.statCard}>
               <StatCard
                 title="Messages"
                 value={unreadMessages.toString()}
-                icon="message-circle"
+                icon="message-square"
               />
             </Pressable>
           </View>
@@ -331,25 +307,7 @@ const styles = StyleSheet.create({
     ...Typography.largeTitle,
   },
   aiCard: {
-    marginBottom: Spacing.sm,
-  },
-  secondaryCard: {
     marginBottom: Spacing.lg,
-  },
-  aiIconSmall: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: Spacing.sm,
-  },
-  secondaryCardTitle: {
-    ...Typography.callout,
-    fontWeight: "600",
-  },
-  secondaryCardSubtitle: {
-    ...Typography.caption1,
   },
   aiCardContent: {
     flexDirection: "row",
