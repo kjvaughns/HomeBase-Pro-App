@@ -24,14 +24,14 @@ import { JobStatus } from "@/state/types";
 type ScreenRouteProp = RouteProp<RootStackParamList, "JobDetail">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-const STATUS_CONFIG: Record<JobStatus, { label: string; variant: "success" | "info" | "warning" | "neutral" }> = {
-  requested: { label: "Requested", variant: "info" },
-  scheduled: { label: "Scheduled", variant: "info" },
-  in_progress: { label: "In Progress", variant: "warning" },
-  awaiting_payment: { label: "Awaiting Payment", variant: "warning" },
-  completed: { label: "Completed", variant: "success" },
-  paid: { label: "Paid", variant: "success" },
-  closed: { label: "Closed", variant: "neutral" },
+const STATUS_CONFIG: Record<JobStatus, { label: string; status: "success" | "info" | "warning" | "neutral" }> = {
+  requested: { label: "Requested", status: "info" },
+  scheduled: { label: "Scheduled", status: "info" },
+  in_progress: { label: "In Progress", status: "warning" },
+  awaiting_payment: { label: "Awaiting Payment", status: "warning" },
+  completed: { label: "Completed", status: "success" },
+  paid: { label: "Paid", status: "success" },
+  closed: { label: "Closed", status: "neutral" },
 };
 
 export default function JobDetailScreen() {
@@ -129,7 +129,7 @@ export default function JobDetailScreen() {
         <Animated.View entering={FadeInDown.duration(400)}>
           <GlassCard style={styles.headerCard}>
             <View style={styles.headerRow}>
-              <Avatar name={job.providerName} size={56} />
+              <Avatar name={job.providerName} size="medium" />
               <View style={styles.headerInfo}>
                 <ThemedText style={styles.providerName}>{job.providerName}</ThemedText>
                 <ThemedText style={[styles.businessName, { color: theme.textSecondary }]}>
@@ -138,7 +138,7 @@ export default function JobDetailScreen() {
               </View>
               <StatusPill
                 label={statusConfig.label}
-                variant={statusConfig.variant}
+                status={statusConfig.status}
               />
             </View>
             <View style={styles.serviceRow}>
@@ -190,7 +190,7 @@ export default function JobDetailScreen() {
                 <ThemedText style={styles.invoiceTitle}>Invoice #{invoice.id.slice(-6)}</ThemedText>
                 <StatusPill
                   label={invoice.status === "paid" ? "Paid" : "Unpaid"}
-                  variant={invoice.status === "paid" ? "success" : "warning"}
+                  status={invoice.status === "paid" ? "success" : "warning"}
                   size="small"
                 />
               </View>
@@ -232,19 +232,21 @@ export default function JobDetailScreen() {
         )}
 
         <View style={styles.actions}>
-          <SecondaryButton
-            label="Message Provider"
-            onPress={handleMessage}
-            leftIcon="message-circle"
-          />
+          <SecondaryButton onPress={handleMessage}>
+            Message Provider
+          </SecondaryButton>
 
-          {job.status === "awaiting_payment" && invoice && invoice.status !== "paid" && (
-            <PrimaryButton label="Pay Invoice" onPress={handlePayment} style={styles.actionBtn} />
-          )}
+          {job.status === "awaiting_payment" && invoice && invoice.status !== "paid" ? (
+            <PrimaryButton onPress={handlePayment} style={styles.actionBtn}>
+              Pay Invoice
+            </PrimaryButton>
+          ) : null}
 
-          {(job.status === "paid" || job.status === "completed") && !review && (
-            <PrimaryButton label="Leave a Review" onPress={handleReview} style={styles.actionBtn} />
-          )}
+          {(job.status === "paid" || job.status === "completed") && !review ? (
+            <PrimaryButton onPress={handleReview} style={styles.actionBtn}>
+              Leave a Review
+            </PrimaryButton>
+          ) : null}
         </View>
 
         <Pressable onLongPress={showSimulateOption} style={styles.debugTrigger}>

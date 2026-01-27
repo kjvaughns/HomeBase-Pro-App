@@ -311,6 +311,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/appointments/:id/reschedule", async (req: Request<IdParams>, res: Response) => {
+    try {
+      const { scheduledDate, scheduledTime } = req.body;
+      
+      if (!scheduledDate || !scheduledTime) {
+        return res.status(400).json({ error: "New date and time are required" });
+      }
+      
+      const appointment = await storage.updateAppointment(req.params.id, {
+        scheduledDate,
+        scheduledTime,
+        status: "pending", // Reset to pending when rescheduled
+      });
+      
+      if (!appointment) {
+        return res.status(404).json({ error: "Appointment not found" });
+      }
+      
+      await storage.createNotification(
+        appointment.userId,
+        "Appointment Rescheduled",
+        `Your ${appointment.serviceName} appointment has been rescheduled to ${scheduledDate} at ${scheduledTime}.`,
+        "booking_update",
+        JSON.stringify({ appointmentId: appointment.id })
+      );
+      
+      res.json({ appointment });
+    } catch (error) {
+      console.error("Reschedule appointment error:", error);
+      res.status(500).json({ error: "Failed to reschedule appointment" });
+    }
+  });
+
+  app.get("/api/appointments/:id", async (req: Request<IdParams>, res: Response) => {
+    try {
+      const appointment = await storage.getAppointment(req.params.id);
+      if (!appointment) {
+        return res.status(404).json({ error: "Appointment not found" });
+      }
+      res.json({ appointment });
+    } catch (error) {
+      console.error("Get appointment error:", error);
+      res.status(500).json({ error: "Failed to get appointment" });
+    }
+  });
+
   app.get("/api/notifications/:userId", async (req: Request<UserIdParams>, res: Response) => {
     try {
       const notifications = await storage.getNotifications(req.params.userId);

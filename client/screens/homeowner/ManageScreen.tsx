@@ -115,7 +115,7 @@ export default function ManageScreen() {
   };
 
   const handleAppointmentPress = (appointment: Appointment) => {
-    navigation.navigate("JobDetail", { jobId: appointment.id });
+    navigation.navigate("AppointmentDetail", { appointmentId: appointment.id });
   };
 
   const handleMockSignIn = () => {

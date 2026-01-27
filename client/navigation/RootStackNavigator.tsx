@@ -24,6 +24,7 @@ import BookingAddressScreen from "@/screens/homeowner/BookingAddressScreen";
 import BookingConfirmScreen from "@/screens/homeowner/BookingConfirmScreen";
 import BookingSuccessScreen from "@/screens/homeowner/BookingSuccessScreen";
 import JobDetailScreen from "@/screens/homeowner/JobDetailScreen";
+import AppointmentDetailScreen from "@/screens/homeowner/AppointmentDetailScreen";
 import ChatScreen from "@/screens/homeowner/ChatScreen";
 import PaymentScreen from "@/screens/homeowner/PaymentScreen";
 import ReviewScreen from "@/screens/homeowner/ReviewScreen";
@@ -91,6 +92,7 @@ export type RootStackParamList = {
   };
   BookingSuccess: { jobId: string };
   JobDetail: { jobId: string };
+  AppointmentDetail: { appointmentId: string };
   Chat: { jobId: string; threadId?: string };
   Payment: { jobId: string; invoiceId: string };
   Review: { jobId: string };
@@ -258,6 +260,13 @@ export default function RootStackNavigator() {
         component={JobDetailScreen}
         options={{
           headerTitle: "Job Details",
+        }}
+      />
+      <Stack.Screen
+        name="AppointmentDetail"
+        component={AppointmentDetailScreen}
+        options={{
+          headerTitle: "Appointment Details",
         }}
       />
       <Stack.Screen
