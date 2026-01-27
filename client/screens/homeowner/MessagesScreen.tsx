@@ -1,50 +1,91 @@
 import React, { useState } from "react";
-import { StyleSheet, FlatList, RefreshControl, View } from "react-native";
+import { StyleSheet, FlatList, RefreshControl, View, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
 import { ThemedView } from "@/components/ThemedView";
-import { MessageRow } from "@/components/MessageRow";
+import { ThemedText } from "@/components/ThemedText";
+import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
 import { SkeletonListRow } from "@/components/SkeletonLoader";
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, Colors } from "@/constants/theme";
+import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
-import { mockMessages, Message } from "@/state/mockData";
+import { useHomeownerStore } from "@/state/homeownerStore";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { MessageThread } from "@/state/types";
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function MessagesScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
+  const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
   const { isAuthenticated } = useAuthStore();
 
-  const [refreshing, setRefreshing] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const messageThreads = useHomeownerStore((s) => s.messageThreads);
+  const isHydrated = useHomeownerStore((s) => s.isHydrated);
 
-  const messages = isAuthenticated ? mockMessages : [];
+  const [refreshing, setRefreshing] = useState(false);
+
+  const threads = isAuthenticated ? messageThreads : [];
 
   const onRefresh = () => {
     setRefreshing(true);
     setTimeout(() => setRefreshing(false), 1000);
   };
 
-  const handleMessagePress = (message: Message) => {
-    // Navigate to chat
+  const handleThreadPress = (thread: MessageThread) => {
+    navigation.navigate("Chat", { jobId: thread.jobId });
   };
 
-  const renderMessage = ({ item, index }: { item: Message; index: number }) => (
-    <Animated.View entering={FadeInDown.delay(index * 100).duration(400)}>
-      <MessageRow
-        message={item}
-        onPress={() => handleMessagePress(item)}
-        testID={`message-${item.id}`}
-      />
-      {index < messages.length - 1 ? (
-        <View style={[styles.divider, { backgroundColor: theme.separator }]} />
-      ) : null}
+  const renderThread = ({ item, index }: { item: MessageThread; index: number }) => (
+    <Animated.View entering={FadeInDown.delay(index * 50).duration(300)}>
+      <Pressable
+        onPress={() => handleThreadPress(item)}
+        style={[styles.threadCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}
+        testID={`thread-${item.id}`}
+      >
+        <Avatar name={item.providerName} size={48} imageUrl={item.providerAvatar} />
+        <View style={styles.threadContent}>
+          <View style={styles.threadHeader}>
+            <ThemedText style={styles.providerName} numberOfLines={1}>
+              {item.providerName}
+            </ThemedText>
+            <ThemedText style={[styles.threadTime, { color: theme.textTertiary }]}>
+              {item.lastMessageTime}
+            </ThemedText>
+          </View>
+          <ThemedText style={[styles.serviceName, { color: theme.textSecondary }]} numberOfLines={1}>
+            {item.service}
+          </ThemedText>
+          <View style={styles.lastMessageRow}>
+            <ThemedText
+              style={[
+                styles.lastMessage,
+                { color: theme.textSecondary },
+                item.unreadCount > 0 && styles.lastMessageUnread,
+              ]}
+              numberOfLines={1}
+            >
+              {item.lastMessage}
+            </ThemedText>
+            {item.unreadCount > 0 && (
+              <View style={[styles.unreadBadge, { backgroundColor: Colors.accent }]}>
+                <ThemedText style={styles.unreadCount}>{item.unreadCount}</ThemedText>
+              </View>
+            )}
+          </View>
+        </View>
+        <Feather name="chevron-right" size={18} color={theme.textTertiary} />
+      </Pressable>
     </Animated.View>
   );
 
@@ -55,12 +96,12 @@ export default function MessagesScreen() {
       description="When you connect with a service provider, your conversations will appear here."
       primaryAction={{
         label: "Find a Pro",
-        onPress: () => {},
+        onPress: () => navigation.navigate("Main"),
       }}
     />
   );
 
-  if (loading) {
+  if (!isHydrated) {
     return (
       <ThemedView style={styles.container}>
         <FlatList
@@ -70,6 +111,7 @@ export default function MessagesScreen() {
           contentContainerStyle={{
             paddingTop: headerHeight + Spacing.lg,
             paddingBottom: tabBarHeight + Spacing.xl,
+            paddingHorizontal: Spacing.screenPadding,
           }}
         />
       </ThemedView>
@@ -79,15 +121,16 @@ export default function MessagesScreen() {
   return (
     <ThemedView style={styles.container}>
       <FlatList
-        data={messages}
-        renderItem={renderMessage}
+        data={threads}
+        renderItem={renderThread}
         keyExtractor={(item) => item.id}
         contentContainerStyle={[
           {
             paddingTop: headerHeight + Spacing.lg,
             paddingBottom: tabBarHeight + Spacing.xl,
+            paddingHorizontal: Spacing.screenPadding,
           },
-          messages.length === 0 && styles.emptyContainer,
+          threads.length === 0 && styles.emptyContainer,
         ]}
         scrollIndicatorInsets={{ bottom: insets.bottom }}
         showsVerticalScrollIndicator={false}
@@ -111,8 +154,60 @@ const styles = StyleSheet.create({
   emptyContainer: {
     flex: 1,
   },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    marginLeft: Spacing.screenPadding + 56 + Spacing.md,
+  threadCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    marginBottom: Spacing.sm,
+  },
+  threadContent: {
+    flex: 1,
+    marginLeft: Spacing.md,
+  },
+  threadHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  providerName: {
+    ...Typography.subhead,
+    fontWeight: "600",
+    flex: 1,
+  },
+  threadTime: {
+    ...Typography.caption2,
+    marginLeft: Spacing.sm,
+  },
+  serviceName: {
+    ...Typography.caption1,
+    marginTop: 2,
+  },
+  lastMessageRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  lastMessage: {
+    ...Typography.caption1,
+    flex: 1,
+  },
+  lastMessageUnread: {
+    fontWeight: "600",
+  },
+  unreadBadge: {
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+    marginLeft: Spacing.sm,
+  },
+  unreadCount: {
+    ...Typography.caption2,
+    color: "#fff",
+    fontWeight: "700",
   },
 });

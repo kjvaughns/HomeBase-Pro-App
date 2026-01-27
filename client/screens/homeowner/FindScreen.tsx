@@ -22,11 +22,8 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
-import {
-  serviceCategories,
-  featuredProviders,
-  ServiceCategory,
-} from "@/state/mockData";
+import { useHomeownerStore } from "@/state/homeownerStore";
+import { ServiceCategory, Job, JobStatus } from "@/state/types";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -38,14 +35,6 @@ interface HomeTool {
   screen: keyof RootStackParamList;
 }
 
-interface RecentActivity {
-  id: string;
-  type: "booking" | "quote" | "message";
-  title: string;
-  provider: string;
-  date: string;
-  status: "completed" | "upcoming" | "pending";
-}
 
 const HOME_TOOLS: HomeTool[] = [
   {
@@ -78,32 +67,15 @@ const HOME_TOOLS: HomeTool[] = [
   },
 ];
 
-const RECENT_ACTIVITY: RecentActivity[] = [
-  {
-    id: "1",
-    type: "booking",
-    title: "Plumbing Repair",
-    provider: "Mike's Plumbing",
-    date: "Jan 20, 2026",
-    status: "completed",
-  },
-  {
-    id: "2",
-    type: "booking",
-    title: "HVAC Maintenance",
-    provider: "CoolAir Services",
-    date: "Feb 5, 2026",
-    status: "upcoming",
-  },
-  {
-    id: "3",
-    type: "quote",
-    title: "Kitchen Remodel",
-    provider: "HomeReno Pro",
-    date: "Jan 25, 2026",
-    status: "pending",
-  },
-];
+const STATUS_MAP: Record<JobStatus, { label: string; variant: "success" | "info" | "warning" | "neutral" }> = {
+  requested: { label: "Requested", variant: "info" },
+  scheduled: { label: "Upcoming", variant: "info" },
+  in_progress: { label: "In Progress", variant: "warning" },
+  awaiting_payment: { label: "Payment Due", variant: "warning" },
+  completed: { label: "Completed", variant: "success" },
+  paid: { label: "Paid", variant: "success" },
+  closed: { label: "Closed", variant: "neutral" },
+};
 
 export default function FindScreen() {
   const insets = useSafeAreaInsets();
@@ -112,6 +84,13 @@ export default function FindScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
   const { isAuthenticated, user, login } = useAuthStore();
+  
+  const categories = useHomeownerStore((s) => s.categories);
+  const providers = useHomeownerStore((s) => s.providers);
+  const jobs = useHomeownerStore((s) => s.jobs);
+
+  const recentJobs = React.useMemo(() => jobs.slice(0, 3), [jobs]);
+  const featuredProviders = React.useMemo(() => providers.slice(0, 5), [providers]);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
@@ -129,7 +108,11 @@ export default function FindScreen() {
   };
 
   const handleCategoryPress = (category: ServiceCategory) => {
-    // Navigate to category details
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    navigation.navigate("ProviderList", {
+      categoryId: category.id,
+      categoryName: category.name,
+    });
   };
 
   const handleAIPress = () => {
@@ -151,30 +134,16 @@ export default function FindScreen() {
     setShowAccountGate(false);
   };
 
-  const getStatusVariant = (status: RecentActivity["status"]) => {
-    switch (status) {
-      case "completed":
-        return "success";
-      case "upcoming":
-        return "info";
-      case "pending":
-        return "warning";
-      default:
-        return "neutral";
-    }
+  const handleJobPress = (job: Job) => {
+    navigation.navigate("JobDetail", { jobId: job.id });
   };
 
-  const getActivityIcon = (type: RecentActivity["type"]): keyof typeof Feather.glyphMap => {
-    switch (type) {
-      case "booking":
-        return "calendar";
-      case "quote":
-        return "file-text";
-      case "message":
-        return "message-circle";
-      default:
-        return "circle";
+  const handleProviderCardPress = (providerId: string) => {
+    if (!isAuthenticated) {
+      setShowAccountGate(true);
+      return;
     }
+    navigation.navigate("ProviderProfile", { providerId });
   };
 
   const renderHeader = () => (
@@ -220,48 +189,52 @@ export default function FindScreen() {
         <Feather name="chevron-down" size={14} color={Colors.accent} />
       </Animated.View>
 
-      {isAuthenticated ? (
+      {isAuthenticated && recentJobs.length > 0 ? (
         <>
           <Animated.View entering={FadeInDown.delay(250).duration(400)}>
-            <SectionHeader title="Recent Activity" actionLabel="View All" onAction={() => {}} />
+            <SectionHeader title="Recent Activity" actionLabel="View All" onAction={() => navigation.navigate("Main")} />
           </Animated.View>
 
           <Animated.View
             entering={FadeInDown.delay(300).duration(400)}
             style={styles.activityContainer}
           >
-            {RECENT_ACTIVITY.map((activity, index) => (
-              <Pressable
-                key={activity.id}
-                style={[
-                  styles.activityCard,
-                  {
-                    backgroundColor: theme.cardBackground,
-                    borderColor: theme.borderLight,
-                  },
-                ]}
-              >
-                <View style={[styles.activityIcon, { backgroundColor: Colors.accentLight }]}>
-                  <Feather name={getActivityIcon(activity.type)} size={16} color={Colors.accent} />
-                </View>
-                <View style={styles.activityContent}>
-                  <ThemedText style={styles.activityTitle}>{activity.title}</ThemedText>
-                  <ThemedText style={[styles.activityProvider, { color: theme.textSecondary }]}>
-                    {activity.provider}
-                  </ThemedText>
-                </View>
-                <View style={styles.activityRight}>
-                  <StatusPill
-                    label={activity.status.charAt(0).toUpperCase() + activity.status.slice(1)}
-                    variant={getStatusVariant(activity.status) as any}
-                    size="small"
-                  />
-                  <ThemedText style={[styles.activityDate, { color: theme.textTertiary }]}>
-                    {activity.date}
-                  </ThemedText>
-                </View>
-              </Pressable>
-            ))}
+            {recentJobs.map((job) => {
+              const statusInfo = STATUS_MAP[job.status];
+              return (
+                <Pressable
+                  key={job.id}
+                  onPress={() => handleJobPress(job)}
+                  style={[
+                    styles.activityCard,
+                    {
+                      backgroundColor: theme.cardBackground,
+                      borderColor: theme.borderLight,
+                    },
+                  ]}
+                >
+                  <View style={[styles.activityIcon, { backgroundColor: Colors.accentLight }]}>
+                    <Feather name="calendar" size={16} color={Colors.accent} />
+                  </View>
+                  <View style={styles.activityContent}>
+                    <ThemedText style={styles.activityTitle}>{job.service}</ThemedText>
+                    <ThemedText style={[styles.activityProvider, { color: theme.textSecondary }]}>
+                      {job.providerName}
+                    </ThemedText>
+                  </View>
+                  <View style={styles.activityRight}>
+                    <StatusPill
+                      label={statusInfo.label}
+                      variant={statusInfo.variant}
+                      size="small"
+                    />
+                    <ThemedText style={[styles.activityDate, { color: theme.textTertiary }]}>
+                      {job.scheduledDate || "TBD"}
+                    </ThemedText>
+                  </View>
+                </Pressable>
+              );
+            })}
           </Animated.View>
         </>
       ) : null}
@@ -274,7 +247,7 @@ export default function FindScreen() {
         entering={FadeInDown.delay(isAuthenticated ? 400 : 300).duration(400)}
         style={styles.categoriesGrid}
       >
-        {serviceCategories.slice(0, 6).map((category) => (
+        {categories.slice(0, 6).map((category) => (
           <View key={category.id} style={styles.categoryItem}>
             <CategoryCard
               name={category.name}
@@ -308,7 +281,7 @@ export default function FindScreen() {
         services={item.services}
         hourlyRate={item.hourlyRate}
         verified={item.verified}
-        onPress={handleProviderPress}
+        onPress={() => handleProviderCardPress(item.id)}
         testID={`provider-${item.id}`}
       />
     </Animated.View>
