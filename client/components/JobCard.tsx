@@ -12,10 +12,10 @@ import * as Haptics from "expo-haptics";
 
 import { Avatar } from "@/components/Avatar";
 import { ThemedText } from "@/components/ThemedText";
-import { StatusPill } from "@/components/StatusPill";
+import { StatusPill, StatusType } from "@/components/StatusPill";
 import { useTheme } from "@/hooks/useTheme";
 import { BorderRadius, Spacing, Colors, Animation, GlassEffect } from "@/constants/theme";
-import { Job } from "@/state/mockData";
+import { Job } from "@/state/providerStore";
 
 interface JobCardProps {
   job: Job;
@@ -25,7 +25,7 @@ interface JobCardProps {
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-const getStatusType = (status: Job["status"]) => {
+const getStatusType = (status: Job["status"]): StatusType => {
   switch (status) {
     case "scheduled":
       return "scheduled";
@@ -33,6 +33,8 @@ const getStatusType = (status: Job["status"]) => {
       return "inProgress";
     case "completed":
       return "completed";
+    case "cancelled":
+      return "cancelled";
     default:
       return "neutral";
   }

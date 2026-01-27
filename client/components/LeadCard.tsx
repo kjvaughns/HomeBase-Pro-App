@@ -16,7 +16,7 @@ import { StatusPill } from "@/components/StatusPill";
 import { Button } from "@/components/Button";
 import { useTheme } from "@/hooks/useTheme";
 import { BorderRadius, Spacing, Colors, Animation, GlassEffect } from "@/constants/theme";
-import { Lead } from "@/state/mockData";
+import { Lead } from "@/state/providerStore";
 
 interface LeadCardProps {
   lead: Lead;

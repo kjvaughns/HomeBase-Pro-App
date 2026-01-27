@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { StyleSheet, View, FlatList, RefreshControl, Pressable } from "react-native";
+import React, { useState, useMemo } from "react";
+import { StyleSheet, View, FlatList, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -9,12 +9,20 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { JobCard } from "@/components/JobCard";
 import { GlassCard } from "@/components/GlassCard";
+import { FilterChips, FilterOption } from "@/components/FilterChips";
 import { EmptyState } from "@/components/EmptyState";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius } from "@/constants/theme";
-import { mockJobs, Job } from "@/state/mockData";
+import { useProviderStore, Job } from "@/state/providerStore";
 
-type FilterType = "all" | "scheduled" | "in_progress" | "completed";
+type JobFilter = "all" | "scheduled" | "in_progress" | "completed";
+
+const filterOptions: FilterOption<JobFilter>[] = [
+  { key: "all", label: "All" },
+  { key: "scheduled", label: "Scheduled" },
+  { key: "in_progress", label: "In Progress" },
+  { key: "completed", label: "Completed" },
+];
 
 export default function ScheduleScreen() {
   const insets = useSafeAreaInsets();
@@ -22,104 +30,110 @@ export default function ScheduleScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const { theme } = useTheme();
 
+  const jobs = useProviderStore((s) => s.jobs);
+  const startJob = useProviderStore((s) => s.startJob);
+  const completeJob = useProviderStore((s) => s.completeJob);
+
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<FilterType>("all");
+  const [filter, setFilter] = useState<JobFilter>("all");
+
+  const filteredJobs = useMemo(() => {
+    const sorted = [...jobs].sort((a, b) => {
+      if (a.status === "completed" && b.status !== "completed") return 1;
+      if (a.status !== "completed" && b.status === "completed") return -1;
+      return new Date(a.date).getTime() - new Date(b.date).getTime();
+    });
+    if (filter === "all") return sorted;
+    return sorted.filter((job) => job.status === filter);
+  }, [jobs, filter]);
+
+  const filterOptionsWithCounts = useMemo(() => {
+    return filterOptions.map((opt) => ({
+      ...opt,
+      count: opt.key === "all" ? jobs.length : jobs.filter((j) => j.status === opt.key).length,
+    }));
+  }, [jobs]);
+
+  const stats = useMemo(() => ({
+    scheduled: jobs.filter((j) => j.status === "scheduled").length,
+    inProgress: jobs.filter((j) => j.status === "in_progress").length,
+    completed: jobs.filter((j) => j.status === "completed").length,
+  }), [jobs]);
 
   const onRefresh = () => {
     setRefreshing(true);
     setTimeout(() => setRefreshing(false), 1000);
   };
 
-  const filteredJobs = mockJobs.filter((job) => {
-    if (filter === "all") return true;
-    return job.status === filter;
-  });
-
   const handleJobPress = (job: Job) => {
     // Navigate to job details
   };
 
-  const filters: { key: FilterType; label: string }[] = [
-    { key: "all", label: "All" },
-    { key: "scheduled", label: "Scheduled" },
-    { key: "in_progress", label: "In Progress" },
-    { key: "completed", label: "Completed" },
-  ];
-
   const renderHeader = () => (
-    <Animated.View entering={FadeInDown.delay(100).duration(400)}>
-      <View style={styles.filterContainer}>
-        {filters.map((f) => (
-          <Pressable
-            key={f.key}
-            onPress={() => setFilter(f.key)}
-            style={[
-              styles.filterChip,
-              {
-                backgroundColor:
-                  filter === f.key ? Colors.accent : theme.backgroundDefault,
-              },
-            ]}
-          >
-            <ThemedText
-              type="label"
-              style={{
-                color: filter === f.key ? "#FFFFFF" : theme.textSecondary,
-              }}
-            >
-              {f.label}
-            </ThemedText>
-          </Pressable>
-        ))}
-      </View>
+    <View style={styles.headerContainer}>
+      <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+        <GlassCard style={styles.statsCard}>
+          <View style={styles.statsRow}>
+            <View style={styles.stat}>
+              <ThemedText type="h2" style={{ color: Colors.accent }}>
+                {stats.scheduled}
+              </ThemedText>
+              <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+                Scheduled
+              </ThemedText>
+            </View>
+            <View style={[styles.statDivider, { backgroundColor: theme.separator }]} />
+            <View style={styles.stat}>
+              <ThemedText type="h2" style={{ color: Colors.warning }}>
+                {stats.inProgress}
+              </ThemedText>
+              <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+                In Progress
+              </ThemedText>
+            </View>
+            <View style={[styles.statDivider, { backgroundColor: theme.separator }]} />
+            <View style={styles.stat}>
+              <ThemedText type="h2" style={{ color: theme.text }}>
+                {stats.completed}
+              </ThemedText>
+              <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+                Completed
+              </ThemedText>
+            </View>
+          </View>
+        </GlassCard>
+      </Animated.View>
 
-      <GlassCard style={styles.statsCard}>
-        <View style={styles.statsRow}>
-          <View style={styles.stat}>
-            <ThemedText type="h2" style={{ color: Colors.accent }}>
-              {mockJobs.filter((j) => j.status === "scheduled").length}
-            </ThemedText>
-            <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-              Scheduled
-            </ThemedText>
-          </View>
-          <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
-          <View style={styles.stat}>
-            <ThemedText type="h2" style={{ color: "#F59E0B" }}>
-              {mockJobs.filter((j) => j.status === "in_progress").length}
-            </ThemedText>
-            <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-              In Progress
-            </ThemedText>
-          </View>
-          <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
-          <View style={styles.stat}>
-            <ThemedText type="h2" style={{ color: theme.text }}>
-              {mockJobs.filter((j) => j.status === "completed").length}
-            </ThemedText>
-            <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-              Completed
-            </ThemedText>
-          </View>
-        </View>
-      </GlassCard>
-    </Animated.View>
+      <Animated.View entering={FadeInDown.delay(200).duration(400)}>
+        <FilterChips
+          options={filterOptionsWithCounts}
+          selected={filter}
+          onSelect={setFilter}
+          showCounts
+          style={styles.filterChips}
+        />
+      </Animated.View>
+    </View>
   );
 
   const renderJob = ({ item, index }: { item: Job; index: number }) => (
-    <Animated.View entering={FadeInDown.delay(200 + index * 100).duration(400)}>
-      <JobCard job={item} onPress={() => handleJobPress(item)} testID={`job-${item.id}`} />
+    <Animated.View entering={FadeInDown.delay(300 + index * 50).duration(300)}>
+      <JobCard
+        job={item}
+        onPress={() => handleJobPress(item)}
+        testID={`job-${item.id}`}
+      />
     </Animated.View>
   );
 
   const renderEmpty = () => (
     <EmptyState
-      image={require("../../../assets/images/empty-bookings.png")}
-      title="No jobs found"
+      image={require("../../../assets/images/empty-jobs.png")}
+      title={filter === "all" ? "No jobs yet" : `No ${filter.replace("_", " ")} jobs`}
       description={
         filter === "all"
-          ? "You don't have any jobs scheduled. New jobs will appear here once you win leads."
-          : `No ${filter.replace("_", " ")} jobs found.`
+          ? "Your scheduled jobs will appear here. Accept leads to start building your schedule!"
+          : `You don't have any ${filter.replace("_", " ")} jobs at the moment.`
       }
     />
   );
@@ -131,17 +145,16 @@ export default function ScheduleScreen() {
         renderItem={renderJob}
         keyExtractor={(item) => item.id}
         ListHeaderComponent={renderHeader}
+        ListEmptyComponent={renderEmpty}
         contentContainerStyle={[
           {
-            paddingTop: headerHeight + Spacing.xl,
+            paddingTop: headerHeight + Spacing.md,
             paddingBottom: tabBarHeight + Spacing.xl,
-            paddingHorizontal: Spacing.lg,
           },
           filteredJobs.length === 0 && styles.emptyContainer,
         ]}
         scrollIndicatorInsets={{ bottom: insets.bottom }}
         showsVerticalScrollIndicator={false}
-        ListEmptyComponent={renderEmpty}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -158,21 +171,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  emptyContainer: {
-    flex: 1,
-  },
-  filterContainer: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-    marginBottom: Spacing.lg,
-  },
-  filterChip: {
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.full,
+  headerContainer: {
+    paddingHorizontal: Spacing.screenPadding,
+    marginBottom: Spacing.md,
   },
   statsCard: {
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md,
   },
   statsRow: {
     flexDirection: "row",
@@ -183,7 +187,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   statDivider: {
-    width: 1,
+    width: StyleSheet.hairlineWidth,
     height: 40,
+  },
+  filterChips: {
+    paddingHorizontal: 0,
+    marginBottom: Spacing.sm,
+  },
+  emptyContainer: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingHorizontal: Spacing.screenPadding,
   },
 });

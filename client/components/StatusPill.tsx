@@ -4,7 +4,7 @@ import { StyleSheet, View } from "react-native";
 import { ThemedText } from "@/components/ThemedText";
 import { Spacing, BorderRadius, Colors } from "@/constants/theme";
 
-type StatusType = "success" | "warning" | "error" | "info" | "neutral" | "pending" | "scheduled" | "inProgress" | "completed";
+export type StatusType = "success" | "warning" | "error" | "info" | "neutral" | "pending" | "scheduled" | "inProgress" | "completed" | "cancelled";
 
 interface StatusPillProps {
   status: StatusType;
@@ -21,6 +21,7 @@ const getStatusColors = (status: StatusType): { bg: string; text: string } => {
     case "pending":
       return { bg: `${Colors.warning}14`, text: Colors.warning };
     case "error":
+    case "cancelled":
       return { bg: `${Colors.error}14`, text: Colors.error };
     case "info":
     case "scheduled":

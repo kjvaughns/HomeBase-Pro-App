@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import { StyleSheet, View, ScrollView, Switch } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -16,6 +16,7 @@ import { StatusPill } from "@/components/StatusPill";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
+import { useProviderStore } from "@/state/providerStore";
 
 export default function ProviderMoreScreen() {
   const insets = useSafeAreaInsets();
@@ -25,8 +26,10 @@ export default function ProviderMoreScreen() {
   const { theme } = useTheme();
   const { user, providerProfile, logout } = useAuthStore();
 
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [availableForWork, setAvailableForWork] = useState(true);
+  const availableForWork = useProviderStore((s) => s.availableForWork);
+  const notificationsEnabled = useProviderStore((s) => s.notificationsEnabled);
+  const setAvailableForWork = useProviderStore((s) => s.setAvailableForWork);
+  const setNotificationsEnabled = useProviderStore((s) => s.setNotificationsEnabled);
 
   const handleSwitchToHomeowner = () => {
     navigation.navigate("RoleSwitchConfirmation", { targetRole: "homeowner" });
