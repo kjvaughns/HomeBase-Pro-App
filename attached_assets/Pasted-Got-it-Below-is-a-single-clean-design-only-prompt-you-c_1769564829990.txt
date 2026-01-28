@@ -1,0 +1,259 @@
+Got it. Below is a **single clean design-only prompt** you can paste straight into Natively or any design agent. It is opinionated, aligned to what you showed, and fixes the overdesigned mess while restoring the calm luxury feel you want.
+
+No code. No backend. No logic.
+Pure **UX/UI + flow + component design**, aligned to both provider and homeowner.
+
+---
+
+## DESIGN PROMPT
+
+### HomeBase Provider Services & Public Business Profile System
+
+**Design only. React Native Expo. iOS-first. Liquid Glass. Calm luxury.**
+
+### Objective
+
+Design the **Services Management system and Public Business Profile** inside the **HomeBase Provider app**, ensuring it perfectly aligns with the **Homeowner marketplace and booking experience**.
+
+This system must feel **simple, powerful, and intelligent**, not busy or over-styled.
+Avoid white outlines, harsh borders, excessive glow, or visual noise.
+
+Design for **clarity, trust, and confidence**.
+
+---
+
+## Design Language & Principles
+
+* **Dark, minimal, premium**
+* Frosted Liquid Glass surfaces with subtle depth
+* Soft green accent used sparingly for action and status
+* No hard outlines or neon borders
+* Floating elements only when they serve purpose
+* Smooth, restrained animations
+* Clear hierarchy over decoration
+
+---
+
+## SECTION 1: Services Hub (Provider View)
+
+### Services List Screen
+
+Purpose: Quickly understand, manage, and publish services.
+
+**Layout**
+
+* Header: “Services”
+* Search bar with soft glass background
+* Category filter chips (Cleaning, HVAC, Handyman, Plumbing, etc.)
+* Floating “Add Service” FAB (single, centered, subtle glow)
+
+**Service Cards**
+Each card includes:
+
+* Service name
+* Category label
+* Pricing type badge:
+
+  * Fixed
+  * Variable
+  * Service Call
+  * Quote Only
+* Estimated price or “From $X” or “Requires Estimate”
+* Published toggle (soft switch)
+* Subtle arrow for edit
+
+Card style:
+
+* Slight glass blur
+* Rounded edges
+* No outlines
+* Hover / press elevation only
+
+---
+
+## SECTION 2: Create / Edit Service Flow
+
+This is a **guided, intelligent builder**, not a long form.
+
+### Step 1: Service Basics
+
+* Service name
+* Category selector
+* Short client-facing description
+* Publish toggle
+
+Optional AI helper:
+
+* “Generate description with AI”
+* Preview tone: professional, friendly, premium
+
+---
+
+### Step 2: Pricing Model Selection
+
+Displayed as large selectable cards:
+
+1. **Fixed Price**
+
+   * Flat rate
+   * Duration
+2. **Variable Pricing**
+
+   * Based on inputs like:
+
+     * Bedrooms
+     * Bathrooms
+     * Square footage
+     * Units
+   * Dynamic estimated range preview
+3. **Service Call**
+
+   * Diagnostic fee
+   * Optional hourly rate
+4. **Quote Only**
+
+   * No pricing shown
+   * Requires approval
+
+Each option shows:
+
+* Simple explanation
+* Example use case
+* Clean icon
+* Single active selection
+
+---
+
+### Step 3: Booking Rules & Intake
+
+* Instant booking toggle
+* Approval required toggle
+* Intake questions builder:
+
+  * Text
+  * Yes/No
+  * Number
+  * Photo upload
+* Require photos toggle
+
+UX:
+
+* Inline editable question chips
+* Minimal drag handles
+* No clutter
+
+---
+
+### Step 4: Availability & Buffers
+
+* Duration selector
+* Buffer before / after
+* Recurring availability preview
+
+---
+
+### Step 5: Client Preview (Critical)
+
+Show how this service looks **exactly** to homeowners:
+
+* Service card
+* Pricing behavior
+* Intake questions
+* Book button
+
+This creates trust and confidence.
+
+---
+
+## SECTION 3: Public Business Profile (Provider)
+
+### Business Profile Overview
+
+Acts as **both**:
+
+* Marketplace listing
+* Direct booking page
+
+**Hero Section**
+
+* Cover image
+* Logo
+* Business name
+* Rating and review count
+* Location
+* “Book Now” CTA
+
+Glass overlay. No harsh borders.
+
+---
+
+### Profile Sections
+
+1. About the Business
+2. Services Offered (auto-pulled from Services)
+3. Portfolio Gallery
+4. Reviews
+5. Service Area
+6. Contact & Social Links
+
+Each section:
+
+* Expandable cards
+* Editable inline
+* Preview toggle
+
+---
+
+### Marketplace Publishing
+
+* Publish to Marketplace toggle
+* Custom slug editor
+* “Preview Booking Page” button
+
+UX copy reinforces:
+“This is what homeowners see.”
+
+---
+
+## SECTION 4: Alignment With Homeowner Experience
+
+Design must ensure:
+
+* Service cards look identical on both sides
+* Pricing logic mirrors homeowner booking flow
+* Intake questions map cleanly into homeowner checkout
+* Service previews match marketplace listings exactly
+
+Homeowner sees:
+
+* Clean service selection
+* Transparent pricing behavior
+* Confidence before booking
+
+---
+
+## SECTION 5: Animations & Motion
+
+* Card expand animations
+* Pricing model transitions
+* AI assist micro-feedback
+* Page transitions with soft depth
+* No flashy effects
+
+---
+
+## Final Notes for the Design Agent
+
+* This is **design + flow only**
+* Use mock data
+* No backend logic
+* No API work
+* Maintain consistency across Provider and Homeowner portals
+* Prioritize calm, trust, and simplicity
+
+---
+
+If you want, next I can:
+
+* Strip this down into a **super short version for credit-efficient tools**
+* Or create a **single master design system prompt** that locks this style across the entire app so it never gets messed up again
