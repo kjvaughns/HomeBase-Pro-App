@@ -223,6 +223,8 @@ export default function RootStackNavigator() {
         component={AIChatScreen}
         options={{
           headerTitle: "Ask HomeBase AI",
+          headerTransparent: false,
+          headerBlurEffect: undefined,
         }}
       />
       <Stack.Screen

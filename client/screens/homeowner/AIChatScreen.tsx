@@ -239,8 +239,8 @@ export default function AIChatScreen() {
           contentContainerStyle={[
             styles.messagesContent,
             {
-              paddingTop: Spacing.lg,
-              paddingBottom: headerHeight + Spacing.xl,
+              paddingTop: Spacing.xl,
+              paddingBottom: Spacing.xl,
             },
           ]}
           ListEmptyComponent={renderEmptyState}
