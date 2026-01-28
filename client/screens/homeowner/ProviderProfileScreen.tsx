@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { StyleSheet, View, ScrollView, Pressable, Linking, Alert } from "react-native";
+import { StyleSheet, View, ScrollView, Pressable, Linking, Alert, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
@@ -7,6 +7,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { useQuery } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -20,6 +21,8 @@ import { useHomeownerStore } from "@/state/homeownerStore";
 import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { AccountGateModal } from "@/components/AccountGateModal";
+import { getApiUrl } from "@/lib/query-client";
+import { Provider } from "@/state/types";
 
 type ScreenRouteProp = RouteProp<RootStackParamList, "ProviderProfile">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -34,7 +37,7 @@ export default function ProviderProfileScreen() {
   const { theme } = useTheme();
   const { providerId, intakeData } = route.params;
 
-  const providers = useHomeownerStore((s) => s.providers);
+  const localProviders = useHomeownerStore((s) => s.providers);
   const allReviews = useHomeownerStore((s) => s.reviews);
   const categories = useHomeownerStore((s) => s.categories);
   const toggleSavedProvider = useHomeownerStore((s) => s.toggleSavedProvider);
@@ -43,9 +46,21 @@ export default function ProviderProfileScreen() {
   
   const isSaved = isProviderSaved(providerId);
   
-  const provider = useMemo(() => {
-    return providers.find((p) => p.id === providerId);
-  }, [providers, providerId]);
+  const localProvider = useMemo(() => {
+    return localProviders.find((p) => p.id === providerId);
+  }, [localProviders, providerId]);
+
+  const { data: apiData, isLoading: isApiLoading } = useQuery<{ provider: Provider }>({
+    queryKey: ["/api/providers", providerId],
+    queryFn: async () => {
+      const response = await fetch(new URL(`/api/providers/${providerId}`, getApiUrl()).toString());
+      if (!response.ok) throw new Error("Provider not found");
+      return response.json();
+    },
+    enabled: !localProvider,
+  });
+
+  const provider = localProvider || apiData?.provider;
   
   const reviews = useMemo(() => {
     return allReviews.filter((r) => r.providerId === providerId);
@@ -54,10 +69,26 @@ export default function ProviderProfileScreen() {
   const [activeTab, setActiveTab] = useState<TabType>("about");
   const [showAccountGate, setShowAccountGate] = useState(false);
 
+  if (isApiLoading && !localProvider) {
+    return (
+      <ThemedView style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color={Colors.accent} />
+        <ThemedText style={[styles.loadingText, { color: theme.textSecondary }]}>
+          Loading provider...
+        </ThemedText>
+      </ThemedView>
+    );
+  }
+
   if (!provider) {
     return (
-      <ThemedView style={styles.container}>
-        <ThemedText>Provider not found</ThemedText>
+      <ThemedView style={[styles.container, styles.loadingContainer]}>
+        <Feather name="alert-circle" size={48} color={theme.textTertiary} />
+        <ThemedText style={styles.notFoundText}>Provider not found</ThemedText>
+        <Pressable onPress={() => navigation.goBack()} style={styles.backLink}>
+          <Feather name="arrow-left" size={16} color={Colors.accent} />
+          <ThemedText style={[styles.backLinkText, { color: Colors.accent }]}>Go back</ThemedText>
+        </Pressable>
       </ThemedView>
     );
   }
@@ -359,6 +390,28 @@ export default function ProviderProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  loadingContainer: {
+    justifyContent: "center",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  loadingText: {
+    ...Typography.body,
+  },
+  notFoundText: {
+    ...Typography.title3,
+    marginTop: Spacing.md,
+  },
+  backLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    marginTop: Spacing.lg,
+  },
+  backLinkText: {
+    ...Typography.body,
+    fontWeight: "500",
   },
   profileCard: {
     marginBottom: Spacing.lg,
