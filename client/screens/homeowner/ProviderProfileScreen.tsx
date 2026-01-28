@@ -93,7 +93,9 @@ export default function ProviderProfileScreen() {
     );
   }
 
-  const category = categories.find((c) => c.id === provider.categoryIds[0]);
+  const category = provider.categoryIds?.length 
+    ? categories.find((c) => c.id === provider.categoryIds[0])
+    : null;
 
   const handleBookPress = () => {
     if (!isAuthenticated) {
@@ -101,11 +103,21 @@ export default function ProviderProfileScreen() {
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    navigation.navigate("SimpleBooking", {
-      providerId: provider.id,
-      providerName: provider.businessName,
-      intakeData,
-    });
+    
+    // If we already have intake data, go directly to booking
+    // Otherwise, go through Smart Intake first
+    if (intakeData) {
+      navigation.navigate("SimpleBooking", {
+        providerId: provider.id,
+        providerName: provider.businessName,
+        intakeData,
+      });
+    } else {
+      navigation.navigate("SmartIntake", {
+        preselectedProviderId: provider.id,
+        preselectedProviderName: provider.businessName,
+      });
+    }
   };
 
   const handleSignIn = () => {

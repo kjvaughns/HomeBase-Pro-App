@@ -115,6 +115,8 @@ export default function SmartIntakeScreen() {
   
   const prefillCategory = route.params?.prefillCategory;
   const prefillProblem = route.params?.prefillProblem;
+  const preselectedProviderId = route.params?.preselectedProviderId;
+  const preselectedProviderName = route.params?.preselectedProviderName;
 
   const [step, setStep] = useState<IntakeStep>("describe");
   const [problemText, setProblemText] = useState(prefillProblem || "");
@@ -292,6 +294,39 @@ export default function SmartIntakeScreen() {
   const handleSignUp = () => {
     setShowAccountGate(false);
     navigation.navigate("SignUp");
+  };
+
+  // Handle booking with preselected provider
+  const handleBookWithPreselectedProvider = () => {
+    if (!isAuthenticated) {
+      setShowAccountGate(true);
+      return;
+    }
+    if (!preselectedProviderId || !preselectedProviderName) return;
+    
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
+    const urgencyMap: Record<string, "flexible" | "soon" | "urgent" | "emergency"> = {
+      low: "flexible",
+      medium: "soon",
+      high: "urgent",
+      emergency: "emergency",
+    };
+    
+    const intakeData = {
+      problemDescription: problemText,
+      issueSummary: refinedAnalysis?.refinedSummary || analysis?.summary || problemText,
+      recommendedService: selectedOption?.name || refinedAnalysis?.serviceOptions?.[0]?.name || "General Service",
+      priceRange: selectedOption?.priceRange || analysis?.estimatedPriceRange || { min: 100, max: 300 },
+      urgency: urgencyMap[refinedAnalysis?.severity || analysis?.severity || "medium"] || "flexible" as const,
+      category: analysis?.category || prefillCategory || "general",
+    };
+    
+    navigation.navigate("SimpleBooking", {
+      providerId: preselectedProviderId,
+      providerName: preselectedProviderName,
+      intakeData,
+    });
   };
 
   const getSeverityStatus = (severity: string) => {
@@ -617,74 +652,115 @@ export default function SmartIntakeScreen() {
     );
   };
 
-  const renderProvidersStep = () => (
-    <Animated.View entering={FadeInDown.duration(400)} style={styles.stepContainer}>
-      <ThemedText style={styles.providersTitle}>Top Matched Providers</ThemedText>
-      <ThemedText style={[styles.providersSubtitle, { color: theme.textSecondary }]}>
-        Ready to take on your job
-      </ThemedText>
-
-      {selectedOption ? (
-        <View style={[styles.selectedOptionBanner, { backgroundColor: Colors.accentLight }]}>
-          <Feather name="check-circle" size={16} color={Colors.accent} />
-          <ThemedText style={[styles.selectedOptionText, { color: Colors.accent }]}>
-            {selectedOption.name}: ${selectedOption.priceRange.min} - ${selectedOption.priceRange.max}
+  const renderProvidersStep = () => {
+    // If there's a preselected provider, show simplified booking UI
+    if (preselectedProviderId && preselectedProviderName) {
+      return (
+        <Animated.View entering={FadeInDown.duration(400)} style={styles.stepContainer}>
+          <View style={[styles.iconContainer, { backgroundColor: Colors.accentLight, marginBottom: Spacing.lg }]}>
+            <Feather name="check-circle" size={32} color={Colors.accent} />
+          </View>
+          
+          <ThemedText style={styles.providersTitle}>Ready to Book</ThemedText>
+          <ThemedText style={[styles.providersSubtitle, { color: theme.textSecondary }]}>
+            Your service request details are ready
           </ThemedText>
-        </View>
-      ) : null}
 
-      {providers.map((provider, index) => (
-        <Animated.View key={provider.id} entering={FadeInUp.delay(index * 100).duration(300)}>
-          <Pressable
-            style={[styles.providerCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}
-            onPress={() => handleSelectProvider(provider.id)}
-          >
-            <Avatar name={provider.businessName} size="medium" />
-            <View style={styles.providerInfo}>
-              <View style={styles.providerNameRow}>
-                <ThemedText style={styles.providerName}>{provider.businessName}</ThemedText>
-                {provider.isVerified ? (
-                  <Feather name="check-circle" size={14} color={Colors.accent} />
-                ) : null}
-              </View>
-              <View style={styles.providerStats}>
-                <View style={styles.ratingRow}>
-                  <Feather name="star" size={12} color={Colors.accent} />
-                  <ThemedText style={styles.ratingText}>
-                    {typeof provider.rating === "string" ? provider.rating : provider.rating?.toFixed(1)} ({provider.reviewCount})
-                  </ThemedText>
-                </View>
-                {provider.yearsExperience ? (
-                  <ThemedText style={[styles.experienceText, { color: theme.textSecondary }]}>
-                    {provider.yearsExperience} yrs
-                  </ThemedText>
-                ) : null}
-              </View>
-              {provider.capabilityTags && provider.capabilityTags.length > 0 ? (
-                <View style={styles.capabilityTags}>
-                  {provider.capabilityTags.slice(0, 3).map((tag, i) => (
-                    <View key={i} style={[styles.capabilityTag, { backgroundColor: Colors.accentLight }]}>
-                      <ThemedText style={[styles.capabilityTagText, { color: Colors.accent }]}>{tag}</ThemedText>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
+          {selectedOption ? (
+            <View style={[styles.selectedOptionBanner, { backgroundColor: Colors.accentLight, marginTop: Spacing.lg }]}>
+              <Feather name="check-circle" size={16} color={Colors.accent} />
+              <ThemedText style={[styles.selectedOptionText, { color: Colors.accent }]}>
+                {selectedOption.name}: ${selectedOption.priceRange.min} - ${selectedOption.priceRange.max}
+              </ThemedText>
             </View>
-            <Feather name="chevron-right" size={20} color={theme.textSecondary} />
-          </Pressable>
-        </Animated.View>
-      ))}
+          ) : null}
 
-      {providers.length === 0 ? (
-        <View style={styles.noProvidersContainer}>
-          <Feather name="users" size={48} color={theme.textSecondary} />
-          <ThemedText style={[styles.noProvidersText, { color: theme.textSecondary }]}>
-            No providers available for this category in your area
-          </ThemedText>
-        </View>
-      ) : null}
-    </Animated.View>
-  );
+          <GlassCard style={styles.preselectedProviderCard}>
+            <ThemedText style={[styles.bookingWithLabel, { color: theme.textSecondary }]}>
+              Booking with
+            </ThemedText>
+            <ThemedText style={styles.preselectedProviderName}>{preselectedProviderName}</ThemedText>
+          </GlassCard>
+
+          <PrimaryButton
+            onPress={handleBookWithPreselectedProvider}
+            style={{ marginTop: Spacing.xl }}
+          >
+            Continue to Booking
+          </PrimaryButton>
+        </Animated.View>
+      );
+    }
+
+    return (
+      <Animated.View entering={FadeInDown.duration(400)} style={styles.stepContainer}>
+        <ThemedText style={styles.providersTitle}>Top Matched Providers</ThemedText>
+        <ThemedText style={[styles.providersSubtitle, { color: theme.textSecondary }]}>
+          Ready to take on your job
+        </ThemedText>
+
+        {selectedOption ? (
+          <View style={[styles.selectedOptionBanner, { backgroundColor: Colors.accentLight }]}>
+            <Feather name="check-circle" size={16} color={Colors.accent} />
+            <ThemedText style={[styles.selectedOptionText, { color: Colors.accent }]}>
+              {selectedOption.name}: ${selectedOption.priceRange.min} - ${selectedOption.priceRange.max}
+            </ThemedText>
+          </View>
+        ) : null}
+
+        {providers.map((provider, index) => (
+          <Animated.View key={provider.id} entering={FadeInUp.delay(index * 100).duration(300)}>
+            <Pressable
+              style={[styles.providerCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}
+              onPress={() => handleSelectProvider(provider.id)}
+            >
+              <Avatar name={provider.businessName} size="medium" />
+              <View style={styles.providerInfo}>
+                <View style={styles.providerNameRow}>
+                  <ThemedText style={styles.providerName}>{provider.businessName}</ThemedText>
+                  {provider.isVerified ? (
+                    <Feather name="check-circle" size={14} color={Colors.accent} />
+                  ) : null}
+                </View>
+                <View style={styles.providerStats}>
+                  <View style={styles.ratingRow}>
+                    <Feather name="star" size={12} color={Colors.accent} />
+                    <ThemedText style={styles.ratingText}>
+                      {typeof provider.rating === "string" ? provider.rating : provider.rating?.toFixed(1)} ({provider.reviewCount})
+                    </ThemedText>
+                  </View>
+                  {provider.yearsExperience ? (
+                    <ThemedText style={[styles.experienceText, { color: theme.textSecondary }]}>
+                      {provider.yearsExperience} yrs
+                    </ThemedText>
+                  ) : null}
+                </View>
+                {provider.capabilityTags && provider.capabilityTags.length > 0 ? (
+                  <View style={styles.capabilityTags}>
+                    {provider.capabilityTags.slice(0, 3).map((tag, i) => (
+                      <View key={i} style={[styles.capabilityTag, { backgroundColor: Colors.accentLight }]}>
+                        <ThemedText style={[styles.capabilityTagText, { color: Colors.accent }]}>{tag}</ThemedText>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+              <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+            </Pressable>
+          </Animated.View>
+        ))}
+
+        {providers.length === 0 ? (
+          <View style={styles.noProvidersContainer}>
+            <Feather name="users" size={48} color={theme.textSecondary} />
+            <ThemedText style={[styles.noProvidersText, { color: theme.textSecondary }]}>
+              No providers available for this category in your area
+            </ThemedText>
+          </View>
+        ) : null}
+      </Animated.View>
+    );
+  };
 
   return (
     <ThemedView style={styles.container}>
@@ -1075,5 +1151,18 @@ const styles = StyleSheet.create({
     ...Typography.subhead,
     textAlign: "center",
     marginTop: Spacing.md,
+  },
+  preselectedProviderCard: {
+    marginTop: Spacing.xl,
+    padding: Spacing.lg,
+    alignItems: "center",
+  },
+  bookingWithLabel: {
+    ...Typography.caption,
+    marginBottom: Spacing.xs,
+  },
+  preselectedProviderName: {
+    ...Typography.title2,
+    textAlign: "center",
   },
 });
