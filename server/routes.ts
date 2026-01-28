@@ -257,7 +257,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!appointment) {
         return res.status(404).json({ error: "Appointment not found" });
       }
-      res.json({ appointment });
+      
+      const provider = await storage.getProvider(appointment.providerId);
+      
+      let statusHistory = [];
+      if (appointment.statusHistory) {
+        try {
+          statusHistory = JSON.parse(appointment.statusHistory);
+        } catch (e) {
+          statusHistory = [];
+        }
+      }
+      
+      res.json({ 
+        appointment: {
+          ...appointment,
+          statusHistory,
+          provider: provider ? {
+            id: provider.id,
+            businessName: provider.businessName,
+            rating: provider.rating,
+            reviewCount: provider.reviewCount,
+            phone: provider.phone,
+            avatarUrl: provider.avatarUrl,
+          } : null,
+        }
+      });
     } catch (error) {
       console.error("Get appointment error:", error);
       res.status(500).json({ error: "Failed to get appointment" });

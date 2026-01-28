@@ -26,6 +26,21 @@ type ScreenRouteProp = RouteProp<{ AppointmentDetail: AppointmentDetailParams },
 
 type AppointmentStatus = "pending" | "confirmed" | "in_progress" | "completed" | "cancelled";
 
+interface StatusUpdate {
+  status: string;
+  date: string;
+  note: string;
+}
+
+interface Provider {
+  id: string;
+  businessName: string;
+  rating?: string;
+  reviewCount?: number;
+  phone?: string;
+  avatarUrl?: string;
+}
+
 interface Appointment {
   id: string;
   userId: string;
@@ -33,14 +48,20 @@ interface Appointment {
   providerId: string;
   serviceName: string;
   description?: string;
+  jobSummary?: string;
   scheduledDate: string;
   scheduledTime: string;
   urgency: string;
   jobSize: string;
   estimatedPrice?: number;
+  finalPrice?: number;
+  providerDiagnosis?: string;
+  statusHistory?: StatusUpdate[];
   status: AppointmentStatus;
   createdAt: string;
   updatedAt: string;
+  completedAt?: string;
+  provider?: Provider;
 }
 
 const STATUS_CONFIG: Record<AppointmentStatus, { label: string; status: "success" | "info" | "warning" | "neutral" | "cancelled" }> = {
@@ -211,11 +232,11 @@ export default function AppointmentDetailScreen() {
         <Animated.View entering={FadeInDown.duration(400)}>
           <GlassCard style={styles.headerCard}>
             <View style={styles.headerRow}>
-              <Avatar name="Service Provider" size="medium" />
+              <Avatar name={appointment.provider?.businessName || "Provider"} size="medium" />
               <View style={styles.headerInfo}>
                 <ThemedText style={styles.serviceName}>{appointment.serviceName}</ThemedText>
-                <ThemedText style={[styles.serviceDesc, { color: theme.textSecondary }]}>
-                  {appointment.description || "Home service appointment"}
+                <ThemedText style={[styles.providerName, { color: theme.textSecondary }]}>
+                  {appointment.provider?.businessName || "Service Provider"}
                 </ThemedText>
               </View>
               <StatusPill
@@ -225,6 +246,17 @@ export default function AppointmentDetailScreen() {
             </View>
           </GlassCard>
         </Animated.View>
+
+        {appointment.jobSummary ? (
+          <View style={styles.section}>
+            <ThemedText style={styles.sectionTitle}>Job Summary</ThemedText>
+            <View style={[styles.summaryCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
+              <ThemedText style={[styles.summaryText, { color: theme.text }]}>
+                {appointment.jobSummary}
+              </ThemedText>
+            </View>
+          </View>
+        ) : null}
 
         <View style={styles.section}>
           <ThemedText style={styles.sectionTitle}>Details</ThemedText>
@@ -251,14 +283,69 @@ export default function AppointmentDetailScreen() {
               <ThemedText style={styles.detailValue}>{appointment.jobSize}</ThemedText>
             </View>
             {appointment.estimatedPrice ? (
-              <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
+              <View style={[styles.detailRow, { borderBottomWidth: appointment.status === "completed" && appointment.finalPrice ? StyleSheet.hairlineWidth : 0 }]}>
                 <Feather name="dollar-sign" size={18} color={theme.textSecondary} />
                 <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Est. Price</ThemedText>
                 <ThemedText style={[styles.detailValue, { color: Colors.accent }]}>${appointment.estimatedPrice}</ThemedText>
               </View>
             ) : null}
+            {appointment.status === "completed" && appointment.finalPrice ? (
+              <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
+                <Feather name="check-circle" size={18} color={Colors.accent} />
+                <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Final Price</ThemedText>
+                <ThemedText style={[styles.detailValue, { color: Colors.accent, fontWeight: "600" }]}>${appointment.finalPrice}</ThemedText>
+              </View>
+            ) : null}
           </View>
         </View>
+
+        {appointment.statusHistory && appointment.statusHistory.length > 0 ? (
+          <View style={styles.section}>
+            <ThemedText style={styles.sectionTitle}>Status Updates</ThemedText>
+            <View style={[styles.timelineCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
+              {appointment.statusHistory.map((update, index) => (
+                <View key={index} style={styles.timelineItem}>
+                  <View style={styles.timelineDot}>
+                    <View style={[styles.dot, { backgroundColor: index === appointment.statusHistory!.length - 1 ? Colors.accent : theme.textTertiary }]} />
+                    {index < appointment.statusHistory!.length - 1 ? (
+                      <View style={[styles.timelineLine, { backgroundColor: theme.borderLight }]} />
+                    ) : null}
+                  </View>
+                  <View style={styles.timelineContent}>
+                    <View style={styles.timelineHeader}>
+                      <ThemedText style={styles.timelineStatus}>
+                        {update.status.charAt(0).toUpperCase() + update.status.slice(1).replace("_", " ")}
+                      </ThemedText>
+                      <ThemedText style={[styles.timelineDate, { color: theme.textTertiary }]}>
+                        {new Date(update.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      </ThemedText>
+                    </View>
+                    <ThemedText style={[styles.timelineNote, { color: theme.textSecondary }]}>
+                      {update.note}
+                    </ThemedText>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        {appointment.status === "completed" && appointment.providerDiagnosis ? (
+          <View style={styles.section}>
+            <ThemedText style={styles.sectionTitle}>Provider Diagnosis</ThemedText>
+            <View style={[styles.diagnosisCard, { backgroundColor: `${Colors.accent}08`, borderColor: Colors.accent + "30" }]}>
+              <View style={styles.diagnosisHeader}>
+                <View style={[styles.diagnosisIcon, { backgroundColor: Colors.accent + "20" }]}>
+                  <Feather name="clipboard" size={16} color={Colors.accent} />
+                </View>
+                <ThemedText style={[styles.diagnosisLabel, { color: Colors.accent }]}>Work Completed</ThemedText>
+              </View>
+              <ThemedText style={[styles.diagnosisText, { color: theme.text }]}>
+                {appointment.providerDiagnosis}
+              </ThemedText>
+            </View>
+          </View>
+        ) : null}
 
         <View style={styles.actions}>
           <SecondaryButton onPress={handleMessage}>
@@ -485,9 +572,89 @@ const styles = StyleSheet.create({
     ...Typography.headline,
     fontWeight: "600",
   },
-  serviceDesc: {
+  providerName: {
     ...Typography.subhead,
     marginTop: 2,
+  },
+  summaryCard: {
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    padding: Spacing.md,
+  },
+  summaryText: {
+    ...Typography.body,
+    lineHeight: 22,
+  },
+  timelineCard: {
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    padding: Spacing.md,
+  },
+  timelineItem: {
+    flexDirection: "row",
+    marginBottom: Spacing.sm,
+  },
+  timelineDot: {
+    width: 24,
+    alignItems: "center",
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginTop: 4,
+  },
+  timelineLine: {
+    width: 2,
+    flex: 1,
+    marginTop: 4,
+  },
+  timelineContent: {
+    flex: 1,
+    paddingLeft: Spacing.sm,
+    paddingBottom: Spacing.sm,
+  },
+  timelineHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  timelineStatus: {
+    ...Typography.subhead,
+    fontWeight: "600",
+  },
+  timelineDate: {
+    ...Typography.caption2,
+  },
+  timelineNote: {
+    ...Typography.caption1,
+  },
+  diagnosisCard: {
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    padding: Spacing.md,
+  },
+  diagnosisHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  diagnosisIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  diagnosisLabel: {
+    ...Typography.subhead,
+    fontWeight: "600",
+  },
+  diagnosisText: {
+    ...Typography.body,
+    lineHeight: 22,
   },
   section: {
     marginBottom: Spacing.lg,
