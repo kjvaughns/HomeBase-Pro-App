@@ -14,6 +14,7 @@ import {
   ServiceCategory,
   BookingRequest,
   TimeSlot,
+  Appointment,
 } from "./types";
 import {
   SERVICE_CATEGORIES,
@@ -40,6 +41,7 @@ interface HomeownerState {
   reviews: Review[];
   quotes: Quote[];
   savedProviderIds: string[];
+  appointments: Appointment[];
 
   hydrate: () => Promise<void>;
   resetToSeedData: () => Promise<void>;
@@ -87,6 +89,13 @@ interface HomeownerState {
   getQuotes: () => Quote[];
   acceptQuote: (quoteId: string) => Job;
   declineQuote: (quoteId: string) => void;
+
+  addAppointment: (appointment: Appointment) => void;
+  getAppointments: () => Appointment[];
+  getAppointmentById: (id: string) => Appointment | undefined;
+  updateAppointmentCondition: (id: string, description: string) => void;
+  cancelAppointment: (id: string) => void;
+  rescheduleAppointment: (id: string, newDate: string, newTime: string) => void;
 }
 
 const JOB_STATUS_ORDER: JobStatus[] = [
@@ -110,6 +119,7 @@ export const useHomeownerStore = create<HomeownerState>()((set, get) => ({
   reviews: [],
   quotes: [],
   savedProviderIds: [],
+  appointments: [],
 
   hydrate: async () => {
     try {
@@ -124,6 +134,7 @@ export const useHomeownerStore = create<HomeownerState>()((set, get) => ({
           reviews: data.reviews || SEED_REVIEWS,
           quotes: data.quotes || SEED_QUOTES,
           savedProviderIds: data.savedProviderIds || [],
+          appointments: data.appointments || [],
           isHydrated: true,
         });
       } else {
@@ -635,6 +646,57 @@ export const useHomeownerStore = create<HomeownerState>()((set, get) => ({
     }));
     saveToStorage(get());
   },
+
+  addAppointment: (appointment) => {
+    set((state) => ({
+      appointments: [appointment, ...state.appointments],
+    }));
+    saveToStorage(get());
+  },
+
+  getAppointments: () => {
+    return get().appointments;
+  },
+
+  getAppointmentById: (id) => {
+    return get().appointments.find((a) => a.id === id);
+  },
+
+  updateAppointmentCondition: (id, description) => {
+    const update = {
+      id: `upd-${Date.now()}`,
+      description,
+      createdAt: new Date().toISOString(),
+    };
+    set((state) => ({
+      appointments: state.appointments.map((a) =>
+        a.id === id
+          ? { ...a, conditionUpdates: [...a.conditionUpdates, update] }
+          : a
+      ),
+    }));
+    saveToStorage(get());
+  },
+
+  cancelAppointment: (id) => {
+    set((state) => ({
+      appointments: state.appointments.map((a) =>
+        a.id === id ? { ...a, status: "cancelled" } : a
+      ),
+    }));
+    saveToStorage(get());
+  },
+
+  rescheduleAppointment: (id, newDate, newTime) => {
+    set((state) => ({
+      appointments: state.appointments.map((a) =>
+        a.id === id
+          ? { ...a, scheduledDate: newDate, scheduledTime: newTime, status: "rescheduled" }
+          : a
+      ),
+    }));
+    saveToStorage(get());
+  },
 }));
 
 async function saveToStorage(state: HomeownerState) {
@@ -647,6 +709,7 @@ async function saveToStorage(state: HomeownerState) {
       reviews: state.reviews,
       quotes: state.quotes,
       savedProviderIds: state.savedProviderIds,
+      appointments: state.appointments,
     };
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch (error) {

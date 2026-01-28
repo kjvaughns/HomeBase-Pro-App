@@ -200,3 +200,24 @@ export interface BookingRequest {
   scheduledTime: string;
   addressId: string;
 }
+
+export interface ConditionUpdate {
+  id: string;
+  description: string;
+  createdAt: string;
+}
+
+export interface Appointment {
+  id: string;
+  providerId: string;
+  providerName: string;
+  category: string;
+  service: string;
+  description: string;
+  scheduledDate: string;
+  scheduledTime: string;
+  status: "pending" | "confirmed" | "completed" | "cancelled" | "rescheduled";
+  estimatedPrice: { min: number; max: number };
+  createdAt: string;
+  conditionUpdates: ConditionUpdate[];
+}

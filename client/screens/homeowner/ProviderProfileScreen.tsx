@@ -70,10 +70,9 @@ export default function ProviderProfileScreen() {
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    navigation.navigate("ServiceIntake", {
+    navigation.navigate("SimpleBooking", {
       providerId: provider.id,
-      categoryId: provider.categoryIds[0],
-      service: intakeData?.recommendedService || provider.services[0],
+      providerName: provider.businessName,
       intakeData,
     });
   };
@@ -183,10 +182,17 @@ export default function ProviderProfileScreen() {
           style={[styles.serviceRow, { borderColor: theme.borderLight }]}
           onPress={() => {
             if (isAuthenticated) {
-              navigation.navigate("ServiceIntake", {
+              navigation.navigate("SimpleBooking", {
                 providerId: provider.id,
-                categoryId: provider.categoryIds[0],
-                service,
+                providerName: provider.businessName,
+                intakeData: {
+                  problemDescription: "",
+                  issueSummary: "",
+                  recommendedService: service,
+                  priceRange: { min: provider.hourlyRate, max: provider.hourlyRate * 4 },
+                  urgency: "flexible" as const,
+                  category: provider.categoryIds[0],
+                },
               });
             } else {
               setShowAccountGate(true);

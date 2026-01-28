@@ -13,7 +13,7 @@ import ForgotPasswordScreen from "@/screens/auth/ForgotPasswordScreen";
 import OnboardingScreen from "@/screens/auth/OnboardingScreen";
 import AIChatScreen from "@/screens/homeowner/AIChatScreen";
 import SmartIntakeScreen from "@/screens/homeowner/SmartIntakeScreen";
-import ServiceIntakeScreen from "@/screens/homeowner/ServiceIntakeScreen";
+import SimpleBookingScreen from "@/screens/homeowner/SimpleBookingScreen";
 import SurvivalKitScreen from "@/screens/homeowner/SurvivalKitScreen";
 import HealthScoreScreen from "@/screens/homeowner/HealthScoreScreen";
 import HouseFaxScreen from "@/screens/homeowner/HouseFaxScreen";
@@ -21,7 +21,6 @@ import BudgeterScreen from "@/screens/homeowner/BudgeterScreen";
 import ServiceHistoryScreen from "@/screens/homeowner/ServiceHistoryScreen";
 import ProviderListScreen from "@/screens/homeowner/ProviderListScreen";
 import ProviderProfileScreen from "@/screens/homeowner/ProviderProfileScreen";
-import BookingRequestScreen from "@/screens/homeowner/BookingRequestScreen";
 import BookingScheduleScreen from "@/screens/homeowner/BookingScheduleScreen";
 import BookingAddressScreen from "@/screens/homeowner/BookingAddressScreen";
 import BookingConfirmScreen from "@/screens/homeowner/BookingConfirmScreen";
@@ -78,10 +77,9 @@ export type RootStackParamList = {
       category: string;
     };
   };
-  ServiceIntake: {
+  SimpleBooking: {
     providerId: string;
-    categoryId: string;
-    service: string;
+    providerName: string;
     intakeData?: {
       problemDescription: string;
       issueSummary: string;
@@ -90,11 +88,6 @@ export type RootStackParamList = {
       urgency: UrgencyLevel;
       category: string;
     };
-  };
-  BookingRequest: {
-    providerId: string;
-    categoryId: string;
-    service: string;
   };
   BookingSchedule: {
     providerId: string;
@@ -235,10 +228,11 @@ export default function RootStackNavigator() {
         }}
       />
       <Stack.Screen
-        name="ServiceIntake"
-        component={ServiceIntakeScreen}
+        name="SimpleBooking"
+        component={SimpleBookingScreen}
         options={{
-          headerTitle: "Service Details",
+          headerTitle: "Book Appointment",
+          headerTransparent: false,
         }}
       />
       <Stack.Screen
@@ -288,13 +282,6 @@ export default function RootStackNavigator() {
         component={ProviderProfileScreen}
         options={{
           headerTitle: "",
-        }}
-      />
-      <Stack.Screen
-        name="BookingRequest"
-        component={BookingRequestScreen}
-        options={{
-          headerTitle: "Request Details",
         }}
       />
       <Stack.Screen
