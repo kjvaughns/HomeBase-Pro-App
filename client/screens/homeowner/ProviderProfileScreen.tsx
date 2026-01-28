@@ -41,10 +41,10 @@ export default function ProviderProfileScreen() {
   const allReviews = useHomeownerStore((s) => s.reviews);
   const categories = useHomeownerStore((s) => s.categories);
   const toggleSavedProvider = useHomeownerStore((s) => s.toggleSavedProvider);
-  const isProviderSaved = useHomeownerStore((s) => s.isProviderSaved);
+  const savedProviderIds = useHomeownerStore((s) => s.savedProviderIds);
   const { isAuthenticated } = useAuthStore();
   
-  const isSaved = isProviderSaved(providerId);
+  const isSaved = savedProviderIds.includes(providerId);
   
   const localProvider = useMemo(() => {
     return localProviders.find((p) => p.id === providerId);
