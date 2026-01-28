@@ -234,7 +234,6 @@ export default function RootStackNavigator() {
         component={SimpleBookingScreen}
         options={{
           headerTitle: "Book Appointment",
-          headerTransparent: false,
         }}
       />
       <Stack.Screen
