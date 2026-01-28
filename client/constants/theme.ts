@@ -6,8 +6,11 @@ export const Colors = {
   accentPressed: "#2D9A4F",
   
   success: "#38AE5F",
+  successLight: "rgba(56, 174, 95, 0.12)",
   error: "#EF4444",
+  errorLight: "rgba(239, 68, 68, 0.12)",
   warning: "#F59E0B",
+  warningLight: "rgba(245, 158, 11, 0.12)",
   
   light: {
     text: "#1A1A1A",
