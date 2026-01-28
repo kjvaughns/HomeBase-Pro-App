@@ -41,6 +41,7 @@ import InvoiceDetailScreen from "@/screens/provider/InvoiceDetailScreen";
 import ServiceBuilderScreen from "@/screens/provider/ServiceBuilderScreen";
 import PublicProfileScreen from "@/screens/provider/PublicProfileScreen";
 import ServicePreviewScreen from "@/screens/provider/ServicePreviewScreen";
+import BookingPoliciesScreen from "@/screens/provider/BookingPoliciesScreen";
 import SavedProvidersScreen from "@/screens/homeowner/SavedProvidersScreen";
 import HelpCenterScreen from "@/screens/homeowner/HelpCenterScreen";
 import ContactUsScreen from "@/screens/homeowner/ContactUsScreen";
@@ -144,6 +145,7 @@ export type RootStackParamList = {
   SavedProviders: undefined;
   HelpCenter: undefined;
   ContactUs: undefined;
+  BookingPolicies: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -436,6 +438,13 @@ export default function RootStackNavigator() {
         component={ContactUsScreen}
         options={{
           headerTitle: "Contact Us",
+        }}
+      />
+      <Stack.Screen
+        name="BookingPolicies"
+        component={BookingPoliciesScreen}
+        options={{
+          headerTitle: "Booking Policies",
         }}
       />
     </Stack.Navigator>

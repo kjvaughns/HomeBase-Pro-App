@@ -111,6 +111,12 @@ export default function ProviderMoreScreen() {
               onPress={() => navigation.navigate("BusinessProfile")}
             />
             <ListRow
+              title="Booking Policies"
+              subtitle="Deposits, cancellations, reschedules"
+              leftIcon="file-text"
+              onPress={() => navigation.navigate("BookingPolicies")}
+            />
+            <ListRow
               title="Service Areas"
               leftIcon="map"
               onPress={() => {}}

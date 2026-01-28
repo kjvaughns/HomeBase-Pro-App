@@ -323,6 +323,15 @@ const initialClientActivities: ClientActivity[] = [
 // STORE INTERFACE
 // ============================================
 
+export interface BookingPolicies {
+  requireDeposit: boolean;
+  depositPercent: number;
+  cancellationHours: number;
+  cancellationFeePercent: number;
+  rescheduleHours: number;
+  maxReschedules: number;
+}
+
 interface ProviderState {
   // Data
   leads: Lead[];
@@ -337,6 +346,7 @@ interface ProviderState {
   // Settings
   availableForWork: boolean;
   notificationsEnabled: boolean;
+  bookingPolicies: BookingPolicies | null;
   
   // Computed stats (cached)
   _statsCache: ProviderStats | null;
@@ -367,6 +377,7 @@ interface ProviderState {
   // Settings actions
   setAvailableForWork: (value: boolean) => void;
   setNotificationsEnabled: (value: boolean) => void;
+  setBookingPolicies: (policies: BookingPolicies) => void;
   
   // Computed getters
   getStats: () => ProviderStats;
@@ -397,6 +408,7 @@ export const useProviderStore = create<ProviderState>()(
       
       availableForWork: true,
       notificationsEnabled: true,
+      bookingPolicies: null,
       
       _statsCache: null,
       
@@ -598,6 +610,7 @@ export const useProviderStore = create<ProviderState>()(
       // Settings actions
       setAvailableForWork: (value) => set({ availableForWork: value }),
       setNotificationsEnabled: (value) => set({ notificationsEnabled: value }),
+      setBookingPolicies: (policies) => set({ bookingPolicies: policies }),
       
       // Computed getters
       getStats: () => {
