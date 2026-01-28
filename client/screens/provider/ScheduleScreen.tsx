@@ -18,6 +18,7 @@ import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 
 type ViewMode = "list" | "day" | "week" | "month";
+type DateRangePreset = "today" | "week" | "month" | "custom";
 
 interface Job {
   id: string;
@@ -208,6 +209,108 @@ function ViewModeTabs({ selected, onSelect }: ViewModeTabsProps) {
           </ThemedText>
         </Pressable>
       ))}
+    </View>
+  );
+}
+
+interface DateRangePickerProps {
+  preset: DateRangePreset;
+  onPresetChange: (preset: DateRangePreset) => void;
+  customStart: Date | null;
+  customEnd: Date | null;
+  onCustomStartChange: (date: Date) => void;
+  onCustomEndChange: (date: Date) => void;
+}
+
+function DateRangePicker({ 
+  preset, 
+  onPresetChange, 
+  customStart, 
+  customEnd,
+  onCustomStartChange,
+  onCustomEndChange 
+}: DateRangePickerProps) {
+  const { theme } = useTheme();
+  const presets: { key: DateRangePreset; label: string }[] = [
+    { key: "today", label: "Today" },
+    { key: "week", label: "This Week" },
+    { key: "month", label: "This Month" },
+    { key: "custom", label: "Custom" },
+  ];
+
+  const handlePresetChange = (newPreset: DateRangePreset) => {
+    onPresetChange(newPreset);
+    if (newPreset === "custom" && !customStart) {
+      onCustomStartChange(new Date());
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + 7);
+      onCustomEndChange(endDate);
+    }
+  };
+
+  return (
+    <View style={styles.dateRangePicker}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.dateRangePresets}
+      >
+        {presets.map((p) => (
+          <Pressable
+            key={p.key}
+            style={[
+              styles.dateRangeChip,
+              { borderColor: theme.separator },
+              preset === p.key && { backgroundColor: Colors.accent, borderColor: Colors.accent },
+            ]}
+            onPress={() => handlePresetChange(p.key)}
+          >
+            <ThemedText
+              type="caption"
+              style={[
+                { color: theme.textSecondary },
+                preset === p.key && { color: "#FFFFFF", fontWeight: "600" },
+              ]}
+            >
+              {p.label}
+            </ThemedText>
+          </Pressable>
+        ))}
+      </ScrollView>
+      
+      {preset === "custom" ? (
+        <View style={styles.customDateRow}>
+          <Pressable
+            style={[styles.customDateButton, { backgroundColor: theme.cardBackground }]}
+            onPress={() => {
+              const newDate = new Date(customStart || new Date());
+              newDate.setDate(newDate.getDate() - 1);
+              onCustomStartChange(newDate);
+            }}
+          >
+            <Feather name="chevron-left" size={16} color={theme.text} />
+          </Pressable>
+          <View style={styles.customDateLabels}>
+            <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+              {customStart ? formatDateShort(customStart) : "Start"}
+            </ThemedText>
+            <ThemedText type="caption" style={{ color: theme.textSecondary }}> - </ThemedText>
+            <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+              {customEnd ? formatDateShort(customEnd) : "End"}
+            </ThemedText>
+          </View>
+          <Pressable
+            style={[styles.customDateButton, { backgroundColor: theme.cardBackground }]}
+            onPress={() => {
+              const newDate = new Date(customEnd || new Date());
+              newDate.setDate(newDate.getDate() + 1);
+              onCustomEndChange(newDate);
+            }}
+          >
+            <Feather name="chevron-right" size={16} color={theme.text} />
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -588,6 +691,10 @@ export default function ScheduleScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [statusFilter, setStatusFilter] = useState<"all" | "scheduled" | "in_progress" | "completed">("all");
+  const [dateRangePreset, setDateRangePreset] = useState<DateRangePreset>("week");
+  const [customStartDate, setCustomStartDate] = useState<Date | null>(null);
+  const [customEndDate, setCustomEndDate] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState<"start" | "end" | null>(null);
 
   const jobs = jobsData?.jobs || [];
   const clients = clientsData?.clients || [];
@@ -629,6 +736,51 @@ export default function ScheduleScreen() {
   const dayJobs = useMemo(() => {
     return formattedJobs.filter((job) => isSameDay(new Date(job.date), selectedDate));
   }, [formattedJobs, selectedDate]);
+
+  const getDateRange = useCallback((): { start: Date; end: Date } => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    switch (dateRangePreset) {
+      case "today":
+        const endOfToday = new Date(today);
+        endOfToday.setHours(23, 59, 59, 999);
+        return { start: today, end: endOfToday };
+      case "week": {
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - today.getDay());
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        endOfWeek.setHours(23, 59, 59, 999);
+        return { start: startOfWeek, end: endOfWeek };
+      }
+      case "month": {
+        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        endOfMonth.setHours(23, 59, 59, 999);
+        return { start: startOfMonth, end: endOfMonth };
+      }
+      case "custom":
+        if (customStartDate && customEndDate) {
+          const start = new Date(customStartDate);
+          start.setHours(0, 0, 0, 0);
+          const end = new Date(customEndDate);
+          end.setHours(23, 59, 59, 999);
+          return { start, end };
+        }
+        return { start: today, end: today };
+      default:
+        return { start: today, end: today };
+    }
+  }, [dateRangePreset, customStartDate, customEndDate]);
+
+  const rangeJobs = useMemo(() => {
+    const { start, end } = getDateRange();
+    return formattedJobs.filter((job) => {
+      const jobDate = new Date(job.date);
+      return jobDate >= start && jobDate <= end;
+    });
+  }, [formattedJobs, getDateRange]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -691,24 +843,43 @@ export default function ScheduleScreen() {
       );
     }
 
+    const { start, end } = getDateRange();
+    const dateRangeLabel = dateRangePreset === "custom" 
+      ? `${formatDateShort(start)} - ${formatDateShort(end)}`
+      : dateRangePreset === "today" 
+        ? "Today"
+        : dateRangePreset === "week"
+          ? "This Week"
+          : "This Month";
+
     return (
       <FlatList
-        data={dayJobs}
+        data={rangeJobs}
         renderItem={({ item, index }) => (
           <Animated.View entering={FadeInDown.delay(index * 50).duration(300)}>
-            <JobListItem job={item} onPress={() => handleJobPress(item)} />
+            <View style={styles.listJobItem}>
+              <ThemedText type="caption" style={{ color: theme.textSecondary, marginBottom: 4 }}>
+                {formatDate(new Date(item.date))}
+              </ThemedText>
+              <JobListItem job={item} onPress={() => handleJobPress(item)} />
+            </View>
           </Animated.View>
         )}
         keyExtractor={(item) => item.id}
         contentContainerStyle={[
           styles.listContent,
-          dayJobs.length === 0 && styles.emptyContainer,
+          rangeJobs.length === 0 && styles.emptyContainer,
         ]}
+        ListHeaderComponent={
+          <ThemedText type="caption" style={[styles.listHeader, { color: theme.textSecondary }]}>
+            {rangeJobs.length} job{rangeJobs.length !== 1 ? "s" : ""} in {dateRangeLabel}
+          </ThemedText>
+        }
         ListEmptyComponent={
           <EmptyState
             image={require("../../../assets/images/empty-bookings.png")}
             title="No jobs scheduled"
-            description="You don't have any jobs scheduled for this day."
+            description={`No jobs found in the selected time range.`}
           />
         }
         showsVerticalScrollIndicator={false}
@@ -728,13 +899,26 @@ export default function ScheduleScreen() {
         ]}
       >
         <View style={styles.headerRow}>
-          <DateNavigator
-            date={selectedDate}
-            viewMode={viewMode}
-            onPrevious={handlePrevious}
-            onNext={handleNext}
-            onToday={handleToday}
-          />
+          {viewMode === "list" ? (
+            <View style={{ flex: 1 }}>
+              <DateRangePicker
+                preset={dateRangePreset}
+                onPresetChange={setDateRangePreset}
+                customStart={customStartDate}
+                customEnd={customEndDate}
+                onCustomStartChange={setCustomStartDate}
+                onCustomEndChange={setCustomEndDate}
+              />
+            </View>
+          ) : (
+            <DateNavigator
+              date={selectedDate}
+              viewMode={viewMode}
+              onPrevious={handlePrevious}
+              onNext={handleNext}
+              onToday={handleToday}
+            />
+          )}
           <Pressable
             style={[styles.addButton, { backgroundColor: Colors.accent }]}
             onPress={handleAddJob}
@@ -974,5 +1158,42 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
+  },
+  dateRangePicker: {
+    gap: Spacing.sm,
+  },
+  dateRangePresets: {
+    gap: Spacing.sm,
+    flexDirection: "row",
+  },
+  dateRangeChip: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  customDateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginTop: Spacing.xs,
+  },
+  customDateButton: {
+    width: 32,
+    height: 32,
+    borderRadius: BorderRadius.full,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  customDateLabels: {
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "center",
+  },
+  listJobItem: {
+    marginBottom: Spacing.sm,
+  },
+  listHeader: {
+    marginBottom: Spacing.sm,
   },
 });
