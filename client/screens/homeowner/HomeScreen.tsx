@@ -1,9 +1,9 @@
-import React, { useMemo } from "react";
-import { StyleSheet, View, ScrollView, Pressable } from "react-native";
+import React, { useMemo, useCallback, useEffect, useState } from "react";
+import { StyleSheet, View, ScrollView, Pressable, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -22,6 +22,19 @@ import { useAuthStore } from "@/state/authStore";
 import { useHomeownerStore } from "@/state/homeownerStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { Job, JobStatus, ServiceCategory } from "@/state/types";
+import { getApiUrl } from "@/lib/query-client";
+
+interface Appointment {
+  id: string;
+  serviceName: string;
+  scheduledDate: string;
+  scheduledTime: string;
+  status: string;
+  estimatedPrice?: string;
+  provider?: {
+    businessName: string;
+  };
+}
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -43,28 +56,84 @@ export default function HomeScreen() {
   const { theme } = useTheme();
   const { user } = useAuthStore();
   
-  const jobs = useHomeownerStore((s) => s.jobs);
   const categories = useHomeownerStore((s) => s.categories);
+  
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const upcomingJobs = useMemo(() => 
-    jobs.filter((j) => j.status === "scheduled" || j.status === "requested"), 
-    [jobs]
+  const fetchAppointments = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const response = await fetch(new URL(`/api/appointments/${user.id}`, getApiUrl()).href);
+      if (response.ok) {
+        const data = await response.json();
+        setAppointments(data.appointments || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch appointments:", error);
+    }
+  }, [user?.id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchAppointments();
+    }, [fetchAppointments])
+  );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchAppointments();
+    setRefreshing(false);
+  };
+
+  const upcomingAppointments = useMemo(() => 
+    appointments.filter((a) => {
+      const date = new Date(a.scheduledDate);
+      return date >= new Date() && (a.status === "confirmed" || a.status === "pending");
+    }), 
+    [appointments]
   );
   
-  const activeJobs = useMemo(() => 
-    jobs.filter((j) => j.status === "in_progress" || j.status === "awaiting_payment"), 
-    [jobs]
+  const activeAppointments = useMemo(() => 
+    appointments.filter((a) => a.status === "in_progress"), 
+    [appointments]
   );
   
-  const recentJobs = useMemo(() => jobs.slice(0, 3), [jobs]);
+  const recentAppointments = useMemo(() => {
+    return [...appointments]
+      .sort((a, b) => new Date(b.scheduledDate).getTime() - new Date(a.scheduledDate).getTime())
+      .slice(0, 3);
+  }, [appointments]);
 
-  const handleJobPress = (job: Job) => {
+  const handleAppointmentPress = (appointmentId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    navigation.navigate("JobDetail", { jobId: job.id });
+    navigation.navigate("AppointmentDetail", { appointmentId });
   };
 
   const handleViewAllJobs = () => {
     navigation.getParent()?.navigate("ManageTab");
+  };
+
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      pending: "Pending",
+      confirmed: "Confirmed",
+      in_progress: "In Progress",
+      completed: "Completed",
+      cancelled: "Cancelled",
+    };
+    return labels[status] || status;
+  };
+
+  const getStatusStyle = (status: string): "success" | "info" | "warning" | "neutral" | "pending" | "scheduled" | "inProgress" | "completed" => {
+    const styles: Record<string, "success" | "info" | "warning" | "neutral" | "pending" | "scheduled" | "inProgress" | "completed"> = {
+      pending: "pending",
+      confirmed: "scheduled",
+      in_progress: "inProgress",
+      completed: "completed",
+      cancelled: "neutral",
+    };
+    return styles[status] || "neutral";
   };
 
   const handleAIPress = () => {
@@ -94,6 +163,9 @@ export default function HomeScreen() {
           paddingHorizontal: Spacing.screenPadding,
         }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
+        }
       >
         <Animated.View entering={FadeInDown.duration(400)}>
           <View style={styles.greeting}>
@@ -131,14 +203,14 @@ export default function HomeScreen() {
             <View style={styles.statCard}>
               <StatCard
                 title="Upcoming"
-                value={upcomingJobs.length}
+                value={upcomingAppointments.length}
                 icon="calendar"
               />
             </View>
             <View style={styles.statCard}>
               <StatCard
                 title="In Progress"
-                value={activeJobs.length}
+                value={activeAppointments.length}
                 icon="tool"
               />
             </View>
@@ -146,36 +218,36 @@ export default function HomeScreen() {
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(300).duration(400)}>
-          {recentJobs.length > 0 ? (
+          {recentAppointments.length > 0 ? (
             <>
               <View style={styles.sectionHeader}>
-                <ThemedText style={styles.sectionTitle}>Recent Jobs</ThemedText>
+                <ThemedText style={styles.sectionTitle}>Recent Bookings</ThemedText>
                 <Pressable onPress={handleViewAllJobs}>
                   <ThemedText style={[styles.viewAll, { color: Colors.accent }]}>View All</ThemedText>
                 </Pressable>
               </View>
 
-              {recentJobs.map((job) => (
-                <Pressable key={job.id} onPress={() => handleJobPress(job)}>
+              {recentAppointments.map((appt) => (
+                <Pressable key={appt.id} onPress={() => handleAppointmentPress(appt.id)}>
                   <GlassCard style={styles.jobCard}>
                     <View style={styles.jobHeader}>
-                      <Avatar name={job.providerName} size="small" />
+                      <Avatar name={appt.provider?.businessName || "Provider"} size="small" />
                       <View style={styles.jobInfo}>
-                        <ThemedText style={styles.jobService}>{job.service}</ThemedText>
+                        <ThemedText style={styles.jobService}>{appt.serviceName}</ThemedText>
                         <ThemedText style={[styles.jobProvider, { color: theme.textSecondary }]}>
-                          {job.providerName}
+                          {appt.provider?.businessName || "Service Provider"}
                         </ThemedText>
                       </View>
                       <StatusPill
-                        label={STATUS_MAP[job.status].label}
-                        status={STATUS_MAP[job.status].status}
+                        label={getStatusLabel(appt.status)}
+                        status={getStatusStyle(appt.status)}
                       />
                     </View>
-                    {job.scheduledDate ? (
+                    {appt.scheduledDate ? (
                       <View style={styles.jobFooter}>
                         <Feather name="calendar" size={14} color={theme.textSecondary} />
                         <ThemedText style={[styles.jobDate, { color: theme.textSecondary }]}>
-                          {formatDate(job.scheduledDate)}
+                          {formatDate(appt.scheduledDate)} at {appt.scheduledTime}
                         </ThemedText>
                       </View>
                     ) : null}
@@ -186,7 +258,7 @@ export default function HomeScreen() {
           ) : (
             <GlassCard style={styles.emptyCard}>
               <Feather name="inbox" size={40} color={theme.textSecondary} />
-              <ThemedText style={styles.emptyText}>No jobs yet</ThemedText>
+              <ThemedText style={styles.emptyText}>No bookings yet</ThemedText>
               <ThemedText style={[styles.emptySubtext, { color: theme.textSecondary }]}>
                 Book your first service to get started
               </ThemedText>
