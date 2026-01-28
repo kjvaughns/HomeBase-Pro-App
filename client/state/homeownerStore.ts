@@ -113,7 +113,7 @@ export const useHomeownerStore = create<HomeownerState>()((set, get) => ({
   receipts: [],
   reviews: [],
   quotes: [],
-  savedProviderIds: [],
+  savedProviderIds: ["prov-1", "prov-4", "prov-2"],
   appointments: [],
 
   hydrate: async () => {
