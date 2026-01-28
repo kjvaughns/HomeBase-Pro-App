@@ -1,0 +1,362 @@
+HomeBase Provider Portal Refinement and Finish
+Design only. React Native Expo. iOS-first. Liquid Glass. Calm luxury minimalism. No white outlined borders. Soft green only for primary actions and positive states. Everything clickable with mock data. Align UI patterns and data objects with the Homeowner portal so the experience feels like one product.
+
+Primary goal
+Finish the provider portal so it feels complete, connected, and effortless:
+1. A real Client CRM with a premium client profile page and full job history.
+2. A Provider Job Detail screen that mirrors what the homeowner sends through AI intake and booking.
+3. A better Schedule tab with List-first, clear statuses, and a frictionless add job flow.
+4. A stronger AI Service Builder and Services system that drives booking, schedule, and invoices.
+5. A complete Business Profile and Public Booking Page editor with live preview and settings pages.
+6. Add required business and money related pages: service areas, business info, bank, tax, reviews, resources, help center, contact support.
+7. Make homeowner and provider experiences tightly connected with shared objects, shared terminology, and one tap actions.
+
+Global requirements
+1. Use the same design system as the homeowner app: typography scale, spacing, card style, chips, buttons, toasts, empty states, skeletons, and micro animations.
+2. Fix safe area padding everywhere. No content hidden behind nav or FAB. FAB position consistent, never overlaps lists.
+3. All lists are virtualized and feel fast. Add search and quick filters on every major list.
+4. Provide realistic mock data with consistent relationships:
+2 businesses
+12 clients
+30 jobs total across states (pending, upcoming, in progress, completed, invoiced, unpaid)
+12 services (mixed pricing models)
+Reviews dataset
+HouseFax style home metadata per client
+5. Update blueprint files as necessary for new routes, navigation, and data stubs.
+
+Navigation structure (Provider)
+Tabs:
+Home
+Schedule
+Plus FAB (Create)
+Money
+More
+
+FAB menu (Create)
+New Job
+New Client
+New Invoice
+New Service
+Payment Link
+
+Feature 1: Client CRM overhaul
+Clients list screen
+Top search bar
+Filter chips: All, Leads, Active, Inactive, Has upcoming, Overdue invoice
+Sort: Recent activity, Highest LTV, Most overdue, Newest
+Client cards show:
+Name
+Address line
+Status chip (Lead, Active, Inactive)
+Quick stats row: next appt date, lifetime spend, outstanding balance
+Quick actions: Call, Message, Create job
+
+Client Profile screen (new, premium)
+Header
+Client avatar, name, status chip
+Primary actions: New Job, Send Invoice, Message, Call
+Contact section
+Phone, email, address with copy and open maps icons
+Home section (HouseFax connected)
+Property summary card: beds, baths, sqft, year built, roof age, HVAC type, water heater age
+Show “Last updated by homeowner” indicator
+Home insights mini strip:
+Home Health score last run (if exists)
+Survival kit annual estimate (range)
+Notable risks (top 2)
+Job History section
+Tabs: Overview, Jobs, Invoices, Notes, Home (HouseFax)
+Overview tab
+Client KPIs: LTV, Total jobs, Avg ticket, Outstanding, Last service
+Upcoming job card
+Recent activity timeline
+Jobs tab
+Full list of jobs with status, date, service, amount
+Invoices tab
+Paid and unpaid with due date chips
+Notes tab
+Internal notes and customer visible notes toggle (design only)
+Home tab
+Deeper home ledger details that matter to a provider:
+Access notes
+Pets
+Parking
+Gate codes (sensitive marker, provider only)
+Photos from past jobs
+Preferred appointment windows
+
+Important data sharing rule in UX copy
+Show a small “Shared by homeowner” badge for public info.
+Show “Private to your business” badge for internal notes and sensitive fields.
+
+Feature 2: Provider Job Detail screen (the core workflow)
+Entry points
+From Home screen Upcoming jobs card
+From Schedule list
+From Client profile job history
+Job Detail layout
+Top status banner with one tap status actions:
+Pending confirmation
+Confirmed
+On my way
+Arrived
+In progress
+Completed
+Invoice sent
+Paid
+Show a segmented control or button row for status changes with subtle haptics.
+
+Core job card
+Client name and address
+Service selected
+Date and time
+Team member assigned (if teams exist)
+Price estimate or fixed price
+Travel buffer indicator
+Buttons:
+Start navigation
+Message client
+Call
+Reschedule
+Cancel
+
+AI Intake packet section (mirrors homeowner flow)
+Show a structured “AI Intake Summary” card:
+Problem description
+Photos (mock)
+Home details relevant to this service (from HouseFax)
+Preferred time windows
+Constraints: pets, access, parking
+Safety notes
+“Suggested upsells” from AI (optional, mock)
+Button: View full intake transcript (drawer)
+
+Checklist and execution
+Task checklist for this job (editable)
+Materials list (optional)
+Notes field with quick templates
+
+Invoice and payment section
+After completion, show an invoice composer preview:
+Line items from service
+Adjustments
+Discounts
+Tax
+Tip toggle
+Buttons:
+Send invoice
+Collect payment
+Create payment link
+Mark paid (for manual)
+
+Feature 3: Schedule tab redesign
+Tabs order
+List first, then Day, Week, Month. Remove Map.
+List view (default)
+This is the provider command center.
+Filters row: Pending, Upcoming, Today, This week, Needs invoice, Overdue payment
+List rows show:
+Date badge
+Time
+Client
+Service
+Status chip
+Amount or estimate
+Quick actions on swipe:
+Mark On My Way
+Send invoice
+Reschedule
+
+Day view
+Timeline with “today” clearly highlighted in HomeBase green filled dot, and a subtle ring on the selected day.
+Week view
+Monday through Sunday strip with today highlighted.
+Show blocks for jobs, tap opens Job Detail.
+Month view
+Simple calendar with dots and counts.
+
+Add job flow (from FAB or Schedule plus)
+Step 1 Select client
+Search existing clients
+Add new client inline (modal) if not found
+When client selected, autopopulate address and contact fields
+Step 2 Select service
+Dropdown of provider created services with search and category chips
+Service card shows pricing type badge: Fixed, Variable, Service call, Quote only
+Step 3 Intake questions and pricing
+If service has intake questions, show them in a clean form
+If variable pricing, show unit selectors and dynamic estimate (mock)
+If service call, show service call fee and duration
+Step 4 Schedule
+Improved date picker (native feel)
+Time picker with availability hints (mock)
+Buffer before and after (use service settings)
+Step 5 Review
+Summary card and create button
+After create: success animation and optional “Send confirmation to client” toggle
+
+Feature 4: AI Service Builder upgrade
+Services list screen
+Search
+Category chips
+Service cards show:
+Name
+Category
+Pricing type
+Duration
+Published toggle
+Starting price or estimate range
+Buttons: Edit, Duplicate, Preview
+
+New service flow (AI assisted)
+Step 1 Basics
+Service name
+Category
+Published toggle
+Short description
+AI helper button: “Generate description” and “Improve wording”
+Step 2 Pricing model
+Choose: Fixed, Variable, Service call, Quote only
+Explain each in one sentence
+Step 3 Variable pricing builder (core)
+Allow providers to create “pricing factors” templates:
+Bedrooms, Bathrooms, Square feet, Stories, Add-ons, Condition, Pets
+Each factor has:
+Input type (stepper, slider, dropdown)
+Units
+Price impact rule (flat add, multiplier, per unit)
+Show live preview of estimated price range as they build
+Include presets for common trades:
+Cleaning preset
+Lawn preset
+Handyman preset
+HVAC service call preset
+Step 4 Intake questions
+Add questions with type: yes/no, multiple choice, text, photo required
+Mark required vs optional
+Step 5 Booking rules
+Instant booking toggle
+Lead time rules
+Cancellation window
+Require deposit toggle (design only)
+Step 6 Client preview
+Show exactly how homeowner sees this service in the booking flow
+Button: Preview in marketplace
+Save
+
+Feature 5: Business Profile and Public Booking Page editor
+Business profile hub
+This is where they edit how their public page looks.
+Sections
+Branding: logo, cover photo, accent preview
+Business details: name, tagline, description with AI rewrite
+Contact info: phone, email, website
+Social links
+Service area and business areas
+Portfolio manager
+Services published list
+Reviews preview and settings
+Primary CTA buttons
+Preview booking page
+Copy share link with slug
+Publish toggle with warning if incomplete
+
+Public booking page editor
+Editor mode with sections re-order:
+Hero
+Top services
+About
+Portfolio
+Reviews
+Service area
+Policies
+Preview button always visible
+Allow customizing:
+Featured services
+Badge highlights (Fast response, Insured, Licensed)
+Response hours
+Booking message
+
+Slug and link
+Let provider set a custom slug if available
+Show “homebase.co/slug”
+Copy and share actions
+
+Feature 6: Money and business settings pages
+Money tab (hub)
+Cards:
+Revenue MTD
+Collected
+Outstanding
+Payouts pending
+Saved from HomeBase efficiencies (mock)
+Subpages
+Payouts and bank
+Tax info
+Pricing and discounts
+Invoices
+Transactions
+Reports and analytics
+
+More tab organization
+Profile switching component
+Business profile
+Service areas
+Business areas
+Bank account
+Tax info
+Reviews
+Provider resources
+Help center
+Contact support
+Integrations (calendar, quickbooks coming soon)
+Settings
+
+Service areas page
+Map removed if unsupported. Use list and search instead.
+Fields:
+Primary city
+Radius
+Zip codes served
+Travel fee rule (optional)
+Business areas page
+Types served: residential, commercial, rental, HOA
+Add tags and minimum job size
+
+Bank account page
+Stripe connect entry style card (design only)
+Payout schedule selector
+Tax info page
+W9 details form (design only)
+Reviews page
+List reviews with reply option (design only)
+Highlight best reviews to feature on booking page
+Provider resources
+Mini hub with templates:
+Estimate template
+Follow up messages
+Before and after checklist
+Seasonal promo templates
+Help center and contact support
+Help center categories and searchable FAQs
+Contact support form with attachments
+Support ticket status list
+
+Unique cross portal connection ideas (must implement in design)
+1. Shared “Home Context” card everywhere
+In jobs, client profile, and intake summary show the same home metadata card that homeowners maintain.
+2. Homeowner updates instantly improve provider workflows
+Show “Homeowner updated their home details” banner on client profile and upcoming jobs.
+3. Smart recommendations to increase job quality
+In Job Detail, show “AI suggests asking these 2 questions” if intake missing (mock).
+4. One tap rebook loops
+From completed job, allow “Create follow up job” and “Add recurring schedule” (mock).
+5. Savings and outcomes
+Provider view shows “Customer savings” as an outcome metric in job wrap up (mock), tied to using accurate intake and proactive maintenance suggestions.
+
+Deliverables
+1. New screens: Client Profile, Job Detail, Schedule redesigned, Add Job wizard, Services AI builder upgraded, Business Profile hub, Booking Page editor, Service areas, Business areas, Bank, Tax, Reviews, Resources, Help, Contact support
+2. Fully clickable navigation with mock data
+3. Consistent Liquid Glass styling across all these screens
+4. Update blueprint files for routes, nav, and data stubs
+Only design and mock interactions, no real backend work.
