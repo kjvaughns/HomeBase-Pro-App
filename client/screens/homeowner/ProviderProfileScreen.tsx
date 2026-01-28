@@ -323,14 +323,21 @@ export default function ProviderProfileScreen() {
                 </View>
               </View>
               <Pressable
-                style={[styles.saveButton, { backgroundColor: isSaved ? Colors.accent + "15" : theme.backgroundElevated }]}
+                style={[
+                  styles.saveButton, 
+                  { 
+                    backgroundColor: isSaved ? Colors.accent : theme.backgroundElevated,
+                    borderColor: isSaved ? Colors.accent : theme.borderLight,
+                    borderWidth: 1,
+                  }
+                ]}
                 onPress={handleToggleSave}
                 hitSlop={8}
               >
                 <Feather
                   name="heart"
-                  size={22}
-                  color={isSaved ? Colors.accent : theme.textSecondary}
+                  size={20}
+                  color={isSaved ? "#FFF" : theme.textSecondary}
                 />
               </Pressable>
             </View>

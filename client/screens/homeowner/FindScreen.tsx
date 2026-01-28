@@ -99,6 +99,12 @@ export default function FindScreen() {
   
   const categories = useHomeownerStore((s) => s.categories);
   const providers = useHomeownerStore((s) => s.providers);
+  const getSavedProviders = useHomeownerStore((s) => s.getSavedProviders);
+  
+  const savedProviders = useMemo(() => {
+    if (!isAuthenticated) return [];
+    return getSavedProviders();
+  }, [isAuthenticated, getSavedProviders]);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
@@ -250,6 +256,44 @@ export default function FindScreen() {
           <Feather name="chevron-right" size={20} color={theme.textSecondary} />
         </Pressable>
       </Animated.View>
+
+      {isAuthenticated && savedProviders.length > 0 ? (
+        <Animated.View entering={FadeInDown.delay(180).duration(400)}>
+          <SectionHeader 
+            title="Saved Providers" 
+            actionLabel="See All" 
+            onAction={() => navigation.navigate("SavedProviders")} 
+          />
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.savedProvidersRow}
+          >
+            {savedProviders.slice(0, 5).map((provider) => (
+              <Pressable
+                key={provider.id}
+                style={[styles.savedProviderCard, { backgroundColor: theme.cardBackground }]}
+                onPress={() => handleProviderCardPress(provider.id)}
+              >
+                <View style={[styles.savedProviderAvatar, { backgroundColor: Colors.accentLight }]}>
+                  <ThemedText style={styles.savedProviderInitial}>
+                    {provider.businessName.charAt(0)}
+                  </ThemedText>
+                </View>
+                <ThemedText style={styles.savedProviderName} numberOfLines={1}>
+                  {provider.businessName}
+                </ThemedText>
+                <View style={styles.savedProviderRating}>
+                  <Feather name="star" size={12} color={Colors.warning} />
+                  <ThemedText style={[styles.savedProviderRatingText, { color: theme.textSecondary }]}>
+                    {provider.rating.toFixed(1)}
+                  </ThemedText>
+                </View>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </Animated.View>
+      ) : null}
 
       <Animated.View entering={FadeInDown.delay(200).duration(400)}>
         <SectionHeader title="Services" actionLabel="See All" onAction={() => {}} />
@@ -777,5 +821,43 @@ const styles = StyleSheet.create({
   },
   applyButtonContainer: {
     flex: 1,
+  },
+  savedProvidersRow: {
+    paddingVertical: Spacing.sm,
+    gap: Spacing.sm,
+    paddingRight: Spacing.screenPadding,
+  },
+  savedProviderCard: {
+    width: 100,
+    alignItems: "center",
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.md,
+  },
+  savedProviderAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.xs,
+  },
+  savedProviderInitial: {
+    ...Typography.title2,
+    fontWeight: "700",
+    color: Colors.accent,
+  },
+  savedProviderName: {
+    ...Typography.caption1,
+    fontWeight: "600",
+    textAlign: "center",
+    marginBottom: 2,
+  },
+  savedProviderRating: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+  },
+  savedProviderRatingText: {
+    ...Typography.caption2,
   },
 });
