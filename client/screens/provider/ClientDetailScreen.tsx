@@ -164,12 +164,12 @@ export default function ClientDetailScreen() {
 
   const handleNewJob = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    Alert.alert("Create Job", "Navigate to create job for this client");
+    (navigation as any).navigate("AddJob", { clientId: client.id });
   };
 
   const handleSendInvoice = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    Alert.alert("Send Invoice", "Navigate to send invoice for this client");
+    (navigation as any).navigate("AddInvoice", { clientId: client.id });
   };
 
   const statusColor = useMemo(() => {

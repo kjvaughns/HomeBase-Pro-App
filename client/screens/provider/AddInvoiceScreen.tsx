@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { StyleSheet, ScrollView, View, Alert, KeyboardAvoidingView, Platform, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 
@@ -36,11 +36,13 @@ export default function AddInvoiceScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const navigation = useNavigation();
+  const route = useRoute();
   const queryClient = useQueryClient();
   const { providerProfile } = useAuthStore();
   const { theme } = useTheme();
 
   const providerId = providerProfile?.id;
+  const preselectedClientId = (route.params as any)?.clientId;
 
   const { data: clientsData } = useQuery<{ clients: Client[] }>({
     queryKey: ["/api/provider", providerId, "clients"],
@@ -55,7 +57,7 @@ export default function AddInvoiceScreen() {
   const clients = clientsData?.clients || [];
   const jobs = jobsData?.jobs || [];
 
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(preselectedClientId || null);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
   const [dueDate, setDueDate] = useState("");

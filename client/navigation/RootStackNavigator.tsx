@@ -140,8 +140,8 @@ export type RootStackParamList = {
   Notifications: undefined;
   ClientDetail: { clientId: string };
   AddClient: undefined;
-  AddJob: undefined;
-  AddInvoice: undefined;
+  AddJob: { clientId?: string } | undefined;
+  AddInvoice: { clientId?: string } | undefined;
   InvoiceDetail: { invoiceId: string };
   Services: undefined;
   NewService: undefined;

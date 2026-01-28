@@ -286,7 +286,7 @@ export default function ProviderHomeScreen() {
               <JobCard
                 key={job.id}
                 job={formatJobForCard(job)}
-                onPress={() => {}}
+                onPress={() => navigation.navigate("ProviderJobDetail", { jobId: job.id })}
                 testID={`job-${job.id}`}
               />
             ))}
@@ -313,7 +313,11 @@ export default function ProviderHomeScreen() {
               key={job.id}
               entering={FadeInDown.delay((inProgressJobs.length > 0 ? 600 : 500) + index * 100).duration(400)}
             >
-              <JobCard job={formatJobForCard(job)} onPress={() => {}} testID={`job-${job.id}`} />
+              <JobCard 
+                job={formatJobForCard(job)} 
+                onPress={() => navigation.navigate("ProviderJobDetail", { jobId: job.id })} 
+                testID={`job-${job.id}`} 
+              />
             </Animated.View>
           ))
         ) : (
