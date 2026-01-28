@@ -99,13 +99,15 @@ export default function ProviderMoreScreen() {
               </View>
             </View>
             <ListRow
-              title="My Services"
-              leftIcon="briefcase"
+              title="AI Service Builder"
+              subtitle="Create optimized service listings"
+              leftIcon="cpu"
               onPress={() => navigation.navigate("Services")}
             />
             <ListRow
-              title="Business Profile"
-              leftIcon="user"
+              title="Public Booking Page"
+              subtitle="Shareable profile for clients"
+              leftIcon="link"
               onPress={() => navigation.navigate("BusinessProfile")}
             />
             <ListRow

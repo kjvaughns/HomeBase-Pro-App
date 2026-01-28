@@ -39,10 +39,9 @@ import AddClientScreen from "@/screens/provider/AddClientScreen";
 import AddJobScreen from "@/screens/provider/AddJobScreen";
 import AddInvoiceScreen from "@/screens/provider/AddInvoiceScreen";
 import InvoiceDetailScreen from "@/screens/provider/InvoiceDetailScreen";
-import ServicesScreen from "@/screens/provider/ServicesScreen";
-import NewServiceScreen from "@/screens/provider/NewServiceScreen";
+import ServiceBuilderScreen from "@/screens/provider/ServiceBuilderScreen";
+import PublicProfileScreen from "@/screens/provider/PublicProfileScreen";
 import ServicePreviewScreen from "@/screens/provider/ServicePreviewScreen";
-import BusinessProfileScreen from "@/screens/provider/BusinessProfileScreen";
 import SavedProvidersScreen from "@/screens/homeowner/SavedProvidersScreen";
 import HelpCenterScreen from "@/screens/homeowner/HelpCenterScreen";
 import ContactUsScreen from "@/screens/homeowner/ContactUsScreen";
@@ -399,45 +398,16 @@ export default function RootStackNavigator() {
       />
       <Stack.Screen
         name="Services"
-        component={ServicesScreen}
+        component={ServiceBuilderScreen}
         options={{
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen
-        name="NewService"
-        component={NewServiceScreen}
-        options={{
-          headerTitle: "New Service",
-          presentation: "modal",
-        }}
-      />
-      <Stack.Screen
-        name="EditService"
-        component={NewServiceScreen}
-        options={{
-          headerTitle: "Edit Service",
-        }}
-      />
-      <Stack.Screen
-        name="ServicePreview"
-        component={ServicePreviewScreen}
-        options={{
-          headerTitle: "Service Preview",
+          headerTitle: "AI Service Builder",
         }}
       />
       <Stack.Screen
         name="BusinessProfile"
-        component={BusinessProfileScreen}
+        component={PublicProfileScreen}
         options={{
           headerShown: false,
-        }}
-      />
-      <Stack.Screen
-        name="PreviewBookingPage"
-        component={ServicePreviewScreen}
-        options={{
-          headerTitle: "Booking Page Preview",
         }}
       />
       <Stack.Screen
