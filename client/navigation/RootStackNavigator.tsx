@@ -47,6 +47,7 @@ import BusinessDetailsScreen from "@/screens/provider/BusinessDetailsScreen";
 import AccountingScreen from "@/screens/provider/AccountingScreen";
 import ReviewsScreen from "@/screens/provider/ReviewsScreen";
 import ProviderResourcesScreen from "@/screens/provider/ProviderResourcesScreen";
+import ProviderAIAssistantScreen from "@/screens/provider/ProviderAIAssistantScreen";
 import SavedProvidersScreen from "@/screens/homeowner/SavedProvidersScreen";
 import HelpCenterScreen from "@/screens/homeowner/HelpCenterScreen";
 import ContactUsScreen from "@/screens/homeowner/ContactUsScreen";
@@ -162,6 +163,7 @@ export type RootStackParamList = {
   Accounting: undefined;
   Reviews: undefined;
   ProviderResources: undefined;
+  ProviderAIAssistant: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -495,6 +497,13 @@ export default function RootStackNavigator() {
         component={ProviderResourcesScreen}
         options={{
           headerTitle: "Resources",
+        }}
+      />
+      <Stack.Screen
+        name="ProviderAIAssistant"
+        component={ProviderAIAssistantScreen}
+        options={{
+          headerTitle: "Business Assistant",
         }}
       />
     </Stack.Navigator>

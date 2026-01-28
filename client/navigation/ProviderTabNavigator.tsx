@@ -12,6 +12,7 @@ import MoneyScreen from "@/screens/provider/MoneyScreen";
 import ProviderMoreScreen from "@/screens/provider/ProviderMoreScreen";
 import { useTheme } from "@/hooks/useTheme";
 import { HeaderTitle } from "@/components/HeaderTitle";
+import ProviderFAB from "@/components/ProviderFAB";
 import { Colors, Spacing, Typography, BorderRadius } from "@/constants/theme";
 
 export type ProviderTabParamList = {
@@ -131,68 +132,71 @@ export default function ProviderTabNavigator() {
   const { theme, isDark } = useTheme();
 
   return (
-    <Tab.Navigator
-      initialRouteName="HomeTab"
-      tabBar={(props) => <CustomTabBar {...props} />}
-      screenOptions={{
-        headerTitleAlign: "center",
-        headerTransparent: true,
-        headerTintColor: theme.text,
-        headerTitleStyle: {
-          ...Typography.headline,
-          color: theme.text,
-        },
-        headerStyle: {
-          backgroundColor: Platform.select({
-            ios: undefined,
-            android: theme.backgroundRoot,
-            web: isDark ? "rgba(28, 28, 30, 0.85)" : "rgba(248, 248, 248, 0.85)",
-          }),
-        },
-        headerShadowVisible: false,
-      }}
-    >
-      <Tab.Screen
-        name="HomeTab"
-        component={ProviderHomeScreen}
-        options={{
-          title: "Home",
-          headerTitle: () => <HeaderTitle title="HomeBase Pro" />,
+    <View style={{ flex: 1 }}>
+      <Tab.Navigator
+        initialRouteName="HomeTab"
+        tabBar={(props) => <CustomTabBar {...props} />}
+        screenOptions={{
+          headerTitleAlign: "center",
+          headerTransparent: true,
+          headerTintColor: theme.text,
+          headerTitleStyle: {
+            ...Typography.headline,
+            color: theme.text,
+          },
+          headerStyle: {
+            backgroundColor: Platform.select({
+              ios: undefined,
+              android: theme.backgroundRoot,
+              web: isDark ? "rgba(28, 28, 30, 0.85)" : "rgba(248, 248, 248, 0.85)",
+            }),
+          },
+          headerShadowVisible: false,
         }}
-      />
-      <Tab.Screen
-        name="ClientsTab"
-        component={ClientsScreen}
-        options={{
-          title: "Clients",
-          headerShown: false,
-        }}
-      />
-      <Tab.Screen
-        name="ScheduleTab"
-        component={ScheduleScreen}
-        options={{
-          title: "Schedule",
-          headerTitle: "Schedule",
-        }}
-      />
-      <Tab.Screen
-        name="MoneyTab"
-        component={MoneyScreen}
-        options={{
-          title: "Money",
-          headerTitle: "Money",
-        }}
-      />
-      <Tab.Screen
-        name="MoreTab"
-        component={ProviderMoreScreen}
-        options={{
-          title: "More",
-          headerTitle: "More",
-        }}
-      />
-    </Tab.Navigator>
+      >
+        <Tab.Screen
+          name="HomeTab"
+          component={ProviderHomeScreen}
+          options={{
+            title: "Home",
+            headerTitle: () => <HeaderTitle title="HomeBase Pro" />,
+          }}
+        />
+        <Tab.Screen
+          name="ClientsTab"
+          component={ClientsScreen}
+          options={{
+            title: "Clients",
+            headerShown: false,
+          }}
+        />
+        <Tab.Screen
+          name="ScheduleTab"
+          component={ScheduleScreen}
+          options={{
+            title: "Schedule",
+            headerTitle: "Schedule",
+          }}
+        />
+        <Tab.Screen
+          name="MoneyTab"
+          component={MoneyScreen}
+          options={{
+            title: "Money",
+            headerTitle: "Money",
+          }}
+        />
+        <Tab.Screen
+          name="MoreTab"
+          component={ProviderMoreScreen}
+          options={{
+            title: "More",
+            headerTitle: "More",
+          }}
+        />
+      </Tab.Navigator>
+      <ProviderFAB />
+    </View>
   );
 }
 

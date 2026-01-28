@@ -64,7 +64,7 @@ export default function ProviderFAB() {
       icon: "file-text",
       onPress: () => {
         handleClose();
-        navigation.navigate("CreateInvoice");
+        navigation.navigate("AddInvoice");
       },
     },
     {
@@ -73,7 +73,7 @@ export default function ProviderFAB() {
       icon: "calendar",
       onPress: () => {
         handleClose();
-        navigation.navigate("CreateJob");
+        navigation.navigate("AddJob");
       },
     },
     {

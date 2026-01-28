@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
-import { openai, HOMEBASE_SYSTEM_PROMPT } from "./openai";
+import { openai, HOMEBASE_SYSTEM_PROMPT, PROVIDER_ASSISTANT_PROMPT } from "./openai";
 import { storage } from "./storage";
 import { seedDatabase } from "./seed";
 import { insertUserSchema, loginSchema, insertHomeSchema, insertAppointmentSchema, insertProviderSchema, insertClientSchema, insertJobSchema, insertInvoiceSchema, insertPaymentSchema } from "@shared/schema";
@@ -519,6 +519,54 @@ Be conversational and helpful. If they just have a question, answer it. If they 
     } catch (error) {
       console.error("Error in simple chat:", error);
       res.status(500).json({ error: "Failed to process chat request" });
+    }
+  });
+
+  // ============ PROVIDER AI ASSISTANT ============
+
+  app.post("/api/ai/provider-assistant", async (req: Request, res: Response) => {
+    try {
+      const { message, businessContext, conversationHistory } = req.body as {
+        message: string;
+        businessContext?: string;
+        conversationHistory?: Array<{ role: string; content: string }>;
+      };
+
+      if (!message) {
+        return res.status(400).json({ error: "Message is required" });
+      }
+
+      const systemPrompt = businessContext
+        ? `${PROVIDER_ASSISTANT_PROMPT}\n\nCurrent Business Context:\n${businessContext}`
+        : PROVIDER_ASSISTANT_PROMPT;
+
+      const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+        { role: "system", content: systemPrompt },
+      ];
+
+      if (conversationHistory) {
+        messages.push(
+          ...conversationHistory.map((m) => ({
+            role: m.role as "user" | "assistant",
+            content: m.content,
+          }))
+        );
+      }
+
+      messages.push({ role: "user", content: message });
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages,
+        max_tokens: 1024,
+      });
+
+      const content = response.choices[0]?.message?.content || "I'm here to help with your business questions.";
+
+      res.json({ response: content });
+    } catch (error) {
+      console.error("Provider assistant error:", error);
+      res.status(500).json({ error: "Failed to process request" });
     }
   });
 
