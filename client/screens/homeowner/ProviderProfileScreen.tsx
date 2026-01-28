@@ -37,7 +37,11 @@ export default function ProviderProfileScreen() {
   const providers = useHomeownerStore((s) => s.providers);
   const allReviews = useHomeownerStore((s) => s.reviews);
   const categories = useHomeownerStore((s) => s.categories);
+  const toggleSavedProvider = useHomeownerStore((s) => s.toggleSavedProvider);
+  const isProviderSaved = useHomeownerStore((s) => s.isProviderSaved);
   const { isAuthenticated } = useAuthStore();
+  
+  const isSaved = isProviderSaved(providerId);
   
   const provider = useMemo(() => {
     return providers.find((p) => p.id === providerId);
@@ -81,6 +85,11 @@ export default function ProviderProfileScreen() {
   const handleSignUp = () => {
     setShowAccountGate(false);
     navigation.navigate("SignUp");
+  };
+
+  const handleToggleSave = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    toggleSavedProvider(providerId);
   };
 
   const handleCall = async () => {
@@ -263,10 +272,23 @@ export default function ProviderProfileScreen() {
                   </ThemedText>
                 </View>
               </View>
+              <Pressable
+                style={[styles.saveButton, { backgroundColor: isSaved ? Colors.accent + "15" : theme.backgroundElevated }]}
+                onPress={handleToggleSave}
+                hitSlop={8}
+              >
+                <Feather
+                  name="heart"
+                  size={22}
+                  color={isSaved ? Colors.accent : theme.textSecondary}
+                />
+              </Pressable>
             </View>
-            {provider.verified && (
-              <StatusPill label="Verified Pro" status="success" />
-            )}
+            <View style={styles.profileActions}>
+              {provider.verified ? (
+                <StatusPill label="Verified Pro" status="success" />
+              ) : null}
+            </View>
           </GlassCard>
         </Animated.View>
 
@@ -336,11 +358,24 @@ const styles = StyleSheet.create({
   },
   profileHeader: {
     flexDirection: "row",
+    alignItems: "flex-start",
     marginBottom: Spacing.md,
   },
   profileInfo: {
     flex: 1,
     marginLeft: Spacing.md,
+  },
+  saveButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: Spacing.sm,
+  },
+  profileActions: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   providerName: {
     ...Typography.title2,

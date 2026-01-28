@@ -150,7 +150,7 @@ export default function MoreScreen() {
                 <ListRow
                   title="Saved Providers"
                   leftIcon="heart"
-                  onPress={() => {}}
+                  onPress={() => navigation.navigate("SavedProviders")}
                   isLast
                 />
               </View>
@@ -218,13 +218,13 @@ export default function MoreScreen() {
             <ListRow
               title="Help Center"
               leftIcon="help-circle"
-              onPress={() => {}}
+              onPress={() => navigation.navigate("HelpCenter")}
               isFirst
             />
             <ListRow
               title="Contact Us"
               leftIcon="message-circle"
-              onPress={() => {}}
+              onPress={() => navigation.navigate("ContactUs")}
             />
             <ListRow
               title="Terms of Service"
