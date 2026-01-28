@@ -1,0 +1,221 @@
+HomeBase Homeowner Tools Upgrade: Survival Kit + HouseFax Ledger + Savings Insights
+Design only. React Native Expo. iOS-first. Liquid Glass. Calm luxury minimalism. No white outlines. No loud glows. Soft green accents only for primary actions and positive states. Use mock data and fully clickable flows.
+
+Objective
+Design the Survival Kit and HouseFax Ledger system so homeowners can:
+1. Add and maintain a rich Home Profile per address
+2. Track total spend on home services over time
+3. See estimated savings from using HomeBase
+4. Store home history tied to the specific address and use it to predict future maintenance and costs
+5. Get an estimated yearly maintenance cost based on home details, neighborhood context, and house type, plus tips to reduce that cost
+
+Global rules
+1. Everything is per Home address. User can have multiple homes and switch homes from a persistent Home selector.
+2. All screens are design only but must be interactive with mock data and realistic empty states.
+3. Keep design consistent with the current Homeowner portal. Liquid Glass surfaces, soft shadows, clean typography, restrained motion.
+4. Every output must connect to one tap booking with a service category and home_id (visual only). Buttons: Book Now, Get Quote, Add to Plan, Snooze, Mark Done.
+5. Store “address history” conceptually: timeline of updates, jobs, invoices, inspections, assessments, and changes to home fields. Design the UI for it.
+
+Navigation placement
+Add a “Tools” section inside the Homeowner More tab with four tiles:
+1. Survival Kit
+2. HouseFax Ledger
+3. Savings and Spend
+4. Home Health Score (placeholder tile if not building yet)
+
+Also add quick entry tiles on Home screen under “Your Home” for:
+Survival Kit and HouseFax Ledger
+
+Tool 1: Survival Kit
+Purpose
+A guided wizard that gathers home details and outputs:
+1. Estimated yearly maintenance cost range
+2. A personalized maintenance plan with tasks
+3. Tips to reduce costs and prevent emergencies
+4. Cost drivers explanation so it feels trustworthy
+
+Entry Screen
+Card header: “Survival Kit”
+Subtext: “Build your maintenance plan and predict yearly upkeep costs.”
+Primary CTA: Start
+Secondary: Use my saved home details
+
+Wizard Steps (design a 12 to 18 step wizard, fast but meaningful)
+Step groups with progress indicator and micro animations:
+A. Home basics
+Address (select existing home or add new)
+Property type (single family, townhome, condo, duplex)
+Year built or home age
+Square footage
+Bedrooms, bathrooms
+Stories
+B. Key systems
+HVAC type and age
+Water heater type and age
+Roof age and material
+Plumbing type optional
+Electrical panel type optional
+Appliances optional
+C. Exterior and risks
+Yard size
+Trees near roof yes/no
+Basement yes/no
+Pool/spa yes/no
+Garage yes/no
+D. Neighborhood context (design only, mock derived fields)
+Neighborhood type selector: urban, suburban, rural
+Climate zone selector: hot, cold, mixed
+Local risk chips: hail, flooding, humidity, freezing, wildfire (multi select)
+E. Preferences
+DIY comfort level (low, medium, high)
+Service level: lean, standard, proactive
+Budget goal: keep costs low, balanced, protect resale
+
+UX rules for wizard
+Single question per screen with large tap targets
+Use saved Home profile values as defaults
+Explain why each input matters in one short line
+Add 3 instant gratification moments:
+“You are ahead of 82% of homeowners”
+“Your plan will prevent the top 3 costly surprises”
+“HomeBase will auto remind you and make booking one tap”
+
+Survival Kit Results Screen
+Tabs: Summary, Plan, Costs, Tips, Export
+Summary
+Yearly upkeep estimate range (large)
+Top 3 cost drivers (chips)
+Next due item (card)
+“Potential savings with proactive maintenance” (range)
+Plan
+Task list grouped by month and system
+Each task row has: due date, frequency, cost range, severity, Book Now, Add to Plan
+Costs
+Breakdown by category: HVAC, Plumbing, Electrical, Roof, Lawn, Pest, Safety
+Show how neighborhood and home type influenced estimate with a simple “Factors” card
+Tips
+Personalized tips list with a “Why this helps” expandable explanation
+Export
+Buttons: PDF, CSV, Share link (mock)
+CTA: Add Plan to HomeBase (creates tasks in plan, design only)
+
+Tool 2: HouseFax Ledger
+Purpose
+A home operating system per address that stores:
+1. Assets and systems registry
+2. Service history and invoices
+3. Assessments and plan snapshots
+4. Home changes over time
+5. Predictive upcoming maintenance and projected costs
+
+HouseFax Home Screen
+Header: “HouseFax Ledger”
+Home selector at top
+Four summary cards:
+Total Spent (lifetime)
+Total Saved (HomeBase estimate)
+Upcoming Maintenance (count)
+Home Health Trend (sparkline mock)
+
+Primary sections as tabs or segmented control:
+Overview, History, Assets, Documents, Insights
+
+Overview tab
+This Month Forecast card:
+Expected spend range
+Upcoming tasks list
+Buttons: Book Now, Add to Plan
+Home Timeline Preview card:
+Recent events (job completed, roof age updated, assessment run)
+Insights Preview card:
+“Top 3 things driving costs in this home”
+
+History tab
+A scrollable timeline with filters:
+Jobs, Invoices, Assessments, Home Updates, Documents
+Each timeline item shows:
+Date
+Type icon
+Short summary
+Amount (if applicable)
+Tap opens detail drawer
+
+Assets tab
+Assets registry list:
+HVAC, Water Heater, Roof, Appliances, Plumbing, Electrical, Sprinklers, etc.
+Each asset detail page includes:
+Install date, age, model, serial, photos, warranty, notes
+“Recommended service cycle” card
+“Add reminder” button
+“Book service” button
+
+Documents tab
+Grid list of docs:
+Invoices, receipts, manuals, warranties, inspection reports
+Upload UI (mock)
+Tagging to assets and timeline events
+
+Insights tab
+Predictive maintenance panel (design only):
+Projected next 12 months cost range
+Top upcoming risks
+Suggested actions to reduce spend
+“Compare to similar homes” card using neighborhood and type selectors (mock)
+
+Savings and Spend Experience
+Create a dedicated screen accessible from Tools tiles and from HouseFax:
+Savings and Spend Dashboard
+Cards:
+Total Spent on Home Services (lifetime and this year)
+HomeBase Estimated Savings (lifetime and this year)
+Savings breakdown:
+Avoided emergency estimate
+Discounts and promos
+Optimized maintenance timing
+“Where your money went” category chart (mock)
+“Your best savings wins” timeline items with amounts
+CTA: “Keep saving” which routes to recommended tasks and one tap booking
+
+Savings calculation explanation UI
+Add an info drawer:
+Explain in plain language how savings is estimated
+Show confidence level: low, medium, high
+No backend logic, only design and copy
+
+Address linked history and change tracking
+Add a “Home Changes” section inside HouseFax:
+A list of editable home fields with “last updated” and “source”
+Source examples: homeowner edit, provider update, assessment
+Add a “Change Log” view:
+Before and after values
+Date
+Who changed it
+This is purely visual but must be clickable and polished
+
+Integrations in UI (coming soon)
+Within HouseFax Documents or Settings, add “Sync” section:
+Calendar, email receipts, contractor invoices (coming soon labels)
+
+Mock data requirements
+Provide realistic mock examples:
+At least 2 homes
+At least 5 service history items per home
+At least 6 tasks per plan
+At least 4 assets per home
+At least 8 documents across invoices and warranties
+Include “spent” totals and “saved” totals
+
+Design constraints
+Restore the calm HomeBase look:
+No white outlines around cards
+No noisy neon borders
+No excessive lighting
+Liquid Glass should be subtle and premium
+Fix safe area padding on all screens
+All FAB and floating UI must be correctly positioned and consistent
+
+Deliverables
+1. New screens and navigation hooks for Survival Kit, HouseFax Ledger, Savings and Spend
+2. Fully interactive mock flows: run Survival Kit, view results, add plan, open HouseFax, drill into assets, view history, view savings
+3. Empty states and first time setup states
+4. Component library notes: cards, chips, list rows, segmented control, timeline item, asset card, export button group
