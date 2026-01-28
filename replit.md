@@ -21,6 +21,16 @@ The test account includes:
 
 **New user accounts start with a clean, empty state** - no mock data is pre-populated. Categories and providers are shared public data visible to all users.
 
+### Provider Side (Service Pro Portal)
+The test account also has a provider profile (Demo Pro Services) with comprehensive business data:
+- **Provider ID**: test-provider-001
+- **Rating**: 4.9 stars (47 reviews)
+- **Clients**: 8 active clients
+- **Jobs**: 10 completed, 3 scheduled
+- **Revenue MTD**: ~$4,910
+- **Invoices**: 10 total (8 paid, 2 pending)
+- **Capability Tags**: Licensed, Insured, Background Checked, 24/7 Emergency
+
 ## System Architecture
 The application is structured into a client-side React Native Expo app and an Express.js backend. The UI/UX features a "Liquid Glass" effect for iOS, incorporating frosted blur for key elements, and supports both Light and Dark modes. The primary accent color is `#38AE5F`, with all other elements utilizing a neutral grayscale palette. Typography is based on SF Pro with a defined type scale.
 
