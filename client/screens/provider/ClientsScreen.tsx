@@ -1,8 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { StyleSheet, FlatList, RefreshControl, View, TextInput, Pressable, ActivityIndicator, Modal, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useHeaderHeight } from "@react-navigation/elements";
-import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -117,8 +115,6 @@ function ClientCard({ client, onPress }: ClientCardProps) {
 
 export default function ClientsScreen() {
   const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
-  const tabBarHeight = useBottomTabBarHeight();
   const { theme, isDark } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { providerProfile } = useAuthStore();
@@ -487,8 +483,8 @@ export default function ClientsScreen() {
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={[
           {
-            paddingTop: headerHeight + Spacing.md,
-            paddingBottom: tabBarHeight + Spacing.xl,
+            paddingTop: insets.top + Spacing.lg,
+            paddingBottom: insets.bottom + 100,
           },
           filteredClients.length === 0 && styles.emptyContainer,
         ]}
