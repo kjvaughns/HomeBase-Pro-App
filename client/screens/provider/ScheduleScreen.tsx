@@ -623,7 +623,7 @@ export default function ScheduleScreen() {
   }, []);
 
   const handleJobPress = (job: FormattedJob) => {
-    // TODO: Navigate to job details
+    navigation.navigate("ProviderJobDetail" as any, { jobId: job.id });
   };
 
   const handleAddJob = () => {

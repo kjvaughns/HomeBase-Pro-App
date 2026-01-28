@@ -22,10 +22,26 @@ export interface Lead {
   photos?: string[];
 }
 
+export interface JobChecklistItem {
+  id: string;
+  label: string;
+  completed: boolean;
+}
+
+export interface JobIntakeData {
+  problemDescription?: string;
+  followUpAnswers?: { question: string; answer: string }[];
+  photos?: string[];
+  estimatedDuration?: string;
+  priceBreakdown?: { label: string; amount: number }[];
+}
+
 export interface Job {
   id: string;
+  clientId?: string;
   leadId?: string;
   customerName: string;
+  customerEmail?: string;
   customerAvatar?: string;
   customerPhone?: string;
   service: string;
@@ -33,10 +49,20 @@ export interface Job {
   address: string;
   date: string;
   time: string;
-  status: "scheduled" | "in_progress" | "completed" | "cancelled";
+  endTime?: string;
+  status: "scheduled" | "confirmed" | "on_my_way" | "arrived" | "in_progress" | "completed" | "cancelled";
   price: number;
+  laborCost?: number;
+  materialsCost?: number;
   notes?: string;
+  internalNotes?: string;
   completedAt?: string;
+  startedAt?: string;
+  checklist?: JobChecklistItem[];
+  intakeData?: JobIntakeData;
+  invoiceId?: string;
+  paymentStatus?: "unpaid" | "partial" | "paid";
+  amountPaid?: number;
 }
 
 export interface Quote {

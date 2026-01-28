@@ -262,23 +262,34 @@ export default function ClientDetailScreen() {
       </ThemedText>
       {jobs.length > 0 ? (
         jobs.map((job) => (
-          <GlassCard key={job.id} style={styles.jobCard}>
-            <View style={styles.jobHeader}>
-              <ThemedText type="body" style={{ fontWeight: "600" }}>
-                {job.service}
+          <Pressable
+            key={job.id}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              (navigation as any).navigate("ProviderJobDetail", { jobId: job.id });
+            }}
+          >
+            <GlassCard style={styles.jobCard}>
+              <View style={styles.jobHeader}>
+                <ThemedText type="body" style={{ fontWeight: "600" }}>
+                  {job.service}
+                </ThemedText>
+                <StatusPill
+                  status={job.status === "completed" ? "completed" : job.status === "scheduled" ? "scheduled" : "pending"}
+                  label={job.status === "completed" ? "Completed" : job.status === "scheduled" ? "Scheduled" : "Pending"}
+                />
+              </View>
+              <ThemedText type="caption" style={{ color: theme.textSecondary, marginTop: 4 }}>
+                {formatDate(job.date)} at {job.time}
               </ThemedText>
-              <StatusPill
-                status={job.status === "completed" ? "completed" : job.status === "scheduled" ? "scheduled" : "pending"}
-                label={job.status === "completed" ? "Completed" : job.status === "scheduled" ? "Scheduled" : "Pending"}
-              />
-            </View>
-            <ThemedText type="caption" style={{ color: theme.textSecondary, marginTop: 4 }}>
-              {formatDate(job.date)} at {job.time}
-            </ThemedText>
-            <ThemedText type="body" style={{ color: Colors.accent, marginTop: 4 }}>
-              {formatCurrency(job.price)}
-            </ThemedText>
-          </GlassCard>
+              <View style={styles.jobFooter}>
+                <ThemedText type="body" style={{ color: Colors.accent }}>
+                  {formatCurrency(job.price)}
+                </ThemedText>
+                <Feather name="chevron-right" size={16} color={theme.textSecondary} />
+              </View>
+            </GlassCard>
+          </Pressable>
         ))
       ) : (
         <ThemedText type="body" style={{ color: theme.textSecondary }}>
@@ -828,6 +839,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+  },
+  jobFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 4,
   },
   invoiceCard: {
     marginBottom: Spacing.sm,
