@@ -111,20 +111,10 @@ export default function ProviderMoreScreen() {
               onPress={() => navigation.navigate("BusinessProfile")}
             />
             <ListRow
-              title="Booking Policies"
-              subtitle="Deposits, cancellations, reschedules"
-              leftIcon="file-text"
-              onPress={() => navigation.navigate("BookingPolicies")}
-            />
-            <ListRow
-              title="Service Areas"
-              leftIcon="map"
-              onPress={() => {}}
-            />
-            <ListRow
-              title="Business Hours"
-              leftIcon="clock"
-              onPress={() => {}}
+              title="Business Details"
+              subtitle="Policies, areas, hours"
+              leftIcon="settings"
+              onPress={() => navigation.navigate("BusinessDetails")}
               isLast
             />
           </View>
@@ -136,21 +126,17 @@ export default function ProviderMoreScreen() {
           </ThemedText>
           <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
             <ListRow
-              title="Bank Account"
+              title="Accounting"
+              subtitle="Bank account & tax info"
               leftIcon="credit-card"
-              onPress={() => {}}
+              onPress={() => navigation.navigate("Accounting")}
               isFirst
-            />
-            <ListRow
-              title="Tax Information"
-              leftIcon="file-text"
-              onPress={() => {}}
             />
             <ListRow
               title="Reviews"
               subtitle={`${providerProfile?.reviewCount || 45} reviews`}
               leftIcon="star"
-              onPress={() => {}}
+              onPress={() => navigation.navigate("Reviews")}
               isLast
             />
           </View>
@@ -194,8 +180,9 @@ export default function ProviderMoreScreen() {
           <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
             <ListRow
               title="Provider Resources"
+              subtitle="Guides, tips & best practices"
               leftIcon="book"
-              onPress={() => {}}
+              onPress={() => navigation.navigate("ProviderResources")}
               isFirst
             />
             <ListRow

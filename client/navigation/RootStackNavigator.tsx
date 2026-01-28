@@ -43,6 +43,10 @@ import PublicProfileScreen from "@/screens/provider/PublicProfileScreen";
 import ServicePreviewScreen from "@/screens/provider/ServicePreviewScreen";
 import BookingPoliciesScreen from "@/screens/provider/BookingPoliciesScreen";
 import ProviderJobDetailScreen from "@/screens/provider/ProviderJobDetailScreen";
+import BusinessDetailsScreen from "@/screens/provider/BusinessDetailsScreen";
+import AccountingScreen from "@/screens/provider/AccountingScreen";
+import ReviewsScreen from "@/screens/provider/ReviewsScreen";
+import ProviderResourcesScreen from "@/screens/provider/ProviderResourcesScreen";
 import SavedProvidersScreen from "@/screens/homeowner/SavedProvidersScreen";
 import HelpCenterScreen from "@/screens/homeowner/HelpCenterScreen";
 import ContactUsScreen from "@/screens/homeowner/ContactUsScreen";
@@ -154,6 +158,10 @@ export type RootStackParamList = {
   ContactUs: undefined;
   BookingPolicies: undefined;
   ProviderJobDetail: { jobId: string };
+  BusinessDetails: undefined;
+  Accounting: undefined;
+  Reviews: undefined;
+  ProviderResources: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -459,6 +467,34 @@ export default function RootStackNavigator() {
         component={ProviderJobDetailScreen}
         options={{
           headerTitle: "Job Details",
+        }}
+      />
+      <Stack.Screen
+        name="BusinessDetails"
+        component={BusinessDetailsScreen}
+        options={{
+          headerTitle: "Business Details",
+        }}
+      />
+      <Stack.Screen
+        name="Accounting"
+        component={AccountingScreen}
+        options={{
+          headerTitle: "Accounting",
+        }}
+      />
+      <Stack.Screen
+        name="Reviews"
+        component={ReviewsScreen}
+        options={{
+          headerTitle: "Reviews",
+        }}
+      />
+      <Stack.Screen
+        name="ProviderResources"
+        component={ProviderResourcesScreen}
+        options={{
+          headerTitle: "Resources",
         }}
       />
     </Stack.Navigator>
