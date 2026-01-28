@@ -396,15 +396,15 @@ interface ProviderState {
 export const useProviderStore = create<ProviderState>()(
   persist(
     (set, get) => ({
-      // Initial data
-      leads: initialLeads,
-      jobs: initialJobs,
+      // Initial data - empty arrays for new providers (no mock data)
+      leads: [],
+      jobs: [],
       quotes: [],
-      messages: initialMessages,
-      invoices: initialInvoices,
-      payouts: initialPayouts,
-      clients: initialClients,
-      clientActivities: initialClientActivities,
+      messages: [],
+      invoices: [],
+      payouts: [],
+      clients: [],
+      clientActivities: [],
       
       availableForWork: true,
       notificationsEnabled: true,

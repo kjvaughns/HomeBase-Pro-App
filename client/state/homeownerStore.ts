@@ -19,11 +19,6 @@ import {
 import {
   SERVICE_CATEGORIES,
   PROVIDERS,
-  SEED_JOBS,
-  SEED_INVOICES,
-  SEED_RECEIPTS,
-  SEED_REVIEWS,
-  SEED_QUOTES,
   DEFAULT_HOMEOWNER,
   generateTimeSlots,
 } from "./seedData";
@@ -127,39 +122,42 @@ export const useHomeownerStore = create<HomeownerState>()((set, get) => ({
       if (stored) {
         const data = JSON.parse(stored);
         set({
-          profile: data.profile || DEFAULT_HOMEOWNER,
-          jobs: data.jobs || SEED_JOBS,
-          invoices: data.invoices || SEED_INVOICES,
-          receipts: data.receipts || SEED_RECEIPTS,
-          reviews: data.reviews || SEED_REVIEWS,
-          quotes: data.quotes || SEED_QUOTES,
+          profile: data.profile || null,
+          jobs: data.jobs || [],
+          invoices: data.invoices || [],
+          receipts: data.receipts || [],
+          reviews: data.reviews || [],
+          quotes: data.quotes || [],
           savedProviderIds: data.savedProviderIds || [],
           appointments: data.appointments || [],
           isHydrated: true,
         });
       } else {
+        // New users start with empty state - no mock data
         set({
-          profile: DEFAULT_HOMEOWNER,
-          jobs: SEED_JOBS,
-          invoices: SEED_INVOICES,
-          receipts: SEED_RECEIPTS,
-          reviews: SEED_REVIEWS,
-          quotes: SEED_QUOTES,
+          profile: null,
+          jobs: [],
+          invoices: [],
+          receipts: [],
+          reviews: [],
+          quotes: [],
           savedProviderIds: [],
+          appointments: [],
           isHydrated: true,
         });
-        saveToStorage(get());
       }
     } catch (error) {
       console.error("Failed to hydrate homeowner store:", error);
+      // On error, start with empty state
       set({
-        profile: DEFAULT_HOMEOWNER,
-        jobs: SEED_JOBS,
-        invoices: SEED_INVOICES,
-        receipts: SEED_RECEIPTS,
-        reviews: SEED_REVIEWS,
-        quotes: SEED_QUOTES,
+        profile: null,
+        jobs: [],
+        invoices: [],
+        receipts: [],
+        reviews: [],
+        quotes: [],
         savedProviderIds: [],
+        appointments: [],
         isHydrated: true,
       });
     }
@@ -167,14 +165,16 @@ export const useHomeownerStore = create<HomeownerState>()((set, get) => ({
 
   resetToSeedData: async () => {
     await AsyncStorage.removeItem(STORAGE_KEY);
+    // Reset to empty state - no mock data
     set({
-      profile: DEFAULT_HOMEOWNER,
-      jobs: SEED_JOBS,
-      invoices: SEED_INVOICES,
-      receipts: SEED_RECEIPTS,
-      reviews: SEED_REVIEWS,
-      quotes: SEED_QUOTES,
+      profile: null,
+      jobs: [],
+      invoices: [],
+      receipts: [],
+      reviews: [],
+      quotes: [],
       savedProviderIds: [],
+      appointments: [],
     });
   },
 
