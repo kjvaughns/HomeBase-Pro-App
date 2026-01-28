@@ -133,7 +133,7 @@ export default function ProviderFAB() {
             style={[
               styles.actionsContainer,
               {
-                bottom: bottomOffset,
+                bottom: bottomOffset + 70,
                 right: Spacing.lg,
               },
             ]}
