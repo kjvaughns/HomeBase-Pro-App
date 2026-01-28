@@ -17,7 +17,6 @@ import SimpleBookingScreen from "@/screens/homeowner/SimpleBookingScreen";
 import SurvivalKitScreen from "@/screens/homeowner/SurvivalKitScreen";
 import HealthScoreScreen from "@/screens/homeowner/HealthScoreScreen";
 import HouseFaxScreen from "@/screens/homeowner/HouseFaxScreen";
-import SavingsSpendScreen from "@/screens/homeowner/SavingsSpendScreen";
 import BudgeterScreen from "@/screens/homeowner/BudgeterScreen";
 import ServiceHistoryScreen from "@/screens/homeowner/ServiceHistoryScreen";
 import ProviderListScreen from "@/screens/homeowner/ProviderListScreen";
@@ -262,13 +261,6 @@ export default function RootStackNavigator() {
         component={HouseFaxScreen}
         options={{
           headerTitle: "HouseFax",
-        }}
-      />
-      <Stack.Screen
-        name="SavingsSpend"
-        component={SavingsSpendScreen}
-        options={{
-          headerTitle: "Savings & Spend",
         }}
       />
       <Stack.Screen

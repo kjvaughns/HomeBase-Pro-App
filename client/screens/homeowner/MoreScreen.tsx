@@ -159,19 +159,6 @@ export default function MoreScreen() {
                 
                 <Pressable
                   style={[styles.toolTile, { backgroundColor: theme.cardBackground }]}
-                  onPress={() => navigation.navigate("SavingsSpend")}
-                >
-                  <View style={[styles.toolIcon, { backgroundColor: Colors.accentLight }]}>
-                    <Feather name="trending-up" size={20} color={Colors.accent} />
-                  </View>
-                  <ThemedText style={styles.toolTitle}>Savings</ThemedText>
-                  <ThemedText style={[styles.toolSubtitle, { color: theme.textSecondary }]}>
-                    Track spend
-                  </ThemedText>
-                </Pressable>
-                
-                <Pressable
-                  style={[styles.toolTile, { backgroundColor: theme.cardBackground }]}
                   onPress={() => navigation.navigate("HealthScore")}
                 >
                   <View style={[styles.toolIcon, { backgroundColor: Colors.accentLight }]}>
