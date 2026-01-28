@@ -1,0 +1,154 @@
+HomeBase Homeowner Upgrade: Home Health Score + Service History Tool + Saved Providers
+Design only. React Native Expo. iOS-first. Liquid Glass. Calm luxury minimalism. No white outline borders. Soft green only for primary actions and positive states. Fully clickable flows with mock data, but no real backend logic.
+
+Goal
+1. Improve Home Health Score into a premium assessment that feels trustworthy, shows history over time, and converts into actionable tasks and one tap booking.
+2. Add a Service History tool tile and dedicated pages under Tools.
+3. Add Saved Providers system with proper pages and make it visible on the Find screen for logged in users.
+
+Global requirements
+1. Everything is per Home. Persistent Home selector across these tools and pages.
+2. All task rows support: Book Now, Get Quote, Add to Plan, Snooze, Mark Done.
+3. Fix safe area padding everywhere. No chat box hidden behind nav. No floating widget overlap. FAB placement consistent and not covering content.
+4. Add polished empty states, first run states, skeleton loading states, and success micro animations.
+
+Navigation updates
+A. More tab
+Add a Tools section with tiles:
+Survival Kit
+HouseFax Ledger
+Home Health Score
+Service History
+Savings and Spend
+B. Find tab
+For logged in users, add a “Saved Providers” section near the top under search and category chips.
+Also add a “Continue where you left off” row showing last viewed providers and last saved search (mock).
+
+Feature 1: Home Health Score redesign
+Entry screen
+Title: Home Health Score
+Subtext: “Know what matters most right now and what it will cost later.”
+Primary CTA: Run Assessment
+Secondary CTA: View Previous Scores
+Show last score summary if it exists with trend indicator and last run date.
+
+Assessment flow
+Design a 10 to 16 step fast wizard with progress indicator and instant feedback moments.
+Use single question per screen, big tap targets, and small “why we ask” helper text.
+Inputs sections:
+1. Home context (prefilled from home profile)
+Home age
+Roof age
+HVAC age
+Water heater age
+2. Visible symptoms checklist
+Leaks, uneven temps, high bills, slow drains, roof stains, pests, gutter overflow, dryer takes long, cracks, mold smell
+3. Safety checks
+Smoke and CO tested, GFCI present, panel type optional, water shutoff known yes/no
+4. Maintenance habits
+Filter cadence, gutter cleaning, annual HVAC service, pest control cadence
+5. Risk tolerance
+Conservative, balanced, aggressive
+6. Optional quick media
+Add photos toggle for issues (mock upload UI)
+
+Scoring UX
+Use a transparent points model UI:
+Score out of 100
+Breakdown cards: Safety, Water damage, Energy, Comfort, Exterior
+Show a “How we scored this” drawer with point weights in plain language.
+Add confidence indicator: low, medium, high (based on completeness of inputs).
+
+Results screen layout
+Top: Big score ring with subtle animation and trend from last run.
+Tabs: Overview, Risks, Action Plan, History
+Overview
+Short summary: “Your home is doing okay, but you have 2 high priority risks.”
+Show 3 highlight cards:
+Top risk
+Projected cost if ignored (range)
+Quick win savings (range)
+Risks
+Top 5 issues list with severity chips: Low, Medium, High
+Each issue shows: why it matters, recommended next step, and Book Now.
+Action Plan
+Prioritized tasks list with due dates, recurrence suggestions, cost ranges, mapped service category (visual).
+Buttons on each row: Add to Plan, Book Now.
+History
+Timeline of past runs with mini score chart and “what improved” callouts.
+Allow “Compare runs” view: side by side breakdown cards (mock).
+
+Convert to booking
+On high severity items show a sticky bottom CTA:
+“Fix the top issue now”
+Options: Book Now or Get Quote
+Design the booking handoff card to pass: home_id, service_category, task_context (visual only).
+
+Feature 2: Service History tool and pages
+Tool tile under More Tools: Service History
+Entry screen
+Explain: “Everything done for this home, all in one place.”
+Home selector at top.
+Two tabs: Timeline and Providers
+
+Timeline tab
+A clean ledger list grouped by month:
+Job title, provider, date, status, amount, and quick action icons.
+Filters:
+All, Completed, Upcoming, Invoices, DIY, Warranties
+Tap item opens Service Entry Detail page:
+Summary card
+Work notes
+Photos (mock)
+Invoice preview card
+Buttons: Rebook, Message Provider, Download receipt, Add warranty note
+
+Providers tab
+Shows providers who have worked on this home with spend totals and rating.
+Buttons per provider: View profile, Save provider, Rebook
+
+Empty states
+No service history yet:
+Show suggested first bookings and a CTA to “Start with a Home Health Score” and “Browse providers”.
+
+Feature 3: Saved Providers system
+Saved Providers list page
+Accessible from:
+Manage tab: Saved Providers section
+More tab: Saved Providers row
+Find tab: Saved Providers section
+List layout
+Search bar
+Sort options: Recently saved, Highest rated, Most booked, Closest
+Provider card fields:
+Logo, name, category, rating, review count, service area, starting price or quote badge
+Buttons: Book, Message, Remove, Share
+Tag chips: Vetted, Fast response, Popular, Top rated (mock)
+
+Provider profile page updates
+Add Save button state:
+Save icon toggles saved status with micro animation.
+Add “Saved” state in header.
+
+Find tab updates for logged in users
+At top under search:
+Saved Providers horizontal carousel
+Each card: provider photo, name, rating, quick Book button
+If none saved, show a calm prompt: “Save your favorite pros for one tap booking.”
+Add a “Recommended for your home” row below saved providers:
+Uses home_id context and last assessment risks (mock).
+
+Mock data requirements
+At least:
+2 homes
+6 service history entries per home
+4 providers saved
+3 providers previously used
+2 past health score runs with different results
+
+Deliverables
+1. New or updated screens: Home Health Score entry, wizard, results, history compare
+2. Service History tool entry, timeline list, service entry detail, providers tab
+3. Saved Providers list page, saved providers components, Find screen section for logged in users
+4. Fully clickable navigation and mock interactions, consistent Liquid Glass styling, fixed safe areas and floating elements
+Also update blueprint files as needed to match the new routes and navigation structure.
