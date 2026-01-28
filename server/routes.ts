@@ -88,7 +88,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Invalid email or password" });
       }
 
-      res.json({ user: formatUserResponse(user) });
+      // Fetch provider profile if user is a provider
+      let providerProfile = null;
+      if (user.isProvider) {
+        providerProfile = await storage.getProviderByUserId(user.id);
+      }
+
+      res.json({ user: formatUserResponse(user), providerProfile });
     } catch (error) {
       console.error("Login error:", error);
       res.status(500).json({ error: "Failed to login" });

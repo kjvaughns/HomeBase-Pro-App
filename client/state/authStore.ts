@@ -30,7 +30,7 @@ interface AuthState {
   providerProfile: ProviderProfile | null;
   isHydrated: boolean;
   
-  login: (user: User) => void;
+  login: (user: User, providerProfile?: ProviderProfile | null) => void;
   logout: () => void;
   setActiveRole: (role: UserRole) => void;
   createProviderProfile: (profile: ProviderProfile) => void;
@@ -49,11 +49,12 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   providerProfile: null,
   isHydrated: false,
 
-  login: (user: User) => {
+  login: (user: User, providerProfile?: ProviderProfile | null) => {
     const newState = {
       isAuthenticated: true,
       user,
       activeRole: "homeowner" as UserRole,
+      providerProfile: providerProfile || null,
     };
     set(newState);
     saveToStorage(get());

@@ -59,13 +59,24 @@ export default function LoginScreen({ navigation }: Props) {
       const data = await response.json();
       
       if (data.user) {
+        const providerProfile = data.providerProfile ? {
+          id: data.providerProfile.id,
+          userId: data.providerProfile.userId,
+          businessName: data.providerProfile.businessName,
+          services: data.providerProfile.capabilityTags || [],
+          status: data.providerProfile.isActive ? "approved" as const : "pending" as const,
+          rating: parseFloat(data.providerProfile.rating) || 0,
+          reviewCount: data.providerProfile.reviewCount || 0,
+          completedJobs: 0,
+        } : null;
+        
         login({
           id: data.user.id,
           name: data.user.name,
           email: data.user.email,
           phone: data.user.phone,
           avatarUrl: data.user.avatarUrl,
-        });
+        }, providerProfile);
         navigation.reset({
           index: 0,
           routes: [{ name: "Main" }],
