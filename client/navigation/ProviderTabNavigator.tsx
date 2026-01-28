@@ -2,7 +2,7 @@ import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
-import { Platform, StyleSheet, View, useWindowDimensions, Text } from "react-native";
+import { Platform, StyleSheet, View, useWindowDimensions, Text, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import ProviderHomeScreen from "@/screens/provider/ProviderHomeScreen";
@@ -109,16 +109,17 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
           const color = isFocused ? Colors.accent : theme.tabIconDefault;
 
           return (
-            <View
+            <Pressable
               key={route.key}
               style={styles.tab}
-              onTouchEnd={onPress}
+              onPress={onPress}
               accessibilityRole="button"
               accessibilityState={isFocused ? { selected: true } : {}}
+              testID={`tab-${route.name}`}
             >
               <Feather name={iconName} size={iconSize} color={color} style={styles.icon} />
               <Text style={[styles.tabText, { fontSize, color }]}>{label}</Text>
-            </View>
+            </Pressable>
           );
         })}
       </View>
