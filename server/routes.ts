@@ -590,7 +590,7 @@ Be conversational and helpful. If they just have a question, answer it. If they 
       if (providerId) {
         const [provider, jobs] = await Promise.all([
           storage.getProvider(providerId),
-          storage.getJobsByProviderId(providerId),
+          storage.getJobs(providerId),
         ]);
         
         if (provider) {
@@ -601,9 +601,13 @@ Be conversational and helpful. If they just have a question, answer it. If they 
         }
 
         if (jobs && jobs.length > 0) {
-          const completedJobs = jobs.filter(j => j.status === 'completed' && j.finalPrice);
+          const completedJobs = jobs.filter((j: { status: string; finalPrice: string | null }) => 
+            j.status === 'completed' && j.finalPrice
+          );
           if (completedJobs.length > 0) {
-            const avgPrice = completedJobs.reduce((sum, j) => sum + parseFloat(j.finalPrice || '0'), 0) / completedJobs.length;
+            const avgPrice = completedJobs.reduce((sum: number, j: { finalPrice: string | null }) => 
+              sum + parseFloat(j.finalPrice || '0'), 0
+            ) / completedJobs.length;
             businessContext += `Average completed job price: $${avgPrice.toFixed(2)}\n`;
             businessContext += `Total completed jobs: ${completedJobs.length}\n`;
           }
