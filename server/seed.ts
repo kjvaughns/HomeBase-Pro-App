@@ -1,5 +1,12 @@
 import { db } from "./db";
-import { serviceCategories, services, providers, providerServices } from "@shared/schema";
+import { serviceCategories, services, providers, providerServices, users, homes, appointments } from "@shared/schema";
+import bcrypt from "bcrypt";
+
+// Test user credentials for demo/testing purposes
+export const TEST_USER_EMAIL = "test@homebase.com";
+export const TEST_USER_PASSWORD = "test123";
+export const TEST_USER_ID = "test-user-001";
+export const TEST_HOME_ID = "test-home-001";
 
 export async function seedDatabase() {
   const existingCategories = await db.select().from(serviceCategories);
@@ -82,5 +89,94 @@ export async function seedDatabase() {
 
   await db.insert(providerServices).values(providerServiceData);
 
-  console.log("Database seeded successfully");
+  // Create test user with mock data for demo purposes
+  const hashedPassword = await bcrypt.hash(TEST_USER_PASSWORD, 10);
+  
+  await db.insert(users).values({
+    id: TEST_USER_ID,
+    email: TEST_USER_EMAIL,
+    password: hashedPassword,
+    firstName: "Demo",
+    lastName: "User",
+    phone: "555-0000",
+  });
+
+  // Create test user's home
+  await db.insert(homes).values({
+    id: TEST_HOME_ID,
+    userId: TEST_USER_ID,
+    label: "Main Home",
+    street: "123 Test Street",
+    city: "San Francisco",
+    state: "CA",
+    zip: "94102",
+    propertyType: "single_family",
+    bedrooms: 3,
+    bathrooms: 2,
+    squareFeet: 1800,
+    yearBuilt: 1985,
+    isDefault: true,
+  });
+
+  // Create sample appointments for test user
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const nextWeek = new Date(now);
+  nextWeek.setDate(nextWeek.getDate() + 7);
+  const lastWeek = new Date(now);
+  lastWeek.setDate(lastWeek.getDate() - 7);
+
+  const appointmentData = [
+    {
+      id: "appt-test-1",
+      userId: TEST_USER_ID,
+      homeId: TEST_HOME_ID,
+      providerId: "p1",
+      serviceId: "s2",
+      serviceName: "Leak Repair",
+      description: "Kitchen sink is leaking under the cabinet",
+      urgency: "soon" as const,
+      jobSize: "small" as const,
+      scheduledDate: tomorrow,
+      scheduledTime: "10:00 AM",
+      status: "confirmed" as const,
+      estimatedPrice: "125.00",
+    },
+    {
+      id: "appt-test-2",
+      userId: TEST_USER_ID,
+      homeId: TEST_HOME_ID,
+      providerId: "p2",
+      serviceId: "s4",
+      serviceName: "AC Repair",
+      description: "Air conditioning not cooling properly",
+      urgency: "urgent" as const,
+      jobSize: "medium" as const,
+      scheduledDate: nextWeek,
+      scheduledTime: "2:00 PM",
+      status: "pending" as const,
+      estimatedPrice: "150.00",
+    },
+    {
+      id: "appt-test-3",
+      userId: TEST_USER_ID,
+      homeId: TEST_HOME_ID,
+      providerId: "p4",
+      serviceId: "s9",
+      serviceName: "Deep Clean",
+      description: "Full house deep cleaning before holiday guests",
+      urgency: "flexible" as const,
+      jobSize: "large" as const,
+      scheduledDate: lastWeek,
+      scheduledTime: "9:00 AM",
+      status: "completed" as const,
+      estimatedPrice: "200.00",
+      finalPrice: "220.00",
+    },
+  ];
+
+  await db.insert(appointments).values(appointmentData);
+
+  console.log("Database seeded successfully with test user: " + TEST_USER_EMAIL);
 }
