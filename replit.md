@@ -9,6 +9,18 @@ HomeBase is an iOS mobile application built with Expo React Native, featuring a 
 - Liquid Glass styling for headers, tab bars, key cards, modals
 - Clean, minimal design with proper spacing
 
+## Test Account
+For demo and testing purposes, a test account is available with pre-populated data:
+- **Email**: test@homebase.com
+- **Password**: test123
+- **User ID**: test-user-001
+
+The test account includes:
+- A pre-configured home (123 Test Street, San Francisco)
+- Sample appointments (Leak Repair, AC Repair, Deep Clean)
+
+**New user accounts start with a clean, empty state** - no mock data is pre-populated. Categories and providers are shared public data visible to all users.
+
 ## System Architecture
 The application is structured into a client-side React Native Expo app and an Express.js backend. The UI/UX features a "Liquid Glass" effect for iOS, incorporating frosted blur for key elements, and supports both Light and Dark modes. The primary accent color is `#38AE5F`, with all other elements utilizing a neutral grayscale palette. Typography is based on SF Pro with a defined type scale.
 
