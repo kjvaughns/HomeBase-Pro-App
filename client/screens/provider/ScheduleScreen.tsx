@@ -125,6 +125,53 @@ function getStatusLabel(status: Job["status"]): string {
   }
 }
 
+type StatusFilter = "all" | "scheduled" | "in_progress" | "completed";
+
+interface StatusFilterChipsProps {
+  selected: StatusFilter;
+  onSelect: (filter: StatusFilter) => void;
+}
+
+function StatusFilterChips({ selected, onSelect }: StatusFilterChipsProps) {
+  const { theme } = useTheme();
+  const filters: { key: StatusFilter; label: string }[] = [
+    { key: "all", label: "All" },
+    { key: "scheduled", label: "Scheduled" },
+    { key: "in_progress", label: "In Progress" },
+    { key: "completed", label: "Completed" },
+  ];
+
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.statusFilterContainer}
+    >
+      {filters.map((filter) => (
+        <Pressable
+          key={filter.key}
+          style={[
+            styles.statusFilterChip,
+            { borderColor: theme.separator },
+            selected === filter.key && { backgroundColor: Colors.accent, borderColor: Colors.accent },
+          ]}
+          onPress={() => onSelect(filter.key)}
+        >
+          <ThemedText
+            type="caption"
+            style={[
+              { color: theme.textSecondary },
+              selected === filter.key && { color: "#FFFFFF", fontWeight: "600" },
+            ]}
+          >
+            {filter.label}
+          </ThemedText>
+        </Pressable>
+      ))}
+    </ScrollView>
+  );
+}
+
 interface ViewModeTabsProps {
   selected: ViewMode;
   onSelect: (mode: ViewMode) => void;
@@ -540,6 +587,7 @@ export default function ScheduleScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [statusFilter, setStatusFilter] = useState<"all" | "scheduled" | "in_progress" | "completed">("all");
 
   const jobs = jobsData?.jobs || [];
   const clients = clientsData?.clients || [];
@@ -565,14 +613,18 @@ export default function ScheduleScreen() {
 
   const formattedJobs = useMemo(() => {
     return jobs
-      .filter((job) => job.status !== "cancelled")
+      .filter((job) => {
+        if (job.status === "cancelled") return false;
+        if (statusFilter === "all") return true;
+        return job.status === statusFilter;
+      })
       .map(formatJobForDisplay)
       .sort((a, b) => {
         const dateA = new Date(a.date);
         const dateB = new Date(b.date);
         return dateA.getTime() - dateB.getTime();
       });
-  }, [jobs, clients]);
+  }, [jobs, clients, statusFilter]);
 
   const dayJobs = useMemo(() => {
     return formattedJobs.filter((job) => isSameDay(new Date(job.date), selectedDate));
@@ -691,6 +743,7 @@ export default function ScheduleScreen() {
           </Pressable>
         </View>
         <ViewModeTabs selected={viewMode} onSelect={setViewMode} />
+        <StatusFilterChips selected={statusFilter} onSelect={setStatusFilter} />
       </View>
 
       <View style={[styles.content, { paddingBottom: tabBarHeight + Spacing.lg }]}>
@@ -775,6 +828,17 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     alignItems: "center",
     borderRadius: BorderRadius.md,
+  },
+  statusFilterContainer: {
+    paddingVertical: Spacing.sm,
+    gap: Spacing.sm,
+    flexDirection: "row",
+  },
+  statusFilterChip: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
   },
   content: {
     flex: 1,
