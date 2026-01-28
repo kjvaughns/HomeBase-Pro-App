@@ -39,6 +39,10 @@ import AddClientScreen from "@/screens/provider/AddClientScreen";
 import AddJobScreen from "@/screens/provider/AddJobScreen";
 import AddInvoiceScreen from "@/screens/provider/AddInvoiceScreen";
 import InvoiceDetailScreen from "@/screens/provider/InvoiceDetailScreen";
+import ServicesScreen from "@/screens/provider/ServicesScreen";
+import NewServiceScreen from "@/screens/provider/NewServiceScreen";
+import ServicePreviewScreen from "@/screens/provider/ServicePreviewScreen";
+import BusinessProfileScreen from "@/screens/provider/BusinessProfileScreen";
 import SavedProvidersScreen from "@/screens/homeowner/SavedProvidersScreen";
 import HelpCenterScreen from "@/screens/homeowner/HelpCenterScreen";
 import ContactUsScreen from "@/screens/homeowner/ContactUsScreen";
@@ -121,6 +125,12 @@ export type RootStackParamList = {
   AddJob: undefined;
   AddInvoice: undefined;
   InvoiceDetail: { invoiceId: string };
+  Services: undefined;
+  NewService: undefined;
+  EditService: { serviceId: string };
+  ServicePreview: { service: any };
+  BusinessProfile: undefined;
+  PreviewBookingPage: { providerId?: string };
   SavedProviders: undefined;
   HelpCenter: undefined;
   ContactUs: undefined;
@@ -385,6 +395,49 @@ export default function RootStackNavigator() {
         component={InvoiceDetailScreen}
         options={{
           headerTitle: "Invoice",
+        }}
+      />
+      <Stack.Screen
+        name="Services"
+        component={ServicesScreen}
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="NewService"
+        component={NewServiceScreen}
+        options={{
+          headerTitle: "New Service",
+          presentation: "modal",
+        }}
+      />
+      <Stack.Screen
+        name="EditService"
+        component={NewServiceScreen}
+        options={{
+          headerTitle: "Edit Service",
+        }}
+      />
+      <Stack.Screen
+        name="ServicePreview"
+        component={ServicePreviewScreen}
+        options={{
+          headerTitle: "Service Preview",
+        }}
+      />
+      <Stack.Screen
+        name="BusinessProfile"
+        component={BusinessProfileScreen}
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="PreviewBookingPage"
+        component={ServicePreviewScreen}
+        options={{
+          headerTitle: "Booking Page Preview",
         }}
       />
       <Stack.Screen

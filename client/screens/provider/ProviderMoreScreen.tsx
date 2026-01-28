@@ -99,9 +99,14 @@ export default function ProviderMoreScreen() {
               </View>
             </View>
             <ListRow
-              title="Services & Pricing"
-              leftIcon="tool"
-              onPress={() => {}}
+              title="My Services"
+              leftIcon="briefcase"
+              onPress={() => navigation.navigate("Services")}
+            />
+            <ListRow
+              title="Business Profile"
+              leftIcon="user"
+              onPress={() => navigation.navigate("BusinessProfile")}
             />
             <ListRow
               title="Service Areas"
@@ -188,12 +193,12 @@ export default function ProviderMoreScreen() {
             <ListRow
               title="Help Center"
               leftIcon="help-circle"
-              onPress={() => {}}
+              onPress={() => navigation.navigate("HelpCenter")}
             />
             <ListRow
               title="Contact Support"
               leftIcon="message-circle"
-              onPress={() => {}}
+              onPress={() => navigation.navigate("ContactUs")}
               isLast
             />
           </View>
