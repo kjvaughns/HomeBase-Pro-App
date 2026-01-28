@@ -169,6 +169,19 @@ export default function MoreScreen() {
                     Home status
                   </ThemedText>
                 </Pressable>
+                
+                <Pressable
+                  style={[styles.toolTile, { backgroundColor: theme.cardBackground }]}
+                  onPress={() => navigation.navigate("ServiceHistory")}
+                >
+                  <View style={[styles.toolIcon, { backgroundColor: Colors.accentLight }]}>
+                    <Feather name="clock" size={20} color={Colors.accent} />
+                  </View>
+                  <ThemedText style={styles.toolTitle}>Service History</ThemedText>
+                  <ThemedText style={[styles.toolSubtitle, { color: theme.textSecondary }]}>
+                    Past services
+                  </ThemedText>
+                </Pressable>
               </View>
             </Animated.View>
 
