@@ -145,7 +145,7 @@ export default function ProviderTabNavigator() {
           backgroundColor: Platform.select({
             ios: undefined,
             android: theme.backgroundRoot,
-            web: "transparent",
+            web: isDark ? "rgba(28, 28, 30, 0.85)" : "rgba(248, 248, 248, 0.85)",
           }),
         },
         headerShadowVisible: false,

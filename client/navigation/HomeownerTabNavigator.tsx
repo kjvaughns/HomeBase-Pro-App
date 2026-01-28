@@ -143,7 +143,7 @@ export default function HomeownerTabNavigator() {
           backgroundColor: Platform.select({
             ios: undefined,
             android: theme.backgroundRoot,
-            web: isDark ? "rgba(28, 28, 30, 0.8)" : "rgba(255, 255, 255, 0.8)",
+            web: isDark ? "rgba(28, 28, 30, 0.85)" : "rgba(248, 248, 248, 0.85)",
           }),
         },
         headerShadowVisible: false,
