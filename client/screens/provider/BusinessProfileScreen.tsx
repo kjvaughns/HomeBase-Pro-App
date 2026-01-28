@@ -33,6 +33,14 @@ export default function BusinessProfileScreen() {
   const [businessName, setBusinessName] = useState("Clean & Co. LLC");
   const [slug, setSlug] = useState("clean-co");
   const [isSaving, setIsSaving] = useState(false);
+  
+  const [phone, setPhone] = useState("(415) 555-0123");
+  const [email, setEmail] = useState("contact@cleanco.com");
+  const [address, setAddress] = useState("123 Market St, San Francisco, CA");
+  
+  const [instagram, setInstagram] = useState("@cleanco_sf");
+  const [facebook, setFacebook] = useState("cleancoservices");
+  const [website, setWebsite] = useState("www.cleanco.com");
 
   const handleEditCover = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -164,6 +172,102 @@ export default function BusinessProfileScreen() {
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(200).duration(300)}>
+          <GlassCard style={styles.section}>
+            <ThemedText style={styles.sectionTitle}>CONTACT INFO</ThemedText>
+
+            <View style={styles.detailRow}>
+              <View style={styles.detailIcon}>
+                <Feather name="phone" size={18} color={theme.textSecondary} />
+              </View>
+              <TextInput
+                style={[styles.detailInput, { color: theme.text }]}
+                value={phone}
+                onChangeText={setPhone}
+                placeholder="Phone number"
+                placeholderTextColor={theme.textSecondary}
+                keyboardType="phone-pad"
+              />
+            </View>
+
+            <View style={styles.detailRow}>
+              <View style={styles.detailIcon}>
+                <Feather name="mail" size={18} color={theme.textSecondary} />
+              </View>
+              <TextInput
+                style={[styles.detailInput, { color: theme.text }]}
+                value={email}
+                onChangeText={setEmail}
+                placeholder="Email address"
+                placeholderTextColor={theme.textSecondary}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
+
+            <View style={styles.detailRow}>
+              <View style={styles.detailIcon}>
+                <Feather name="map-pin" size={18} color={theme.textSecondary} />
+              </View>
+              <TextInput
+                style={[styles.detailInput, { color: theme.text }]}
+                value={address}
+                onChangeText={setAddress}
+                placeholder="Business address"
+                placeholderTextColor={theme.textSecondary}
+              />
+            </View>
+          </GlassCard>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(250).duration(300)}>
+          <GlassCard style={styles.section}>
+            <ThemedText style={styles.sectionTitle}>SOCIAL LINKS</ThemedText>
+
+            <View style={styles.detailRow}>
+              <View style={[styles.detailIcon, { backgroundColor: "#E1306C20" }]}>
+                <Feather name="instagram" size={18} color="#E1306C" />
+              </View>
+              <TextInput
+                style={[styles.detailInput, { color: theme.text }]}
+                value={instagram}
+                onChangeText={setInstagram}
+                placeholder="Instagram handle"
+                placeholderTextColor={theme.textSecondary}
+                autoCapitalize="none"
+              />
+            </View>
+
+            <View style={styles.detailRow}>
+              <View style={[styles.detailIcon, { backgroundColor: "#1877F220" }]}>
+                <Feather name="facebook" size={18} color="#1877F2" />
+              </View>
+              <TextInput
+                style={[styles.detailInput, { color: theme.text }]}
+                value={facebook}
+                onChangeText={setFacebook}
+                placeholder="Facebook page"
+                placeholderTextColor={theme.textSecondary}
+                autoCapitalize="none"
+              />
+            </View>
+
+            <View style={styles.detailRow}>
+              <View style={styles.detailIcon}>
+                <Feather name="link" size={18} color={theme.textSecondary} />
+              </View>
+              <TextInput
+                style={[styles.detailInput, { color: theme.text }]}
+                value={website}
+                onChangeText={setWebsite}
+                placeholder="Website URL"
+                placeholderTextColor={theme.textSecondary}
+                autoCapitalize="none"
+              />
+            </View>
+          </GlassCard>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(300).duration(300)}>
           <GlassCard style={styles.section}>
             <ThemedText style={styles.sectionTitle}>CONFIGURATION</ThemedText>
 
