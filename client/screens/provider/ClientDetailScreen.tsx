@@ -1,20 +1,23 @@
 import React, { useState, useMemo } from "react";
-import { StyleSheet, View, ScrollView, Pressable, Linking } from "react-native";
+import { StyleSheet, View, ScrollView, Pressable, Linking, Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
-import { useRoute, RouteProp } from "@react-navigation/native";
+import { useRoute, RouteProp, useNavigation } from "@react-navigation/native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
+import { StatusPill } from "@/components/StatusPill";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
-import { useProviderStore, Client, ClientActivity } from "@/state/providerStore";
+import { useProviderStore, Client, ClientActivity, ClientNote, Job, Invoice } from "@/state/providerStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
-type TabType = "overview" | "activity" | "billing";
+type TabType = "overview" | "jobs" | "invoices" | "notes" | "home";
 
 function getInitials(name: string): string {
   return name
@@ -23,6 +26,20 @@ function getInitials(name: string): string {
     .join("")
     .toUpperCase()
     .slice(0, 2);
+}
+
+function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+function formatDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 interface ActionButtonProps {
@@ -45,7 +62,13 @@ function ActionButton({ icon, label, onPress, primary }: ActionButtonProps) {
       ]}
       onPress={onPress}
     >
-      <Feather name={icon} size={20} color={primary ? "#FFFFFF" : theme.text} />
+      <Feather name={icon} size={18} color={primary ? "#FFFFFF" : theme.text} />
+      <ThemedText
+        type="caption"
+        style={{ color: primary ? "#FFFFFF" : theme.text, marginTop: 4 }}
+      >
+        {label}
+      </ThemedText>
     </Pressable>
   );
 }
@@ -66,7 +89,7 @@ function TabButton({ label, active, onPress }: TabButtonProps) {
     >
       <ThemedText
         type="body"
-        style={{ color: active ? Colors.accent : theme.textSecondary }}
+        style={{ color: active ? Colors.accent : theme.textSecondary, fontWeight: active ? "600" : "400" }}
       >
         {label}
       </ThemedText>
@@ -74,22 +97,23 @@ function TabButton({ label, active, onPress }: TabButtonProps) {
   );
 }
 
-interface ActivityRowProps {
-  activity: ClientActivity;
+interface KPICardProps {
+  label: string;
+  value: string;
+  color?: string;
 }
 
-function ActivityRow({ activity }: ActivityRowProps) {
+function KPICard({ label, value, color }: KPICardProps) {
   const { theme } = useTheme();
   
   return (
-    <View style={styles.activityRow}>
-      <View style={[styles.activityDot, { backgroundColor: theme.textSecondary }]} />
-      <View style={styles.activityContent}>
-        <ThemedText type="body">{activity.description}</ThemedText>
-        <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-          {activity.timestamp}
-        </ThemedText>
-      </View>
+    <View style={styles.kpiCard}>
+      <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+        {label}
+      </ThemedText>
+      <ThemedText type="h3" style={{ color: color || theme.text }}>
+        {value}
+      </ThemedText>
     </View>
   );
 }
@@ -99,28 +123,33 @@ export default function ClientDetailScreen() {
   const headerHeight = useHeaderHeight();
   const { theme } = useTheme();
   const route = useRoute<RouteProp<RootStackParamList, "ClientDetail">>();
+  const navigation = useNavigation();
   const { clientId } = route.params;
 
   const clients = useProviderStore((s) => s.clients);
-  const clientActivities = useProviderStore((s) => s.clientActivities);
-  const invoices = useProviderStore((s) => s.invoices);
+  const getClientActivities = useProviderStore((s) => s.getClientActivities);
+  const getClientNotes = useProviderStore((s) => s.getClientNotes);
+  const getClientJobHistory = useProviderStore((s) => s.getClientJobHistory);
+  const getClientInvoices = useProviderStore((s) => s.getClientInvoices);
 
   const client = useMemo(
     () => clients.find((c) => c.id === clientId),
     [clients, clientId]
   );
 
-  const activities = useMemo(
-    () => clientActivities.filter((a) => a.clientId === clientId),
-    [clientActivities, clientId]
-  );
+  const activities = useMemo(() => getClientActivities(clientId), [getClientActivities, clientId]);
+  const notes = useMemo(() => getClientNotes(clientId), [getClientNotes, clientId]);
+  const jobs = useMemo(() => getClientJobHistory(clientId), [getClientJobHistory, clientId]);
+  const invoices = useMemo(() => getClientInvoices(clientId), [getClientInvoices, clientId]);
 
   const [activeTab, setActiveTab] = useState<TabType>("overview");
 
   if (!client) {
     return (
       <ThemedView style={styles.container}>
-        <ThemedText>Client not found</ThemedText>
+        <View style={[styles.notFound, { paddingTop: headerHeight }]}>
+          <ThemedText type="h2">Client not found</ThemedText>
+        </View>
       </ThemedView>
     );
   }
@@ -133,104 +162,400 @@ export default function ClientDetailScreen() {
     Linking.openURL(`sms:${client.phone}`);
   };
 
-  const handleInvoice = () => {
-    // Navigate to create invoice
+  const handleNewJob = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Alert.alert("Create Job", "Navigate to create job for this client");
   };
+
+  const handleSendInvoice = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Alert.alert("Send Invoice", "Navigate to send invoice for this client");
+  };
+
+  const statusColor = useMemo(() => {
+    switch (client.status) {
+      case "active": return Colors.accent;
+      case "lead": return "#3B82F6";
+      case "inactive": return theme.textSecondary;
+      default: return theme.textSecondary;
+    }
+  }, [client.status, theme]);
+
+  const statusLabel = useMemo(() => {
+    switch (client.status) {
+      case "active": return "Active";
+      case "lead": return "Lead";
+      case "inactive": return "Inactive";
+      case "archived": return "Archived";
+      default: return client.status;
+    }
+  }, [client.status]);
 
   const renderOverview = () => (
     <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+      <View style={styles.kpiRow}>
+        <KPICard label="Lifetime Value" value={formatCurrency(client.ltv)} color={Colors.accent} />
+        <KPICard label="Total Jobs" value={client.jobCount.toString()} />
+        <KPICard label="Avg Ticket" value={formatCurrency(client.avgTicket || 0)} />
+      </View>
+      
+      {(client.outstandingBalance ?? 0) > 0 ? (
+        <GlassCard style={styles.alertCard}>
+          <View style={styles.alertRow}>
+            <Feather name="alert-circle" size={20} color="#EF4444" />
+            <View style={styles.alertContent}>
+              <ThemedText type="body" style={{ fontWeight: "600" }}>
+                Outstanding Balance
+              </ThemedText>
+              <ThemedText type="body" style={{ color: "#EF4444" }}>
+                {formatCurrency(client.outstandingBalance ?? 0)}
+              </ThemedText>
+            </View>
+            <Pressable style={[styles.alertButton, { backgroundColor: "#EF4444" }]}>
+              <ThemedText type="caption" style={{ color: "#FFFFFF" }}>Send Reminder</ThemedText>
+            </Pressable>
+          </View>
+        </GlassCard>
+      ) : null}
+
+      {client.nextAppointment ? (
+        <GlassCard style={styles.upcomingCard}>
+          <View style={styles.upcomingHeader}>
+            <Feather name="calendar" size={18} color={Colors.accent} />
+            <ThemedText type="body" style={{ fontWeight: "600", marginLeft: Spacing.sm }}>
+              Upcoming Appointment
+            </ThemedText>
+          </View>
+          <ThemedText type="body" style={{ marginTop: Spacing.sm }}>
+            {formatDate(client.nextAppointment)}
+          </ThemedText>
+        </GlassCard>
+      ) : null}
+
       <ThemedText type="label" style={[styles.sectionTitle, { color: theme.textSecondary }]}>
         Recent Activity
       </ThemedText>
       {activities.length > 0 ? (
         activities.slice(0, 5).map((activity) => (
-          <ActivityRow key={activity.id} activity={activity} />
+          <View key={activity.id} style={styles.activityRow}>
+            <View style={[styles.activityDot, { backgroundColor: Colors.accent }]} />
+            <View style={styles.activityContent}>
+              <ThemedText type="body">{activity.description}</ThemedText>
+              <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+                {activity.timestamp}
+              </ThemedText>
+            </View>
+          </View>
         ))
       ) : (
         <ThemedText type="body" style={{ color: theme.textSecondary }}>
           No recent activity
         </ThemedText>
       )}
-
-      <ThemedText
-        type="label"
-        style={[styles.sectionTitle, { color: theme.textSecondary, marginTop: Spacing.lg }]}
-      >
-        Details
-      </ThemedText>
-      <View style={styles.detailsGrid}>
-        <View style={styles.detailItem}>
-          <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-            Email
-          </ThemedText>
-          <ThemedText type="body">{client.email}</ThemedText>
-        </View>
-        <View style={styles.detailItem}>
-          <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-            Phone
-          </ThemedText>
-          <ThemedText type="body">{client.phone}</ThemedText>
-        </View>
-        {client.address ? (
-          <View style={[styles.detailItem, { flex: 1, minWidth: "100%" }]}>
-            <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-              Address
-            </ThemedText>
-            <ThemedText type="body">{client.address}</ThemedText>
-          </View>
-        ) : null}
-      </View>
     </Animated.View>
   );
 
-  const renderActivity = () => (
+  const renderJobs = () => (
     <Animated.View entering={FadeInDown.delay(100).duration(400)}>
       <ThemedText type="label" style={[styles.sectionTitle, { color: theme.textSecondary }]}>
-        All Activity
+        Job History ({jobs.length})
       </ThemedText>
-      {activities.length > 0 ? (
-        activities.map((activity) => (
-          <ActivityRow key={activity.id} activity={activity} />
+      {jobs.length > 0 ? (
+        jobs.map((job) => (
+          <GlassCard key={job.id} style={styles.jobCard}>
+            <View style={styles.jobHeader}>
+              <ThemedText type="body" style={{ fontWeight: "600" }}>
+                {job.service}
+              </ThemedText>
+              <StatusPill
+                status={job.status === "completed" ? "completed" : job.status === "scheduled" ? "scheduled" : "pending"}
+                label={job.status === "completed" ? "Completed" : job.status === "scheduled" ? "Scheduled" : "Pending"}
+              />
+            </View>
+            <ThemedText type="caption" style={{ color: theme.textSecondary, marginTop: 4 }}>
+              {formatDate(job.date)} at {job.time}
+            </ThemedText>
+            <ThemedText type="body" style={{ color: Colors.accent, marginTop: 4 }}>
+              {formatCurrency(job.price)}
+            </ThemedText>
+          </GlassCard>
         ))
       ) : (
         <ThemedText type="body" style={{ color: theme.textSecondary }}>
-          No activity recorded
+          No jobs recorded
         </ThemedText>
       )}
     </Animated.View>
   );
 
-  const renderBilling = () => (
+  const renderInvoices = () => (
     <Animated.View entering={FadeInDown.delay(100).duration(400)}>
       <ThemedText type="label" style={[styles.sectionTitle, { color: theme.textSecondary }]}>
-        Billing Summary
+        Invoices ({invoices.length})
       </ThemedText>
-      <GlassCard style={styles.billingCard}>
-        <View style={styles.billingRow}>
-          <ThemedText type="body" style={{ color: theme.textSecondary }}>
-            Lifetime Value
-          </ThemedText>
-          <ThemedText type="h2" style={{ color: Colors.accent }}>
-            ${client.ltv.toLocaleString()}
-          </ThemedText>
-        </View>
-        <View style={styles.billingRow}>
-          <ThemedText type="body" style={{ color: theme.textSecondary }}>
-            Total Jobs
-          </ThemedText>
-          <ThemedText type="h3">{client.jobCount}</ThemedText>
-        </View>
-        {client.clientSince ? (
-          <View style={styles.billingRow}>
-            <ThemedText type="body" style={{ color: theme.textSecondary }}>
-              Client Since
-            </ThemedText>
-            <ThemedText type="body">{client.clientSince}</ThemedText>
-          </View>
-        ) : null}
-      </GlassCard>
+      {invoices.length > 0 ? (
+        invoices.map((invoice) => (
+          <GlassCard key={invoice.id} style={styles.invoiceCard}>
+            <View style={styles.invoiceHeader}>
+              <ThemedText type="body" style={{ fontWeight: "600" }}>
+                {invoice.service}
+              </ThemedText>
+              <View style={[
+                styles.invoiceStatus,
+                { backgroundColor: invoice.status === "paid" ? Colors.accent + "20" : "#EF4444" + "20" }
+              ]}>
+                <ThemedText
+                  type="caption"
+                  style={{ color: invoice.status === "paid" ? Colors.accent : "#EF4444", fontWeight: "600" }}
+                >
+                  {invoice.status.toUpperCase()}
+                </ThemedText>
+              </View>
+            </View>
+            <View style={styles.invoiceDetails}>
+              <ThemedText type="body" style={{ color: Colors.accent }}>
+                {formatCurrency(invoice.amount)}
+              </ThemedText>
+              <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+                Due: {formatDate(invoice.dueDate)}
+              </ThemedText>
+            </View>
+          </GlassCard>
+        ))
+      ) : (
+        <ThemedText type="body" style={{ color: theme.textSecondary }}>
+          No invoices recorded
+        </ThemedText>
+      )}
     </Animated.View>
   );
+
+  const renderNotes = () => (
+    <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+      <View style={styles.notesHeader}>
+        <ThemedText type="label" style={{ color: theme.textSecondary }}>
+          NOTES ({notes.length})
+        </ThemedText>
+        <Pressable style={[styles.addNoteButton, { backgroundColor: Colors.accent }]}>
+          <Feather name="plus" size={16} color="#FFFFFF" />
+          <ThemedText type="caption" style={{ color: "#FFFFFF", marginLeft: 4 }}>Add Note</ThemedText>
+        </Pressable>
+      </View>
+      {notes.length > 0 ? (
+        notes.map((note) => (
+          <GlassCard key={note.id} style={styles.noteCard}>
+            <View style={styles.noteHeader}>
+              <View style={[
+                styles.noteBadge,
+                { backgroundColor: note.isInternal ? theme.textSecondary + "20" : Colors.accent + "20" }
+              ]}>
+                <Feather
+                  name={note.isInternal ? "lock" : "user"}
+                  size={12}
+                  color={note.isInternal ? theme.textSecondary : Colors.accent}
+                />
+                <ThemedText
+                  type="caption"
+                  style={{
+                    marginLeft: 4,
+                    color: note.isInternal ? theme.textSecondary : Colors.accent,
+                  }}
+                >
+                  {note.isInternal ? "Private" : "Shared"}
+                </ThemedText>
+              </View>
+              <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+                {formatDate(note.createdAt)}
+              </ThemedText>
+            </View>
+            <ThemedText type="body" style={{ marginTop: Spacing.sm }}>
+              {note.content}
+            </ThemedText>
+            <ThemedText type="caption" style={{ color: theme.textSecondary, marginTop: Spacing.xs }}>
+              by {note.createdBy}
+            </ThemedText>
+          </GlassCard>
+        ))
+      ) : (
+        <ThemedText type="body" style={{ color: theme.textSecondary }}>
+          No notes recorded
+        </ThemedText>
+      )}
+    </Animated.View>
+  );
+
+  const renderHome = () => {
+    const home = client.home;
+    
+    if (!home) {
+      return (
+        <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+          <GlassCard style={styles.noHomeCard}>
+            <Feather name="home" size={32} color={theme.textSecondary} />
+            <ThemedText type="body" style={{ marginTop: Spacing.md, textAlign: "center" }}>
+              No home information available
+            </ThemedText>
+            <ThemedText type="caption" style={{ color: theme.textSecondary, marginTop: Spacing.xs, textAlign: "center" }}>
+              Home details will appear here when the homeowner shares their HouseFax
+            </ThemedText>
+          </GlassCard>
+        </Animated.View>
+      );
+    }
+
+    return (
+      <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+        {home.lastUpdatedByHomeowner ? (
+          <View style={[styles.sharedBadge, { backgroundColor: Colors.accent + "20" }]}>
+            <Feather name="share-2" size={14} color={Colors.accent} />
+            <ThemedText type="caption" style={{ color: Colors.accent, marginLeft: 4 }}>
+              Shared by homeowner - Updated {formatDate(home.lastUpdatedByHomeowner)}
+            </ThemedText>
+          </View>
+        ) : null}
+
+        <GlassCard style={styles.homePropertyCard}>
+          <ThemedText type="label" style={{ color: theme.textSecondary, marginBottom: Spacing.sm }}>
+            PROPERTY DETAILS
+          </ThemedText>
+          <View style={styles.propertyGrid}>
+            <View style={styles.propertyItem}>
+              <ThemedText type="h3">{home.beds}</ThemedText>
+              <ThemedText type="caption" style={{ color: theme.textSecondary }}>Beds</ThemedText>
+            </View>
+            <View style={styles.propertyItem}>
+              <ThemedText type="h3">{home.baths}</ThemedText>
+              <ThemedText type="caption" style={{ color: theme.textSecondary }}>Baths</ThemedText>
+            </View>
+            <View style={styles.propertyItem}>
+              <ThemedText type="h3">{home.sqft.toLocaleString()}</ThemedText>
+              <ThemedText type="caption" style={{ color: theme.textSecondary }}>Sq Ft</ThemedText>
+            </View>
+            <View style={styles.propertyItem}>
+              <ThemedText type="h3">{home.yearBuilt}</ThemedText>
+              <ThemedText type="caption" style={{ color: theme.textSecondary }}>Year Built</ThemedText>
+            </View>
+          </View>
+        </GlassCard>
+
+        {home.healthScore !== undefined ? (
+          <GlassCard style={styles.healthScoreCard}>
+            <View style={styles.healthScoreHeader}>
+              <ThemedText type="label" style={{ color: theme.textSecondary }}>
+                HOME HEALTH SCORE
+              </ThemedText>
+              {home.healthScoreDate ? (
+                <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+                  {formatDate(home.healthScoreDate)}
+                </ThemedText>
+              ) : null}
+            </View>
+            <View style={styles.healthScoreValue}>
+              <ThemedText
+                type="h1"
+                style={{
+                  color: home.healthScore >= 80 ? Colors.accent : home.healthScore >= 60 ? "#F59E0B" : "#EF4444",
+                }}
+              >
+                {home.healthScore}
+              </ThemedText>
+              <ThemedText type="body" style={{ color: theme.textSecondary }}>/100</ThemedText>
+            </View>
+          </GlassCard>
+        ) : null}
+
+        {home.survivalKitEstimate ? (
+          <GlassCard style={styles.estimateCard}>
+            <ThemedText type="label" style={{ color: theme.textSecondary, marginBottom: Spacing.sm }}>
+              ESTIMATED ANNUAL MAINTENANCE
+            </ThemedText>
+            <ThemedText type="h2" style={{ color: Colors.accent }}>
+              {formatCurrency(home.survivalKitEstimate.min)} - {formatCurrency(home.survivalKitEstimate.max)}
+            </ThemedText>
+          </GlassCard>
+        ) : null}
+
+        {home.notableRisks && home.notableRisks.length > 0 ? (
+          <GlassCard style={styles.risksCard}>
+            <ThemedText type="label" style={{ color: theme.textSecondary, marginBottom: Spacing.sm }}>
+              NOTABLE RISKS
+            </ThemedText>
+            {home.notableRisks.map((risk, index) => (
+              <View key={index} style={styles.riskRow}>
+                <Feather name="alert-triangle" size={14} color="#F59E0B" />
+                <ThemedText type="body" style={{ marginLeft: Spacing.sm }}>
+                  {risk}
+                </ThemedText>
+              </View>
+            ))}
+          </GlassCard>
+        ) : null}
+
+        {(home.accessNotes || home.pets || home.parking || home.gateCode) ? (
+          <GlassCard style={styles.accessCard}>
+            <ThemedText type="label" style={{ color: theme.textSecondary, marginBottom: Spacing.sm }}>
+              ACCESS INFORMATION
+            </ThemedText>
+            <View style={[styles.privateBadge, { backgroundColor: theme.textSecondary + "20" }]}>
+              <Feather name="lock" size={12} color={theme.textSecondary} />
+              <ThemedText type="caption" style={{ color: theme.textSecondary, marginLeft: 4 }}>
+                Private to your business
+              </ThemedText>
+            </View>
+            {home.accessNotes ? (
+              <View style={styles.accessRow}>
+                <Feather name="key" size={16} color={theme.textSecondary} />
+                <ThemedText type="body" style={{ marginLeft: Spacing.sm, flex: 1 }}>
+                  {home.accessNotes}
+                </ThemedText>
+              </View>
+            ) : null}
+            {home.pets ? (
+              <View style={styles.accessRow}>
+                <Feather name="heart" size={16} color={theme.textSecondary} />
+                <ThemedText type="body" style={{ marginLeft: Spacing.sm, flex: 1 }}>
+                  {home.pets}
+                </ThemedText>
+              </View>
+            ) : null}
+            {home.parking ? (
+              <View style={styles.accessRow}>
+                <Feather name="truck" size={16} color={theme.textSecondary} />
+                <ThemedText type="body" style={{ marginLeft: Spacing.sm, flex: 1 }}>
+                  {home.parking}
+                </ThemedText>
+              </View>
+            ) : null}
+            {home.gateCode ? (
+              <View style={styles.accessRow}>
+                <Feather name="lock" size={16} color="#EF4444" />
+                <ThemedText type="body" style={{ marginLeft: Spacing.sm, flex: 1, color: "#EF4444" }}>
+                  Gate Code: {home.gateCode}
+                </ThemedText>
+              </View>
+            ) : null}
+          </GlassCard>
+        ) : null}
+
+        {home.preferredWindows && home.preferredWindows.length > 0 ? (
+          <GlassCard style={styles.preferencesCard}>
+            <ThemedText type="label" style={{ color: theme.textSecondary, marginBottom: Spacing.sm }}>
+              PREFERRED APPOINTMENT WINDOWS
+            </ThemedText>
+            <View style={styles.windowsRow}>
+              {home.preferredWindows.map((window, index) => (
+                <View key={index} style={[styles.windowChip, { backgroundColor: Colors.accent + "20" }]}>
+                  <ThemedText type="caption" style={{ color: Colors.accent }}>
+                    {window}
+                  </ThemedText>
+                </View>
+              ))}
+            </View>
+          </GlassCard>
+        ) : null}
+      </Animated.View>
+    );
+  };
 
   return (
     <ThemedView style={styles.container}>
@@ -252,45 +577,104 @@ export default function ClientDetailScreen() {
               </ThemedText>
             )}
           </View>
-          <ThemedText type="h2" style={styles.clientName}>
-            {client.name}
-          </ThemedText>
+          <View style={styles.nameRow}>
+            <ThemedText type="h2" style={styles.clientName}>
+              {client.name}
+            </ThemedText>
+            <View style={[styles.statusBadge, { backgroundColor: statusColor + "20" }]}>
+              <ThemedText style={[styles.statusText, { color: statusColor }]}>
+                {statusLabel}
+              </ThemedText>
+            </View>
+          </View>
           <ThemedText type="body" style={{ color: theme.textSecondary }}>
             {client.clientSince
               ? `Client since ${client.clientSince}`
-              : "Potential client"}{" "}
-            {client.ltv > 0 ? `| LTV $${client.ltv.toLocaleString()}` : ""}
+              : "Potential client"}
           </ThemedText>
 
           <View style={styles.actionButtons}>
+            <ActionButton icon="briefcase" label="New Job" onPress={handleNewJob} primary />
+            <ActionButton icon="file-text" label="Invoice" onPress={handleSendInvoice} />
+            <ActionButton icon="message-circle" label="Message" onPress={handleMessage} />
             <ActionButton icon="phone" label="Call" onPress={handleCall} />
-            <ActionButton icon="message-circle" label="Message" onPress={handleMessage} primary />
-            <ActionButton icon="file-text" label="Invoice" onPress={handleInvoice} />
           </View>
         </Animated.View>
 
-        <View style={[styles.tabBar, { borderBottomColor: theme.separator }]}>
+        <GlassCard style={styles.contactCard}>
+          <ThemedText type="label" style={{ color: theme.textSecondary, marginBottom: Spacing.sm }}>
+            CONTACT
+          </ThemedText>
+          <View style={styles.contactRow}>
+            <Feather name="phone" size={16} color={theme.textSecondary} />
+            <ThemedText type="body" style={{ marginLeft: Spacing.sm }}>
+              {client.phone}
+            </ThemedText>
+            <Pressable onPress={handleCall} style={styles.contactAction}>
+              <Feather name="external-link" size={16} color={Colors.accent} />
+            </Pressable>
+          </View>
+          <View style={styles.contactRow}>
+            <Feather name="mail" size={16} color={theme.textSecondary} />
+            <ThemedText type="body" style={{ marginLeft: Spacing.sm }}>
+              {client.email}
+            </ThemedText>
+          </View>
+          {client.address ? (
+            <View style={styles.contactRow}>
+              <Feather name="map-pin" size={16} color={theme.textSecondary} />
+              <ThemedText type="body" style={{ marginLeft: Spacing.sm, flex: 1 }}>
+                {client.address}
+              </ThemedText>
+              <Pressable
+                onPress={() => Linking.openURL(`maps://?address=${encodeURIComponent(client.address || "")}`)}
+                style={styles.contactAction}
+              >
+                <Feather name="navigation" size={16} color={Colors.accent} />
+              </Pressable>
+            </View>
+          ) : null}
+        </GlassCard>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.tabBarScroll}
+          contentContainerStyle={styles.tabBarContent}
+        >
           <TabButton
             label="Overview"
             active={activeTab === "overview"}
             onPress={() => setActiveTab("overview")}
           />
           <TabButton
-            label="Activity"
-            active={activeTab === "activity"}
-            onPress={() => setActiveTab("activity")}
+            label="Jobs"
+            active={activeTab === "jobs"}
+            onPress={() => setActiveTab("jobs")}
           />
           <TabButton
-            label="Billing"
-            active={activeTab === "billing"}
-            onPress={() => setActiveTab("billing")}
+            label="Invoices"
+            active={activeTab === "invoices"}
+            onPress={() => setActiveTab("invoices")}
           />
-        </View>
+          <TabButton
+            label="Notes"
+            active={activeTab === "notes"}
+            onPress={() => setActiveTab("notes")}
+          />
+          <TabButton
+            label="Home"
+            active={activeTab === "home"}
+            onPress={() => setActiveTab("home")}
+          />
+        </ScrollView>
 
         <View style={styles.tabContent}>
           {activeTab === "overview" && renderOverview()}
-          {activeTab === "activity" && renderActivity()}
-          {activeTab === "billing" && renderBilling()}
+          {activeTab === "jobs" && renderJobs()}
+          {activeTab === "invoices" && renderInvoices()}
+          {activeTab === "notes" && renderNotes()}
+          {activeTab === "home" && renderHome()}
         </View>
       </ScrollView>
     </ThemedView>
@@ -301,26 +685,45 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  notFound: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   profileHeader: {
     alignItems: "center",
     marginBottom: Spacing.lg,
   },
   avatar: {
-    width: 96,
-    height: 96,
-    borderRadius: BorderRadius.full,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: Spacing.md,
     overflow: "hidden",
   },
   avatarImage: {
-    width: 96,
-    height: 96,
-    borderRadius: BorderRadius.full,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
   },
   clientName: {
-    marginBottom: Spacing.xs,
+    marginBottom: 0,
+  },
+  statusBadge: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+  },
+  statusText: {
+    ...Typography.caption2,
+    fontWeight: "600",
   },
   actionButtons: {
     flexDirection: "row",
@@ -328,21 +731,34 @@ const styles = StyleSheet.create({
     marginTop: Spacing.lg,
   },
   actionButton: {
-    width: 48,
-    height: 48,
-    borderRadius: BorderRadius.full,
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.lg,
+    minWidth: 64,
   },
-  tabBar: {
+  contactCard: {
+    marginBottom: Spacing.md,
+  },
+  contactRow: {
     flexDirection: "row",
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    marginBottom: Spacing.lg,
+    alignItems: "center",
+    paddingVertical: Spacing.xs,
+  },
+  contactAction: {
+    marginLeft: "auto",
+    padding: Spacing.xs,
+  },
+  tabBarScroll: {
+    marginBottom: Spacing.md,
+  },
+  tabBarContent: {
+    gap: Spacing.md,
   },
   tabButton: {
-    flex: 1,
-    paddingVertical: Spacing.md,
-    alignItems: "center",
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
   },
   tabButtonActive: {
     borderBottomWidth: 2,
@@ -353,8 +769,42 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     marginBottom: Spacing.md,
+    marginTop: Spacing.md,
     textTransform: "uppercase",
     letterSpacing: 1,
+  },
+  kpiRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  kpiCard: {
+    flex: 1,
+    alignItems: "center",
+  },
+  alertCard: {
+    marginBottom: Spacing.md,
+  },
+  alertRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  alertContent: {
+    flex: 1,
+    marginLeft: Spacing.md,
+  },
+  alertButton: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+  },
+  upcomingCard: {
+    marginBottom: Spacing.md,
+  },
+  upcomingHeader: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   activityRow: {
     flexDirection: "row",
@@ -371,20 +821,136 @@ const styles = StyleSheet.create({
   activityContent: {
     flex: 1,
   },
-  detailsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.md,
+  jobCard: {
+    marginBottom: Spacing.sm,
   },
-  detailItem: {
-    minWidth: "45%",
-  },
-  billingCard: {
-    gap: Spacing.md,
-  },
-  billingRow: {
+  jobHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+  },
+  invoiceCard: {
+    marginBottom: Spacing.sm,
+  },
+  invoiceHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  invoiceStatus: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+  },
+  invoiceDetails: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: Spacing.sm,
+  },
+  notesHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Spacing.md,
+    marginTop: Spacing.md,
+  },
+  addNoteButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+  },
+  noteCard: {
+    marginBottom: Spacing.sm,
+  },
+  noteHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  noteBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+  },
+  noHomeCard: {
+    alignItems: "center",
+    padding: Spacing.xl,
+  },
+  sharedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.md,
+  },
+  homePropertyCard: {
+    marginBottom: Spacing.md,
+  },
+  propertyGrid: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  propertyItem: {
+    alignItems: "center",
+  },
+  healthScoreCard: {
+    marginBottom: Spacing.md,
+  },
+  healthScoreHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Spacing.sm,
+  },
+  healthScoreValue: {
+    flexDirection: "row",
+    alignItems: "baseline",
+  },
+  estimateCard: {
+    marginBottom: Spacing.md,
+  },
+  risksCard: {
+    marginBottom: Spacing.md,
+  },
+  riskRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: Spacing.xs,
+  },
+  accessCard: {
+    marginBottom: Spacing.md,
+  },
+  privateBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+    alignSelf: "flex-start",
+    marginBottom: Spacing.sm,
+  },
+  accessRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: Spacing.sm,
+  },
+  preferencesCard: {
+    marginBottom: Spacing.md,
+  },
+  windowsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.xs,
+  },
+  windowChip: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.full,
   },
 });

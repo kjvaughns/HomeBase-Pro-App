@@ -95,6 +95,60 @@ export interface Payout {
   bankLast4?: string;
 }
 
+export interface ClientHome {
+  beds: number;
+  baths: number;
+  sqft: number;
+  yearBuilt: number;
+  propertyType: "single_family" | "condo" | "townhouse" | "multi_family";
+  roofAge?: number;
+  hvacType?: string;
+  hvacAge?: number;
+  waterHeaterAge?: number;
+  healthScore?: number;
+  healthScoreDate?: string;
+  survivalKitEstimate?: { min: number; max: number };
+  notableRisks?: string[];
+  lastUpdatedByHomeowner?: string;
+  accessNotes?: string;
+  pets?: string;
+  parking?: string;
+  gateCode?: string;
+  preferredWindows?: string[];
+  photos?: string[];
+}
+
+export interface ClientJob {
+  id: string;
+  clientId: string;
+  service: string;
+  description?: string;
+  date: string;
+  status: "pending" | "confirmed" | "on_my_way" | "arrived" | "in_progress" | "completed" | "invoice_sent" | "paid";
+  price: number;
+  paidAmount?: number;
+}
+
+export interface ClientInvoice {
+  id: string;
+  clientId: string;
+  jobId: string;
+  amount: number;
+  date: string;
+  dueDate: string;
+  status: "draft" | "sent" | "paid" | "overdue";
+  paidAt?: string;
+}
+
+export interface ClientNote {
+  id: string;
+  clientId: string;
+  content: string;
+  isInternal: boolean;
+  createdAt: string;
+  createdBy: string;
+}
+
 export interface Client {
   id: string;
   name: string;
@@ -108,6 +162,10 @@ export interface Client {
   jobCount: number;
   address?: string;
   notes?: string;
+  outstandingBalance?: number;
+  avgTicket?: number;
+  nextAppointment?: string;
+  home?: ClientHome;
 }
 
 export interface ClientActivity {
@@ -291,32 +349,206 @@ const initialPayouts: Payout[] = [
 // ============================================
 
 const initialClients: Client[] = [
-  { id: "cl1", name: "Sarah Miller", email: "sarah.miller@example.com", phone: "(555) 123-4567", status: "active", lastSeen: "2 days ago", clientSince: "2023", ltv: 4500, jobCount: 8, address: "123 Pine St, San Francisco, CA" },
-  { id: "cl2", name: "John Doe", email: "john.doe@example.com", phone: "(555) 234-5678", status: "lead", lastSeen: "N/A", clientSince: undefined, ltv: 0, jobCount: 0, address: "456 Oak Ave, Oakland, CA" },
-  { id: "cl3", name: "Emily Clark", email: "emily.clark@example.com", phone: "(555) 345-6789", status: "inactive", lastSeen: "3 months ago", clientSince: "2024", ltv: 850, jobCount: 2, address: "789 Elm St, Berkeley, CA" },
-  { id: "cl4", name: "Michael Brown", email: "michael.brown@example.com", phone: "(555) 456-7890", status: "active", lastSeen: "1 week ago", clientSince: "2022", ltv: 12500, jobCount: 15, address: "321 Maple Dr, San Mateo, CA" },
-  { id: "cl5", name: "Jessica Taylor", email: "jessica.taylor@example.com", phone: "(555) 567-8901", status: "active", lastSeen: "Yesterday", clientSince: "2024", ltv: 2200, jobCount: 4, address: "654 Cedar Ln, Alameda, CA" },
-  { id: "cl6", name: "David Wilson", email: "david.wilson@example.com", phone: "(555) 678-9012", status: "lead", lastSeen: "N/A", clientSince: undefined, ltv: 0, jobCount: 0, address: "987 Birch Rd, Daly City, CA" },
-  { id: "cl7", name: "Amanda Foster", email: "amanda.foster@example.com", phone: "(555) 789-0123", status: "active", lastSeen: "4 days ago", clientSince: "2023", ltv: 7800, jobCount: 11, address: "567 Birch Rd, San Francisco, CA" },
-  { id: "cl8", name: "Robert Taylor", email: "robert.taylor@example.com", phone: "(555) 890-1234", status: "active", lastSeen: "Today", clientSince: "2024", ltv: 1500, jobCount: 3, address: "111 First Ave, San Francisco, CA" },
-  { id: "cl9", name: "Jennifer Lee", email: "jennifer.lee@example.com", phone: "(555) 901-2345", status: "active", lastSeen: "Today", clientSince: "2023", ltv: 3200, jobCount: 6, address: "890 Ash Dr, San Francisco, CA" },
-  { id: "cl10", name: "Christopher Davis", email: "chris.davis@example.com", phone: "(555) 012-3456", status: "archived", lastSeen: "1 year ago", clientSince: "2021", ltv: 5600, jobCount: 9, address: "666 Sixth Ave, Oakland, CA" },
-  { id: "cl11", name: "Michelle Wong", email: "michelle.wong@example.com", phone: "(555) 111-2222", status: "active", lastSeen: "3 days ago", clientSince: "2024", ltv: 1850, jobCount: 3, address: "222 Second St, Oakland, CA" },
-  { id: "cl12", name: "Kevin Wright", email: "kevin.wright@example.com", phone: "(555) 222-3333", status: "lead", lastSeen: "N/A", clientSince: undefined, ltv: 0, jobCount: 0, address: "234 Spruce Way, Oakland, CA" },
-  { id: "cl13", name: "Patricia Moore", email: "patricia.moore@example.com", phone: "(555) 333-4444", status: "active", lastSeen: "1 week ago", clientSince: "2023", ltv: 4100, jobCount: 7, address: "444 Fourth Pl, San Francisco, CA" },
-  { id: "cl14", name: "Daniel Kim", email: "daniel.kim@example.com", phone: "(555) 444-5555", status: "inactive", lastSeen: "2 months ago", clientSince: "2024", ltv: 650, jobCount: 1, address: "555 Fifth Ct, Daly City, CA" },
-  { id: "cl15", name: "Lisa Chen", email: "lisa.chen@example.com", phone: "(555) 555-6666", status: "active", lastSeen: "5 days ago", clientSince: "2024", ltv: 950, jobCount: 2, address: "778 Cedar Ln, Daly City, CA" },
+  { 
+    id: "cl1", name: "Sarah Miller", email: "sarah.miller@example.com", phone: "(555) 123-4567", 
+    status: "active", lastSeen: "2 days ago", clientSince: "2023", ltv: 4500, jobCount: 8, 
+    address: "123 Pine St, San Francisco, CA", avgTicket: 562, outstandingBalance: 0, nextAppointment: "2026-02-03",
+    home: {
+      beds: 3, baths: 2, sqft: 1850, yearBuilt: 1985, propertyType: "single_family",
+      roofAge: 12, hvacType: "Central AC/Furnace", hvacAge: 8, waterHeaterAge: 6,
+      healthScore: 72, healthScoreDate: "2026-01-15",
+      survivalKitEstimate: { min: 2800, max: 4200 },
+      notableRisks: ["Roof nearing end of life", "Water heater maintenance due"],
+      lastUpdatedByHomeowner: "2026-01-20",
+      accessNotes: "Side gate code: 1234. Ring doorbell before entering.",
+      pets: "Golden Retriever named Max - friendly",
+      parking: "Driveway available",
+      preferredWindows: ["Morning (8-12)", "Weekdays only"]
+    }
+  },
+  { 
+    id: "cl2", name: "John Doe", email: "john.doe@example.com", phone: "(555) 234-5678", 
+    status: "lead", lastSeen: "N/A", clientSince: undefined, ltv: 0, jobCount: 0, 
+    address: "456 Oak Ave, Oakland, CA"
+  },
+  { 
+    id: "cl3", name: "Emily Clark", email: "emily.clark@example.com", phone: "(555) 345-6789", 
+    status: "inactive", lastSeen: "3 months ago", clientSince: "2024", ltv: 850, jobCount: 2, 
+    address: "789 Elm St, Berkeley, CA", avgTicket: 425, outstandingBalance: 275,
+    home: {
+      beds: 2, baths: 1, sqft: 1100, yearBuilt: 1962, propertyType: "condo",
+      hvacType: "Wall unit", hvacAge: 15, waterHeaterAge: 10,
+      healthScore: 58, healthScoreDate: "2025-10-01",
+      notableRisks: ["HVAC needs replacement", "Old plumbing"],
+      lastUpdatedByHomeowner: "2025-09-15"
+    }
+  },
+  { 
+    id: "cl4", name: "Michael Brown", email: "michael.brown@example.com", phone: "(555) 456-7890", 
+    status: "active", lastSeen: "1 week ago", clientSince: "2022", ltv: 12500, jobCount: 15, 
+    address: "321 Maple Dr, San Mateo, CA", avgTicket: 833, outstandingBalance: 0, nextAppointment: "2026-01-30",
+    home: {
+      beds: 4, baths: 3, sqft: 2400, yearBuilt: 2005, propertyType: "single_family",
+      roofAge: 5, hvacType: "Central AC/Heat Pump", hvacAge: 3, waterHeaterAge: 2,
+      healthScore: 89, healthScoreDate: "2026-01-10",
+      survivalKitEstimate: { min: 1800, max: 2600 },
+      notableRisks: [],
+      lastUpdatedByHomeowner: "2026-01-18",
+      accessNotes: "Keypad entry: use code provided day of service",
+      pets: "2 indoor cats - keep doors closed",
+      parking: "Street parking, no driveway",
+      gateCode: "4521",
+      preferredWindows: ["Afternoon (12-5)", "Flexible"]
+    }
+  },
+  { 
+    id: "cl5", name: "Jessica Taylor", email: "jessica.taylor@example.com", phone: "(555) 567-8901", 
+    status: "active", lastSeen: "Yesterday", clientSince: "2024", ltv: 2200, jobCount: 4, 
+    address: "654 Cedar Ln, Alameda, CA", avgTicket: 550, outstandingBalance: 450, nextAppointment: "2026-01-29",
+    home: {
+      beds: 3, baths: 2.5, sqft: 1650, yearBuilt: 1998, propertyType: "townhouse",
+      roofAge: 8, hvacType: "Central AC/Furnace", hvacAge: 10, waterHeaterAge: 8,
+      healthScore: 75, healthScoreDate: "2025-12-20",
+      survivalKitEstimate: { min: 2200, max: 3400 },
+      notableRisks: ["HVAC service due"],
+      lastUpdatedByHomeowner: "2025-12-18",
+      pets: "Small dog - will be crated during service"
+    }
+  },
+  { 
+    id: "cl6", name: "David Wilson", email: "david.wilson@example.com", phone: "(555) 678-9012", 
+    status: "lead", lastSeen: "N/A", clientSince: undefined, ltv: 0, jobCount: 0, 
+    address: "987 Birch Rd, Daly City, CA"
+  },
+  { 
+    id: "cl7", name: "Amanda Foster", email: "amanda.foster@example.com", phone: "(555) 789-0123", 
+    status: "active", lastSeen: "4 days ago", clientSince: "2023", ltv: 7800, jobCount: 11, 
+    address: "567 Birch Rd, San Francisco, CA", avgTicket: 709, outstandingBalance: 1200, nextAppointment: "2026-02-01",
+    home: {
+      beds: 4, baths: 2, sqft: 2100, yearBuilt: 1978, propertyType: "single_family",
+      roofAge: 18, hvacType: "Central AC/Furnace", hvacAge: 12, waterHeaterAge: 4,
+      healthScore: 64, healthScoreDate: "2026-01-05",
+      survivalKitEstimate: { min: 4500, max: 6800 },
+      notableRisks: ["Roof replacement recommended", "HVAC nearing end of life"],
+      lastUpdatedByHomeowner: "2026-01-08",
+      accessNotes: "Lockbox on front door - combination provided",
+      pets: "No pets",
+      parking: "Garage available for parking",
+      gateCode: "8876",
+      preferredWindows: ["Morning (8-12)"]
+    }
+  },
+  { 
+    id: "cl8", name: "Robert Taylor", email: "robert.taylor@example.com", phone: "(555) 890-1234", 
+    status: "active", lastSeen: "Today", clientSince: "2024", ltv: 1500, jobCount: 3, 
+    address: "111 First Ave, San Francisco, CA", avgTicket: 500, outstandingBalance: 0, nextAppointment: "2026-01-28",
+    home: {
+      beds: 2, baths: 2, sqft: 1200, yearBuilt: 2018, propertyType: "condo",
+      hvacType: "Mini-split", hvacAge: 2, waterHeaterAge: 6,
+      healthScore: 92, healthScoreDate: "2026-01-22",
+      survivalKitEstimate: { min: 800, max: 1400 },
+      lastUpdatedByHomeowner: "2026-01-25",
+      accessNotes: "Concierge will let you in - call when arriving",
+      parking: "Visitor parking in garage - Level P1"
+    }
+  },
+  { 
+    id: "cl9", name: "Jennifer Lee", email: "jennifer.lee@example.com", phone: "(555) 901-2345", 
+    status: "active", lastSeen: "Today", clientSince: "2023", ltv: 3200, jobCount: 6, 
+    address: "890 Ash Dr, San Francisco, CA", avgTicket: 533, outstandingBalance: 175, nextAppointment: "2026-01-28",
+    home: {
+      beds: 3, baths: 2, sqft: 1550, yearBuilt: 1992, propertyType: "single_family",
+      roofAge: 10, hvacType: "Central AC/Furnace", hvacAge: 7, waterHeaterAge: 5,
+      healthScore: 78, healthScoreDate: "2025-11-30",
+      survivalKitEstimate: { min: 2000, max: 3200 },
+      notableRisks: ["Gutter cleaning needed"],
+      lastUpdatedByHomeowner: "2025-11-28",
+      pets: "1 cat - indoor only",
+      preferredWindows: ["Afternoon (12-5)"]
+    }
+  },
+  { 
+    id: "cl10", name: "Christopher Davis", email: "chris.davis@example.com", phone: "(555) 012-3456", 
+    status: "archived", lastSeen: "1 year ago", clientSince: "2021", ltv: 5600, jobCount: 9, 
+    address: "666 Sixth Ave, Oakland, CA", avgTicket: 622
+  },
+  { 
+    id: "cl11", name: "Michelle Wong", email: "michelle.wong@example.com", phone: "(555) 111-2222", 
+    status: "active", lastSeen: "3 days ago", clientSince: "2024", ltv: 1850, jobCount: 3, 
+    address: "222 Second St, Oakland, CA", avgTicket: 617, outstandingBalance: 0,
+    home: {
+      beds: 2, baths: 1, sqft: 950, yearBuilt: 2010, propertyType: "condo",
+      hvacType: "Central AC", hvacAge: 4, waterHeaterAge: 8,
+      healthScore: 85, healthScoreDate: "2026-01-12",
+      survivalKitEstimate: { min: 900, max: 1500 },
+      lastUpdatedByHomeowner: "2026-01-14"
+    }
+  },
+  { 
+    id: "cl12", name: "Kevin Wright", email: "kevin.wright@example.com", phone: "(555) 222-3333", 
+    status: "lead", lastSeen: "N/A", clientSince: undefined, ltv: 0, jobCount: 0, 
+    address: "234 Spruce Way, Oakland, CA"
+  },
+  { 
+    id: "cl13", name: "Patricia Moore", email: "patricia.moore@example.com", phone: "(555) 333-4444", 
+    status: "active", lastSeen: "1 week ago", clientSince: "2023", ltv: 4100, jobCount: 7, 
+    address: "444 Fourth Pl, San Francisco, CA", avgTicket: 586, outstandingBalance: 890,
+    home: {
+      beds: 3, baths: 2, sqft: 1700, yearBuilt: 1988, propertyType: "single_family",
+      roofAge: 15, hvacType: "Central AC/Furnace", hvacAge: 9, waterHeaterAge: 7,
+      healthScore: 70, healthScoreDate: "2025-12-01",
+      survivalKitEstimate: { min: 2600, max: 4000 },
+      notableRisks: ["Roof inspection recommended"],
+      lastUpdatedByHomeowner: "2025-11-28",
+      pets: "2 dogs - will be in backyard during service",
+      parking: "Street parking only"
+    }
+  },
+  { 
+    id: "cl14", name: "Daniel Kim", email: "daniel.kim@example.com", phone: "(555) 444-5555", 
+    status: "inactive", lastSeen: "2 months ago", clientSince: "2024", ltv: 650, jobCount: 1, 
+    address: "555 Fifth Ct, Daly City, CA", avgTicket: 650, outstandingBalance: 650
+  },
+  { 
+    id: "cl15", name: "Lisa Chen", email: "lisa.chen@example.com", phone: "(555) 555-6666", 
+    status: "active", lastSeen: "5 days ago", clientSince: "2024", ltv: 950, jobCount: 2, 
+    address: "778 Cedar Ln, Daly City, CA", avgTicket: 475, outstandingBalance: 0,
+    home: {
+      beds: 3, baths: 2, sqft: 1400, yearBuilt: 2002, propertyType: "townhouse",
+      roofAge: 6, hvacType: "Central AC/Heat Pump", hvacAge: 5, waterHeaterAge: 4,
+      healthScore: 82, healthScoreDate: "2026-01-08",
+      survivalKitEstimate: { min: 1400, max: 2200 },
+      lastUpdatedByHomeowner: "2026-01-10",
+      pets: "No pets",
+      preferredWindows: ["Weekday mornings"]
+    }
+  },
 ];
 
 const initialClientActivities: ClientActivity[] = [
   { id: "ca1", clientId: "cl1", type: "job_completed", description: "Job Completed: Deep Clean", timestamp: "Yesterday at 4:00 PM", jobId: "j13" },
-  { id: "ca2", clientId: "cl1", type: "job_completed", description: "Job Completed: Deep Clean", timestamp: "Yesterday at 4:00 PM", jobId: "j14" },
-  { id: "ca3", clientId: "cl1", type: "job_completed", description: "Job Completed: Deep Clean", timestamp: "Yesterday at 4:00 PM", jobId: "j15" },
+  { id: "ca2", clientId: "cl1", type: "invoice_paid", description: "Invoice Paid: $450", timestamp: "2 days ago", invoiceId: "inv1" },
+  { id: "ca3", clientId: "cl1", type: "job_scheduled", description: "Job Scheduled: Water Heater Service", timestamp: "3 days ago", jobId: "j5" },
   { id: "ca4", clientId: "cl4", type: "invoice_paid", description: "Invoice Paid: $1,350", timestamp: "3 days ago", invoiceId: "inv4" },
   { id: "ca5", clientId: "cl4", type: "job_completed", description: "Job Completed: Water Heater Install", timestamp: "5 days ago", jobId: "j16" },
   { id: "ca6", clientId: "cl5", type: "job_scheduled", description: "Job Scheduled: Pipe Repair", timestamp: "2 days ago", jobId: "j1" },
-  { id: "ca7", clientId: "cl8", type: "message_sent", description: "Message: Great, see you tomorrow at 9!", timestamp: "10 min ago" },
-  { id: "ca8", clientId: "cl9", type: "quote_sent", description: "Quote Sent: $2,500", timestamp: "1 week ago" },
+  { id: "ca7", clientId: "cl7", type: "invoice_sent", description: "Invoice Sent: $1,200", timestamp: "4 days ago", invoiceId: "inv11" },
+  { id: "ca8", clientId: "cl8", type: "message_sent", description: "Message: Great, see you tomorrow at 9!", timestamp: "10 min ago" },
+  { id: "ca9", clientId: "cl9", type: "quote_sent", description: "Quote Sent: $2,500", timestamp: "1 week ago" },
+  { id: "ca10", clientId: "cl13", type: "invoice_sent", description: "Invoice Sent: $890", timestamp: "1 week ago", invoiceId: "inv12" },
+];
+
+const initialClientNotes: ClientNote[] = [
+  { id: "cn1", clientId: "cl1", content: "Prefers morning appointments before 11am. Very responsive via text.", isInternal: true, createdAt: "2025-06-15", createdBy: "Demo Pro" },
+  { id: "cn2", clientId: "cl1", content: "Has annual service agreement - next HVAC check due March 2026.", isInternal: true, createdAt: "2025-12-01", createdBy: "Demo Pro" },
+  { id: "cn3", clientId: "cl4", content: "High-value client. Always pays on time. Prefers detailed invoices with photos.", isInternal: true, createdAt: "2024-08-20", createdBy: "Demo Pro" },
+  { id: "cn4", clientId: "cl4", content: "Interested in smart home water leak detection system - follow up in Q1.", isInternal: true, createdAt: "2026-01-10", createdBy: "Demo Pro" },
+  { id: "cn5", clientId: "cl5", content: "Thank you for the excellent service! The repairs were handled professionally.", isInternal: false, createdAt: "2025-11-15", createdBy: "Jessica Taylor" },
+  { id: "cn6", clientId: "cl7", content: "Roof replacement quote provided - decision pending HOA approval.", isInternal: true, createdAt: "2026-01-08", createdBy: "Demo Pro" },
+  { id: "cn7", clientId: "cl7", content: "Key in lockbox - remember to reset after each visit.", isInternal: true, createdAt: "2025-03-22", createdBy: "Demo Pro" },
+  { id: "cn8", clientId: "cl8", content: "Building requires 24hr advance notice for all visits - contact concierge.", isInternal: true, createdAt: "2024-09-01", createdBy: "Demo Pro" },
+  { id: "cn9", clientId: "cl9", content: "Cat is shy but friendly. Keep bathroom door closed during service.", isInternal: true, createdAt: "2024-11-10", createdBy: "Demo Pro" },
+  { id: "cn10", clientId: "cl13", content: "Dogs are loud but harmless. Owner will put them in backyard.", isInternal: true, createdAt: "2023-05-15", createdBy: "Demo Pro" },
 ];
 
 // ============================================
@@ -342,6 +574,7 @@ interface ProviderState {
   payouts: Payout[];
   clients: Client[];
   clientActivities: ClientActivity[];
+  clientNotes: ClientNote[];
   
   // Settings
   availableForWork: boolean;
@@ -379,6 +612,9 @@ interface ProviderState {
   setNotificationsEnabled: (value: boolean) => void;
   setBookingPolicies: (policies: BookingPolicies) => void;
   
+  // Client actions
+  addClientNote: (clientId: string, content: string, isInternal: boolean) => void;
+  
   // Computed getters
   getStats: () => ProviderStats;
   getLeadsByStatus: (status: Lead["status"]) => Lead[];
@@ -387,6 +623,12 @@ interface ProviderState {
   getNextJob: () => Job | undefined;
   getRecentEarnings: () => number;
   getClientActivities: (clientId: string) => ClientActivity[];
+  getClientNotes: (clientId: string) => ClientNote[];
+  getClientJobHistory: (clientId: string) => Job[];
+  getClientInvoices: (clientId: string) => Invoice[];
+  
+  // Initialization
+  initializeWithMockData: () => void;
 }
 
 // ============================================
@@ -405,6 +647,7 @@ export const useProviderStore = create<ProviderState>()(
       payouts: [],
       clients: [],
       clientActivities: [],
+      clientNotes: [],
       
       availableForWork: true,
       notificationsEnabled: true,
@@ -664,6 +907,57 @@ export const useProviderStore = create<ProviderState>()(
       getClientActivities: (clientId) => {
         return get().clientActivities.filter((a) => a.clientId === clientId);
       },
+      
+      getClientNotes: (clientId) => {
+        return get().clientNotes.filter((n) => n.clientId === clientId);
+      },
+      
+      getClientJobHistory: (clientId) => {
+        const client = get().clients.find((c) => c.id === clientId);
+        if (!client) return [];
+        return get().jobs.filter((j) => 
+          j.customerName === client.name || 
+          j.address === client.address
+        );
+      },
+      
+      getClientInvoices: (clientId) => {
+        const client = get().clients.find((c) => c.id === clientId);
+        if (!client) return [];
+        return get().invoices.filter((i) => i.customerName === client.name);
+      },
+      
+      // Client actions
+      addClientNote: (clientId, content, isInternal) => {
+        const note: ClientNote = {
+          id: `cn${Date.now()}`,
+          clientId,
+          content,
+          isInternal,
+          createdAt: new Date().toISOString().split("T")[0],
+          createdBy: "Demo Pro",
+        };
+        set((state) => ({
+          clientNotes: [...state.clientNotes, note],
+        }));
+      },
+      
+      // Initialize with mock data (called when switching to provider mode)
+      initializeWithMockData: () => {
+        const state = get();
+        if (state.clients.length === 0) {
+          set({
+            leads: initialLeads,
+            jobs: initialJobs,
+            messages: initialMessages,
+            invoices: initialInvoices,
+            payouts: initialPayouts,
+            clients: initialClients,
+            clientActivities: initialClientActivities,
+            clientNotes: initialClientNotes,
+          });
+        }
+      },
     }),
     {
       name: "provider-store",
@@ -677,6 +971,7 @@ export const useProviderStore = create<ProviderState>()(
         payouts: state.payouts,
         clients: state.clients,
         clientActivities: state.clientActivities,
+        clientNotes: state.clientNotes,
         availableForWork: state.availableForWork,
         notificationsEnabled: state.notificationsEnabled,
       }),

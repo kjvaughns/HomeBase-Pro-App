@@ -44,7 +44,14 @@ The application is structured into a client-side React Native Expo app and an Ex
 - **Provider Capability Tags**: Skill-based tags (Licensed, Insured, 24/7 Emergency, etc.) displayed on provider cards with years of experience.
 - **Service Summary Cards**: AI-generated scope of work summaries with itemized breakdowns shown to homeowners and providers during booking.
 - **Data Management**: Full CRUD operations for appointments, clients, jobs, and invoices, with real-time status tracking and notifications.
-- **Provider Portal**: Comprehensive dashboard displaying real-time statistics (revenue MTD, jobs completed, active clients), a Clients CRM, Schedule management with various calendar views, and a complete invoicing system.
+- **Provider Portal**: Comprehensive dashboard displaying real-time statistics (revenue MTD, jobs completed, active clients), a Clients CRM with HouseFax integration, Schedule management with various calendar views, and a complete invoicing system.
+  - **Clients CRM**: Full client management with search, filter chips (All/Leads/Active/Inactive/Has Upcoming/Overdue), and sort options (Recent Activity/Highest LTV/Most Overdue/Newest). Enhanced client cards show avatar, status badge, address, LTV, outstanding balance, and quick actions (Call/Message).
+  - **ClientDetailScreen**: Premium tabbed interface with 5 tabs:
+    - **Overview**: KPI cards (LTV, Total Jobs, Avg Ticket), outstanding balance alerts, upcoming appointments, recent activity timeline
+    - **Jobs**: Job history with status pills and pricing
+    - **Invoices**: Invoice list with paid/pending status and due dates
+    - **Notes**: Client notes with private/shared badges and add note functionality
+    - **Home (HouseFax)**: Property details (beds, baths, sqft, year built), Home Health Score from homeowner, Survival Kit maintenance estimates, notable risks, access information (pets, parking, gate codes), preferred appointment windows
 - **Homeowner Tools**: Comprehensive home management features accessible from the More tab's Tools section and Home screen quick tiles:
   - **Survival Kit**: 17-step guided wizard that gathers property details (type, year built, square footage), home systems (HVAC type/age, water heater, roof), exterior features, location/climate info, and service preferences. Generates personalized results with 5 tabs: Summary (estimated yearly costs, top cost drivers), Plan (scheduled maintenance tasks with Book Now CTAs), Costs (category breakdown), Tips (money-saving suggestions), and Export (PDF/CSV options).
   - **HouseFax Ledger**: Home operating system with multi-home selector and 4 summary cards (Total Spent, Total Saved, Upcoming Tasks, Health Trend). Features 5 tabs: Overview (forecast, recent activity), History (filterable timeline of jobs/invoices/assessments), Assets (registry with 6+ items including install dates, warranty info, service cycles, and booking CTAs), Documents (uploads with categories), and Insights (predictive costs, upcoming risks, savings suggestions). Integrates all spending and savings tracking within the ledger.

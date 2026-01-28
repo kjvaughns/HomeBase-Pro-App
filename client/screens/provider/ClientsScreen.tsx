@@ -1,112 +1,185 @@
-import React, { useState, useMemo } from "react";
-import { StyleSheet, FlatList, RefreshControl, View, TextInput, Pressable, ActivityIndicator, Modal, ScrollView } from "react-native";
+import React, { useState, useMemo, useEffect } from "react";
+import { StyleSheet, FlatList, RefreshControl, View, TextInput, Pressable, Linking } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
-import { useQuery } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { EmptyState } from "@/components/EmptyState";
 import { GlassCard } from "@/components/GlassCard";
-import { PrimaryButton } from "@/components/PrimaryButton";
+import { StatusPill } from "@/components/StatusPill";
+import { FilterChips, FilterOption } from "@/components/FilterChips";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
-import { useAuthStore } from "@/state/authStore";
+import { useProviderStore, Client } from "@/state/providerStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
-type SortOption = "newest" | "oldest" | "alphabetical";
+type StatusFilter = "all" | "lead" | "active" | "inactive" | "has_upcoming" | "overdue";
+type SortOption = "recent" | "ltv" | "overdue" | "newest";
 
-interface Filters {
-  sortBy: SortOption;
-  hasPhone: boolean;
-  hasEmail: boolean;
-}
-
-const DEFAULT_FILTERS: Filters = {
-  sortBy: "newest",
-  hasPhone: false,
-  hasEmail: false,
-};
-
-const SORT_OPTIONS: { value: SortOption; label: string }[] = [
-  { value: "newest", label: "Newest First" },
-  { value: "oldest", label: "Oldest First" },
-  { value: "alphabetical", label: "A to Z" },
+const STATUS_FILTERS: FilterOption<StatusFilter>[] = [
+  { key: "all", label: "All" },
+  { key: "lead", label: "Leads" },
+  { key: "active", label: "Active" },
+  { key: "inactive", label: "Inactive" },
+  { key: "has_upcoming", label: "Has Upcoming" },
+  { key: "overdue", label: "Overdue" },
 ];
 
-interface Client {
-  id: string;
-  providerId: string;
-  firstName: string;
-  lastName: string;
-  email?: string;
-  phone?: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  zip?: string;
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
+const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: "recent", label: "Recent Activity" },
+  { value: "ltv", label: "Highest LTV" },
+  { value: "overdue", label: "Most Overdue" },
+  { value: "newest", label: "Newest" },
+];
+
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 }
 
-function getInitials(firstName: string, lastName: string): string {
-  return `${firstName[0] || ""}${lastName[0] || ""}`.toUpperCase();
-}
-
-function formatDate(dateStr: string): string {
+function formatDate(dateStr?: string): string {
+  if (!dateStr) return "";
   const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return `${diffDays} days ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
 }
 
 interface ClientCardProps {
   client: Client;
   onPress: () => void;
+  onCall: () => void;
+  onMessage: () => void;
 }
 
-function ClientCard({ client, onPress }: ClientCardProps) {
+function ClientCard({ client, onPress, onCall, onMessage }: ClientCardProps) {
   const { theme } = useTheme();
 
+  const statusColor = useMemo(() => {
+    switch (client.status) {
+      case "active": return Colors.accent;
+      case "lead": return "#3B82F6";
+      case "inactive": return theme.textSecondary;
+      default: return theme.textSecondary;
+    }
+  }, [client.status, theme]);
+
+  const statusLabel = useMemo(() => {
+    switch (client.status) {
+      case "active": return "Active";
+      case "lead": return "Lead";
+      case "inactive": return "Inactive";
+      case "archived": return "Archived";
+      default: return client.status;
+    }
+  }, [client.status]);
+
   return (
-    <Pressable onPress={onPress}>
+    <Pressable onPress={onPress} testID={`client-card-${client.id}`}>
       <GlassCard style={styles.clientCard}>
-        <View style={styles.clientRow}>
-          <View style={[styles.avatar, { backgroundColor: Colors.accent + "20" }]}>
-            <ThemedText type="body" style={{ color: Colors.accent, fontWeight: "600" }}>
-              {getInitials(client.firstName, client.lastName)}
-            </ThemedText>
+        <View style={styles.clientHeader}>
+          <View style={styles.clientHeaderLeft}>
+            <View style={[styles.avatar, { backgroundColor: Colors.accent + "20" }]}>
+              {client.avatar ? (
+                <Animated.Image source={{ uri: client.avatar }} style={styles.avatarImage} />
+              ) : (
+                <ThemedText type="body" style={{ color: Colors.accent, fontWeight: "600" }}>
+                  {getInitials(client.name)}
+                </ThemedText>
+              )}
+            </View>
+            <View style={styles.clientInfo}>
+              <View style={styles.nameRow}>
+                <ThemedText type="body" style={{ fontWeight: "600" }}>
+                  {client.name}
+                </ThemedText>
+                <View style={[styles.statusBadge, { backgroundColor: statusColor + "20" }]}>
+                  <ThemedText style={[styles.statusText, { color: statusColor }]}>
+                    {statusLabel}
+                  </ThemedText>
+                </View>
+              </View>
+              {client.address ? (
+                <ThemedText type="caption" style={{ color: theme.textSecondary }} numberOfLines={1}>
+                  {client.address}
+                </ThemedText>
+              ) : null}
+            </View>
           </View>
-          <View style={styles.clientInfo}>
-            <ThemedText type="body" style={{ fontWeight: "600" }}>
-              {client.firstName} {client.lastName}
-            </ThemedText>
-            {client.phone ? (
+        </View>
+
+        <View style={[styles.statsRow, { borderTopColor: theme.separator }]}>
+          {client.nextAppointment ? (
+            <View style={styles.statItem}>
               <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-                {client.phone}
+                Next Appt
               </ThemedText>
-            ) : client.email ? (
-              <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-                {client.email}
+              <ThemedText type="body" style={{ fontWeight: "500" }}>
+                {formatDate(client.nextAppointment)}
               </ThemedText>
-            ) : null}
+            </View>
+          ) : null}
+          <View style={styles.statItem}>
             <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-              Added {formatDate(client.createdAt)}
+              Lifetime
+            </ThemedText>
+            <ThemedText type="body" style={{ fontWeight: "500", color: Colors.accent }}>
+              {formatCurrency(client.ltv)}
             </ThemedText>
           </View>
-          <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+          {(client.outstandingBalance ?? 0) > 0 ? (
+            <View style={styles.statItem}>
+              <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+                Outstanding
+              </ThemedText>
+              <ThemedText type="body" style={{ fontWeight: "500", color: "#EF4444" }}>
+                {formatCurrency(client.outstandingBalance ?? 0)}
+              </ThemedText>
+            </View>
+          ) : null}
+        </View>
+
+        <View style={styles.actionsRow}>
+          <Pressable
+            style={[styles.actionButton, { backgroundColor: theme.cardBackground }]}
+            onPress={(e) => { e.stopPropagation(); onCall(); }}
+            testID={`call-${client.id}`}
+          >
+            <Feather name="phone" size={16} color={theme.text} />
+            <ThemedText type="caption" style={{ marginLeft: 4 }}>Call</ThemedText>
+          </Pressable>
+          <Pressable
+            style={[styles.actionButton, { backgroundColor: Colors.accent }]}
+            onPress={(e) => { e.stopPropagation(); onMessage(); }}
+            testID={`message-${client.id}`}
+          >
+            <Feather name="message-circle" size={16} color="#FFFFFF" />
+            <ThemedText type="caption" style={{ marginLeft: 4, color: "#FFFFFF" }}>Message</ThemedText>
+          </Pressable>
+          <Pressable
+            style={[styles.actionButton, { backgroundColor: theme.cardBackground }]}
+            onPress={onPress}
+            testID={`job-${client.id}`}
+          >
+            <Feather name="briefcase" size={16} color={theme.text} />
+            <ThemedText type="caption" style={{ marginLeft: 4 }}>Create Job</ThemedText>
+          </Pressable>
         </View>
       </GlassCard>
     </Pressable>
@@ -115,98 +188,90 @@ function ClientCard({ client, onPress }: ClientCardProps) {
 
 export default function ClientsScreen() {
   const insets = useSafeAreaInsets();
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { providerProfile } = useAuthStore();
 
-  const providerId = providerProfile?.id;
+  const clients = useProviderStore((s) => s.clients);
+  const initializeWithMockData = useProviderStore((s) => s.initializeWithMockData);
 
-  const { data: clientsData, isLoading, refetch } = useQuery<{ clients: Client[] }>({
-    queryKey: ["/api/provider", providerId, "clients"],
-    enabled: !!providerId,
-  });
+  useEffect(() => {
+    initializeWithMockData();
+  }, [initializeWithMockData]);
 
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [showFilterModal, setShowFilterModal] = useState(false);
-  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
-  const [tempFilters, setTempFilters] = useState<Filters>(DEFAULT_FILTERS);
-
-  const activeFilterCount = useMemo(() => {
-    let count = 0;
-    if (filters.sortBy !== "newest") count++;
-    if (filters.hasPhone) count++;
-    if (filters.hasEmail) count++;
-    return count;
-  }, [filters]);
-
-  const clients = clientsData?.clients || [];
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [sortBy, setSortBy] = useState<SortOption>("recent");
+  const [showSortMenu, setShowSortMenu] = useState(false);
 
   const filteredClients = useMemo(() => {
     let result = [...clients];
-    
+
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
       result = result.filter(
         (c) =>
-          `${c.firstName} ${c.lastName}`.toLowerCase().includes(query) ||
+          c.name.toLowerCase().includes(query) ||
           (c.email && c.email.toLowerCase().includes(query)) ||
-          (c.phone && c.phone.includes(query))
+          (c.phone && c.phone.includes(query)) ||
+          (c.address && c.address.toLowerCase().includes(query))
       );
     }
 
-    if (filters.hasPhone) {
-      result = result.filter((c) => !!c.phone);
+    switch (statusFilter) {
+      case "lead":
+        result = result.filter((c) => c.status === "lead");
+        break;
+      case "active":
+        result = result.filter((c) => c.status === "active");
+        break;
+      case "inactive":
+        result = result.filter((c) => c.status === "inactive");
+        break;
+      case "has_upcoming":
+        result = result.filter((c) => !!c.nextAppointment);
+        break;
+      case "overdue":
+        result = result.filter((c) => (c.outstandingBalance ?? 0) > 0);
+        break;
     }
 
-    if (filters.hasEmail) {
-      result = result.filter((c) => !!c.email);
-    }
-
-    switch (filters.sortBy) {
+    switch (sortBy) {
+      case "recent":
+        result.sort((a, b) => {
+          const aDate = a.nextAppointment || a.lastSeen || "";
+          const bDate = b.nextAppointment || b.lastSeen || "";
+          return bDate.localeCompare(aDate);
+        });
+        break;
+      case "ltv":
+        result.sort((a, b) => b.ltv - a.ltv);
+        break;
+      case "overdue":
+        result.sort((a, b) => (b.outstandingBalance ?? 0) - (a.outstandingBalance ?? 0));
+        break;
       case "newest":
-        result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        break;
-      case "oldest":
-        result.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-        break;
-      case "alphabetical":
-        result.sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`));
+        result.sort((a, b) => (b.clientSince || "").localeCompare(a.clientSince || ""));
         break;
     }
 
     return result;
-  }, [clients, searchQuery, filters]);
+  }, [clients, searchQuery, statusFilter, sortBy]);
 
-  const totalCount = clients.length;
-
-  const openFilterModal = () => {
-    setTempFilters(filters);
-    setShowFilterModal(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  };
-
-  const applyFilters = () => {
-    setFilters(tempFilters);
-    setShowFilterModal(false);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  };
-
-  const resetFilters = () => {
-    setTempFilters(DEFAULT_FILTERS);
-  };
-
-  const clearFilter = (filterKey: keyof Filters) => {
-    setFilters((prev) => ({
-      ...prev,
-      [filterKey]: DEFAULT_FILTERS[filterKey],
-    }));
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  };
+  const clientCounts = useMemo(() => {
+    return {
+      all: clients.length,
+      lead: clients.filter((c) => c.status === "lead").length,
+      active: clients.filter((c) => c.status === "active").length,
+      inactive: clients.filter((c) => c.status === "inactive").length,
+      has_upcoming: clients.filter((c) => !!c.nextAppointment).length,
+      overdue: clients.filter((c) => (c.outstandingBalance ?? 0) > 0).length,
+    };
+  }, [clients]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await refetch();
+    initializeWithMockData();
     setRefreshing(false);
   };
 
@@ -214,42 +279,25 @@ export default function ClientsScreen() {
     navigation.navigate("ClientDetail", { clientId: client.id });
   };
 
+  const handleCall = (client: Client) => {
+    if (client.phone) {
+      Linking.openURL(`tel:${client.phone}`);
+    }
+  };
+
+  const handleMessage = (client: Client) => {
+    if (client.phone) {
+      Linking.openURL(`sms:${client.phone}`);
+    }
+  };
+
   const handleAddClient = () => {
     navigation.navigate("AddClient" as any);
   };
 
-  const renderActiveFilters = () => {
-    const chips: { key: keyof Filters; label: string }[] = [];
-
-    if (filters.sortBy !== "newest") {
-      const label = filters.sortBy === "oldest" ? "Oldest First" : "A-Z";
-      chips.push({ key: "sortBy", label });
-    }
-    if (filters.hasPhone) {
-      chips.push({ key: "hasPhone", label: "Has Phone" });
-    }
-    if (filters.hasEmail) {
-      chips.push({ key: "hasEmail", label: "Has Email" });
-    }
-
-    if (chips.length === 0) return null;
-
-    return (
-      <View style={styles.activeFiltersRow}>
-        {chips.map((chip) => (
-          <Pressable
-            key={chip.key}
-            onPress={() => clearFilter(chip.key)}
-            style={[styles.activeFilterChip, { backgroundColor: Colors.accentLight }]}
-          >
-            <ThemedText style={[styles.activeFilterText, { color: Colors.accent }]}>
-              {chip.label}
-            </ThemedText>
-            <Feather name="x" size={14} color={Colors.accent} />
-          </Pressable>
-        ))}
-      </View>
-    );
+  const handleFilterChange = (id: string) => {
+    setStatusFilter(id as StatusFilter);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   const renderHeader = () => (
@@ -258,35 +306,21 @@ export default function ClientsScreen() {
         <View>
           <ThemedText type="h1">Clients</ThemedText>
           <ThemedText type="body" style={{ color: Colors.accent }}>
-            {totalCount} Total
+            {clients.length} Total
           </ThemedText>
         </View>
         <View style={styles.titleButtons}>
           <Pressable
-            onPress={openFilterModal}
-            style={[
-              styles.filterButton,
-              {
-                backgroundColor: activeFilterCount > 0 ? Colors.accent : theme.cardBackground,
-                borderColor: activeFilterCount > 0 ? Colors.accent : theme.borderLight,
-              },
-            ]}
-            testID="filter-button"
+            onPress={() => setShowSortMenu(!showSortMenu)}
+            style={[styles.sortButton, { backgroundColor: theme.cardBackground }]}
+            testID="sort-button"
           >
-            <Feather
-              name="sliders"
-              size={18}
-              color={activeFilterCount > 0 ? "#fff" : theme.text}
-            />
-            {activeFilterCount > 0 ? (
-              <View style={styles.filterBadge}>
-                <ThemedText style={styles.filterBadgeText}>{activeFilterCount}</ThemedText>
-              </View>
-            ) : null}
+            <Feather name="sliders" size={18} color={theme.text} />
           </Pressable>
           <Pressable
             style={[styles.addButton, { backgroundColor: Colors.accent }]}
             onPress={handleAddClient}
+            testID="add-client-button"
           >
             <Feather name="plus" size={20} color="white" />
           </Pressable>
@@ -301,6 +335,7 @@ export default function ClientsScreen() {
           placeholderTextColor={theme.textSecondary}
           value={searchQuery}
           onChangeText={setSearchQuery}
+          testID="search-input"
         />
         {searchQuery.length > 0 ? (
           <Pressable onPress={() => setSearchQuery("")}>
@@ -309,169 +344,71 @@ export default function ClientsScreen() {
         ) : null}
       </View>
 
-      {renderActiveFilters()}
+      <FilterChips
+        options={STATUS_FILTERS.map((f) => ({
+          ...f,
+          label: `${f.label} (${clientCounts[f.key]})`,
+        }))}
+        selected={statusFilter}
+        onSelect={handleFilterChange}
+      />
+
+      {showSortMenu ? (
+        <View style={[styles.sortMenu, { backgroundColor: theme.cardBackground }]}>
+          {SORT_OPTIONS.map((option) => (
+            <Pressable
+              key={option.value}
+              style={[
+                styles.sortOption,
+                sortBy === option.value && { backgroundColor: Colors.accent + "20" },
+              ]}
+              onPress={() => {
+                setSortBy(option.value);
+                setShowSortMenu(false);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }}
+            >
+              <ThemedText
+                type="body"
+                style={{
+                  color: sortBy === option.value ? Colors.accent : theme.text,
+                  fontWeight: sortBy === option.value ? "600" : "400",
+                }}
+              >
+                {option.label}
+              </ThemedText>
+              {sortBy === option.value ? (
+                <Feather name="check" size={18} color={Colors.accent} />
+              ) : null}
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 
-  const renderFilterModal = () => (
-    <Modal
-      visible={showFilterModal}
-      animationType="slide"
-      transparent
-      onRequestClose={() => setShowFilterModal(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <BlurView
-          intensity={isDark ? 40 : 60}
-          tint={isDark ? "dark" : "light"}
-          style={StyleSheet.absoluteFill}
-        />
-        <Pressable
-          style={StyleSheet.absoluteFill}
-          onPress={() => setShowFilterModal(false)}
-        />
-        <View
-          style={[
-            styles.modalContent,
-            { backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.md },
-          ]}
-        >
-          <View style={styles.modalHeader}>
-            <ThemedText style={styles.modalTitle}>Filters</ThemedText>
-            <Pressable onPress={() => setShowFilterModal(false)}>
-              <Feather name="x" size={24} color={theme.text} />
-            </Pressable>
-          </View>
-
-          <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
-            <View style={styles.filterSection}>
-              <ThemedText style={styles.filterLabel}>Sort By</ThemedText>
-              <View style={styles.optionsRow}>
-                {SORT_OPTIONS.map((option) => (
-                  <Pressable
-                    key={option.value}
-                    onPress={() => setTempFilters((prev) => ({ ...prev, sortBy: option.value }))}
-                    style={[
-                      styles.optionChip,
-                      {
-                        backgroundColor:
-                          tempFilters.sortBy === option.value ? Colors.accent : theme.cardBackground,
-                        borderColor:
-                          tempFilters.sortBy === option.value ? Colors.accent : theme.borderLight,
-                      },
-                    ]}
-                  >
-                    <ThemedText
-                      style={[
-                        styles.optionText,
-                        { color: tempFilters.sortBy === option.value ? "#fff" : theme.text },
-                      ]}
-                    >
-                      {option.label}
-                    </ThemedText>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.filterSection}>
-              <ThemedText style={styles.filterLabel}>Contact Info</ThemedText>
-              <View style={styles.optionsRow}>
-                <Pressable
-                  onPress={() => setTempFilters((prev) => ({ ...prev, hasPhone: !prev.hasPhone }))}
-                  style={[
-                    styles.optionChip,
-                    {
-                      backgroundColor: tempFilters.hasPhone ? Colors.accent : theme.cardBackground,
-                      borderColor: tempFilters.hasPhone ? Colors.accent : theme.borderLight,
-                    },
-                  ]}
-                >
-                  <Feather
-                    name="phone"
-                    size={14}
-                    color={tempFilters.hasPhone ? "#fff" : theme.text}
-                    style={{ marginRight: 4 }}
-                  />
-                  <ThemedText
-                    style={[
-                      styles.optionText,
-                      { color: tempFilters.hasPhone ? "#fff" : theme.text },
-                    ]}
-                  >
-                    Has Phone
-                  </ThemedText>
-                </Pressable>
-                <Pressable
-                  onPress={() => setTempFilters((prev) => ({ ...prev, hasEmail: !prev.hasEmail }))}
-                  style={[
-                    styles.optionChip,
-                    {
-                      backgroundColor: tempFilters.hasEmail ? Colors.accent : theme.cardBackground,
-                      borderColor: tempFilters.hasEmail ? Colors.accent : theme.borderLight,
-                    },
-                  ]}
-                >
-                  <Feather
-                    name="mail"
-                    size={14}
-                    color={tempFilters.hasEmail ? "#fff" : theme.text}
-                    style={{ marginRight: 4 }}
-                  />
-                  <ThemedText
-                    style={[
-                      styles.optionText,
-                      { color: tempFilters.hasEmail ? "#fff" : theme.text },
-                    ]}
-                  >
-                    Has Email
-                  </ThemedText>
-                </Pressable>
-              </View>
-            </View>
-          </ScrollView>
-
-          <View style={styles.modalActions}>
-            <Pressable
-              onPress={resetFilters}
-              style={[styles.resetButton, { borderColor: theme.borderLight }]}
-            >
-              <ThemedText style={[styles.resetButtonText, { color: theme.text }]}>
-                Reset
-              </ThemedText>
-            </Pressable>
-            <View style={styles.applyButtonContainer}>
-              <PrimaryButton onPress={applyFilters}>Apply Filters</PrimaryButton>
-            </View>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-
   const renderClient = ({ item, index }: { item: Client; index: number }) => (
-    <Animated.View entering={FadeInDown.delay(index * 50).duration(300)}>
-      <ClientCard client={item} onPress={() => handleClientPress(item)} />
+    <Animated.View entering={FadeInDown.delay(index * 30).duration(300)}>
+      <ClientCard
+        client={item}
+        onPress={() => handleClientPress(item)}
+        onCall={() => handleCall(item)}
+        onMessage={() => handleMessage(item)}
+      />
     </Animated.View>
   );
 
-  const renderEmpty = () => {
-    if (isLoading) {
-      return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.accent} />
-        </View>
-      );
-    }
-    
-    return (
-      <EmptyState
-        image={require("../../../assets/images/empty-leads.png")}
-        title="No clients yet"
-        description="Add your first client to start managing your business."
-      />
-    );
-  };
+  const renderEmpty = () => (
+    <EmptyState
+      image={require("../../../assets/images/empty-leads.png")}
+      title={statusFilter !== "all" ? "No clients match filters" : "No clients yet"}
+      description={
+        statusFilter !== "all"
+          ? "Try adjusting your filters to see more clients."
+          : "Add your first client to start managing your business."
+      }
+    />
+  );
 
   return (
     <ThemedView style={styles.container}>
@@ -498,7 +435,6 @@ export default function ClientsScreen() {
           />
         }
       />
-      {renderFilterModal()}
     </ThemedView>
   );
 }
@@ -521,32 +457,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: Spacing.sm,
   },
-  filterButton: {
+  sortButton: {
     width: 40,
     height: 40,
     borderRadius: BorderRadius.md,
-    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
-  },
-  filterBadge: {
-    position: "absolute",
-    top: -4,
-    right: -4,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 2,
-    borderColor: Colors.accent,
-  },
-  filterBadgeText: {
-    ...Typography.caption2,
-    fontSize: 10,
-    fontWeight: "700",
-    color: Colors.accent,
   },
   addButton: {
     width: 40,
@@ -569,32 +485,33 @@ const styles = StyleSheet.create({
     ...Typography.body,
     padding: 0,
   },
-  activeFiltersRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.xs,
-    marginBottom: Spacing.md,
+  sortMenu: {
+    marginTop: Spacing.sm,
+    borderRadius: BorderRadius.lg,
+    overflow: "hidden",
   },
-  activeFilterChip: {
+  sortOption: {
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    gap: Spacing.xs,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.full,
-  },
-  activeFilterText: {
-    ...Typography.caption1,
-    fontWeight: "500",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
   },
   clientCard: {
     marginHorizontal: Spacing.screenPadding,
     marginBottom: Spacing.sm,
   },
-  clientRow: {
+  clientHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: Spacing.sm,
+  },
+  clientHeaderLeft: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.md,
+    flex: 1,
   },
   avatar: {
     width: 48,
@@ -604,89 +521,55 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     overflow: "hidden",
   },
+  avatarImage: {
+    width: 48,
+    height: 48,
+    borderRadius: BorderRadius.full,
+  },
   clientInfo: {
     flex: 1,
     gap: 2,
   },
-  emptyContainer: {
-    flexGrow: 1,
-    justifyContent: "center",
-    paddingHorizontal: Spacing.screenPadding,
-  },
-  loadingContainer: {
-    padding: Spacing["2xl"],
-    alignItems: "center",
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    borderTopLeftRadius: BorderRadius.xl,
-    borderTopRightRadius: BorderRadius.xl,
-    paddingTop: Spacing.md,
-    maxHeight: "70%",
-  },
-  modalHeader: {
+  nameRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: Spacing.screenPadding,
-    paddingBottom: Spacing.md,
-  },
-  modalTitle: {
-    ...Typography.title2,
-    fontWeight: "700",
-  },
-  modalScroll: {
-    paddingHorizontal: Spacing.screenPadding,
-  },
-  filterSection: {
-    marginBottom: Spacing.lg,
-  },
-  filterLabel: {
-    ...Typography.subhead,
-    fontWeight: "600",
-    marginBottom: Spacing.sm,
-  },
-  optionsRow: {
-    flexDirection: "row",
+    gap: Spacing.sm,
     flexWrap: "wrap",
-    gap: Spacing.xs,
   },
-  optionChip: {
+  statusBadge: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+  },
+  statusText: {
+    ...Typography.caption2,
+    fontWeight: "600",
+  },
+  statsRow: {
+    flexDirection: "row",
+    gap: Spacing.lg,
+    paddingTop: Spacing.sm,
+    marginTop: Spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  statItem: {
+    gap: 2,
+  },
+  actionsRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  actionButton: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.md,
-    borderWidth: 1,
   },
-  optionText: {
-    ...Typography.subhead,
-    fontWeight: "500",
-  },
-  modalActions: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.screenPadding,
-    paddingTop: Spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "rgba(0,0,0,0.1)",
-  },
-  resetButton: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    alignItems: "center",
+  emptyContainer: {
+    flexGrow: 1,
     justifyContent: "center",
-  },
-  resetButtonText: {
-    ...Typography.subhead,
-    fontWeight: "600",
-  },
-  applyButtonContainer: {
-    flex: 1,
+    paddingHorizontal: Spacing.screenPadding,
   },
 });
