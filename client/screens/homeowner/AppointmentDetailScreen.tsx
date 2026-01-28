@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from "react";
-import { StyleSheet, View, ScrollView, Modal, Pressable, Alert, ActivityIndicator } from "react-native";
+import { StyleSheet, View, ScrollView, Modal, Pressable, Alert, ActivityIndicator, TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
@@ -69,8 +69,10 @@ export default function AppointmentDetailScreen() {
 
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showConditionModal, setShowConditionModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [conditionUpdate, setConditionUpdate] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { data, isLoading, error } = useQuery<{ appointment: Appointment }>({
@@ -147,6 +149,27 @@ export default function AppointmentDetailScreen() {
       (navigation as any).navigate("Chat", { jobId: appointment.id });
     }
   };
+
+  const handleConditionUpdate = useCallback(async () => {
+    if (!conditionUpdate.trim() || !appointment) return;
+
+    setIsSubmitting(true);
+    try {
+      await apiRequest("POST", `/api/appointments/${appointmentId}/update-condition`, {
+        description: conditionUpdate,
+      });
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      queryClient.invalidateQueries({ queryKey: ["/api/appointments"] });
+      setShowConditionModal(false);
+      setConditionUpdate("");
+      Alert.alert("Update Sent", "The provider has been notified about the change in your situation.");
+    } catch (err) {
+      Alert.alert("Error", "Failed to submit update. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [conditionUpdate, appointment, appointmentId, queryClient]);
 
   if (isLoading) {
     return (
@@ -244,6 +267,9 @@ export default function AppointmentDetailScreen() {
 
           {canModify ? (
             <>
+              <SecondaryButton onPress={() => setShowConditionModal(true)} style={styles.actionBtn}>
+                Update Condition
+              </SecondaryButton>
               <SecondaryButton onPress={() => setShowRescheduleModal(true)} style={styles.actionBtn}>
                 Reschedule
               </SecondaryButton>
@@ -373,6 +399,54 @@ export default function AppointmentDetailScreen() {
               </Pressable>
             </View>
           </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showConditionModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowConditionModal(false)}
+      >
+        <View style={[styles.modalContainer, { backgroundColor: theme.backgroundDefault }]}>
+          <View style={styles.modalHeader}>
+            <ThemedText style={styles.modalTitle}>Update Condition</ThemedText>
+            <Pressable onPress={() => setShowConditionModal(false)}>
+              <Feather name="x" size={24} color={theme.text} />
+            </Pressable>
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            <ThemedText style={[styles.conditionDesc, { color: theme.textSecondary }]}>
+              Has your situation changed? Let the provider know if the job has gotten worse or if there are new issues.
+            </ThemedText>
+            
+            <TextInput
+              style={[
+                styles.conditionInput,
+                {
+                  backgroundColor: theme.cardBackground,
+                  borderColor: theme.borderLight,
+                  color: theme.text,
+                },
+              ]}
+              placeholder="Describe what has changed..."
+              placeholderTextColor={theme.textTertiary}
+              value={conditionUpdate}
+              onChangeText={setConditionUpdate}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
+
+            <PrimaryButton
+              onPress={handleConditionUpdate}
+              disabled={!conditionUpdate.trim() || isSubmitting}
+              style={styles.conditionSubmitBtn}
+            >
+              {isSubmitting ? "Sending..." : "Send Update"}
+            </PrimaryButton>
+          </ScrollView>
         </View>
       </Modal>
     </ThemedView>
@@ -575,5 +649,21 @@ const styles = StyleSheet.create({
     ...Typography.body,
     fontWeight: "600",
     color: "#fff",
+  },
+  conditionDesc: {
+    ...Typography.body,
+    marginBottom: Spacing.lg,
+    lineHeight: 22,
+  },
+  conditionInput: {
+    minHeight: 120,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    ...Typography.body,
+    marginBottom: Spacing.lg,
+  },
+  conditionSubmitBtn: {
+    marginTop: Spacing.sm,
   },
 });
