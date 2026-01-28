@@ -14,12 +14,9 @@ import { Feather } from "@expo/vector-icons";
 import Animated, {
   FadeInDown,
   FadeIn,
-  FadeOut,
   useSharedValue,
-  useAnimatedStyle,
+  useAnimatedProps,
   withTiming,
-  withSpring,
-  interpolate,
   Easing,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -124,7 +121,7 @@ function ScoreRing({ score, size = 120, strokeWidth = 10, animating = false }: {
     }
   }, [score, animating]);
 
-  const animatedProps = useAnimatedStyle(() => ({
+  const animatedProps = useAnimatedProps(() => ({
     strokeDashoffset: circumference * (1 - progress.value),
   }));
 
@@ -138,7 +135,7 @@ function ScoreRing({ score, size = 120, strokeWidth = 10, animating = false }: {
     <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
       <Svg width={size} height={size} style={{ position: "absolute", transform: [{ rotate: "-90deg" }] }}>
         <Circle cx={size / 2} cy={size / 2} r={radius} stroke={theme.separator} strokeWidth={strokeWidth} fill="none" />
-        <AnimatedCircle cx={size / 2} cy={size / 2} r={radius} stroke={getScoreColor(score)} strokeWidth={strokeWidth} fill="none" strokeDasharray={`${circumference} ${circumference}`} strokeDashoffset={circumference * (1 - score / 100)} strokeLinecap="round" />
+        <AnimatedCircle cx={size / 2} cy={size / 2} r={radius} stroke={getScoreColor(score)} strokeWidth={strokeWidth} fill="none" strokeDasharray={`${circumference} ${circumference}`} strokeLinecap="round" animatedProps={animatedProps} />
       </Svg>
       <View style={{ alignItems: "center" }}>
         <ThemedText style={[styles.scoreValue, { color: getScoreColor(score) }]}>{score}</ThemedText>
