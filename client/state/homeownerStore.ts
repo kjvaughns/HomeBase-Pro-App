@@ -39,9 +39,14 @@ interface HomeownerState {
   receipts: Receipt[];
   reviews: Review[];
   quotes: Quote[];
+  savedProviderIds: string[];
 
   hydrate: () => Promise<void>;
   resetToSeedData: () => Promise<void>;
+  
+  toggleSavedProvider: (providerId: string) => void;
+  isProviderSaved: (providerId: string) => boolean;
+  getSavedProviders: () => Provider[];
 
   setProfile: (profile: HomeownerProfile) => void;
   updateProfile: (updates: Partial<HomeownerProfile>) => void;
@@ -104,6 +109,7 @@ export const useHomeownerStore = create<HomeownerState>()((set, get) => ({
   receipts: [],
   reviews: [],
   quotes: [],
+  savedProviderIds: [],
 
   hydrate: async () => {
     try {
@@ -117,6 +123,7 @@ export const useHomeownerStore = create<HomeownerState>()((set, get) => ({
           receipts: data.receipts || SEED_RECEIPTS,
           reviews: data.reviews || SEED_REVIEWS,
           quotes: data.quotes || SEED_QUOTES,
+          savedProviderIds: data.savedProviderIds || [],
           isHydrated: true,
         });
       } else {
@@ -127,6 +134,7 @@ export const useHomeownerStore = create<HomeownerState>()((set, get) => ({
           receipts: SEED_RECEIPTS,
           reviews: SEED_REVIEWS,
           quotes: SEED_QUOTES,
+          savedProviderIds: [],
           isHydrated: true,
         });
         saveToStorage(get());
@@ -140,6 +148,7 @@ export const useHomeownerStore = create<HomeownerState>()((set, get) => ({
         receipts: SEED_RECEIPTS,
         reviews: SEED_REVIEWS,
         quotes: SEED_QUOTES,
+        savedProviderIds: [],
         isHydrated: true,
       });
     }
@@ -154,7 +163,28 @@ export const useHomeownerStore = create<HomeownerState>()((set, get) => ({
       receipts: SEED_RECEIPTS,
       reviews: SEED_REVIEWS,
       quotes: SEED_QUOTES,
+      savedProviderIds: [],
     });
+  },
+
+  toggleSavedProvider: (providerId) => {
+    const { savedProviderIds } = get();
+    const isSaved = savedProviderIds.includes(providerId);
+    if (isSaved) {
+      set({ savedProviderIds: savedProviderIds.filter((id) => id !== providerId) });
+    } else {
+      set({ savedProviderIds: [...savedProviderIds, providerId] });
+    }
+    saveToStorage(get());
+  },
+
+  isProviderSaved: (providerId) => {
+    return get().savedProviderIds.includes(providerId);
+  },
+
+  getSavedProviders: () => {
+    const { providers, savedProviderIds } = get();
+    return providers.filter((p) => savedProviderIds.includes(p.id));
   },
 
   setProfile: (profile) => {
@@ -616,6 +646,7 @@ async function saveToStorage(state: HomeownerState) {
       receipts: state.receipts,
       reviews: state.reviews,
       quotes: state.quotes,
+      savedProviderIds: state.savedProviderIds,
     };
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch (error) {
