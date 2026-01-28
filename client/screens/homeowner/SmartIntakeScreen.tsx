@@ -264,7 +264,24 @@ export default function SmartIntakeScreen() {
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    navigation.navigate("ProviderProfile", { providerId });
+    
+    const urgencyMap: Record<string, "flexible" | "soon" | "urgent" | "emergency"> = {
+      low: "flexible",
+      medium: "soon",
+      high: "urgent",
+      emergency: "emergency",
+    };
+    
+    const intakeData = {
+      problemDescription: problemText,
+      issueSummary: refinedAnalysis?.refinedSummary || analysis?.summary || problemText,
+      recommendedService: selectedOption?.name || refinedAnalysis?.serviceOptions?.[0]?.name || "General Service",
+      priceRange: selectedOption?.priceRange || analysis?.estimatedPriceRange || { min: 100, max: 300 },
+      urgency: urgencyMap[refinedAnalysis?.severity || analysis?.severity || "medium"] || "flexible" as const,
+      category: analysis?.category || prefillCategory || "general",
+    };
+    
+    navigation.navigate("ProviderProfile", { providerId, intakeData });
   };
 
   const handleSignIn = () => {

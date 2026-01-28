@@ -67,11 +67,29 @@ export type RootStackParamList = {
   Budgeter: undefined;
   ServiceHistory: undefined;
   ProviderList: { categoryId: string; categoryName: string };
-  ProviderProfile: { providerId: string };
+  ProviderProfile: { 
+    providerId: string;
+    intakeData?: {
+      problemDescription: string;
+      issueSummary: string;
+      recommendedService: string;
+      priceRange: { min: number; max: number };
+      urgency: UrgencyLevel;
+      category: string;
+    };
+  };
   ServiceIntake: {
     providerId: string;
     categoryId: string;
     service: string;
+    intakeData?: {
+      problemDescription: string;
+      issueSummary: string;
+      recommendedService: string;
+      priceRange: { min: number; max: number };
+      urgency: UrgencyLevel;
+      category: string;
+    };
   };
   BookingRequest: {
     providerId: string;

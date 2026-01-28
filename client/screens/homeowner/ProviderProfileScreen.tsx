@@ -32,7 +32,7 @@ export default function ProviderProfileScreen() {
   const route = useRoute<ScreenRouteProp>();
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
-  const { providerId } = route.params;
+  const { providerId, intakeData } = route.params;
 
   const providers = useHomeownerStore((s) => s.providers);
   const allReviews = useHomeownerStore((s) => s.reviews);
@@ -73,7 +73,8 @@ export default function ProviderProfileScreen() {
     navigation.navigate("ServiceIntake", {
       providerId: provider.id,
       categoryId: provider.categoryIds[0],
-      service: provider.services[0],
+      service: intakeData?.recommendedService || provider.services[0],
+      intakeData,
     });
   };
 

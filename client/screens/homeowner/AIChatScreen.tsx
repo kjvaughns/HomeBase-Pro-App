@@ -152,7 +152,11 @@ export default function AIChatScreen() {
               styles.messageBubble,
               isUser
                 ? { backgroundColor: Colors.accent }
-                : { backgroundColor: theme.backgroundSecondary },
+                : { 
+                    backgroundColor: isDark ? "#1C1C1E" : "#F2F2F7",
+                    borderWidth: 1,
+                    borderColor: isDark ? "#2C2C2E" : "#E5E5EA",
+                  },
             ]}
           >
             <ThemedText
@@ -231,11 +235,12 @@ export default function AIChatScreen() {
           renderItem={renderMessage}
           keyExtractor={(item) => item.id}
           inverted={messages.length > 0}
+          style={{ backgroundColor: theme.backgroundRoot }}
           contentContainerStyle={[
             styles.messagesContent,
             {
               paddingTop: Spacing.lg,
-              paddingBottom: headerHeight + Spacing.lg,
+              paddingBottom: headerHeight + Spacing.xl,
             },
           ]}
           ListEmptyComponent={renderEmptyState}

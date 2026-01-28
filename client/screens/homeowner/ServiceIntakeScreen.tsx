@@ -63,16 +63,30 @@ export default function ServiceIntakeScreen() {
   const route = useRoute<ScreenRouteProp>();
   const { theme } = useTheme();
 
-  const { providerId, service, categoryId } = route.params;
+  const { providerId, service, categoryId, intakeData } = route.params;
   const providers = useHomeownerStore((s) => s.providers);
   const provider = providers.find((p) => p.id === providerId);
+  
+  const hasIntakeData = Boolean(intakeData?.problemDescription);
 
-  const [step, setStep] = useState<IntakeStep>("describe");
-  const [problemText, setProblemText] = useState("");
+  const [step, setStep] = useState<IntakeStep>(hasIntakeData ? "summary" : "describe");
+  const [problemText, setProblemText] = useState(intakeData?.problemDescription || "");
   const [isLoading, setIsLoading] = useState(false);
   const [analysis, setAnalysis] = useState<ServiceAnalysis | null>(null);
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
-  const [issueExplanation, setIssueExplanation] = useState<IssueExplanation | null>(null);
+  const [issueExplanation, setIssueExplanation] = useState<IssueExplanation | null>(
+    hasIntakeData && intakeData ? {
+      explanation: intakeData.issueSummary,
+      recommendedService: intakeData.recommendedService,
+      whatToExpect: [
+        `The technician from ${provider?.businessName} will assess the situation and identify the cause of the issue.`,
+        "They will discuss the findings with you and outline the necessary work needed.",
+        "Once you approve, they will proceed with the repair to resolve your issue.",
+      ],
+      estimatedDuration: "1-3 hours",
+      priceRange: intakeData.priceRange,
+    } : null
+  );
 
   const analyzeProblem = useCallback(async () => {
     if (!problemText.trim()) return;
