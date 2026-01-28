@@ -570,6 +570,95 @@ Be conversational and helpful. If they just have a question, answer it. If they 
     }
   });
 
+  // ============ AI PRICING ASSISTANT ============
+
+  app.post("/api/ai/pricing-assistant", async (req: Request, res: Response) => {
+    try {
+      const { providerId, serviceName, description, clientId } = req.body as {
+        providerId?: string;
+        serviceName: string;
+        description?: string;
+        clientId?: string;
+      };
+
+      if (!serviceName) {
+        return res.status(400).json({ error: "Service name is required" });
+      }
+
+      let businessContext = "";
+      
+      if (providerId) {
+        const [provider, jobs] = await Promise.all([
+          storage.getProvider(providerId),
+          storage.getJobsByProviderId(providerId),
+        ]);
+        
+        if (provider) {
+          businessContext += `Provider: ${provider.businessName}\n`;
+          if (provider.hourlyRate) {
+            businessContext += `Hourly Rate: $${provider.hourlyRate}\n`;
+          }
+        }
+
+        if (jobs && jobs.length > 0) {
+          const completedJobs = jobs.filter(j => j.status === 'completed' && j.finalPrice);
+          if (completedJobs.length > 0) {
+            const avgPrice = completedJobs.reduce((sum, j) => sum + parseFloat(j.finalPrice || '0'), 0) / completedJobs.length;
+            businessContext += `Average completed job price: $${avgPrice.toFixed(2)}\n`;
+            businessContext += `Total completed jobs: ${completedJobs.length}\n`;
+          }
+        }
+      }
+
+      const prompt = `You are a pricing expert for home service providers. Based on the service and context, suggest an appropriate price.
+
+Service: ${serviceName}
+${description ? `Description: ${description}` : ""}
+${businessContext ? `\nBusiness Context:\n${businessContext}` : ""}
+
+Industry pricing guidelines:
+- General Repair: $75-200 depending on complexity
+- Installation: $100-500+ depending on scope
+- Maintenance: $50-150 for routine work
+- Inspection: $50-100 standard rate
+- Emergency Service: 1.5-2x normal rates
+- Consultation: $50-100/hour
+
+Respond with a JSON object ONLY (no markdown, no explanation):
+{
+  "suggestedPrice": <number>,
+  "minPrice": <number>,
+  "maxPrice": <number>,
+  "reasoning": "<brief 1-2 sentence explanation>"
+}`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 256,
+      });
+
+      const content = response.choices[0]?.message?.content || "";
+      
+      try {
+        const suggestion = JSON.parse(content.replace(/```json\n?|\n?```/g, "").trim());
+        res.json({ suggestion });
+      } catch {
+        res.json({
+          suggestion: {
+            suggestedPrice: 150,
+            minPrice: 100,
+            maxPrice: 250,
+            reasoning: "Based on typical service rates in the home services industry.",
+          },
+        });
+      }
+    } catch (error) {
+      console.error("Pricing assistant error:", error);
+      res.status(500).json({ error: "Failed to generate pricing suggestion" });
+    }
+  });
+
   // ============ SERVICE BUILDER ROUTES ============
 
   const SERVICE_BUILDER_PROMPT = `You are HomeBase's AI Service Builder assistant. Help service providers create optimized, professional service listings.
