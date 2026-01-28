@@ -23,7 +23,10 @@ The application is structured into a client-side React Native Expo app and an Ex
 - **Service Summary Cards**: AI-generated scope of work summaries with itemized breakdowns shown to homeowners and providers during booking.
 - **Data Management**: Full CRUD operations for appointments, clients, jobs, and invoices, with real-time status tracking and notifications.
 - **Provider Portal**: Comprehensive dashboard displaying real-time statistics (revenue MTD, jobs completed, active clients), a Clients CRM, Schedule management with various calendar views, and a complete invoicing system.
-- **Homeowner Tools**: Includes a Survival Kit, Home Health Score, HouseFax for property history, Budgeter, and Service History with maintenance reminders.
+- **Homeowner Tools**: Includes a Survival Kit, Home Health Score, HouseFax for property history, Budgeter, Service History with maintenance reminders, and Saved Providers for quick access to favorited providers.
+- **Saved Providers**: Homeowners can save/favorite providers by tapping the heart icon on provider profiles. Saved providers are persisted and accessible from the More screen.
+- **Help Center**: FAQ screen with expandable sections covering Getting Started, Bookings & Appointments, Payments & Pricing, and About Providers.
+- **Contact Us**: Contact options including Email Support, Phone Support, Live Chat, and social media links with support hours.
 - **Design System**: Reusable UI components like `PrimaryButton`, `GlassCard`, `ListRow`, `StatusPill`, `TextField`, `Avatar`, `EmptyState`, `SkeletonLoader`, and various cards for categories, providers, bookings, messages, and stats.
 - **State Management**: Uses Zustand for client-side state management, with separate stores for authentication, homeowner, and provider data.
 - **Database Schema**: PostgreSQL database with Drizzle ORM managing `users`, `homes`, `providers`, `appointments`, `notifications`, `reviews`, `clients`, `jobs`, `invoices`, `payments`, and `maintenanceReminders` tables.
