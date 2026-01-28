@@ -1,12 +1,13 @@
 import React, { useState, useCallback } from "react";
-import { StyleSheet, View, FlatList, RefreshControl, SectionList } from "react-native";
+import { StyleSheet, View, FlatList, RefreshControl, ScrollView, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
 
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
@@ -80,6 +81,7 @@ export default function ManageScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showAccountGate, setShowAccountGate] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
 
   const fetchAppointments = useCallback(async () => {
     if (!user?.id) {
@@ -208,16 +210,50 @@ export default function ManageScreen() {
     );
   };
 
-  const renderSectionHeader = ({ section }: { section: Section }) => (
-    <View style={[styles.sectionHeader, { backgroundColor: theme.backgroundDefault }]}>
-      <ThemedText style={styles.sectionTitle}>{section.title}</ThemedText>
-      <View style={[styles.countBadge, { backgroundColor: Colors.accent + "15" }]}>
-        <ThemedText style={[styles.countText, { color: Colors.accent }]}>
-          {section.data.length}
-        </ThemedText>
+  const toggleSection = (sectionTitle: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setCollapsedSections((prev) => ({
+      ...prev,
+      [sectionTitle]: !prev[sectionTitle],
+    }));
+  };
+
+  const CollapsibleSection = ({ section }: { section: Section }) => {
+    const isCollapsed = collapsedSections[section.title] || false;
+    
+    return (
+      <View style={styles.sectionContainer}>
+        <Pressable
+          style={[styles.sectionHeader, { backgroundColor: theme.backgroundSecondary }]}
+          onPress={() => toggleSection(section.title)}
+        >
+          <View style={styles.sectionHeaderLeft}>
+            <ThemedText style={styles.sectionTitle}>{section.title}</ThemedText>
+            <View style={[styles.countBadge, { backgroundColor: Colors.accent + "15" }]}>
+              <ThemedText style={[styles.countText, { color: Colors.accent }]}>
+                {section.data.length}
+              </ThemedText>
+            </View>
+          </View>
+          <Feather
+            name={isCollapsed ? "chevron-down" : "chevron-up"}
+            size={20}
+            color={theme.textSecondary}
+          />
+        </Pressable>
+        
+        {!isCollapsed ? (
+          <View style={styles.sectionContent}>
+            {section.data.map((item, index) => (
+              <React.Fragment key={item.id}>
+                {renderAppointment({ item, index })}
+              </React.Fragment>
+            ))}
+          </View>
+        ) : null}
       </View>
-    </View>
-  );
+    );
+  };
 
   const renderEmpty = () => {
     if (!isAuthenticated) {
@@ -289,11 +325,7 @@ export default function ManageScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <SectionList
-        sections={sections}
-        renderItem={renderAppointment}
-        renderSectionHeader={renderSectionHeader}
-        keyExtractor={(item) => item.id}
+      <ScrollView
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,
           paddingBottom: tabBarHeight + Spacing.xl,
@@ -301,7 +333,6 @@ export default function ManageScreen() {
         }}
         scrollIndicatorInsets={{ bottom: insets.bottom }}
         showsVerticalScrollIndicator={false}
-        stickySectionHeadersEnabled={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -309,7 +340,11 @@ export default function ManageScreen() {
             tintColor={Colors.accent}
           />
         }
-      />
+      >
+        {sections.map((section) => (
+          <CollapsibleSection key={section.title} section={section} />
+        ))}
+      </ScrollView>
     </ThemedView>
   );
 }
@@ -318,27 +353,39 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  sectionContainer: {
+    marginBottom: Spacing.md,
+  },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: Spacing.md,
-    marginTop: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
     marginBottom: Spacing.sm,
   },
+  sectionHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
   sectionTitle: {
-    ...Typography.title3,
-    fontWeight: "700",
+    ...Typography.subhead,
+    fontWeight: "600",
+  },
+  sectionContent: {
+    gap: 0,
   },
   countBadge: {
     paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
+    paddingVertical: 2,
     borderRadius: BorderRadius.full,
-    minWidth: 28,
+    minWidth: 24,
     alignItems: "center",
   },
   countText: {
-    ...Typography.caption1,
+    ...Typography.caption2,
     fontWeight: "600",
   },
   cardWrapper: {
