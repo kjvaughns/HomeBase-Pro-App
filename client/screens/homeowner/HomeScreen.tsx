@@ -334,6 +334,16 @@ export default function HomeScreen() {
               </View>
               <ThemedText style={styles.quickActionText}>HouseFax</ThemedText>
             </Pressable>
+
+            <Pressable
+              style={[styles.quickAction, { backgroundColor: theme.cardBackground }]}
+              onPress={() => navigation.navigate("SavingsSpend")}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: Colors.accentLight }]}>
+                <Feather name="trending-up" size={20} color={Colors.accent} />
+              </View>
+              <ThemedText style={styles.quickActionText}>Savings</ThemedText>
+            </Pressable>
           </View>
         </Animated.View>
       </ScrollView>

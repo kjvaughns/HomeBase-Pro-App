@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, View, ScrollView, Switch } from "react-native";
+import { StyleSheet, View, ScrollView, Switch, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -128,6 +128,65 @@ export default function MoreScreen() {
           <>
             <Animated.View entering={FadeInDown.delay(200).duration(400)}>
               <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
+                Tools
+              </ThemedText>
+              <View style={styles.toolsGrid}>
+                <Pressable
+                  style={[styles.toolTile, { backgroundColor: theme.cardBackground }]}
+                  onPress={() => navigation.navigate("SurvivalKit")}
+                >
+                  <View style={[styles.toolIcon, { backgroundColor: Colors.accentLight }]}>
+                    <Feather name="shield" size={20} color={Colors.accent} />
+                  </View>
+                  <ThemedText style={styles.toolTitle}>Survival Kit</ThemedText>
+                  <ThemedText style={[styles.toolSubtitle, { color: theme.textSecondary }]}>
+                    Maintenance plan
+                  </ThemedText>
+                </Pressable>
+                
+                <Pressable
+                  style={[styles.toolTile, { backgroundColor: theme.cardBackground }]}
+                  onPress={() => navigation.navigate("HouseFax")}
+                >
+                  <View style={[styles.toolIcon, { backgroundColor: Colors.accentLight }]}>
+                    <Feather name="file-text" size={20} color={Colors.accent} />
+                  </View>
+                  <ThemedText style={styles.toolTitle}>HouseFax</ThemedText>
+                  <ThemedText style={[styles.toolSubtitle, { color: theme.textSecondary }]}>
+                    Home ledger
+                  </ThemedText>
+                </Pressable>
+                
+                <Pressable
+                  style={[styles.toolTile, { backgroundColor: theme.cardBackground }]}
+                  onPress={() => navigation.navigate("SavingsSpend")}
+                >
+                  <View style={[styles.toolIcon, { backgroundColor: Colors.accentLight }]}>
+                    <Feather name="trending-up" size={20} color={Colors.accent} />
+                  </View>
+                  <ThemedText style={styles.toolTitle}>Savings</ThemedText>
+                  <ThemedText style={[styles.toolSubtitle, { color: theme.textSecondary }]}>
+                    Track spend
+                  </ThemedText>
+                </Pressable>
+                
+                <Pressable
+                  style={[styles.toolTile, { backgroundColor: theme.cardBackground }]}
+                  onPress={() => navigation.navigate("HealthScore")}
+                >
+                  <View style={[styles.toolIcon, { backgroundColor: Colors.accentLight }]}>
+                    <Feather name="activity" size={20} color={Colors.accent} />
+                  </View>
+                  <ThemedText style={styles.toolTitle}>Health Score</ThemedText>
+                  <ThemedText style={[styles.toolSubtitle, { color: theme.textSecondary }]}>
+                    Home status
+                  </ThemedText>
+                </Pressable>
+              </View>
+            </Animated.View>
+
+            <Animated.View entering={FadeInDown.delay(300).duration(400)}>
+              <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
                 Account
               </ThemedText>
               <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
@@ -156,7 +215,7 @@ export default function MoreScreen() {
               </View>
             </Animated.View>
 
-            <Animated.View entering={FadeInDown.delay(300).duration(400)}>
+            <Animated.View entering={FadeInDown.delay(400).duration(400)}>
               <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
                 Settings
               </ThemedText>
@@ -185,7 +244,7 @@ export default function MoreScreen() {
           </>
         ) : null}
 
-        <Animated.View entering={FadeInDown.delay(isAuthenticated ? 400 : 200).duration(400)}>
+        <Animated.View entering={FadeInDown.delay(isAuthenticated ? 500 : 200).duration(400)}>
           <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
             Appearance
           </ThemedText>
@@ -210,7 +269,7 @@ export default function MoreScreen() {
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(isAuthenticated ? 500 : 300).duration(400)}>
+        <Animated.View entering={FadeInDown.delay(isAuthenticated ? 600 : 300).duration(400)}>
           <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
             Support
           </ThemedText>
@@ -241,7 +300,7 @@ export default function MoreScreen() {
         </Animated.View>
 
         {isAuthenticated ? (
-          <Animated.View entering={FadeInDown.delay(600).duration(400)}>
+          <Animated.View entering={FadeInDown.delay(700).duration(400)}>
             <View style={[styles.section, { backgroundColor: theme.cardBackground, marginTop: Spacing.lg }]}>
               <ListRow
                 title="Sign Out"
@@ -256,7 +315,7 @@ export default function MoreScreen() {
           </Animated.View>
         ) : null}
 
-        <Animated.View entering={FadeInDown.delay(600).duration(400)}>
+        <Animated.View entering={FadeInDown.delay(800).duration(400)}>
           <ThemedText style={[styles.version, { color: theme.textTertiary }]}>
             Version 1.0.0
           </ThemedText>
@@ -336,6 +395,34 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.card,
     marginBottom: Spacing.lg,
     overflow: "hidden",
+  },
+  toolsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
+  toolTile: {
+    width: "48%",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.card,
+    alignItems: "center",
+  },
+  toolIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.sm,
+  },
+  toolTitle: {
+    ...Typography.subhead,
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  toolSubtitle: {
+    ...Typography.caption1,
   },
   darkModeRow: {
     position: "relative",
