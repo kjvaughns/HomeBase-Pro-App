@@ -45,7 +45,13 @@ The application is structured into a client-side React Native Expo app and an Ex
 - **Service Summary Cards**: AI-generated scope of work summaries with itemized breakdowns shown to homeowners and providers during booking.
 - **Data Management**: Full CRUD operations for appointments, clients, jobs, and invoices, with real-time status tracking and notifications.
 - **Provider Portal**: Comprehensive dashboard displaying real-time statistics (revenue MTD, jobs completed, active clients), a Clients CRM, Schedule management with various calendar views, and a complete invoicing system.
-- **Homeowner Tools**: Includes a Survival Kit, Home Health Score, HouseFax for property history, Budgeter, Service History with maintenance reminders, and Saved Providers for quick access to favorited providers.
+- **Homeowner Tools**: Comprehensive home management features accessible from the More tab's Tools section and Home screen quick tiles:
+  - **Survival Kit**: 17-step guided wizard that gathers property details (type, year built, square footage), home systems (HVAC type/age, water heater, roof), exterior features, location/climate info, and service preferences. Generates personalized results with 5 tabs: Summary (estimated yearly costs, top cost drivers), Plan (scheduled maintenance tasks with Book Now CTAs), Costs (category breakdown), Tips (money-saving suggestions), and Export (PDF/CSV options).
+  - **HouseFax Ledger**: Home operating system with multi-home selector and 4 summary cards (Total Spent, Total Saved, Upcoming Tasks, Health Trend). Features 5 tabs: Overview (forecast, recent activity), History (filterable timeline of jobs/invoices/assessments), Assets (registry with 6+ items including install dates, warranty info, service cycles, and booking CTAs), Documents (uploads with categories), and Insights (predictive costs, upcoming risks, suggestions).
+  - **Savings & Spend Dashboard**: Financial tracking with yearly spend ($12,450 spent), savings tally ($2,740 saved via HomeBase), monthly category charts, and cost reduction tips.
+  - **Home Health Score**: Overall property condition assessment (placeholder).
+  - **Service History**: Past appointments with maintenance reminders.
+  - **Saved Providers**: Quick access to favorited providers.
 - **Saved Providers**: Homeowners can save/favorite providers by tapping the heart icon on provider profiles. Saved providers are persisted and accessible from the More screen.
 - **Help Center**: FAQ screen with expandable sections covering Getting Started, Bookings & Appointments, Payments & Pricing, and About Providers.
 - **Contact Us**: Contact options including Email Support, Phone Support, Live Chat, and social media links with support hours.
