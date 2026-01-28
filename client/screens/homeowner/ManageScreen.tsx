@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { StyleSheet, View, FlatList, RefreshControl, Pressable, SectionList } from "react-native";
+import React, { useState, useCallback } from "react";
+import { StyleSheet, View, FlatList, RefreshControl, SectionList } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -10,6 +10,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
+import { GlassCard } from "@/components/GlassCard";
 import { StatusPill } from "@/components/StatusPill";
 import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
@@ -22,6 +23,14 @@ import { getApiUrl } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type AppointmentStatus = "pending" | "confirmed" | "in_progress" | "completed" | "cancelled";
+
+interface Provider {
+  id: string;
+  businessName: string;
+  serviceType?: string;
+  rating?: number;
+  reviewCount?: number;
+}
 
 interface Appointment {
   id: string;
@@ -41,6 +50,7 @@ interface Appointment {
   providerNotes?: string;
   createdAt: string;
   updatedAt: string;
+  provider?: Provider;
 }
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -139,47 +149,61 @@ export default function ManageScreen() {
 
   const renderAppointment = ({ item, index }: { item: Appointment; index: number }) => {
     const statusConfig = STATUS_CONFIG[item.status] || { label: item.status, status: "neutral" as const };
+    const providerName = item.provider?.businessName || "Service Provider";
+    
     return (
-      <Animated.View entering={FadeInDown.delay(index * 50).duration(300)}>
-        <Pressable
+      <Animated.View entering={FadeInDown.delay(index * 50).duration(300)} style={styles.cardWrapper}>
+        <GlassCard
           onPress={() => handleAppointmentPress(item)}
-          style={[styles.jobCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}
           testID={`appointment-${item.id}`}
+          intensity="light"
         >
-          <View style={styles.jobHeader}>
-            <Avatar name={item.serviceName} size="medium" />
-            <View style={styles.jobInfo}>
-              <ThemedText style={styles.providerName}>{item.serviceName}</ThemedText>
-              <ThemedText style={[styles.serviceName, { color: theme.textSecondary }]}>
-                {item.description || "Service appointment"}
-              </ThemedText>
-            </View>
-            <StatusPill label={statusConfig.label} status={statusConfig.status} size="small" />
-          </View>
-
-          <View style={[styles.jobDetails, { borderTopColor: theme.borderLight }]}>
-            <View style={styles.detailItem}>
-              <Feather name="calendar" size={14} color={theme.textSecondary} />
-              <ThemedText style={[styles.detailText, { color: theme.textSecondary }]}>
-                {formatDate(item.scheduledDate)}
-              </ThemedText>
-            </View>
-            <View style={styles.detailItem}>
-              <Feather name="clock" size={14} color={theme.textSecondary} />
-              <ThemedText style={[styles.detailText, { color: theme.textSecondary }]}>
-                {item.scheduledTime || "TBD"}
-              </ThemedText>
-            </View>
-            {item.estimatedPrice ? (
-              <View style={styles.detailItem}>
-                <Feather name="dollar-sign" size={14} color={theme.textSecondary} />
-                <ThemedText style={[styles.detailText, { color: theme.textSecondary }]}>
-                  ${item.estimatedPrice}
+          <View style={styles.cardContent}>
+            <View style={styles.cardHeader}>
+              <View style={[styles.iconContainer, { backgroundColor: Colors.accent + "15" }]}>
+                <Feather name="tool" size={20} color={Colors.accent} />
+              </View>
+              <View style={styles.headerInfo}>
+                <ThemedText style={styles.serviceName}>{item.serviceName}</ThemedText>
+                <ThemedText style={[styles.providerName, { color: theme.textSecondary }]}>
+                  {providerName}
                 </ThemedText>
               </View>
-            ) : null}
+              <StatusPill label={statusConfig.label} status={statusConfig.status} size="small" />
+            </View>
+
+            <View style={[styles.cardDetails, { borderTopColor: theme.borderLight }]}>
+              <View style={styles.detailRow}>
+                <View style={styles.detailItem}>
+                  <View style={[styles.detailIcon, { backgroundColor: theme.backgroundSecondary }]}>
+                    <Feather name="calendar" size={12} color={theme.textSecondary} />
+                  </View>
+                  <ThemedText style={styles.detailText}>
+                    {formatDate(item.scheduledDate)}
+                  </ThemedText>
+                </View>
+                <View style={styles.detailItem}>
+                  <View style={[styles.detailIcon, { backgroundColor: theme.backgroundSecondary }]}>
+                    <Feather name="clock" size={12} color={theme.textSecondary} />
+                  </View>
+                  <ThemedText style={styles.detailText}>
+                    {item.scheduledTime || "TBD"}
+                  </ThemedText>
+                </View>
+              </View>
+              {item.estimatedPrice ? (
+                <View style={styles.priceRow}>
+                  <ThemedText style={[styles.priceLabel, { color: theme.textSecondary }]}>
+                    Est. Price
+                  </ThemedText>
+                  <ThemedText style={[styles.priceValue, { color: Colors.accent }]}>
+                    ${item.estimatedPrice}
+                  </ThemedText>
+                </View>
+              ) : null}
+            </View>
           </View>
-        </Pressable>
+        </GlassCard>
       </Animated.View>
     );
   };
@@ -187,9 +211,11 @@ export default function ManageScreen() {
   const renderSectionHeader = ({ section }: { section: Section }) => (
     <View style={[styles.sectionHeader, { backgroundColor: theme.backgroundDefault }]}>
       <ThemedText style={styles.sectionTitle}>{section.title}</ThemedText>
-      <ThemedText style={[styles.sectionCount, { color: theme.textSecondary }]}>
-        {section.data.length}
-      </ThemedText>
+      <View style={[styles.countBadge, { backgroundColor: Colors.accent + "15" }]}>
+        <ThemedText style={[styles.countText, { color: Colors.accent }]}>
+          {section.data.length}
+        </ThemedText>
+      </View>
     </View>
   );
 
@@ -296,53 +322,90 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: Spacing.sm,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.xs,
-  },
-  sectionTitle: {
-    ...Typography.headline,
-    fontWeight: "600",
-  },
-  sectionCount: {
-    ...Typography.subhead,
-  },
-  jobCard: {
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
+    paddingVertical: Spacing.md,
+    marginTop: Spacing.lg,
     marginBottom: Spacing.sm,
   },
-  jobHeader: {
-    flexDirection: "row",
+  sectionTitle: {
+    ...Typography.title3,
+    fontWeight: "700",
+  },
+  countBadge: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.full,
+    minWidth: 28,
     alignItems: "center",
   },
-  jobInfo: {
-    flex: 1,
-    marginLeft: Spacing.md,
-  },
-  providerName: {
-    ...Typography.subhead,
+  countText: {
+    ...Typography.caption1,
     fontWeight: "600",
   },
-  serviceName: {
-    ...Typography.caption1,
-    marginTop: 2,
+  cardWrapper: {
+    marginBottom: Spacing.md,
   },
-  jobDetails: {
+  cardContent: {
+    gap: Spacing.md,
+  },
+  cardHeader: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    marginTop: Spacing.md,
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  iconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  serviceName: {
+    ...Typography.body,
+    fontWeight: "600",
+  },
+  providerName: {
+    ...Typography.caption1,
+  },
+  cardDetails: {
     paddingTop: Spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    gap: Spacing.md,
+    gap: Spacing.sm,
+  },
+  detailRow: {
+    flexDirection: "row",
+    gap: Spacing.lg,
   },
   detailItem: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.xs,
   },
+  detailIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: BorderRadius.full,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   detailText: {
+    ...Typography.footnote,
+    fontWeight: "500",
+  },
+  priceRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: Spacing.xs,
+  },
+  priceLabel: {
     ...Typography.caption1,
+  },
+  priceValue: {
+    ...Typography.body,
+    fontWeight: "700",
   },
 });
