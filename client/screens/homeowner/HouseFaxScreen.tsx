@@ -122,14 +122,18 @@ export default function HouseFaxScreen() {
       const response = await fetch(new URL(`/api/homes/${user.id}`, getApiUrl()).href);
       if (response.ok) {
         const data = await response.json();
-        setHomes(data || []);
-        if (data && data.length > 0) {
-          const defaultHome = data.find((h: Home) => h.isDefault) || data[0];
+        const homesArray = Array.isArray(data?.homes) ? data.homes : [];
+        setHomes(homesArray);
+        if (homesArray.length > 0) {
+          const defaultHome = homesArray.find((h: Home) => h.isDefault) || homesArray[0];
           setSelectedHome(defaultHome);
         }
+      } else {
+        setHomes([]);
       }
     } catch (error) {
       console.error("Error fetching homes:", error);
+      setHomes([]);
     } finally {
       setIsLoadingHomes(false);
     }

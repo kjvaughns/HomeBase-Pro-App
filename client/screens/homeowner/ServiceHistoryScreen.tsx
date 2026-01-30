@@ -153,13 +153,17 @@ export default function ServiceHistoryScreen() {
       const response = await fetch(new URL(`/api/homes/${user.id}`, getApiUrl()).href);
       if (response.ok) {
         const data = await response.json();
-        setHomes(data || []);
-        if (data && data.length > 0) {
-          setSelectedHome(data[0]);
+        const homesArray = Array.isArray(data?.homes) ? data.homes : [];
+        setHomes(homesArray);
+        if (homesArray.length > 0) {
+          setSelectedHome(homesArray[0]);
         }
+      } else {
+        setHomes([]);
       }
     } catch (error) {
       console.error("Error fetching homes:", error);
+      setHomes([]);
     } finally {
       setIsLoadingHomes(false);
     }
