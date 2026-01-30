@@ -47,24 +47,43 @@ interface HouseFaxEnrichmentResult {
 }
 
 // Zillow API via RapidAPI
-// Configurable host - set RAPIDAPI_ZILLOW_HOST env var if using different Zillow API
-// Common options: 'zillow-com1.p.rapidapi.com', 'zillow56.p.rapidapi.com', 'zillow-working-api.p.rapidapi.com'
+// Note: Different Zillow APIs on RapidAPI have different endpoints and formats
+// Set RAPIDAPI_ZILLOW_HOST to match your subscribed API
 export async function fetchZillowPropertyData(address: string): Promise<ZillowPropertyData | null> {
   const rapidApiKey = process.env.RAPIDAPI_KEY;
-  const zillowHost = process.env.RAPIDAPI_ZILLOW_HOST || 'zillow-working-api.p.rapidapi.com';
+  const zillowHost = process.env.RAPIDAPI_ZILLOW_HOST;
   
   if (!rapidApiKey) {
     console.error('RAPIDAPI_KEY not configured');
     return null;
   }
 
+  // If no Zillow host configured, return null gracefully
+  if (!zillowHost) {
+    console.log('No RAPIDAPI_ZILLOW_HOST configured - Zillow enrichment skipped');
+    return null;
+  }
+
   try {
-    // Try the configured Zillow API
-    const searchUrl = `https://${zillowHost}/search?location=${encodeURIComponent(address)}`;
+    // Try common Zillow API patterns based on the configured host
+    let apiUrl: string;
     
-    console.log('Calling Zillow API:', searchUrl.replace(address, '[ADDRESS]'));
+    if (zillowHost.includes('real-estate101')) {
+      // Real Estate 101 requires a full Zillow search URL with searchQueryState
+      // This API is better for bulk search results, not individual property lookup
+      console.log('Real Estate 101 API requires Zillow search URL format - not suitable for address lookup');
+      return null;
+    } else if (zillowHost.includes('zillow56') || zillowHost.includes('zillow-com')) {
+      // Standard Zillow API format
+      apiUrl = `https://${zillowHost}/search?location=${encodeURIComponent(address)}`;
+    } else {
+      // Generic fallback
+      apiUrl = `https://${zillowHost}/search?location=${encodeURIComponent(address)}`;
+    }
     
-    const searchResponse = await fetch(searchUrl, {
+    console.log('Calling Zillow API:', zillowHost, 'for:', address);
+    
+    const searchResponse = await fetch(apiUrl, {
       method: 'GET',
       headers: {
         'X-RapidAPI-Key': rapidApiKey,
@@ -80,63 +99,32 @@ export async function fetchZillowPropertyData(address: string): Promise<ZillowPr
 
     const searchData = await searchResponse.json();
     
-    // Zillow56 returns results in different formats
-    const results = searchData.results || searchData.props || [];
-    if (results.length === 0) {
+    // Handle various response formats
+    const results = searchData.results || searchData.props || searchData.data || [];
+    const propertyList = Array.isArray(results) ? results : (results.properties || []);
+    
+    if (propertyList.length === 0) {
       console.log('No Zillow properties found for address:', address);
       return null;
     }
 
-    const property = results[0];
+    const property = propertyList[0];
     
-    // Try to get more detailed property info using zpid if available
-    if (property.zpid) {
-      try {
-        const detailUrl = `https://${zillowHost}/property?zpid=${property.zpid}`;
-        const detailResponse = await fetch(detailUrl, {
-          method: 'GET',
-          headers: {
-            'X-RapidAPI-Key': rapidApiKey,
-            'X-RapidAPI-Host': zillowHost
-          }
-        });
-
-        if (detailResponse.ok) {
-          const detailData = await detailResponse.json();
-          return {
-            zpid: String(detailData.zpid || property.zpid),
-            address: detailData.address?.streetAddress || detailData.streetAddress || property.address,
-            bedrooms: detailData.bedrooms || property.bedrooms,
-            bathrooms: detailData.bathrooms || property.bathrooms,
-            livingArea: detailData.livingArea || detailData.livingAreaValue || property.livingArea,
-            lotSize: detailData.lotSize || detailData.lotAreaValue,
-            yearBuilt: detailData.yearBuilt || property.yearBuilt,
-            propertyType: detailData.homeType || detailData.propertyTypeDimension || property.propertyType,
-            zestimate: detailData.zestimate || detailData.price || property.zestimate,
-            taxAssessedValue: detailData.taxAssessedValue,
-            lastSoldDate: detailData.dateSold || detailData.datePosted,
-            lastSoldPrice: detailData.lastSoldPrice,
-            homeStatus: detailData.homeStatus,
-            url: detailData.url || detailData.hdpUrl || `https://www.zillow.com/homedetails/${property.zpid}_zpid/`
-          };
-        }
-      } catch (detailError) {
-        console.error('Zillow detail fetch failed:', detailError);
-      }
-    }
-
-    // Fallback to search result data
     return {
-      zpid: String(property.zpid || ''),
-      address: property.address || property.streetAddress,
-      bedrooms: property.bedrooms,
-      bathrooms: property.bathrooms,
-      livingArea: property.livingArea || property.livingAreaValue,
-      lotSize: property.lotAreaValue || property.lotSize,
+      zpid: String(property.zpid || property.id || ''),
+      address: property.address || property.streetAddress || property.addressStreet,
+      bedrooms: property.bedrooms || property.beds,
+      bathrooms: property.bathrooms || property.baths,
+      livingArea: property.livingArea || property.sqft || property.livingAreaSqFt,
+      lotSize: property.lotSize || property.lotAreaSqFt,
       yearBuilt: property.yearBuilt,
-      propertyType: property.propertyType || property.homeType,
-      zestimate: property.zestimate || property.price,
-      url: property.detailUrl || (property.zpid ? `https://www.zillow.com/homedetails/${property.zpid}_zpid/` : undefined)
+      propertyType: property.propertyType || property.homeType || property.propertyTypeDimension,
+      zestimate: property.zestimate || property.price || property.estimatedValue,
+      taxAssessedValue: property.taxAssessedValue,
+      lastSoldDate: property.dateSold || property.lastSoldDate,
+      lastSoldPrice: property.lastSoldPrice,
+      homeStatus: property.homeStatus || property.status,
+      url: property.url || property.detailUrl || property.hdpUrl
     };
 
   } catch (error) {
