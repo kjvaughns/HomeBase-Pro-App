@@ -579,14 +579,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/chat", async (req: Request, res: Response) => {
     try {
-      const { messages } = req.body as { messages: ChatMessage[] };
+      const { messages, homeId } = req.body as { messages: ChatMessage[]; homeId?: string };
 
       if (!messages || !Array.isArray(messages)) {
         return res.status(400).json({ error: "Messages array is required" });
       }
 
+      // Build system prompt with optional HouseFax context
+      let systemPrompt = HOMEBASE_SYSTEM_PROMPT;
+      
+      if (homeId) {
+        const home = await storage.getHome(homeId);
+        if (home) {
+          const houseFaxContext = buildHouseFaxContext(home);
+          systemPrompt = `${HOMEBASE_SYSTEM_PROMPT}\n\n## Current Home Context (HouseFax)\nYou are speaking with a homeowner about their property. Reference this information naturally in your responses:\n\n${houseFaxContext}`;
+        }
+      }
+
       const chatMessages: ChatMessage[] = [
-        { role: "system", content: HOMEBASE_SYSTEM_PROMPT },
+        { role: "system", content: systemPrompt },
         ...messages,
       ];
 
@@ -641,14 +652,29 @@ Be conversational and helpful. If they just have a question, answer it. If they 
 
   app.post("/api/chat/simple", async (req: Request, res: Response) => {
     try {
-      const { message, history } = req.body as { message: string; history?: Array<{ role: string; content: string }> };
+      const { message, history, homeId } = req.body as { 
+        message: string; 
+        history?: Array<{ role: string; content: string }>;
+        homeId?: string;
+      };
 
       if (!message) {
         return res.status(400).json({ error: "Message is required" });
       }
 
+      // Build system prompt with optional HouseFax context
+      let systemPrompt = ENHANCED_CHAT_PROMPT;
+      
+      if (homeId) {
+        const home = await storage.getHome(homeId);
+        if (home) {
+          const houseFaxContext = buildHouseFaxContext(home);
+          systemPrompt = `${ENHANCED_CHAT_PROMPT}\n\n## Current Home Context (HouseFax)\nYou are speaking with a homeowner about their property. Use this information to give personalized advice:\n\n${houseFaxContext}`;
+        }
+      }
+
       const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
-        { role: "system", content: ENHANCED_CHAT_PROMPT },
+        { role: "system", content: systemPrompt },
       ];
       
       if (history) {
