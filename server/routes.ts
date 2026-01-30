@@ -159,8 +159,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         zip: zipCode || zip,
       };
       
+      console.log("Creating home with data:", JSON.stringify(homeData, null, 2));
+      
       const parsed = insertHomeSchema.safeParse(homeData);
       if (!parsed.success) {
+        console.error("Home validation failed:", JSON.stringify(parsed.error.issues, null, 2));
         return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
       }
       const home = await storage.createHome(parsed.data);

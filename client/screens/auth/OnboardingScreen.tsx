@@ -79,8 +79,8 @@ export default function OnboardingScreen() {
         zip: enrichmentData.zipCode,
         formattedAddress: enrichmentData.formattedAddress,
         placeId: enrichmentData.placeId,
-        latitude: enrichmentData.latitude,
-        longitude: enrichmentData.longitude,
+        latitude: enrichmentData.latitude?.toString(),
+        longitude: enrichmentData.longitude?.toString(),
         neighborhoodName: enrichmentData.neighborhoodName,
         countyName: enrichmentData.countyName,
         bedrooms: enrichmentData.bedrooms,
@@ -88,13 +88,13 @@ export default function OnboardingScreen() {
         squareFeet: enrichmentData.squareFeet,
         yearBuilt: enrichmentData.yearBuilt,
         propertyType: enrichmentData.propertyType?.replace(/ /g, "_"),
-        estimatedValue: enrichmentData.estimatedValue,
+        estimatedValue: enrichmentData.estimatedValue?.toString(),
         lotSize: enrichmentData.lotSize,
         zillowId: enrichmentData.zillowId,
         zillowUrl: enrichmentData.zillowUrl,
-        taxAssessedValue: enrichmentData.taxAssessedValue,
+        taxAssessedValue: enrichmentData.taxAssessedValue?.toString(),
         lastSoldDate: enrichmentData.lastSoldDate,
-        lastSoldPrice: enrichmentData.lastSoldPrice,
+        lastSoldPrice: enrichmentData.lastSoldPrice?.toString(),
       });
       goToMain();
     } catch (error) {
