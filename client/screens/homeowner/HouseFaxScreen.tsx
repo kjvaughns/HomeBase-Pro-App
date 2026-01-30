@@ -1,8 +1,8 @@
-import React, { useState } from "react";
-import { StyleSheet, View, ScrollView, Pressable, Image } from "react-native";
+import React, { useState, useEffect, useCallback } from "react";
+import { StyleSheet, View, ScrollView, Pressable, Image, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -13,15 +13,25 @@ import { GlassCard } from "@/components/GlassCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
+import { useAuthStore } from "@/state/authStore";
+import { getApiUrl } from "@/lib/query-client";
 
 type TabType = "overview" | "history" | "assets" | "documents" | "insights";
 
 interface Home {
   id: string;
-  address: string;
-  city: string;
-  state: string;
-  zip: string;
+  label?: string;
+  street?: string;
+  formattedAddress?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  bedrooms?: number;
+  bathrooms?: number;
+  squareFeet?: number;
+  yearBuilt?: number;
+  estimatedValue?: string;
+  isDefault?: boolean;
 }
 
 interface Asset {
@@ -52,11 +62,6 @@ interface Document {
   date: string;
   assetId?: string;
 }
-
-const MOCK_HOMES: Home[] = [
-  { id: "home-1", address: "123 Oak Street", city: "San Francisco", state: "CA", zip: "94102" },
-  { id: "home-2", address: "456 Pine Avenue", city: "Oakland", state: "CA", zip: "94611" },
-];
 
 const MOCK_ASSETS: Asset[] = [
   { id: "a1", name: "Central AC System", category: "HVAC", installDate: "Jun 2018", age: 7, model: "Carrier 24ACC636", warrantyExpires: "Jun 2028", icon: "wind", nextService: "Apr 2026" },
@@ -98,12 +103,43 @@ export default function HouseFaxScreen() {
   const headerHeight = useHeaderHeight();
   const navigation = useNavigation<any>();
   const { theme } = useTheme();
+  const { user } = useAuthStore();
 
-  const [selectedHome, setSelectedHome] = useState(MOCK_HOMES[0]);
+  const [homes, setHomes] = useState<Home[]>([]);
+  const [selectedHome, setSelectedHome] = useState<Home | null>(null);
+  const [isLoadingHomes, setIsLoadingHomes] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [showHomeSelector, setShowHomeSelector] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [historyFilter, setHistoryFilter] = useState<HistoryEvent["type"] | "all">("all");
+
+  const fetchHomes = useCallback(async () => {
+    if (!user?.id) {
+      setIsLoadingHomes(false);
+      return;
+    }
+    try {
+      const response = await fetch(new URL(`/api/homes/${user.id}`, getApiUrl()).href);
+      if (response.ok) {
+        const data = await response.json();
+        setHomes(data || []);
+        if (data && data.length > 0) {
+          const defaultHome = data.find((h: Home) => h.isDefault) || data[0];
+          setSelectedHome(defaultHome);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching homes:", error);
+    } finally {
+      setIsLoadingHomes(false);
+    }
+  }, [user?.id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchHomes();
+    }, [fetchHomes])
+  );
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -147,23 +183,40 @@ export default function HouseFaxScreen() {
     ? MOCK_HISTORY 
     : MOCK_HISTORY.filter((h) => h.type === historyFilter);
 
-  const renderHomeSelector = () => (
-    <Pressable
-      onPress={() => setShowHomeSelector(!showHomeSelector)}
-      style={[styles.homeSelector, { backgroundColor: theme.cardBackground }]}
-    >
-      <View style={[styles.homeSelectorIcon, { backgroundColor: Colors.accentLight }]}>
-        <Feather name="home" size={18} color={Colors.accent} />
-      </View>
-      <View style={styles.homeSelectorInfo}>
-        <ThemedText style={styles.homeSelectorAddress}>{selectedHome.address}</ThemedText>
-        <ThemedText style={[styles.homeSelectorCity, { color: theme.textSecondary }]}>
-          {selectedHome.city}, {selectedHome.state}
-        </ThemedText>
-      </View>
-      <Feather name={showHomeSelector ? "chevron-up" : "chevron-down"} size={20} color={theme.textSecondary} />
-    </Pressable>
-  );
+  const getHomeDisplayAddress = (home: Home) => {
+    return home.label || home.street || home.formattedAddress?.split(",")[0] || "My Home";
+  };
+
+  const getHomeLocation = (home: Home) => {
+    if (home.city && home.state) return `${home.city}, ${home.state}`;
+    if (home.formattedAddress) {
+      const parts = home.formattedAddress.split(",");
+      return parts.length > 1 ? parts.slice(1).join(",").trim() : "";
+    }
+    return "";
+  };
+
+  const renderHomeSelector = () => {
+    if (!selectedHome) return null;
+    
+    return (
+      <Pressable
+        onPress={() => setShowHomeSelector(!showHomeSelector)}
+        style={[styles.homeSelector, { backgroundColor: theme.cardBackground }]}
+      >
+        <View style={[styles.homeSelectorIcon, { backgroundColor: Colors.accentLight }]}>
+          <Feather name="home" size={18} color={Colors.accent} />
+        </View>
+        <View style={styles.homeSelectorInfo}>
+          <ThemedText style={styles.homeSelectorAddress}>{getHomeDisplayAddress(selectedHome)}</ThemedText>
+          <ThemedText style={[styles.homeSelectorCity, { color: theme.textSecondary }]}>
+            {getHomeLocation(selectedHome)}
+          </ThemedText>
+        </View>
+        <Feather name={showHomeSelector ? "chevron-up" : "chevron-down"} size={20} color={theme.textSecondary} />
+      </Pressable>
+    );
+  };
 
   const renderSummaryCards = () => (
     <View style={styles.summaryGrid}>
@@ -580,6 +633,38 @@ export default function HouseFaxScreen() {
     </>
   );
 
+  if (isLoadingHomes) {
+    return (
+      <ThemedView style={styles.container}>
+        <View style={[styles.loadingContainer, { paddingTop: headerHeight + Spacing.xl }]}>
+          <ActivityIndicator size="large" color={Colors.accent} />
+          <ThemedText style={[styles.loadingText, { color: theme.textSecondary }]}>
+            Loading your homes...
+          </ThemedText>
+        </View>
+      </ThemedView>
+    );
+  }
+
+  if (homes.length === 0) {
+    return (
+      <ThemedView style={styles.container}>
+        <View style={[styles.emptyContainer, { paddingTop: headerHeight + Spacing.xl }]}>
+          <View style={[styles.emptyIcon, { backgroundColor: Colors.accentLight }]}>
+            <Feather name="home" size={48} color={Colors.accent} />
+          </View>
+          <ThemedText style={styles.emptyTitle}>No Homes Added</ThemedText>
+          <ThemedText style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
+            Add your first home to start tracking your HouseFax data
+          </ThemedText>
+          <PrimaryButton onPress={() => navigation.navigate("Addresses")}>
+            Add Home
+          </PrimaryButton>
+        </View>
+      </ThemedView>
+    );
+  }
+
   return (
     <ThemedView style={styles.container}>
       <ScrollView
@@ -594,9 +679,9 @@ export default function HouseFaxScreen() {
       >
         {renderHomeSelector()}
         
-        {showHomeSelector ? (
+        {showHomeSelector && homes.length > 0 ? (
           <Animated.View entering={FadeInDown.duration(200)} style={styles.homeSelectorDropdown}>
-            {MOCK_HOMES.map((home) => (
+            {homes.map((home) => (
               <Pressable
                 key={home.id}
                 onPress={() => {
@@ -605,21 +690,21 @@ export default function HouseFaxScreen() {
                 }}
                 style={[
                   styles.homeOption,
-                  selectedHome.id === home.id && { backgroundColor: Colors.accentLight },
+                  selectedHome?.id === home.id && { backgroundColor: Colors.accentLight },
                 ]}
               >
                 <Feather 
                   name="home" 
                   size={18} 
-                  color={selectedHome.id === home.id ? Colors.accent : theme.textSecondary} 
+                  color={selectedHome?.id === home.id ? Colors.accent : theme.textSecondary} 
                 />
                 <View style={styles.homeOptionInfo}>
-                  <ThemedText style={styles.homeOptionAddress}>{home.address}</ThemedText>
+                  <ThemedText style={styles.homeOptionAddress}>{getHomeDisplayAddress(home)}</ThemedText>
                   <ThemedText style={[styles.homeOptionCity, { color: theme.textSecondary }]}>
-                    {home.city}, {home.state}
+                    {getHomeLocation(home)}
                   </ThemedText>
                 </View>
-                {selectedHome.id === home.id ? (
+                {selectedHome?.id === home.id ? (
                   <Feather name="check" size={18} color={Colors.accent} />
                 ) : null}
               </Pressable>
@@ -646,6 +731,40 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: Spacing.screenPadding,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: Spacing.screenPadding,
+  },
+  loadingText: {
+    ...Typography.body,
+    marginTop: Spacing.md,
+  },
+  emptyContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: Spacing.xl,
+  },
+  emptyIcon: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.lg,
+  },
+  emptyTitle: {
+    ...Typography.title2,
+    textAlign: "center",
+    marginBottom: Spacing.sm,
+  },
+  emptySubtitle: {
+    ...Typography.body,
+    textAlign: "center",
+    marginBottom: Spacing.xl,
   },
   homeSelector: {
     flexDirection: "row",
