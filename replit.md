@@ -1,7 +1,7 @@
 # HomeBase - Unified Home Services App
 
 ## Overview
-HomeBase is an iOS mobile application built with Expo React Native, featuring a unified platform for homeowners and service providers. It aims to streamline home service management, from finding providers and booking appointments to managing client relationships, jobs, and invoicing. The application integrates an Express.js backend with a Supabase PostgreSQL database to offer a comprehensive solution for the home services market. Key capabilities include a robust authentication system, distinct homeowner and provider portals, AI-powered assistance, and full CRUD operations for appointments, clients, jobs, and invoices.
+HomeBase is an iOS mobile application built with Expo React Native, featuring a unified platform for homeowners and service providers. It aims to streamline home service management, from finding providers and booking appointments to managing client relationships, jobs, and invoicing. The application integrates an Express.js backend with a PostgreSQL database (Replit's built-in DATABASE_URL) to offer a comprehensive solution for the home services market. Key capabilities include a robust authentication system, distinct homeowner and provider portals, AI-powered assistance, and full CRUD operations for appointments, clients, jobs, and invoices.
 
 ## User Preferences
 - No emojis in the app
