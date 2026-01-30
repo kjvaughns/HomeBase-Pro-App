@@ -37,7 +37,21 @@ The application is structured into a client-side React Native Expo app and an Ex
 ### Technical Implementations
 - **Authentication**: Backend-driven user management with email/password signup (bcrypt hashing), JWT-like session management, and a password reset flow. Includes an onboarding process for first property setup.
 - **Access Control**: Three distinct access states: Guest Mode, Homeowner Mode, and Provider Mode, each with tailored functionalities.
-- **AI Integration**: "Ask HomeBase AI" feature leverages OpenAI GPT-4o-mini via Replit AI Integrations for instant answers on home maintenance and repairs.
+- **AI Integration**: "Ask HomeBase AI" feature leverages OpenAI GPT-4o-mini via Replit AI Integrations for instant answers on home maintenance and repairs. AI chat endpoints accept optional `homeId` to include HouseFax property context for personalized responses.
+- **HouseFax Intelligence Layer**: Unified property data enrichment system combining external APIs:
+  - **Zillow API** (via RapidAPI Real Estate 101): Property data including beds, baths, sqft, year built, Zestimate, last sold price, property type
+  - **Google Places API**: Address autocomplete and normalization
+  - **Google Geocoding API**: Lat/lng coordinates, neighborhood, county, formatted address
+  - **Auto-Enrichment**: When a home is added or enriched, both APIs are called to populate HouseFax fields
+  - **AI Context**: HouseFax data is injected into AI system prompts for property-aware conversations
+  - **API Endpoints**:
+    - `GET /api/housefax/autocomplete?q=address` - Google Places autocomplete
+    - `GET /api/housefax/place/:placeId` - Get place details from Google
+    - `POST /api/housefax/geocode` - Geocode an address
+    - `POST /api/housefax/zillow` - Fetch Zillow property data
+    - `POST /api/housefax/enrich` - Full enrichment (Zillow + Google)
+    - `POST /api/homes/:id/enrich` - Enrich existing home with HouseFax data
+    - `GET /api/homes/:id/housefax-context` - Get AI context for a home
 - **AI Smart Intake**: Natural language problem descriptions are analyzed by AI to classify service categories, generate follow-up questions, estimate price ranges, and match with top providers.
 - **Dynamic Quote Engine**: AI-powered price estimates based on service type, home data, location, and complexity. Generates realistic ranges with material and labor breakdowns.
 - **Smart Provider Matching**: Algorithm ranks providers using trust scores (job completion rate, on-time performance, satisfaction ratings) and shows top 3-5 curated matches instead of full directory.
@@ -77,6 +91,8 @@ The application is structured into a client-side React Native Expo app and an Ex
 - **OpenAI GPT-4o-mini**: Integrated via Replit AI Integrations for the AI chat functionality.
 - **Stripe**: Backend integration for payment processing, including product management, payment intents, customer creation, checkout sessions, and customer portals. Uses `stripe-replit-sync`.
 - **RevenueCat**: Mobile subscription management using `react-native-purchases` for offerings, purchases, restores, and customer information.
+- **RapidAPI (Real Estate 101)**: Zillow property data via `/api/property-details/byaddress` endpoint. Requires `RAPIDAPI_KEY` secret.
+- **Google APIs**: Places Autocomplete and Geocoding APIs for address handling. Requires `GOOGLE_API_KEY` secret.
 - **Zustand**: Client-side state management library.
 - **React Query**: Used for data fetching and caching in the client application, especially within the Provider Portal.
 - **Expo**: Framework for building universal React applications.

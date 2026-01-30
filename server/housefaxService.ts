@@ -46,85 +46,100 @@ interface HouseFaxEnrichmentResult {
   errors?: string[];
 }
 
-// Zillow API via RapidAPI
-// Note: Different Zillow APIs on RapidAPI have different endpoints and formats
-// Set RAPIDAPI_ZILLOW_HOST to match your subscribed API
+// Zillow API via RapidAPI - using Real Estate 101 property-details endpoint
 export async function fetchZillowPropertyData(address: string): Promise<ZillowPropertyData | null> {
   const rapidApiKey = process.env.RAPIDAPI_KEY;
-  const zillowHost = process.env.RAPIDAPI_ZILLOW_HOST;
   
   if (!rapidApiKey) {
     console.error('RAPIDAPI_KEY not configured');
     return null;
   }
 
-  // If no Zillow host configured, return null gracefully
-  if (!zillowHost) {
-    console.log('No RAPIDAPI_ZILLOW_HOST configured - Zillow enrichment skipped');
-    return null;
-  }
-
   try {
-    // Try common Zillow API patterns based on the configured host
-    let apiUrl: string;
+    // Format address for Real Estate 101 API: replace spaces/commas with dashes
+    // Example: "188 Shaw St, New London, CT 06320" -> "188-Shaw-St-New-London-CT-06320"
+    const formattedAddress = address
+      .replace(/,/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/--+/g, '-');
     
-    if (zillowHost.includes('real-estate101')) {
-      // Real Estate 101 requires a full Zillow search URL with searchQueryState
-      // This API is better for bulk search results, not individual property lookup
-      console.log('Real Estate 101 API requires Zillow search URL format - not suitable for address lookup');
-      return null;
-    } else if (zillowHost.includes('zillow56') || zillowHost.includes('zillow-com')) {
-      // Standard Zillow API format
-      apiUrl = `https://${zillowHost}/search?location=${encodeURIComponent(address)}`;
-    } else {
-      // Generic fallback
-      apiUrl = `https://${zillowHost}/search?location=${encodeURIComponent(address)}`;
-    }
+    const apiUrl = `https://real-estate101.p.rapidapi.com/api/property-details/byaddress?address=${encodeURIComponent(formattedAddress)}`;
     
-    console.log('Calling Zillow API:', zillowHost, 'for:', address);
+    console.log('Calling Real Estate 101 API for:', address, '-> Formatted:', formattedAddress);
     
-    const searchResponse = await fetch(apiUrl, {
+    const response = await fetch(apiUrl, {
       method: 'GET',
       headers: {
         'X-RapidAPI-Key': rapidApiKey,
-        'X-RapidAPI-Host': zillowHost
+        'X-RapidAPI-Host': 'real-estate101.p.rapidapi.com'
       }
     });
 
-    if (!searchResponse.ok) {
-      const errorText = await searchResponse.text();
-      console.error('Zillow search failed:', searchResponse.status, errorText);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Zillow API failed:', response.status, errorText);
       return null;
     }
 
-    const searchData = await searchResponse.json();
+    const data = await response.json();
     
-    // Handle various response formats
-    const results = searchData.results || searchData.props || searchData.data || [];
-    const propertyList = Array.isArray(results) ? results : (results.properties || []);
+    // Check if we got valid property data
+    if (!data || data.error || !data.success === false) {
+      console.log('No property data returned for:', address);
+      if (data.error) console.log('API error:', data.error);
+    }
+
+    // Extract property details from Real Estate 101 response
+    // The response structure may vary, so we handle multiple formats
+    const property = data.property || data.data || data;
     
-    if (propertyList.length === 0) {
-      console.log('No Zillow properties found for address:', address);
+    if (!property || typeof property !== 'object') {
+      console.log('Invalid property data structure for:', address);
       return null;
     }
 
-    const property = propertyList[0];
-    
+    console.log('Zillow data received for property');
+
+    // Handle nested address object
+    let addressStr = '';
+    if (typeof property.address === 'object' && property.address) {
+      const addr = property.address;
+      addressStr = [addr.streetAddress, addr.city, addr.state, addr.zipcode].filter(Boolean).join(', ');
+    } else {
+      addressStr = property.streetAddress || property.address || property.fullAddress || '';
+    }
+
+    // Handle nested livingArea object
+    let livingAreaValue: number | undefined;
+    if (typeof property.livingArea === 'object' && property.livingArea) {
+      livingAreaValue = property.livingArea.value;
+    } else {
+      livingAreaValue = property.livingArea || property.livingAreaValue || property.sqft || property.squareFeet;
+    }
+
+    // Handle nested lotSize object
+    let lotSizeValue: number | undefined;
+    if (typeof property.lotSize === 'object' && property.lotSize) {
+      lotSizeValue = property.lotSize.value;
+    } else {
+      lotSizeValue = property.lotSize || property.lotAreaValue || property.lotSqft;
+    }
+
     return {
-      zpid: String(property.zpid || property.id || ''),
-      address: property.address || property.streetAddress || property.addressStreet,
-      bedrooms: property.bedrooms || property.beds,
-      bathrooms: property.bathrooms || property.baths,
-      livingArea: property.livingArea || property.sqft || property.livingAreaSqFt,
-      lotSize: property.lotSize || property.lotAreaSqFt,
-      yearBuilt: property.yearBuilt,
-      propertyType: property.propertyType || property.homeType || property.propertyTypeDimension,
-      zestimate: property.zestimate || property.price || property.estimatedValue,
-      taxAssessedValue: property.taxAssessedValue,
-      lastSoldDate: property.dateSold || property.lastSoldDate,
-      lastSoldPrice: property.lastSoldPrice,
+      zpid: String(property.zpid || property.zillowId || property.id || ''),
+      address: addressStr,
+      bedrooms: property.bedrooms || property.beds || property.bedroomCount,
+      bathrooms: property.bathrooms || property.baths || property.bathroomCount,
+      livingArea: livingAreaValue,
+      lotSize: lotSizeValue,
+      yearBuilt: property.yearBuilt || property.yearBuiltRange,
+      propertyType: property.homeType || property.propertyType || property.propertyTypeDimension,
+      zestimate: property.zestimate || property.price || property.estimatedValue || property.priceEstimate,
+      taxAssessedValue: property.taxAssessedValue || property.taxAssessment,
+      lastSoldDate: property.lastSoldDate || property.dateSold,
+      lastSoldPrice: property.lastSoldPrice || property.soldPrice,
       homeStatus: property.homeStatus || property.status,
-      url: property.url || property.detailUrl || property.hdpUrl
+      url: property.url || property.hdpUrl || property.zillowUrl
     };
 
   } catch (error) {
