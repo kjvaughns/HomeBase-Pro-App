@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -8,6 +8,7 @@ import {
   Modal,
   ScrollView,
   Image,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -27,13 +28,17 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useAuthStore } from "@/state/authStore";
+import { getApiUrl } from "@/lib/query-client";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 interface Home {
   id: string;
-  name: string;
-  address: string;
+  label?: string;
+  street?: string;
+  formattedAddress?: string;
+  city?: string;
+  state?: string;
 }
 
 interface ServiceEntry {
@@ -62,11 +67,6 @@ interface PastProvider {
   rating: number;
   lastService: string;
 }
-
-const MOCK_HOMES: Home[] = [
-  { id: "home-1", name: "Main House", address: "123 Test Street, San Francisco" },
-  { id: "home-2", name: "Beach Cottage", address: "456 Ocean Drive, Santa Cruz" },
-];
 
 const MOCK_SERVICE_ENTRIES: ServiceEntry[] = [
   { id: "se-1", homeId: "home-1", title: "HVAC Maintenance", provider: { id: "p-1", name: "Bay Area HVAC Pros" }, date: "2026-01-20", status: "completed", amount: 185, category: "HVAC", type: "service", notes: "Annual maintenance, replaced filter, cleaned coils" },
@@ -122,17 +122,57 @@ export default function ServiceHistoryScreen() {
   const { theme } = useTheme();
   const { user } = useAuthStore();
 
-  const [selectedHomeId, setSelectedHomeId] = useState(MOCK_HOMES[0].id);
+  const [homes, setHomes] = useState<Home[]>([]);
+  const [selectedHome, setSelectedHome] = useState<Home | null>(null);
+  const [isLoadingHomes, setIsLoadingHomes] = useState(true);
   const [showHomeSelector, setShowHomeSelector] = useState(false);
   const [activeTab, setActiveTab] = useState<"timeline" | "providers">("timeline");
   const [activeFilter, setActiveFilter] = useState("All");
   const [selectedEntry, setSelectedEntry] = useState<ServiceEntry | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const selectedHome = MOCK_HOMES.find((h) => h.id === selectedHomeId) || MOCK_HOMES[0];
+  const getHomeDisplayName = (home: Home) => {
+    return home.label || home.street || home.formattedAddress?.split(",")[0] || "My Home";
+  };
+
+  const getHomeLocation = (home: Home) => {
+    if (home.city && home.state) return `${home.city}, ${home.state}`;
+    if (home.formattedAddress) {
+      const parts = home.formattedAddress.split(",");
+      return parts.length > 1 ? parts.slice(1).join(",").trim() : "";
+    }
+    return "";
+  };
+
+  const fetchHomes = useCallback(async () => {
+    if (!user?.id) {
+      setIsLoadingHomes(false);
+      return;
+    }
+    try {
+      const response = await fetch(new URL(`/api/homes/${user.id}`, getApiUrl()).href);
+      if (response.ok) {
+        const data = await response.json();
+        setHomes(data || []);
+        if (data && data.length > 0) {
+          setSelectedHome(data[0]);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching homes:", error);
+    } finally {
+      setIsLoadingHomes(false);
+    }
+  }, [user?.id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchHomes();
+    }, [fetchHomes])
+  );
 
   const filteredEntries = MOCK_SERVICE_ENTRIES
-    .filter((e) => e.homeId === selectedHomeId)
+    .filter((e) => selectedHome ? e.homeId === selectedHome.id : true)
     .filter((e) => {
       if (activeFilter === "All") return true;
       if (activeFilter === "Completed") return e.status === "completed";
@@ -169,19 +209,19 @@ export default function ServiceHistoryScreen() {
   const renderTimelineEntry = (entry: ServiceEntry, index: number) => (
     <Animated.View key={entry.id} entering={FadeInDown.delay(index * 50).duration(300)}>
       <Pressable onPress={() => handleEntryPress(entry)}>
-        <View style={[styles.entryCard, { backgroundColor: theme.cardBackground }]}>
+        <View style={[styles.entryCard, { backgroundColor: theme.cardBackground, borderWidth: 1, borderColor: theme.border }]}>
           <View style={[styles.entryIcon, { backgroundColor: Colors.accentLight }]}>
             <Feather name={CATEGORY_ICONS[entry.category] || "tool"} size={18} color={Colors.accent} />
           </View>
           <View style={styles.entryContent}>
             <View style={styles.entryHeader}>
-              <ThemedText style={styles.entryTitle} numberOfLines={1}>{entry.title}</ThemedText>
+              <ThemedText style={[styles.entryTitle, { color: theme.text }]} numberOfLines={1}>{entry.title}</ThemedText>
               <StatusPill status={mapStatusToType(entry.status)} label={entry.status} size="small" />
             </View>
             <ThemedText style={[styles.entryProvider, { color: theme.textSecondary }]}>{entry.provider.name}</ThemedText>
             <View style={styles.entryMeta}>
               <ThemedText style={[styles.entryDate, { color: theme.textSecondary }]}>{formatDate(entry.date)}</ThemedText>
-              {entry.amount ? <ThemedText style={styles.entryAmount}>${entry.amount}</ThemedText> : null}
+              {entry.amount ? <ThemedText style={[styles.entryAmount, { color: Colors.accent }]}>${entry.amount}</ThemedText> : null}
             </View>
           </View>
           <Feather name="chevron-right" size={20} color={theme.textTertiary} />
@@ -352,17 +392,17 @@ export default function ServiceHistoryScreen() {
       <Pressable style={styles.modalOverlay} onPress={() => setShowHomeSelector(false)}>
         <View style={[styles.modalContent, { backgroundColor: theme.backgroundDefault }]}>
           <ThemedText style={styles.modalTitle}>Select Home</ThemedText>
-          {MOCK_HOMES.map((home) => (
+          {homes.map((home) => (
             <Pressable
               key={home.id}
-              style={[styles.homeOption, selectedHomeId === home.id && { backgroundColor: Colors.accentLight }]}
-              onPress={() => { setSelectedHomeId(home.id); setShowHomeSelector(false); }}
+              style={[styles.homeOption, selectedHome?.id === home.id && { backgroundColor: Colors.accentLight }]}
+              onPress={() => { setSelectedHome(home); setShowHomeSelector(false); }}
             >
               <View>
-                <ThemedText style={styles.homeOptionName}>{home.name}</ThemedText>
-                <ThemedText style={[styles.homeOptionAddress, { color: theme.textSecondary }]}>{home.address}</ThemedText>
+                <ThemedText style={styles.homeOptionName}>{getHomeDisplayName(home)}</ThemedText>
+                <ThemedText style={[styles.homeOptionAddress, { color: theme.textSecondary }]}>{getHomeLocation(home)}</ThemedText>
               </View>
-              {selectedHomeId === home.id ? <Feather name="check" size={20} color={Colors.accent} /> : null}
+              {selectedHome?.id === home.id ? <Feather name="check" size={20} color={Colors.accent} /> : null}
             </Pressable>
           ))}
         </View>
@@ -370,12 +410,44 @@ export default function ServiceHistoryScreen() {
     </Modal>
   );
 
+  if (isLoadingHomes) {
+    return (
+      <ThemedView style={styles.container}>
+        <View style={[styles.loadingContainer, { paddingTop: headerHeight + Spacing.xl }]}>
+          <ActivityIndicator size="large" color={Colors.accent} />
+          <ThemedText style={[styles.loadingText, { color: theme.textSecondary }]}>
+            Loading...
+          </ThemedText>
+        </View>
+      </ThemedView>
+    );
+  }
+
+  if (homes.length === 0) {
+    return (
+      <ThemedView style={styles.container}>
+        <View style={[styles.emptyState, { paddingTop: headerHeight + Spacing.xl }]}>
+          <View style={[styles.emptyIcon, { backgroundColor: Colors.accentLight }]}>
+            <Feather name="clock" size={48} color={Colors.accent} />
+          </View>
+          <ThemedText style={styles.emptyTitle}>No Homes Added</ThemedText>
+          <ThemedText style={[styles.emptyDescription, { color: theme.textSecondary }]}>
+            Add your first home to start tracking your service history
+          </ThemedText>
+          <PrimaryButton onPress={() => navigation.navigate("Addresses")}>
+            Add Home
+          </PrimaryButton>
+        </View>
+      </ThemedView>
+    );
+  }
+
   return (
     <ThemedView style={styles.container}>
       <View style={[styles.header, { paddingTop: headerHeight + Spacing.md }]}>
         <Pressable style={[styles.homeSelector, { backgroundColor: theme.cardBackground }]} onPress={() => setShowHomeSelector(true)}>
           <Feather name="home" size={18} color={Colors.accent} />
-          <ThemedText style={styles.homeSelectorText}>{selectedHome.name}</ThemedText>
+          <ThemedText style={styles.homeSelectorText}>{selectedHome ? getHomeDisplayName(selectedHome) : "Select Home"}</ThemedText>
           <Feather name="chevron-down" size={18} color={theme.textSecondary} />
         </Pressable>
 
@@ -456,6 +528,8 @@ export default function ServiceHistoryScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  loadingContainer: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: Spacing.screenPadding },
+  loadingText: { ...Typography.body, marginTop: Spacing.md },
   header: { paddingHorizontal: Spacing.screenPadding },
   homeSelector: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full, marginBottom: Spacing.md, gap: Spacing.sm },
   homeSelectorText: { ...Typography.subhead, fontWeight: "500" },
