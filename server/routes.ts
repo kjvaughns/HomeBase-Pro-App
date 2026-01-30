@@ -96,10 +96,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Invalid email or password" });
       }
 
-      // Fetch provider profile if user is a provider
-      let providerProfile = null;
-      if (user.isProvider) {
-        providerProfile = await storage.getProviderByUserId(user.id);
+      // Always try to fetch provider profile (in case isProvider flag is out of sync)
+      let providerProfile = await storage.getProviderByUserId(user.id);
+      
+      // If provider profile found but user.isProvider is false, update the user flag
+      if (providerProfile && !user.isProvider) {
+        await storage.updateUser(user.id, { isProvider: true });
+        user.isProvider = true;
       }
 
       res.json({ user: formatUserResponse(user), providerProfile });
