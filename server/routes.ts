@@ -8,7 +8,15 @@ import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
 import { db } from "./db";
 import { sql, eq } from "drizzle-orm";
-import { appointments, maintenanceReminders } from "@shared/schema";
+import { appointments, maintenanceReminders, homes } from "@shared/schema";
+import { 
+  searchPlaces, 
+  getPlaceDetails, 
+  geocodeAddress, 
+  fetchZillowPropertyData, 
+  enrichPropertyData,
+  buildHouseFaxContext 
+} from "./housefaxService";
 
 interface IdParams { id: string; }
 interface UserIdParams { userId: string; }
@@ -194,6 +202,162 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to delete home" });
     }
   });
+
+  // ============ HouseFax API Endpoints ============
+
+  // Google Places autocomplete for address input
+  app.get("/api/housefax/autocomplete", async (req: Request, res: Response) => {
+    try {
+      const query = req.query.q as string;
+      if (!query || query.length < 3) {
+        return res.json({ predictions: [] });
+      }
+      const predictions = await searchPlaces(query);
+      res.json({ predictions });
+    } catch (error) {
+      console.error("Address autocomplete error:", error);
+      res.status(500).json({ error: "Failed to search addresses" });
+    }
+  });
+
+  // Get place details from Google place ID
+  app.get("/api/housefax/place/:placeId", async (req: Request<{ placeId: string }>, res: Response) => {
+    try {
+      const details = await getPlaceDetails(req.params.placeId);
+      if (!details) {
+        return res.status(404).json({ error: "Place not found" });
+      }
+      res.json({ place: details });
+    } catch (error) {
+      console.error("Get place details error:", error);
+      res.status(500).json({ error: "Failed to get place details" });
+    }
+  });
+
+  // Geocode an address
+  app.post("/api/housefax/geocode", async (req: Request, res: Response) => {
+    try {
+      const { address } = req.body;
+      if (!address) {
+        return res.status(400).json({ error: "Address is required" });
+      }
+      const result = await geocodeAddress(address);
+      if (!result) {
+        return res.status(404).json({ error: "Could not geocode address" });
+      }
+      res.json({ result });
+    } catch (error) {
+      console.error("Geocode error:", error);
+      res.status(500).json({ error: "Failed to geocode address" });
+    }
+  });
+
+  // Fetch Zillow property data
+  app.post("/api/housefax/zillow", async (req: Request, res: Response) => {
+    try {
+      const { address } = req.body;
+      if (!address) {
+        return res.status(400).json({ error: "Address is required" });
+      }
+      const property = await fetchZillowPropertyData(address);
+      if (!property) {
+        return res.json({ property: null, message: "No property data found" });
+      }
+      res.json({ property });
+    } catch (error) {
+      console.error("Zillow fetch error:", error);
+      res.status(500).json({ error: "Failed to fetch property data" });
+    }
+  });
+
+  // Full property enrichment (Zillow + Google)
+  app.post("/api/housefax/enrich", async (req: Request, res: Response) => {
+    try {
+      const { address } = req.body;
+      if (!address) {
+        return res.status(400).json({ error: "Address is required" });
+      }
+      const enrichment = await enrichPropertyData(address);
+      res.json(enrichment);
+    } catch (error) {
+      console.error("Property enrichment error:", error);
+      res.status(500).json({ error: "Failed to enrich property data" });
+    }
+  });
+
+  // Enrich an existing home with HouseFax data
+  app.post("/api/homes/:id/enrich", async (req: Request<IdParams>, res: Response) => {
+    try {
+      const home = await storage.getHome(req.params.id);
+      if (!home) {
+        return res.status(404).json({ error: "Home not found" });
+      }
+
+      const fullAddress = `${home.street}, ${home.city}, ${home.state} ${home.zip}`;
+      const enrichment = await enrichPropertyData(fullAddress);
+
+      // Prepare update data
+      const updateData: Record<string, unknown> = {
+        housefaxEnrichedAt: new Date()
+      };
+
+      // Apply Zillow data if available
+      if (enrichment.zillow) {
+        const z = enrichment.zillow;
+        if (z.bedrooms && !home.bedrooms) updateData.bedrooms = z.bedrooms;
+        if (z.bathrooms && !home.bathrooms) updateData.bathrooms = z.bathrooms;
+        if (z.livingArea && !home.squareFeet) updateData.squareFeet = z.livingArea;
+        if (z.yearBuilt && !home.yearBuilt) updateData.yearBuilt = z.yearBuilt;
+        if (z.lotSize) updateData.lotSize = z.lotSize;
+        if (z.zestimate) updateData.estimatedValue = String(z.zestimate);
+        if (z.zpid) updateData.zillowId = z.zpid;
+        if (z.url) updateData.zillowUrl = z.url;
+        if (z.taxAssessedValue) updateData.taxAssessedValue = String(z.taxAssessedValue);
+        if (z.lastSoldDate) updateData.lastSoldDate = z.lastSoldDate;
+        if (z.lastSoldPrice) updateData.lastSoldPrice = String(z.lastSoldPrice);
+      }
+
+      // Apply Google data if available
+      if (enrichment.google) {
+        const g = enrichment.google;
+        if (g.latitude) updateData.latitude = String(g.latitude);
+        if (g.longitude) updateData.longitude = String(g.longitude);
+        if (g.placeId) updateData.placeId = g.placeId;
+        if (g.formattedAddress) updateData.formattedAddress = g.formattedAddress;
+        if (g.neighborhood) updateData.neighborhoodName = g.neighborhood;
+        if (g.county) updateData.countyName = g.county;
+      }
+
+      // Update the home
+      const updatedHome = await storage.updateHome(req.params.id, updateData);
+      
+      res.json({ 
+        home: updatedHome ? formatHomeResponse(updatedHome) : null,
+        enrichment,
+        fieldsUpdated: Object.keys(updateData).length - 1 // -1 for timestamp
+      });
+    } catch (error) {
+      console.error("Home enrichment error:", error);
+      res.status(500).json({ error: "Failed to enrich home" });
+    }
+  });
+
+  // Get HouseFax context for AI
+  app.get("/api/homes/:id/housefax-context", async (req: Request<IdParams>, res: Response) => {
+    try {
+      const home = await storage.getHome(req.params.id);
+      if (!home) {
+        return res.status(404).json({ error: "Home not found" });
+      }
+      const context = buildHouseFaxContext(home);
+      res.json({ context });
+    } catch (error) {
+      console.error("Get HouseFax context error:", error);
+      res.status(500).json({ error: "Failed to get HouseFax context" });
+    }
+  });
+
+  // ============ End HouseFax API Endpoints ============
 
   app.get("/api/categories", async (req: Request, res: Response) => {
     try {
@@ -601,11 +765,11 @@ Be conversational and helpful. If they just have a question, answer it. If they 
         }
 
         if (jobs && jobs.length > 0) {
-          const completedJobs = jobs.filter((j: { status: string; finalPrice: string | null }) => 
+          const completedJobs = jobs.filter(j => 
             j.status === 'completed' && j.finalPrice
           );
           if (completedJobs.length > 0) {
-            const avgPrice = completedJobs.reduce((sum: number, j: { finalPrice: string | null }) => 
+            const avgPrice = completedJobs.reduce((sum, j) => 
               sum + parseFloat(j.finalPrice || '0'), 0
             ) / completedJobs.length;
             businessContext += `Average completed job price: $${avgPrice.toFixed(2)}\n`;

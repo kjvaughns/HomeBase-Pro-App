@@ -43,6 +43,29 @@ export const homes = pgTable("homes", {
   squareFeet: integer("square_feet"),
   yearBuilt: integer("year_built"),
   isDefault: boolean("is_default").default(false),
+  
+  // HouseFax enrichment fields - Zillow data
+  lotSize: integer("lot_size"), // in sqft
+  estimatedValue: decimal("estimated_value", { precision: 12, scale: 2 }),
+  zillowId: text("zillow_id"),
+  zillowUrl: text("zillow_url"),
+  taxAssessedValue: decimal("tax_assessed_value", { precision: 12, scale: 2 }),
+  lastSoldDate: text("last_sold_date"),
+  lastSoldPrice: decimal("last_sold_price", { precision: 12, scale: 2 }),
+  
+  // HouseFax enrichment fields - Google data
+  latitude: decimal("latitude", { precision: 10, scale: 7 }),
+  longitude: decimal("longitude", { precision: 10, scale: 7 }),
+  placeId: text("place_id"),
+  formattedAddress: text("formatted_address"),
+  neighborhoodName: text("neighborhood_name"),
+  countyName: text("county_name"),
+  
+  // HouseFax AI-accumulated data
+  housefaxData: text("housefax_data"), // JSON: systems, materials, known issues, etc.
+  housefaxScore: integer("housefax_score"), // Home health score (0-100)
+  housefaxEnrichedAt: timestamp("housefax_enriched_at"),
+  
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
