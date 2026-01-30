@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { queryClient } from "@/lib/query-client";
 
 export type UserRole = "guest" | "homeowner" | "provider";
 export type ProviderStatus = "draft" | "pending" | "approved" | "rejected" | "paused";
@@ -69,6 +70,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     };
     set(newState);
     saveToStorage(get());
+    queryClient.clear();
   },
 
   setActiveRole: (role: UserRole) => {
