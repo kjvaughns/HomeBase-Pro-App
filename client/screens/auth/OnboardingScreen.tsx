@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, View, Alert } from "react-native";
+import { StyleSheet, View, Alert, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { CommonActions, useNavigation } from "@react-navigation/native";
@@ -10,10 +10,20 @@ import { TextField } from "@/components/TextField";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { SecondaryButton } from "@/components/SecondaryButton";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
+import { AddressAutocomplete, EnrichmentData } from "@/components/AddressAutocomplete";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest } from "@/lib/query-client";
-import { Spacing, Colors, BorderRadius } from "@/constants/theme";
+import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
+
+interface PropertyInfo {
+  bedrooms?: number;
+  bathrooms?: number;
+  squareFeet?: number;
+  yearBuilt?: number;
+  propertyType?: string;
+  estimatedValue?: number;
+}
 
 export default function OnboardingScreen() {
   const { theme } = useTheme();
@@ -23,12 +33,9 @@ export default function OnboardingScreen() {
 
   const [step, setStep] = useState<"welcome" | "add-home">("welcome");
   const [nickname, setNickname] = useState("My Home");
-  const [address, setAddress] = useState("");
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("");
-  const [zipCode, setZipCode] = useState("");
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [enrichmentData, setEnrichmentData] = useState<EnrichmentData | null>(null);
+  const [propertyInfo, setPropertyInfo] = useState<PropertyInfo | null>(null);
 
   const goToMain = () => {
     navigation.dispatch(
@@ -39,40 +46,55 @@ export default function OnboardingScreen() {
     );
   };
 
-  const validate = () => {
-    const newErrors: Record<string, string> = {};
-    
-    if (!address.trim()) {
-      newErrors.address = "Street address is required";
+  const handleAddressSelected = (data: EnrichmentData) => {
+    setEnrichmentData(data);
+    if (data.bedrooms || data.squareFeet || data.yearBuilt || data.estimatedValue) {
+      setPropertyInfo({
+        bedrooms: data.bedrooms,
+        bathrooms: data.bathrooms,
+        squareFeet: data.squareFeet,
+        yearBuilt: data.yearBuilt,
+        propertyType: data.propertyType,
+        estimatedValue: data.estimatedValue,
+      });
+    } else {
+      setPropertyInfo(null);
     }
-    if (!city.trim()) {
-      newErrors.city = "City is required";
-    }
-    if (!state.trim()) {
-      newErrors.state = "State is required";
-    }
-    if (!zipCode.trim()) {
-      newErrors.zipCode = "ZIP code is required";
-    } else if (!/^\d{5}(-\d{4})?$/.test(zipCode.trim())) {
-      newErrors.zipCode = "Enter a valid ZIP code";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
   };
 
   const handleAddHome = async () => {
-    if (!validate() || !user) return;
+    if (!enrichmentData || !user) {
+      Alert.alert("Missing Address", "Please search and select an address to continue.");
+      return;
+    }
 
     setLoading(true);
     try {
       await apiRequest("POST", "/api/homes", {
         userId: user.id,
-        nickname: nickname.trim() || "My Home",
-        address: address.trim(),
-        city: city.trim(),
-        state: state.trim(),
-        zipCode: zipCode.trim(),
+        label: nickname.trim() || "My Home",
+        street: enrichmentData.street,
+        city: enrichmentData.city,
+        state: enrichmentData.state,
+        zip: enrichmentData.zipCode,
+        formattedAddress: enrichmentData.formattedAddress,
+        placeId: enrichmentData.placeId,
+        latitude: enrichmentData.latitude,
+        longitude: enrichmentData.longitude,
+        neighborhoodName: enrichmentData.neighborhoodName,
+        countyName: enrichmentData.countyName,
+        bedrooms: enrichmentData.bedrooms,
+        bathrooms: enrichmentData.bathrooms,
+        squareFeet: enrichmentData.squareFeet,
+        yearBuilt: enrichmentData.yearBuilt,
+        propertyType: enrichmentData.propertyType?.replace(/ /g, "_"),
+        estimatedValue: enrichmentData.estimatedValue,
+        lotSize: enrichmentData.lotSize,
+        zillowId: enrichmentData.zillowId,
+        zillowUrl: enrichmentData.zillowUrl,
+        taxAssessedValue: enrichmentData.taxAssessedValue,
+        lastSoldDate: enrichmentData.lastSoldDate,
+        lastSoldPrice: enrichmentData.lastSoldPrice,
       });
       goToMain();
     } catch (error) {
@@ -82,12 +104,16 @@ export default function OnboardingScreen() {
     }
   };
 
-  const clearError = (field: string) => {
-    if (errors[field]) {
-      const newErrors = { ...errors };
-      delete newErrors[field];
-      setErrors(newErrors);
-    }
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
+  const formatNumber = (value: number) => {
+    return new Intl.NumberFormat("en-US").format(value);
   };
 
   if (step === "welcome") {
@@ -141,7 +167,7 @@ export default function OnboardingScreen() {
             Add your home
           </ThemedText>
           <ThemedText type="body" style={[styles.formSubtitle, { color: theme.textSecondary }]}>
-            Enter your home address to find local service providers
+            Search for your address to find local service providers
           </ThemedText>
         </View>
 
@@ -155,75 +181,113 @@ export default function OnboardingScreen() {
             testID="input-nickname"
           />
 
-          <TextField
-            label="Street Address"
-            placeholder="123 Main Street"
-            leftIcon="map-pin"
-            autoComplete="street-address"
-            value={address}
-            onChangeText={(text) => {
-              setAddress(text);
-              clearError("address");
-            }}
-            error={errors.address}
-            testID="input-address"
-          />
-
-          <TextField
-            label="City"
-            placeholder="City"
-            leftIcon="navigation"
-            autoComplete="postal-address-locality"
-            value={city}
-            onChangeText={(text) => {
-              setCity(text);
-              clearError("city");
-            }}
-            error={errors.city}
-            testID="input-city"
-          />
-
-          <View style={styles.row}>
-            <View style={styles.stateField}>
-              <TextField
-                label="State"
-                placeholder="CA"
-                autoComplete="postal-address-region"
-                autoCapitalize="characters"
-                maxLength={2}
-                value={state}
-                onChangeText={(text) => {
-                  setState(text.toUpperCase());
-                  clearError("state");
-                }}
-                error={errors.state}
-                testID="input-state"
-              />
-            </View>
-            <View style={styles.zipField}>
-              <TextField
-                label="ZIP Code"
-                placeholder="12345"
-                keyboardType="number-pad"
-                autoComplete="postal-code"
-                maxLength={10}
-                value={zipCode}
-                onChangeText={(text) => {
-                  setZipCode(text);
-                  clearError("zipCode");
-                }}
-                error={errors.zipCode}
-                testID="input-zip"
-              />
-            </View>
+          <View style={styles.fieldContainer}>
+            <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Address</ThemedText>
+            <AddressAutocomplete
+              onAddressSelected={handleAddressSelected}
+              placeholder="Search for your address..."
+              testID="input-address-search"
+            />
           </View>
+
+          {enrichmentData ? (
+            <View style={[styles.addressConfirmation, { backgroundColor: Colors.accentLight, borderColor: Colors.accent }]}>
+              <View style={styles.addressConfirmHeader}>
+                <Feather name="check-circle" size={20} color={Colors.accent} />
+                <ThemedText style={styles.addressConfirmTitle}>Address Found</ThemedText>
+              </View>
+              <ThemedText style={[styles.addressConfirmText, { color: theme.text }]}>
+                {enrichmentData.street}
+              </ThemedText>
+              <ThemedText style={[styles.addressConfirmSubtext, { color: theme.textSecondary }]}>
+                {enrichmentData.city}, {enrichmentData.state} {enrichmentData.zipCode}
+              </ThemedText>
+            </View>
+          ) : null}
+
+          {propertyInfo ? (
+            <View style={[styles.propertyCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
+              <View style={styles.propertyHeader}>
+                <Feather name="info" size={18} color={Colors.accent} />
+                <ThemedText style={styles.propertyTitle}>Property Details</ThemedText>
+              </View>
+              
+              <View style={styles.propertyGrid}>
+                {propertyInfo.bedrooms ? (
+                  <View style={styles.propertyItem}>
+                    <ThemedText style={[styles.propertyValue, { color: theme.text }]}>
+                      {propertyInfo.bedrooms}
+                    </ThemedText>
+                    <ThemedText style={[styles.propertyLabel, { color: theme.textSecondary }]}>
+                      Beds
+                    </ThemedText>
+                  </View>
+                ) : null}
+                
+                {propertyInfo.bathrooms ? (
+                  <View style={styles.propertyItem}>
+                    <ThemedText style={[styles.propertyValue, { color: theme.text }]}>
+                      {propertyInfo.bathrooms}
+                    </ThemedText>
+                    <ThemedText style={[styles.propertyLabel, { color: theme.textSecondary }]}>
+                      Baths
+                    </ThemedText>
+                  </View>
+                ) : null}
+                
+                {propertyInfo.squareFeet ? (
+                  <View style={styles.propertyItem}>
+                    <ThemedText style={[styles.propertyValue, { color: theme.text }]}>
+                      {formatNumber(propertyInfo.squareFeet)}
+                    </ThemedText>
+                    <ThemedText style={[styles.propertyLabel, { color: theme.textSecondary }]}>
+                      Sq Ft
+                    </ThemedText>
+                  </View>
+                ) : null}
+                
+                {propertyInfo.yearBuilt ? (
+                  <View style={styles.propertyItem}>
+                    <ThemedText style={[styles.propertyValue, { color: theme.text }]}>
+                      {propertyInfo.yearBuilt}
+                    </ThemedText>
+                    <ThemedText style={[styles.propertyLabel, { color: theme.textSecondary }]}>
+                      Built
+                    </ThemedText>
+                  </View>
+                ) : null}
+              </View>
+
+              {propertyInfo.estimatedValue ? (
+                <View style={[styles.valueRow, { borderTopColor: theme.borderLight }]}>
+                  <ThemedText style={[styles.valueLabel, { color: theme.textSecondary }]}>
+                    Estimated Value
+                  </ThemedText>
+                  <ThemedText style={[styles.valueAmount, { color: Colors.accent }]}>
+                    {formatCurrency(propertyInfo.estimatedValue)}
+                  </ThemedText>
+                </View>
+              ) : null}
+
+              {propertyInfo.propertyType ? (
+                <View style={[styles.typeRow, { borderTopColor: theme.borderLight }]}>
+                  <ThemedText style={[styles.typeLabel, { color: theme.textSecondary }]}>
+                    Type
+                  </ThemedText>
+                  <ThemedText style={[styles.typeValue, { color: theme.text }]}>
+                    {propertyInfo.propertyType.charAt(0).toUpperCase() + propertyInfo.propertyType.slice(1)}
+                  </ThemedText>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.formFooter}>
           <PrimaryButton
             onPress={handleAddHome}
             loading={loading}
-            disabled={loading}
+            disabled={loading || !enrichmentData}
             testID="button-submit"
           >
             Continue
@@ -300,15 +364,99 @@ const styles = StyleSheet.create({
   form: {
     gap: Spacing.lg,
   },
-  row: {
+  fieldContainer: {
+    gap: Spacing.xs,
+  },
+  label: {
+    ...Typography.subhead,
+    fontWeight: "500",
+  },
+  addressConfirmation: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+  },
+  addressConfirmHeader: {
     flexDirection: "row",
-    gap: Spacing.md,
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
-  stateField: {
+  addressConfirmTitle: {
+    ...Typography.subhead,
+    fontWeight: "600",
+    color: Colors.accent,
+  },
+  addressConfirmText: {
+    ...Typography.body,
+    fontWeight: "500",
+  },
+  addressConfirmSubtext: {
+    ...Typography.caption1,
+    marginTop: 2,
+  },
+  propertyCard: {
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  propertyHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    padding: Spacing.md,
+    paddingBottom: Spacing.sm,
+  },
+  propertyTitle: {
+    ...Typography.subhead,
+    fontWeight: "600",
+    color: Colors.accent,
+  },
+  propertyGrid: {
+    flexDirection: "row",
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.md,
+  },
+  propertyItem: {
     flex: 1,
+    alignItems: "center",
   },
-  zipField: {
-    flex: 2,
+  propertyValue: {
+    ...Typography.title2,
+    fontWeight: "700",
+  },
+  propertyLabel: {
+    ...Typography.caption1,
+    marginTop: 2,
+  },
+  valueRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderTopWidth: 1,
+  },
+  valueLabel: {
+    ...Typography.subhead,
+  },
+  valueAmount: {
+    ...Typography.headline,
+    fontWeight: "700",
+  },
+  typeRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderTopWidth: 1,
+  },
+  typeLabel: {
+    ...Typography.caption1,
+  },
+  typeValue: {
+    ...Typography.caption1,
+    fontWeight: "500",
   },
   formFooter: {
     marginTop: "auto",
