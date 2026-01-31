@@ -1823,6 +1823,81 @@ Respond with JSON only:
     }
   });
 
+  // Create and immediately send invoice (one-step flow)
+  app.post("/api/invoices/create-and-send", async (req: Request, res: Response) => {
+    try {
+      // Auto-generate invoice number
+      const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+      
+      // Build line items from amount
+      const amount = parseFloat(req.body.amount);
+      const lineItems = [{
+        description: req.body.notes || "Service",
+        quantity: 1,
+        unitPrice: amount,
+        total: amount
+      }];
+      
+      // Create invoice data
+      const invoiceData = {
+        providerId: req.body.providerId,
+        clientId: req.body.clientId,
+        jobId: req.body.jobId || null,
+        invoiceNumber,
+        total: amount.toString(),
+        lineItems,
+        status: "sent",
+        dueDate: req.body.dueDate ? new Date(req.body.dueDate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days default
+      };
+      
+      const parsed = insertInvoiceSchema.safeParse(invoiceData);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
+      }
+      
+      // Create the invoice
+      const invoice = await storage.createInvoice(parsed.data);
+      
+      // Now send the email
+      let emailSent = false;
+      let emailError: string | undefined;
+      
+      if (invoice.clientId) {
+        const client = await storage.getClient(invoice.clientId);
+        const provider = await storage.getProvider(invoice.providerId);
+        
+        if (client?.email && provider) {
+          const clientName = [client.firstName, client.lastName].filter(Boolean).join(" ") || "Client";
+          
+          const emailResult = await sendInvoiceEmail({
+            clientEmail: client.email,
+            clientName,
+            providerName: provider.businessName || provider.userId || "Service Provider",
+            invoiceNumber: invoice.invoiceNumber || invoiceNumber,
+            amount: amount,
+            dueDate: invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : "Due on receipt",
+            lineItems,
+          });
+          
+          emailSent = emailResult.success;
+          emailError = emailResult.error;
+          console.log("Invoice email result:", emailResult);
+        } else if (!client?.email) {
+          emailError = "Client has no email address on file.";
+        }
+      }
+      
+      res.status(201).json({ 
+        invoice, 
+        emailSent,
+        emailError 
+      });
+    } catch (error) {
+      console.error("Create and send invoice error:", error);
+      res.status(500).json({ error: "Failed to create invoice" });
+    }
+  });
+
   app.put("/api/invoices/:id", async (req: Request<IdParams>, res: Response) => {
     try {
       const invoice = await storage.updateInvoice(req.params.id, req.body);

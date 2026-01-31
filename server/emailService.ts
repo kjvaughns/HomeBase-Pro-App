@@ -124,13 +124,33 @@ export async function sendInvoiceEmail(data: InvoiceEmailData): Promise<{ succes
               </table>
               
               ${data.paymentLink ? `
-                <a href="${data.paymentLink}" style="display: block; background: #38AE5F; color: white; text-align: center; padding: 16px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
+                <a href="${data.paymentLink}" style="display: block; background: #38AE5F; color: white; text-align: center; padding: 16px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px; margin-bottom: 24px;">
                   Pay Now
                 </a>
               ` : ''}
               
-              <p style="color: #9ca3af; font-size: 12px; margin-top: 32px; text-align: center;">
-                This invoice was sent via HomeBase
+              <div style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-radius: 8px; padding: 20px; margin-top: 24px; text-align: center;">
+                <p style="color: #166534; font-weight: 600; margin: 0 0 8px 0; font-size: 14px;">
+                  Manage your home services with HomeBase
+                </p>
+                <p style="color: #15803d; font-size: 13px; margin: 0 0 16px 0;">
+                  Track invoices, book services, and get instant quotes - all in one app.
+                </p>
+                <div style="display: flex; justify-content: center; gap: 12px;">
+                  <a href="https://apps.apple.com/app/homebase" style="display: inline-block; background: #111827; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-size: 12px; font-weight: 500;">
+                    App Store
+                  </a>
+                  <a href="https://play.google.com/store/apps/details?id=com.homebase" style="display: inline-block; background: #111827; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-size: 12px; font-weight: 500;">
+                    Google Play
+                  </a>
+                </div>
+              </div>
+            </div>
+            
+            <div style="background: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;">
+              <img src="https://via.placeholder.com/120x30/38AE5F/FFFFFF?text=HomeBase" alt="HomeBase" style="height: 24px; margin-bottom: 8px;" />
+              <p style="color: #9ca3af; font-size: 11px; margin: 0;">
+                Sent via HomeBase - The smart way to manage home services
               </p>
             </div>
           </div>

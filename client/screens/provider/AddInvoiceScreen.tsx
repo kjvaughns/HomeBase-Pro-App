@@ -73,13 +73,20 @@ export default function AddInvoiceScreen() {
       amount: string;
       dueDate?: string;
       notes?: string;
+      sendImmediately?: boolean;
     }) => {
-      const response = await apiRequest("POST", "/api/invoices", data);
+      const response = await apiRequest("POST", "/api/invoices/create-and-send", data);
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "invoices"] });
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "stats"] });
+      
+      if (data.emailSent) {
+        Alert.alert("Invoice Sent", "Invoice has been created and emailed to the client.");
+      } else if (data.invoice && !data.emailSent) {
+        Alert.alert("Invoice Created", data.emailError || "Invoice saved. Client has no email on file.");
+      }
       navigation.goBack();
     },
     onError: (error) => {
@@ -88,25 +95,68 @@ export default function AddInvoiceScreen() {
     },
   });
 
-  const handleSave = () => {
+  const saveDraftMutation = useMutation({
+    mutationFn: async (data: {
+      providerId: string;
+      clientId: string;
+      jobId?: string;
+      amount: string;
+      dueDate?: string;
+      notes?: string;
+    }) => {
+      const response = await apiRequest("POST", "/api/invoices", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "invoices"] });
+      Alert.alert("Draft Saved", "Invoice has been saved as a draft.");
+      navigation.goBack();
+    },
+    onError: (error) => {
+      Alert.alert("Error", "Failed to save invoice. Please try again.");
+      console.error("Save invoice error:", error);
+    },
+  });
+
+  const validateForm = () => {
     if (!selectedClientId) {
       Alert.alert("Required Field", "Please select a client.");
-      return;
+      return false;
     }
 
     if (!amount.trim() || isNaN(parseFloat(amount))) {
       Alert.alert("Required Field", "Please enter a valid amount.");
-      return;
+      return false;
     }
 
     if (!providerId) {
       Alert.alert("Error", "Provider profile not found.");
-      return;
+      return false;
     }
+    
+    return true;
+  };
+
+  const handleCreateAndSend = () => {
+    if (!validateForm()) return;
 
     createMutation.mutate({
-      providerId,
-      clientId: selectedClientId,
+      providerId: providerId!,
+      clientId: selectedClientId!,
+      jobId: selectedJobId || undefined,
+      amount: amount.trim(),
+      dueDate: dueDate.trim() ? new Date(dueDate).toISOString() : undefined,
+      notes: notes.trim() || undefined,
+      sendImmediately: true,
+    });
+  };
+
+  const handleSaveDraft = () => {
+    if (!validateForm()) return;
+
+    saveDraftMutation.mutate({
+      providerId: providerId!,
+      clientId: selectedClientId!,
       jobId: selectedJobId || undefined,
       amount: amount.trim(),
       dueDate: dueDate.trim() ? new Date(dueDate).toISOString() : undefined,
@@ -256,18 +306,26 @@ export default function AddInvoiceScreen() {
 
           <View style={styles.buttons}>
             <PrimaryButton
-              onPress={handleSave}
-              disabled={createMutation.isPending || clients.length === 0}
+              onPress={handleCreateAndSend}
+              disabled={createMutation.isPending || saveDraftMutation.isPending || clients.length === 0}
             >
-              {createMutation.isPending ? "Creating..." : "Create Invoice"}
+              {createMutation.isPending ? "Sending..." : "Create & Send Invoice"}
             </PrimaryButton>
             
             <SecondaryButton
-              onPress={() => navigation.goBack()}
-              disabled={createMutation.isPending}
+              onPress={handleSaveDraft}
+              disabled={createMutation.isPending || saveDraftMutation.isPending || clients.length === 0}
             >
-              Cancel
+              {saveDraftMutation.isPending ? "Saving..." : "Save as Draft"}
             </SecondaryButton>
+            
+            <Pressable
+              onPress={() => navigation.goBack()}
+              disabled={createMutation.isPending || saveDraftMutation.isPending}
+              style={{ alignItems: "center", paddingVertical: Spacing.md }}
+            >
+              <ThemedText style={{ color: theme.textSecondary }}>Cancel</ThemedText>
+            </Pressable>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
