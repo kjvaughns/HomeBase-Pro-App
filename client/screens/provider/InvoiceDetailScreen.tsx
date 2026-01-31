@@ -84,10 +84,16 @@ export default function InvoiceDetailScreen() {
       const response = await apiRequest("POST", `/api/invoices/${invoiceId}/send`, {});
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/invoices", invoiceId] });
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "invoices"] });
-      Alert.alert("Success", "Invoice sent successfully.");
+      if (data.emailSent) {
+        Alert.alert("Invoice Sent", "Invoice has been sent and emailed to the client.");
+      } else if (data.emailError) {
+        Alert.alert("Invoice Sent", `Invoice status updated but email failed: ${data.emailError}`);
+      } else {
+        Alert.alert("Invoice Sent", "Invoice has been marked as sent. No email address on file for client.");
+      }
     },
     onError: () => {
       Alert.alert("Error", "Failed to send invoice.");

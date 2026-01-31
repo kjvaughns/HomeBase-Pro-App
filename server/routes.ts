@@ -1838,11 +1838,56 @@ Respond with JSON only:
 
   app.post("/api/invoices/:id/send", async (req: Request<IdParams>, res: Response) => {
     try {
-      const invoice = await storage.sendInvoice(req.params.id);
+      const invoiceId = req.params.id;
+      
+      // Get the invoice first
+      const invoice = await storage.getInvoice(invoiceId);
       if (!invoice) {
         return res.status(404).json({ error: "Invoice not found" });
       }
-      res.json({ invoice });
+      
+      // Get client and provider details for email
+      let emailSent = false;
+      let emailError: string | undefined;
+      
+      if (invoice.clientId) {
+        const client = await storage.getClient(invoice.clientId);
+        const provider = await storage.getProvider(invoice.providerId);
+        
+        if (client?.email && provider) {
+          const rawLineItems = invoice.lineItems;
+          const lineItems = Array.isArray(rawLineItems) ? rawLineItems : (typeof rawLineItems === 'string' ? JSON.parse(rawLineItems) : []);
+          const clientName = [client.firstName, client.lastName].filter(Boolean).join(" ") || "Client";
+          
+          const emailResult = await sendInvoiceEmail({
+            clientEmail: client.email,
+            clientName,
+            providerName: provider.businessName || provider.userId || "Service Provider",
+            invoiceNumber: invoice.invoiceNumber || `INV-${invoice.id.slice(0, 8)}`,
+            amount: parseFloat(invoice.total?.toString() || "0"),
+            dueDate: invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : "Due on receipt",
+            lineItems: lineItems.map((item: any) => ({
+              description: item.description || item.name || "Service",
+              quantity: item.quantity || 1,
+              unitPrice: parseFloat(item.unitPrice?.toString() || item.price?.toString() || "0"),
+              total: parseFloat(item.total?.toString() || "0")
+            })),
+          });
+          
+          emailSent = emailResult.success;
+          emailError = emailResult.error;
+          console.log("Invoice email result:", emailResult);
+        }
+      }
+      
+      // Update invoice status to sent
+      const updatedInvoice = await storage.sendInvoice(invoiceId);
+      
+      res.json({ 
+        invoice: updatedInvoice, 
+        emailSent,
+        emailError 
+      });
     } catch (error) {
       console.error("Send invoice error:", error);
       res.status(500).json({ error: "Failed to send invoice" });
