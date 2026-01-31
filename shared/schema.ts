@@ -8,8 +8,12 @@ export const appointmentStatusEnum = pgEnum("appointment_status", ["pending", "c
 export const urgencyEnum = pgEnum("urgency", ["flexible", "soon", "urgent"]);
 export const jobSizeEnum = pgEnum("job_size", ["small", "medium", "large"]);
 export const jobStatusEnum = pgEnum("job_status", ["scheduled", "in_progress", "completed", "cancelled"]);
-export const invoiceStatusEnum = pgEnum("invoice_status", ["draft", "sent", "paid", "overdue", "cancelled"]);
-export const paymentMethodEnum = pgEnum("payment_method", ["cash", "card", "bank_transfer", "check", "other"]);
+export const invoiceStatusEnum = pgEnum("invoice_status", ["draft", "sent", "viewed", "paid", "partially_paid", "overdue", "void", "refunded", "cancelled"]);
+export const paymentMethodEnum = pgEnum("payment_method", ["cash", "card", "bank_transfer", "check", "stripe", "credits", "other"]);
+export const paymentStatusEnum = pgEnum("payment_status", ["requires_payment", "processing", "succeeded", "failed", "refunded"]);
+export const payoutStatusEnum = pgEnum("payout_status", ["pending", "in_transit", "paid", "failed"]);
+export const connectOnboardingStatusEnum = pgEnum("connect_onboarding_status", ["not_started", "pending", "complete"]);
+export const providerPlanTierEnum = pgEnum("provider_plan_tier", ["free", "starter", "professional", "enterprise"]);
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -228,6 +232,107 @@ export const maintenanceRemindersRelations = relations(maintenanceReminders, ({ 
   user: one(users, { fields: [maintenanceReminders.userId], references: [users.id] }),
 }));
 
+// Provider plan tiers with platform fees
+export const providerPlans = pgTable("provider_plans", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+  planTier: providerPlanTierEnum("plan_tier").default("free"),
+  platformFeePercent: decimal("platform_fee_percent", { precision: 5, scale: 2 }).default("10.00"), // 10% default
+  platformFeeFixedCents: integer("platform_fee_fixed_cents").default(0), // additional fixed fee in cents
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const providerPlansRelations = relations(providerPlans, ({ one }) => ({
+  provider: one(providers, { fields: [providerPlans.providerId], references: [providers.id] }),
+}));
+
+// Stripe Connect accounts for providers
+export const stripeConnectAccounts = pgTable("stripe_connect_accounts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }).unique(),
+  stripeAccountId: text("stripe_account_id").notNull().unique(),
+  onboardingStatus: connectOnboardingStatusEnum("onboarding_status").default("not_started"),
+  chargesEnabled: boolean("charges_enabled").default(false),
+  payoutsEnabled: boolean("payouts_enabled").default(false),
+  detailsSubmitted: boolean("details_submitted").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const stripeConnectAccountsRelations = relations(stripeConnectAccounts, ({ one }) => ({
+  provider: one(providers, { fields: [stripeConnectAccounts.providerId], references: [providers.id] }),
+}));
+
+// User credits wallet (for RevenueCat integration)
+export const userCredits = pgTable("user_credits", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
+  balanceCents: integer("balance_cents").default(0),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const userCreditsRelations = relations(userCredits, ({ one, many }) => ({
+  user: one(users, { fields: [userCredits.userId], references: [users.id] }),
+  ledger: many(creditLedger),
+}));
+
+// Credit ledger for tracking credit transactions
+export const creditLedger = pgTable("credit_ledger", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  deltaCents: integer("delta_cents").notNull(), // positive for credit, negative for debit
+  reason: text("reason").notNull(), // e.g., "revenuecat_purchase", "invoice_payment", "refund"
+  invoiceId: varchar("invoice_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const creditLedgerRelations = relations(creditLedger, ({ one }) => ({
+  user: one(users, { fields: [creditLedger.userId], references: [users.id] }),
+  credits: one(userCredits, { fields: [creditLedger.userId], references: [userCredits.userId] }),
+}));
+
+// Payouts to providers via Stripe Connect
+export const payouts = pgTable("payouts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+  amountCents: integer("amount_cents").notNull(),
+  status: payoutStatusEnum("status").default("pending"),
+  stripeTransferId: text("stripe_transfer_id"),
+  stripePayoutId: text("stripe_payout_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const payoutsRelations = relations(payouts, ({ one }) => ({
+  provider: one(providers, { fields: [payouts.providerId], references: [providers.id] }),
+}));
+
+// Stripe webhook events for idempotency
+export const stripeWebhookEvents = pgTable("stripe_webhook_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  stripeEventId: text("stripe_event_id").notNull().unique(),
+  eventType: text("event_type").notNull(),
+  processedAt: timestamp("processed_at").defaultNow().notNull(),
+  payload: text("payload"), // JSON string of event data
+});
+
+// Invoice line items (normalized from JSON)
+export const invoiceLineItems = pgTable("invoice_line_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  invoiceId: varchar("invoice_id").notNull().references(() => invoices.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  quantity: decimal("quantity", { precision: 10, scale: 2 }).default("1"),
+  unitPriceCents: integer("unit_price_cents").notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  metadata: text("metadata"), // JSON for additional data
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const invoiceLineItemsRelations = relations(invoiceLineItems, ({ one }) => ({
+  invoice: one(invoices, { fields: [invoiceLineItems.invoiceId], references: [invoices.id] }),
+}));
+
 // Provider's clients (their customers)
 export const clients = pgTable("clients", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -279,39 +384,70 @@ export const jobsRelations = relations(jobs, ({ one, many }) => ({
   invoices: many(invoices),
 }));
 
-// Invoices for jobs
+// Invoices for jobs (enhanced for Stripe Connect)
 export const invoices = pgTable("invoices", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
-  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  clientId: varchar("client_id").references(() => clients.id, { onDelete: "set null" }),
+  homeownerUserId: varchar("homeowner_user_id").references(() => users.id, { onDelete: "set null" }),
   jobId: varchar("job_id").references(() => jobs.id, { onDelete: "set null" }),
   invoiceNumber: text("invoice_number").notNull(),
-  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  currency: text("currency").default("usd"),
+  
+  // Amount breakdown in cents for precision
+  subtotalCents: integer("subtotal_cents").notNull().default(0),
+  taxCents: integer("tax_cents").default(0),
+  discountCents: integer("discount_cents").default(0),
+  platformFeeCents: integer("platform_fee_cents").default(0),
+  totalCents: integer("total_cents").notNull().default(0),
+  
+  // Legacy decimal fields for backwards compatibility
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull().default("0"),
   tax: decimal("tax", { precision: 10, scale: 2 }).default("0"),
-  total: decimal("total", { precision: 10, scale: 2 }).notNull(),
+  total: decimal("total", { precision: 10, scale: 2 }).notNull().default("0"),
+  
   status: invoiceStatusEnum("status").default("draft"),
   dueDate: timestamp("due_date"),
   notes: text("notes"),
-  lineItems: text("line_items"), // JSON string of line items
+  lineItems: text("line_items"), // JSON string of line items (legacy)
+  paymentMethodsAllowed: text("payment_methods_allowed").default("stripe,credits"), // JSON array
+  
+  // Stripe Connect fields
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  stripeCheckoutSessionId: text("stripe_checkout_session_id"),
+  stripePaymentLinkId: text("stripe_payment_link_id"),
+  hostedInvoiceUrl: text("hosted_invoice_url"),
+  
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
   sentAt: timestamp("sent_at"),
+  viewedAt: timestamp("viewed_at"),
   paidAt: timestamp("paid_at"),
 });
 
 export const invoicesRelations = relations(invoices, ({ one, many }) => ({
   provider: one(providers, { fields: [invoices.providerId], references: [providers.id] }),
   client: one(clients, { fields: [invoices.clientId], references: [clients.id] }),
+  homeownerUser: one(users, { fields: [invoices.homeownerUserId], references: [users.id] }),
   job: one(jobs, { fields: [invoices.jobId], references: [jobs.id] }),
   payments: many(payments),
+  lineItemsNormalized: many(invoiceLineItems),
 }));
 
-// Payments received
+// Payments received (enhanced for Stripe Connect)
 export const payments = pgTable("payments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   invoiceId: varchar("invoice_id").notNull().references(() => invoices.id, { onDelete: "cascade" }),
   providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
-  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
-  method: paymentMethodEnum("method").default("card"),
+  amountCents: integer("amount_cents").notNull().default(0),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull().default("0"), // Legacy
+  method: paymentMethodEnum("method").default("stripe"),
+  status: paymentStatusEnum("status").default("requires_payment"),
+  
+  // Stripe fields
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  stripeChargeId: text("stripe_charge_id"),
+  
   reference: text("reference"), // transaction ID or check number
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -365,7 +501,9 @@ export const insertJobSchema = createInsertSchema(jobs).omit({
 export const insertInvoiceSchema = createInsertSchema(invoices).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
   sentAt: true,
+  viewedAt: true,
   paidAt: true,
 });
 
@@ -375,6 +513,38 @@ export const insertPaymentSchema = createInsertSchema(payments).omit({
 });
 
 export const insertProviderSchema = createInsertSchema(providers).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertProviderPlanSchema = createInsertSchema(providerPlans).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertStripeConnectAccountSchema = createInsertSchema(stripeConnectAccounts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertInvoiceLineItemSchema = createInsertSchema(invoiceLineItems).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertPayoutSchema = createInsertSchema(payouts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertUserCreditsSchema = createInsertSchema(userCredits).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export const insertCreditLedgerSchema = createInsertSchema(creditLedger).omit({
   id: true,
   createdAt: true,
 });
@@ -399,3 +569,16 @@ export type Invoice = typeof invoices.$inferSelect;
 export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
 export type Payment = typeof payments.$inferSelect;
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
+export type ProviderPlan = typeof providerPlans.$inferSelect;
+export type InsertProviderPlan = z.infer<typeof insertProviderPlanSchema>;
+export type StripeConnectAccount = typeof stripeConnectAccounts.$inferSelect;
+export type InsertStripeConnectAccount = z.infer<typeof insertStripeConnectAccountSchema>;
+export type InvoiceLineItem = typeof invoiceLineItems.$inferSelect;
+export type InsertInvoiceLineItem = z.infer<typeof insertInvoiceLineItemSchema>;
+export type Payout = typeof payouts.$inferSelect;
+export type InsertPayout = z.infer<typeof insertPayoutSchema>;
+export type UserCredits = typeof userCredits.$inferSelect;
+export type InsertUserCredits = z.infer<typeof insertUserCreditsSchema>;
+export type CreditLedgerEntry = typeof creditLedger.$inferSelect;
+export type InsertCreditLedgerEntry = z.infer<typeof insertCreditLedgerSchema>;
+export type StripeWebhookEvent = typeof stripeWebhookEvents.$inferSelect;
