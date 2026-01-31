@@ -1,0 +1,204 @@
+You are my backend engineer. Implement Stripe Connect + Invoicing for the HomeBase platform using Supabase (Postgres + Auth + Edge Functions). This must support a React Native Expo app plus a web portal, all on the same database. I already have Stripe test keys connected.
+
+Scope
+Build the backend moving parts for:
+1) Providers creating and sending invoices
+2) Homeowners paying invoices either:
+   A) Stripe hosted payment link or payment sheet flow
+   B) In app purchase via RevenueCat (note: RevenueCat is for digital goods, so treat this as a platform membership or credits wallet and then apply it to invoices; do NOT try to use IAP to pay providers directly)
+3) Stripe Connect payouts to providers with platform application fee (our transaction cut) that varies by provider plan
+4) Webhooks and database state transitions so invoice, payment, payout states stay accurate
+
+Hard rules
+1) No secrets in the client. All Stripe actions happen server side only.
+2) Use Supabase Edge Functions for API endpoints and Stripe webhooks.
+3) Every table must have RLS and policies. Provider data is scoped to provider org membership.
+4) Implement idempotency for webhook processing and payment creation.
+5) Provide a README with exact manual steps for Supabase and Stripe configuration.
+
+Data model additions or updates
+Tables
+provider_plans
+- id, org_id, plan_tier, platform_fee_percent, platform_fee_fixed_cents, created_at
+
+invoices
+- id (uuid)
+- org_id
+- homeowner_user_id nullable
+- client_identity_id nullable
+- job_id nullable
+- status enum (draft, sent, viewed, paid, partially_paid, overdue, void, refunded)
+- currency default usd
+- subtotal_cents
+- tax_cents
+- discount_cents
+- platform_fee_cents
+- total_cents
+- due_at
+- notes
+- payment_method_allowed json (stripe, credits)
+- stripe_payment_intent_id nullable
+- stripe_checkout_session_id nullable
+- stripe_payment_link_id nullable
+- hosted_invoice_url nullable
+- created_at updated_at
+
+invoice_line_items
+- id
+- invoice_id
+- name
+- quantity
+- unit_price_cents
+- amount_cents
+- metadata json
+
+payments
+- id
+- invoice_id
+- provider_org_id
+- method enum (stripe, credits)
+- amount_cents
+- status enum (requires_payment, processing, succeeded, failed, refunded)
+- stripe_payment_intent_id nullable
+- stripe_charge_id nullable
+- created_at
+
+payouts
+- id
+- org_id
+- amount_cents
+- status enum (pending, in_transit, paid, failed)
+- stripe_transfer_id nullable
+- stripe_payout_id nullable
+- created_at
+
+stripe_connect_accounts
+- org_id
+- stripe_account_id
+- onboarding_status enum (not_started, pending, complete)
+- charges_enabled bool
+- payouts_enabled bool
+- details_submitted bool
+- created_at updated_at
+
+Optional wallet for RevenueCat credits
+user_credits
+- user_id
+- balance_cents
+- updated_at
+credit_ledger
+- id, user_id, delta_cents, reason, invoice_id nullable, created_at
+
+RLS policies
+- Providers can read and write invoices only for orgs they are a member of.
+- Homeowners can read invoices only where homeowner_user_id matches them, or where they are linked via verified client_identity and invoice is addressed to them.
+- Only server functions with service role can update stripe ids and webhook derived statuses.
+
+Edge Functions to build
+1) create_connect_account_link
+Input: org_id
+Behavior:
+- Create or fetch Stripe connected account (Express recommended)
+- Store stripe_account_id
+- Create account link for onboarding
+- Return onboarding_url
+
+2) refresh_connect_account_link
+Input: org_id
+Return a new onboarding link
+
+3) get_connect_status
+Input: org_id
+Fetch account status from Stripe and update stripe_connect_accounts row
+
+4) create_invoice
+Input: org_id, client_identity_id or homeowner_user_id, optional job_id, line_items[], tax, discount, due_at, notes
+Behavior:
+- Create invoice record in draft
+- Create line items
+- Calculate subtotal and total
+- Calculate platform fee based on provider_plans for org_id
+
+5) send_invoice
+Input: invoice_id, delivery_method (email, link)
+Behavior:
+- Mark invoice as sent
+- Generate hosted payment option based on allowed methods
+- Return a shareable URL for payment
+- If email, call email sender and log event
+
+6) create_invoice_payment_intent
+Input: invoice_id, payer_user_id optional
+Behavior:
+- Load invoice, org, connect account, plan fee
+- Create Stripe PaymentIntent with:
+  amount = invoice total
+  application_fee_amount = platform_fee_cents
+  transfer_data.destination = connected_account_id
+- Save stripe_payment_intent_id on invoice
+- Create payments row status requires_payment
+- Return client_secret for payment sheet and a hosted fallback link
+
+7) create_stripe_payment_link_or_checkout
+Input: invoice_id
+Behavior:
+- Create Stripe Checkout Session or Payment Link for hosted payment
+- It must still use Connect destination charge and application fee
+- Save hosted url on invoice
+
+8) apply_credits_to_invoice
+Input: invoice_id, homeowner_user_id, amount_cents
+Behavior:
+- Deduct from user_credits
+- Create payment row method credits
+- Update invoice status accordingly
+Important: This is only allowed if invoice is configured to accept credits and credits are from RevenueCat membership or credits system.
+
+9) stripe_webhook
+Handle and persist events:
+- account.updated -> update connect onboarding status
+- payment_intent.succeeded -> mark payment succeeded, mark invoice paid, store charge id
+- payment_intent.payment_failed -> mark failed
+- charge.refunded -> mark invoice refunded
+- payout.paid / payout.failed -> update payouts table
+- dispute events -> flag invoice and create admin alert row (optional)
+Implement idempotency using event id table stripe_webhook_events.
+
+10) admin_fee_preview
+Input: org_id, invoice_totals
+Return computed platform fee based on plan rules for display
+
+RevenueCat integration guidance
+- Do not use IAP to pay providers directly.
+- Implement a “HomeBase Credits” wallet funded by RevenueCat purchases.
+- Credits can be applied to invoices inside the app as a payment method, and then the platform uses its own Stripe flow to pay the provider. For this prompt, only design the backend wallet tables and apply_credits_to_invoice endpoint as mock. Provide integration hooks but do not require full RevenueCat server validation yet.
+
+Manual setup instructions required in README
+Supabase
+- Add env vars STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, EMAIL_PROVIDER_KEY, APP_URL
+- Deploy edge functions
+- Run migrations
+- Enable RLS
+
+Stripe
+- Enable Connect, Express accounts
+- Configure platform business profile
+- Add webhook endpoint pointing to supabase function
+- Add required events
+- Test: onboarding, payment intent success, refund, payout status
+
+Testing
+Provide a minimal test script:
+- Create org and plan
+- Create connect account link
+- Create invoice with line items
+- Create payment intent
+- Simulate webhook events and verify invoice status updates
+
+Output
+Deliver:
+- SQL migrations
+- RLS policies
+- Edge function source code
+- README with step by step manual setup
+- Sample curl commands to test each endpoint
