@@ -11,6 +11,7 @@ import { TextField } from "@/components/TextField";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { SecondaryButton } from "@/components/SecondaryButton";
 import { GlassCard } from "@/components/GlassCard";
+import { AddressAutocomplete, EnrichmentData } from "@/components/AddressAutocomplete";
 import { Spacing, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest } from "@/lib/query-client";
@@ -31,6 +32,13 @@ export default function AddClientScreen() {
   const [state, setState] = useState("");
   const [zip, setZip] = useState("");
   const [notes, setNotes] = useState("");
+
+  const handleAddressSelected = (data: EnrichmentData) => {
+    setAddress(data.street || "");
+    setCity(data.city || "");
+    setState(data.state || "");
+    setZip(data.zipCode || "");
+  };
 
   const createMutation = useMutation({
     mutationFn: async (data: {
@@ -143,8 +151,14 @@ export default function AddClientScreen() {
             />
           </GlassCard>
 
-          <GlassCard style={styles.section}>
+          <GlassCard style={StyleSheet.flatten([styles.section, { zIndex: 1000 }])}>
             <ThemedText style={styles.sectionTitle}>Address</ThemedText>
+            
+            <AddressAutocomplete
+              onAddressSelected={handleAddressSelected}
+              placeholder="Search for address..."
+              testID="input-address-search"
+            />
             
             <TextField
               label="Street Address"
