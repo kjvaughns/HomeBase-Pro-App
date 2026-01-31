@@ -89,7 +89,25 @@ The application is structured into a client-side React Native Expo app and an Ex
 - **Supabase**: Provides PostgreSQL database hosting and connection pooling.
 - **Drizzle ORM**: Used for type-safe interaction with the PostgreSQL database.
 - **OpenAI GPT-4o-mini**: Integrated via Replit AI Integrations for the AI chat functionality.
-- **Stripe**: Backend integration for payment processing, including product management, payment intents, customer creation, checkout sessions, and customer portals. Uses `stripe-replit-sync`.
+- **Stripe Connect**: Full marketplace payment integration for provider invoicing:
+  - **Connect Onboarding**: Express account creation with OAuth flow for provider payouts
+  - **Invoice System**: Create invoices with line items, send to clients, track payment status (draft/sent/viewed/paid/void/refunded)
+  - **Payment Processing**: PaymentIntents with destination charges, Checkout Sessions with application fees
+  - **Platform Fees**: Tiered fee calculation based on provider plan (Free 10%, Starter 7.5%, Professional 5%, Enterprise 3%)
+  - **Credits Wallet**: User credit balance with ledger tracking for promotions and refunds
+  - **Webhook Handler**: Idempotent processing of payment_intent, account, payout, and charge events
+  - **API Endpoints**:
+    - `POST /api/stripe/connect/onboard/:providerId` - Start Connect onboarding
+    - `POST /api/stripe/connect/refresh-link/:providerId` - Refresh expired link
+    - `GET /api/stripe/connect/status/:providerId` - Check account status
+    - `POST /api/stripe/invoices` - Create invoice with line items
+    - `POST /api/stripe/invoices/:id/send` - Send invoice to client
+    - `POST /api/stripe/invoices/:id/pay` - Create payment intent
+    - `POST /api/stripe/invoices/:id/checkout` - Create Checkout session
+    - `POST /api/stripe/invoices/:id/apply-credits` - Apply wallet credits
+    - `POST /api/stripe/webhooks` - Handle Stripe webhooks
+    - `GET /api/stripe/fee-preview` - Calculate platform fees
+  - Uses lazy initialization (`getStripe()`) for graceful handling when API key is missing
 - **RevenueCat**: Mobile subscription management using `react-native-purchases` for offerings, purchases, restores, and customer information.
 - **RapidAPI (Real Estate 101)**: Zillow property data via `/api/property-details/byaddress` endpoint. Requires `RAPIDAPI_KEY` secret.
 - **Google APIs**: Places Autocomplete and Geocoding APIs for address handling. Requires `GOOGLE_API_KEY` secret.
