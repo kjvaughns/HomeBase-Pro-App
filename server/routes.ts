@@ -17,6 +17,29 @@ import {
   enrichPropertyData,
   buildHouseFaxContext 
 } from "./housefaxService";
+import {
+  createConnectAccountLink,
+  refreshConnectAccountLink,
+  getConnectStatus,
+  createInvoicePaymentIntent,
+  createStripeCheckoutSession,
+  applyCreditsToInvoice,
+  handleStripeWebhook,
+  calculateFeePreview,
+  getProviderPlan,
+  calculatePlatformFee,
+  getStripe,
+} from "./stripeConnectService";
+import {
+  invoices,
+  invoiceLineItems,
+  providerPlans,
+  stripeConnectAccounts,
+  userCredits,
+  creditLedger,
+  payments,
+  payouts,
+} from "@shared/schema";
 
 interface IdParams { id: string; }
 interface UserIdParams { userId: string; }
@@ -2002,6 +2025,419 @@ Respond with JSON only:
     } catch (error) {
       console.error("Create customer portal error:", error);
       res.status(500).json({ error: "Failed to create customer portal session" });
+    }
+  });
+
+  // ============================================
+  // STRIPE CONNECT ENDPOINTS
+  // ============================================
+
+  // Create Connect account and onboarding link for provider
+  app.post("/api/connect/account-link", async (req: Request, res: Response) => {
+    try {
+      const { providerId } = req.body;
+      if (!providerId) {
+        return res.status(400).json({ error: "providerId is required" });
+      }
+      const result = await createConnectAccountLink(providerId);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Create connect account link error:", error);
+      res.status(500).json({ error: error.message || "Failed to create connect account link" });
+    }
+  });
+
+  // Refresh Connect account onboarding link
+  app.post("/api/connect/refresh-link", async (req: Request, res: Response) => {
+    try {
+      const { providerId } = req.body;
+      if (!providerId) {
+        return res.status(400).json({ error: "providerId is required" });
+      }
+      const result = await refreshConnectAccountLink(providerId);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Refresh connect account link error:", error);
+      res.status(500).json({ error: error.message || "Failed to refresh connect account link" });
+    }
+  });
+
+  // Get Connect account status for provider
+  app.get("/api/connect/status/:providerId", async (req: Request<{ providerId: string }>, res: Response) => {
+    try {
+      const { providerId } = req.params;
+      const result = await getConnectStatus(providerId);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Get connect status error:", error);
+      res.status(500).json({ error: error.message || "Failed to get connect status" });
+    }
+  });
+
+  // Create or update provider plan
+  app.post("/api/providers/:providerId/plan", async (req: Request<{ providerId: string }>, res: Response) => {
+    try {
+      const { providerId } = req.params;
+      const { planTier, platformFeePercent, platformFeeFixedCents } = req.body;
+
+      const [existing] = await db
+        .select()
+        .from(providerPlans)
+        .where(eq(providerPlans.providerId, providerId));
+
+      if (existing) {
+        const [updated] = await db
+          .update(providerPlans)
+          .set({
+            planTier: planTier || existing.planTier,
+            platformFeePercent: platformFeePercent || existing.platformFeePercent,
+            platformFeeFixedCents: platformFeeFixedCents ?? existing.platformFeeFixedCents,
+            updatedAt: new Date(),
+          })
+          .where(eq(providerPlans.id, existing.id))
+          .returning();
+        res.json({ plan: updated });
+      } else {
+        const [created] = await db
+          .insert(providerPlans)
+          .values({
+            providerId,
+            planTier: planTier || "free",
+            platformFeePercent: platformFeePercent || "10.00",
+            platformFeeFixedCents: platformFeeFixedCents || 0,
+          })
+          .returning();
+        res.status(201).json({ plan: created });
+      }
+    } catch (error: any) {
+      console.error("Update provider plan error:", error);
+      res.status(500).json({ error: error.message || "Failed to update provider plan" });
+    }
+  });
+
+  // Get provider plan
+  app.get("/api/providers/:providerId/plan", async (req: Request<{ providerId: string }>, res: Response) => {
+    try {
+      const { providerId } = req.params;
+      const plan = await getProviderPlan(providerId);
+      res.json({ plan });
+    } catch (error: any) {
+      console.error("Get provider plan error:", error);
+      res.status(500).json({ error: error.message || "Failed to get provider plan" });
+    }
+  });
+
+  // Preview platform fee for a given amount
+  app.post("/api/connect/fee-preview", async (req: Request, res: Response) => {
+    try {
+      const { providerId, totalCents } = req.body;
+      if (!providerId || totalCents === undefined) {
+        return res.status(400).json({ error: "providerId and totalCents are required" });
+      }
+      const preview = await calculateFeePreview(providerId, totalCents);
+      res.json(preview);
+    } catch (error: any) {
+      console.error("Fee preview error:", error);
+      res.status(500).json({ error: error.message || "Failed to calculate fee preview" });
+    }
+  });
+
+  // ============================================
+  // ENHANCED INVOICE ENDPOINTS (with Stripe Connect)
+  // ============================================
+
+  // Create invoice with line items and platform fee calculation
+  app.post("/api/invoices/create", async (req: Request, res: Response) => {
+    try {
+      const {
+        providerId,
+        clientId,
+        homeownerUserId,
+        jobId,
+        lineItems: lineItemsInput,
+        taxCents,
+        discountCents,
+        dueDate,
+        notes,
+        paymentMethodsAllowed,
+      } = req.body;
+
+      if (!providerId) {
+        return res.status(400).json({ error: "providerId is required" });
+      }
+
+      // Calculate subtotal from line items
+      let subtotalCents = 0;
+      const parsedLineItems = Array.isArray(lineItemsInput) ? lineItemsInput : [];
+      for (const item of parsedLineItems) {
+        const qty = parseFloat(item.quantity || "1");
+        const unitPrice = parseInt(item.unitPriceCents || "0", 10);
+        subtotalCents += Math.round(qty * unitPrice);
+      }
+
+      // Calculate platform fee
+      const plan = await getProviderPlan(providerId);
+      const fee = calculatePlatformFee(
+        subtotalCents,
+        plan.platformFeePercent || "10.00",
+        plan.platformFeeFixedCents || 0
+      );
+
+      const totalBeforeTax = subtotalCents - (discountCents || 0);
+      const totalCents = totalBeforeTax + (taxCents || 0);
+
+      // Generate invoice number
+      const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}`;
+
+      // Create the invoice
+      const [invoice] = await db
+        .insert(invoices)
+        .values({
+          providerId,
+          clientId: clientId || null,
+          homeownerUserId: homeownerUserId || null,
+          jobId: jobId || null,
+          invoiceNumber,
+          currency: "usd",
+          subtotalCents,
+          taxCents: taxCents || 0,
+          discountCents: discountCents || 0,
+          platformFeeCents: fee.totalCents,
+          totalCents,
+          amount: (subtotalCents / 100).toFixed(2),
+          tax: ((taxCents || 0) / 100).toFixed(2),
+          total: (totalCents / 100).toFixed(2),
+          status: "draft",
+          dueDate: dueDate ? new Date(dueDate) : null,
+          notes: notes || null,
+          paymentMethodsAllowed: paymentMethodsAllowed || "stripe,credits",
+        })
+        .returning();
+
+      // Create line items
+      if (parsedLineItems.length > 0) {
+        await db.insert(invoiceLineItems).values(
+          parsedLineItems.map((item: any) => ({
+            invoiceId: invoice.id,
+            name: item.name,
+            description: item.description || null,
+            quantity: item.quantity || "1",
+            unitPriceCents: parseInt(item.unitPriceCents || "0", 10),
+            amountCents: Math.round(
+              parseFloat(item.quantity || "1") * parseInt(item.unitPriceCents || "0", 10)
+            ),
+            metadata: item.metadata ? JSON.stringify(item.metadata) : null,
+          }))
+        );
+      }
+
+      // Fetch line items for response
+      const createdLineItems = await db
+        .select()
+        .from(invoiceLineItems)
+        .where(eq(invoiceLineItems.invoiceId, invoice.id));
+
+      res.status(201).json({
+        invoice,
+        lineItems: createdLineItems,
+        platformFee: fee,
+      });
+    } catch (error: any) {
+      console.error("Create invoice error:", error);
+      res.status(500).json({ error: error.message || "Failed to create invoice" });
+    }
+  });
+
+  // Send invoice (mark as sent and optionally generate payment link)
+  app.post("/api/invoices/:invoiceId/send", async (req: Request<{ invoiceId: string }>, res: Response) => {
+    try {
+      const { invoiceId } = req.params;
+      const { deliveryMethod, generatePaymentLink } = req.body;
+
+      let hostedUrl: string | null = null;
+
+      if (generatePaymentLink) {
+        const checkoutResult = await createStripeCheckoutSession(invoiceId);
+        hostedUrl = checkoutResult.checkoutUrl;
+      }
+
+      const [updated] = await db
+        .update(invoices)
+        .set({
+          status: "sent",
+          sentAt: new Date(),
+          hostedInvoiceUrl: hostedUrl || undefined,
+          updatedAt: new Date(),
+        })
+        .where(eq(invoices.id, invoiceId))
+        .returning();
+
+      res.json({
+        invoice: updated,
+        paymentUrl: hostedUrl,
+        deliveryMethod: deliveryMethod || "link",
+      });
+    } catch (error: any) {
+      console.error("Send invoice error:", error);
+      res.status(500).json({ error: error.message || "Failed to send invoice" });
+    }
+  });
+
+  // Create payment intent for invoice (for in-app payment sheet)
+  app.post("/api/invoices/:invoiceId/payment-intent", async (req: Request<{ invoiceId: string }>, res: Response) => {
+    try {
+      const { invoiceId } = req.params;
+      const { payerUserId } = req.body;
+      const result = await createInvoicePaymentIntent(invoiceId, payerUserId);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Create payment intent error:", error);
+      res.status(500).json({ error: error.message || "Failed to create payment intent" });
+    }
+  });
+
+  // Create Stripe checkout session for invoice (hosted payment page)
+  app.post("/api/invoices/:invoiceId/checkout", async (req: Request<{ invoiceId: string }>, res: Response) => {
+    try {
+      const { invoiceId } = req.params;
+      const result = await createStripeCheckoutSession(invoiceId);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Create checkout session error:", error);
+      res.status(500).json({ error: error.message || "Failed to create checkout session" });
+    }
+  });
+
+  // Apply credits to invoice
+  app.post("/api/invoices/:invoiceId/apply-credits", async (req: Request<{ invoiceId: string }>, res: Response) => {
+    try {
+      const { invoiceId } = req.params;
+      const { userId, amountCents } = req.body;
+
+      if (!userId || !amountCents) {
+        return res.status(400).json({ error: "userId and amountCents are required" });
+      }
+
+      const result = await applyCreditsToInvoice(invoiceId, userId, amountCents);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Apply credits error:", error);
+      res.status(500).json({ error: error.message || "Failed to apply credits" });
+    }
+  });
+
+  // Get user credits balance
+  app.get("/api/users/:userId/credits", async (req: Request<{ userId: string }>, res: Response) => {
+    try {
+      const { userId } = req.params;
+      const [credits] = await db
+        .select()
+        .from(userCredits)
+        .where(eq(userCredits.userId, userId));
+
+      res.json({
+        balanceCents: credits?.balanceCents || 0,
+        balance: ((credits?.balanceCents || 0) / 100).toFixed(2),
+      });
+    } catch (error: any) {
+      console.error("Get user credits error:", error);
+      res.status(500).json({ error: error.message || "Failed to get user credits" });
+    }
+  });
+
+  // Add credits to user wallet (for RevenueCat integration)
+  app.post("/api/users/:userId/credits/add", async (req: Request<{ userId: string }>, res: Response) => {
+    try {
+      const { userId } = req.params;
+      const { amountCents, reason } = req.body;
+
+      if (!amountCents || amountCents <= 0) {
+        return res.status(400).json({ error: "amountCents must be a positive number" });
+      }
+
+      // Upsert user credits
+      const [existing] = await db
+        .select()
+        .from(userCredits)
+        .where(eq(userCredits.userId, userId));
+
+      let newBalance: number;
+      if (existing) {
+        newBalance = (existing.balanceCents || 0) + amountCents;
+        await db
+          .update(userCredits)
+          .set({ balanceCents: newBalance, updatedAt: new Date() })
+          .where(eq(userCredits.userId, userId));
+      } else {
+        newBalance = amountCents;
+        await db.insert(userCredits).values({
+          userId,
+          balanceCents: newBalance,
+        });
+      }
+
+      // Record in ledger
+      await db.insert(creditLedger).values({
+        userId,
+        deltaCents: amountCents,
+        reason: reason || "revenuecat_purchase",
+      });
+
+      res.json({
+        balanceCents: newBalance,
+        balance: (newBalance / 100).toFixed(2),
+      });
+    } catch (error: any) {
+      console.error("Add credits error:", error);
+      res.status(500).json({ error: error.message || "Failed to add credits" });
+    }
+  });
+
+  // Stripe Connect webhook handler
+  app.post("/api/webhooks/stripe-connect", async (req: Request, res: Response) => {
+    try {
+      const sig = req.headers["stripe-signature"];
+      const endpointSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
+
+      let event: any;
+
+      if (endpointSecret && sig) {
+        try {
+          event = getStripe().webhooks.constructEvent(
+            req.body,
+            sig,
+            endpointSecret
+          );
+        } catch (err: any) {
+          console.error("Webhook signature verification failed:", err.message);
+          return res.status(400).json({ error: `Webhook Error: ${err.message}` });
+        }
+      } else {
+        // In development without webhook secret, parse body directly
+        event = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+      }
+
+      const result = await handleStripeWebhook(event);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Stripe webhook error:", error);
+      res.status(500).json({ error: error.message || "Webhook processing failed" });
+    }
+  });
+
+  // Get payouts for provider
+  app.get("/api/providers/:providerId/payouts", async (req: Request<{ providerId: string }>, res: Response) => {
+    try {
+      const { providerId } = req.params;
+      const providerPayouts = await db
+        .select()
+        .from(payouts)
+        .where(eq(payouts.providerId, providerId));
+
+      res.json({ payouts: providerPayouts });
+    } catch (error: any) {
+      console.error("Get payouts error:", error);
+      res.status(500).json({ error: error.message || "Failed to get payouts" });
     }
   });
 
