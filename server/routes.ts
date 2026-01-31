@@ -9,6 +9,7 @@ import { getStripePublishableKey } from "./stripeClient";
 import { db } from "./db";
 import { sql, eq } from "drizzle-orm";
 import { appointments, maintenanceReminders, homes } from "@shared/schema";
+import { sendInvoiceEmail } from "./emailService";
 import { 
   searchPlaces, 
   getPlaceDetails, 
@@ -1801,9 +1802,13 @@ Respond with JSON only:
 
   app.post("/api/invoices", async (req: Request, res: Response) => {
     try {
+      // Auto-generate invoice number if not provided
+      const invoiceNumber = req.body.invoiceNumber || `INV-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+      
       // Convert dueDate string to Date
       const invoiceData = {
         ...req.body,
+        invoiceNumber,
         dueDate: req.body.dueDate ? new Date(req.body.dueDate) : undefined,
       };
       const parsed = insertInvoiceSchema.safeParse(invoiceData);
@@ -2471,17 +2476,71 @@ Respond with JSON only:
     }
   });
 
-  // Send invoice (mark as sent and optionally generate payment link)
+  // Send invoice (mark as sent and optionally generate payment link + send email)
   app.post("/api/invoices/:invoiceId/send", async (req: Request<{ invoiceId: string }>, res: Response) => {
     try {
       const { invoiceId } = req.params;
       const { deliveryMethod, generatePaymentLink } = req.body;
+
+      // Get invoice details
+      const invoice = await storage.getInvoice(invoiceId);
+      if (!invoice) {
+        return res.status(404).json({ error: "Invoice not found" });
+      }
+
+      // Get client details
+      if (!invoice.clientId) {
+        return res.status(400).json({ error: "Invoice has no client" });
+      }
+      const client = await storage.getClient(invoice.clientId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+
+      // Get provider details
+      const provider = await storage.getProvider(invoice.providerId);
+      if (!provider) {
+        return res.status(404).json({ error: "Provider not found" });
+      }
 
       let hostedUrl: string | null = null;
 
       if (generatePaymentLink) {
         const checkoutResult = await createStripeCheckoutSession(invoiceId);
         hostedUrl = checkoutResult.checkoutUrl;
+      }
+
+      // Send email if client has email
+      let emailSent = false;
+      let emailError: string | undefined;
+      
+      if (client.email && (deliveryMethod === "email" || deliveryMethod === "both")) {
+        const rawLineItems = invoice.lineItems;
+        const lineItems = Array.isArray(rawLineItems) ? rawLineItems : (typeof rawLineItems === 'string' ? JSON.parse(rawLineItems) : []);
+        const clientName = [client.firstName, client.lastName].filter(Boolean).join(" ") || "Client";
+        
+        const emailResult = await sendInvoiceEmail({
+          clientEmail: client.email,
+          clientName,
+          providerName: provider.businessName || provider.userId || "Service Provider",
+          invoiceNumber: invoice.invoiceNumber || `INV-${invoice.id.slice(0, 8)}`,
+          amount: parseFloat(invoice.total?.toString() || "0"),
+          dueDate: invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : "Due on receipt",
+          lineItems: lineItems.map((item: any) => ({
+            description: item.description || item.name || "Service",
+            quantity: item.quantity || 1,
+            unitPrice: parseFloat(item.unitPrice?.toString() || item.price?.toString() || "0"),
+            total: parseFloat(item.total?.toString() || "0")
+          })),
+          paymentLink: hostedUrl || undefined
+        });
+        
+        emailSent = emailResult.success;
+        emailError = emailResult.error;
+        
+        if (!emailResult.success) {
+          console.error("Failed to send invoice email:", emailResult.error);
+        }
       }
 
       const [updated] = await db
@@ -2499,6 +2558,8 @@ Respond with JSON only:
         invoice: updated,
         paymentUrl: hostedUrl,
         deliveryMethod: deliveryMethod || "link",
+        emailSent,
+        emailError
       });
     } catch (error: any) {
       console.error("Send invoice error:", error);
