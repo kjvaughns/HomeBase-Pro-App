@@ -108,6 +108,11 @@ The application is structured into a client-side React Native Expo app and an Ex
     - `POST /api/stripe/webhooks` - Handle Stripe webhooks
     - `GET /api/stripe/fee-preview` - Calculate platform fees
   - Uses lazy initialization (`getStripe()`) for graceful handling when API key is missing
+- **Resend**: Transactional email service for invoice delivery:
+  - **Invoice Emails**: Professional HTML email templates with itemized line items, amounts, due dates
+  - **Payment Links**: Optional Stripe Checkout links embedded in invoice emails
+  - **Email Service**: `server/emailService.ts` handles all email composition and sending
+  - **Auto-Generated Invoice Numbers**: Format `INV-{timestamp}-{random}` if not provided
 - **RevenueCat**: Mobile subscription management using `react-native-purchases` for offerings, purchases, restores, and customer information.
 - **RapidAPI (Real Estate 101)**: Zillow property data via `/api/property-details/byaddress` endpoint. Requires `RAPIDAPI_KEY` secret.
 - **Google APIs**: Places Autocomplete and Geocoding APIs for address handling. Requires `GOOGLE_API_KEY` secret.
