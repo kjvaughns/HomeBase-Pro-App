@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from "react";
-import { StyleSheet, View, ScrollView, Pressable, Linking, Alert } from "react-native";
+import { StyleSheet, View, ScrollView, Pressable, Linking, Alert, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, RouteProp, useNavigation } from "@react-navigation/native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { useQuery } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -15,17 +16,27 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useProviderStore, Client, ClientActivity, ClientNote, Job, Invoice } from "@/state/providerStore";
+import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type TabType = "overview" | "jobs" | "invoices" | "notes" | "home";
 
-function getInitials(name: string): string {
+// Helper to get client name from either name field or firstName/lastName
+function getClientName(client: any): string {
+  if (client.name) return client.name;
+  const parts = [client.firstName, client.lastName].filter(Boolean);
+  return parts.join(" ") || "Unknown";
+}
+
+function getInitials(name: string | undefined | null): string {
+  if (!name) return "??";
   return name
     .split(" ")
     .map((n) => n[0])
+    .filter(Boolean)
     .join("")
     .toUpperCase()
-    .slice(0, 2);
+    .slice(0, 2) || "??";
 }
 
 function formatCurrency(amount: number): string {
@@ -126,7 +137,18 @@ export default function ClientDetailScreen() {
   const navigation = useNavigation();
   const { clientId } = route.params;
 
-  const clients = useProviderStore((s) => s.clients);
+  const providerProfile = useAuthStore((s) => s.providerProfile);
+  const providerId = providerProfile?.id;
+
+  // Fetch clients from API
+  const { data: clientsData, isLoading } = useQuery<{ clients: Client[] }>({
+    queryKey: ["/api/provider", providerId, "clients"],
+    enabled: !!providerId,
+  });
+
+  const clients = clientsData?.clients || [];
+
+  // Keep Zustand methods for activities, notes, jobs, invoices (these may still use local data)
   const getClientActivities = useProviderStore((s) => s.getClientActivities);
   const getClientNotes = useProviderStore((s) => s.getClientNotes);
   const getClientJobHistory = useProviderStore((s) => s.getClientJobHistory);
@@ -143,6 +165,16 @@ export default function ClientDetailScreen() {
   const invoices = useMemo(() => getClientInvoices(clientId), [getClientInvoices, clientId]);
 
   const [activeTab, setActiveTab] = useState<TabType>("overview");
+
+  if (isLoading) {
+    return (
+      <ThemedView style={styles.container}>
+        <View style={[styles.notFound, { paddingTop: headerHeight }]}>
+          <ActivityIndicator size="large" color={Colors.accent} />
+        </View>
+      </ThemedView>
+    );
+  }
 
   if (!client) {
     return (
@@ -172,31 +204,33 @@ export default function ClientDetailScreen() {
     (navigation as any).navigate("AddInvoice", { clientId: client.id });
   };
 
+  const clientStatus = client.status || "active";
+  
   const statusColor = useMemo(() => {
-    switch (client.status) {
+    switch (clientStatus) {
       case "active": return Colors.accent;
       case "lead": return "#3B82F6";
       case "inactive": return theme.textSecondary;
       default: return theme.textSecondary;
     }
-  }, [client.status, theme]);
+  }, [clientStatus, theme]);
 
   const statusLabel = useMemo(() => {
-    switch (client.status) {
+    switch (clientStatus) {
       case "active": return "Active";
       case "lead": return "Lead";
       case "inactive": return "Inactive";
       case "archived": return "Archived";
-      default: return client.status;
+      default: return clientStatus || "Active";
     }
-  }, [client.status]);
+  }, [clientStatus]);
 
   const renderOverview = () => (
     <Animated.View entering={FadeInDown.delay(100).duration(400)}>
       <View style={styles.kpiRow}>
-        <KPICard label="Lifetime Value" value={formatCurrency(client.ltv)} color={Colors.accent} />
-        <KPICard label="Total Jobs" value={client.jobCount.toString()} />
-        <KPICard label="Avg Ticket" value={formatCurrency(client.avgTicket || 0)} />
+        <KPICard label="Lifetime Value" value={formatCurrency(client.ltv ?? 0)} color={Colors.accent} />
+        <KPICard label="Total Jobs" value={(client.jobCount ?? 0).toString()} />
+        <KPICard label="Avg Ticket" value={formatCurrency(client.avgTicket ?? 0)} />
       </View>
       
       {(client.outstandingBalance ?? 0) > 0 ? (
@@ -584,13 +618,13 @@ export default function ClientDetailScreen() {
               <Animated.Image source={{ uri: client.avatar }} style={styles.avatarImage} />
             ) : (
               <ThemedText type="h1" style={{ color: Colors.accent }}>
-                {getInitials(client.name)}
+                {getInitials(getClientName(client))}
               </ThemedText>
             )}
           </View>
           <View style={styles.nameRow}>
             <ThemedText type="h2" style={styles.clientName}>
-              {client.name}
+              {getClientName(client)}
             </ThemedText>
             <View style={[styles.statusBadge, { backgroundColor: statusColor + "20" }]}>
               <ThemedText style={[styles.statusText, { color: statusColor }]}>
@@ -619,16 +653,18 @@ export default function ClientDetailScreen() {
           <View style={styles.contactRow}>
             <Feather name="phone" size={16} color={theme.textSecondary} />
             <ThemedText type="body" style={{ marginLeft: Spacing.sm }}>
-              {client.phone}
+              {client.phone || "No phone"}
             </ThemedText>
-            <Pressable onPress={handleCall} style={styles.contactAction}>
-              <Feather name="external-link" size={16} color={Colors.accent} />
-            </Pressable>
+            {client.phone ? (
+              <Pressable onPress={handleCall} style={styles.contactAction}>
+                <Feather name="external-link" size={16} color={Colors.accent} />
+              </Pressable>
+            ) : null}
           </View>
           <View style={styles.contactRow}>
             <Feather name="mail" size={16} color={theme.textSecondary} />
             <ThemedText type="body" style={{ marginLeft: Spacing.sm }}>
-              {client.email}
+              {client.email || "No email"}
             </ThemedText>
           </View>
           {client.address ? (
