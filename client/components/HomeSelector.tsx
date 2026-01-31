@@ -125,6 +125,25 @@ export function HomeSelector({ selectedHome, onSelectHome, onAddNew, compact = f
                 <ThemedText style={[styles.compactAddress, { color: theme.textSecondary }]} numberOfLines={1}>
                   {formatAddress(selectedHome)}
                 </ThemedText>
+                {selectedHome.bedrooms || selectedHome.squareFeet ? (
+                  <View style={styles.compactDetails}>
+                    {selectedHome.bedrooms ? (
+                      <ThemedText style={[styles.compactDetail, { color: theme.textTertiary }]}>
+                        {selectedHome.bedrooms} bed
+                      </ThemedText>
+                    ) : null}
+                    {selectedHome.bathrooms ? (
+                      <ThemedText style={[styles.compactDetail, { color: theme.textTertiary }]}>
+                        {selectedHome.bathrooms} bath
+                      </ThemedText>
+                    ) : null}
+                    {selectedHome.squareFeet ? (
+                      <ThemedText style={[styles.compactDetail, { color: theme.textTertiary }]}>
+                        {selectedHome.squareFeet.toLocaleString()} sqft
+                      </ThemedText>
+                    ) : null}
+                  </View>
+                ) : null}
               </>
             ) : (
               <ThemedText style={[styles.compactPlaceholder, { color: theme.textSecondary }]}>
@@ -248,6 +267,30 @@ export function HomeSelector({ selectedHome, onSelectHome, onAddNew, compact = f
                 <ThemedText style={[styles.homeCardAddress, { color: theme.textSecondary }]} numberOfLines={1}>
                   {formatAddress(home)}
                 </ThemedText>
+                {home.bedrooms || home.squareFeet ? (
+                  <View style={styles.homeCardDetails}>
+                    {home.bedrooms ? (
+                      <ThemedText style={[styles.homeCardDetail, { color: theme.textTertiary }]}>
+                        {home.bedrooms} bed
+                      </ThemedText>
+                    ) : null}
+                    {home.bathrooms ? (
+                      <ThemedText style={[styles.homeCardDetail, { color: theme.textTertiary }]}>
+                        {home.bathrooms} bath
+                      </ThemedText>
+                    ) : null}
+                    {home.squareFeet ? (
+                      <ThemedText style={[styles.homeCardDetail, { color: theme.textTertiary }]}>
+                        {home.squareFeet.toLocaleString()} sqft
+                      </ThemedText>
+                    ) : null}
+                    {home.yearBuilt ? (
+                      <ThemedText style={[styles.homeCardDetail, { color: theme.textTertiary }]}>
+                        Built {home.yearBuilt}
+                      </ThemedText>
+                    ) : null}
+                  </View>
+                ) : null}
               </View>
               {selectedHome?.id === home.id ? (
                 <Feather name="check-circle" size={20} color={Colors.accent} />
@@ -292,6 +335,16 @@ const styles = StyleSheet.create({
   },
   homeCardAddress: {
     ...Typography.caption,
+  },
+  homeCardDetails: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+    marginTop: Spacing.xs,
+  },
+  homeCardDetail: {
+    ...Typography.caption,
+    fontSize: 11,
   },
   emptyState: {
     alignItems: "center",
@@ -339,6 +392,16 @@ const styles = StyleSheet.create({
   },
   compactPlaceholder: {
     ...Typography.body,
+  },
+  compactDetails: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+    marginTop: 2,
+  },
+  compactDetail: {
+    ...Typography.caption,
+    fontSize: 11,
   },
   modalContainer: {
     flex: 1,
