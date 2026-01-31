@@ -2032,6 +2032,219 @@ Respond with JSON only:
   // STRIPE CONNECT ENDPOINTS
   // ============================================
 
+  // Start Stripe Connect onboarding for provider (frontend uses this path)
+  app.post("/api/stripe/connect/onboard/:providerId", async (req: Request<{ providerId: string }>, res: Response) => {
+    try {
+      const { providerId } = req.params;
+      const result = await createConnectAccountLink(providerId);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Create connect onboarding error:", error);
+      res.status(500).json({ error: error.message || "Failed to start Stripe onboarding" });
+    }
+  });
+
+  // Refresh Stripe Connect onboarding link
+  app.post("/api/stripe/connect/refresh-link/:providerId", async (req: Request<{ providerId: string }>, res: Response) => {
+    try {
+      const { providerId } = req.params;
+      const result = await refreshConnectAccountLink(providerId);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Refresh connect link error:", error);
+      res.status(500).json({ error: error.message || "Failed to refresh onboarding link" });
+    }
+  });
+
+  // Get Stripe Connect status for provider
+  app.get("/api/stripe/connect/status/:providerId", async (req: Request<{ providerId: string }>, res: Response) => {
+    try {
+      const { providerId } = req.params;
+      const result = await getConnectStatus(providerId);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Get connect status error:", error);
+      res.status(500).json({ error: error.message || "Failed to get connect status" });
+    }
+  });
+
+  // Preview platform fee (GET endpoint for frontend)
+  app.get("/api/stripe/fee-preview", async (req: Request, res: Response) => {
+    try {
+      const { providerId, amountCents } = req.query;
+      if (!providerId || amountCents === undefined) {
+        return res.status(400).json({ error: "providerId and amountCents are required" });
+      }
+      const preview = await calculateFeePreview(providerId as string, parseInt(amountCents as string, 10));
+      res.json(preview);
+    } catch (error: any) {
+      console.error("Fee preview error:", error);
+      res.status(500).json({ error: error.message || "Failed to calculate fee preview" });
+    }
+  });
+
+  // Create invoice with line items (frontend path)
+  app.post("/api/stripe/invoices", async (req: Request, res: Response) => {
+    try {
+      const {
+        providerId,
+        clientId,
+        homeownerUserId,
+        jobId,
+        lineItems: lineItemsInput,
+        taxCents,
+        discountCents,
+        dueDate,
+        notes,
+      } = req.body;
+
+      if (!providerId) {
+        return res.status(400).json({ error: "providerId is required" });
+      }
+
+      // Calculate subtotal from line items
+      let subtotalCents = 0;
+      const parsedLineItems = Array.isArray(lineItemsInput) ? lineItemsInput : [];
+      for (const item of parsedLineItems) {
+        const qty = parseFloat(item.quantity || "1");
+        const unitPrice = parseInt(item.unitPriceCents || "0", 10);
+        subtotalCents += Math.round(qty * unitPrice);
+      }
+
+      // Calculate platform fee
+      const plan = await getProviderPlan(providerId);
+      const fee = calculatePlatformFee(
+        subtotalCents,
+        plan.platformFeePercent || "10.00",
+        plan.platformFeeFixedCents || 0
+      );
+
+      const totalBeforeTax = subtotalCents - (discountCents || 0);
+      const totalCents = totalBeforeTax + (taxCents || 0);
+
+      // Generate invoice number
+      const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}`;
+
+      // Create the invoice
+      const [invoice] = await db
+        .insert(invoices)
+        .values({
+          providerId,
+          clientId: clientId || null,
+          homeownerUserId: homeownerUserId || null,
+          jobId: jobId || null,
+          invoiceNumber,
+          currency: "usd",
+          subtotalCents,
+          taxCents: taxCents || 0,
+          discountCents: discountCents || 0,
+          platformFeeCents: fee.totalCents,
+          totalCents,
+          amount: (subtotalCents / 100).toFixed(2),
+          tax: ((taxCents || 0) / 100).toFixed(2),
+          total: (totalCents / 100).toFixed(2),
+          status: "draft",
+          dueDate: dueDate ? new Date(dueDate) : null,
+          notes: notes || null,
+          paymentMethodsAllowed: "stripe,credits",
+        })
+        .returning();
+
+      // Create line items
+      if (parsedLineItems.length > 0) {
+        await db.insert(invoiceLineItems).values(
+          parsedLineItems.map((item: any) => ({
+            invoiceId: invoice.id,
+            name: item.description || item.name || "Service",
+            description: item.description || null,
+            quantity: String(item.quantity || "1"),
+            unitPriceCents: parseInt(item.unitPriceCents || "0", 10),
+            amountCents: Math.round(
+              parseFloat(item.quantity || "1") * parseInt(item.unitPriceCents || "0", 10)
+            ),
+          }))
+        );
+      }
+
+      res.status(201).json({
+        invoice,
+        platformFee: fee,
+      });
+    } catch (error: any) {
+      console.error("Create invoice error:", error);
+      res.status(500).json({ error: error.message || "Failed to create invoice" });
+    }
+  });
+
+  // Get invoices for provider
+  app.get("/api/stripe/invoices", async (req: Request, res: Response) => {
+    try {
+      const { providerId } = req.query;
+      if (!providerId) {
+        return res.status(400).json({ error: "providerId is required" });
+      }
+      const providerInvoices = await db
+        .select()
+        .from(invoices)
+        .where(eq(invoices.providerId, providerId as string))
+        .orderBy(invoices.createdAt);
+      res.json({ invoices: providerInvoices });
+    } catch (error: any) {
+      console.error("Get invoices error:", error);
+      res.status(500).json({ error: error.message || "Failed to get invoices" });
+    }
+  });
+
+  // Send invoice
+  app.post("/api/stripe/invoices/:invoiceId/send", async (req: Request<{ invoiceId: string }>, res: Response) => {
+    try {
+      const { invoiceId } = req.params;
+
+      const [updated] = await db
+        .update(invoices)
+        .set({
+          status: "sent",
+          sentAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(invoices.id, invoiceId))
+        .returning();
+
+      res.json({ invoice: updated });
+    } catch (error: any) {
+      console.error("Send invoice error:", error);
+      res.status(500).json({ error: error.message || "Failed to send invoice" });
+    }
+  });
+
+  // Create Stripe checkout session for invoice payment
+  app.post("/api/stripe/invoices/:invoiceId/checkout", async (req: Request<{ invoiceId: string }>, res: Response) => {
+    try {
+      const { invoiceId } = req.params;
+      const result = await createStripeCheckoutSession(invoiceId);
+      res.json({ url: result.checkoutUrl, sessionId: result.sessionId });
+    } catch (error: any) {
+      console.error("Create checkout session error:", error);
+      res.status(500).json({ error: error.message || "Failed to create checkout session" });
+    }
+  });
+
+  // Apply credits to invoice
+  app.post("/api/stripe/invoices/:invoiceId/apply-credits", async (req: Request<{ invoiceId: string }>, res: Response) => {
+    try {
+      const { invoiceId } = req.params;
+      const { userId, amountCents } = req.body;
+      if (!userId || amountCents === undefined) {
+        return res.status(400).json({ error: "userId and amountCents are required" });
+      }
+      const result = await applyCreditsToInvoice(invoiceId, userId, amountCents);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Apply credits error:", error);
+      res.status(500).json({ error: error.message || "Failed to apply credits" });
+    }
+  });
+
   // Create Connect account and onboarding link for provider
   app.post("/api/connect/account-link", async (req: Request, res: Response) => {
     try {
