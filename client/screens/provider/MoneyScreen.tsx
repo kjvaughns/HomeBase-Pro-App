@@ -148,8 +148,30 @@ export default function MoneyScreen() {
     return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
+  const handleStripeConnect = () => {
+    navigation.navigate("StripeConnect");
+  };
+
   const renderHeader = () => (
     <View style={styles.headerContainer}>
+      <Animated.View entering={FadeInDown.delay(50).duration(400)}>
+        <Pressable 
+          style={[styles.stripeButton, { backgroundColor: theme.cardBackground }]}
+          onPress={handleStripeConnect}
+        >
+          <View style={[styles.stripeIcon, { backgroundColor: Colors.accent + "20" }]}>
+            <Feather name="credit-card" size={18} color={Colors.accent} />
+          </View>
+          <View style={styles.stripeInfo}>
+            <ThemedText style={{ fontWeight: "600" }}>Stripe Payments</ThemedText>
+            <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+              Test invoices and Connect onboarding
+            </ThemedText>
+          </View>
+          <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+        </Pressable>
+      </Animated.View>
+
       <Animated.View entering={FadeInDown.delay(100).duration(400)}>
         <GlassCard style={styles.balanceCard}>
           <View style={styles.balanceHeader}>
@@ -312,6 +334,24 @@ const styles = StyleSheet.create({
   },
   headerContainer: {
     marginBottom: Spacing.md,
+  },
+  stripeButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.card,
+    marginBottom: Spacing.md,
+  },
+  stripeIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.iconContainer,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: Spacing.md,
+  },
+  stripeInfo: {
+    flex: 1,
   },
   balanceCard: {
     marginBottom: Spacing.lg,
