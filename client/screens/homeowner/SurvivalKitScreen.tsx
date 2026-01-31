@@ -11,7 +11,9 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { HomeSelector, Home } from "@/components/HomeSelector";
 import { useTheme } from "@/hooks/useTheme";
+import { useAuthStore } from "@/state/authStore";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -204,8 +206,10 @@ export default function SurvivalKitScreen() {
   const headerHeight = useHeaderHeight();
   const navigation = useNavigation<any>();
   const { theme } = useTheme();
+  const { isAuthenticated } = useAuthStore();
 
   const [currentStep, setCurrentStep] = useState<WizardStep>("entry");
+  const [selectedHome, setSelectedHome] = useState<Home | null>(null);
   const [wizardData, setWizardData] = useState<WizardData>({
     propertyType: "",
     yearBuilt: "",
@@ -262,6 +266,57 @@ export default function SurvivalKitScreen() {
         ? prev[key].filter((id) => id !== itemId)
         : [...prev[key], itemId],
     }));
+  }, []);
+
+  const prefillFromHome = useCallback((home: Home) => {
+    setSelectedHome(home);
+    
+    const getPropertyType = (type?: string) => {
+      if (!type) return "";
+      const typeMap: Record<string, string> = {
+        single_family: "single_family",
+        condo: "condo",
+        townhouse: "townhome",
+        apartment: "condo",
+        multi_family: "duplex",
+      };
+      return typeMap[type] || "";
+    };
+    
+    const getYearBuiltRange = (year?: number) => {
+      if (!year) return "";
+      if (year < 1970) return "Before 1970";
+      if (year < 1990) return "1970-1990";
+      if (year < 2010) return "1990-2010";
+      return "After 2010";
+    };
+    
+    const getSquareFootageRange = (sqft?: number) => {
+      if (!sqft) return "";
+      if (sqft < 1500) return "small";
+      if (sqft < 2500) return "medium";
+      return "large";
+    };
+    
+    const getBedroomsLabel = (beds?: number) => {
+      if (!beds) return "";
+      if (beds === 1) return "1";
+      if (beds === 2) return "2";
+      if (beds === 3) return "3";
+      if (beds >= 4) return "4+";
+      return "";
+    };
+    
+    setWizardData((prev) => ({
+      ...prev,
+      propertyType: getPropertyType(home.propertyType),
+      yearBuilt: getYearBuiltRange(home.yearBuilt),
+      squareFootage: getSquareFootageRange(home.squareFeet),
+      bedrooms: getBedroomsLabel(home.bedrooms),
+    }));
+    
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setCurrentStep("hvac_type");
   }, []);
 
   const estimatedCost = useMemo(() => {
@@ -372,14 +427,25 @@ export default function SurvivalKitScreen() {
           </View>
         </View>
 
+        {isAuthenticated ? (
+          <>
+            <View style={styles.homeSelectorContainer}>
+              <HomeSelector
+                selectedHome={selectedHome}
+                onSelectHome={prefillFromHome}
+                onAddNew={() => navigation.navigate("Addresses")}
+                compact
+              />
+            </View>
+            <ThemedText style={[styles.orDivider, { color: theme.textTertiary }]}>
+              or start fresh
+            </ThemedText>
+          </>
+        ) : null}
+
         <PrimaryButton onPress={goToNextStep} style={styles.startButton}>
-          Start
+          {isAuthenticated ? "Enter Details Manually" : "Start"}
         </PrimaryButton>
-        <Pressable onPress={goToNextStep} style={styles.secondaryButton}>
-          <ThemedText style={[styles.secondaryButtonText, { color: theme.textSecondary }]}>
-            Use my saved home details
-          </ThemedText>
-        </Pressable>
       </GlassCard>
     </Animated.View>
   );
@@ -1087,15 +1153,19 @@ const styles = StyleSheet.create({
   entryFeatureText: {
     ...Typography.body,
   },
+  homeSelectorContainer: {
+    width: "100%",
+    marginTop: Spacing.lg,
+    marginBottom: Spacing.sm,
+  },
+  orDivider: {
+    ...Typography.caption,
+    textAlign: "center",
+    marginBottom: Spacing.sm,
+  },
   startButton: {
     minWidth: 200,
     marginBottom: Spacing.md,
-  },
-  secondaryButton: {
-    padding: Spacing.sm,
-  },
-  secondaryButtonText: {
-    ...Typography.subhead,
   },
   stepContainer: {
     flex: 1,
