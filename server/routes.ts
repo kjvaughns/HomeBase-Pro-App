@@ -1622,6 +1622,16 @@ Respond with JSON only:
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
       }
+      
+      // Check for existing client with same email for this provider
+      if (parsed.data.email && parsed.data.providerId) {
+        const existingClients = await storage.getClients(parsed.data.providerId);
+        const duplicate = existingClients.find(c => c.email?.toLowerCase() === parsed.data.email?.toLowerCase());
+        if (duplicate) {
+          return res.status(409).json({ error: "A client with this email already exists" });
+        }
+      }
+      
       const client = await storage.createClient(parsed.data);
       res.status(201).json({ client });
     } catch (error) {

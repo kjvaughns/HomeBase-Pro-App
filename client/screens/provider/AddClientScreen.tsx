@@ -68,8 +68,11 @@ export default function AddClientScreen() {
         },
       ]);
     },
-    onError: (error) => {
-      Alert.alert("Error", "Failed to create client. Please try again.");
+    onError: (error: any) => {
+      const message = error?.message?.includes("already exists") 
+        ? "A client with this email already exists."
+        : "Failed to create client. Please try again.";
+      Alert.alert("Error", message);
       console.error("Create client error:", error);
     },
   });
