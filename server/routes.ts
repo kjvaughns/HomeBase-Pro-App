@@ -170,6 +170,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
       }
       const home = await storage.createHome(parsed.data);
+      
+      // Auto-enrich the home with property data (fire and forget)
+      if (home.street && home.city && home.state && home.zip) {
+        const fullAddress = `${home.street}, ${home.city}, ${home.state} ${home.zip}`;
+        enrichPropertyData(fullAddress).then(async (enrichment) => {
+          try {
+            const updateData: Record<string, unknown> = {
+              housefaxEnrichedAt: new Date()
+            };
+            
+            if (enrichment.zillow) {
+              const z = enrichment.zillow;
+              if (z.bedrooms) updateData.bedrooms = z.bedrooms;
+              if (z.bathrooms) updateData.bathrooms = z.bathrooms;
+              if (z.livingArea) updateData.squareFeet = z.livingArea;
+              if (z.yearBuilt) updateData.yearBuilt = z.yearBuilt;
+              if (z.lotSize) updateData.lotSize = z.lotSize;
+              if (z.zestimate) updateData.estimatedValue = String(z.zestimate);
+              if (z.zpid) updateData.zillowId = z.zpid;
+              if (z.url) updateData.zillowUrl = z.url;
+              if (z.taxAssessedValue) updateData.taxAssessedValue = String(z.taxAssessedValue);
+              if (z.lastSoldDate) updateData.lastSoldDate = z.lastSoldDate;
+              if (z.lastSoldPrice) updateData.lastSoldPrice = String(z.lastSoldPrice);
+            }
+            
+            if (enrichment.google) {
+              const g = enrichment.google;
+              if (g.latitude) updateData.latitude = String(g.latitude);
+              if (g.longitude) updateData.longitude = String(g.longitude);
+              if (g.placeId) updateData.placeId = g.placeId;
+              if (g.formattedAddress) updateData.formattedAddress = g.formattedAddress;
+              if (g.neighborhood) updateData.neighborhoodName = g.neighborhood;
+              if (g.county) updateData.countyName = g.county;
+            }
+            
+            await storage.updateHome(home.id, updateData);
+            console.log(`Auto-enriched home ${home.id} with ${Object.keys(updateData).length - 1} fields`);
+          } catch (err) {
+            console.error("Auto-enrichment update failed:", err);
+          }
+        }).catch((err) => {
+          console.error("Auto-enrichment failed:", err);
+        });
+      }
+      
       res.status(201).json({ home: formatHomeResponse(home) });
     } catch (error) {
       console.error("Create home error:", error);
