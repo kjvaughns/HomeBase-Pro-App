@@ -227,7 +227,7 @@ export default function AIChatScreen() {
       <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior="padding"
-        keyboardVerticalOffset={0}
+        keyboardVerticalOffset={headerHeight}
       >
         <FlatList
           ref={flatListRef}
@@ -239,7 +239,7 @@ export default function AIChatScreen() {
           contentContainerStyle={[
             styles.messagesContent,
             {
-              paddingTop: headerHeight + Spacing.md,
+              paddingTop: Spacing.md,
               paddingBottom: Spacing.xl,
             },
           ]}

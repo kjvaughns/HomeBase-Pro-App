@@ -3,8 +3,10 @@ import { StyleSheet, View, ScrollView, Pressable, RefreshControl } from "react-n
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
-import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { useNavigation, useFocusEffect, CompositeNavigationProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
+import { HomeownerTabParamList } from "@/navigation/HomeownerTabNavigator";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -36,7 +38,10 @@ interface Appointment {
   };
 }
 
-type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+type NavigationProp = CompositeNavigationProp<
+  BottomTabNavigationProp<HomeownerTabParamList>,
+  NativeStackNavigationProp<RootStackParamList>
+>;
 
 const STATUS_MAP: Record<JobStatus, { label: string; status: "success" | "info" | "warning" | "neutral" | "pending" | "scheduled" | "inProgress" | "completed" }> = {
   requested: { label: "Requested", status: "info" },
@@ -269,7 +274,7 @@ export default function HomeScreen() {
         <Animated.View entering={FadeInDown.delay(400).duration(400)}>
           <View style={styles.sectionHeader}>
             <ThemedText style={styles.sectionTitle}>Quick Search</ThemedText>
-            <Pressable onPress={() => navigation.getParent()?.navigate("FindTab")}>
+            <Pressable onPress={() => navigation.navigate("FindTab")}>
               <ThemedText style={[styles.viewAll, { color: Colors.accent }]}>See All</ThemedText>
             </Pressable>
           </View>
