@@ -26,6 +26,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { HomeSelector, Home } from "@/components/HomeSelector";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
@@ -47,16 +48,6 @@ interface HealthScoreRun {
   topRisks: string[];
 }
 
-interface Home {
-  id: string;
-  name: string;
-  address: string;
-}
-
-const MOCK_HOMES: Home[] = [
-  { id: "home-1", name: "Main House", address: "123 Test Street, San Francisco" },
-  { id: "home-2", name: "Beach Cottage", address: "456 Ocean Drive, Santa Cruz" },
-];
 
 const MOCK_SCORE_RUNS: HealthScoreRun[] = [
   {
@@ -152,8 +143,7 @@ export default function HealthScoreScreen() {
   const { theme } = useTheme();
   const { user } = useAuthStore();
 
-  const [selectedHomeId, setSelectedHomeId] = useState(MOCK_HOMES[0].id);
-  const [showHomeSelector, setShowHomeSelector] = useState(false);
+  const [selectedHome, setSelectedHome] = useState<Home | null>(null);
   const [showWizard, setShowWizard] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [wizardStep, setWizardStep] = useState(0);
@@ -162,7 +152,10 @@ export default function HealthScoreScreen() {
   const [showScoringDrawer, setShowScoringDrawer] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "risks" | "plan" | "history">("overview");
 
-  const selectedHome = MOCK_HOMES.find((h) => h.id === selectedHomeId) || MOCK_HOMES[0];
+  const handleSelectHome = (home: Home) => {
+    setSelectedHome(home);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
   const lastRun = MOCK_SCORE_RUNS[0];
   const previousRun = MOCK_SCORE_RUNS[1];
   const trendDiff = lastRun && previousRun ? lastRun.score - previousRun.score : 0;
@@ -240,11 +233,12 @@ export default function HealthScoreScreen() {
       showsVerticalScrollIndicator={false}
     >
       <Animated.View entering={FadeInDown.delay(100).duration(400)}>
-        <Pressable style={[styles.homeSelector, { backgroundColor: theme.cardBackground }]} onPress={() => setShowHomeSelector(true)}>
-          <Feather name="home" size={18} color={Colors.accent} />
-          <ThemedText style={styles.homeSelectorText}>{selectedHome.name}</ThemedText>
-          <Feather name="chevron-down" size={18} color={theme.textSecondary} />
-        </Pressable>
+        <HomeSelector
+          selectedHome={selectedHome}
+          onSelectHome={handleSelectHome}
+          onAddNew={() => navigation.navigate("Addresses")}
+          compact
+        />
       </Animated.View>
 
       <Animated.View entering={FadeInDown.delay(200).duration(400)}>
@@ -671,36 +665,12 @@ export default function HealthScoreScreen() {
     </Modal>
   );
 
-  const renderHomeSelector = () => (
-    <Modal visible={showHomeSelector} animationType="fade" transparent>
-      <Pressable style={styles.modalOverlay} onPress={() => setShowHomeSelector(false)}>
-        <View style={[styles.modalContent, { backgroundColor: theme.backgroundDefault }]}>
-          <ThemedText style={styles.modalTitle}>Select Home</ThemedText>
-          {MOCK_HOMES.map((home) => (
-            <Pressable
-              key={home.id}
-              style={[styles.homeOption, selectedHomeId === home.id && { backgroundColor: Colors.accentLight }]}
-              onPress={() => { setSelectedHomeId(home.id); setShowHomeSelector(false); }}
-            >
-              <View>
-                <ThemedText style={styles.homeOptionName}>{home.name}</ThemedText>
-                <ThemedText style={[styles.homeOptionAddress, { color: theme.textSecondary }]}>{home.address}</ThemedText>
-              </View>
-              {selectedHomeId === home.id ? <Feather name="check" size={20} color={Colors.accent} /> : null}
-            </Pressable>
-          ))}
-        </View>
-      </Pressable>
-    </Modal>
-  );
-
   return (
     <ThemedView style={styles.container}>
       {renderEntryScreen()}
       {renderWizard()}
       {renderResults()}
       {renderScoringDrawer()}
-      {renderHomeSelector()}
     </ThemedView>
   );
 }
