@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
+import { useNavigation } from "@react-navigation/native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -16,18 +17,20 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { ListRow } from "@/components/ListRow";
 import { StatusPill } from "@/components/StatusPill";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 
-type TabKey = "bank" | "tax";
+type TabKey = "payments" | "bank" | "tax";
 
 export default function AccountingScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const navigation = useNavigation<any>();
   const { theme } = useTheme();
 
-  const [activeTab, setActiveTab] = useState<TabKey>("bank");
+  const [activeTab, setActiveTab] = useState<TabKey>("payments");
   const [isSaving, setIsSaving] = useState(false);
 
   const [bankName, setBankName] = useState("Chase Bank");
@@ -47,6 +50,46 @@ export default function AccountingScreen() {
     await new Promise((resolve) => setTimeout(resolve, 1000));
     setIsSaving(false);
   };
+
+  const renderPaymentsTab = () => (
+    <Animated.View entering={FadeInDown.delay(50).duration(300)}>
+      <GlassCard style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionTitleRow}>
+            <Feather name="dollar-sign" size={18} color={Colors.accent} />
+            <ThemedText style={styles.sectionTitle}>Stripe Connect</ThemedText>
+          </View>
+        </View>
+
+        <ThemedText style={[styles.sectionDescription, { color: theme.textSecondary }]}>
+          Connect your Stripe account to receive payments directly from clients. Manage invoices, track payouts, and more.
+        </ThemedText>
+
+        <View style={[styles.menuSection, { backgroundColor: theme.cardBackground }]}>
+          <ListRow
+            title="Stripe Connect Setup"
+            subtitle="Onboarding, payouts, and account status"
+            leftIcon="credit-card"
+            onPress={() => navigation.navigate("StripeConnect")}
+            isFirst
+          />
+          <ListRow
+            title="Create Invoice"
+            subtitle="Bill clients with itemized invoices"
+            leftIcon="file-plus"
+            onPress={() => navigation.navigate("StripeConnect")}
+          />
+          <ListRow
+            title="Invoice History"
+            subtitle="View and manage all invoices"
+            leftIcon="list"
+            onPress={() => navigation.navigate("StripeConnect")}
+            isLast
+          />
+        </View>
+      </GlassCard>
+    </Animated.View>
+  );
 
   const renderBankTab = () => (
     <Animated.View entering={FadeInDown.delay(50).duration(300)}>
@@ -288,6 +331,27 @@ export default function AccountingScreen() {
             <Pressable
               style={[
                 styles.tab,
+                activeTab === "payments" && { backgroundColor: Colors.accent },
+              ]}
+              onPress={() => setActiveTab("payments")}
+            >
+              <Feather
+                name="dollar-sign"
+                size={16}
+                color={activeTab === "payments" ? "#FFFFFF" : theme.textSecondary}
+              />
+              <ThemedText
+                style={[
+                  styles.tabText,
+                  activeTab === "payments" && { color: "#FFFFFF" },
+                ]}
+              >
+                Payments
+              </ThemedText>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.tab,
                 activeTab === "bank" && { backgroundColor: Colors.accent },
               ]}
               onPress={() => setActiveTab("bank")}
@@ -303,7 +367,7 @@ export default function AccountingScreen() {
                   activeTab === "bank" && { color: "#FFFFFF" },
                 ]}
               >
-                Bank Account
+                Bank
               </ThemedText>
             </Pressable>
             <Pressable
@@ -324,13 +388,13 @@ export default function AccountingScreen() {
                   activeTab === "tax" && { color: "#FFFFFF" },
                 ]}
               >
-                Tax Info
+                Tax
               </ThemedText>
             </Pressable>
           </View>
         </Animated.View>
 
-        {activeTab === "bank" ? renderBankTab() : renderTaxTab()}
+        {activeTab === "payments" ? renderPaymentsTab() : activeTab === "bank" ? renderBankTab() : renderTaxTab()}
 
         <Animated.View entering={FadeInDown.delay(100).duration(300)}>
           <PrimaryButton onPress={handleSave} disabled={isSaving}>
@@ -383,6 +447,14 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...Typography.headline,
     fontWeight: "600",
+  },
+  sectionDescription: {
+    ...Typography.body,
+    marginBottom: Spacing.lg,
+  },
+  menuSection: {
+    borderRadius: BorderRadius.md,
+    overflow: "hidden",
   },
   bankPreview: {
     marginBottom: Spacing.lg,

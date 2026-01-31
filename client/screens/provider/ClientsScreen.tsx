@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import { StyleSheet, FlatList, RefreshControl, View, TextInput, Pressable, Linking } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -6,6 +6,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { useQuery } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -15,8 +16,31 @@ import { StatusPill } from "@/components/StatusPill";
 import { FilterChips, FilterOption } from "@/components/FilterChips";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
-import { useProviderStore, Client } from "@/state/providerStore";
+import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+
+export interface Client {
+  id: string;
+  providerId: string;
+  firstName: string;
+  lastName: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  notes?: string;
+  avatar?: string;
+  status: "lead" | "active" | "inactive" | "archived";
+  ltv: number;
+  outstandingBalance?: number;
+  nextAppointment?: string;
+  lastSeen?: string;
+  clientSince?: string;
+  createdAt: string;
+}
 
 type StatusFilter = "all" | "lead" | "active" | "inactive" | "has_upcoming" | "overdue";
 type SortOption = "recent" | "ltv" | "overdue" | "newest";
@@ -186,17 +210,44 @@ function ClientCard({ client, onPress, onCall, onMessage }: ClientCardProps) {
   );
 }
 
+interface ApiClient {
+  id: string;
+  providerId: string;
+  firstName: string;
+  lastName: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  notes?: string;
+  status?: string;
+  createdAt: string;
+}
+
 export default function ClientsScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { providerProfile } = useAuthStore();
+  const providerId = providerProfile?.id;
 
-  const clients = useProviderStore((s) => s.clients);
-  const initializeWithMockData = useProviderStore((s) => s.initializeWithMockData);
+  const { data: clientsData, isLoading, refetch } = useQuery<{ clients: ApiClient[] }>({
+    queryKey: ["/api/provider", providerId, "clients"],
+    enabled: !!providerId,
+  });
 
-  useEffect(() => {
-    initializeWithMockData();
-  }, [initializeWithMockData]);
+  const clients: Client[] = useMemo(() => {
+    return (clientsData?.clients || []).map((c) => ({
+      ...c,
+      name: `${c.firstName} ${c.lastName}`,
+      status: (c.status as Client["status"]) || "active",
+      ltv: 0,
+      outstandingBalance: 0,
+      clientSince: c.createdAt,
+    }));
+  }, [clientsData]);
 
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -271,7 +322,7 @@ export default function ClientsScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    initializeWithMockData();
+    await refetch();
     setRefreshing(false);
   };
 
