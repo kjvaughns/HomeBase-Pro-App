@@ -48,10 +48,17 @@ export default function AddClientScreen() {
       const response = await apiRequest("POST", "/api/clients", data);
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/provider", providerProfile?.id, "clients"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/provider", providerProfile?.id, "stats"] });
-      navigation.goBack();
+    onSuccess: (data) => {
+      Alert.alert("Success", "Client added successfully!", [
+        {
+          text: "OK",
+          onPress: () => {
+            queryClient.invalidateQueries({ queryKey: ["/api/provider", providerProfile?.id, "clients"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/provider", providerProfile?.id, "stats"] });
+            navigation.goBack();
+          },
+        },
+      ]);
     },
     onError: (error) => {
       Alert.alert("Error", "Failed to create client. Please try again.");

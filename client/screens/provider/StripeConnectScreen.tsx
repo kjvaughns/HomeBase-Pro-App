@@ -101,8 +101,8 @@ export default function StripeConnectScreen() {
       return response.json();
     },
     onSuccess: (data) => {
-      if (data.url) {
-        Linking.openURL(data.url);
+      if (data.onboardingUrl) {
+        Linking.openURL(data.onboardingUrl);
       }
       refetchStatus();
     },
