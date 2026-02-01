@@ -1,0 +1,235 @@
+You are my senior product engineer and QA lead. You will implement, wire, and verify the full HomeBase mobile app experience so that the Service Pro side is the primary experience, while still supporting Homeowner accounts. Build everything end to end with correct data models, permissions, Stripe Connect flows, and working UI.
+
+Primary goals
+1. The app must open to a role selection screen, not a homeowner focused home screen.
+2. Users can be both Homeowner and Service Pro under one login. They can switch roles any time.
+3. The Service Pro workflow must fully replace pen and paper: client CRM, scheduling, invoices, payments, booking link intake, and automated confirmations.
+4. All core flows must be functional and testable with clear acceptance criteria.
+
+Platform assumptions
+Mobile app with authentication, database, and Stripe Connect already integrated or available.
+If something is missing, implement it. Do not leave stubs.
+
+Information architecture
+App launch flow
+A. Splash
+B. If not logged in, show Auth
+C. If logged in, show Role Gateway screen
+
+Role Gateway screen requirements
+1. Title: “How will you use HomeBase?”
+2. Two primary buttons:
+   Homeowner
+   Service Pro
+3. Micro copy under each:
+   Homeowner: “Book, pay, and manage appointments”
+   Service Pro: “Schedule jobs, invoice clients, and get paid”
+4. Allow multi role
+   If user already has both roles, show “Continue as Homeowner” and “Continue as Service Pro”
+   If user only has one role, show the other role as “Add role” and run onboarding
+5. Add a small “Switch roles” entry in settings and on the main dashboard header for quick switching.
+6. Role selection persists per session but user can switch at any time.
+
+Account model and permissions
+User can have two profiles tied to the same auth user_id:
+1. homeowner_profile
+2. provider_profile
+
+Rules
+1. Same login can create both profiles.
+2. Switching roles changes the navigation and default home screen.
+3. Data access is role scoped:
+   Homeowner sees their own bookings, invoices, payments, messages, saved providers.
+   Provider sees their business, clients, schedule, invoices, payouts, booking links.
+
+Data models
+Create or verify these tables and relations
+
+users
+id, email, phone, created_at
+
+homeowner_profiles
+id, user_id, name, phone, default_address_id, created_at
+
+provider_profiles
+id, user_id, business_name, trade_category, service_area, phone, brand_color, logo_url, public_slug, created_at
+
+addresses
+id, owner_type(homeowner or provider), owner_id, street, city, state, zip, lat, lng
+
+clients
+id, provider_id, full_name, phone, email, address_id, tags, notes, created_at
+
+jobs
+id, provider_id, homeowner_id nullable, client_id nullable, title, description, category, status(requested, booked, in_progress, completed, cancelled), scheduled_start, scheduled_end, address_id, intake_payload_json, created_at
+
+invoices
+id, provider_id, job_id nullable, client_id, homeowner_id nullable, subtotal, tax, total, status(draft, sent, paid, overdue, void), due_date, stripe_payment_link_url, stripe_payment_intent_id, created_at
+
+invoice_items
+id, invoice_id, name, qty, unit_price, line_total
+
+payments
+id, invoice_id, provider_id, amount, status, stripe_charge_id, stripe_event_id, created_at
+
+payouts
+id, provider_id, amount, status, stripe_payout_id, created_at
+
+booking_links
+id, provider_id, slug, is_active, deposit_required boolean, deposit_amount optional, service_catalog_json, availability_rules_json, created_at
+
+intake_submissions
+id, booking_link_id, provider_id, homeowner_id nullable, client_name, client_phone, address_id, problem_description, answers_json, photos_array_urls, preferred_times_json, quote_mode(range or fixed), quote_low, quote_high, quote_fixed, status(submitted, reviewed, converted), created_at
+
+messages_or_notifications
+id, provider_id, homeowner_id nullable, client_id nullable, job_id nullable, type(confirmation, reminder, receipt, update), channel(sms, email, in_app), content, sent_at, status
+
+Stripe Connect integration
+Provider onboarding
+1. In provider onboarding, user can create or connect a Stripe Connect account.
+2. Store provider stripe_connect_account_id.
+3. Block “Get paid” features until Stripe is connected, but allow creating clients and scheduling.
+4. Invoice payment must route funds to the provider connected account correctly.
+5. Provider “Funds” screen must show:
+   Available balance
+   Pending balance
+   Payout history
+   Payout button if supported
+6. Webhook handling
+   Process payment succeeded events and update invoice status to paid, create payment record, trigger receipts.
+
+Service Pro onboarding flow
+After selecting Service Pro from Role Gateway, onboarding must be short and conversion focused.
+Step 1 Business setup
+Business name
+Trade category dropdown
+Service zip codes or service area
+Step 2 Get paid setup
+Connect Stripe button
+Explain: “Get paid by card, deposits, and invoices”
+Step 3 Your booking link
+Generate slug
+Toggle deposits
+Set deposit amount if enabled
+Step 4 Done
+Land on Service Pro Dashboard
+
+Homeowner onboarding flow
+After selecting Homeowner
+Step 1 Profile basics
+Name, phone
+Step 2 Address
+Default address
+Step 3 Done
+Land on Homeowner Dashboard
+
+Navigation and screens
+Service Pro Dashboard is the default after provider role selection
+Tabs for Service Pro
+1. Schedule
+2. Clients
+3. Invoices
+4. Booking link
+5. Funds
+Settings includes role switching
+
+Schedule screen
+Calendar week view and day view
+Create job
+Tap job to view details, status, notes, address, linked invoice
+Job statuses must update and reflect visually
+Job creation options:
+Manual booking
+From intake submission conversion
+
+Clients screen
+List of clients with search
+Add client
+Client detail shows history of jobs and invoices, notes, tags
+
+Invoices screen
+Create invoice for a client, optional link to a job
+Add line items
+Send invoice
+Invoice send must generate a working payment link or payment flow
+Invoice status updates automatically after payment
+Support deposits when booking requires it, deposit payment must create a payment record and apply to balance due or be tracked clearly
+
+Booking link screen
+Shows the provider’s public booking link
+Share button
+Preview flow
+Edit settings:
+Deposits toggle
+Deposit amount
+Availability rules
+Service catalog and the questions to ask
+
+AI intake and quoting behavior
+When a homeowner uses booking link
+1. They describe their issue in free text.
+2. The system asks a small number of dynamic follow up questions to clarify.
+3. The intake submission is created and visible on the provider side.
+4. The quote shown to homeowner can be either:
+   Range quote (low, high)
+   Fixed quote
+   Or “Estimate after review” depending on provider settings.
+Implement this in a deterministic, reliable way. If an AI model is used, include a fallback question set per category so it always works.
+
+Homeowner experience
+Homeowner Dashboard minimal
+Upcoming appointments
+Invoices to pay
+History
+When homeowner receives an invoice link, they should be able to pay in app or web fallback.
+Homeowner can manage appointment details and see provider instructions.
+
+B2B2C invite loop requirements
+Every invoice, receipt, and appointment confirmation must include a prompt for the homeowner to use the app:
+“Manage your appointment and payments with HomeBase”
+If user is not installed, link opens app store or web landing.
+If installed, deep link into the relevant invoice or appointment.
+
+Acceptance criteria and QA checklist
+Role gateway
+1. App never lands on homeowner home by default.
+2. Logged in users always see role selection unless they selected “remember my choice”.
+3. Users can add the second role later without creating a second login.
+4. Switching roles changes tabs and dashboard correctly.
+
+Service Pro core workflows must work end to end
+1. Create client
+2. Create job on schedule
+3. Create invoice linked to client and job
+4. Send invoice link
+5. Pay invoice using Stripe Connect routing
+6. Invoice becomes paid automatically
+7. Payment record created
+8. Receipt sent and visible
+9. Funds screen reflects balances and payouts
+
+Booking link flow must work end to end
+1. Provider creates booking link
+2. Homeowner opens link, submits intake, sees quote or next steps, books time, pays deposit if required
+3. Job appears on provider schedule with intake details
+4. Provider can convert intake to job and invoice
+5. Notifications are sent
+
+Data integrity
+1. Provider cannot see other providers’ data
+2. Homeowner cannot see other homeowners’ invoices or jobs
+3. All records are tied to provider_id and user_id properly
+
+Performance and reliability
+1. No screen loads can be blocked by slow network calls
+2. All loading states and empty states are present
+3. Error messages are clear and actionable
+
+Deliverables
+1. Implemented screens and navigation
+2. Implemented database tables and policies
+3. Implemented Stripe Connect onboarding, payment routing, and webhooks
+4. Implemented booking link and intake workflow with AI plus fallback
+5. QA pass with the checklist above, plus a short written test report describing each tested flow and proof that it works
+
+Do not add extra features beyond this scope. Focus on making these flows extremely stable and simple.
