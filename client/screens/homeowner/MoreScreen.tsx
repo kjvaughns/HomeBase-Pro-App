@@ -31,6 +31,8 @@ export default function MoreScreen() {
     hasProviderProfile,
     canAccessProviderMode,
     logout,
+    setActiveRole,
+    setNeedsRoleSelection,
   } = useAuthStore();
 
   const [showAccountGate, setShowAccountGate] = useState(false);
@@ -54,7 +56,12 @@ export default function MoreScreen() {
 
   const handleSwitchToProvider = () => {
     if (canAccessProviderMode()) {
-      navigation.navigate("RoleSwitchConfirmation", { targetRole: "provider" });
+      setActiveRole("provider");
+      setNeedsRoleSelection(false);
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "ProviderTabs" }],
+      });
     }
   };
 

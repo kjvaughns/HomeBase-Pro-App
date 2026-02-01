@@ -31,8 +31,15 @@ export default function ProviderMoreScreen() {
   const setAvailableForWork = useProviderStore((s) => s.setAvailableForWork);
   const setNotificationsEnabled = useProviderStore((s) => s.setNotificationsEnabled);
 
+  const { setActiveRole, setNeedsRoleSelection } = useAuthStore();
+
   const handleSwitchToHomeowner = () => {
-    navigation.navigate("RoleSwitchConfirmation", { targetRole: "homeowner" });
+    setActiveRole("homeowner");
+    setNeedsRoleSelection(false);
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "HomeTabs" }],
+    });
   };
 
   const handleLogout = () => {

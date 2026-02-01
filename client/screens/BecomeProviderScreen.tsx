@@ -6,6 +6,7 @@ import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -16,16 +17,58 @@ import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollV
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
+import { apiRequest } from "@/lib/query-client";
 
 export default function BecomeProviderScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const navigation = useNavigation<any>();
   const { theme } = useTheme();
-  const { user, createProviderProfile } = useAuthStore();
+  const queryClient = useQueryClient();
+  const { user, createProviderProfile, setActiveRole, setNeedsRoleSelection } = useAuthStore();
 
   const [businessName, setBusinessName] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [phone, setPhone] = useState("");
+  const [serviceArea, setServiceArea] = useState("");
+
+  const registerMutation = useMutation({
+    mutationFn: async (data: { userId: string; businessName: string; phone?: string; email?: string; serviceArea?: string }) => {
+      const response = await apiRequest("POST", "/api/provider/register", data);
+      return response.json();
+    },
+    onSuccess: async (result) => {
+      const provider = result.provider;
+      if (!provider) return;
+      
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      createProviderProfile({
+        id: provider.id,
+        userId: provider.userId,
+        businessName: provider.businessName,
+        services: [],
+        status: "approved",
+        rating: 0,
+        reviewCount: 0,
+        completedJobs: 0,
+      });
+      
+      setActiveRole("provider");
+      setNeedsRoleSelection(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/provider"] });
+      
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "ProviderTabs" }],
+      });
+    },
+    onError: (error: any) => {
+      Alert.alert(
+        "Registration Failed",
+        error.message || "Unable to create your provider profile. Please try again."
+      );
+    },
+  });
 
   const benefits = [
     {
@@ -50,30 +93,18 @@ export default function BecomeProviderScreen() {
     },
   ];
 
-  const handleSubmit = async () => {
-    if (!businessName.trim()) {
+  const handleSubmit = () => {
+    if (!businessName.trim() || !user?.id) {
       return;
     }
 
-    setLoading(true);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    createProviderProfile({
-      id: "provider-1",
-      userId: user?.id || "1",
+    registerMutation.mutate({
+      userId: user.id,
       businessName: businessName.trim(),
-      services: ["Plumbing"],
-      status: "approved",
-      rating: 0,
-      reviewCount: 0,
-      completedJobs: 0,
+      phone: phone.trim() || undefined,
+      email: user.email,
+      serviceArea: serviceArea.trim() || undefined,
     });
-
-    setLoading(false);
-
-    navigation.navigate("RoleSwitchConfirmation", { targetRole: "provider" });
   };
 
   return (
@@ -179,7 +210,7 @@ export default function BecomeProviderScreen() {
         >
           <PrimaryButton
             onPress={handleSubmit}
-            loading={loading}
+            loading={registerMutation.isPending}
             disabled={!businessName.trim()}
             style={styles.submitButton}
           >
