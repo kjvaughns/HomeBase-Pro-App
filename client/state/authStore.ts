@@ -30,10 +30,12 @@ interface AuthState {
   activeRole: UserRole;
   providerProfile: ProviderProfile | null;
   isHydrated: boolean;
+  needsRoleSelection: boolean;
   
   login: (user: User, providerProfile?: ProviderProfile | null) => void;
   logout: () => void;
   setActiveRole: (role: UserRole) => void;
+  setNeedsRoleSelection: (needs: boolean) => void;
   createProviderProfile: (profile: ProviderProfile) => void;
   updateProviderStatus: (status: ProviderStatus) => void;
   hasProviderProfile: () => boolean;
@@ -49,13 +51,15 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   activeRole: "guest",
   providerProfile: null,
   isHydrated: false,
+  needsRoleSelection: true,
 
   login: (user: User, providerProfile?: ProviderProfile | null) => {
     const newState = {
       isAuthenticated: true,
       user,
-      activeRole: "homeowner" as UserRole,
+      activeRole: "guest" as UserRole,
       providerProfile: providerProfile || null,
+      needsRoleSelection: true,
     };
     set(newState);
     saveToStorage(get());
@@ -79,6 +83,11 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       return;
     }
     set({ activeRole: role });
+    saveToStorage(get());
+  },
+
+  setNeedsRoleSelection: (needs: boolean) => {
+    set({ needsRoleSelection: needs });
     saveToStorage(get());
   },
 
@@ -116,6 +125,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
           user: data.user || null,
           activeRole: data.activeRole || "guest",
           providerProfile: data.providerProfile || null,
+          needsRoleSelection: data.needsRoleSelection ?? true,
           isHydrated: true,
         });
       } else {
@@ -135,6 +145,7 @@ async function saveToStorage(state: AuthState) {
       user: state.user,
       activeRole: state.activeRole,
       providerProfile: state.providerProfile,
+      needsRoleSelection: state.needsRoleSelection,
     };
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch (error) {

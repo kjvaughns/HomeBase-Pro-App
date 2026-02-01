@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import HomeownerTabNavigator from "@/navigation/HomeownerTabNavigator";
 import ProviderTabNavigator from "@/navigation/ProviderTabNavigator";
+import RoleGatewayScreen from "@/screens/RoleGatewayScreen";
 import RoleSwitchConfirmationScreen from "@/screens/RoleSwitchConfirmationScreen";
 import BecomeProviderScreen from "@/screens/BecomeProviderScreen";
 import WelcomeScreen from "@/screens/auth/WelcomeScreen";
@@ -63,6 +64,7 @@ export type RootStackParamList = {
   SignUp: undefined;
   ForgotPassword: undefined;
   Onboarding: undefined;
+  RoleGateway: undefined;
   Main: undefined;
   RoleSwitchConfirmation: { targetRole: UserRole };
   BecomeProvider: undefined;
@@ -173,7 +175,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export default function RootStackNavigator() {
   const screenOptions = useScreenOptions();
   const { theme } = useTheme();
-  const { isAuthenticated, isHydrated, activeRole, canAccessProviderMode } = useAuthStore();
+  const { isAuthenticated, isHydrated, activeRole, canAccessProviderMode, needsRoleSelection } = useAuthStore();
 
   const getMainComponent = () => {
     if (isAuthenticated && activeRole === "provider" && canAccessProviderMode()) {
@@ -186,13 +188,24 @@ export default function RootStackNavigator() {
     return null;
   }
 
+  // Show role gateway if authenticated but hasn't selected a role yet
+  const showRoleGateway = isAuthenticated && needsRoleSelection;
+
   return (
     <Stack.Navigator screenOptions={screenOptions}>
-      <Stack.Screen
-        name="Main"
-        component={getMainComponent()}
-        options={{ headerShown: false }}
-      />
+      {showRoleGateway ? (
+        <Stack.Screen
+          name="RoleGateway"
+          component={RoleGatewayScreen}
+          options={{ headerShown: false }}
+        />
+      ) : (
+        <Stack.Screen
+          name="Main"
+          component={getMainComponent()}
+          options={{ headerShown: false }}
+        />
+      )}
       <Stack.Screen
         name="Welcome"
         component={WelcomeScreen}
