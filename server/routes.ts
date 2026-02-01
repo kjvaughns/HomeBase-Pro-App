@@ -2845,6 +2845,202 @@ Respond with JSON only:
     }
   });
 
+  // ============================================
+  // BOOKING LINKS & INTAKE SUBMISSIONS
+  // ============================================
+
+  // Get booking links for provider
+  app.get("/api/providers/:providerId/booking-links", async (req: Request<{ providerId: string }>, res: Response) => {
+    try {
+      const { providerId } = req.params;
+      const links = await storage.getBookingLinksByProvider(providerId);
+      res.json({ bookingLinks: links });
+    } catch (error: any) {
+      console.error("Get booking links error:", error);
+      res.status(500).json({ error: error.message || "Failed to get booking links" });
+    }
+  });
+
+  // Create booking link for provider
+  app.post("/api/providers/:providerId/booking-links", async (req: Request<{ providerId: string }>, res: Response) => {
+    try {
+      const { providerId } = req.params;
+      const { slug, welcomeMessage, confirmationMessage, depositRequired, depositAmount, depositPercentage, intakeQuestions, serviceCatalog, availabilityRules, brandColor, logoUrl } = req.body;
+
+      if (!slug) {
+        return res.status(400).json({ error: "slug is required" });
+      }
+
+      // Check if slug is already taken
+      const existing = await storage.getBookingLinkBySlug(slug);
+      if (existing) {
+        return res.status(409).json({ error: "This booking link URL is already taken" });
+      }
+
+      const link = await storage.createBookingLink({
+        providerId,
+        slug,
+        welcomeMessage,
+        confirmationMessage,
+        depositRequired: depositRequired || false,
+        depositAmount,
+        depositPercentage,
+        intakeQuestions: intakeQuestions ? JSON.stringify(intakeQuestions) : null,
+        serviceCatalog: serviceCatalog ? JSON.stringify(serviceCatalog) : null,
+        availabilityRules: availabilityRules ? JSON.stringify(availabilityRules) : null,
+        brandColor,
+        logoUrl,
+      });
+
+      res.status(201).json({ bookingLink: link });
+    } catch (error: any) {
+      console.error("Create booking link error:", error);
+      res.status(500).json({ error: error.message || "Failed to create booking link" });
+    }
+  });
+
+  // Get public booking link by slug (no auth required)
+  app.get("/api/book/:slug", async (req: Request<{ slug: string }>, res: Response) => {
+    try {
+      const { slug } = req.params;
+      const link = await storage.getBookingLinkBySlug(slug);
+      
+      if (!link || link.status !== "active") {
+        return res.status(404).json({ error: "Booking page not found" });
+      }
+
+      // Get provider info for the booking page
+      const provider = await storage.getProvider(link.providerId);
+      if (!provider) {
+        return res.status(404).json({ error: "Provider not found" });
+      }
+
+      res.json({ 
+        bookingLink: {
+          ...link,
+          intakeQuestions: link.intakeQuestions ? JSON.parse(link.intakeQuestions) : [],
+          serviceCatalog: link.serviceCatalog ? JSON.parse(link.serviceCatalog) : [],
+          availabilityRules: link.availabilityRules ? JSON.parse(link.availabilityRules) : null,
+        },
+        provider: {
+          id: provider.id,
+          businessName: provider.businessName,
+          avatarUrl: provider.avatarUrl,
+          rating: provider.rating,
+          reviewCount: provider.reviewCount,
+          capabilityTags: provider.capabilityTags,
+        }
+      });
+    } catch (error: any) {
+      console.error("Get booking link error:", error);
+      res.status(500).json({ error: error.message || "Failed to get booking page" });
+    }
+  });
+
+  // Update booking link
+  app.put("/api/booking-links/:id", async (req: Request<{ id: string }>, res: Response) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      
+      if (updates.intakeQuestions && typeof updates.intakeQuestions !== "string") {
+        updates.intakeQuestions = JSON.stringify(updates.intakeQuestions);
+      }
+      if (updates.serviceCatalog && typeof updates.serviceCatalog !== "string") {
+        updates.serviceCatalog = JSON.stringify(updates.serviceCatalog);
+      }
+      if (updates.availabilityRules && typeof updates.availabilityRules !== "string") {
+        updates.availabilityRules = JSON.stringify(updates.availabilityRules);
+      }
+
+      const link = await storage.updateBookingLink(id, updates);
+      if (!link) {
+        return res.status(404).json({ error: "Booking link not found" });
+      }
+      res.json({ bookingLink: link });
+    } catch (error: any) {
+      console.error("Update booking link error:", error);
+      res.status(500).json({ error: error.message || "Failed to update booking link" });
+    }
+  });
+
+  // Delete booking link
+  app.delete("/api/booking-links/:id", async (req: Request<{ id: string }>, res: Response) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteBookingLink(id);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete booking link error:", error);
+      res.status(500).json({ error: error.message || "Failed to delete booking link" });
+    }
+  });
+
+  // Submit intake form (public - creates intake submission)
+  app.post("/api/book/:slug/submit", async (req: Request<{ slug: string }>, res: Response) => {
+    try {
+      const { slug } = req.params;
+      const { clientName, clientPhone, clientEmail, address, problemDescription, answersJson, photosJson, preferredTimesJson, homeownerUserId } = req.body;
+
+      if (!clientName || !problemDescription) {
+        return res.status(400).json({ error: "Name and problem description are required" });
+      }
+
+      const link = await storage.getBookingLinkBySlug(slug);
+      if (!link || link.status !== "active") {
+        return res.status(404).json({ error: "Booking page not found" });
+      }
+
+      const submission = await storage.createIntakeSubmission({
+        bookingLinkId: link.id,
+        providerId: link.providerId,
+        homeownerUserId: homeownerUserId || null,
+        clientName,
+        clientPhone,
+        clientEmail,
+        address,
+        problemDescription,
+        answersJson: answersJson ? JSON.stringify(answersJson) : null,
+        photosJson: photosJson ? JSON.stringify(photosJson) : null,
+        preferredTimesJson: preferredTimesJson ? JSON.stringify(preferredTimesJson) : null,
+      });
+
+      res.status(201).json({ submission, message: "Your request has been submitted!" });
+    } catch (error: any) {
+      console.error("Submit intake error:", error);
+      res.status(500).json({ error: error.message || "Failed to submit request" });
+    }
+  });
+
+  // Get intake submissions for provider
+  app.get("/api/providers/:providerId/intake-submissions", async (req: Request<{ providerId: string }>, res: Response) => {
+    try {
+      const { providerId } = req.params;
+      const submissions = await storage.getIntakeSubmissionsByProvider(providerId);
+      res.json({ submissions });
+    } catch (error: any) {
+      console.error("Get intake submissions error:", error);
+      res.status(500).json({ error: error.message || "Failed to get intake submissions" });
+    }
+  });
+
+  // Update intake submission (review, convert, decline)
+  app.put("/api/intake-submissions/:id", async (req: Request<{ id: string }>, res: Response) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      
+      const submission = await storage.updateIntakeSubmission(id, updates);
+      if (!submission) {
+        return res.status(404).json({ error: "Submission not found" });
+      }
+      res.json({ submission });
+    } catch (error: any) {
+      console.error("Update intake submission error:", error);
+      res.status(500).json({ error: error.message || "Failed to update submission" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

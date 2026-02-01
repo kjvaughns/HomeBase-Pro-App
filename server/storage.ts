@@ -12,6 +12,8 @@ import {
   jobs,
   invoices,
   payments,
+  bookingLinks,
+  intakeSubmissions,
   type User,
   type InsertUser,
   type Home,
@@ -31,6 +33,10 @@ import {
   type InsertInvoice,
   type Payment,
   type InsertPayment,
+  type BookingLink,
+  type InsertBookingLink,
+  type IntakeSubmission,
+  type InsertIntakeSubmission,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
@@ -447,6 +453,60 @@ export class DatabaseStorage implements IStorage {
       .where(eq(invoices.providerId, providerId));
     const nextNum = existingInvoices.length + 1;
     return `INV-${String(nextNum).padStart(4, "0")}`;
+  }
+
+  // Booking Links
+  async getBookingLink(id: string): Promise<BookingLink | undefined> {
+    const [link] = await db.select().from(bookingLinks).where(eq(bookingLinks.id, id));
+    return link || undefined;
+  }
+
+  async getBookingLinkBySlug(slug: string): Promise<BookingLink | undefined> {
+    const [link] = await db.select().from(bookingLinks).where(eq(bookingLinks.slug, slug));
+    return link || undefined;
+  }
+
+  async getBookingLinksByProvider(providerId: string): Promise<BookingLink[]> {
+    return await db.select().from(bookingLinks).where(eq(bookingLinks.providerId, providerId));
+  }
+
+  async createBookingLink(data: InsertBookingLink): Promise<BookingLink> {
+    const [link] = await db.insert(bookingLinks).values(data).returning();
+    return link;
+  }
+
+  async updateBookingLink(id: string, data: Partial<BookingLink>): Promise<BookingLink | undefined> {
+    const [link] = await db.update(bookingLinks).set({ ...data, updatedAt: new Date() }).where(eq(bookingLinks.id, id)).returning();
+    return link || undefined;
+  }
+
+  async deleteBookingLink(id: string): Promise<boolean> {
+    const result = await db.delete(bookingLinks).where(eq(bookingLinks.id, id));
+    return true;
+  }
+
+  // Intake Submissions
+  async getIntakeSubmission(id: string): Promise<IntakeSubmission | undefined> {
+    const [submission] = await db.select().from(intakeSubmissions).where(eq(intakeSubmissions.id, id));
+    return submission || undefined;
+  }
+
+  async getIntakeSubmissionsByProvider(providerId: string): Promise<IntakeSubmission[]> {
+    return await db.select().from(intakeSubmissions).where(eq(intakeSubmissions.providerId, providerId)).orderBy(desc(intakeSubmissions.createdAt));
+  }
+
+  async getIntakeSubmissionsByBookingLink(bookingLinkId: string): Promise<IntakeSubmission[]> {
+    return await db.select().from(intakeSubmissions).where(eq(intakeSubmissions.bookingLinkId, bookingLinkId)).orderBy(desc(intakeSubmissions.createdAt));
+  }
+
+  async createIntakeSubmission(data: InsertIntakeSubmission): Promise<IntakeSubmission> {
+    const [submission] = await db.insert(intakeSubmissions).values(data).returning();
+    return submission;
+  }
+
+  async updateIntakeSubmission(id: string, data: Partial<IntakeSubmission>): Promise<IntakeSubmission | undefined> {
+    const [submission] = await db.update(intakeSubmissions).set({ ...data, updatedAt: new Date() }).where(eq(intakeSubmissions.id, id)).returning();
+    return submission || undefined;
   }
 }
 

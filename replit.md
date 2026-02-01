@@ -1,7 +1,7 @@
 # HomeBase - Unified Home Services App
 
 ## Overview
-HomeBase is an iOS mobile application built with Expo React Native, featuring a unified platform for homeowners and service providers. It aims to streamline home service management, from finding providers and booking appointments to managing client relationships, jobs, and invoicing. The application integrates an Express.js backend with a PostgreSQL database (Replit's built-in DATABASE_URL) to offer a comprehensive solution for the home services market. Key capabilities include a robust authentication system, distinct homeowner and provider portals, AI-powered assistance, and full CRUD operations for appointments, clients, jobs, and invoices.
+HomeBase is an iOS mobile application built with Expo React Native, providing a unified platform for homeowners and service providers. It aims to simplify home service management, from finding and booking providers to managing client relationships, jobs, and invoicing. The application integrates an Express.js backend with a PostgreSQL database, offering a comprehensive solution for the home services market with a robust authentication system, distinct user portals, AI-powered assistance, and full CRUD operations.
 
 ## User Preferences
 - No emojis in the app
@@ -9,114 +9,45 @@ HomeBase is an iOS mobile application built with Expo React Native, featuring a 
 - Liquid Glass styling for headers, tab bars, key cards, modals
 - Clean, minimal design with proper spacing
 
-## Test Account
-For demo and testing purposes, a test account is available with pre-populated data:
-- **Email**: test@homebase.com
-- **Password**: test123
-- **User ID**: test-user-001
-
-The test account includes:
-- A pre-configured home (123 Test Street, San Francisco)
-- Sample appointments (Leak Repair, AC Repair, Deep Clean)
-
-**New user accounts start with a clean, empty state** - no mock data is pre-populated. Categories and providers are shared public data visible to all users.
-
-### Provider Side (Service Pro Portal)
-The test account also has a provider profile (Demo Pro Services) with comprehensive business data:
-- **Provider ID**: test-provider-001
-- **Rating**: 4.9 stars (47 reviews)
-- **Clients**: 8 active clients
-- **Jobs**: 10 completed, 3 scheduled
-- **Revenue MTD**: ~$4,910
-- **Invoices**: 10 total (8 paid, 2 pending)
-- **Capability Tags**: Licensed, Insured, Background Checked, 24/7 Emergency
-
 ## System Architecture
-The application is structured into a client-side React Native Expo app and an Express.js backend. The UI/UX features a "Liquid Glass" effect for iOS, incorporating frosted blur for key elements, and supports both Light and Dark modes. The primary accent color is `#38AE5F`, with all other elements utilizing a neutral grayscale palette. Typography is based on SF Pro with a defined type scale.
+The application comprises a client-side React Native Expo app and an Express.js backend. The UI/UX features a "Liquid Glass" effect with frosted blur for key elements, supporting both Light and Dark modes. The primary accent color is `#38AE5F`, with all other elements using a neutral grayscale palette. Typography is based on SF Pro.
 
 ### Technical Implementations
-- **Authentication**: Backend-driven user management with email/password signup (bcrypt hashing), JWT-like session management, and a password reset flow. Includes an onboarding process for first property setup.
-- **Access Control**: Three distinct access states: Guest Mode, Homeowner Mode, and Provider Mode, each with tailored functionalities.
-- **AI Integration**: "Ask HomeBase AI" feature leverages OpenAI GPT-4o-mini via Replit AI Integrations for instant answers on home maintenance and repairs. AI chat endpoints accept optional `homeId` to include HouseFax property context for personalized responses.
-- **HouseFax Intelligence Layer**: Unified property data enrichment system combining external APIs:
-  - **Zillow API** (via RapidAPI Real Estate 101): Property data including beds, baths, sqft, year built, Zestimate, last sold price, property type
-  - **Google Places API**: Address autocomplete and normalization
-  - **Google Geocoding API**: Lat/lng coordinates, neighborhood, county, formatted address
-  - **Auto-Enrichment**: When a home is added or enriched, both APIs are called to populate HouseFax fields
-  - **AI Context**: HouseFax data is injected into AI system prompts for property-aware conversations
-  - **API Endpoints**:
-    - `GET /api/housefax/autocomplete?q=address` - Google Places autocomplete
-    - `GET /api/housefax/place/:placeId` - Get place details from Google
-    - `POST /api/housefax/geocode` - Geocode an address
-    - `POST /api/housefax/zillow` - Fetch Zillow property data
-    - `POST /api/housefax/enrich` - Full enrichment (Zillow + Google)
-    - `POST /api/homes/:id/enrich` - Enrich existing home with HouseFax data
-    - `GET /api/homes/:id/housefax-context` - Get AI context for a home
-- **AI Smart Intake**: Natural language problem descriptions are analyzed by AI to classify service categories, generate follow-up questions, estimate price ranges, and match with top providers.
-- **Dynamic Quote Engine**: AI-powered price estimates based on service type, home data, location, and complexity. Generates realistic ranges with material and labor breakdowns.
-- **Smart Provider Matching**: Algorithm ranks providers using trust scores (job completion rate, on-time performance, satisfaction ratings) and shows top 3-5 curated matches instead of full directory.
-- **Provider Capability Tags**: Skill-based tags (Licensed, Insured, 24/7 Emergency, etc.) displayed on provider cards with years of experience.
-- **Service Summary Cards**: AI-generated scope of work summaries with itemized breakdowns shown to homeowners and providers during booking.
-- **Data Management**: Full CRUD operations for appointments, clients, jobs, and invoices, with real-time status tracking and notifications.
-- **Provider Portal**: Comprehensive dashboard displaying real-time statistics (revenue MTD, jobs completed, active clients), a Clients CRM with HouseFax integration, Schedule management with various calendar views, and a complete invoicing system.
-  - **Clients CRM**: Full client management with search, filter chips (All/Leads/Active/Inactive/Has Upcoming/Overdue), and sort options (Recent Activity/Highest LTV/Most Overdue/Newest). Enhanced client cards show avatar, status badge, address, LTV, outstanding balance, and quick actions (Call/Message).
-  - **ClientDetailScreen**: Premium tabbed interface with 5 tabs:
-    - **Overview**: KPI cards (LTV, Total Jobs, Avg Ticket), outstanding balance alerts, upcoming appointments, recent activity timeline
-    - **Jobs**: Job history with status pills and pricing
-    - **Invoices**: Invoice list with paid/pending status and due dates
-    - **Notes**: Client notes with private/shared badges and add note functionality
-    - **Home (HouseFax)**: Property details (beds, baths, sqft, year built), Home Health Score from homeowner, Survival Kit maintenance estimates, notable risks, access information (pets, parking, gate codes), preferred appointment windows
-- **Homeowner Tools**: Comprehensive home management features accessible from the More tab's Tools section and Home screen quick tiles:
-  - **Survival Kit**: 17-step guided wizard that gathers property details (type, year built, square footage), home systems (HVAC type/age, water heater, roof), exterior features, location/climate info, and service preferences. Generates personalized results with 5 tabs: Summary (estimated yearly costs, top cost drivers), Plan (scheduled maintenance tasks with Book Now CTAs), Costs (category breakdown), Tips (money-saving suggestions), and Export (PDF/CSV options).
-  - **HouseFax Ledger**: Home operating system with multi-home selector and 4 summary cards (Total Spent, Total Saved, Upcoming Tasks, Health Trend). Features 5 tabs: Overview (forecast, recent activity), History (filterable timeline of jobs/invoices/assessments), Assets (registry with 6+ items including install dates, warranty info, service cycles, and booking CTAs), Documents (uploads with categories), and Insights (predictive costs, upcoming risks, savings suggestions). Integrates all spending and savings tracking within the ledger.
-  - **Home Health Score**: 14-step assessment wizard evaluating home age, systems (HVAC, water heater, roof), visible symptoms, safety checks, and maintenance habits. Features entry screen with last score/trend, results screen with animated score ring, 4 tabs (Overview, Risks, Action Plan, History), transparent scoring drawer with confidence indicator, and convert-to-booking CTAs for high-severity items.
-  - **Service History**: Two-tab structure with Timeline (monthly grouped ledger, filters for All/Completed/Upcoming/Invoices/DIY/Warranties) and Providers tab (past providers with spend totals, ratings). Includes home selector and service entry detail modal.
-  - **Saved Providers**: Full list page with search functionality, sort options (Recent/Rating/Most Booked/Closest), enhanced provider cards showing tags, ratings, and action buttons (Book/Message/Remove/Share). Features empty state with CTA to browse providers.
-- **Saved Providers**: Homeowners can save/favorite providers by tapping the heart icon on provider profiles. Saved providers are persisted and accessible from the More screen.
-- **Help Center**: FAQ screen with expandable sections covering Getting Started, Bookings & Appointments, Payments & Pricing, and About Providers.
-- **Contact Us**: Contact options including Email Support, Phone Support, Live Chat, and social media links with support hours.
-- **Design System**: Reusable UI components like `PrimaryButton`, `GlassCard`, `ListRow`, `StatusPill`, `TextField`, `Avatar`, `EmptyState`, `SkeletonLoader`, and various cards for categories, providers, bookings, messages, and stats.
-- **State Management**: Uses Zustand for client-side state management, with separate stores for authentication, homeowner, and provider data.
-- **Database Schema**: PostgreSQL database with Drizzle ORM managing `users`, `homes`, `providers`, `appointments`, `notifications`, `reviews`, `clients`, `jobs`, `invoices`, `payments`, and `maintenanceReminders` tables.
-- **API Endpoints**: A comprehensive set of RESTful API endpoints for authentication, managing homes, appointments, notifications, AI chat, and all provider portal functionalities (clients, jobs, invoices, payments).
-
-### Project Structure
-- `client/`: Contains the Expo React Native application, including components, hooks, navigation, screens (auth, homeowner, provider), and state management.
-- `server/`: Houses the Express.js backend, including server setup, routes, database connection, OpenAI client, and templates.
-- `shared/`: Contains shared Drizzle schema definitions.
+- **Authentication**: Backend-driven user management with email/password signup, JWT-like session management, and password reset. Includes onboarding for first property setup.
+- **Access Control**: Three distinct states: Guest, Homeowner, and Provider, each with tailored functionalities.
+- **AI Integration**: "Ask HomeBase AI" uses OpenAI GPT-4o-mini via Replit AI Integrations for home maintenance queries. AI chat endpoints accept optional `homeId` for property-specific context.
+- **HouseFax Intelligence Layer**: Property data enrichment system combining Zillow API (via RapidAPI Real Estate 101) and Google Places/Geocoding APIs for address autocomplete, normalization, and property details. HouseFax data is injected into AI system prompts.
+- **AI Smart Intake**: AI analyzes natural language problem descriptions to classify service categories, generate follow-up questions, estimate price ranges, and match providers.
+- **Dynamic Quote Engine**: AI-powered price estimates based on service type, home data, location, and complexity.
+- **Smart Provider Matching**: Algorithm ranks providers using trust scores to show curated matches.
+- **Provider Capability Tags**: Skill-based tags displayed on provider cards.
+- **Service Summary Cards**: AI-generated scope of work summaries for booking.
+- **Data Management**: Full CRUD for appointments, clients, jobs, and invoices, with real-time tracking.
+- **Provider Portal**: Dashboard with real-time statistics, Clients CRM (with search, filter, sort, and quick actions), Schedule management, and an invoicing system. The `ClientDetailScreen` includes Overview, Jobs, Invoices, Notes, and Home (HouseFax) tabs.
+- **Homeowner Tools**:
+    - **Survival Kit**: Guided wizard for property details, generating personalized maintenance plans, cost estimates, and tips.
+    - **HouseFax Ledger**: Home operating system with multi-home support, tracking expenses, maintenance history, assets, documents, and insights.
+    - **Home Health Score**: Assessment wizard providing a score, risks, and action plans.
+    - **Service History**: Timeline and Providers tabs for tracking past services.
+    - **Saved Providers**: List of favorited providers with search and sort.
+- **Help Center**: FAQ and Contact Us sections.
+- **Design System**: Reusable UI components for consistent design.
+- **State Management**: Uses Zustand for client-side state.
+- **Role Gateway**: App opens to role selection (Homeowner/Service Pro) with quick switching available.
+- **Booking Links**: Providers can create public booking pages with customizable intake forms, AI quote generation, deposit support, and custom questions.
+- **Database Schema**: PostgreSQL database with Drizzle ORM managing various tables including `users`, `homes`, `providers`, `appointments`, `clients`, `jobs`, `invoices`, `bookingLinks`, and `intakeSubmissions`.
+- **API Endpoints**: Comprehensive RESTful API for authentication, home management, appointments, notifications, AI chat, booking links, and all provider portal functionalities.
 
 ## External Dependencies
-- **Supabase**: Provides PostgreSQL database hosting and connection pooling.
-- **Drizzle ORM**: Used for type-safe interaction with the PostgreSQL database.
-- **OpenAI GPT-4o-mini**: Integrated via Replit AI Integrations for the AI chat functionality.
-- **Stripe Connect**: Full marketplace payment integration for provider invoicing:
-  - **Connect Onboarding**: Express account creation with OAuth flow for provider payouts
-  - **Invoice System**: Create invoices with line items, send to clients, track payment status (draft/sent/viewed/paid/void/refunded)
-  - **Payment Processing**: PaymentIntents with destination charges, Checkout Sessions with application fees
-  - **Platform Fees**: Tiered fee calculation based on provider plan (Free 10%, Starter 7.5%, Professional 5%, Enterprise 3%)
-  - **Credits Wallet**: User credit balance with ledger tracking for promotions and refunds
-  - **Webhook Handler**: Idempotent processing of payment_intent, account, payout, and charge events
-  - **API Endpoints**:
-    - `POST /api/stripe/connect/onboard/:providerId` - Start Connect onboarding
-    - `POST /api/stripe/connect/refresh-link/:providerId` - Refresh expired link
-    - `GET /api/stripe/connect/status/:providerId` - Check account status
-    - `POST /api/stripe/invoices` - Create invoice with line items
-    - `POST /api/stripe/invoices/:id/send` - Send invoice to client
-    - `POST /api/stripe/invoices/:id/pay` - Create payment intent
-    - `POST /api/stripe/invoices/:id/checkout` - Create Checkout session
-    - `POST /api/stripe/invoices/:id/apply-credits` - Apply wallet credits
-    - `POST /api/stripe/webhooks` - Handle Stripe webhooks
-    - `GET /api/stripe/fee-preview` - Calculate platform fees
-  - Uses lazy initialization (`getStripe()`) for graceful handling when API key is missing
-- **Resend**: Transactional email service for invoice delivery:
-  - **Invoice Emails**: Professional HTML email templates with itemized line items, amounts, due dates
-  - **Payment Links**: Optional Stripe Checkout links embedded in invoice emails
-  - **Email Service**: `server/emailService.ts` handles all email composition and sending
-  - **Auto-Generated Invoice Numbers**: Format `INV-{timestamp}-{random}` if not provided
-- **RevenueCat**: Mobile subscription management using `react-native-purchases` for offerings, purchases, restores, and customer information.
-- **RapidAPI (Real Estate 101)**: Zillow property data via `/api/property-details/byaddress` endpoint. Requires `RAPIDAPI_KEY` secret.
-- **Google APIs**: Places Autocomplete and Geocoding APIs for address handling. Requires `GOOGLE_API_KEY` secret.
-- **Zustand**: Client-side state management library.
-- **React Query**: Used for data fetching and caching in the client application, especially within the Provider Portal.
-- **Expo**: Framework for building universal React applications.
+- **Supabase**: PostgreSQL database hosting.
+- **Drizzle ORM**: Type-safe database interaction.
+- **OpenAI GPT-4o-mini**: AI chat functionality.
+- **Stripe Connect**: Marketplace payment integration for invoicing, payment processing, platform fees, and credits wallet.
+- **Resend**: Transactional email service for invoice delivery.
+- **RevenueCat**: Mobile subscription management.
+- **RapidAPI (Real Estate 101)**: Zillow property data.
+- **Google APIs**: Places Autocomplete and Geocoding APIs.
+- **Zustand**: Client-side state management.
+- **React Query**: Data fetching and caching.
+- **Expo**: React Native application framework.
 - **Express.js**: Backend web application framework.
