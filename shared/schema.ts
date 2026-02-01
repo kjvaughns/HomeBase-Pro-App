@@ -458,6 +458,91 @@ export const paymentsRelations = relations(payments, ({ one }) => ({
   provider: one(providers, { fields: [payments.providerId], references: [providers.id] }),
 }));
 
+// Booking link status enum
+export const bookingLinkStatusEnum = pgEnum("booking_link_status", ["active", "paused", "disabled"]);
+
+// Quote mode enum for intake submissions
+export const quoteModeEnum = pgEnum("quote_mode", ["range", "fixed", "estimate_after_review"]);
+
+// Intake submission status enum
+export const intakeStatusEnum = pgEnum("intake_status", ["submitted", "reviewed", "converted", "declined", "expired"]);
+
+// Provider booking links (public intake pages)
+export const bookingLinks = pgTable("booking_links", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+  slug: text("slug").notNull().unique(),
+  status: bookingLinkStatusEnum("status").default("active"),
+  depositRequired: boolean("deposit_required").default(false),
+  depositAmount: decimal("deposit_amount", { precision: 10, scale: 2 }),
+  depositPercentage: integer("deposit_percentage"), // Alternative to fixed amount
+  serviceCatalog: text("service_catalog"), // JSON: list of services with pricing
+  availabilityRules: text("availability_rules"), // JSON: working hours, blackout dates
+  intakeQuestions: text("intake_questions"), // JSON: custom questions to ask
+  welcomeMessage: text("welcome_message"),
+  confirmationMessage: text("confirmation_message"),
+  brandColor: text("brand_color"),
+  logoUrl: text("logo_url"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const bookingLinksRelations = relations(bookingLinks, ({ one, many }) => ({
+  provider: one(providers, { fields: [bookingLinks.providerId], references: [providers.id] }),
+  intakeSubmissions: many(intakeSubmissions),
+}));
+
+// Intake submissions from booking links
+export const intakeSubmissions = pgTable("intake_submissions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  bookingLinkId: varchar("booking_link_id").notNull().references(() => bookingLinks.id, { onDelete: "cascade" }),
+  providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+  homeownerUserId: varchar("homeowner_user_id").references(() => users.id, { onDelete: "set null" }),
+  
+  // Client info (may or may not have an account)
+  clientName: text("client_name").notNull(),
+  clientPhone: text("client_phone"),
+  clientEmail: text("client_email"),
+  address: text("address"),
+  
+  // Problem description
+  problemDescription: text("problem_description").notNull(),
+  categoryId: varchar("category_id").references(() => serviceCategories.id, { onDelete: "set null" }),
+  answersJson: text("answers_json"), // JSON: responses to intake questions
+  photosJson: text("photos_json"), // JSON: array of photo URLs
+  preferredTimesJson: text("preferred_times_json"), // JSON: preferred appointment times
+  
+  // Quoting
+  quoteMode: quoteModeEnum("quote_mode").default("estimate_after_review"),
+  quoteLow: decimal("quote_low", { precision: 10, scale: 2 }),
+  quoteHigh: decimal("quote_high", { precision: 10, scale: 2 }),
+  quoteFixed: decimal("quote_fixed", { precision: 10, scale: 2 }),
+  
+  // Status and conversion
+  status: intakeStatusEnum("status").default("submitted"),
+  convertedJobId: varchar("converted_job_id").references(() => jobs.id, { onDelete: "set null" }),
+  convertedClientId: varchar("converted_client_id").references(() => clients.id, { onDelete: "set null" }),
+  
+  // Deposit payment
+  depositPaid: boolean("deposit_paid").default(false),
+  depositAmount: decimal("deposit_amount", { precision: 10, scale: 2 }),
+  depositPaymentId: varchar("deposit_payment_id"),
+  
+  reviewedAt: timestamp("reviewed_at"),
+  convertedAt: timestamp("converted_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const intakeSubmissionsRelations = relations(intakeSubmissions, ({ one }) => ({
+  bookingLink: one(bookingLinks, { fields: [intakeSubmissions.bookingLinkId], references: [bookingLinks.id] }),
+  provider: one(providers, { fields: [intakeSubmissions.providerId], references: [providers.id] }),
+  homeownerUser: one(users, { fields: [intakeSubmissions.homeownerUserId], references: [users.id] }),
+  category: one(serviceCategories, { fields: [intakeSubmissions.categoryId], references: [serviceCategories.id] }),
+  convertedJob: one(jobs, { fields: [intakeSubmissions.convertedJobId], references: [jobs.id] }),
+  convertedClient: one(clients, { fields: [intakeSubmissions.convertedClientId], references: [clients.id] }),
+}));
+
 export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
   password: true,
@@ -549,6 +634,18 @@ export const insertCreditLedgerSchema = createInsertSchema(creditLedger).omit({
   createdAt: true,
 });
 
+export const insertBookingLinkSchema = createInsertSchema(bookingLinks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertIntakeSubmissionSchema = createInsertSchema(intakeSubmissions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type Home = typeof homes.$inferSelect;
@@ -582,3 +679,7 @@ export type InsertUserCredits = z.infer<typeof insertUserCreditsSchema>;
 export type CreditLedgerEntry = typeof creditLedger.$inferSelect;
 export type InsertCreditLedgerEntry = z.infer<typeof insertCreditLedgerSchema>;
 export type StripeWebhookEvent = typeof stripeWebhookEvents.$inferSelect;
+export type BookingLink = typeof bookingLinks.$inferSelect;
+export type InsertBookingLink = z.infer<typeof insertBookingLinkSchema>;
+export type IntakeSubmission = typeof intakeSubmissions.$inferSelect;
+export type InsertIntakeSubmission = z.infer<typeof insertIntakeSubmissionSchema>;
