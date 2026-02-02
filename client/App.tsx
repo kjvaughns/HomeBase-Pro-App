@@ -12,6 +12,7 @@ import { queryClient } from "@/lib/query-client";
 import RootStackNavigator from "@/navigation/RootStackNavigator";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useThemeStore } from "@/state/themeStore";
+import { useOnboardingStore } from "@/state/onboardingStore";
 import { useTheme } from "@/hooks/useTheme";
 
 function AppContent() {
@@ -29,9 +30,11 @@ function AppContent() {
 
 export default function App() {
   const hydrateTheme = useThemeStore((s) => s.hydrate);
+  const hydrateOnboarding = useOnboardingStore((s) => s.hydrate);
   
   useEffect(() => {
     hydrateTheme();
+    hydrateOnboarding();
   }, []);
   
   return (

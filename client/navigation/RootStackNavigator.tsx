@@ -7,6 +7,10 @@ import ProviderTabNavigator from "@/navigation/ProviderTabNavigator";
 import RoleGatewayScreen from "@/screens/RoleGatewayScreen";
 import RoleSwitchConfirmationScreen from "@/screens/RoleSwitchConfirmationScreen";
 import BecomeProviderScreen from "@/screens/BecomeProviderScreen";
+import FirstLaunchScreen from "@/screens/onboarding/FirstLaunchScreen";
+import AccountTypeSelectionScreen from "@/screens/onboarding/AccountTypeSelectionScreen";
+import HomeownerOnboardingScreen from "@/screens/onboarding/HomeownerOnboardingScreen";
+import ProviderOnboardingScreen from "@/screens/onboarding/ProviderOnboardingScreen";
 import WelcomeScreen from "@/screens/auth/WelcomeScreen";
 import LoginScreen from "@/screens/auth/LoginScreen";
 import SignUpScreen from "@/screens/auth/SignUpScreen";
@@ -56,9 +60,14 @@ import ContactUsScreen from "@/screens/homeowner/ContactUsScreen";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuthStore, UserRole } from "@/state/authStore";
+import { useOnboardingStore } from "@/state/onboardingStore";
 import { UrgencyLevel, JobSize } from "@/state/types";
 
 export type RootStackParamList = {
+  FirstLaunch: undefined;
+  AccountTypeSelection: undefined;
+  HomeownerOnboarding: undefined;
+  ProviderOnboarding: undefined;
   Welcome: undefined;
   Login: undefined;
   SignUp: undefined;
@@ -176,6 +185,7 @@ export default function RootStackNavigator() {
   const screenOptions = useScreenOptions();
   const { theme } = useTheme();
   const { isAuthenticated, isHydrated, activeRole, canAccessProviderMode, needsRoleSelection } = useAuthStore();
+  const { hasCompletedFirstLaunch, isHydrated: onboardingHydrated } = useOnboardingStore();
 
   const getMainComponent = () => {
     if (isAuthenticated && activeRole === "provider" && canAccessProviderMode()) {
@@ -184,16 +194,25 @@ export default function RootStackNavigator() {
     return HomeownerTabNavigator;
   };
 
-  if (!isHydrated) {
+  if (!isHydrated || !onboardingHydrated) {
     return null;
   }
+
+  // Show first launch for new users who haven't completed onboarding
+  const showFirstLaunch = !hasCompletedFirstLaunch && !isAuthenticated;
 
   // Show role gateway if authenticated but hasn't selected a role yet
   const showRoleGateway = isAuthenticated && needsRoleSelection;
 
   return (
     <Stack.Navigator screenOptions={screenOptions}>
-      {showRoleGateway ? (
+      {showFirstLaunch ? (
+        <Stack.Screen
+          name="FirstLaunch"
+          component={FirstLaunchScreen}
+          options={{ headerShown: false }}
+        />
+      ) : showRoleGateway ? (
         <Stack.Screen
           name="RoleGateway"
           component={RoleGatewayScreen}
@@ -206,6 +225,21 @@ export default function RootStackNavigator() {
           options={{ headerShown: false }}
         />
       )}
+      <Stack.Screen
+        name="AccountTypeSelection"
+        component={AccountTypeSelectionScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="HomeownerOnboarding"
+        component={HomeownerOnboardingScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="ProviderOnboarding"
+        component={ProviderOnboardingScreen}
+        options={{ headerShown: false }}
+      />
       <Stack.Screen
         name="Welcome"
         component={WelcomeScreen}
