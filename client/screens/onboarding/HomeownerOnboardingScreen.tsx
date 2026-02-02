@@ -16,12 +16,6 @@ type Props = NativeStackScreenProps<RootStackParamList, "HomeownerOnboarding">;
 
 const STEPS = [
   {
-    id: "welcome",
-    title: "Welcome Home",
-    subtitle: "Let's set up your home profile to get personalized recommendations",
-    icon: "home" as const,
-  },
-  {
     id: "priorities",
     title: "What brings you here?",
     subtitle: "Select what matters most to you",
@@ -106,21 +100,6 @@ export default function HomeownerOnboardingScreen({ navigation }: Props) {
 
   const renderStepContent = () => {
     switch (step.id) {
-      case "welcome":
-        return (
-          <View style={styles.welcomeContent}>
-            <View style={[styles.welcomeIcon, { backgroundColor: Colors.accent + "15" }]}>
-              <Feather name="home" size={64} color={Colors.accent} />
-            </View>
-            <View style={styles.welcomeFeatures}>
-              <WelcomeFeature icon="search" text="Find vetted, trusted service providers" />
-              <WelcomeFeature icon="cpu" text="Get AI-powered recommendations" />
-              <WelcomeFeature icon="shield" text="Track maintenance and protect your investment" />
-              <WelcomeFeature icon="credit-card" text="Pay securely through the app" />
-            </View>
-          </View>
-        );
-
       case "priorities":
         return (
           <View style={styles.prioritiesContent}>

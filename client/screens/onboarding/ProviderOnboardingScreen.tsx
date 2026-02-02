@@ -16,12 +16,6 @@ type Props = NativeStackScreenProps<RootStackParamList, "ProviderOnboarding">;
 
 const STEPS = [
   {
-    id: "welcome",
-    title: "Grow Your Business",
-    subtitle: "HomeBase helps service providers get more clients and get paid faster",
-    icon: "trending-up" as const,
-  },
-  {
     id: "services",
     title: "What services do you offer?",
     subtitle: "Select the categories that best describe your work",
@@ -144,38 +138,6 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
 
   const renderStepContent = () => {
     switch (step.id) {
-      case "welcome":
-        return (
-          <View style={styles.welcomeContent}>
-            <View style={[styles.welcomeIcon, { backgroundColor: Colors.accent }]}>
-              <Feather name="briefcase" size={64} color="#FFFFFF" />
-            </View>
-            <View style={styles.statsContainer}>
-              <View style={[styles.statCard, { backgroundColor: theme.backgroundSecondary }]}>
-                <ThemedText type="h2" style={{ color: Colors.accent }}>
-                  1000+
-                </ThemedText>
-                <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-                  Active Providers
-                </ThemedText>
-              </View>
-              <View style={[styles.statCard, { backgroundColor: theme.backgroundSecondary }]}>
-                <ThemedText type="h2" style={{ color: Colors.accent }}>
-                  $2M+
-                </ThemedText>
-                <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-                  Paid to Pros
-                </ThemedText>
-              </View>
-            </View>
-            <View style={styles.benefitsList}>
-              <BenefitItem icon="check-circle" text="No monthly fees to get started" />
-              <BenefitItem icon="check-circle" text="Keep more of what you earn" />
-              <BenefitItem icon="check-circle" text="Professional tools at your fingertips" />
-            </View>
-          </View>
-        );
-
       case "services":
         return (
           <View style={styles.servicesContent}>
