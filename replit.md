@@ -33,7 +33,9 @@ The application comprises a client-side React Native Expo app and an Express.js 
 - **Help Center**: FAQ and Contact Us sections.
 - **Design System**: Reusable UI components for consistent design.
 - **State Management**: Uses Zustand for client-side state.
-- **Role Gateway**: App opens to role selection (Homeowner/Service Pro) with quick switching available.
+- **First-Launch Experience**: Animated welcome screen with logo reveal and smooth transitions. New users select account type (Homeowner or Service Provider) BEFORE authentication, then see tailored 3-step onboarding flows. Returning users skip directly to their appropriate dashboard.
+- **Onboarding Flows**: Separate animated onboarding for each role - Homeowners set priorities and see tool highlights, Providers see business features and Stripe Connect teaser. Progress indicators and staggered animations throughout.
+- **Role Gateway**: After onboarding, quick role switching available between Homeowner and Provider views.
 - **Booking Links**: Providers can create public booking pages with customizable intake forms, AI quote generation, deposit support, and custom questions.
 - **Database Schema**: PostgreSQL database with Drizzle ORM managing various tables including `users`, `homes`, `providers`, `appointments`, `clients`, `jobs`, `invoices`, `bookingLinks`, and `intakeSubmissions`.
 - **API Endpoints**: Comprehensive RESTful API for authentication, home management, appointments, notifications, AI chat, booking links, and all provider portal functionalities.
