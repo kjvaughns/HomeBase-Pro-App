@@ -1,26 +1,28 @@
 import React, { useEffect, useRef } from "react";
-import { StyleSheet, View, Animated, Dimensions } from "react-native";
+import { StyleSheet, View, Animated, Dimensions, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { ThemedText } from "@/components/ThemedText";
-import { ThemedView } from "@/components/ThemedView";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, Colors } from "@/constants/theme";
+import { Spacing, Colors, BorderRadius } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
-const { width } = Dimensions.get("window");
+const { width, height } = Dimensions.get("window");
 
 type Props = NativeStackScreenProps<RootStackParamList, "FirstLaunch">;
 
 export default function FirstLaunchScreen({ navigation }: Props) {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
   const logoScale = useRef(new Animated.Value(0)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
+  const glowOpacity = useRef(new Animated.Value(0)).current;
   const titleOpacity = useRef(new Animated.Value(0)).current;
   const titleTranslateY = useRef(new Animated.Value(20)).current;
   const subtitleOpacity = useRef(new Animated.Value(0)).current;
@@ -33,20 +35,25 @@ export default function FirstLaunchScreen({ navigation }: Props) {
       Animated.parallel([
         Animated.spring(logoScale, {
           toValue: 1,
-          tension: 50,
-          friction: 7,
+          tension: 40,
+          friction: 6,
           useNativeDriver: true,
         }),
         Animated.timing(logoOpacity, {
           toValue: 1,
-          duration: 400,
+          duration: 500,
           useNativeDriver: true,
         }),
       ]),
+      Animated.timing(glowOpacity, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
       Animated.parallel([
         Animated.timing(titleOpacity, {
           toValue: 1,
-          duration: 300,
+          duration: 400,
           useNativeDriver: true,
         }),
         Animated.spring(titleTranslateY, {
@@ -82,97 +89,204 @@ export default function FirstLaunchScreen({ navigation }: Props) {
     ]).start();
   }, []);
 
+  const GlassFeatureCard = ({
+    icon,
+    title,
+    description,
+    delay,
+  }: {
+    icon: keyof typeof Feather.glyphMap;
+    title: string;
+    description: string;
+    delay: number;
+  }) => {
+    const cardOpacity = useRef(new Animated.Value(0)).current;
+    const cardTranslateX = useRef(new Animated.Value(delay > 0 ? 40 : -40)).current;
+
+    useEffect(() => {
+      Animated.sequence([
+        Animated.delay(800 + delay),
+        Animated.parallel([
+          Animated.timing(cardOpacity, {
+            toValue: 1,
+            duration: 400,
+            useNativeDriver: true,
+          }),
+          Animated.spring(cardTranslateX, {
+            toValue: 0,
+            tension: 50,
+            friction: 8,
+            useNativeDriver: true,
+          }),
+        ]),
+      ]).start();
+    }, []);
+
+    return (
+      <Animated.View
+        style={[
+          styles.glassCard,
+          {
+            opacity: cardOpacity,
+            transform: [{ translateX: cardTranslateX }],
+          },
+        ]}
+      >
+        {Platform.OS === "ios" ? (
+          <BlurView
+            intensity={isDark ? 40 : 60}
+            tint={isDark ? "dark" : "light"}
+            style={StyleSheet.absoluteFill}
+          />
+        ) : (
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              { backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.9)" },
+            ]}
+          />
+        )}
+        <View style={styles.glassCardContent}>
+          <View style={[styles.glassIconWrapper, { backgroundColor: Colors.accent + "20" }]}>
+            <Feather name={icon} size={22} color={Colors.accent} />
+          </View>
+          <View style={styles.glassTextContent}>
+            <ThemedText type="label" style={styles.glassCardTitle}>
+              {title}
+            </ThemedText>
+            <ThemedText type="caption" style={{ color: theme.textSecondary, lineHeight: 18 }}>
+              {description}
+            </ThemedText>
+          </View>
+          <Feather name="chevron-right" size={18} color={theme.textTertiary} />
+        </View>
+      </Animated.View>
+    );
+  };
+
   return (
-    <ThemedView style={styles.container}>
-      <View style={[styles.content, { paddingTop: insets.top + Spacing["3xl"] }]}>
-        <Animated.View
-          style={[
-            styles.logoContainer,
-            {
-              opacity: logoOpacity,
-              transform: [{ scale: logoScale }],
-            },
-          ]}
-        >
-          <View style={[styles.logoOuter, { backgroundColor: Colors.accent + "15" }]}>
-            <View style={[styles.logoInner, { backgroundColor: Colors.accent + "30" }]}>
-              <View style={[styles.logoCircle, { backgroundColor: Colors.accent }]}>
-                <Feather name="home" size={48} color="#FFFFFF" />
+    <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
+      <LinearGradient
+        colors={
+          isDark
+            ? [Colors.accent + "15", "transparent", Colors.accent + "08"]
+            : [Colors.accent + "12", "transparent", Colors.accent + "06"]
+        }
+        locations={[0, 0.4, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+
+      <View style={[styles.content, { paddingTop: insets.top + Spacing.xl }]}>
+        <View style={styles.heroSection}>
+          <Animated.View
+            style={[
+              styles.logoContainer,
+              {
+                opacity: logoOpacity,
+                transform: [{ scale: logoScale }],
+              },
+            ]}
+          >
+            <Animated.View style={[styles.logoGlow, { opacity: glowOpacity }]}>
+              <LinearGradient
+                colors={[Colors.accent + "40", Colors.accent + "00"]}
+                style={styles.glowGradient}
+              />
+            </Animated.View>
+
+            <View style={styles.logoOuterRing}>
+              {Platform.OS === "ios" ? (
+                <BlurView
+                  intensity={isDark ? 30 : 50}
+                  tint={isDark ? "dark" : "light"}
+                  style={StyleSheet.absoluteFill}
+                />
+              ) : (
+                <View
+                  style={[
+                    StyleSheet.absoluteFill,
+                    { backgroundColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.7)" },
+                  ]}
+                />
+              )}
+              <View style={styles.logoMiddleRing}>
+                <LinearGradient
+                  colors={[Colors.accent + "30", Colors.accent + "10"]}
+                  style={StyleSheet.absoluteFill}
+                />
+                <View style={styles.logoCore}>
+                  <LinearGradient
+                    colors={[Colors.accent, "#2D9A4E"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={StyleSheet.absoluteFill}
+                  />
+                  <Feather name="home" size={44} color="#FFFFFF" />
+                </View>
               </View>
             </View>
-          </View>
-        </Animated.View>
+          </Animated.View>
 
-        <Animated.View
-          style={{
-            opacity: titleOpacity,
-            transform: [{ translateY: titleTranslateY }],
-          }}
-        >
-          <ThemedText type="h1" style={styles.appName}>
-            HomeBase
-          </ThemedText>
-        </Animated.View>
+          <Animated.View
+            style={{
+              opacity: titleOpacity,
+              transform: [{ translateY: titleTranslateY }],
+            }}
+          >
+            <ThemedText type="h1" style={styles.appName}>
+              HomeBase
+            </ThemedText>
+          </Animated.View>
 
-        <Animated.View style={{ opacity: subtitleOpacity }}>
-          <ThemedText type="body" style={[styles.tagline, { color: theme.textSecondary }]}>
-            The smarter way to manage home services
-          </ThemedText>
-        </Animated.View>
+          <Animated.View style={{ opacity: subtitleOpacity }}>
+            <ThemedText type="body" style={[styles.tagline, { color: theme.textSecondary }]}>
+              The smarter way to manage home services
+            </ThemedText>
+          </Animated.View>
+        </View>
 
-        <Animated.View
-          style={[
-            styles.features,
-            {
-              opacity: featuresOpacity,
-              transform: [{ translateY: featuresTranslateY }],
-            },
-          ]}
-        >
-          <View style={[styles.featureCard, { backgroundColor: theme.backgroundSecondary }]}>
-            <View style={[styles.featureIconWrapper, { backgroundColor: Colors.accent + "15" }]}>
-              <Feather name="users" size={24} color={Colors.accent} />
-            </View>
-            <View style={styles.featureContent}>
-              <ThemedText type="label" style={styles.featureTitle}>
-                For Homeowners
-              </ThemedText>
-              <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-                Find trusted pros, book services, track everything
-              </ThemedText>
-            </View>
-          </View>
-
-          <View style={[styles.featureCard, { backgroundColor: theme.backgroundSecondary }]}>
-            <View style={[styles.featureIconWrapper, { backgroundColor: Colors.accent + "15" }]}>
-              <Feather name="briefcase" size={24} color={Colors.accent} />
-            </View>
-            <View style={styles.featureContent}>
-              <ThemedText type="label" style={styles.featureTitle}>
-                For Service Providers
-              </ThemedText>
-              <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-                Grow your business, manage clients, get paid faster
-              </ThemedText>
-            </View>
-          </View>
-        </Animated.View>
+        <View style={styles.featuresSection}>
+          <GlassFeatureCard
+            icon="users"
+            title="For Homeowners"
+            description="Find trusted pros, book services, track everything"
+            delay={0}
+          />
+          <GlassFeatureCard
+            icon="briefcase"
+            title="For Service Providers"
+            description="Grow your business, manage clients, get paid faster"
+            delay={150}
+          />
+        </View>
       </View>
 
       <Animated.View
         style={[
           styles.footer,
-          { paddingBottom: insets.bottom + Spacing.lg, opacity: buttonOpacity },
+          { paddingBottom: insets.bottom + Spacing.xl, opacity: buttonOpacity },
         ]}
       >
-        <PrimaryButton
-          onPress={() => navigation.navigate("AccountTypeSelection")}
-          testID="button-get-started"
-        >
-          Get Started
-        </PrimaryButton>
+        <View style={styles.buttonWrapper}>
+          {Platform.OS === "ios" ? (
+            <BlurView
+              intensity={isDark ? 25 : 40}
+              tint={isDark ? "dark" : "light"}
+              style={[StyleSheet.absoluteFill, styles.buttonBlur]}
+            />
+          ) : null}
+          <PrimaryButton
+            onPress={() => navigation.navigate("AccountTypeSelection")}
+            testID="button-get-started"
+          >
+            Get Started
+          </PrimaryButton>
+        </View>
+        <ThemedText type="caption" style={[styles.footerText, { color: theme.textTertiary }]}>
+          One account, two powerful experiences
+        </ThemedText>
       </Animated.View>
-    </ThemedView>
+    </View>
   );
 }
 
@@ -183,71 +297,116 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: Spacing.screenPadding,
-    alignItems: "center",
   },
-  logoContainer: {
-    marginTop: Spacing["2xl"],
+  heroSection: {
+    alignItems: "center",
     marginBottom: Spacing.xl,
   },
-  logoOuter: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
+  logoContainer: {
+    marginTop: Spacing.xl,
+    marginBottom: Spacing.lg,
     alignItems: "center",
     justifyContent: "center",
   },
-  logoInner: {
-    width: 130,
-    height: 130,
-    borderRadius: 65,
-    alignItems: "center",
-    justifyContent: "center",
+  logoGlow: {
+    position: "absolute",
+    width: 200,
+    height: 200,
   },
-  logoCircle: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+  glowGradient: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 100,
+  },
+  logoOuterRing: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+  },
+  logoMiddleRing: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  logoCore: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    shadowColor: Colors.accent,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 8,
   },
   appName: {
-    fontSize: 36,
+    fontSize: 38,
     fontWeight: "700",
     textAlign: "center",
-    marginBottom: Spacing.xs,
+    letterSpacing: -0.5,
   },
   tagline: {
     fontSize: 17,
     textAlign: "center",
-    marginBottom: Spacing["2xl"],
+    marginTop: Spacing.xs,
+    letterSpacing: 0.2,
   },
-  features: {
-    width: "100%",
+  featuresSection: {
+    flex: 1,
+    justifyContent: "center",
     gap: Spacing.md,
+    paddingBottom: Spacing.xl,
   },
-  featureCard: {
+  glassCard: {
+    borderRadius: BorderRadius.lg,
+    overflow: "hidden",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.15)",
+  },
+  glassCardContent: {
     flexDirection: "row",
     alignItems: "center",
     padding: Spacing.lg,
-    borderRadius: 16,
     gap: Spacing.md,
   },
-  featureIconWrapper: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+  glassIconWrapper: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
   },
-  featureContent: {
+  glassTextContent: {
     flex: 1,
   },
-  featureTitle: {
+  glassCardTitle: {
     fontWeight: "600",
     marginBottom: 2,
   },
   footer: {
     paddingHorizontal: Spacing.screenPadding,
+    alignItems: "center",
     gap: Spacing.md,
+  },
+  buttonWrapper: {
+    width: "100%",
+    borderRadius: BorderRadius.lg,
+    overflow: "hidden",
+  },
+  buttonBlur: {
+    borderRadius: BorderRadius.lg,
+  },
+  footerText: {
+    textAlign: "center",
   },
 });
