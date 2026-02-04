@@ -1,10 +1,12 @@
 import React, { useEffect, useRef } from "react";
-import { StyleSheet, View, Animated, Dimensions, Platform } from "react-native";
+import { StyleSheet, View, Animated, Dimensions, Platform, Image } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+
+const AppLogo = require("../../../assets/images/icon.png");
 
 import { ThemedText } from "@/components/ThemedText";
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -209,20 +211,12 @@ export default function FirstLaunchScreen({ navigation }: Props) {
                   ]}
                 />
               )}
-              <View style={styles.logoMiddleRing}>
-                <LinearGradient
-                  colors={[Colors.accent + "30", Colors.accent + "10"]}
-                  style={StyleSheet.absoluteFill}
+              <View style={styles.logoImageContainer}>
+                <Image
+                  source={AppLogo}
+                  style={styles.logoImage}
+                  resizeMode="contain"
                 />
-                <View style={styles.logoCore}>
-                  <LinearGradient
-                    colors={[Colors.accent, "#2D9A4E"]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={StyleSheet.absoluteFill}
-                  />
-                  <Feather name="home" size={44} color="#FFFFFF" />
-                </View>
               </View>
             </View>
           </Animated.View>
@@ -328,26 +322,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.2)",
   },
-  logoMiddleRing: {
+  logoImageContainer: {
     width: 110,
     height: 110,
-    borderRadius: 55,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
   },
-  logoCore: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-    shadowColor: Colors.accent,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 8,
+  logoImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 20,
   },
   appName: {
     fontSize: 38,
