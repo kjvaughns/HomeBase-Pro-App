@@ -1,9 +1,11 @@
 import React from "react";
-import { View, StyleSheet, Pressable } from "react-native";
+import { View, StyleSheet, Pressable, Image } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useNavigation } from "@react-navigation/native";
+
+const AppLogo = require("../../assets/images/icon.png");
 
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
@@ -53,9 +55,11 @@ export default function RoleGatewayScreen() {
     <ThemedView style={styles.container}>
       <View style={[styles.content, { paddingTop: insets.top + Spacing["2xl"], paddingBottom: insets.bottom + Spacing.xl }]}>
         <View style={styles.header}>
-          <View style={[styles.logoContainer, { backgroundColor: Colors.accent }]}>
-            <Feather name="home" size={32} color="#FFFFFF" />
-          </View>
+          <Image
+            source={AppLogo}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
           <ThemedText style={styles.appName}>HomeBase</ThemedText>
           <ThemedText style={[styles.greeting, { color: theme.textSecondary }]}>
             Welcome{user?.name ? `, ${user.name.split(' ')[0]}` : ''}
@@ -130,12 +134,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: Spacing.xl,
   },
-  logoContainer: {
+  logoImage: {
     width: 64,
     height: 64,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
+    borderRadius: 14,
     marginBottom: Spacing.md,
   },
   appName: {

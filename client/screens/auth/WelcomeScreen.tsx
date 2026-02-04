@@ -4,6 +4,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
+const AppLogo = require("../../../assets/images/icon.png");
+
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -22,9 +24,11 @@ export default function WelcomeScreen({ navigation }: Props) {
     <ThemedView style={styles.container}>
       <View style={[styles.content, { paddingTop: insets.top + Spacing["3xl"] }]}>
         <View style={styles.logoContainer}>
-          <View style={[styles.logoCircle, { backgroundColor: Colors.accent }]}>
-            <Feather name="home" size={48} color="#FFFFFF" />
-          </View>
+          <Image
+            source={AppLogo}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
           <ThemedText type="h1" style={styles.appName}>
             HomeBase
           </ThemedText>
@@ -98,12 +102,10 @@ const styles = StyleSheet.create({
     marginTop: Spacing["2xl"],
     marginBottom: Spacing.xl,
   },
-  logoCircle: {
+  logoImage: {
     width: 96,
     height: 96,
-    borderRadius: 48,
-    alignItems: "center",
-    justifyContent: "center",
+    borderRadius: 20,
     marginBottom: Spacing.lg,
   },
   appName: {
