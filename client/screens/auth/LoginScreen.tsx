@@ -77,10 +77,6 @@ export default function LoginScreen({ navigation }: Props) {
           phone: data.user.phone,
           avatarUrl: data.user.avatarUrl,
         }, providerProfile);
-        navigation.reset({
-          index: 0,
-          routes: [{ name: "Main" }],
-        });
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Login failed";

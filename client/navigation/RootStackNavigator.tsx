@@ -225,41 +225,45 @@ export default function RootStackNavigator() {
           options={{ headerShown: false }}
         />
       )}
-      <Stack.Screen
-        name="AccountTypeSelection"
-        component={AccountTypeSelectionScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="HomeownerOnboarding"
-        component={HomeownerOnboardingScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="ProviderOnboarding"
-        component={ProviderOnboardingScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="Welcome"
-        component={WelcomeScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="Login"
-        component={LoginScreen}
-        options={{ headerTitle: "Sign In" }}
-      />
-      <Stack.Screen
-        name="SignUp"
-        component={SignUpScreen}
-        options={{ headerTitle: "Create Account" }}
-      />
-      <Stack.Screen
-        name="ForgotPassword"
-        component={ForgotPasswordScreen}
-        options={{ headerTitle: "Reset Password" }}
-      />
+      {!isAuthenticated ? (
+        <>
+          <Stack.Screen
+            name="AccountTypeSelection"
+            component={AccountTypeSelectionScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="HomeownerOnboarding"
+            component={HomeownerOnboardingScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="ProviderOnboarding"
+            component={ProviderOnboardingScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="Welcome"
+            component={WelcomeScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="Login"
+            component={LoginScreen}
+            options={{ headerTitle: "Sign In" }}
+          />
+          <Stack.Screen
+            name="SignUp"
+            component={SignUpScreen}
+            options={{ headerTitle: "Create Account" }}
+          />
+          <Stack.Screen
+            name="ForgotPassword"
+            component={ForgotPasswordScreen}
+            options={{ headerTitle: "Reset Password" }}
+          />
+        </>
+      ) : null}
       <Stack.Screen
         name="Onboarding"
         component={OnboardingScreen}
