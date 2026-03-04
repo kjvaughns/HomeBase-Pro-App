@@ -3,6 +3,7 @@ modules = ["nodejs-22", "postgresql-16"]
 
 [nix]
 channel = "stable-24_05"
+packages = ["glib"]
 
 [deployment]
 deploymentTarget = "cloudrun"
@@ -40,6 +41,10 @@ author = "agent"
 task = "workflow.run"
 args = "Start App"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start Frontend"
+
 [[workflows.workflow]]
 name = "Start App"
 author = "agent"
@@ -70,9 +75,11 @@ mode = "sequential"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npm run expo:dev"
+args = "REACT_NATIVE_DEBUGGER_OPEN=0 npm run expo:dev"
 waitForPort = 8081
-ensurePreviewReachable = "/status"
+
+[workflows.workflow.metadata]
+outputType = "webview"
 
 [userenv]
 

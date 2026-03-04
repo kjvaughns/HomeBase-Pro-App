@@ -10,7 +10,7 @@ HomeBase is an iOS mobile application built with Expo React Native, providing a 
 - Clean, minimal design with proper spacing
 
 ## System Architecture
-The application comprises a client-side React Native Expo app and an Express.js backend. The UI/UX features a "Liquid Glass" effect with frosted blur for key elements, supporting both Light and Dark modes. The primary accent color is `#38AE5F`, with all other elements using a neutral grayscale palette. Typography is based on SF Pro.
+The application comprises a client-side React Native Expo app (SDK 55, React Native 0.83.2, React 19.2.0) and an Express.js backend. The UI/UX features a "Liquid Glass" effect with frosted blur for key elements, supporting both Light and Dark modes. The primary accent color is `#38AE5F`, with all other elements using a neutral grayscale palette. Typography is based on SF Pro.
 
 ### Technical Implementations
 - **Authentication**: Backend-driven user management with email/password signup, JWT-like session management, and password reset. Includes onboarding for first property setup.

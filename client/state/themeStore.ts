@@ -1,11 +1,11 @@
 import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Appearance, ColorSchemeName } from "react-native";
+import { Appearance } from "react-native";
 
 interface ThemeState {
   mode: "system" | "light" | "dark";
   isHydrated: boolean;
-  getColorScheme: () => ColorSchemeName;
+  getColorScheme: () => "light" | "dark";
   setMode: (mode: "system" | "light" | "dark") => void;
   toggleDarkMode: () => void;
   hydrate: () => Promise<void>;
@@ -17,10 +17,10 @@ export const useThemeStore = create<ThemeState>()((set, get) => ({
   mode: "system",
   isHydrated: false,
 
-  getColorScheme: () => {
+  getColorScheme: (): "light" | "dark" => {
     const { mode } = get();
     if (mode === "system") {
-      return Appearance.getColorScheme();
+      return Appearance.getColorScheme() === "dark" ? "dark" : "light";
     }
     return mode;
   },
