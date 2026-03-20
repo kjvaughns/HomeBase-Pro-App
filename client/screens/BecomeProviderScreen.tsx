@@ -56,11 +56,6 @@ export default function BecomeProviderScreen() {
       setActiveRole("provider");
       setNeedsRoleSelection(false);
       queryClient.invalidateQueries({ queryKey: ["/api/provider"] });
-      
-      navigation.reset({
-        index: 0,
-        routes: [{ name: "ProviderTabs" }],
-      });
     },
     onError: (error: any) => {
       Alert.alert(

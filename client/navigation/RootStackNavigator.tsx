@@ -11,6 +11,7 @@ import FirstLaunchScreen from "@/screens/onboarding/FirstLaunchScreen";
 import AccountTypeSelectionScreen from "@/screens/onboarding/AccountTypeSelectionScreen";
 import HomeownerOnboardingScreen from "@/screens/onboarding/HomeownerOnboardingScreen";
 import ProviderOnboardingScreen from "@/screens/onboarding/ProviderOnboardingScreen";
+import ProviderSetupFlow from "@/screens/onboarding/ProviderSetupFlow";
 import WelcomeScreen from "@/screens/auth/WelcomeScreen";
 import LoginScreen from "@/screens/auth/LoginScreen";
 import SignUpScreen from "@/screens/auth/SignUpScreen";
@@ -71,6 +72,7 @@ export type RootStackParamList = {
   AccountTypeSelection: undefined;
   HomeownerOnboarding: undefined;
   ProviderOnboarding: undefined;
+  ProviderSetupFlow: undefined;
   Welcome: undefined;
   Login: undefined;
   SignUp: undefined;
@@ -194,10 +196,12 @@ export default function RootStackNavigator() {
   const screenOptions = useScreenOptions();
   const { theme } = useTheme();
   const { isAuthenticated, isHydrated, activeRole, canAccessProviderMode, needsRoleSelection } = useAuthStore();
-  const { hasCompletedFirstLaunch, isHydrated: onboardingHydrated } = useOnboardingStore();
+  const { hasCompletedFirstLaunch, hasCompletedProviderSetup, isHydrated: onboardingHydrated } = useOnboardingStore();
+
+  const isProviderMode = isAuthenticated && activeRole === "provider" && canAccessProviderMode();
 
   const getMainComponent = () => {
-    if (isAuthenticated && activeRole === "provider" && canAccessProviderMode()) {
+    if (isProviderMode) {
       return ProviderTabNavigator;
     }
     return HomeownerTabNavigator;
@@ -213,6 +217,9 @@ export default function RootStackNavigator() {
   // Show role gateway if authenticated but hasn't selected a role yet
   const showRoleGateway = isAuthenticated && needsRoleSelection;
 
+  // Show provider setup flow if provider mode but setup not completed
+  const showProviderSetup = isProviderMode && !hasCompletedProviderSetup;
+
   return (
     <Stack.Navigator screenOptions={screenOptions}>
       {showFirstLaunch ? (
@@ -225,6 +232,12 @@ export default function RootStackNavigator() {
         <Stack.Screen
           name="RoleGateway"
           component={RoleGatewayScreen}
+          options={{ headerShown: false }}
+        />
+      ) : showProviderSetup ? (
+        <Stack.Screen
+          name="ProviderSetupFlow"
+          component={ProviderSetupFlow}
           options={{ headerShown: false }}
         />
       ) : (

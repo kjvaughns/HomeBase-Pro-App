@@ -590,6 +590,26 @@ export interface BookingPolicies {
   maxReschedules: number;
 }
 
+export interface OnboardingService {
+  id: string;
+  name: string;
+  price: number | null;
+  quoteRequired: boolean;
+  durationMinutes: number;
+}
+
+export interface ProviderAvailability {
+  activeDays: string[];
+  startTime: string;
+  endTime: string;
+}
+
+export interface ProviderBusinessProfile {
+  businessName: string;
+  category: string;
+  serviceArea: string;
+}
+
 interface ProviderState {
   // Data
   leads: Lead[];
@@ -601,6 +621,11 @@ interface ProviderState {
   clients: Client[];
   clientActivities: ClientActivity[];
   clientNotes: ClientNote[];
+  
+  // Onboarding-set provider data
+  onboardingServices: OnboardingService[];
+  providerAvailability: ProviderAvailability | null;
+  providerBusinessProfile: ProviderBusinessProfile | null;
   
   // Settings
   availableForWork: boolean;
@@ -638,6 +663,11 @@ interface ProviderState {
   setNotificationsEnabled: (value: boolean) => void;
   setBookingPolicies: (policies: BookingPolicies) => void;
   
+  // Onboarding setup actions
+  addOnboardingService: (service: OnboardingService) => void;
+  setProviderAvailability: (availability: ProviderAvailability) => void;
+  setProviderBusinessProfile: (profile: ProviderBusinessProfile) => void;
+  
   // Client actions
   addClientNote: (clientId: string, content: string, isInternal: boolean) => void;
   
@@ -674,6 +704,10 @@ export const useProviderStore = create<ProviderState>()(
       clients: [],
       clientActivities: [],
       clientNotes: [],
+      
+      onboardingServices: [],
+      providerAvailability: null,
+      providerBusinessProfile: null,
       
       availableForWork: true,
       notificationsEnabled: true,
@@ -881,6 +915,16 @@ export const useProviderStore = create<ProviderState>()(
       setNotificationsEnabled: (value) => set({ notificationsEnabled: value }),
       setBookingPolicies: (policies) => set({ bookingPolicies: policies }),
       
+      addOnboardingService: (service) => {
+        set((state) => ({
+          onboardingServices: [...state.onboardingServices, service],
+        }));
+      },
+      
+      setProviderAvailability: (availability) => set({ providerAvailability: availability }),
+      
+      setProviderBusinessProfile: (profile) => set({ providerBusinessProfile: profile }),
+      
       // Computed getters
       getStats: () => {
         const state = get();
@@ -998,6 +1042,9 @@ export const useProviderStore = create<ProviderState>()(
         clients: state.clients,
         clientActivities: state.clientActivities,
         clientNotes: state.clientNotes,
+        onboardingServices: state.onboardingServices,
+        providerAvailability: state.providerAvailability,
+        providerBusinessProfile: state.providerBusinessProfile,
         availableForWork: state.availableForWork,
         notificationsEnabled: state.notificationsEnabled,
       }),

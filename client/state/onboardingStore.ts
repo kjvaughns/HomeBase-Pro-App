@@ -5,10 +5,12 @@ export type AccountType = "homeowner" | "provider";
 
 interface OnboardingState {
   hasCompletedFirstLaunch: boolean;
+  hasCompletedProviderSetup: boolean;
   selectedAccountType: AccountType | null;
   isHydrated: boolean;
   
   setHasCompletedFirstLaunch: (completed: boolean) => void;
+  setHasCompletedProviderSetup: (completed: boolean) => void;
   setAccountType: (type: AccountType) => void;
   reset: () => void;
   hydrate: () => Promise<void>;
@@ -20,6 +22,7 @@ async function saveToStorage(state: Partial<OnboardingState>) {
   try {
     const toSave = {
       hasCompletedFirstLaunch: state.hasCompletedFirstLaunch,
+      hasCompletedProviderSetup: state.hasCompletedProviderSetup,
       selectedAccountType: state.selectedAccountType,
     };
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
@@ -30,11 +33,17 @@ async function saveToStorage(state: Partial<OnboardingState>) {
 
 export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
   hasCompletedFirstLaunch: false,
+  hasCompletedProviderSetup: false,
   selectedAccountType: null,
   isHydrated: false,
 
   setHasCompletedFirstLaunch: (completed: boolean) => {
     set({ hasCompletedFirstLaunch: completed });
+    saveToStorage(get());
+  },
+
+  setHasCompletedProviderSetup: (completed: boolean) => {
+    set({ hasCompletedProviderSetup: completed });
     saveToStorage(get());
   },
 
@@ -46,6 +55,7 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
   reset: () => {
     set({
       hasCompletedFirstLaunch: false,
+      hasCompletedProviderSetup: false,
       selectedAccountType: null,
     });
     AsyncStorage.removeItem(STORAGE_KEY);
@@ -58,6 +68,7 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
         const parsed = JSON.parse(stored);
         set({
           hasCompletedFirstLaunch: parsed.hasCompletedFirstLaunch ?? false,
+          hasCompletedProviderSetup: parsed.hasCompletedProviderSetup ?? false,
           selectedAccountType: parsed.selectedAccountType ?? null,
           isHydrated: true,
         });
