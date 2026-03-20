@@ -1,0 +1,246 @@
+Good. This is the move that actually gets you to launch instead of tweaking forever.
+
+Here’s a **no-BS production readiness prompt** that forces a real audit, not surface-level feedback.
+
+---
+
+## 🔧 Prompt: Full Production Readiness Audit (HomeBase)
+
+Perform a complete end to end audit of the HomeBase app to determine if it is ready for production launch.
+
+Do not focus on small UI tweaks. Focus on whether this app can function reliably in the real world with real users, real payments, and real usage.
+
+---
+
+## Phase 1: Core Flow Validation
+
+Test and validate the entire core loop:
+
+Provider signs up → completes onboarding → creates service → sets availability → shares booking link → homeowner books → provider manages job → payment is completed
+
+Identify ANY break in this flow.
+
+Return:
+
+* broken steps
+* confusing UX points
+* missing backend logic
+* unreliable states
+
+If this loop is not flawless, list exactly what needs to be fixed.
+
+---
+
+## Phase 2: Frontend Audit
+
+Review all screens and flows:
+
+Identify:
+
+* broken UI components
+* inconsistent design
+* bad navigation
+* confusing layouts
+* slow or laggy screens
+* mobile responsiveness issues
+
+Flag anything that reduces trust or usability.
+
+---
+
+## Phase 3: Backend + Infrastructure Audit
+
+Analyze backend systems including Supabase, Stripe, APIs, and overall architecture.
+
+Check:
+
+### Auth
+
+* secure login and signup
+* session handling
+* role separation (provider vs homeowner)
+
+### Database
+
+* clean schema structure
+* proper relationships (users, services, bookings, payments)
+* no redundant or unused tables
+* scalability risks
+
+### Booking System
+
+* booking creation logic
+* availability conflicts
+* edge cases (double booking, timezone issues)
+
+### Payments (Stripe)
+
+* payment flow works end to end
+* provider payouts (Stripe Connect if used)
+* webhook handling
+* failed payment handling
+* refund logic (basic)
+
+### APIs
+
+* error handling
+* rate limits
+* timeouts
+* fallback states
+
+---
+
+## Phase 4: Critical Edge Cases
+
+Identify and test:
+
+* double bookings
+* user cancels last minute
+* provider no-shows
+* failed payments
+* partial payments / deposits
+* timezone mismatches
+* user switching roles
+* incomplete onboarding accounts
+
+List what breaks and how to fix it.
+
+---
+
+## Phase 5: Performance + Stability
+
+Check:
+
+* app load time
+* screen transition speed
+* API response times
+* unnecessary re-renders
+* heavy components
+* memory leaks (if applicable)
+
+Flag anything that would make the app feel slow or unreliable.
+
+---
+
+## Phase 6: Security + Production Risks
+
+Identify:
+
+* exposed API keys
+* improper environment variable usage
+* insecure database rules
+* missing validation
+* weak auth flows
+* payment vulnerabilities
+
+---
+
+## Phase 7: AI Feature Audit
+
+Review all AI features:
+
+* remove anything gimmicky
+* flag anything that slows down flows
+* ensure AI is:
+
+  * fast
+  * useful
+  * non-blocking
+
+If AI is not directly helping users complete actions faster, mark it for removal or simplification.
+
+---
+
+## Phase 8: Missing Features for MVP
+
+Identify ONLY critical missing features required for launch.
+
+Do NOT suggest nice to have features.
+
+Only include features that are required to:
+
+* complete bookings
+* manage jobs
+* process payments
+* maintain basic user trust
+
+---
+
+## Phase 9: Overbuilt Features
+
+List features that should be:
+
+* removed
+* postponed
+* simplified
+
+If something does not directly support:
+booking → managing → getting paid
+
+it should not be in MVP.
+
+---
+
+## Phase 10: Final Output
+
+Return:
+
+1. Launch Readiness Score (0–100)
+2. Top 10 blockers preventing launch
+3. Critical bugs or broken systems
+4. Backend gaps that must be fixed
+5. Security risks
+6. Features to REMOVE
+7. Features to ADD (only critical)
+8. Performance issues
+9. Final checklist to go live
+10. Fastest path to production launch
+
+---
+
+## Non Negotiable Rules
+
+Be brutally honest.
+
+Do not protect bad decisions.
+
+Do not suggest unnecessary features.
+
+Prioritize speed to launch and real usability over perfection.
+
+---
+
+## ⚠️ Real talk
+
+You don’t need more features.
+
+You need:
+
+* reliability
+* clarity
+* a clean core loop
+
+If this audit comes back messy, don’t patch it.
+
+Cut it down and make the core work flawlessly.
+
+---
+
+## Your next move after running this
+
+Don’t try to fix everything.
+
+Fix:
+
+1. anything blocking bookings
+2. anything blocking payments
+3. anything confusing providers
+
+Then launch.
+
+---
+
+If you want, after you run this, paste the results here and I’ll tell you exactly:
+what to ignore
+what to fix
+and what’s actually worth delaying launch for vs not
