@@ -17,14 +17,16 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useProviderStore } from "@/state/providerStore";
+import { useThemeStore } from "@/state/themeStore";
 
 export default function ProviderMoreScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<any>();
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { user, providerProfile, logout } = useAuthStore();
+  const toggleDarkMode = useThemeStore((s) => s.toggleDarkMode);
 
   const availableForWork = useProviderStore((s) => s.availableForWork);
   const notificationsEnabled = useProviderStore((s) => s.notificationsEnabled);
@@ -182,6 +184,31 @@ export default function ProviderMoreScreen() {
 
         <Animated.View entering={FadeInDown.delay(500).duration(400)}>
           <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
+            Appearance
+          </ThemedText>
+          <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
+            <View style={styles.switchRow}>
+              <ListRow
+                title="Dark Mode"
+                leftIcon="moon"
+                showChevron={false}
+                isFirst
+                isLast
+              />
+              <View style={styles.switchContainer}>
+                <Switch
+                  value={isDark}
+                  onValueChange={toggleDarkMode}
+                  trackColor={{ false: theme.backgroundTertiary, true: Colors.accent }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+            </View>
+          </View>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(600).duration(400)}>
+          <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
             Support
           </ThemedText>
           <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
@@ -206,7 +233,7 @@ export default function ProviderMoreScreen() {
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(600).duration(400)}>
+        <Animated.View entering={FadeInDown.delay(700).duration(400)}>
           <View style={[styles.section, { backgroundColor: theme.cardBackground, marginTop: Spacing.lg }]}>
             <ListRow
               title="Sign Out"
@@ -220,7 +247,7 @@ export default function ProviderMoreScreen() {
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(700).duration(400)}>
+        <Animated.View entering={FadeInDown.delay(800).duration(400)}>
           <ThemedText style={[styles.version, { color: theme.textTertiary }]}>
             Version 1.0.0
           </ThemedText>
