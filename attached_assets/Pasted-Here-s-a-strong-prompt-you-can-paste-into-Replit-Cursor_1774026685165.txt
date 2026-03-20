@@ -1,0 +1,218 @@
+Here’s a strong prompt you can paste into Replit, Cursor, Lovable, or your builder.
+
+**Prompt:**
+
+Build HomeBase into a fully working production ready MVP focused on one thing first: helping service providers run their business day to day, while also giving homeowners a clean working booking experience.
+
+HomeBase should function like a modern AI powered business operating system for service pros, with a homeowner side attached. Think Booksy level usefulness for providers, but purpose built for home services and powered by AI.
+
+## Core product direction
+
+The provider side is the main product right now.
+
+Providers should be able to:
+see a full business dashboard
+manage leads, clients, jobs, estimates, invoices, payments, and schedule
+send booking links to homeowners
+use AI tools to help run their business
+track business performance
+get paid through the platform
+manage availability, appointments, reminders, and customer intake
+communicate value clearly and save time
+
+The homeowner side should be a clean working app experience that allows users to:
+open booking links from providers
+view provider profile and services
+book appointments
+complete AI assisted intake flows
+see appointment details
+pay invoices or deposits if needed
+manage their home and service requests in a simple way
+
+The app must support this core loop:
+provider creates profile and services
+provider sends booking link
+homeowner opens link on web or app
+homeowner books through AI scheduler and intake flow
+provider receives booking
+provider manages job, schedule, communication, invoice, and payment inside HomeBase
+
+## What to build
+
+Create a real working MVP with mock or live integrations where appropriate, but prioritize working flows over unnecessary polish.
+
+### Provider portal must include:
+
+1. Dashboard
+   business overview
+   upcoming appointments
+   recent payments
+   open estimates and invoices
+   new leads
+   basic analytics like revenue, bookings, conversion, repeat clients
+
+2. Calendar and scheduling
+   day, week, month calendar views
+   availability settings
+   reschedule and cancel flows
+   appointment reminders
+   buffer times
+   travel time support if possible
+   AI scheduler that helps recommend best time slots
+
+3. CRM
+   client list
+   client profiles
+   property or home profiles if available
+   job history
+   notes
+   tags
+   contact details
+   lifetime value
+   saved intake answers
+
+4. Services and pricing
+   service catalog
+   duration
+   pricing models
+   custom quotes
+   add ons
+   booking rules
+
+5. Booking system
+   shareable booking links
+   provider profile booking page
+   web booking flow that works even if homeowner does not yet have the app
+   if app is installed, deep link into app
+   if app is not installed, open responsive web page and encourage app download without blocking booking
+   AI intake and scheduler should guide the homeowner through service selection, timing, and details
+
+6. Estimates, invoices, and payments
+   create estimates
+   convert estimates to invoices
+   take deposits
+   take full payments
+   payment tracking
+   refund and status handling if possible
+   basic Stripe integration structure
+   provider payout visibility
+
+7. AI tools for providers
+   AI assistant that helps:
+   respond to leads
+   summarize client requests
+   suggest pricing ranges
+   draft estimates and invoice notes
+   write follow up messages
+   suggest schedule openings
+   surface missed opportunities
+   generate review requests
+   recommend upsells
+   summarize business performance
+
+8. Settings and business profile
+   business info
+   service area
+   business hours
+   team members if needed later
+   branding
+   payment settings
+   notification settings
+
+### Homeowner side must include:
+
+1. clean app or web experience
+2. booking from provider link
+3. service selection
+4. AI intake flow
+5. appointment confirmation
+6. payment or deposit flow if required
+7. ability to view booked jobs and basic history
+8. homeowner profile and property details
+
+## Important product rules
+
+Keep this an MVP.
+Do not overbuild.
+Do not add features just because they sound impressive.
+Cut anything that slows launch without being critical to the booking, scheduling, CRM, invoice, and payment loop.
+
+Prioritize features that make a provider say:
+I can actually run my business with this today.
+
+## Required engineering behavior
+
+First, audit the existing codebase and architecture.
+
+Identify:
+broken flows
+duplicate logic
+dead code
+unnecessary complexity
+features that should be removed or postponed
+anything blocking launch
+anything that should be mocked for now instead of fully built
+database or auth issues
+state management issues
+routing issues
+mobile responsiveness issues
+payment flow weaknesses
+places where AI is being forced in but adds no value
+
+Then simplify the product where needed.
+
+Do not keep overcomplicated features just because they already exist.
+If something is not essential for launch, move it into a future roadmap section instead of building it now.
+
+## MVP launch filter
+
+Everything built should pass this test:
+Can a provider sign up, set up services, send a booking link, get a homeowner booked, manage the appointment, and get paid?
+
+If not, fix that before adding extras.
+
+## Tech and UX expectations
+
+Use the current stack unless there is a clear reason not to.
+Keep code modular and production minded.
+Use clean database structure.
+Use secure auth.
+Use responsive design for web and mobile.
+Make routing clear between provider and homeowner experiences.
+Support app deep links where appropriate.
+Make the booking link experience smooth and frictionless.
+
+The UI should feel modern, premium, and simple.
+Not cluttered.
+Not experimental.
+Fast and trustworthy.
+
+## Deliverables I want from you
+
+1. Audit the current codebase and list the top launch blockers
+2. Recommend what to cut, simplify, or postpone
+3. Build the core MVP flows end to end
+4. Show the final app structure for provider and homeowner portals
+5. Clearly mark what is fully working, what is mocked, and what still needs real API keys or manual setup
+6. Give a short post build checklist for launch readiness
+7. Give step by step manual instructions only where absolutely necessary
+
+## Non negotiables
+
+The provider side is the main product.
+The homeowner side must work through provider booking links.
+AI should help the experience, not complicate it.
+Focus on real usability and launch readiness.
+I want a working version, not a bloated prototype.
+
+At the end, give me:
+a list of launch ready features
+a list of postponed features
+a list of codebase holes or risks
+and the fastest path to shipping this MVP.
+
+---
+
+If you want, I can also turn this into:
+a **Replit specific build prompt**
+or a **shorter under 3000 character version** for platforms with prompt limits.
