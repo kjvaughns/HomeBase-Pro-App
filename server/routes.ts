@@ -1085,6 +1085,46 @@ Respond ONLY with a JSON object:
     }
   });
 
+  app.post("/api/ai/improve-bio", async (req: Request, res: Response) => {
+    try {
+      const { currentBio, businessName, category } = req.body as {
+        currentBio: string;
+        businessName?: string;
+        category?: string;
+      };
+      if (!currentBio || !currentBio.trim()) {
+        return res.status(400).json({ error: "currentBio is required" });
+      }
+
+      const prompt = `You are a professional copywriter who helps home service providers craft compelling business bios. Rewrite the following bio to be professional, clear, and trustworthy while keeping the provider's voice and specific details intact.
+
+Business Name: ${businessName || "Not provided"}
+Category: ${category || "Home Services"}
+Current Bio: ${currentBio}
+
+Rewrite the bio to:
+- Sound professional and confident
+- Highlight what makes them stand out (use their specific details)
+- Be concise (2–3 sentences max)
+- Appeal to homeowners looking for reliable help
+- Keep their actual experience, years, and specifics
+
+Respond ONLY with the improved bio text, no quotes, no explanations.`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 200,
+      });
+
+      const improvedBio = response.choices[0]?.message?.content?.trim() || currentBio;
+      res.json({ improvedBio });
+    } catch (error) {
+      console.error("Improve bio error:", error);
+      res.status(500).json({ error: "Failed to improve bio" });
+    }
+  });
+
   // ============ SMART INTAKE ROUTES ============
 
   const INTAKE_SYSTEM_PROMPT = `You are HomeBase's Smart Intake AI. Your job is to understand home service problems and gather key details that help service professionals provide accurate quotes and close leads.
