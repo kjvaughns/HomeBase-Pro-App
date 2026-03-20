@@ -29,18 +29,17 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { GlassCard } from "@/components/GlassCard";
-import { ZipCodeAreaInput } from "@/components/ZipCodeAreaInput";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useOnboardingStore } from "@/state/onboardingStore";
 import { useAuthStore } from "@/state/authStore";
 import { useProviderStore } from "@/state/providerStore";
-import { apiRequest, getApiUrl } from "@/lib/query-client";
+import { apiRequest } from "@/lib/query-client";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ProviderSetupFlow">;
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 7;
 
 const SERVICE_CATEGORIES = [
   { id: "plumbing", label: "Plumbing", icon: "droplet" as const },
@@ -55,18 +54,6 @@ const SERVICE_CATEGORIES = [
   { id: "other", label: "Other", icon: "more-horizontal" as const },
 ];
 
-const SERVICE_NAME_SUGGESTIONS: Record<string, string[]> = {
-  plumbing: ["Emergency Drain Cleaning", "Water Heater Installation", "Leak Detection & Repair"],
-  electrical: ["Electrical Safety Inspection", "Panel Upgrade", "Outlet & Switch Replacement"],
-  hvac: ["AC Tune-Up & Filter Change", "Furnace Inspection", "Duct Cleaning"],
-  cleaning: ["Deep Home Cleaning", "Move-In/Move-Out Clean", "Recurring House Cleaning"],
-  landscaping: ["Lawn Mowing & Edging", "Yard Cleanup & Mulching", "Tree Trimming"],
-  handyman: ["General Handyman Service", "Furniture Assembly", "Drywall Repair"],
-  roofing: ["Roof Inspection & Repair", "Gutter Cleaning", "Shingle Replacement"],
-  painting: ["Interior Room Painting", "Exterior House Painting", "Cabinet Refinishing"],
-  pest: ["Pest Inspection & Treatment", "Rodent Control", "Termite Inspection"],
-  other: ["Professional Consultation", "Home Assessment", "Maintenance Service"],
-};
 
 const DURATION_OPTIONS = [
   { label: "30 min", value: 30 },
@@ -148,107 +135,7 @@ function StepHeader({
   );
 }
 
-function Step1BusinessBasics({
-  data,
-  onChange,
-}: {
-  data: SetupData;
-  onChange: (updates: Partial<SetupData>) => void;
-}) {
-  const { theme } = useTheme();
-
-  return (
-    <ScrollView
-      style={styles.stepScroll}
-      contentContainerStyle={styles.stepScrollContent}
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-    >
-      <StepHeader
-        stepNum={1}
-        title="Business Basics"
-        subtitle="Tell customers who you are and what you do"
-      />
-
-      <GlassCard style={styles.card}>
-        <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
-          Business Name
-        </ThemedText>
-        <TextInput
-          style={[
-            styles.textInput,
-            {
-              backgroundColor: theme.backgroundElevated,
-              color: theme.text,
-              borderColor: theme.borderLight,
-            },
-          ]}
-          placeholder="Your business name"
-          placeholderTextColor={theme.textSecondary}
-          value={data.businessName}
-          onChangeText={(v) => onChange({ businessName: v })}
-          testID="input-business-name"
-        />
-
-        <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary, marginTop: Spacing.lg }]}>
-          Service Category
-        </ThemedText>
-        <View style={styles.categoryGrid}>
-          {SERVICE_CATEGORIES.map((cat) => {
-            const selected = data.category === cat.id;
-            return (
-              <Pressable
-                key={cat.id}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  onChange({ category: cat.id });
-                }}
-                testID={`category-${cat.id}`}
-                style={[
-                  styles.categoryCard,
-                  {
-                    backgroundColor: selected ? Colors.accent + "15" : theme.backgroundElevated,
-                    borderColor: selected ? Colors.accent : theme.borderLight,
-                    borderWidth: selected ? 1.5 : StyleSheet.hairlineWidth,
-                  },
-                ]}
-              >
-                <Feather
-                  name={cat.icon}
-                  size={20}
-                  color={selected ? Colors.accent : theme.textSecondary}
-                />
-                <ThemedText
-                  type="caption"
-                  style={{
-                    textAlign: "center",
-                    color: selected ? Colors.accent : theme.text,
-                    fontWeight: selected ? "600" : "400",
-                    marginTop: Spacing.xs,
-                  }}
-                >
-                  {cat.label}
-                </ThemedText>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <View style={{ marginTop: Spacing.lg }}>
-          <ZipCodeAreaInput
-            label="Service area"
-            optional
-            value={data.serviceArea}
-            onChange={(v) => onChange({ serviceArea: v })}
-            testID="input-service-area"
-          />
-        </View>
-      </GlassCard>
-    </ScrollView>
-  );
-}
-
-function Step2CreateService({
+function Step1CreateService({
   data,
   onChange,
   category,
@@ -266,10 +153,20 @@ function Step2CreateService({
   } | null>(null);
   const [loadingPrice, setLoadingPrice] = useState(false);
   const [loadingDescription, setLoadingDescription] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const priceDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const descDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const suggestions = category ? (SERVICE_NAME_SUGGESTIONS[category] || []).slice(0, 3) : [];
+  useEffect(() => {
+    if (!category) return;
+    setLoadingSuggestions(true);
+    apiRequest("POST", "/api/ai/suggest-service-names", { category })
+      .then((res) => res.json())
+      .then((json) => { if (Array.isArray(json.names)) setAiSuggestions(json.names.slice(0, 3)); })
+      .catch(() => {})
+      .finally(() => setLoadingSuggestions(false));
+  }, [category]);
 
   const fetchDescription = async (serviceName: string) => {
     if (!serviceName.trim() || !category) return;
@@ -335,7 +232,7 @@ function Step2CreateService({
       keyboardShouldPersistTaps="handled"
     >
       <StepHeader
-        stepNum={2}
+        stepNum={1}
         title="Create Your First Service"
         subtitle="Define what you offer so customers can book you"
       />
@@ -360,13 +257,20 @@ function Step2CreateService({
           testID="input-service-name"
         />
 
-        {suggestions.length > 0 ? (
+        {loadingSuggestions ? (
+          <View style={[styles.suggestionRow, { alignItems: "center" }]}>
+            <ActivityIndicator size="small" color={Colors.accent} />
+            <ThemedText type="caption" style={{ color: Colors.accent }}>
+              Loading suggestions...
+            </ThemedText>
+          </View>
+        ) : aiSuggestions.length > 0 ? (
           <View style={styles.suggestionRow}>
             <Feather name="zap" size={12} color={Colors.accent} />
             <ThemedText type="caption" style={{ color: Colors.accent, marginRight: Spacing.sm }}>
               Quick picks:
             </ThemedText>
-            {suggestions.map((s) => (
+            {aiSuggestions.map((s) => (
               <Pressable
                 key={s}
                 onPress={() => {
@@ -529,7 +433,7 @@ function Step2CreateService({
   );
 }
 
-function Step3Availability({
+function Step2Availability({
   data,
   onChange,
 }: {
@@ -562,7 +466,7 @@ function Step3Availability({
       showsVerticalScrollIndicator={false}
     >
       <StepHeader
-        stepNum={3}
+        stepNum={2}
         title="Set Your Availability"
         subtitle="When are you available to take bookings?"
       />
@@ -706,7 +610,7 @@ function Step3Availability({
   );
 }
 
-function Step4ProfilePolish({
+function Step3ProfilePolish({
   data,
   onChange,
 }: {
@@ -756,7 +660,7 @@ function Step4ProfilePolish({
       keyboardShouldPersistTaps="handled"
     >
       <StepHeader
-        stepNum={4}
+        stepNum={3}
         title="Polish Your Profile"
         subtitle="A great bio earns trust before you say a word"
       />
@@ -839,7 +743,7 @@ function Step4ProfilePolish({
   );
 }
 
-function Step5BookingPreview({ data }: { data: SetupData }) {
+function Step4BookingPreview({ data }: { data: SetupData }) {
   const { theme } = useTheme();
   const categoryLabel = SERVICE_CATEGORIES.find((c) => c.id === data.category)?.label || "";
   const categoryIcon = SERVICE_CATEGORIES.find((c) => c.id === data.category)?.icon || "tool";
@@ -857,7 +761,7 @@ function Step5BookingPreview({ data }: { data: SetupData }) {
       showsVerticalScrollIndicator={false}
     >
       <StepHeader
-        stepNum={5}
+        stepNum={4}
         title="Booking Preview"
         subtitle="This is what customers will see when they find you"
       />
@@ -953,7 +857,7 @@ function Step5BookingPreview({ data }: { data: SetupData }) {
   );
 }
 
-function Step6Payments({ navigation }: { navigation: Props["navigation"] }) {
+function Step5Payments({ navigation }: { navigation: Props["navigation"] }) {
   const { theme } = useTheme();
   const [stripeAvailable] = useState(() => {
     const key = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY;
@@ -973,7 +877,7 @@ function Step6Payments({ navigation }: { navigation: Props["navigation"] }) {
       showsVerticalScrollIndicator={false}
     >
       <StepHeader
-        stepNum={6}
+        stepNum={5}
         title="Payments Setup"
         subtitle="Get paid directly through HomeBase via Stripe"
       />
@@ -1051,7 +955,7 @@ const VALUE_ROWS = [
   { icon: "trending-up" as const, title: "Get booked automatically", desc: "AI-powered intake qualifies and routes leads while you focus on jobs." },
 ];
 
-function Step7ValuePaywall({ onContinue }: { onContinue: () => void }) {
+function Step6ValuePaywall({ onContinue }: { onContinue: () => void }) {
   const { theme } = useTheme();
 
   return (
@@ -1061,7 +965,7 @@ function Step7ValuePaywall({ onContinue }: { onContinue: () => void }) {
       showsVerticalScrollIndicator={false}
     >
       <StepHeader
-        stepNum={7}
+        stepNum={6}
         title="Start free, upgrade when you grow"
         subtitle="Everything you need to build a professional business"
       />
@@ -1134,19 +1038,35 @@ function Step7ValuePaywall({ onContinue }: { onContinue: () => void }) {
   );
 }
 
-function Step8YouAreLive({
+function Step7YouAreLive({
   data,
+  providerProfile,
   onGoToDashboard,
 }: {
   data: SetupData;
+  providerProfile: ReturnType<typeof useAuthStore>["providerProfile"];
   onGoToDashboard: () => void;
 }) {
   const { theme } = useTheme();
   const [copied, setCopied] = useState(false);
   const scale = useSharedValue(1);
+  const [apiBookingLink, setApiBookingLink] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!providerProfile?.id) return;
+    apiRequest("GET", `/api/providers/${providerProfile.id}/booking-links`)
+      .then((res) => res.json())
+      .then((json) => {
+        const links = json.bookingLinks ?? [];
+        if (links.length > 0 && links[0].slug) {
+          setApiBookingLink(`homebase.app/${links[0].slug}`);
+        }
+      })
+      .catch(() => {});
+  }, [providerProfile?.id]);
 
   const bookingSlug = data.businessName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "") || "your-business";
-  const bookingLink = `homebase.app/${bookingSlug}`;
+  const bookingLink = apiBookingLink ?? `homebase.app/${bookingSlug}`;
 
   const handleCopy = async () => {
     await Clipboard.setStringAsync(`https://${bookingLink}`);
@@ -1288,13 +1208,11 @@ export default function ProviderSetupFlow({ navigation }: Props) {
   const canContinue = () => {
     switch (step) {
       case 1:
-        return data.businessName.trim().length > 0 && data.category.length > 0;
-      case 2:
         return data.serviceName.trim().length > 0;
-      case 3:
+      case 2:
         return data.activeDays.length > 0;
+      case 3:
       case 4:
-      case 5:
         return true;
       default:
         return true;
@@ -1316,7 +1234,6 @@ export default function ProviderSetupFlow({ navigation }: Props) {
         category: data.category,
         serviceArea: data.serviceArea.trim(),
       });
-    } else if (step === 2) {
       const service = {
         id: `svc-${Date.now()}`,
         name: data.serviceName.trim(),
@@ -1347,7 +1264,7 @@ export default function ProviderSetupFlow({ navigation }: Props) {
       } else {
         addOnboardingService(service);
       }
-    } else if (step === 3) {
+    } else if (step === 2) {
       setProviderAvailability({
         activeDays: data.activeDays,
         startTime: data.startTime,
@@ -1377,34 +1294,32 @@ export default function ProviderSetupFlow({ navigation }: Props) {
   const renderStep = () => {
     switch (step) {
       case 1:
-        return <Step1BusinessBasics key="s1" data={data} onChange={updateData} />;
+        return <Step1CreateService key="s1" data={data} onChange={updateData} category={data.category} />;
       case 2:
-        return <Step2CreateService key="s2" data={data} onChange={updateData} category={data.category} />;
+        return <Step2Availability key="s2" data={data} onChange={updateData} />;
       case 3:
-        return <Step3Availability key="s3" data={data} onChange={updateData} />;
+        return <Step3ProfilePolish key="s3" data={data} onChange={updateData} />;
       case 4:
-        return <Step4ProfilePolish key="s4" data={data} onChange={updateData} />;
+        return <Step4BookingPreview key="s4" data={data} />;
       case 5:
-        return <Step5BookingPreview key="s5" data={data} />;
+        return <Step5Payments key="s5" navigation={navigation} />;
       case 6:
-        return <Step6Payments key="s6" navigation={navigation} />;
+        return <Step6ValuePaywall key="s6" onContinue={advanceStep} />;
       case 7:
-        return <Step7ValuePaywall key="s7" onContinue={advanceStep} />;
-      case 8:
-        return <Step8YouAreLive key="s8" data={data} onGoToDashboard={handleGoToDashboard} />;
+        return <Step7YouAreLive key="s7" data={data} providerProfile={providerProfile} onGoToDashboard={handleGoToDashboard} />;
       default:
         return null;
     }
   };
 
-  const showFooterContinue = step < TOTAL_STEPS && step !== 6 && step !== 7 && step !== 8;
-  const showFooterSkip = step === 6;
+  const showFooterContinue = step < TOTAL_STEPS && step !== 5 && step !== 6 && step !== 7;
+  const showFooterSkip = step === 5;
 
   return (
     <ThemedView style={styles.container}>
       <View style={[styles.topBar, { paddingTop: insets.top + Spacing.sm }]}>
         <View style={styles.backArea}>
-          {step > 1 && step < TOTAL_STEPS ? (
+          {step > 1 ? (
             <Pressable onPress={handleBack} style={styles.backBtn} testID="button-back">
               <Feather name="chevron-left" size={24} color={theme.text} />
             </Pressable>

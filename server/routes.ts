@@ -1024,6 +1024,45 @@ Respond with ONLY the description text, no quotes, no extra formatting.`;
     }
   });
 
+  app.post("/api/ai/suggest-service-names", async (req: Request, res: Response) => {
+    try {
+      const { category } = req.body as { category: string };
+      if (!category) {
+        return res.status(400).json({ error: "category is required" });
+      }
+
+      const prompt = `You are a home services expert. Suggest 3 popular, specific service names for a "${category}" provider.
+
+Rules:
+- Each name should be 3-6 words, specific and professional
+- Focus on high-demand services homeowners commonly book
+- No generic names like "General Service" or "Home Service"
+
+Respond with ONLY a JSON array of exactly 3 strings, example: ["Drain Cleaning & Unclogging","Water Heater Installation","Emergency Pipe Repair"]`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 120,
+        response_format: { type: "json_object" },
+      });
+
+      let names: string[] = [];
+      try {
+        const raw = response.choices[0]?.message?.content?.trim() || "{}";
+        const parsed = JSON.parse(raw);
+        const arr = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.names) ? parsed.names : Object.values(parsed)[0]);
+        names = (arr as string[]).slice(0, 3).filter((n) => typeof n === "string");
+      } catch {
+        names = [];
+      }
+      res.json({ names });
+    } catch (error) {
+      console.error("Suggest service names error:", error);
+      res.status(500).json({ error: "Failed to generate service names" });
+    }
+  });
+
   app.post("/api/ai/suggest-price", async (req: Request, res: Response) => {
     try {
       const { serviceName, category, pricingType, location } = req.body as {
