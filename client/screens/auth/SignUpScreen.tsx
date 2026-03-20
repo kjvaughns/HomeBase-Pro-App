@@ -23,9 +23,13 @@ export default function SignUpScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { login } = useAuthStore();
-  const { selectedAccountType } = useOnboardingStore();
+  const { selectedAccountType, providerPreSignupData } = useOnboardingStore();
 
-  const [name, setName] = useState("");
+  const [name, setName] = useState(
+    selectedAccountType === "provider" && providerPreSignupData?.businessName
+      ? providerPreSignupData.businessName
+      : ""
+  );
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
