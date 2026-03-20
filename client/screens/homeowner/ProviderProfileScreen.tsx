@@ -225,17 +225,10 @@ export default function ProviderProfileScreen() {
           style={[styles.serviceRow, { borderColor: theme.borderLight }]}
           onPress={() => {
             if (isAuthenticated) {
-              navigation.navigate("SimpleBooking", {
+              navigation.navigate("BookingRequest", {
                 providerId: provider.id,
-                providerName: provider.businessName,
-                intakeData: {
-                  problemDescription: "",
-                  issueSummary: "",
-                  recommendedService: service,
-                  priceRange: { min: provider.hourlyRate, max: provider.hourlyRate * 4 },
-                  urgency: "flexible" as const,
-                  category: provider.categoryIds[0],
-                },
+                categoryId: provider.categoryIds?.[0] ?? "",
+                service,
               });
             } else {
               setShowAccountGate(true);
