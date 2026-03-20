@@ -1,0 +1,303 @@
+I get what you’re going for. But don’t turn onboarding into a movie.
+
+Providers don’t care about “immersive.”
+They care about: **more jobs, less hassle, getting paid faster.**
+
+So we’ll build something that *feels premium and motivating*, but still gets them set up fast.
+
+Here’s the right prompt:
+
+---
+
+## 🔧 Prompt: AI-Powered Provider Onboarding (High-Converting, Not Fluffy)
+
+Redesign the HomeBase provider onboarding into a fast, high-impact, AI-assisted setup experience that helps service providers go from signup → ready to get booked in minutes.
+
+The onboarding should feel premium and motivating, but must stay efficient and outcome-driven.
+
+---
+
+## Core Goal
+
+By the end of onboarding, the provider must:
+
+* have a complete business profile
+* have at least 1 service created
+* have availability set
+* have a live booking link
+* understand how they will get jobs and get paid
+
+If this is not achieved, onboarding failed.
+
+---
+
+## Key User Psychology (Home Service Providers)
+
+Design messaging around what they actually care about:
+
+* getting more jobs consistently
+* not chasing leads
+* saving time on admin work
+* looking more professional
+* getting paid faster and reliably
+* not dealing with complicated tools
+
+Avoid generic startup language.
+
+Speak directly to:
+
+* solo operators
+* small teams
+* guys running real service businesses (landscaping, cleaning, HVAC, etc.)
+
+---
+
+## Onboarding Structure (Step by Step)
+
+### Step 0: Emotional Hook (Short, not cheesy)
+
+Full screen, clean design:
+
+Headline:
+“Get booked. Stay organized. Get paid.”
+
+Subtext:
+“Everything you need to run your business, in one place.”
+
+CTA: Continue
+
+Optional subtle animation, keep it under 2 seconds.
+
+---
+
+### Step 1: Business Setup
+
+Fields:
+
+* business name
+* service category
+* service area
+
+AI Enhancements:
+
+* auto-suggest category
+* auto-format name
+* small tip:
+  “Clear business names get more bookings”
+
+---
+
+### Step 2: Services Setup (Most Important Step)
+
+Simple, fast UI:
+
+* add service name
+* price or “quote required”
+* duration
+
+AI Enhancements:
+
+* suggest common services based on category
+* suggest pricing ranges
+* improve service names (clean, professional)
+* auto-generate description if missing
+
+NO chat UI.
+
+Inline suggestions only.
+
+---
+
+### Step 3: Availability
+
+* set working hours
+* simple toggle UI
+
+AI Enhancements:
+
+* suggest “standard” hours
+* tip:
+  “Providers with consistent availability get booked more”
+
+---
+
+### Step 4: Business Profile Polish
+
+Fields:
+
+* description
+* optional logo/photo
+
+AI Enhancements:
+
+* “Improve description” button
+* rewrite to:
+
+  * better grammar
+  * clearer value
+  * more professional tone
+
+Keep provider voice, don’t make it sound robotic.
+
+---
+
+### Step 5: Live Preview (Important)
+
+Show:
+
+“This is what customers will see”
+
+Display:
+
+* services
+* pricing
+* availability
+
+This builds trust and excitement.
+
+---
+
+### Step 6: Payments Setup
+
+Simple explanation:
+
+“Get paid directly through HomeBase”
+
+* connect Stripe (or mock)
+* minimal friction
+
+---
+
+### Step 7: Value Reinforcement (Short + Visual)
+
+Small visual section:
+
+* “Save hours every week”
+* “Stop chasing leads”
+* “Get booked automatically”
+
+Use subtle animations or icons.
+
+DO NOT drag this out.
+
+---
+
+### Step 8: Paywall + Free Trial
+
+Clear value:
+
+“You’re ready to start getting booked”
+
+* Free trial CTA (primary)
+* Plan details (secondary)
+
+No confusion.
+
+---
+
+### Step 9: Activation Screen (Most Important Moment)
+
+Headline:
+“You’re live”
+
+Show:
+
+* booking link
+* copy/share button
+
+CTA:
+“Send your link and get your first booking”
+
+---
+
+## AI Behavior Rules
+
+AI must:
+
+* be instant
+* be helpful
+* not require effort
+
+Use:
+
+* autofill
+* suggestions
+* rewrite buttons
+* small tips
+
+DO NOT:
+
+* use chat-based flows
+* force user to interact with AI
+* slow down onboarding
+
+---
+
+## Design Requirements
+
+* one step per screen
+* progress bar at top
+* smooth transitions
+* premium, minimal UI
+* no clutter
+* no long paragraphs
+
+Animations:
+
+* subtle only
+* fast
+* purposeful
+
+---
+
+## What to Avoid
+
+* long “motivational” speeches
+* fake hype language
+* too many steps
+* complex forms
+* anything that delays setup
+
+---
+
+## Deliverables
+
+1. full onboarding flow rebuilt
+2. AI enhancements integrated inline
+3. improved copy focused on real provider needs
+4. removed unnecessary steps
+5. working end-to-end onboarding
+
+---
+
+## ⚠️ Real talk
+
+You’re very close to overdoing it again.
+
+If onboarding:
+
+* feels long
+* feels like a tutorial
+* feels like a pitch
+
+people will drop.
+
+The “this is going to change your business” feeling should come from:
+→ how easy setup is
+→ how clean it looks
+→ how fast they’re ready to get booked
+
+Not from big promises.
+
+---
+
+## One decision you need to make
+
+Do you want onboarding to feel more:
+
+A. Fast and practical
+B. Slightly emotional and inspiring
+
+Pick one.
+
+You can’t fully optimize both without hurting conversion.
