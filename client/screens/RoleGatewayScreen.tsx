@@ -19,6 +19,7 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function RoleGatewayScreen() {
   const insets = useSafeAreaInsets();
+  const safeTop = insets.top || 50;
   const { theme } = useTheme();
   const navigation = useNavigation<NavigationProp>();
   const { 
@@ -53,7 +54,7 @@ export default function RoleGatewayScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <View style={[styles.content, { paddingTop: insets.top + Spacing["2xl"], paddingBottom: insets.bottom + Spacing.xl }]}>
+      <View style={[styles.content, { paddingTop: safeTop + Spacing["2xl"], paddingBottom: insets.bottom + Spacing.xl }]}>
         <View style={styles.header}>
           <Image
             source={AppLogo}

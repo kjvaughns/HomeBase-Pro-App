@@ -45,6 +45,7 @@ const SERVICE_CATEGORIES = [
 export default function ProviderOnboardingScreen({ navigation }: Props) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const safeTop = insets.top || 50;
   const { setHasCompletedFirstLaunch, setProviderPreSignupData } = useOnboardingStore();
 
   const [currentStep, setCurrentStep] = useState(0);
@@ -100,7 +101,7 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <View style={[styles.topBar, { paddingTop: insets.top + Spacing.sm }]}>
+        <View style={[styles.topBar, { paddingTop: safeTop + Spacing.sm }]}>
           <Pressable onPress={handleBack} style={styles.backButton} hitSlop={12}>
             {currentStep > 0 ? (
               <Feather name="arrow-left" size={20} color={theme.textSecondary} />

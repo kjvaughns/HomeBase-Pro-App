@@ -40,6 +40,7 @@ const PRIORITY_OPTIONS = [
 export default function HomeownerOnboardingScreen({ navigation }: Props) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const safeTop = insets.top || 50;
   const { setHasCompletedFirstLaunch } = useOnboardingStore();
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedPriorities, setSelectedPriorities] = useState<string[]>([]);
@@ -169,7 +170,7 @@ export default function HomeownerOnboardingScreen({ navigation }: Props) {
 
   return (
     <ThemedView style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top + Spacing.md }]}>
+      <View style={[styles.header, { paddingTop: safeTop + Spacing.md }]}>
         <View style={styles.progressContainer}>
           {STEPS.map((_, index) => (
             <View

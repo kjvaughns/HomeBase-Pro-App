@@ -19,6 +19,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "AccountTypeSelection">;
 export default function AccountTypeSelectionScreen({ navigation }: Props) {
   const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const safeTop = insets.top || 50;
   const { setAccountType, setHasCompletedFirstLaunch } = useOnboardingStore();
 
   const headerOpacity = useRef(new Animated.Value(0)).current;
@@ -168,7 +169,7 @@ export default function AccountTypeSelectionScreen({ navigation }: Props) {
         style={StyleSheet.absoluteFill}
       />
 
-      <View style={[styles.content, { paddingTop: insets.top + Spacing["3xl"] }]}>
+      <View style={[styles.content, { paddingTop: safeTop + Spacing["3xl"] }]}>
         <Animated.View
           style={[
             styles.header,

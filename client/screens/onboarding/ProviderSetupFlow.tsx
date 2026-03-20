@@ -1178,6 +1178,7 @@ function Step7YouAreLive({
 export default function ProviderSetupFlow({ navigation }: Props) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const safeTop = insets.top || 50;
   const { setHasCompletedProviderSetup, providerPreSignupData } = useOnboardingStore();
   const { user, providerProfile } = useAuthStore();
   const { addOnboardingService, setProviderAvailability, setProviderBusinessProfile } = useProviderStore();
@@ -1317,7 +1318,7 @@ export default function ProviderSetupFlow({ navigation }: Props) {
 
   return (
     <ThemedView style={styles.container}>
-      <View style={[styles.topBar, { paddingTop: insets.top + Spacing.sm }]}>
+      <View style={[styles.topBar, { paddingTop: safeTop + Spacing.sm }]}>
         <View style={styles.backArea}>
           {step > 1 ? (
             <Pressable onPress={handleBack} style={styles.backBtn} testID="button-back">
