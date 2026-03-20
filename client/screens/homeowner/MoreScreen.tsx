@@ -276,6 +276,24 @@ export default function MoreScreen() {
           </View>
         </Animated.View>
 
+        {!isAuthenticated ? (
+          <Animated.View entering={FadeInDown.delay(250).duration(400)}>
+            <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
+              Account Type
+            </ThemedText>
+            <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
+              <ListRow
+                title="Switch Account Type"
+                subtitle="Choose Homeowner or Service Provider"
+                leftIcon="refresh-cw"
+                onPress={() => navigation.navigate("AccountTypeSelection")}
+                isFirst
+                isLast
+              />
+            </View>
+          </Animated.View>
+        ) : null}
+
         <Animated.View entering={FadeInDown.delay(isAuthenticated ? 600 : 300).duration(400)}>
           <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
             Support
