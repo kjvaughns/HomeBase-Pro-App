@@ -153,7 +153,7 @@ export default function RootStackNavigator() {
   const screenOptions = useScreenOptions();
   const { theme } = useTheme();
   const { isAuthenticated, isHydrated, activeRole, canAccessProviderMode, needsRoleSelection } = useAuthStore();
-  const { hasCompletedFirstLaunch, hasCompletedProviderSetup, isHydrated: onboardingHydrated } = useOnboardingStore();
+  const { hasCompletedFirstLaunch, isHydrated: onboardingHydrated } = useOnboardingStore();
 
   const isProviderMode = isAuthenticated && activeRole === "provider" && canAccessProviderMode();
 
@@ -174,9 +174,6 @@ export default function RootStackNavigator() {
   // Show role gateway if authenticated but hasn't selected a role yet
   const showRoleGateway = isAuthenticated && needsRoleSelection;
 
-  // Show provider setup flow if provider mode but setup not completed
-  const showProviderSetup = isProviderMode && !hasCompletedProviderSetup;
-
   return (
     <Stack.Navigator screenOptions={screenOptions}>
       {showFirstLaunch ? (
@@ -189,12 +186,6 @@ export default function RootStackNavigator() {
         <Stack.Screen
           name="RoleGateway"
           component={RoleGatewayScreen}
-          options={{ headerShown: false }}
-        />
-      ) : showProviderSetup ? (
-        <Stack.Screen
-          name="ProviderSetupFlow"
-          component={ProviderSetupFlow}
           options={{ headerShown: false }}
         />
       ) : (
@@ -246,6 +237,11 @@ export default function RootStackNavigator() {
       <Stack.Screen
         name="Onboarding"
         component={OnboardingScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="ProviderSetupFlow"
+        component={ProviderSetupFlow}
         options={{ headerShown: false }}
       />
       <Stack.Screen

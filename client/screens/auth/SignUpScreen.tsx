@@ -22,7 +22,7 @@ export default function SignUpScreen({ navigation }: Props) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
-  const { login } = useAuthStore();
+  const { login, setNeedsRoleSelection, setActiveRole } = useAuthStore();
   const { selectedAccountType, providerPreSignupData } = useOnboardingStore();
 
   const [name, setName] = useState(
@@ -91,12 +91,15 @@ export default function SignUpScreen({ navigation }: Props) {
           phone: data.user.phone,
           avatarUrl: data.user.avatarUrl,
         }, null, data.token ?? null);
+        // Bypass the RoleGateway — we already know the role from the signup flow
+        setNeedsRoleSelection(false);
         if (selectedAccountType === "provider") {
           navigation.reset({
             index: 0,
             routes: [{ name: "ProviderSetupFlow" }],
           });
         } else {
+          setActiveRole("homeowner");
           navigation.reset({
             index: 0,
             routes: [{ name: "Onboarding" }],
