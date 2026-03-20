@@ -121,8 +121,8 @@ export default function BookingSuccessScreen() {
       </View>
 
       <Animated.View entering={FadeIn.delay(900).duration(400)} style={styles.buttons}>
-        <PrimaryButton label="View Job Details" onPress={handleViewJob} />
-        <SecondaryButton label="Back to Home" onPress={handleGoHome} style={styles.secondaryBtn} />
+        <PrimaryButton onPress={handleViewJob}>View Job Details</PrimaryButton>
+        <SecondaryButton onPress={handleGoHome} style={styles.secondaryBtn}>Back to Home</SecondaryButton>
       </Animated.View>
     </ThemedView>
   );

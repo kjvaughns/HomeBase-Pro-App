@@ -162,14 +162,15 @@ export default function BookingRequestScreen() {
       <View
         style={[
           styles.bottomBar,
-          { backgroundColor: theme.background, paddingBottom: insets.bottom + Spacing.md },
+          { backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.md },
         ]}
       >
         <PrimaryButton
-          label="Continue to Schedule"
           onPress={handleNext}
           disabled={!description.trim()}
-        />
+        >
+          Continue to Schedule
+        </PrimaryButton>
       </View>
     </ThemedView>
   );

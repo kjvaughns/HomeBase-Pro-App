@@ -26,6 +26,7 @@ import BudgeterScreen from "@/screens/homeowner/BudgeterScreen";
 import ServiceHistoryScreen from "@/screens/homeowner/ServiceHistoryScreen";
 import ProviderListScreen from "@/screens/homeowner/ProviderListScreen";
 import ProviderProfileScreen from "@/screens/homeowner/ProviderProfileScreen";
+import BookingRequestScreen from "@/screens/homeowner/BookingRequestScreen";
 import BookingScheduleScreen from "@/screens/homeowner/BookingScheduleScreen";
 import BookingAddressScreen from "@/screens/homeowner/BookingAddressScreen";
 import BookingConfirmScreen from "@/screens/homeowner/BookingConfirmScreen";
@@ -113,6 +114,11 @@ export type RootStackParamList = {
       urgency: UrgencyLevel;
       category: string;
     };
+  };
+  BookingRequest: {
+    providerId: string;
+    categoryId: string;
+    service: string;
   };
   BookingSchedule: {
     providerId: string;
@@ -357,6 +363,13 @@ export default function RootStackNavigator() {
         component={ProviderProfileScreen}
         options={{
           headerTitle: "",
+        }}
+      />
+      <Stack.Screen
+        name="BookingRequest"
+        component={BookingRequestScreen}
+        options={{
+          headerTitle: "Request Details",
         }}
       />
       <Stack.Screen

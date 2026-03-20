@@ -180,13 +180,14 @@ export default function PaymentMethodsScreen() {
       </View>
 
       <View style={styles.formActions}>
-        <SecondaryButton label="Cancel" onPress={resetForm} style={styles.formBtn} />
+        <SecondaryButton onPress={resetForm} style={styles.formBtn}>Cancel</SecondaryButton>
         <PrimaryButton
-          label="Add Card"
           onPress={handleSave}
           disabled={formData.cardNumber.length < 16 || formData.expiry.length < 5}
           style={styles.formBtn}
-        />
+        >
+          Add Card
+        </PrimaryButton>
       </View>
 
       <ThemedText style={[styles.securityNote, { color: theme.textTertiary }]}>

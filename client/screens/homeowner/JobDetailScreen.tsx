@@ -64,7 +64,7 @@ export default function JobDetailScreen() {
   const statusConfig = STATUS_CONFIG[job.status];
 
   const handleMessage = () => {
-    navigation.navigate("Chat", { jobId: job.id });
+    Alert.alert("Coming Soon", "Messaging will be available in a future update.");
   };
 
   const handlePayment = () => {

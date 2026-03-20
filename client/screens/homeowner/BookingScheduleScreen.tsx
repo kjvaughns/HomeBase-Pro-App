@@ -190,14 +190,15 @@ export default function BookingScheduleScreen() {
       <View
         style={[
           styles.bottomBar,
-          { backgroundColor: theme.background, paddingBottom: insets.bottom + Spacing.md },
+          { backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.md },
         ]}
       >
         <PrimaryButton
-          label="Continue to Address"
           onPress={handleNext}
           disabled={!selectedSlot}
-        />
+        >
+          Continue to Address
+        </PrimaryButton>
       </View>
     </ThemedView>
   );

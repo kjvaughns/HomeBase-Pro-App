@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { StyleSheet, View, Pressable, ActivityIndicator } from "react-native";
+import { StyleSheet, View, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, useNavigation, RouteProp, CommonActions } from "@react-navigation/native";
@@ -111,7 +111,7 @@ export default function ReviewScreen() {
       >
         <GlassCard style={styles.providerCard}>
           <View style={styles.providerRow}>
-            <Avatar name={job.providerName} size={56} />
+            <Avatar name={job.providerName} size="medium" />
             <View style={styles.providerInfo}>
               <ThemedText style={styles.providerName}>{job.providerName}</ThemedText>
               <ThemedText style={[styles.serviceName, { color: theme.textSecondary }]}>
@@ -186,15 +186,15 @@ export default function ReviewScreen() {
       <View
         style={[
           styles.bottomBar,
-          { backgroundColor: theme.background, paddingBottom: insets.bottom + Spacing.md },
+          { backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.md },
         ]}
       >
         <PrimaryButton
-          label={isSubmitting ? "" : "Submit Review"}
           onPress={handleSubmit}
           disabled={rating === 0 || isSubmitting}
+          loading={isSubmitting}
         >
-          {isSubmitting && <ActivityIndicator color="#fff" />}
+          Submit Review
         </PrimaryButton>
       </View>
     </ThemedView>

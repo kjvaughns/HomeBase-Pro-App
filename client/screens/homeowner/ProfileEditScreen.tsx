@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, View, ActivityIndicator } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation } from "@react-navigation/native";
@@ -55,7 +55,7 @@ export default function ProfileEditScreen() {
         }}
       >
         <View style={styles.avatarSection}>
-          <Avatar name={name} size={100} />
+          <Avatar name={name} size="large" />
           <ThemedText style={[styles.avatarHint, { color: theme.textTertiary }]}>
             Tap to change photo
           </ThemedText>
@@ -100,15 +100,15 @@ export default function ProfileEditScreen() {
       <View
         style={[
           styles.bottomBar,
-          { backgroundColor: theme.background, paddingBottom: insets.bottom + Spacing.md },
+          { backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.md },
         ]}
       >
         <PrimaryButton
-          label={isSaving ? "" : "Save Changes"}
           onPress={handleSave}
           disabled={!name.trim() || !email.trim() || isSaving}
+          loading={isSaving}
         >
-          {isSaving && <ActivityIndicator color="#fff" />}
+          Save Changes
         </PrimaryButton>
       </View>
     </ThemedView>

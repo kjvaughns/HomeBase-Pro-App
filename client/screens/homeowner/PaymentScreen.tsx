@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { StyleSheet, View, ScrollView, Pressable, ActivityIndicator } from "react-native";
+import { StyleSheet, View, ScrollView, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, useNavigation, RouteProp, CommonActions } from "@react-navigation/native";
@@ -200,15 +200,15 @@ export default function PaymentScreen() {
       <View
         style={[
           styles.bottomBar,
-          { backgroundColor: theme.background, paddingBottom: insets.bottom + Spacing.md },
+          { backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.md },
         ]}
       >
         <PrimaryButton
-          label={isProcessing ? "" : `Pay $${invoice.total}`}
           onPress={handlePayment}
           disabled={!selectedMethodId || isProcessing}
+          loading={isProcessing}
         >
-          {isProcessing && <ActivityIndicator color="#fff" />}
+          {`Pay $${invoice.total}`}
         </PrimaryButton>
       </View>
     </ThemedView>

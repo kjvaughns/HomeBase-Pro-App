@@ -166,9 +166,7 @@ export default function AppointmentDetailScreen() {
   }, [appointment, appointmentId, queryClient, navigation]);
 
   const handleMessage = () => {
-    if (appointment) {
-      (navigation as any).navigate("Chat", { jobId: appointment.id });
-    }
+    Alert.alert("Coming Soon", "Messaging will be available in a future update.");
   };
 
   const handleConditionUpdate = useCallback(async () => {
