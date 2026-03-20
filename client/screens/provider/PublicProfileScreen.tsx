@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   StyleSheet,
   View,
@@ -7,6 +7,7 @@ import {
   Pressable,
   Share,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -15,6 +16,7 @@ import { Feather } from "@expo/vector-icons";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import * as Clipboard from "expo-clipboard";
+import { useQuery } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -25,49 +27,62 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { getApiUrl } from "@/lib/query-client";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-interface Service {
+interface ProviderService {
   id: string;
   name: string;
-  price: string;
-  description: string;
+  basePrice: string | null;
+  pricingType: string | null;
+  description: string | null;
+  category: string | null;
 }
 
-interface Review {
+interface BookingLink {
   id: string;
-  author: string;
-  rating: number;
-  text: string;
-  date: string;
+  slug: string;
+  welcomeMessage: string | null;
+  status: string;
 }
-
-const MOCK_SERVICES: Service[] = [
-  { id: "1", name: "AC Repair & Tune-Up", price: "$89 service call", description: "Full diagnostic and repair for all AC units" },
-  { id: "2", name: "Furnace Installation", price: "From $2,500", description: "Complete furnace replacement with warranty" },
-  { id: "3", name: "Duct Cleaning", price: "$299", description: "Whole-home duct cleaning service" },
-];
-
-const MOCK_REVIEWS: Review[] = [
-  { id: "1", author: "Sarah M.", rating: 5, text: "Prompt, professional, and fair pricing. Fixed our AC the same day!", date: "2 weeks ago" },
-  { id: "2", author: "Michael R.", rating: 5, text: "Best HVAC service in the area. Highly recommend!", date: "1 month ago" },
-  { id: "3", author: "Jennifer L.", rating: 4, text: "Great work on our furnace installation. Very knowledgeable team.", date: "2 months ago" },
-];
 
 export default function PublicProfileScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavigationProp>();
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
   const { user, providerProfile } = useAuthStore();
-
-  const [isEditing, setIsEditing] = useState(false);
+  const providerId = providerProfile?.id;
 
   const businessName = providerProfile?.businessName || "Your Business Name";
-  const slug = businessName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-  const profileUrl = `homebase.app/p/${slug}`;
+
+  const { data: bookingLinksData } = useQuery<{ bookingLinks: BookingLink[] }>({
+    queryKey: ["/api/providers", providerId, "booking-links"],
+    enabled: !!providerId,
+  });
+
+  const { data: servicesData, isLoading: servicesLoading } = useQuery<{ services: ProviderService[] }>({
+    queryKey: ["/api/provider", providerId, "custom-services"],
+    enabled: !!providerId,
+  });
+
+  const activeLink = bookingLinksData?.bookingLinks?.find((l) => l.status === "active");
+  const slug = activeLink?.slug;
+  const domain = process.env.EXPO_PUBLIC_DOMAIN || "localhost:5000";
+  const profileUrl = slug ? `${domain}/book/${slug}` : null;
+  const services = servicesData?.services || [];
+
+  const formatPrice = (svc: ProviderService): string => {
+    if (svc.pricingType === "quote") return "Quote";
+    if (svc.basePrice) return `$${svc.basePrice}`;
+    return "Contact";
+  };
 
   const handleShare = async () => {
+    if (!profileUrl) {
+      Alert.alert("No Booking Link", "Create a booking link first from the Business Profile screen.");
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await Share.share({
@@ -80,18 +95,13 @@ export default function PublicProfileScreen() {
   };
 
   const handleCopyLink = async () => {
+    if (!profileUrl) {
+      Alert.alert("No Booking Link", "Create a booking link first from the Business Profile screen.");
+      return;
+    }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     await Clipboard.setStringAsync(`https://${profileUrl}`);
-    Alert.alert("Copied!", "Your profile link has been copied to clipboard.");
-  };
-
-  const handleEditProfile = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setIsEditing(!isEditing);
-  };
-
-  const handleBookService = (service: Service) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Alert.alert("Copied!", "Your booking link has been copied to clipboard.");
   };
 
   const renderStars = (rating: number) => {
@@ -109,6 +119,9 @@ export default function PublicProfileScreen() {
       </View>
     );
   };
+
+  const providerRating = providerProfile?.rating ? Number(providerProfile.rating) : 0;
+  const reviewCount = providerProfile?.reviewCount || 0;
 
   return (
     <ThemedView style={styles.container}>
@@ -130,12 +143,7 @@ export default function PublicProfileScreen() {
             </Pressable>
             <ThemedText style={styles.headerTitle}>Public Profile</ThemedText>
             <View style={styles.headerActions}>
-              <Pressable
-                style={[styles.actionButton, { backgroundColor: theme.backgroundSecondary }]}
-                onPress={handleEditProfile}
-              >
-                <Feather name={isEditing ? "check" : "edit-2"} size={18} color={theme.text} />
-              </Pressable>
+              <View style={{ width: 40 }} />
             </View>
           </View>
         </Animated.View>
@@ -147,18 +155,22 @@ export default function PublicProfileScreen() {
               <ThemedText style={styles.linkLabel}>Your Booking Link</ThemedText>
             </View>
             <View style={[styles.linkDisplay, { backgroundColor: theme.backgroundSecondary }]}>
-              <ThemedText style={styles.linkText}>{profileUrl}</ThemedText>
+              <ThemedText style={styles.linkText}>
+                {profileUrl || "No booking link created yet"}
+              </ThemedText>
             </View>
-            <View style={styles.linkActions}>
-              <Pressable style={styles.linkButton} onPress={handleCopyLink}>
-                <Feather name="copy" size={16} color={Colors.accent} />
-                <ThemedText style={[styles.linkButtonText, { color: Colors.accent }]}>Copy</ThemedText>
-              </Pressable>
-              <Pressable style={styles.linkButton} onPress={handleShare}>
-                <Feather name="share" size={16} color={Colors.accent} />
-                <ThemedText style={[styles.linkButtonText, { color: Colors.accent }]}>Share</ThemedText>
-              </Pressable>
-            </View>
+            {profileUrl ? (
+              <View style={styles.linkActions}>
+                <Pressable style={styles.linkButton} onPress={handleCopyLink}>
+                  <Feather name="copy" size={16} color={Colors.accent} />
+                  <ThemedText style={[styles.linkButtonText, { color: Colors.accent }]}>Copy</ThemedText>
+                </Pressable>
+                <Pressable style={styles.linkButton} onPress={handleShare}>
+                  <Feather name="share" size={16} color={Colors.accent} />
+                  <ThemedText style={[styles.linkButtonText, { color: Colors.accent }]}>Share</ThemedText>
+                </Pressable>
+              </View>
+            ) : null}
           </GlassCard>
         </Animated.View>
 
@@ -179,100 +191,74 @@ export default function PublicProfileScreen() {
                   <Avatar uri={user?.avatarUrl} name={businessName} size="large" />
                 </View>
                 <ThemedText style={styles.businessName}>{businessName}</ThemedText>
-                <View style={styles.ratingContainer}>
-                  {renderStars(5)}
-                  <ThemedText style={[styles.ratingText, { color: theme.textSecondary }]}>
-                    4.9 (128 reviews)
-                  </ThemedText>
-                </View>
+                {providerRating > 0 ? (
+                  <View style={styles.ratingContainer}>
+                    {renderStars(Math.round(providerRating))}
+                    <ThemedText style={[styles.ratingText, { color: theme.textSecondary }]}>
+                      {providerRating.toFixed(1)} ({reviewCount} {reviewCount === 1 ? "review" : "reviews"})
+                    </ThemedText>
+                  </View>
+                ) : null}
                 <View style={styles.badgesRow}>
                   <View style={[styles.badge, { backgroundColor: Colors.accentLight }]}>
                     <Feather name="check-circle" size={12} color={Colors.accent} />
-                    <ThemedText style={[styles.badgeText, { color: Colors.accent }]}>Licensed</ThemedText>
-                  </View>
-                  <View style={[styles.badge, { backgroundColor: Colors.accentLight }]}>
-                    <Feather name="shield" size={12} color={Colors.accent} />
-                    <ThemedText style={[styles.badgeText, { color: Colors.accent }]}>Insured</ThemedText>
+                    <ThemedText style={[styles.badgeText, { color: Colors.accent }]}>Verified</ThemedText>
                   </View>
                 </View>
               </View>
             </View>
 
             <View style={styles.contentSection}>
-              <View style={styles.aboutSection}>
-                <ThemedText style={styles.sectionTitle}>About</ThemedText>
-                <ThemedText style={[styles.aboutText, { color: theme.textSecondary }]}>
-                  Professional HVAC services with over 15 years of experience. We specialize in residential heating and cooling solutions, offering fast response times and quality workmanship. Licensed, insured, and committed to your comfort.
-                </ThemedText>
-              </View>
-
               <View style={styles.servicesSection}>
                 <ThemedText style={styles.sectionTitle}>Services</ThemedText>
-                {MOCK_SERVICES.map((service) => (
-                  <Pressable
-                    key={service.id}
-                    style={[styles.serviceCard, { backgroundColor: theme.backgroundDefault }]}
-                    onPress={() => handleBookService(service)}
-                  >
-                    <View style={styles.serviceInfo}>
-                      <ThemedText style={styles.serviceName}>{service.name}</ThemedText>
-                      <ThemedText style={[styles.serviceDesc, { color: theme.textSecondary }]}>
-                        {service.description}
-                      </ThemedText>
-                    </View>
-                    <View style={styles.servicePrice}>
-                      <ThemedText style={[styles.priceText, { color: Colors.accent }]}>
-                        {service.price}
-                      </ThemedText>
-                      <View style={[styles.bookButton, { backgroundColor: Colors.accent }]}>
-                        <ThemedText style={styles.bookButtonText}>Book</ThemedText>
+                {servicesLoading ? (
+                  <ActivityIndicator size="small" color={Colors.accent} />
+                ) : services.length > 0 ? (
+                  services.map((service) => (
+                    <View
+                      key={service.id}
+                      style={[styles.serviceCard, { backgroundColor: theme.backgroundDefault }]}
+                    >
+                      <View style={styles.serviceInfo}>
+                        <ThemedText style={styles.serviceName}>{service.name}</ThemedText>
+                        {service.description ? (
+                          <ThemedText style={[styles.serviceDesc, { color: theme.textSecondary }]}>
+                            {service.description}
+                          </ThemedText>
+                        ) : null}
+                      </View>
+                      <View style={styles.servicePrice}>
+                        <ThemedText style={[styles.priceText, { color: Colors.accent }]}>
+                          {formatPrice(service)}
+                        </ThemedText>
                       </View>
                     </View>
-                  </Pressable>
-                ))}
-              </View>
-
-              <View style={styles.reviewsSection}>
-                <View style={styles.reviewsHeader}>
-                  <ThemedText style={styles.sectionTitle}>Reviews</ThemedText>
-                  <ThemedText style={[styles.seeAll, { color: Colors.accent }]}>See all</ThemedText>
-                </View>
-                {MOCK_REVIEWS.slice(0, 2).map((review) => (
-                  <View key={review.id} style={[styles.reviewCard, { backgroundColor: theme.backgroundDefault }]}>
-                    <View style={styles.reviewHeader}>
-                      <ThemedText style={styles.reviewAuthor}>{review.author}</ThemedText>
-                      {renderStars(review.rating)}
-                    </View>
-                    <ThemedText style={[styles.reviewText, { color: theme.textSecondary }]}>
-                      {review.text}
-                    </ThemedText>
-                    <ThemedText style={[styles.reviewDate, { color: theme.textTertiary }]}>
-                      {review.date}
-                    </ThemedText>
-                  </View>
-                ))}
+                  ))
+                ) : (
+                  <ThemedText style={[styles.emptyText, { color: theme.textSecondary }]}>
+                    No services added yet. Add services from the Services screen.
+                  </ThemedText>
+                )}
               </View>
 
               <View style={styles.contactSection}>
                 <ThemedText style={styles.sectionTitle}>Contact</ThemedText>
-                <View style={styles.contactRow}>
-                  <Feather name="phone" size={16} color={theme.textSecondary} />
-                  <ThemedText style={[styles.contactText, { color: theme.textSecondary }]}>
-                    (555) 123-4567
-                  </ThemedText>
-                </View>
-                <View style={styles.contactRow}>
-                  <Feather name="mail" size={16} color={theme.textSecondary} />
-                  <ThemedText style={[styles.contactText, { color: theme.textSecondary }]}>
-                    contact@yourbusiness.com
-                  </ThemedText>
-                </View>
-                <View style={styles.contactRow}>
-                  <Feather name="map-pin" size={16} color={theme.textSecondary} />
-                  <ThemedText style={[styles.contactText, { color: theme.textSecondary }]}>
-                    San Francisco Bay Area
-                  </ThemedText>
-                </View>
+                {user?.phone ? (
+                  <View style={styles.contactRow}>
+                    <Feather name="phone" size={16} color={theme.textSecondary} />
+                    <ThemedText style={[styles.contactText, { color: theme.textSecondary }]}>
+                      {user.phone}
+                    </ThemedText>
+                  </View>
+                ) : null}
+                {user?.email ? (
+                  <View style={styles.contactRow}>
+                    <Feather name="mail" size={16} color={theme.textSecondary} />
+                    <ThemedText style={[styles.contactText, { color: theme.textSecondary }]}>
+                      {user.email}
+                    </ThemedText>
+                  </View>
+                ) : null}
               </View>
             </View>
           </View>
@@ -328,13 +314,6 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: "row",
     gap: Spacing.sm,
-  },
-  actionButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
   },
   linkCard: {
     marginBottom: Spacing.lg,
@@ -448,17 +427,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingBottom: Spacing.lg,
   },
-  aboutSection: {
-    marginBottom: Spacing.xl,
-  },
   sectionTitle: {
     ...Typography.headline,
     fontWeight: "600",
     marginBottom: Spacing.sm,
-  },
-  aboutText: {
-    ...Typography.body,
-    lineHeight: 22,
   },
   servicesSection: {
     marginBottom: Spacing.xl,
@@ -489,51 +461,10 @@ const styles = StyleSheet.create({
     ...Typography.footnote,
     fontWeight: "600",
   },
-  bookButton: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
-    borderRadius: BorderRadius.full,
-  },
-  bookButtonText: {
-    ...Typography.caption1,
-    fontWeight: "600",
-    color: "#FFFFFF",
-  },
-  reviewsSection: {
-    marginBottom: Spacing.xl,
-  },
-  reviewsHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: Spacing.sm,
-  },
-  seeAll: {
-    ...Typography.subhead,
-    fontWeight: "500",
-  },
-  reviewCard: {
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    marginBottom: Spacing.sm,
-  },
-  reviewHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: Spacing.xs,
-  },
-  reviewAuthor: {
-    ...Typography.subhead,
-    fontWeight: "600",
-  },
-  reviewText: {
+  emptyText: {
     ...Typography.body,
-    lineHeight: 20,
-    marginBottom: Spacing.xs,
-  },
-  reviewDate: {
-    ...Typography.caption1,
+    textAlign: "center",
+    paddingVertical: Spacing.lg,
   },
   contactSection: {},
   contactRow: {

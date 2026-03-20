@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from "react";
-import { StyleSheet, View, ScrollView, Pressable, FlatList, Alert } from "react-native";
+import React, { useState, useMemo, useEffect } from "react";
+import { StyleSheet, View, ScrollView, Pressable, FlatList, Alert, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
@@ -7,23 +7,65 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { useQuery, useMutation } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
-import { TextField } from "@/components/TextField";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
-import { useHomeownerStore } from "@/state/homeownerStore";
+import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
-import { TimeSlot, PaymentMethod } from "@/state/types";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
 
 type ScreenRouteProp = RouteProp<RootStackParamList, "SimpleBooking">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+const TIME_SLOTS = [
+  { startTime: "08:00", label: "8 AM" },
+  { startTime: "09:00", label: "9 AM" },
+  { startTime: "10:00", label: "10 AM" },
+  { startTime: "11:00", label: "11 AM" },
+  { startTime: "12:00", label: "12 PM" },
+  { startTime: "13:00", label: "1 PM" },
+  { startTime: "14:00", label: "2 PM" },
+  { startTime: "15:00", label: "3 PM" },
+  { startTime: "16:00", label: "4 PM" },
+  { startTime: "17:00", label: "5 PM" },
+];
+
+interface DateItem {
+  dateStr: string;
+  dayName: string;
+  dayNum: number;
+  month: string;
+}
+
+interface HomeRecord {
+  id: string;
+  label: string;
+  street: string;
+  city: string;
+  state: string;
+  zip: string;
+  isDefault: boolean;
+}
+
+interface ProviderService {
+  id: string;
+  name: string;
+  category: string;
+  description: string | null;
+  pricingType: string;
+  basePrice: string | null;
+  priceFrom: string | null;
+  priceTo: string | null;
+  duration: number | null;
+}
 
 export default function SimpleBookingScreen() {
   const insets = useSafeAreaInsets();
@@ -32,129 +74,157 @@ export default function SimpleBookingScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { theme, isDark } = useTheme();
   const params = route.params;
-
-  const profile = useHomeownerStore((s) => s.profile);
-  const addPaymentMethod = useHomeownerStore((s) => s.addPaymentMethod);
-  const getProviderAvailability = useHomeownerStore((s) => s.getProviderAvailability);
-  const addAppointment = useHomeownerStore((s) => s.addAppointment);
-
-  const paymentMethods = profile?.paymentMethods || [];
-  const defaultPayment = paymentMethods.find((p) => p.isDefault) || paymentMethods[0];
-
-  const availability = useMemo(() => {
-    return getProviderAvailability(params.providerId);
-  }, [getProviderAvailability, params.providerId]);
+  const { user } = useAuthStore();
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
-  const [selectedPayment, setSelectedPayment] = useState<PaymentMethod | null>(defaultPayment || null);
-  const [showAddCard, setShowAddCard] = useState(false);
-  const [cardForm, setCardForm] = useState({ cardNumber: "", expiry: "", cvv: "", name: "" });
-  const [isBooking, setIsBooking] = useState(false);
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [selectedTimeLabel, setSelectedTimeLabel] = useState<string | null>(null);
+  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
 
-  const dates = useMemo(() => {
-    const uniqueDates = [...new Set(availability.map((s) => s.date))];
-    return uniqueDates.slice(0, 14).map((dateStr) => {
-      const date = new Date(dateStr + "T00:00:00");
-      return {
+  const { data: homesData, isLoading: homesLoading } = useQuery<{ homes: HomeRecord[] }>({
+    queryKey: ["/api/homes", user?.id],
+    enabled: !!user?.id,
+  });
+
+  const { data: servicesData, isLoading: servicesLoading } = useQuery<{ services: ProviderService[] }>({
+    queryKey: ["/api/provider", params.providerId, "custom-services", "published"],
+    queryFn: async () => {
+      const url = new URL(`/api/provider/${params.providerId}/custom-services`, getApiUrl());
+      url.searchParams.set("publishedOnly", "true");
+      const res = await fetch(url.toString());
+      return res.json();
+    },
+    enabled: !!params.providerId,
+  });
+
+  const { data: availabilityData, isLoading: availabilityLoading } = useQuery<{
+    slots: { startTime: string; label: string }[];
+    workingDays: number[];
+  }>({
+    queryKey: ["/api/provider", params.providerId, "availability", selectedDate],
+    queryFn: async () => {
+      const url = new URL(`/api/provider/${params.providerId}/availability`, getApiUrl());
+      if (selectedDate) url.searchParams.set("date", selectedDate);
+      const res = await fetch(url.toString());
+      return res.json();
+    },
+    enabled: !!params.providerId && !!selectedDate,
+  });
+
+  const timeSlots = availabilityData?.slots || TIME_SLOTS;
+  const workingDays = availabilityData?.workingDays ?? [1, 2, 3, 4, 5];
+
+  const providerServices = servicesData?.services || [];
+
+  // Pre-select service matching intakeData recommendation if available
+  useEffect(() => {
+    if (providerServices.length > 0 && !selectedServiceId) {
+      const recommended = params.intakeData?.recommendedService;
+      if (recommended) {
+        const match = providerServices.find((s) =>
+          s.name.toLowerCase().includes(recommended.toLowerCase()) ||
+          recommended.toLowerCase().includes(s.name.toLowerCase())
+        );
+        if (match) setSelectedServiceId(match.id);
+      } else {
+        setSelectedServiceId(providerServices[0].id);
+      }
+    }
+  }, [providerServices, params.intakeData?.recommendedService]);
+
+  const selectedService = providerServices.find((s) => s.id === selectedServiceId);
+
+  const homes = homesData?.homes || [];
+  const defaultHome = homes.find((h) => h.isDefault) || homes[0];
+
+  const dates = useMemo((): DateItem[] => {
+    const result: DateItem[] = [];
+    const today = new Date();
+    for (let i = 1; i <= 14; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
+      const dateStr = date.toISOString().split("T")[0];
+      result.push({
         dateStr,
         dayName: WEEKDAYS[date.getDay()],
         dayNum: date.getDate(),
         month: MONTHS[date.getMonth()],
-      };
-    });
-  }, [availability]);
-
-  const slotsForDate = useMemo(() => {
-    if (!selectedDate) return [];
-    return availability.filter((s) => s.date === selectedDate && s.available);
-  }, [availability, selectedDate]);
-
-  const formatTime = (time: string) => {
-    const [hour] = time.split(":");
-    const h = parseInt(hour, 10);
-    if (h === 0) return "12 AM";
-    if (h < 12) return `${h} AM`;
-    if (h === 12) return "12 PM";
-    return `${h - 12} PM`;
-  };
-
-  const handleAddCard = () => {
-    if (!cardForm.cardNumber || !cardForm.expiry) {
-      Alert.alert("Missing Info", "Please fill in card details");
-      return;
+      });
     }
+    return result;
+  }, []);
 
-    const last4 = cardForm.cardNumber.slice(-4);
-    const [month, year] = cardForm.expiry.split("/");
+  const canBook = selectedDate && selectedTime && defaultHome && selectedServiceId;
 
-    const newMethod: PaymentMethod = {
-      id: `pm-${Date.now()}`,
-      type: "card",
-      label: "Visa",
-      last4,
-      expiryMonth: parseInt(month, 10),
-      expiryYear: 2000 + parseInt(year, 10),
-      isDefault: paymentMethods.length === 0,
-    };
+  const bookMutation = useMutation({
+    mutationFn: async () => {
+      if (!user?.id || !defaultHome || !selectedDate || !selectedTime || !selectedService) {
+        throw new Error("Missing required booking data");
+      }
 
-    addPaymentMethod(newMethod);
-    setSelectedPayment(newMethod);
-    setShowAddCard(false);
-    setCardForm({ cardNumber: "", expiry: "", cvv: "", name: "" });
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  };
+      // Compute estimated price from the selected service
+      let estimatedPrice: string | null = null;
+      if (selectedService.basePrice) {
+        estimatedPrice = selectedService.basePrice;
+      } else if (selectedService.priceFrom && selectedService.priceTo) {
+        estimatedPrice = ((parseFloat(selectedService.priceFrom) + parseFloat(selectedService.priceTo)) / 2).toString();
+      } else if (params.intakeData?.priceRange) {
+        estimatedPrice = ((params.intakeData.priceRange.min + params.intakeData.priceRange.max) / 2).toString();
+      }
 
-  const handleBook = async () => {
-    if (!selectedSlot || !selectedPayment) {
+      const url = new URL("/api/appointments", getApiUrl());
+      const res = await apiRequest("POST", url.toString(), {
+        userId: user.id,
+        homeId: defaultHome.id,
+        providerId: params.providerId,
+        serviceName: selectedService.name,
+        description: params.intakeData?.problemDescription || params.intakeData?.issueSummary || selectedService.description || "",
+        scheduledDate: new Date(selectedDate).toISOString(),
+        scheduledTime: selectedTimeLabel || selectedTime,
+        estimatedPrice,
+        urgency: params.intakeData?.urgency || "flexible",
+      });
+      return res.json();
+    },
+    onSuccess: (data: { appointment?: { id: string } }) => {
+      const appointmentId = data?.appointment?.id || "booking";
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      navigation.navigate("BookingSuccess", { jobId: appointmentId });
+    },
+    onError: (error: Error) => {
+      Alert.alert("Booking Failed", error?.message || "Could not create your appointment. Please try again.");
+    },
+  });
+
+  const handleBook = () => {
+    if (!canBook) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("Missing Info", "Please select a date, time, and payment method");
+      Alert.alert("Missing Info", "Please select a date and time");
       return;
     }
-
-    setIsBooking(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-
-    // Create appointment
-    const appointment = {
-      id: `apt-${Date.now()}`,
-      providerId: params.providerId,
-      providerName: params.providerName,
-      category: params.intakeData?.category || "general",
-      service: params.intakeData?.recommendedService || "Service",
-      description: params.intakeData?.problemDescription || "",
-      scheduledDate: selectedSlot.date,
-      scheduledTime: formatTime(selectedSlot.startTime),
-      status: "pending" as const,
-      estimatedPrice: params.intakeData?.priceRange || { min: 0, max: 0 },
-      createdAt: new Date().toISOString(),
-      conditionUpdates: [],
-    };
-
-    addAppointment(appointment);
-
-    setTimeout(() => {
-      setIsBooking(false);
-      navigation.navigate("BookingSuccess", { jobId: appointment.id });
-    }, 1500);
+    bookMutation.mutate();
   };
 
-  const canBook = selectedSlot && selectedPayment;
-
-  const renderDateItem = ({ item }: { item: typeof dates[0] }) => {
+  const renderDateItem = ({ item }: { item: DateItem }) => {
     const isSelected = selectedDate === item.dateStr;
+    const d = new Date(item.dateStr + "T12:00:00Z");
+    const dayOfWeek = d.getUTCDay();
+    const isUnavailable = !workingDays.includes(dayOfWeek);
     return (
       <Pressable
         onPress={() => {
+          if (isUnavailable) return;
           Haptics.selectionAsync();
           setSelectedDate(item.dateStr);
-          setSelectedSlot(null);
+          setSelectedTime(null);
         }}
         style={[
           styles.dateCard,
           {
             backgroundColor: isSelected ? Colors.accent : theme.cardBackground,
             borderColor: isSelected ? Colors.accent : theme.borderLight,
+            opacity: isUnavailable ? 0.4 : 1,
           },
         ]}
       >
@@ -177,11 +247,10 @@ export default function SimpleBookingScreen() {
         style={styles.scrollView}
         contentContainerStyle={[
           styles.content,
-          { paddingTop: headerHeight + Spacing.md, paddingBottom: insets.bottom + 100 },
+          { paddingTop: headerHeight + Spacing.md, paddingBottom: insets.bottom + 120 },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Summary Card */}
         {params.intakeData ? (
           <Animated.View entering={FadeInDown.delay(100)}>
             <GlassCard style={styles.summaryCard}>
@@ -199,18 +268,19 @@ export default function SimpleBookingScreen() {
                     {params.intakeData.recommendedService}
                   </ThemedText>
                 </View>
-                <View style={styles.metaItem}>
-                  <Feather name="dollar-sign" size={14} color={Colors.accent} />
-                  <ThemedText style={[styles.metaText, { color: theme.textSecondary }]}>
-                    ${params.intakeData.priceRange.min} - ${params.intakeData.priceRange.max}
-                  </ThemedText>
-                </View>
+                {params.intakeData.priceRange ? (
+                  <View style={styles.metaItem}>
+                    <Feather name="dollar-sign" size={14} color={Colors.accent} />
+                    <ThemedText style={[styles.metaText, { color: theme.textSecondary }]}>
+                      ${params.intakeData.priceRange.min} - ${params.intakeData.priceRange.max}
+                    </ThemedText>
+                  </View>
+                ) : null}
               </View>
             </GlassCard>
           </Animated.View>
         ) : null}
 
-        {/* Provider Info */}
         <Animated.View entering={FadeInDown.delay(200)}>
           <GlassCard style={styles.providerCard}>
             <View style={styles.providerRow}>
@@ -229,7 +299,78 @@ export default function SimpleBookingScreen() {
           </GlassCard>
         </Animated.View>
 
-        {/* Date Selection */}
+        {/* Service selector — loaded from provider's published services */}
+        <Animated.View entering={FadeInDown.delay(250)}>
+          <ThemedText style={styles.sectionTitle}>Select Service</ThemedText>
+          {servicesLoading ? (
+            <ActivityIndicator size="small" color={Colors.accent} style={{ marginBottom: Spacing.md }} />
+          ) : providerServices.length > 0 ? (
+            providerServices.map((svc) => {
+              const isSelected = selectedServiceId === svc.id;
+              let priceLabel = "Contact for pricing";
+              if (svc.basePrice) priceLabel = `$${parseFloat(svc.basePrice).toFixed(0)}`;
+              else if (svc.priceFrom && svc.priceTo) priceLabel = `$${parseFloat(svc.priceFrom).toFixed(0)} - $${parseFloat(svc.priceTo).toFixed(0)}`;
+              return (
+                <Pressable
+                  key={svc.id}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setSelectedServiceId(svc.id);
+                  }}
+                  style={[
+                    styles.serviceCard,
+                    {
+                      backgroundColor: isSelected ? Colors.accent + "15" : theme.cardBackground,
+                      borderColor: isSelected ? Colors.accent : theme.borderLight,
+                      borderWidth: isSelected ? 2 : 1,
+                    },
+                  ]}
+                >
+                  <View style={styles.serviceCardRow}>
+                    <View style={{ flex: 1 }}>
+                      <ThemedText style={[styles.serviceName, isSelected && { color: Colors.accent }]}>
+                        {svc.name}
+                      </ThemedText>
+                      {svc.description ? (
+                        <ThemedText style={[styles.serviceDesc, { color: theme.textSecondary }]} numberOfLines={2}>
+                          {svc.description}
+                        </ThemedText>
+                      ) : null}
+                    </View>
+                    <View style={styles.servicePriceBox}>
+                      <ThemedText style={[styles.servicePrice, isSelected && { color: Colors.accent }]}>
+                        {priceLabel}
+                      </ThemedText>
+                      {svc.duration ? (
+                        <ThemedText style={[styles.serviceDuration, { color: theme.textSecondary }]}>
+                          {svc.duration} min
+                        </ThemedText>
+                      ) : null}
+                    </View>
+                  </View>
+                </Pressable>
+              );
+            })
+          ) : (
+            <GlassCard style={styles.alertCardWarning}>
+              <ThemedText style={{ color: theme.textSecondary }}>No services listed by this provider yet.</ThemedText>
+            </GlassCard>
+          )}
+        </Animated.View>
+
+        {!defaultHome && !homesLoading ? (
+          <Animated.View entering={FadeInDown.delay(260)}>
+            <GlassCard style={styles.alertCardWarning}>
+              <View style={styles.alertRow}>
+                <Feather name="alert-circle" size={18} color="#F59E0B" />
+                <ThemedText style={{ marginLeft: Spacing.sm, flex: 1 }}>
+                  Please add your home address in the app settings before booking.
+                </ThemedText>
+              </View>
+            </GlassCard>
+          </Animated.View>
+        ) : null}
+
         <Animated.View entering={FadeInDown.delay(300)}>
           <ThemedText style={styles.sectionTitle}>Select Date</ThemedText>
           <FlatList
@@ -242,20 +383,28 @@ export default function SimpleBookingScreen() {
           />
         </Animated.View>
 
-        {/* Time Slots */}
         {selectedDate ? (
           <Animated.View entering={FadeInDown.delay(100)} style={styles.timeSlotsSection}>
             <ThemedText style={styles.sectionTitle}>Select Time</ThemedText>
-            {slotsForDate.length > 0 ? (
+            {availabilityLoading ? (
+              <ActivityIndicator size="small" color={Colors.accent} />
+            ) : timeSlots.length === 0 ? (
+              <GlassCard style={styles.alertCardWarning}>
+                <ThemedText style={{ color: theme.textSecondary }}>
+                  No available times on this date. Please select another day.
+                </ThemedText>
+              </GlassCard>
+            ) : (
               <View style={styles.slotsGrid}>
-                {slotsForDate.map((slot) => {
-                  const isSelected = selectedSlot?.startTime === slot.startTime;
+                {timeSlots.map((slot) => {
+                  const isSelected = selectedTime === slot.startTime;
                   return (
                     <Pressable
                       key={slot.startTime}
                       onPress={() => {
                         Haptics.selectionAsync();
-                        setSelectedSlot(slot);
+                        setSelectedTime(slot.startTime);
+                        setSelectedTimeLabel(slot.label);
                       }}
                       style={[
                         styles.slotCard,
@@ -266,127 +415,17 @@ export default function SimpleBookingScreen() {
                       ]}
                     >
                       <ThemedText style={[styles.slotText, isSelected && styles.selectedText]}>
-                        {formatTime(slot.startTime)}
+                        {slot.label}
                       </ThemedText>
                     </Pressable>
                   );
                 })}
               </View>
-            ) : (
-              <View style={[styles.noSlotsCard, { backgroundColor: theme.backgroundSecondary }]}>
-                <Feather name="clock" size={24} color={theme.textTertiary} />
-                <ThemedText style={[styles.noSlotsText, { color: theme.textSecondary }]}>
-                  No available times for this date
-                </ThemedText>
-              </View>
             )}
           </Animated.View>
         ) : null}
-
-        {/* Payment Method */}
-        <Animated.View entering={FadeInDown.delay(400)} style={styles.paymentSection}>
-          <ThemedText style={styles.sectionTitle}>Payment Method</ThemedText>
-          
-          {paymentMethods.length > 0 ? (
-            <View style={styles.paymentList}>
-              {paymentMethods.map((method) => {
-                const isSelected = selectedPayment?.id === method.id;
-                return (
-                  <Pressable
-                    key={method.id}
-                    onPress={() => {
-                      Haptics.selectionAsync();
-                      setSelectedPayment(method);
-                    }}
-                    style={[
-                      styles.paymentCard,
-                      {
-                        backgroundColor: isSelected ? Colors.accentLight : theme.cardBackground,
-                        borderColor: isSelected ? Colors.accent : theme.borderLight,
-                      },
-                    ]}
-                  >
-                    <View style={styles.paymentRow}>
-                      <View style={[styles.paymentIcon, { backgroundColor: isDark ? theme.backgroundTertiary : "#f0f0f0" }]}>
-                        <Feather name="credit-card" size={18} color={Colors.accent} />
-                      </View>
-                      <View style={styles.paymentInfo}>
-                        <ThemedText style={styles.paymentLabel}>{method.label}</ThemedText>
-                        <ThemedText style={[styles.paymentDetails, { color: theme.textSecondary }]}>
-                          ending in {method.last4}
-                        </ThemedText>
-                      </View>
-                      {isSelected ? (
-                        <View style={[styles.checkCircle, { backgroundColor: Colors.accent }]}>
-                          <Feather name="check" size={14} color="#fff" />
-                        </View>
-                      ) : null}
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-          ) : null}
-
-          {!showAddCard ? (
-            <Pressable
-              onPress={() => setShowAddCard(true)}
-              style={[styles.addCardBtn, { borderColor: theme.borderLight }]}
-            >
-              <Feather name="plus" size={18} color={Colors.accent} />
-              <ThemedText style={[styles.addCardText, { color: Colors.accent }]}>
-                Add Payment Method
-              </ThemedText>
-            </Pressable>
-          ) : (
-            <View style={[styles.cardForm, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
-              <ThemedText style={styles.formTitle}>Add Card</ThemedText>
-              <TextField
-                placeholder="Card Number"
-                value={cardForm.cardNumber}
-                onChangeText={(v) => setCardForm((f) => ({ ...f, cardNumber: v }))}
-                keyboardType="number-pad"
-                maxLength={16}
-              />
-              <View style={styles.formRow}>
-                <View style={{ flex: 1 }}>
-                  <TextField
-                    placeholder="MM/YY"
-                    value={cardForm.expiry}
-                    onChangeText={(v) => setCardForm((f) => ({ ...f, expiry: v }))}
-                    maxLength={5}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <TextField
-                    placeholder="CVV"
-                    value={cardForm.cvv}
-                    onChangeText={(v) => setCardForm((f) => ({ ...f, cvv: v }))}
-                    keyboardType="number-pad"
-                    maxLength={4}
-                    secureTextEntry
-                  />
-                </View>
-              </View>
-              <TextField
-                placeholder="Name on Card"
-                value={cardForm.name}
-                onChangeText={(v) => setCardForm((f) => ({ ...f, name: v }))}
-              />
-              <View style={styles.formActions}>
-                <Pressable onPress={() => setShowAddCard(false)} style={styles.cancelBtn}>
-                  <ThemedText style={[styles.cancelText, { color: theme.textSecondary }]}>Cancel</ThemedText>
-                </Pressable>
-                <Pressable onPress={handleAddCard} style={[styles.saveBtn, { backgroundColor: Colors.accent }]}>
-                  <ThemedText style={styles.saveText}>Add Card</ThemedText>
-                </Pressable>
-              </View>
-            </View>
-          )}
-        </Animated.View>
       </ScrollView>
 
-      {/* Bottom CTA */}
       <View
         style={[
           styles.bottomBar,
@@ -398,7 +437,21 @@ export default function SimpleBookingScreen() {
         ]}
       >
         <View style={styles.priceRow}>
-          {params.intakeData?.priceRange ? (
+          {selectedService?.basePrice ? (
+            <>
+              <ThemedText style={[styles.priceLabel, { color: theme.textSecondary }]}>Price</ThemedText>
+              <ThemedText style={styles.priceValue}>
+                ${parseFloat(selectedService.basePrice).toFixed(0)}
+              </ThemedText>
+            </>
+          ) : selectedService?.priceFrom && selectedService?.priceTo ? (
+            <>
+              <ThemedText style={[styles.priceLabel, { color: theme.textSecondary }]}>Estimated</ThemedText>
+              <ThemedText style={styles.priceValue}>
+                ${parseFloat(selectedService.priceFrom).toFixed(0)} - ${parseFloat(selectedService.priceTo).toFixed(0)}
+              </ThemedText>
+            </>
+          ) : params.intakeData?.priceRange ? (
             <>
               <ThemedText style={[styles.priceLabel, { color: theme.textSecondary }]}>Estimated</ThemedText>
               <ThemedText style={styles.priceValue}>
@@ -413,10 +466,10 @@ export default function SimpleBookingScreen() {
         </View>
         <PrimaryButton
           onPress={handleBook}
-          disabled={!canBook || isBooking}
+          disabled={!canBook || bookMutation.isPending}
           style={{ flex: 1 }}
         >
-          {isBooking ? "Booking..." : "Request Appointment"}
+          {bookMutation.isPending ? "Booking..." : "Request Appointment"}
         </PrimaryButton>
       </View>
     </ThemedView>
@@ -493,6 +546,20 @@ const styles = StyleSheet.create({
     ...Typography.subhead,
     textTransform: "capitalize",
   },
+  alertCard: {
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+  },
+  alertCardWarning: {
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: "#F59E0B",
+  },
+  alertRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
+  },
   sectionTitle: {
     ...Typography.headline,
     marginBottom: Spacing.md,
@@ -542,108 +609,6 @@ const styles = StyleSheet.create({
   slotText: {
     ...Typography.subhead,
   },
-  noSlotsCard: {
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.md,
-    alignItems: "center",
-    gap: Spacing.sm,
-  },
-  noSlotsText: {
-    ...Typography.subhead,
-    textAlign: "center",
-  },
-  paymentSection: {
-    marginTop: Spacing.xl,
-  },
-  paymentList: {
-    gap: Spacing.sm,
-  },
-  paymentCard: {
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-  },
-  paymentRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-  },
-  paymentIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  paymentInfo: {
-    flex: 1,
-  },
-  paymentLabel: {
-    ...Typography.headline,
-  },
-  paymentDetails: {
-    ...Typography.caption1,
-  },
-  checkCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  addCardBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.sm,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    borderStyle: "dashed",
-    marginTop: Spacing.md,
-  },
-  addCardText: {
-    ...Typography.subhead,
-    fontWeight: "500",
-  },
-  cardForm: {
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    marginTop: Spacing.md,
-    gap: Spacing.sm,
-  },
-  formTitle: {
-    ...Typography.headline,
-    marginBottom: Spacing.xs,
-  },
-  formRow: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-  },
-  formActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: Spacing.md,
-    marginTop: Spacing.sm,
-  },
-  cancelBtn: {
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-  },
-  cancelText: {
-    ...Typography.subhead,
-  },
-  saveBtn: {
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
-    borderRadius: BorderRadius.md,
-  },
-  saveText: {
-    ...Typography.subhead,
-    fontWeight: "600",
-    color: "#fff",
-  },
   bottomBar: {
     position: "absolute",
     bottom: 0,
@@ -664,5 +629,33 @@ const styles = StyleSheet.create({
   priceValue: {
     ...Typography.headline,
     color: Colors.accent,
+  },
+  serviceCard: {
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  serviceCardRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  serviceName: {
+    ...Typography.headline,
+    marginBottom: 2,
+  },
+  serviceDesc: {
+    ...Typography.subhead,
+    marginTop: 2,
+  },
+  servicePriceBox: {
+    alignItems: "flex-end",
+  },
+  servicePrice: {
+    ...Typography.headline,
+  },
+  serviceDuration: {
+    ...Typography.caption2,
+    marginTop: 2,
   },
 });

@@ -6,6 +6,7 @@ import {
   TextInput,
   Pressable,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -21,8 +22,10 @@ import { GlassCard } from "@/components/GlassCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
-import { getApiUrl } from "@/lib/query-client";
+import { getApiUrl, apiRequest } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { useAuthStore } from "@/state/authStore";
+import { useQueryClient } from "@tanstack/react-query";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -69,6 +72,8 @@ export default function ServiceBuilderScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavigationProp>();
   const { theme, isDark } = useTheme();
+  const { providerProfile } = useAuthStore();
+  const queryClient = useQueryClient();
   const flatListRef = useRef<FlatList>(null);
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -211,9 +216,43 @@ export default function ServiceBuilderScreen() {
     }
   };
 
-  const handlePublishService = () => {
+  const handlePublishService = async () => {
+    if (!providerProfile?.id) {
+      Alert.alert("Error", "Provider profile not found. Please complete your profile setup.");
+      return;
+    }
+    if (!serviceDraft.serviceName) {
+      Alert.alert("Error", "Please complete the service name before publishing.");
+      return;
+    }
+
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    navigation.goBack();
+
+    try {
+      const url = new URL(`/api/provider/${providerProfile.id}/custom-services`, getApiUrl());
+      const response = await apiRequest("POST", url.toString(), {
+        name: serviceDraft.serviceName,
+        category: serviceDraft.businessType || "General",
+        description: serviceDraft.description || null,
+        pricingType: serviceDraft.pricingModel === "flat" ? "fixed" :
+          serviceDraft.pricingModel === "hourly" ? "variable" :
+          serviceDraft.pricingModel === "service_call" ? "service_call" : "quote",
+        basePrice: serviceDraft.basePrice ? String(serviceDraft.basePrice) : null,
+        duration: null,
+        isPublished: true,
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: "Unknown error" }));
+        Alert.alert("Error", err.error || "Failed to publish service");
+        return;
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["/api/provider", providerProfile.id, "custom-services"] });
+      navigation.goBack();
+    } catch {
+      Alert.alert("Error", "Failed to publish service. Please try again.");
+    }
   };
 
   const getPricingDisplay = () => {

@@ -102,7 +102,7 @@ export default function InvoiceDetailScreen() {
 
   const markPaidMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", `/api/invoices/${invoiceId}/mark-paid`, {});
+      const response = await apiRequest("POST", `/api/invoices/${invoiceId}/mark-paid`, { providerId });
       return response.json();
     },
     onSuccess: () => {

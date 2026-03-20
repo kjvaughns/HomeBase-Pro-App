@@ -1,11 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   View,
   ScrollView,
   Pressable,
-  Image,
   TextInput,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -13,6 +14,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -23,58 +25,90 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
+
+interface ProviderData {
+  id: string;
+  businessName: string;
+  description: string | null;
+  phone: string | null;
+  email: string | null;
+  serviceArea: string | null;
+  avatarUrl: string | null;
+  rating: string | null;
+  reviewCount: number | null;
+}
 
 export default function BusinessProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { providerProfile } = useAuthStore();
+  const { providerProfile, user } = useAuthStore();
+  const queryClient = useQueryClient();
+  const providerId = providerProfile?.id;
+  const userId = user?.id;
 
-  const [businessName, setBusinessName] = useState("Clean & Co. LLC");
-  const [slug, setSlug] = useState("clean-co");
-  const [isSaving, setIsSaving] = useState(false);
-  
-  const [phone, setPhone] = useState("(415) 555-0123");
-  const [email, setEmail] = useState("contact@cleanco.com");
-  const [address, setAddress] = useState("123 Market St, San Francisco, CA");
-  
-  const [instagram, setInstagram] = useState("@cleanco_sf");
-  const [facebook, setFacebook] = useState("cleancoservices");
-  const [website, setWebsite] = useState("www.cleanco.com");
+  const { data, isLoading } = useQuery<{ provider: ProviderData }>({
+    queryKey: ["/api/provider/user", userId],
+    enabled: !!userId,
+    queryFn: async () => {
+      const url = new URL(`/api/provider/user/${userId}`, getApiUrl());
+      const res = await fetch(url.toString());
+      if (!res.ok) throw new Error("Failed to load provider");
+      return res.json();
+    },
+  });
 
-  const handleEditCover = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  };
+  const provider = data?.provider;
 
-  const handleEditLogo = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  };
+  const [businessName, setBusinessName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [serviceArea, setServiceArea] = useState("");
 
-  const handleSave = async () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setIsSaving(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setIsSaving(false);
+  useEffect(() => {
+    if (provider) {
+      setBusinessName(provider.businessName || "");
+      setPhone(provider.phone || "");
+      setEmail(provider.email || "");
+      setServiceArea(provider.serviceArea || "");
+    }
+  }, [provider]);
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      if (!providerId) throw new Error("No provider ID");
+      const url = new URL(`/api/provider/${providerId}`, getApiUrl());
+      return apiRequest("PUT", url.toString(), { businessName, phone, email, serviceArea });
+    },
+    onSuccess: () => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      queryClient.invalidateQueries({ queryKey: ["/api/provider/user", userId] });
+      Alert.alert("Saved", "Your profile has been updated.");
+    },
+    onError: () => {
+      Alert.alert("Error", "Failed to save changes. Please try again.");
+    },
+  });
+
+  const handleSave = () => {
+    saveMutation.mutate();
   };
 
   const handlePreviewBookingPage = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    navigation.navigate("PreviewBookingPage" as any, {
-      providerId: providerProfile?.id,
-    });
+    navigation.navigate("PreviewBookingPage", { providerId });
   };
 
-  const handleServiceArea = () => {
-    Haptics.selectionAsync();
-  };
-
-  const handlePortfolio = () => {
-    Haptics.selectionAsync();
-  };
-
-  const handleReviews = () => {
-    Haptics.selectionAsync();
-  };
+  if (isLoading) {
+    return (
+      <ThemedView style={styles.container}>
+        <View style={[styles.centered, { paddingTop: insets.top + Spacing.xl }]}>
+          <ActivityIndicator size="large" color={Colors.accent} />
+        </View>
+      </ThemedView>
+    );
+  }
 
   return (
     <ThemedView style={styles.container}>
@@ -89,7 +123,7 @@ export default function BusinessProfileScreen() {
         <Animated.View entering={FadeInDown.delay(50).duration(300)}>
           <View style={styles.header}>
             <ThemedText type="h2">Business Profile</ThemedText>
-            <Pressable>
+            <Pressable onPress={handlePreviewBookingPage}>
               <ThemedText style={{ color: Colors.accent, fontWeight: "500" }}>
                 PUBLIC PREVIEW
               </ThemedText>
@@ -99,38 +133,23 @@ export default function BusinessProfileScreen() {
 
         <Animated.View entering={FadeInDown.delay(100).duration(300)}>
           <View style={styles.heroSection}>
-            <View style={styles.coverContainer}>
-              <Image
-                source={{ uri: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&q=80" }}
-                style={styles.coverImage}
-              />
-              <View style={styles.coverGradient} />
-              <Pressable
-                style={[styles.editCoverBtn, { backgroundColor: theme.cardBackground }]}
-                onPress={handleEditCover}
-              >
-                <Feather name="camera" size={18} color={theme.text} />
-              </Pressable>
+            <View style={[styles.avatarCircle, { backgroundColor: Colors.accentLight }]}>
+              <ThemedText style={styles.avatarInitial}>
+                {businessName.charAt(0) || providerProfile?.businessName?.charAt(0) || "B"}
+              </ThemedText>
             </View>
-
-            <View style={styles.profileRow}>
-              <Pressable style={styles.logoContainer} onPress={handleEditLogo}>
-                <Image
-                  source={{ uri: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&q=80" }}
-                  style={styles.logoImage}
-                />
-              </Pressable>
-              <View style={styles.profileInfo}>
-                <ThemedText type="h3" style={{ fontWeight: "700" }}>
-                  {businessName}
-                </ThemedText>
+            <View style={{ marginLeft: Spacing.md }}>
+              <ThemedText type="h3" style={{ fontWeight: "700" }}>
+                {businessName || providerProfile?.businessName || "Your Business"}
+              </ThemedText>
+              {provider?.rating ? (
                 <View style={styles.ratingRow}>
                   <Feather name="star" size={14} color={Colors.accent} />
                   <ThemedText style={{ color: Colors.accent, marginLeft: 4, fontWeight: "500" }}>
-                    4.9 (128 Reviews)
+                    {parseFloat(provider.rating).toFixed(1)} ({provider.reviewCount ?? 0} Reviews)
                   </ThemedText>
                 </View>
-              </View>
+              ) : null}
             </View>
           </View>
         </Animated.View>
@@ -149,23 +168,7 @@ export default function BusinessProfileScreen() {
                 onChangeText={setBusinessName}
                 placeholder="Business Name"
                 placeholderTextColor={theme.textSecondary}
-              />
-            </View>
-
-            <View style={styles.detailRow}>
-              <View style={styles.detailIcon}>
-                <Feather name="globe" size={18} color={theme.textSecondary} />
-              </View>
-              <ThemedText style={{ color: theme.textSecondary, marginRight: 4 }}>
-                homebase.co/
-              </ThemedText>
-              <TextInput
-                style={[styles.slugInput, { color: theme.text }]}
-                value={slug}
-                onChangeText={setSlug}
-                placeholder="your-slug"
-                placeholderTextColor={theme.textSecondary}
-                autoCapitalize="none"
+                testID="input-business-name"
               />
             </View>
           </GlassCard>
@@ -186,6 +189,7 @@ export default function BusinessProfileScreen() {
                 placeholder="Phone number"
                 placeholderTextColor={theme.textSecondary}
                 keyboardType="phone-pad"
+                testID="input-phone"
               />
             </View>
 
@@ -201,6 +205,7 @@ export default function BusinessProfileScreen() {
                 placeholderTextColor={theme.textSecondary}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                testID="input-email"
               />
             </View>
 
@@ -210,98 +215,24 @@ export default function BusinessProfileScreen() {
               </View>
               <TextInput
                 style={[styles.detailInput, { color: theme.text }]}
-                value={address}
-                onChangeText={setAddress}
-                placeholder="Business address"
+                value={serviceArea}
+                onChangeText={setServiceArea}
+                placeholder="Service area (e.g. San Francisco, CA)"
                 placeholderTextColor={theme.textSecondary}
+                testID="input-service-area"
               />
             </View>
-          </GlassCard>
-        </Animated.View>
-
-        <Animated.View entering={FadeInDown.delay(250).duration(300)}>
-          <GlassCard style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>SOCIAL LINKS</ThemedText>
-
-            <View style={styles.detailRow}>
-              <View style={[styles.detailIcon, { backgroundColor: "#E1306C20" }]}>
-                <Feather name="instagram" size={18} color="#E1306C" />
-              </View>
-              <TextInput
-                style={[styles.detailInput, { color: theme.text }]}
-                value={instagram}
-                onChangeText={setInstagram}
-                placeholder="Instagram handle"
-                placeholderTextColor={theme.textSecondary}
-                autoCapitalize="none"
-              />
-            </View>
-
-            <View style={styles.detailRow}>
-              <View style={[styles.detailIcon, { backgroundColor: "#1877F220" }]}>
-                <Feather name="facebook" size={18} color="#1877F2" />
-              </View>
-              <TextInput
-                style={[styles.detailInput, { color: theme.text }]}
-                value={facebook}
-                onChangeText={setFacebook}
-                placeholder="Facebook page"
-                placeholderTextColor={theme.textSecondary}
-                autoCapitalize="none"
-              />
-            </View>
-
-            <View style={styles.detailRow}>
-              <View style={styles.detailIcon}>
-                <Feather name="link" size={18} color={theme.textSecondary} />
-              </View>
-              <TextInput
-                style={[styles.detailInput, { color: theme.text }]}
-                value={website}
-                onChangeText={setWebsite}
-                placeholder="Website URL"
-                placeholderTextColor={theme.textSecondary}
-                autoCapitalize="none"
-              />
-            </View>
-          </GlassCard>
-        </Animated.View>
-
-        <Animated.View entering={FadeInDown.delay(300).duration(300)}>
-          <GlassCard style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>CONFIGURATION</ThemedText>
-
-            <ListRow
-              leftIcon="map-pin"
-              title="Service Area"
-              subtitle="San Francisco, CA"
-              onPress={handleServiceArea}
-              showChevron
-              isFirst
-            />
-
-            <ListRow
-              leftIcon="image"
-              title="Portfolio"
-              subtitle="12 Photos"
-              onPress={handlePortfolio}
-              showChevron
-            />
-
-            <ListRow
-              leftIcon="star"
-              title="Reviews"
-              onPress={handleReviews}
-              showChevron
-              isLast
-            />
           </GlassCard>
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(250).duration(300)}>
           <View style={styles.actionsContainer}>
-            <PrimaryButton onPress={handleSave} disabled={isSaving}>
-              {isSaving ? "Saving..." : "Save Changes"}
+            <PrimaryButton
+              onPress={handleSave}
+              disabled={saveMutation.isPending}
+              testID="button-save-profile"
+            >
+              {saveMutation.isPending ? "Saving..." : "Save Changes"}
             </PrimaryButton>
 
             <Pressable
@@ -321,12 +252,9 @@ export default function BusinessProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  flex: {
-    flex: 1,
-  },
+  container: { flex: 1 },
+  flex: { flex: 1 },
+  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
   content: {
     padding: Spacing.screenPadding,
     gap: Spacing.md,
@@ -338,61 +266,28 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   heroSection: {
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: Spacing.sm,
   },
-  coverContainer: {
-    height: 140,
-    borderRadius: BorderRadius.lg,
-    overflow: "hidden",
-    marginBottom: -40,
-  },
-  coverImage: {
-    width: "100%",
-    height: "100%",
-  },
-  coverGradient: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.3)",
-  },
-  editCoverBtn: {
-    position: "absolute",
-    top: Spacing.sm,
-    right: Spacing.sm,
-    width: 36,
-    height: 36,
+  avatarCircle: {
+    width: 72,
+    height: 72,
     borderRadius: BorderRadius.full,
     alignItems: "center",
     justifyContent: "center",
   },
-  profileRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    paddingHorizontal: Spacing.md,
-  },
-  logoContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: BorderRadius.md,
-    overflow: "hidden",
-    borderWidth: 3,
-    borderColor: "#000",
-  },
-  logoImage: {
-    width: "100%",
-    height: "100%",
-  },
-  profileInfo: {
-    marginLeft: Spacing.md,
-    paddingBottom: Spacing.xs,
+  avatarInitial: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: Colors.accent,
   },
   ratingRow: {
     flexDirection: "row",
     alignItems: "center",
     marginTop: 4,
   },
-  section: {
-    padding: Spacing.md,
-  },
+  section: { padding: Spacing.md },
   sectionTitle: {
     ...Typography.caption1,
     fontWeight: "600",
@@ -416,10 +311,6 @@ const styles = StyleSheet.create({
     marginRight: Spacing.md,
   },
   detailInput: {
-    ...Typography.body,
-    flex: 1,
-  },
-  slugInput: {
     ...Typography.body,
     flex: 1,
   },

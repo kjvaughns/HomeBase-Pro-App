@@ -7,7 +7,7 @@ export const propertyTypeEnum = pgEnum("property_type", ["single_family", "condo
 export const appointmentStatusEnum = pgEnum("appointment_status", ["pending", "confirmed", "in_progress", "completed", "cancelled"]);
 export const urgencyEnum = pgEnum("urgency", ["flexible", "soon", "urgent"]);
 export const jobSizeEnum = pgEnum("job_size", ["small", "medium", "large"]);
-export const jobStatusEnum = pgEnum("job_status", ["scheduled", "in_progress", "completed", "cancelled"]);
+export const jobStatusEnum = pgEnum("job_status", ["scheduled", "confirmed", "on_my_way", "arrived", "in_progress", "completed", "cancelled"]);
 export const invoiceStatusEnum = pgEnum("invoice_status", ["draft", "sent", "viewed", "paid", "partially_paid", "overdue", "void", "refunded", "cancelled"]);
 export const paymentMethodEnum = pgEnum("payment_method", ["cash", "card", "bank_transfer", "check", "stripe", "credits", "other"]);
 export const paymentStatusEnum = pgEnum("payment_status", ["requires_payment", "processing", "succeeded", "failed", "refunded"]);
@@ -147,6 +147,37 @@ export const providerServicesRelations = relations(providerServices, ({ one }) =
   service: one(services, { fields: [providerServices.serviceId], references: [services.id] }),
   category: one(serviceCategories, { fields: [providerServices.categoryId], references: [serviceCategories.id] }),
 }));
+
+export const pricingTypeEnum = pgEnum("pricing_type", ["fixed", "variable", "service_call", "quote"]);
+
+export const providerCustomServices = pgTable("provider_custom_services", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  category: text("category").notNull().default("General"),
+  description: text("description"),
+  pricingType: pricingTypeEnum("pricing_type").notNull().default("fixed"),
+  basePrice: decimal("base_price", { precision: 10, scale: 2 }),
+  priceFrom: decimal("price_from", { precision: 10, scale: 2 }),
+  priceTo: decimal("price_to", { precision: 10, scale: 2 }),
+  duration: integer("duration").default(60),
+  isPublished: boolean("is_published").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const providerCustomServicesRelations = relations(providerCustomServices, ({ one }) => ({
+  provider: one(providers, { fields: [providerCustomServices.providerId], references: [providers.id] }),
+}));
+
+export const insertProviderCustomServiceSchema = createInsertSchema(providerCustomServices).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ProviderCustomService = typeof providerCustomServices.$inferSelect;
+export type InsertProviderCustomService = z.infer<typeof insertProviderCustomServiceSchema>;
 
 export const appointments = pgTable("appointments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -361,6 +392,7 @@ export const jobs = pgTable("jobs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
   clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  appointmentId: varchar("appointment_id").references(() => appointments.id, { onDelete: "set null" }),
   serviceId: varchar("service_id").references(() => services.id, { onDelete: "set null" }),
   title: text("title").notNull(),
   description: text("description"),
@@ -380,6 +412,7 @@ export const jobs = pgTable("jobs", {
 export const jobsRelations = relations(jobs, ({ one, many }) => ({
   provider: one(providers, { fields: [jobs.providerId], references: [providers.id] }),
   client: one(clients, { fields: [jobs.clientId], references: [clients.id] }),
+  appointment: one(appointments, { fields: [jobs.appointmentId], references: [appointments.id] }),
   service: one(services, { fields: [jobs.serviceId], references: [services.id] }),
   invoices: many(invoices),
 }));
@@ -562,7 +595,9 @@ export const insertHomeSchema = createInsertSchema(homes).omit({
   updatedAt: true,
 });
 
-export const insertAppointmentSchema = createInsertSchema(appointments).omit({
+export const insertAppointmentSchema = createInsertSchema(appointments, {
+  scheduledDate: z.coerce.date(),
+}).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -576,7 +611,9 @@ export const insertClientSchema = createInsertSchema(clients).omit({
   updatedAt: true,
 });
 
-export const insertJobSchema = createInsertSchema(jobs).omit({
+export const insertJobSchema = createInsertSchema(jobs, {
+  scheduledDate: z.coerce.date(),
+}).omit({
   id: true,
   createdAt: true,
   updatedAt: true,

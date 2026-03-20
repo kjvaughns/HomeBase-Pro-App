@@ -1,11 +1,13 @@
 import React, { useState, useMemo, useCallback } from "react";
-import { StyleSheet, View, ScrollView, Pressable, Linking, Alert } from "react-native";
+import { StyleSheet, View, ScrollView, Pressable, Linking, Alert, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, RouteProp, useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Animated, { FadeInDown, FadeInRight } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -13,9 +15,50 @@ import { GlassCard } from "@/components/GlassCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
-import { useProviderStore, Job, JobChecklistItem } from "@/state/providerStore";
+import { useAuthStore } from "@/state/authStore";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
-const STATUS_CONFIG: Record<Job["status"], { label: string; color: string; icon: keyof typeof Feather.glyphMap }> = {
+type JobStatus = "scheduled" | "confirmed" | "on_my_way" | "arrived" | "in_progress" | "completed" | "cancelled";
+
+type DBJobStatus = JobStatus;
+type DisplayStatus = JobStatus;
+
+interface ApiJob {
+  id: string;
+  providerId: string;
+  clientId: string;
+  serviceId: string | null;
+  title: string;
+  description: string | null;
+  scheduledDate: string;
+  scheduledTime: string | null;
+  estimatedDuration: number | null;
+  status: DBJobStatus;
+  address: string | null;
+  estimatedPrice: string | null;
+  finalPrice: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+}
+
+interface ApiClient {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  phone: string | null;
+  email: string | null;
+}
+
+interface JobChecklistItem {
+  id: string;
+  label: string;
+  completed: boolean;
+}
+
+const STATUS_CONFIG: Record<DisplayStatus, { label: string; color: string; icon: keyof typeof Feather.glyphMap }> = {
   scheduled: { label: "Scheduled", color: "#3B82F6", icon: "calendar" },
   confirmed: { label: "Confirmed", color: "#8B5CF6", icon: "check-circle" },
   on_my_way: { label: "On My Way", color: "#F59E0B", icon: "navigation" },
@@ -25,15 +68,11 @@ const STATUS_CONFIG: Record<Job["status"], { label: string; color: string; icon:
   cancelled: { label: "Cancelled", color: "#EF4444", icon: "x-circle" },
 };
 
-const STATUS_ORDER: Job["status"][] = ["scheduled", "confirmed", "on_my_way", "arrived", "in_progress", "completed"];
+const STATUS_ORDER: DisplayStatus[] = ["scheduled", "confirmed", "on_my_way", "arrived", "in_progress", "completed"];
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-}
-
-function formatTime(timeStr: string): string {
-  return timeStr;
 }
 
 function formatCurrency(amount: number): string {
@@ -54,15 +93,24 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
+function getClientName(client: ApiClient): string {
+  return [client.firstName, client.lastName].filter(Boolean).join(" ") || "Unknown Client";
+}
+
+function mapDbStatusToDisplay(status: DBJobStatus): DisplayStatus {
+  return status;
+}
+
+
 interface StatusBannerProps {
-  status: Job["status"];
+  status: DisplayStatus;
 }
 
 function StatusBanner({ status }: StatusBannerProps) {
   const { theme } = useTheme();
   const config = STATUS_CONFIG[status];
   const currentIndex = STATUS_ORDER.indexOf(status);
-  
+
   return (
     <GlassCard style={styles.statusBanner}>
       <View style={styles.statusHeader}>
@@ -78,7 +126,7 @@ function StatusBanner({ status }: StatusBannerProps) {
           </ThemedText>
         </View>
       </View>
-      
+
       {status !== "cancelled" ? (
         <View style={styles.progressBar}>
           {STATUS_ORDER.map((s, index) => {
@@ -119,13 +167,11 @@ interface ChecklistSectionProps {
 function ChecklistSection({ checklist, onToggle }: ChecklistSectionProps) {
   const { theme } = useTheme();
   const completedCount = checklist.filter((item) => item.completed).length;
-  
+
   return (
     <GlassCard style={styles.section}>
       <View style={styles.sectionHeader}>
-        <ThemedText type="label" style={{ color: theme.textSecondary }}>
-          CHECKLIST
-        </ThemedText>
+        <ThemedText type="label" style={{ color: theme.textSecondary }}>CHECKLIST</ThemedText>
         <ThemedText type="caption" style={{ color: theme.textSecondary }}>
           {completedCount}/{checklist.length}
         </ThemedText>
@@ -146,9 +192,7 @@ function ChecklistSection({ checklist, onToggle }: ChecklistSectionProps) {
               !item.completed && { borderColor: theme.textSecondary },
             ]}
           >
-            {item.completed ? (
-              <Feather name="check" size={14} color="#FFFFFF" />
-            ) : null}
+            {item.completed ? <Feather name="check" size={14} color="#FFFFFF" /> : null}
           </View>
           <ThemedText
             type="body"
@@ -169,27 +213,41 @@ export default function ProviderJobDetailScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { theme } = useTheme();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<{ ProviderJobDetail: { jobId: string } }, "ProviderJobDetail">>();
   const { jobId } = route.params;
+  const { providerProfile } = useAuthStore();
+  const providerId = providerProfile?.id;
+  const queryClient = useQueryClient();
 
-  const jobs = useProviderStore((s) => s.jobs);
-  const startJob = useProviderStore((s) => s.startJob);
-  const completeJob = useProviderStore((s) => s.completeJob);
-  const cancelJob = useProviderStore((s) => s.cancelJob);
+  const [displayStatus, setDisplayStatus] = useState<DisplayStatus | null>(null);
 
-  const job = useMemo(() => jobs.find((j) => j.id === jobId), [jobs, jobId]);
+  const { data: jobData, isLoading } = useQuery<{ job: ApiJob }>({
+    queryKey: ["/api/jobs", jobId],
+    enabled: !!jobId,
+  });
 
-  const [localChecklist, setLocalChecklist] = useState<JobChecklistItem[]>(
-    job?.checklist || [
-      { id: "1", label: "Arrived at location", completed: false },
-      { id: "2", label: "Assessed the issue", completed: false },
-      { id: "3", label: "Discussed scope with customer", completed: false },
-      { id: "4", label: "Completed main work", completed: false },
-      { id: "5", label: "Cleaned up area", completed: false },
-      { id: "6", label: "Walkthrough with customer", completed: false },
-    ]
-  );
+  const job = jobData?.job;
+
+  const { data: clientData } = useQuery<{ client: ApiClient }>({
+    queryKey: ["/api/clients", job?.clientId],
+    enabled: !!job?.clientId,
+  });
+  const client = clientData?.client;
+
+  const resolvedDisplayStatus: DisplayStatus = useMemo(() => {
+    if (displayStatus !== null) return displayStatus;
+    return job ? mapDbStatusToDisplay(job.status) : "scheduled";
+  }, [displayStatus, job]);
+
+  const [localChecklist, setLocalChecklist] = useState<JobChecklistItem[]>([
+    { id: "1", label: "Arrived at location", completed: false },
+    { id: "2", label: "Assessed the issue", completed: false },
+    { id: "3", label: "Discussed scope with customer", completed: false },
+    { id: "4", label: "Completed main work", completed: false },
+    { id: "5", label: "Cleaned up area", completed: false },
+    { id: "6", label: "Walkthrough with customer", completed: false },
+  ]);
 
   const handleToggleChecklist = useCallback((id: string) => {
     setLocalChecklist((prev) =>
@@ -197,29 +255,76 @@ export default function ProviderJobDetailScreen() {
     );
   }, []);
 
-  const handleUpdateStatus = useCallback((newStatus: Job["status"]) => {
+  const updateJobMutation = useMutation({
+    mutationFn: async (newStatus: DBJobStatus) => {
+      const url = new URL(`/api/jobs/${jobId}`, getApiUrl());
+      return apiRequest("PUT", url.toString(), { status: newStatus });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "jobs"] });
+    },
+    onError: () => {
+      Alert.alert("Error", "Failed to update job status");
+    },
+  });
+
+  const completeJobMutation = useMutation({
+    mutationFn: async () => {
+      const url = new URL(`/api/jobs/${jobId}/complete`, getApiUrl());
+      return apiRequest("POST", url.toString(), { finalPrice: job?.estimatedPrice });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "jobs"] });
+      setDisplayStatus("completed");
+    },
+    onError: () => {
+      Alert.alert("Error", "Failed to complete job");
+    },
+  });
+
+  const handleUpdateStatus = useCallback((newDisplayStatus: DisplayStatus) => {
     if (!job) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (newStatus === "in_progress") {
-      startJob(job.id);
-    } else if (newStatus === "completed") {
-      completeJob(job.id);
-    } else if (newStatus === "cancelled") {
-      cancelJob(job.id);
+
+    if (newDisplayStatus === "completed") {
+      completeJobMutation.mutate();
+    } else {
+      updateJobMutation.mutate(newDisplayStatus);
+      setDisplayStatus(newDisplayStatus);
     }
-  }, [job, startJob, completeJob, cancelJob]);
+  }, [job, updateJobMutation, completeJobMutation]);
+
+  const handleCancel = useCallback(() => {
+    Alert.alert(
+      "Cancel Job",
+      "Are you sure you want to cancel this job?",
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Yes, Cancel",
+          style: "destructive",
+          onPress: () => {
+            updateJobMutation.mutate("cancelled");
+            setDisplayStatus("cancelled");
+          },
+        },
+      ]
+    );
+  }, [updateJobMutation]);
 
   const handleCall = useCallback(() => {
-    if (job?.customerPhone) {
-      Linking.openURL(`tel:${job.customerPhone}`);
+    if (client?.phone) {
+      Linking.openURL(`tel:${client.phone}`);
     }
-  }, [job]);
+  }, [client]);
 
   const handleMessage = useCallback(() => {
-    if (job?.customerPhone) {
-      Linking.openURL(`sms:${job.customerPhone}`);
+    if (client?.phone) {
+      Linking.openURL(`sms:${client.phone}`);
     }
-  }, [job]);
+  }, [client]);
 
   const handleNavigate = useCallback(() => {
     if (job?.address) {
@@ -228,8 +333,20 @@ export default function ProviderJobDetailScreen() {
   }, [job]);
 
   const handleCreateInvoice = useCallback(() => {
-    Alert.alert("Create Invoice", "Navigate to create invoice for this job");
-  }, []);
+    if (job) {
+      navigation.navigate("AddInvoice", { clientId: job.clientId });
+    }
+  }, [job, navigation]);
+
+  if (isLoading) {
+    return (
+      <ThemedView style={styles.container}>
+        <View style={[styles.notFound, { paddingTop: headerHeight + Spacing.xl }]}>
+          <ActivityIndicator size="large" color={Colors.accent} />
+        </View>
+      </ThemedView>
+    );
+  }
 
   if (!job) {
     return (
@@ -241,24 +358,20 @@ export default function ProviderJobDetailScreen() {
     );
   }
 
-  const getNextAction = (): { label: string; status: Job["status"] } | null => {
-    switch (job.status) {
-      case "scheduled":
-        return { label: "Confirm Job", status: "confirmed" };
-      case "confirmed":
-        return { label: "On My Way", status: "on_my_way" };
-      case "on_my_way":
-        return { label: "I've Arrived", status: "arrived" };
-      case "arrived":
-        return { label: "Start Work", status: "in_progress" };
-      case "in_progress":
-        return { label: "Complete Job", status: "completed" };
-      default:
-        return null;
+  const getNextAction = (): { label: string; status: DisplayStatus } | null => {
+    switch (resolvedDisplayStatus) {
+      case "scheduled": return { label: "Confirm Job", status: "confirmed" };
+      case "confirmed": return { label: "On My Way", status: "on_my_way" };
+      case "on_my_way": return { label: "I've Arrived", status: "arrived" };
+      case "arrived": return { label: "Start Work", status: "in_progress" };
+      case "in_progress": return { label: "Complete Job", status: "completed" };
+      default: return null;
     }
   };
 
   const nextAction = getNextAction();
+  const clientName = client ? getClientName(client) : "Loading...";
+  const price = job.finalPrice || job.estimatedPrice;
 
   return (
     <ThemedView style={styles.container}>
@@ -271,31 +384,25 @@ export default function ProviderJobDetailScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Animated.View entering={FadeInDown.duration(400)}>
-          <StatusBanner status={job.status} />
+          <StatusBanner status={resolvedDisplayStatus} />
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(100).duration(400)}>
           <GlassCard style={styles.section}>
             <View style={styles.customerRow}>
               <View style={[styles.avatar, { backgroundColor: Colors.accent + "20" }]}>
-                {job.customerAvatar ? (
-                  <Animated.Image source={{ uri: job.customerAvatar }} style={styles.avatarImage} />
-                ) : (
-                  <ThemedText type="body" style={{ color: Colors.accent, fontWeight: "600" }}>
-                    {getInitials(job.customerName)}
-                  </ThemedText>
-                )}
+                <ThemedText type="body" style={{ color: Colors.accent, fontWeight: "600" }}>
+                  {getInitials(clientName)}
+                </ThemedText>
               </View>
               <View style={styles.customerInfo}>
-                <ThemedText type="body" style={{ fontWeight: "600" }}>
-                  {job.customerName}
-                </ThemedText>
+                <ThemedText type="body" style={{ fontWeight: "600" }}>{clientName}</ThemedText>
                 <Pressable onPress={handleNavigate} style={styles.addressRow}>
                   <Feather name="map-pin" size={14} color={theme.textSecondary} />
                   <ThemedText type="caption" style={{ color: theme.textSecondary, marginLeft: 4, flex: 1 }} numberOfLines={1}>
-                    {job.address}
+                    {job.address || "No address"}
                   </ThemedText>
-                  <Feather name="external-link" size={14} color={Colors.accent} />
+                  {job.address ? <Feather name="external-link" size={14} color={Colors.accent} /> : null}
                 </Pressable>
               </View>
             </View>
@@ -322,14 +429,12 @@ export default function ProviderJobDetailScreen() {
             <ThemedText type="label" style={{ color: theme.textSecondary, marginBottom: Spacing.sm }}>
               JOB DETAILS
             </ThemedText>
-            <ThemedText type="h3" style={{ marginBottom: Spacing.xs }}>
-              {job.service}
-            </ThemedText>
+            <ThemedText type="h3" style={{ marginBottom: Spacing.xs }}>{job.title}</ThemedText>
             <View style={styles.detailRow}>
               <Feather name="calendar" size={16} color={theme.textSecondary} />
               <ThemedText type="body" style={{ marginLeft: Spacing.sm }}>
-                {formatDate(job.date)} at {formatTime(job.time)}
-                {job.endTime ? ` - ${formatTime(job.endTime)}` : ""}
+                {formatDate(job.scheduledDate)}
+                {job.scheduledTime ? ` at ${job.scheduledTime}` : ""}
               </ThemedText>
             </View>
             {job.description ? (
@@ -340,65 +445,7 @@ export default function ProviderJobDetailScreen() {
           </GlassCard>
         </Animated.View>
 
-        {job.intakeData ? (
-          <Animated.View entering={FadeInDown.delay(300).duration(400)}>
-            <GlassCard style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <ThemedText type="label" style={{ color: theme.textSecondary }}>
-                  AI INTAKE SUMMARY
-                </ThemedText>
-                <View style={[styles.aiBadge, { backgroundColor: Colors.accent + "20" }]}>
-                  <Feather name="cpu" size={12} color={Colors.accent} />
-                  <ThemedText type="caption" style={{ color: Colors.accent, marginLeft: 4 }}>
-                    Smart Intake
-                  </ThemedText>
-                </View>
-              </View>
-              
-              {job.intakeData.problemDescription ? (
-                <View style={styles.intakeItem}>
-                  <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-                    Problem Description
-                  </ThemedText>
-                  <ThemedText type="body" style={{ marginTop: 2 }}>
-                    {job.intakeData.problemDescription}
-                  </ThemedText>
-                </View>
-              ) : null}
-
-              {job.intakeData.followUpAnswers && job.intakeData.followUpAnswers.length > 0 ? (
-                <View style={styles.intakeItem}>
-                  <ThemedText type="caption" style={{ color: theme.textSecondary, marginBottom: Spacing.xs }}>
-                    Follow-up Answers
-                  </ThemedText>
-                  {job.intakeData.followUpAnswers.map((qa, index) => (
-                    <View key={index} style={styles.qaRow}>
-                      <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-                        Q: {qa.question}
-                      </ThemedText>
-                      <ThemedText type="body">
-                        A: {qa.answer}
-                      </ThemedText>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-
-              {job.intakeData.estimatedDuration ? (
-                <View style={styles.intakeItem}>
-                  <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-                    Estimated Duration
-                  </ThemedText>
-                  <ThemedText type="body" style={{ marginTop: 2 }}>
-                    {job.intakeData.estimatedDuration}
-                  </ThemedText>
-                </View>
-              ) : null}
-            </GlassCard>
-          </Animated.View>
-        ) : null}
-
-        {job.status !== "cancelled" && job.status !== "completed" ? (
+        {resolvedDisplayStatus !== "cancelled" && resolvedDisplayStatus !== "completed" ? (
           <Animated.View entering={FadeInDown.delay(400).duration(400)}>
             <ChecklistSection checklist={localChecklist} onToggle={handleToggleChecklist} />
           </Animated.View>
@@ -409,125 +456,54 @@ export default function ProviderJobDetailScreen() {
             <ThemedText type="label" style={{ color: theme.textSecondary, marginBottom: Spacing.sm }}>
               PRICING
             </ThemedText>
-            
-            {job.laborCost || job.materialsCost ? (
-              <>
-                {job.laborCost ? (
-                  <View style={styles.priceRow}>
-                    <ThemedText type="body">Labor</ThemedText>
-                    <ThemedText type="body">{formatCurrency(job.laborCost)}</ThemedText>
-                  </View>
-                ) : null}
-                {job.materialsCost ? (
-                  <View style={styles.priceRow}>
-                    <ThemedText type="body">Materials</ThemedText>
-                    <ThemedText type="body">{formatCurrency(job.materialsCost)}</ThemedText>
-                  </View>
-                ) : null}
-                <View style={[styles.priceRow, styles.totalRow, { borderTopColor: theme.separator }]}>
-                  <ThemedText type="body" style={{ fontWeight: "600" }}>Total</ThemedText>
-                  <ThemedText type="h3" style={{ color: Colors.accent }}>{formatCurrency(job.price)}</ThemedText>
-                </View>
-              </>
-            ) : (
+            {price ? (
               <View style={styles.priceRow}>
-                <ThemedText type="body" style={{ fontWeight: "600" }}>Total</ThemedText>
-                <ThemedText type="h3" style={{ color: Colors.accent }}>{formatCurrency(job.price)}</ThemedText>
+                <ThemedText type="body" style={{ fontWeight: "600" }}>
+                  {job.finalPrice ? "Final Price" : "Estimated"}
+                </ThemedText>
+                <ThemedText type="h3" style={{ color: Colors.accent }}>
+                  {formatCurrency(parseFloat(price))}
+                </ThemedText>
               </View>
+            ) : (
+              <ThemedText type="body" style={{ color: theme.textSecondary }}>
+                Price TBD
+              </ThemedText>
             )}
-
-            {job.paymentStatus ? (
-              <View style={[styles.paymentStatus, { borderTopColor: theme.separator }]}>
-                <View style={[
-                  styles.paymentBadge,
-                  { backgroundColor: job.paymentStatus === "paid" ? Colors.accent + "20" : "#EF4444" + "20" }
-                ]}>
-                  <Feather
-                    name={job.paymentStatus === "paid" ? "check-circle" : "clock"}
-                    size={14}
-                    color={job.paymentStatus === "paid" ? Colors.accent : "#EF4444"}
-                  />
-                  <ThemedText
-                    type="caption"
-                    style={{
-                      marginLeft: 4,
-                      color: job.paymentStatus === "paid" ? Colors.accent : "#EF4444",
-                      fontWeight: "600",
-                    }}
-                  >
-                    {job.paymentStatus === "paid" ? "Paid" : job.paymentStatus === "partial" ? "Partial Payment" : "Unpaid"}
-                  </ThemedText>
-                </View>
-                {job.amountPaid && job.amountPaid > 0 ? (
-                  <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-                    {formatCurrency(job.amountPaid)} received
-                  </ThemedText>
-                ) : null}
-              </View>
-            ) : null}
           </GlassCard>
         </Animated.View>
 
-        {job.notes || job.internalNotes ? (
+        {job.notes ? (
           <Animated.View entering={FadeInDown.delay(600).duration(400)}>
             <GlassCard style={styles.section}>
               <ThemedText type="label" style={{ color: theme.textSecondary, marginBottom: Spacing.sm }}>
                 NOTES
               </ThemedText>
-              {job.notes ? (
-                <View style={styles.noteItem}>
-                  <View style={styles.noteBadge}>
-                    <Feather name="user" size={12} color={Colors.accent} />
-                    <ThemedText type="caption" style={{ color: Colors.accent, marginLeft: 4 }}>
-                      Customer Note
-                    </ThemedText>
-                  </View>
-                  <ThemedText type="body" style={{ marginTop: 4 }}>
-                    {job.notes}
-                  </ThemedText>
-                </View>
-              ) : null}
-              {job.internalNotes ? (
-                <View style={styles.noteItem}>
-                  <View style={[styles.noteBadge, { backgroundColor: theme.textSecondary + "20" }]}>
-                    <Feather name="lock" size={12} color={theme.textSecondary} />
-                    <ThemedText type="caption" style={{ color: theme.textSecondary, marginLeft: 4 }}>
-                      Internal Note
-                    </ThemedText>
-                  </View>
-                  <ThemedText type="body" style={{ marginTop: 4 }}>
-                    {job.internalNotes}
-                  </ThemedText>
-                </View>
-              ) : null}
+              <ThemedText type="body">{job.notes}</ThemedText>
             </GlassCard>
           </Animated.View>
         ) : null}
       </ScrollView>
 
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing.md, backgroundColor: theme.backgroundRoot }]}>
-        {job.status === "completed" && !job.invoiceId ? (
-          <PrimaryButton onPress={handleCreateInvoice} style={styles.actionButton}>Create Invoice</PrimaryButton>
+        {resolvedDisplayStatus === "completed" ? (
+          <PrimaryButton onPress={handleCreateInvoice} style={styles.actionButton}>
+            Create Invoice
+          </PrimaryButton>
         ) : nextAction ? (
           <PrimaryButton
             onPress={() => handleUpdateStatus(nextAction.status)}
             style={styles.actionButton}
-          >{nextAction.label}</PrimaryButton>
+            disabled={updateJobMutation.isPending || completeJobMutation.isPending}
+          >
+            {(updateJobMutation.isPending || completeJobMutation.isPending) ? "Updating..." : nextAction.label}
+          </PrimaryButton>
         ) : null}
-        
-        {job.status !== "cancelled" && job.status !== "completed" ? (
+
+        {resolvedDisplayStatus !== "cancelled" && resolvedDisplayStatus !== "completed" ? (
           <Pressable
             style={[styles.cancelButton, { borderColor: "#EF4444" }]}
-            onPress={() => {
-              Alert.alert(
-                "Cancel Job",
-                "Are you sure you want to cancel this job?",
-                [
-                  { text: "No", style: "cancel" },
-                  { text: "Yes, Cancel", style: "destructive", onPress: () => handleUpdateStatus("cancelled") },
-                ]
-              );
-            }}
+            onPress={handleCancel}
           >
             <ThemedText type="body" style={{ color: "#EF4444" }}>Cancel Job</ThemedText>
           </Pressable>
@@ -538,21 +514,14 @@ export default function ProviderJobDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   notFound: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  statusBanner: {
-    marginBottom: Spacing.md,
-  },
-  statusHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
+  statusBanner: { marginBottom: Spacing.md },
+  statusHeader: { flexDirection: "row", alignItems: "center" },
   statusIcon: {
     width: 48,
     height: 48,
@@ -560,9 +529,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  statusInfo: {
-    marginLeft: Spacing.md,
-  },
+  statusInfo: { marginLeft: Spacing.md },
   progressBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -591,19 +558,14 @@ const styles = StyleSheet.create({
     height: 2,
     marginHorizontal: 4,
   },
-  section: {
-    marginBottom: Spacing.md,
-  },
+  section: { marginBottom: Spacing.md },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: Spacing.sm,
   },
-  customerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
+  customerRow: { flexDirection: "row", alignItems: "center" },
   avatar: {
     width: 48,
     height: 48,
@@ -612,20 +574,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     overflow: "hidden",
   },
-  avatarImage: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-  },
-  customerInfo: {
-    flex: 1,
-    marginLeft: Spacing.md,
-  },
-  addressRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 2,
-  },
+  customerInfo: { flex: 1, marginLeft: Spacing.md },
+  addressRow: { flexDirection: "row", alignItems: "center", marginTop: 2 },
   contactRow: {
     flexDirection: "row",
     justifyContent: "space-around",
@@ -639,29 +589,8 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.md,
   },
-  detailRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: Spacing.xs,
-  },
-  aiBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.full,
-  },
-  intakeItem: {
-    marginBottom: Spacing.md,
-  },
-  qaRow: {
-    marginBottom: Spacing.xs,
-  },
-  checklistItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: Spacing.sm,
-  },
+  detailRow: { flexDirection: "row", alignItems: "center", marginTop: Spacing.xs },
+  checklistItem: { flexDirection: "row", alignItems: "center", paddingVertical: Spacing.sm },
   checkbox: {
     width: 24,
     height: 24,
@@ -677,38 +606,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: Spacing.xs,
   },
-  totalRow: {
-    borderTopWidth: 1,
-    marginTop: Spacing.sm,
-    paddingTop: Spacing.sm,
-  },
-  paymentStatus: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    borderTopWidth: 1,
-    marginTop: Spacing.sm,
-    paddingTop: Spacing.sm,
-  },
-  paymentBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.full,
-  },
-  noteItem: {
-    marginBottom: Spacing.md,
-  },
-  noteBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.accent + "20",
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.full,
-    alignSelf: "flex-start",
-  },
   bottomBar: {
     position: "absolute",
     bottom: 0,
@@ -719,9 +616,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "rgba(0,0,0,0.1)",
   },
-  actionButton: {
-    marginBottom: Spacing.sm,
-  },
+  actionButton: { marginBottom: Spacing.sm },
   cancelButton: {
     alignItems: "center",
     paddingVertical: Spacing.sm,

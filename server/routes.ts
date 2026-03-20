@@ -7,7 +7,7 @@ import { insertUserSchema, loginSchema, insertHomeSchema, insertAppointmentSchem
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
 import { db } from "./db";
-import { sql, eq } from "drizzle-orm";
+import { sql, eq, and } from "drizzle-orm";
 import { appointments, maintenanceReminders, homes } from "@shared/schema";
 import { sendInvoiceEmail } from "./emailService";
 import { 
@@ -40,10 +40,17 @@ import {
   creditLedger,
   payments,
   payouts,
+  providerCustomServices,
+  insertProviderCustomServiceSchema,
+  users,
+  clients,
+  jobs,
+  bookingLinks,
 } from "@shared/schema";
 
 interface IdParams { id: string; }
 interface UserIdParams { userId: string; }
+interface ProviderIdParams { providerId: string; }
 
 interface ChatMessage {
   role: "user" | "assistant" | "system";
@@ -480,7 +487,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/appointments/:userId", async (req: Request<UserIdParams>, res: Response) => {
+  app.get("/api/users/:userId/appointments", async (req: Request<UserIdParams>, res: Response) => {
     try {
       const appointments = await storage.getAppointments(req.params.userId);
       res.json({ appointments });
@@ -535,7 +542,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
       }
       const appointment = await storage.createAppointment(parsed.data);
-      
+
+      // Find or create a client record in the provider's client list
+      let clientId: string | null = null;
+      try {
+        const [user] = await db.select().from(users).where(eq(users.id, parsed.data.userId));
+        if (user) {
+          const existingClients = await db.select().from(clients)
+            .where(eq(clients.providerId, parsed.data.providerId));
+          const matchingClient = existingClients.find(
+            (c) => c.email === user.email || (c.firstName === (user.firstName || "") && c.phone === user.phone)
+          );
+          if (matchingClient) {
+            clientId = matchingClient.id;
+          } else {
+            const [newClient] = await db.insert(clients).values({
+              providerId: parsed.data.providerId,
+              firstName: user.firstName || "Unknown",
+              lastName: user.lastName || "",
+              email: user.email,
+              phone: user.phone || "",
+            }).returning();
+            clientId = newClient.id;
+          }
+        }
+      } catch (clientErr) {
+        console.error("Client find/create error (non-fatal):", clientErr);
+      }
+
+      // Create a provider job record linked to this appointment
+      if (clientId) {
+        try {
+          await db.insert(jobs).values({
+            providerId: parsed.data.providerId,
+            clientId,
+            appointmentId: appointment.id,
+            serviceId: parsed.data.serviceId ?? null,
+            title: parsed.data.serviceName,
+            description: parsed.data.description || null,
+            scheduledDate: parsed.data.scheduledDate,
+            scheduledTime: parsed.data.scheduledTime,
+            estimatedDuration: 60,
+            status: "scheduled",
+            estimatedPrice: parsed.data.estimatedPrice ?? null,
+            notes: `Booked via homeowner portal.`,
+          });
+        } catch (jobErr) {
+          console.error("Job creation error (non-fatal):", jobErr);
+        }
+      }
+
       await storage.createNotification(
         parsed.data.userId,
         "Booking Confirmed",
@@ -625,7 +681,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!appointment) {
         return res.status(404).json({ error: "Appointment not found" });
       }
-      res.json({ appointment });
+      // Enrich with provider identity so homeowner can see who is doing the work
+      const provider = await storage.getProvider(appointment.providerId);
+      const providerInfo = provider
+        ? { businessName: provider.businessName, phone: provider.phone, email: provider.email }
+        : null;
+      res.json({ appointment, provider: providerInfo });
     } catch (error) {
       console.error("Get appointment error:", error);
       res.status(500).json({ error: "Failed to get appointment" });
@@ -1516,6 +1577,159 @@ Respond with JSON only:
     }
   });
 
+  // ============ PROVIDER AVAILABILITY ENDPOINT ============
+
+  app.get("/api/provider/:providerId/availability", async (req: Request<ProviderIdParams>, res: Response) => {
+    try {
+      const { date } = req.query as { date?: string };
+
+      // Load availability rules from the provider's active booking link
+      const [link] = await db.select().from(bookingLinks)
+        .where(eq(bookingLinks.providerId, req.params.providerId))
+        .limit(1);
+
+      type AvailabilityRules = {
+        workingHours?: { start: string; end: string; days?: number[] };
+        startHour?: number;
+        endHour?: number;
+        slotIntervalMinutes?: number;
+        blackoutDates?: string[];
+      };
+
+      let rules: AvailabilityRules = {};
+      if (link?.availabilityRules) {
+        try { rules = JSON.parse(link.availabilityRules) as AvailabilityRules; } catch { /* ignore */ }
+      }
+
+      // Check blackout dates
+      const blackoutDates: string[] = rules.blackoutDates || [];
+      if (date && blackoutDates.includes(date)) {
+        return res.json({ slots: [] });
+      }
+
+      // Determine working hours — default Mon-Fri, 8am-5pm
+      const startHour = rules.workingHours?.start
+        ? parseInt(rules.workingHours.start.split(":")[0], 10)
+        : (rules.startHour ?? 8);
+      const endHour = rules.workingHours?.end
+        ? parseInt(rules.workingHours.end.split(":")[0], 10)
+        : (rules.endHour ?? 17);
+      const intervalMinutes = rules.slotIntervalMinutes ?? 60;
+
+      // If date provided, check day-of-week against working days
+      if (date) {
+        const d = new Date(date + "T12:00:00Z"); // Noon UTC to avoid timezone flips
+        const dayOfWeek = d.getUTCDay(); // 0=Sun, 6=Sat
+        const workingDays = rules.workingHours?.days ?? [1, 2, 3, 4, 5]; // Mon-Fri
+        if (!workingDays.includes(dayOfWeek)) {
+          return res.json({ slots: [] });
+        }
+      }
+
+      // Generate time slots
+      const slots: { startTime: string; label: string }[] = [];
+      for (let h = startHour; h < endHour; h += intervalMinutes / 60) {
+        const hour = Math.floor(h);
+        const minute = Math.round((h - hour) * 60);
+        const startTime = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+        const ampm = hour < 12 ? "AM" : "PM";
+        const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+        const label = minute === 0 ? `${displayHour} ${ampm}` : `${displayHour}:${String(minute).padStart(2, "0")} ${ampm}`;
+        slots.push({ startTime, label });
+      }
+
+      res.json({ slots, workingDays: rules.workingHours?.days ?? [1, 2, 3, 4, 5] });
+    } catch (error) {
+      console.error("Provider availability error:", error);
+      res.status(500).json({ error: "Failed to get availability" });
+    }
+  });
+
+  // ============ PROVIDER CUSTOM SERVICES ROUTES ============
+
+  app.get("/api/provider/:providerId/custom-services", async (req: Request<ProviderIdParams>, res: Response) => {
+    try {
+      const publishedOnly = req.query.publishedOnly === "true";
+      const conditions = publishedOnly
+        ? and(eq(providerCustomServices.providerId, req.params.providerId), eq(providerCustomServices.isPublished, true))
+        : eq(providerCustomServices.providerId, req.params.providerId);
+      const svcList = await db.select().from(providerCustomServices)
+        .where(conditions)
+        .orderBy(providerCustomServices.createdAt);
+      res.json({ services: svcList });
+    } catch (error) {
+      console.error("Get custom services error:", error);
+      res.status(500).json({ error: "Failed to get services" });
+    }
+  });
+
+  app.post("/api/provider/:providerId/custom-services", async (req: Request<ProviderIdParams>, res: Response) => {
+    try {
+      // Verify provider exists before creating service
+      const provider = await storage.getProvider(req.params.providerId);
+      if (!provider) {
+        return res.status(404).json({ error: "Provider not found" });
+      }
+      const parsed = insertProviderCustomServiceSchema.safeParse({ ...req.body, providerId: req.params.providerId });
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
+      }
+      const [svc] = await db.insert(providerCustomServices).values(parsed.data).returning();
+      res.status(201).json({ service: svc });
+    } catch (error) {
+      console.error("Create custom service error:", error);
+      res.status(500).json({ error: "Failed to create service" });
+    }
+  });
+
+  app.put("/api/provider/:providerId/custom-services/:id", async (req: Request<ProviderIdParams & IdParams>, res: Response) => {
+    try {
+      const [existing] = await db.select().from(providerCustomServices)
+        .where(eq(providerCustomServices.id, req.params.id));
+      if (!existing) return res.status(404).json({ error: "Service not found" });
+      if (existing.providerId !== req.params.providerId) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      // Allowlist mutable fields only — prevent mass-assignment of id/providerId/createdAt
+      const { name, category, description, pricingType, basePrice, priceFrom, priceTo, duration, isPublished } = req.body;
+      const allowedUpdate: Partial<typeof providerCustomServices.$inferInsert> = {};
+      if (name !== undefined) allowedUpdate.name = name;
+      if (category !== undefined) allowedUpdate.category = category;
+      if (description !== undefined) allowedUpdate.description = description;
+      if (pricingType !== undefined) allowedUpdate.pricingType = pricingType;
+      if (basePrice !== undefined) allowedUpdate.basePrice = basePrice;
+      if (priceFrom !== undefined) allowedUpdate.priceFrom = priceFrom;
+      if (priceTo !== undefined) allowedUpdate.priceTo = priceTo;
+      if (duration !== undefined) allowedUpdate.duration = duration;
+      if (isPublished !== undefined) allowedUpdate.isPublished = isPublished;
+      const [svc] = await db.update(providerCustomServices)
+        .set({ ...allowedUpdate, updatedAt: new Date() })
+        .where(eq(providerCustomServices.id, req.params.id))
+        .returning();
+      res.json({ service: svc });
+    } catch (error) {
+      console.error("Update custom service error:", error);
+      res.status(500).json({ error: "Failed to update service" });
+    }
+  });
+
+  app.delete("/api/provider/:providerId/custom-services/:id", async (req: Request<ProviderIdParams & IdParams>, res: Response) => {
+    try {
+      const [existing] = await db.select().from(providerCustomServices)
+        .where(eq(providerCustomServices.id, req.params.id));
+      if (!existing) return res.status(404).json({ error: "Service not found" });
+      if (existing.providerId !== req.params.providerId) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      await db.delete(providerCustomServices)
+        .where(eq(providerCustomServices.id, req.params.id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete custom service error:", error);
+      res.status(500).json({ error: "Failed to delete service" });
+    }
+  });
+
   // ============ PROVIDER PORTAL ROUTES ============
 
   // Provider registration/onboarding
@@ -1588,8 +1802,6 @@ Respond with JSON only:
   });
 
   // ============ CLIENTS ROUTES ============
-
-  interface ProviderIdParams { providerId: string; }
 
   app.get("/api/provider/:providerId/clients", async (req: Request<ProviderIdParams>, res: Response) => {
     try {
@@ -1689,6 +1901,34 @@ Respond with JSON only:
     } catch (error) {
       console.error("Get job error:", error);
       res.status(500).json({ error: "Failed to get job" });
+    }
+  });
+
+  // Get job linked to an appointment (by appointmentId FK)
+  app.get("/api/appointments/:id/job", async (req: Request<IdParams>, res: Response) => {
+    try {
+      const [job] = await db.select().from(jobs)
+        .where(eq(jobs.appointmentId, req.params.id))
+        .limit(1);
+      if (!job) return res.json({ job: null });
+      res.json({ job });
+    } catch (error) {
+      console.error("Get appointment job error:", error);
+      res.status(500).json({ error: "Failed to get job" });
+    }
+  });
+
+  // Get invoice linked to a job
+  app.get("/api/jobs/:id/invoice", async (req: Request<IdParams>, res: Response) => {
+    try {
+      const [invoice] = await db.select().from(invoices)
+        .where(eq(invoices.jobId, req.params.id))
+        .limit(1);
+      if (!invoice) return res.json({ invoice: null });
+      res.json({ invoice });
+    } catch (error) {
+      console.error("Get job invoice error:", error);
+      res.status(500).json({ error: "Failed to get invoice" });
     }
   });
 
@@ -1971,10 +2211,21 @@ Respond with JSON only:
 
   app.post("/api/invoices/:id/mark-paid", async (req: Request<IdParams>, res: Response) => {
     try {
-      const invoice = await storage.markInvoicePaid(req.params.id);
-      if (!invoice) {
+      const { providerId } = req.body;
+      if (!providerId) {
+        return res.status(400).json({ error: "providerId is required" });
+      }
+      const existingInvoice = await storage.getInvoice(req.params.id);
+      if (!existingInvoice) {
         return res.status(404).json({ error: "Invoice not found" });
       }
+      if (existingInvoice.providerId !== providerId) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      if (existingInvoice.status === "paid") {
+        return res.json({ invoice: existingInvoice });
+      }
+      const invoice = await storage.markInvoicePaid(req.params.id);
       res.json({ invoice });
     } catch (error) {
       console.error("Mark invoice paid error:", error);

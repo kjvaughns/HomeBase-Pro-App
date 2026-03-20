@@ -1,5 +1,5 @@
-import React, { useMemo } from "react";
-import { StyleSheet, View, ScrollView, Pressable, Alert } from "react-native";
+import React from "react";
+import { StyleSheet, View, ScrollView, Pressable, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
@@ -7,32 +7,83 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { useQuery } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
-import { Avatar } from "@/components/Avatar";
 import { StatusPill } from "@/components/StatusPill";
 import { PrimaryButton } from "@/components/PrimaryButton";
-import { SecondaryButton } from "@/components/SecondaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
-import { useHomeownerStore } from "@/state/homeownerStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
-import { JobStatus } from "@/state/types";
+import { getApiUrl } from "@/lib/query-client";
 
 type ScreenRouteProp = RouteProp<RootStackParamList, "JobDetail">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-const STATUS_CONFIG: Record<JobStatus, { label: string; status: "success" | "info" | "warning" | "neutral" }> = {
-  requested: { label: "Requested", status: "info" },
+interface AppointmentRecord {
+  id: string;
+  serviceName: string;
+  scheduledDate: string;
+  scheduledTime: string;
+  status: string;
+  estimatedPrice: string | null;
+  finalPrice: string | null;
+  description: string | null;
+  notes: string | null;
+  providerDiagnosis: string | null;
+  completedAt: string | null;
+}
+
+interface ProviderInfo {
+  businessName: string;
+  phone?: string | null;
+  email?: string | null;
+}
+
+interface JobRecord {
+  id: string;
+  title: string;
+  status: string;
+  appointmentId: string | null;
+}
+
+interface InvoiceRecord {
+  id: string;
+  invoiceNumber: string | null;
+  status: string;
+  totalAmount: string;
+  dueDate: string | null;
+  paidAt: string | null;
+}
+
+const STATUS_CONFIG: Record<string, { label: string; status: "success" | "info" | "warning" | "neutral" }> = {
+  pending: { label: "Pending", status: "info" },
+  confirmed: { label: "Confirmed", status: "info" },
   scheduled: { label: "Scheduled", status: "info" },
   in_progress: { label: "In Progress", status: "warning" },
   awaiting_payment: { label: "Awaiting Payment", status: "warning" },
   completed: { label: "Completed", status: "success" },
   paid: { label: "Paid", status: "success" },
   closed: { label: "Closed", status: "neutral" },
+  cancelled: { label: "Cancelled", status: "neutral" },
 };
+
+function formatDate(dateStr: string): string {
+  if (!dateStr) return "TBD";
+  const date = new Date(dateStr);
+  return date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+}
+
+function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
 
 export default function JobDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -42,78 +93,78 @@ export default function JobDetailScreen() {
   const { theme } = useTheme();
   const { jobId } = route.params;
 
-  const jobs = useHomeownerStore((s) => s.jobs);
-  const invoices = useHomeownerStore((s) => s.invoices);
-  const receipts = useHomeownerStore((s) => s.receipts);
-  const allReviews = useHomeownerStore((s) => s.reviews);
-  const advanceJobStatus = useHomeownerStore((s) => s.advanceJobStatus);
-  
-  const job = useMemo(() => jobs.find((j) => j.id === jobId), [jobs, jobId]);
-  const invoice = useMemo(() => invoices.find((i) => i.jobId === jobId), [invoices, jobId]);
-  const receipt = useMemo(() => receipts.find((r) => r.jobId === jobId), [receipts, jobId]);
-  const review = useMemo(() => allReviews.find((r) => r.jobId === jobId), [allReviews, jobId]);
+  const { data: aptData, isLoading } = useQuery<{ appointment: AppointmentRecord; provider: ProviderInfo | null }>({
+    queryKey: ["/api/appointments", jobId],
+    enabled: !!jobId,
+    queryFn: async () => {
+      const url = new URL(`/api/appointments/${jobId}`, getApiUrl());
+      const res = await fetch(url.toString());
+      if (!res.ok) throw new Error("Failed to load appointment");
+      return res.json();
+    },
+  });
 
-  if (!job) {
+  const { data: jobData } = useQuery<{ job: JobRecord | null }>({
+    queryKey: ["/api/appointments", jobId, "job"],
+    enabled: !!jobId,
+    queryFn: async () => {
+      const url = new URL(`/api/appointments/${jobId}/job`, getApiUrl());
+      const res = await fetch(url.toString());
+      if (!res.ok) return { job: null };
+      return res.json();
+    },
+  });
+
+  const linkedJob = jobData?.job;
+
+  const { data: invoiceData } = useQuery<{ invoice: InvoiceRecord | null }>({
+    queryKey: ["/api/jobs", linkedJob?.id, "invoice"],
+    enabled: !!linkedJob?.id,
+    queryFn: async () => {
+      const url = new URL(`/api/jobs/${linkedJob!.id}/invoice`, getApiUrl());
+      const res = await fetch(url.toString());
+      if (!res.ok) return { invoice: null };
+      return res.json();
+    },
+  });
+
+  const invoice = invoiceData?.invoice;
+  const appointment = aptData?.appointment;
+  const provider = aptData?.provider;
+
+  if (isLoading) {
     return (
       <ThemedView style={styles.container}>
-        <ThemedText>Job not found</ThemedText>
+        <View style={[styles.centered, { paddingTop: headerHeight }]}>
+          <ActivityIndicator size="large" color={Colors.accent} />
+        </View>
       </ThemedView>
     );
   }
 
-  const statusConfig = STATUS_CONFIG[job.status];
-
-  const handleMessage = () => {
-    Alert.alert("Coming Soon", "Messaging will be available in a future update.");
-  };
-
-  const handlePayment = () => {
-    if (invoice) {
-      navigation.navigate("Payment", { jobId: job.id, invoiceId: invoice.id });
-    }
-  };
-
-  const handleReview = () => {
-    navigation.navigate("Review", { jobId: job.id });
-  };
-
-  const handleSimulateUpdate = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    advanceJobStatus(job.id);
-  };
-
-  const showSimulateOption = () => {
-    Alert.alert(
-      "Developer Tools",
-      "Advance this job to the next status?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Advance Status", onPress: handleSimulateUpdate },
-      ]
-    );
-  };
-
-  const renderTimelineItem = (event: typeof job.timeline[0], index: number) => {
-    const isLast = index === job.timeline.length - 1;
+  if (!appointment) {
     return (
-      <View key={event.id} style={styles.timelineItem}>
-        <View style={styles.timelineDot}>
-          <View style={[styles.dot, { backgroundColor: Colors.accent }]} />
-          {!isLast && <View style={[styles.timelineLine, { backgroundColor: theme.borderLight }]} />}
-        </View>
-        <View style={styles.timelineContent}>
-          <ThemedText style={styles.timelineTitle}>{event.title}</ThemedText>
-          {event.description ? (
-            <ThemedText style={[styles.timelineDesc, { color: theme.textSecondary }]}>
-              {event.description}
-            </ThemedText>
-          ) : null}
-          <ThemedText style={[styles.timelineTime, { color: theme.textTertiary }]}>
-            {new Date(event.timestamp).toLocaleString()}
+      <ThemedView style={styles.container}>
+        <View style={[styles.centered, { paddingTop: headerHeight }]}>
+          <Feather name="inbox" size={48} color={theme.textSecondary} />
+          <ThemedText style={[styles.emptyText, { color: theme.textSecondary }]}>
+            Appointment not found
           </ThemedText>
         </View>
-      </View>
+      </ThemedView>
     );
+  }
+
+  const statusKey = appointment.status || "pending";
+  const statusConfig = STATUS_CONFIG[statusKey] || { label: statusKey, status: "neutral" as const };
+  const price = appointment.finalPrice || appointment.estimatedPrice;
+
+  const isInvoiceUnpaid = invoice && invoice.status !== "paid" && invoice.status !== "cancelled";
+
+  const handlePayInvoice = () => {
+    if (!invoice) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    navigation.navigate("Payment", { jobId, invoiceId: invoice.id });
   };
 
   return (
@@ -129,11 +180,13 @@ export default function JobDetailScreen() {
         <Animated.View entering={FadeInDown.duration(400)}>
           <GlassCard style={styles.headerCard}>
             <View style={styles.headerRow}>
-              <Avatar name={job.providerName} size="medium" />
+              <View style={[styles.iconCircle, { backgroundColor: Colors.accentLight }]}>
+                <Feather name="tool" size={24} color={Colors.accent} />
+              </View>
               <View style={styles.headerInfo}>
-                <ThemedText style={styles.providerName}>{job.providerName}</ThemedText>
-                <ThemedText style={[styles.businessName, { color: theme.textSecondary }]}>
-                  {job.providerBusinessName}
+                <ThemedText style={styles.serviceName}>{appointment.serviceName || "Service"}</ThemedText>
+                <ThemedText style={[styles.providerInfo, { color: theme.textSecondary }]}>
+                  {provider?.businessName || "Service Provider"}
                 </ThemedText>
               </View>
               <StatusPill
@@ -141,287 +194,255 @@ export default function JobDetailScreen() {
                 status={statusConfig.status}
               />
             </View>
-            <View style={styles.serviceRow}>
-              <Feather name="tool" size={16} color={theme.textSecondary} />
-              <ThemedText style={styles.serviceName}>{job.service}</ThemedText>
-            </View>
           </GlassCard>
         </Animated.View>
 
-        <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Details</ThemedText>
-          
-          <View style={[styles.detailCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
-            <View style={styles.detailRow}>
-              <Feather name="calendar" size={18} color={theme.textSecondary} />
-              <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Date</ThemedText>
-              <ThemedText style={styles.detailValue}>{job.scheduledDate}</ThemedText>
-            </View>
-            <View style={styles.detailRow}>
-              <Feather name="clock" size={18} color={theme.textSecondary} />
-              <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Time</ThemedText>
-              <ThemedText style={styles.detailValue}>{job.scheduledTime}</ThemedText>
-            </View>
-            <View style={styles.detailRow}>
-              <Feather name="map-pin" size={18} color={theme.textSecondary} />
-              <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Address</ThemedText>
-              <ThemedText style={styles.detailValue} numberOfLines={2}>{job.address}</ThemedText>
-            </View>
-            <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
-              <Feather name="file-text" size={18} color={theme.textSecondary} />
-              <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Description</ThemedText>
-              <ThemedText style={styles.detailValue} numberOfLines={3}>{job.description}</ThemedText>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Timeline</ThemedText>
-          <View style={[styles.timelineCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
-            {job.timeline.map(renderTimelineItem)}
-          </View>
-        </View>
-
-        {invoice && (
+        <Animated.View entering={FadeInDown.delay(100).duration(400)}>
           <View style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>Payment</ThemedText>
-            <View style={[styles.invoiceCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
-              <View style={styles.invoiceHeader}>
-                <ThemedText style={styles.invoiceTitle}>Invoice #{invoice.id.slice(-6)}</ThemedText>
-                <StatusPill
-                  label={invoice.status === "paid" ? "Paid" : "Unpaid"}
-                  status={invoice.status === "paid" ? "success" : "warning"}
-                  size="small"
-                />
-              </View>
-              <View style={styles.invoiceTotal}>
-                <ThemedText style={[styles.totalLabel, { color: theme.textSecondary }]}>Total</ThemedText>
-                <ThemedText style={styles.totalValue}>${invoice.total}</ThemedText>
-              </View>
-              {receipt && (
-                <View style={styles.receiptInfo}>
-                  <Feather name="check-circle" size={16} color={Colors.accent} />
-                  <ThemedText style={[styles.receiptText, { color: theme.textSecondary }]}>
-                    Paid on {new Date(receipt.createdAt).toLocaleDateString()}
+            <ThemedText style={styles.sectionTitle}>Details</ThemedText>
+            <View style={[styles.detailCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
+              {appointment.scheduledDate ? (
+                <View style={styles.detailRow}>
+                  <Feather name="calendar" size={18} color={theme.textSecondary} />
+                  <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Date</ThemedText>
+                  <ThemedText style={styles.detailValue}>{formatDate(appointment.scheduledDate)}</ThemedText>
+                </View>
+              ) : null}
+              {appointment.scheduledTime ? (
+                <View style={styles.detailRow}>
+                  <Feather name="clock" size={18} color={theme.textSecondary} />
+                  <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Time</ThemedText>
+                  <ThemedText style={styles.detailValue}>{appointment.scheduledTime}</ThemedText>
+                </View>
+              ) : null}
+              {provider?.phone ? (
+                <View style={styles.detailRow}>
+                  <Feather name="phone" size={18} color={theme.textSecondary} />
+                  <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Phone</ThemedText>
+                  <ThemedText style={styles.detailValue}>{provider.phone}</ThemedText>
+                </View>
+              ) : null}
+              {provider?.email ? (
+                <View style={[styles.detailRow, { borderBottomWidth: appointment.description ? 1 : 0 }]}>
+                  <Feather name="mail" size={18} color={theme.textSecondary} />
+                  <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Email</ThemedText>
+                  <ThemedText style={styles.detailValue} numberOfLines={1}>{provider.email}</ThemedText>
+                </View>
+              ) : null}
+              {appointment.description ? (
+                <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
+                  <Feather name="file-text" size={18} color={theme.textSecondary} />
+                  <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Notes</ThemedText>
+                  <ThemedText style={styles.detailValue} numberOfLines={3}>{appointment.description}</ThemedText>
+                </View>
+              ) : null}
+            </View>
+          </View>
+        </Animated.View>
+
+        {price ? (
+          <Animated.View entering={FadeInDown.delay(200).duration(400)}>
+            <View style={styles.section}>
+              <ThemedText style={styles.sectionTitle}>Pricing</ThemedText>
+              <View style={[styles.detailCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
+                <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
+                  <Feather name="dollar-sign" size={18} color={theme.textSecondary} />
+                  <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>
+                    {appointment.finalPrice ? "Final Price" : "Estimated"}
+                  </ThemedText>
+                  <ThemedText style={[styles.detailValue, { color: Colors.accent }]}>
+                    {formatCurrency(parseFloat(price))}
                   </ThemedText>
                 </View>
-              )}
-            </View>
-          </View>
-        )}
-
-        {review && (
-          <View style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>Your Review</ThemedText>
-            <View style={[styles.reviewCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
-              <View style={styles.reviewStars}>
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <Feather
-                    key={star}
-                    name="star"
-                    size={18}
-                    color={star <= review.rating ? Colors.accent : theme.borderLight}
-                  />
-                ))}
               </View>
-              <ThemedText style={[styles.reviewComment, { color: theme.textSecondary }]}>
-                "{review.comment}"
-              </ThemedText>
             </View>
-          </View>
-        )}
+          </Animated.View>
+        ) : null}
 
-        <View style={styles.actions}>
-          <SecondaryButton onPress={handleMessage}>
-            Message Provider
-          </SecondaryButton>
+        {invoice ? (
+          <Animated.View entering={FadeInDown.delay(250).duration(400)}>
+            <View style={styles.section}>
+              <ThemedText style={styles.sectionTitle}>Invoice</ThemedText>
+              <GlassCard style={styles.invoiceCard}>
+                <View style={styles.invoiceRow}>
+                  <View>
+                    <ThemedText style={styles.invoiceNumber}>
+                      {invoice.invoiceNumber || `Invoice #${invoice.id.slice(-6)}`}
+                    </ThemedText>
+                    <ThemedText style={[styles.invoiceStatus, {
+                      color: invoice.status === "paid" ? Colors.accent : "#F59E0B"
+                    }]}>
+                      {invoice.status === "paid" ? "Paid" : invoice.status === "sent" ? "Payment Due" : invoice.status.toUpperCase()}
+                    </ThemedText>
+                  </View>
+                  <ThemedText style={styles.invoiceAmount}>
+                    {formatCurrency(parseFloat(invoice.totalAmount || "0"))}
+                  </ThemedText>
+                </View>
+                {invoice.dueDate ? (
+                  <ThemedText style={[styles.dueDateText, { color: theme.textSecondary }]}>
+                    Due: {formatDate(invoice.dueDate)}
+                  </ThemedText>
+                ) : null}
+                {isInvoiceUnpaid ? (
+                  <View style={{ marginTop: Spacing.md }}>
+                    <PrimaryButton onPress={handlePayInvoice} testID="button-pay-invoice">
+                      Pay Invoice
+                    </PrimaryButton>
+                  </View>
+                ) : null}
+              </GlassCard>
+            </View>
+          </Animated.View>
+        ) : null}
 
-          {job.status === "awaiting_payment" && invoice && invoice.status !== "paid" ? (
-            <PrimaryButton onPress={handlePayment} style={styles.actionBtn}>
-              Pay Invoice
-            </PrimaryButton>
-          ) : null}
+        {statusKey === "completed" || statusKey === "paid" ? (
+          <Animated.View entering={FadeInDown.delay(300).duration(400)}>
+            <GlassCard style={styles.completedCard}>
+              <View style={styles.completedRow}>
+                <Feather name="check-circle" size={20} color={Colors.accent} />
+                <ThemedText style={{ marginLeft: Spacing.sm, color: Colors.accent, fontWeight: "600" }}>
+                  Service Completed
+                </ThemedText>
+              </View>
+              {appointment.completedAt ? (
+                <ThemedText type="caption" style={{ color: theme.textSecondary, marginTop: 4 }}>
+                  {formatDate(appointment.completedAt)}
+                </ThemedText>
+              ) : null}
+            </GlassCard>
+          </Animated.View>
+        ) : null}
 
-          {(job.status === "paid" || job.status === "completed") && !review ? (
-            <PrimaryButton onPress={handleReview} style={styles.actionBtn}>
-              Leave a Review
-            </PrimaryButton>
-          ) : null}
-        </View>
-
-        <Pressable onLongPress={showSimulateOption} style={styles.debugTrigger}>
-          <ThemedText style={[styles.debugText, { color: theme.textTertiary }]}>
-            Long press to simulate status update
-          </ThemedText>
-        </Pressable>
+        {appointment.providerDiagnosis ? (
+          <Animated.View entering={FadeInDown.delay(350).duration(400)}>
+            <View style={styles.section}>
+              <ThemedText style={styles.sectionTitle}>Provider Notes</ThemedText>
+              <GlassCard style={styles.diagnosisCard}>
+                <Feather name="message-square" size={16} color={theme.textSecondary} />
+                <ThemedText style={[styles.diagnosisText, { color: theme.textSecondary }]}>
+                  {appointment.providerDiagnosis}
+                </ThemedText>
+              </GlassCard>
+            </View>
+          </Animated.View>
+        ) : null}
       </ScrollView>
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  container: { flex: 1 },
+  centered: {
     flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyText: {
+    ...Typography.body,
+    marginTop: Spacing.md,
   },
   headerCard: {
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md,
+    padding: Spacing.md,
   },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: Spacing.md,
+  },
+  iconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerInfo: {
     flex: 1,
     marginLeft: Spacing.md,
   },
-  providerName: {
+  serviceName: {
     ...Typography.headline,
     fontWeight: "600",
   },
-  businessName: {
+  providerInfo: {
     ...Typography.subhead,
-  },
-  serviceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.xs,
-  },
-  serviceName: {
-    ...Typography.body,
+    marginTop: 2,
   },
   section: {
     marginBottom: Spacing.lg,
   },
   sectionTitle: {
     ...Typography.headline,
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
   },
   detailCard: {
     borderRadius: BorderRadius.md,
     borderWidth: 1,
-    padding: Spacing.md,
+    overflow: "hidden",
   },
   detailRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(0,0,0,0.1)",
+    alignItems: "center",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0,0,0,0.07)",
     gap: Spacing.sm,
   },
   detailLabel: {
     ...Typography.subhead,
-    width: 80,
+    flex: 1,
   },
   detailValue: {
-    ...Typography.body,
-    flex: 1,
+    ...Typography.subhead,
+    fontWeight: "500",
+    flex: 2,
     textAlign: "right",
   },
-  timelineCard: {
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    padding: Spacing.md,
-  },
-  timelineItem: {
-    flexDirection: "row",
-  },
-  timelineDot: {
-    alignItems: "center",
-    width: 24,
-  },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  timelineLine: {
-    width: 2,
-    flex: 1,
-    marginVertical: 4,
-  },
-  timelineContent: {
-    flex: 1,
-    paddingBottom: Spacing.md,
-  },
-  timelineTitle: {
-    ...Typography.subhead,
-    fontWeight: "600",
-  },
-  timelineDesc: {
-    ...Typography.caption1,
-    marginTop: 2,
-  },
-  timelineTime: {
-    ...Typography.caption2,
-    marginTop: 4,
-  },
   invoiceCard: {
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
     padding: Spacing.md,
   },
-  invoiceHeader: {
+  invoiceRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
+  },
+  invoiceNumber: {
+    ...Typography.headline,
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  invoiceStatus: {
+    ...Typography.caption2,
+    fontWeight: "600",
+  },
+  invoiceAmount: {
+    ...Typography.title3,
+    color: Colors.accent,
+    fontWeight: "700",
+  },
+  dueDateText: {
+    ...Typography.caption2,
+    marginTop: Spacing.xs,
+  },
+  completedCard: {
+    padding: Spacing.md,
     marginBottom: Spacing.md,
   },
-  invoiceTitle: {
-    ...Typography.subhead,
-    fontWeight: "600",
-  },
-  invoiceTotal: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  totalLabel: {
-    ...Typography.body,
-  },
-  totalValue: {
-    ...Typography.title2,
-    fontWeight: "700",
-    color: Colors.accent,
-  },
-  receiptInfo: {
+  completedRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.xs,
-    marginTop: Spacing.md,
-    paddingTop: Spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "rgba(0,0,0,0.1)",
   },
-  receiptText: {
-    ...Typography.caption1,
-  },
-  reviewCard: {
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
+  diagnosisCard: {
     padding: Spacing.md,
-  },
-  reviewStars: {
     flexDirection: "row",
-    gap: 4,
-    marginBottom: Spacing.sm,
+    gap: Spacing.sm,
+    alignItems: "flex-start",
   },
-  reviewComment: {
+  diagnosisText: {
     ...Typography.body,
-    fontStyle: "italic",
-  },
-  actions: {
-    marginTop: Spacing.md,
-  },
-  actionBtn: {
-    marginTop: Spacing.sm,
-  },
-  debugTrigger: {
-    paddingVertical: Spacing.lg,
-    alignItems: "center",
-  },
-  debugText: {
-    ...Typography.caption2,
+    flex: 1,
   },
 });

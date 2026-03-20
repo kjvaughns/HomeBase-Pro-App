@@ -8,6 +8,7 @@ import {
   Pressable,
   ActivityIndicator,
   Switch,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -15,6 +16,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -24,105 +26,46 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
 
 type PricingType = "fixed" | "variable" | "service_call" | "quote";
 
-interface Service {
+interface ProviderService {
   id: string;
+  providerId: string;
   name: string;
   category: string;
-  description: string;
+  description: string | null;
   pricingType: PricingType;
-  basePrice?: number;
-  priceFrom?: number;
-  priceTo?: number;
-  duration: number;
+  basePrice: string | null;
+  priceFrom: string | null;
+  priceTo: string | null;
+  duration: number | null;
   isPublished: boolean;
 }
 
-const MOCK_SERVICES: Service[] = [
-  {
-    id: "1",
-    name: "Standard Clean",
-    category: "Cleaning",
-    description: "Basic cleaning service for homes up to 2000 sq ft",
-    pricingType: "fixed",
-    basePrice: 120,
-    duration: 120,
-    isPublished: true,
-  },
-  {
-    id: "2",
-    name: "Deep Clean",
-    category: "Cleaning",
-    description: "Thorough deep cleaning including appliances and windows",
-    pricingType: "variable",
-    priceFrom: 180,
-    priceTo: 350,
-    duration: 240,
-    isPublished: true,
-  },
-  {
-    id: "3",
-    name: "Gutter Repair",
-    category: "Handyman",
-    description: "Repair and maintenance of gutters and downspouts",
-    pricingType: "quote",
-    duration: 60,
-    isPublished: false,
-  },
-  {
-    id: "4",
-    name: "AC Service",
-    category: "HVAC",
-    description: "Regular AC maintenance and filter replacement",
-    pricingType: "service_call",
-    basePrice: 85,
-    duration: 60,
-    isPublished: true,
-  },
-  {
-    id: "5",
-    name: "Pipe Repair",
-    category: "Plumbing",
-    description: "Fix leaky pipes and minor plumbing issues",
-    pricingType: "service_call",
-    basePrice: 95,
-    duration: 90,
-    isPublished: true,
-  },
-];
-
-const CATEGORIES = ["All", "Cleaning", "HVAC", "Handyman", "Plumbing"];
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 function getPricingLabel(type: PricingType): string {
   switch (type) {
-    case "fixed":
-      return "FIXED";
-    case "variable":
-      return "VARIABLE";
-    case "service_call":
-      return "SERVICE CALL";
-    case "quote":
-      return "QUOTE";
+    case "fixed": return "FIXED";
+    case "variable": return "VARIABLE";
+    case "service_call": return "SERVICE CALL";
+    case "quote": return "QUOTE";
   }
 }
 
-function getPriceDisplay(service: Service): string {
+function getPriceDisplay(service: ProviderService): string {
   switch (service.pricingType) {
-    case "fixed":
-      return `$${service.basePrice}`;
-    case "variable":
-      return `$${service.priceFrom} - $${service.priceTo}`;
-    case "service_call":
-      return `$${service.basePrice} + hourly`;
-    case "quote":
-      return "Ask for Price";
+    case "fixed": return service.basePrice ? `$${parseFloat(service.basePrice).toFixed(0)}` : "TBD";
+    case "variable": return (service.priceFrom && service.priceTo) ? `$${parseFloat(service.priceFrom).toFixed(0)} - $${parseFloat(service.priceTo).toFixed(0)}` : "Variable";
+    case "service_call": return service.basePrice ? `$${parseFloat(service.basePrice).toFixed(0)} + hourly` : "Call for price";
+    case "quote": return "Ask for Price";
   }
 }
 
 interface ServiceCardProps {
-  service: Service;
+  service: ProviderService;
   onPress: () => void;
   onTogglePublish: (published: boolean) => void;
 }
@@ -159,12 +102,7 @@ function ServiceCard({ service, onPress, onTogglePublish }: ServiceCardProps) {
           />
         </View>
         <View style={styles.serviceFooter}>
-          <View
-            style={[
-              styles.pricingBadge,
-              { backgroundColor: theme.backgroundElevated },
-            ]}
-          >
+          <View style={[styles.pricingBadge, { backgroundColor: theme.backgroundElevated }]}>
             <ThemedText style={[styles.pricingLabel, { color: theme.textSecondary }]}>
               {getPricingLabel(service.pricingType)}
             </ThemedText>
@@ -180,54 +118,68 @@ function ServiceCard({ service, onPress, onTogglePublish }: ServiceCardProps) {
 
 export default function ServicesScreen() {
   const insets = useSafeAreaInsets();
-  const { theme, isDark } = useTheme();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { theme } = useTheme();
+  const navigation = useNavigation<NavigationProp>();
   const { providerProfile } = useAuthStore();
+  const queryClient = useQueryClient();
+  const providerId = providerProfile?.id;
 
-  const [services, setServices] = useState<Service[]>(MOCK_SERVICES);
-  const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
 
+  const { data, isLoading, isRefetching, refetch } = useQuery<{ services: ProviderService[] }>({
+    queryKey: ["/api/provider", providerId, "custom-services"],
+    enabled: !!providerId,
+  });
+
+  const services = data?.services || [];
+
+  const categories = useMemo(() => {
+    const cats = [...new Set(services.map((s) => s.category))];
+    return ["All", ...cats];
+  }, [services]);
+
   const filteredServices = useMemo(() => {
     let result = [...services];
-
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
       result = result.filter(
         (s) =>
           s.name.toLowerCase().includes(query) ||
           s.category.toLowerCase().includes(query) ||
-          s.description.toLowerCase().includes(query)
+          (s.description || "").toLowerCase().includes(query)
       );
     }
-
     if (selectedCategory !== "All") {
       result = result.filter((s) => s.category === selectedCategory);
     }
-
     return result;
   }, [services, searchQuery, selectedCategory]);
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setRefreshing(false);
-  };
+  const togglePublishMutation = useMutation({
+    mutationFn: async ({ id, isPublished }: { id: string; isPublished: boolean }) => {
+      const url = new URL(`/api/provider/${providerId}/custom-services/${id}`, getApiUrl());
+      return apiRequest("PUT", url.toString(), { isPublished });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "custom-services"] });
+    },
+    onError: () => {
+      Alert.alert("Error", "Failed to update service");
+    },
+  });
 
-  const handleServicePress = (service: Service) => {
-    navigation.navigate("EditService" as any, { serviceId: service.id });
+  const handleServicePress = (service: ProviderService) => {
+    navigation.navigate("EditService", { serviceId: service.id, service: service as unknown as Record<string, unknown> });
   };
 
   const handleAddService = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    navigation.navigate("NewService" as any);
+    navigation.navigate("NewService");
   };
 
   const handleTogglePublish = (serviceId: string, published: boolean) => {
-    setServices((prev) =>
-      prev.map((s) => (s.id === serviceId ? { ...s, isPublished: published } : s))
-    );
+    togglePublishMutation.mutate({ id: serviceId, isPublished: published });
   };
 
   const handleCategoryPress = (category: string) => {
@@ -242,6 +194,7 @@ export default function ServicesScreen() {
         <Pressable
           style={[styles.addButton, { backgroundColor: Colors.accent }]}
           onPress={handleAddService}
+          testID="button-add-service"
         >
           <Feather name="plus" size={22} color="white" />
         </Pressable>
@@ -263,42 +216,36 @@ export default function ServicesScreen() {
         ) : null}
       </View>
 
-      <View style={styles.categoriesRow}>
-        {CATEGORIES.map((category) => (
-          <Pressable
-            key={category}
-            onPress={() => handleCategoryPress(category)}
-            style={[
-              styles.categoryChip,
-              {
-                backgroundColor:
-                  selectedCategory === category
-                    ? Colors.accent
-                    : theme.cardBackground,
-                borderColor:
-                  selectedCategory === category
-                    ? Colors.accent
-                    : theme.borderLight,
-              },
-            ]}
-          >
-            <ThemedText
+      {categories.length > 1 ? (
+        <View style={styles.categoriesRow}>
+          {categories.map((category) => (
+            <Pressable
+              key={category}
+              onPress={() => handleCategoryPress(category)}
               style={[
-                styles.categoryText,
+                styles.categoryChip,
                 {
-                  color: selectedCategory === category ? "#fff" : theme.text,
+                  backgroundColor: selectedCategory === category ? Colors.accent : theme.cardBackground,
+                  borderColor: selectedCategory === category ? Colors.accent : theme.borderLight,
                 },
               ]}
             >
-              {category}
-            </ThemedText>
-          </Pressable>
-        ))}
-      </View>
+              <ThemedText
+                style={[
+                  styles.categoryText,
+                  { color: selectedCategory === category ? "#fff" : theme.text },
+                ]}
+              >
+                {category}
+              </ThemedText>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 
-  const renderService = ({ item, index }: { item: Service; index: number }) => (
+  const renderService = ({ item, index }: { item: ProviderService; index: number }) => (
     <Animated.View entering={FadeInDown.delay(index * 50).duration(300)}>
       <ServiceCard
         service={item}
@@ -309,14 +256,13 @@ export default function ServicesScreen() {
   );
 
   const renderEmpty = () => {
-    if (refreshing) {
+    if (isLoading || isRefetching) {
       return (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.accent} />
         </View>
       );
     }
-
     return (
       <EmptyState
         image={require("../../../assets/images/empty-leads.png")}
@@ -345,8 +291,8 @@ export default function ServicesScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
+            refreshing={isRefetching}
+            onRefresh={refetch}
             tintColor={Colors.accent}
           />
         }
@@ -356,9 +302,7 @@ export default function ServicesScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   headerContainer: {
     paddingHorizontal: Spacing.screenPadding,
     marginBottom: Spacing.md,
@@ -425,13 +369,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: Spacing.md,
   },
-  serviceInfo: {
-    flex: 1,
-  },
-  serviceName: {
-    fontWeight: "600",
-    marginBottom: 2,
-  },
+  serviceInfo: { flex: 1 },
+  serviceName: { fontWeight: "600", marginBottom: 2 },
   serviceFooter: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -447,9 +386,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     letterSpacing: 0.5,
   },
-  priceText: {
-    fontWeight: "600",
-  },
+  priceText: { fontWeight: "600" },
   emptyContainer: {
     flexGrow: 1,
     justifyContent: "center",

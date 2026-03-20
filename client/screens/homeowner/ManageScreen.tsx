@@ -89,7 +89,7 @@ export default function ManageScreen() {
       return;
     }
     try {
-      const response = await fetch(new URL(`/api/appointments/${user.id}`, getApiUrl()).href);
+      const response = await fetch(new URL(`/api/users/${user.id}/appointments`, getApiUrl()).href);
       const data = await response.json();
       setAppointments(data.appointments || []);
     } catch (error) {

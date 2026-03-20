@@ -3,6 +3,7 @@ import { StyleSheet, View, ScrollView, Pressable, Linking, Alert, ActivityIndica
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, RouteProp, useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -15,15 +16,83 @@ import { StatusPill } from "@/components/StatusPill";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
-import { useProviderStore, Client, ClientActivity, ClientNote, Job, Invoice } from "@/state/providerStore";
+import { getApiUrl } from "@/lib/query-client";
 import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type TabType = "overview" | "jobs" | "invoices" | "notes" | "home";
 
+interface ClientRecord {
+  id: string;
+  providerId: string;
+  firstName: string;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  // Computed/extended fields (may not be present in base API response)
+  status?: string;
+  ltv?: number;
+  jobCount?: number;
+  avgTicket?: number;
+  outstandingBalance?: number;
+  nextAppointment?: string | null;
+  clientSince?: string | null;
+  avatar?: string | null;
+  home?: HomeDetailRecord | null;
+}
+
+interface HomeDetailRecord {
+  lastUpdatedByHomeowner?: string | null;
+  beds?: number | null;
+  baths?: number | null;
+  sqft?: number | null;
+  yearBuilt?: number | null;
+  healthScore?: number | null;
+  healthScoreDate?: string | null;
+  survivalKitEstimate?: { min: number; max: number } | null;
+  notableRisks?: string[] | null;
+  accessNotes?: string | null;
+  pets?: string | null;
+  parking?: string | null;
+  gateCode?: string | null;
+  preferredWindows?: string[] | null;
+}
+
+interface JobRecord {
+  id: string;
+  title: string;
+  service?: string | null;
+  status: string;
+  scheduledDate: string;
+  date?: string | null;
+  scheduledTime?: string | null;
+  time?: string | null;
+  estimatedPrice: string | null;
+  finalPrice: string | null;
+  description: string | null;
+}
+
+interface InvoiceRecord {
+  id: string;
+  invoiceNumber: string | null;
+  status: string;
+  totalAmount: string;
+  total?: string | null;
+  amount?: string | null;
+  dueDate: string | null;
+  paidAt: string | null;
+  createdAt: string;
+}
+
 // Helper to get client name from either name field or firstName/lastName
-function getClientName(client: any): string {
-  if (client.name) return client.name;
+function getClientName(client: ClientRecord): string {
   const parts = [client.firstName, client.lastName].filter(Boolean);
   return parts.join(" ") || "Unknown";
 }
@@ -134,35 +203,29 @@ export default function ClientDetailScreen() {
   const headerHeight = useHeaderHeight();
   const { theme } = useTheme();
   const route = useRoute<RouteProp<RootStackParamList, "ClientDetail">>();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { clientId } = route.params;
 
-  const providerProfile = useAuthStore((s) => s.providerProfile);
-  const providerId = providerProfile?.id;
-
-  // Fetch clients from API
-  const { data: clientsData, isLoading } = useQuery<{ clients: Client[] }>({
-    queryKey: ["/api/provider", providerId, "clients"],
-    enabled: !!providerId,
+  const { data: clientDetailData, isLoading } = useQuery<{
+    client: ClientRecord;
+    jobs: JobRecord[];
+    invoices: InvoiceRecord[];
+  }>({
+    queryKey: ["/api/clients", clientId],
+    enabled: !!clientId,
+    queryFn: async () => {
+      const url = new URL(`/api/clients/${clientId}`, getApiUrl());
+      const res = await fetch(url.toString());
+      if (!res.ok) throw new Error("Failed to load client");
+      return res.json();
+    },
   });
 
-  const clients = clientsData?.clients || [];
-
-  // Keep Zustand methods for activities, notes, jobs, invoices (these may still use local data)
-  const getClientActivities = useProviderStore((s) => s.getClientActivities);
-  const getClientNotes = useProviderStore((s) => s.getClientNotes);
-  const getClientJobHistory = useProviderStore((s) => s.getClientJobHistory);
-  const getClientInvoices = useProviderStore((s) => s.getClientInvoices);
-
-  const client = useMemo(
-    () => clients.find((c) => c.id === clientId),
-    [clients, clientId]
-  );
-
-  const activities = useMemo(() => getClientActivities(clientId), [getClientActivities, clientId]);
-  const notes = useMemo(() => getClientNotes(clientId), [getClientNotes, clientId]);
-  const jobs = useMemo(() => getClientJobHistory(clientId), [getClientJobHistory, clientId]);
-  const invoices = useMemo(() => getClientInvoices(clientId), [getClientInvoices, clientId]);
+  const client: ClientRecord | null = clientDetailData?.client || null;
+  const jobs: JobRecord[] = clientDetailData?.jobs || [];
+  const invoices: InvoiceRecord[] = clientDetailData?.invoices || [];
+  const activities: { id: string; description: string; timestamp: string }[] = [];
+  const notes: { id: string; content: string; createdAt: string; isInternal?: boolean; createdBy?: string }[] = [];
 
   const [activeTab, setActiveTab] = useState<TabType>("overview");
 
@@ -196,12 +259,12 @@ export default function ClientDetailScreen() {
 
   const handleNewJob = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    (navigation as any).navigate("AddJob", { clientId: client.id });
+    navigation.navigate("AddJob", { clientId: client.id });
   };
 
   const handleSendInvoice = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    (navigation as any).navigate("AddInvoice", { clientId: client.id });
+    navigation.navigate("AddInvoice", { clientId: client.id });
   };
 
   const clientStatus = client.status || "active";
@@ -295,36 +358,40 @@ export default function ClientDetailScreen() {
         Job History ({jobs.length})
       </ThemedText>
       {jobs.length > 0 ? (
-        jobs.map((job) => (
-          <Pressable
-            key={job.id}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              (navigation as any).navigate("ProviderJobDetail", { jobId: job.id });
-            }}
-          >
-            <GlassCard style={styles.jobCard}>
-              <View style={styles.jobHeader}>
-                <ThemedText type="body" style={{ fontWeight: "600" }}>
-                  {job.service}
+        jobs.map((job: JobRecord) => {
+          const price = job.finalPrice || job.estimatedPrice;
+          return (
+            <Pressable
+              key={job.id}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                navigation.navigate("ProviderJobDetail", { jobId: job.id });
+              }}
+            >
+              <GlassCard style={styles.jobCard}>
+                <View style={styles.jobHeader}>
+                  <ThemedText type="body" style={{ fontWeight: "600" }}>
+                    {job.title || job.service || "Job"}
+                  </ThemedText>
+                  <StatusPill
+                    status={job.status === "completed" ? "completed" : job.status === "scheduled" ? "scheduled" : "pending"}
+                    label={job.status === "completed" ? "Completed" : job.status === "scheduled" ? "Scheduled" : "Pending"}
+                  />
+                </View>
+                <ThemedText type="caption" style={{ color: theme.textSecondary, marginTop: 4 }}>
+                  {job.scheduledDate || job.date ? formatDate((job.scheduledDate || job.date) as string) : ""}
+                  {(job.scheduledTime || job.time) ? ` at ${job.scheduledTime || job.time}` : ""}
                 </ThemedText>
-                <StatusPill
-                  status={job.status === "completed" ? "completed" : job.status === "scheduled" ? "scheduled" : "pending"}
-                  label={job.status === "completed" ? "Completed" : job.status === "scheduled" ? "Scheduled" : "Pending"}
-                />
-              </View>
-              <ThemedText type="caption" style={{ color: theme.textSecondary, marginTop: 4 }}>
-                {formatDate(job.date)} at {job.time}
-              </ThemedText>
-              <View style={styles.jobFooter}>
-                <ThemedText type="body" style={{ color: Colors.accent }}>
-                  {formatCurrency(job.price)}
-                </ThemedText>
-                <Feather name="chevron-right" size={16} color={theme.textSecondary} />
-              </View>
-            </GlassCard>
-          </Pressable>
-        ))
+                <View style={styles.jobFooter}>
+                  <ThemedText type="body" style={{ color: Colors.accent }}>
+                    {price ? formatCurrency(parseFloat(price)) : "TBD"}
+                  </ThemedText>
+                  <Feather name="chevron-right" size={16} color={theme.textSecondary} />
+                </View>
+              </GlassCard>
+            </Pressable>
+          );
+        })
       ) : (
         <ThemedText type="body" style={{ color: theme.textSecondary }}>
           No jobs recorded
@@ -339,34 +406,40 @@ export default function ClientDetailScreen() {
         Invoices ({invoices.length})
       </ThemedText>
       {invoices.length > 0 ? (
-        invoices.map((invoice) => (
-          <GlassCard key={invoice.id} style={styles.invoiceCard}>
-            <View style={styles.invoiceHeader}>
-              <ThemedText type="body" style={{ fontWeight: "600" }}>
-                {invoice.service}
-              </ThemedText>
-              <View style={[
-                styles.invoiceStatus,
-                { backgroundColor: invoice.status === "paid" ? Colors.accent + "20" : "#EF4444" + "20" }
-              ]}>
-                <ThemedText
-                  type="caption"
-                  style={{ color: invoice.status === "paid" ? Colors.accent : "#EF4444", fontWeight: "600" }}
-                >
-                  {invoice.status.toUpperCase()}
+        invoices.map((invoice: InvoiceRecord) => {
+          const isPaid = invoice.status === "paid";
+          const total = invoice.total || invoice.amount;
+          return (
+            <GlassCard key={invoice.id} style={styles.invoiceCard}>
+              <View style={styles.invoiceHeader}>
+                <ThemedText type="body" style={{ fontWeight: "600" }}>
+                  {invoice.invoiceNumber || `Invoice #${invoice.id?.slice(-6) || ""}`}
                 </ThemedText>
+                <View style={[
+                  styles.invoiceStatus,
+                  { backgroundColor: isPaid ? Colors.accent + "20" : "#EF4444" + "20" }
+                ]}>
+                  <ThemedText
+                    type="caption"
+                    style={{ color: isPaid ? Colors.accent : "#EF4444", fontWeight: "600" }}
+                  >
+                    {(invoice.status || "draft").toUpperCase()}
+                  </ThemedText>
+                </View>
               </View>
-            </View>
-            <View style={styles.invoiceDetails}>
-              <ThemedText type="body" style={{ color: Colors.accent }}>
-                {formatCurrency(invoice.amount)}
-              </ThemedText>
-              <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-                Due: {formatDate(invoice.dueDate)}
-              </ThemedText>
-            </View>
-          </GlassCard>
-        ))
+              <View style={styles.invoiceDetails}>
+                <ThemedText type="body" style={{ color: Colors.accent }}>
+                  {total ? formatCurrency(parseFloat(total)) : "TBD"}
+                </ThemedText>
+                {invoice.dueDate ? (
+                  <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+                    Due: {formatDate(invoice.dueDate)}
+                  </ThemedText>
+                ) : null}
+              </View>
+            </GlassCard>
+          );
+        })
       ) : (
         <ThemedText type="body" style={{ color: theme.textSecondary }}>
           No invoices recorded
@@ -473,7 +546,7 @@ export default function ClientDetailScreen() {
               <ThemedText type="caption" style={{ color: theme.textSecondary }}>Baths</ThemedText>
             </View>
             <View style={styles.propertyItem}>
-              <ThemedText type="h3">{home.sqft.toLocaleString()}</ThemedText>
+              <ThemedText type="h3">{home.sqft != null ? home.sqft.toLocaleString() : "—"}</ThemedText>
               <ThemedText type="caption" style={{ color: theme.textSecondary }}>Sq Ft</ThemedText>
             </View>
             <View style={styles.propertyItem}>
@@ -499,7 +572,7 @@ export default function ClientDetailScreen() {
               <ThemedText
                 type="h1"
                 style={{
-                  color: home.healthScore >= 80 ? Colors.accent : home.healthScore >= 60 ? "#F59E0B" : "#EF4444",
+                  color: (home.healthScore ?? 0) >= 80 ? Colors.accent : (home.healthScore ?? 0) >= 60 ? "#F59E0B" : "#EF4444",
                 }}
               >
                 {home.healthScore}
@@ -525,7 +598,7 @@ export default function ClientDetailScreen() {
             <ThemedText type="label" style={{ color: theme.textSecondary, marginBottom: Spacing.sm }}>
               NOTABLE RISKS
             </ThemedText>
-            {home.notableRisks.map((risk, index) => (
+            {home.notableRisks.map((risk: string, index: number) => (
               <View key={index} style={styles.riskRow}>
                 <Feather name="alert-triangle" size={14} color="#F59E0B" />
                 <ThemedText type="body" style={{ marginLeft: Spacing.sm }}>
@@ -588,7 +661,7 @@ export default function ClientDetailScreen() {
               PREFERRED APPOINTMENT WINDOWS
             </ThemedText>
             <View style={styles.windowsRow}>
-              {home.preferredWindows.map((window, index) => (
+              {home.preferredWindows.map((window: string, index: number) => (
                 <View key={index} style={[styles.windowChip, { backgroundColor: Colors.accent + "20" }]}>
                   <ThemedText type="caption" style={{ color: Colors.accent }}>
                     {window}

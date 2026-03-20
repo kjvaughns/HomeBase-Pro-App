@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
@@ -16,6 +17,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type ViewMode = "list" | "day" | "week" | "month";
 type DateRangePreset = "today" | "week" | "month" | "custom";
@@ -671,7 +673,7 @@ export default function ScheduleScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useFloatingTabBarHeight();
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { theme } = useTheme();
   const { providerProfile } = useAuthStore();
 
@@ -827,11 +829,11 @@ export default function ScheduleScreen() {
   }, []);
 
   const handleJobPress = (job: FormattedJob) => {
-    navigation.navigate("ProviderJobDetail" as any, { jobId: job.id });
+    navigation.navigate("ProviderJobDetail", { jobId: job.id });
   };
 
   const handleAddJob = () => {
-    navigation.navigate("AddJob" as any);
+    navigation.navigate("AddJob");
   };
 
   const renderListView = () => {

@@ -1,11 +1,13 @@
-import React, { useState, useMemo } from "react";
-import { StyleSheet, View, ScrollView, Pressable } from "react-native";
+import React, { useState } from "react";
+import { StyleSheet, View, ScrollView, ActivityIndicator, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, useNavigation, RouteProp, CommonActions } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as WebBrowser from "expo-web-browser";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -13,12 +15,26 @@ import { GlassCard } from "@/components/GlassCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
-import { useHomeownerStore } from "@/state/homeownerStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
-import { PaymentMethod } from "@/state/types";
+import { getApiUrl, apiRequest } from "@/lib/query-client";
 
 type ScreenRouteProp = RouteProp<RootStackParamList, "Payment">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+interface InvoiceRecord {
+  id: string;
+  invoiceNumber: string;
+  jobId?: string | null;
+  status: string;
+  amount: string;
+  total: string;
+  subtotalCents: number;
+  totalCents: number;
+  notes?: string | null;
+  dueDate?: string | null;
+  hostedInvoiceUrl?: string | null;
+  stripeCheckoutSessionId?: string | null;
+}
 
 export default function PaymentScreen() {
   const insets = useSafeAreaInsets();
@@ -26,113 +42,96 @@ export default function PaymentScreen() {
   const route = useRoute<ScreenRouteProp>();
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
+  const queryClient = useQueryClient();
   const { jobId, invoiceId } = route.params;
 
-  const invoices = useHomeownerStore((s) => s.invoices);
-  const profile = useHomeownerStore((s) => s.profile);
-  const payInvoice = useHomeownerStore((s) => s.payInvoice);
-  
-  const invoice = useMemo(() => invoices.find((i) => i.id === invoiceId), [invoices, invoiceId]);
-
-  const paymentMethods = profile?.paymentMethods || [];
-  const defaultMethod = paymentMethods.find((m) => m.isDefault);
-
-  const [selectedMethodId, setSelectedMethodId] = useState<string | null>(
-    defaultMethod?.id || paymentMethods[0]?.id || null
-  );
   const [isProcessing, setIsProcessing] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
-  if (!invoice) {
-    return (
-      <ThemedView style={styles.container}>
-        <ThemedText>Invoice not found</ThemedText>
-      </ThemedView>
-    );
-  }
+  const { data, isLoading, isError, refetch } = useQuery<{ invoice: InvoiceRecord; payments: unknown[] }>({
+    queryKey: ["/api/invoices", invoiceId],
+    queryFn: async () => {
+      const url = new URL(`/api/invoices/${invoiceId}`, getApiUrl());
+      const res = await fetch(url.toString());
+      if (!res.ok) throw new Error("Failed to fetch invoice");
+      return res.json();
+    },
+    enabled: !!invoiceId,
+  });
 
   const handlePayment = async () => {
-    if (!selectedMethodId) return;
-
     setIsProcessing(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    setPaymentError(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      payInvoice(invoiceId, selectedMethodId);
+      // Create a Stripe Checkout session for this invoice
+      const res = await apiRequest("POST", `/api/invoices/${invoiceId}/checkout`, {});
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({ error: "Payment setup failed" }));
+        throw new Error(errBody.error || "Failed to start payment");
+      }
+      const { checkoutUrl } = await res.json();
+
+      if (!checkoutUrl) {
+        throw new Error("No checkout URL received from server");
+      }
+
+      // Open Stripe hosted checkout in the browser
+      const result = await WebBrowser.openBrowserAsync(checkoutUrl);
+
+      // After browser closes, refresh invoice status
+      await refetch();
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      navigation.dispatch(
-        CommonActions.reset({
-          index: 1,
-          routes: [
-            { name: "Main" },
-            { name: "JobDetail", params: { jobId } },
-          ],
-        })
-      );
-    } catch (error) {
+      if (result.type === "opened" || result.type === "cancel" || result.type === "dismiss") {
+        // Navigate back — invoice status will reflect payment if completed via Stripe
+        navigation.dispatch(
+          CommonActions.reset({
+            index: 1,
+            routes: [
+              { name: "Main" },
+              { name: "JobDetail", params: { jobId } },
+            ],
+          })
+        );
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Payment failed";
+      setPaymentError(message);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const getMethodIcon = (type: PaymentMethod["type"]): keyof typeof Feather.glyphMap => {
-    switch (type) {
-      case "card":
-        return "credit-card";
-      case "bank":
-        return "briefcase";
-      case "apple_pay":
-        return "smartphone";
-      default:
-        return "credit-card";
-    }
-  };
-
-  const renderPaymentMethod = (method: PaymentMethod) => {
-    const isSelected = selectedMethodId === method.id;
+  if (isLoading) {
     return (
-      <Pressable
-        key={method.id}
-        onPress={() => {
-          Haptics.selectionAsync();
-          setSelectedMethodId(method.id);
-        }}
-        style={[
-          styles.methodCard,
-          {
-            backgroundColor: isSelected ? Colors.accentLight : theme.cardBackground,
-            borderColor: isSelected ? Colors.accent : theme.borderLight,
-          },
-        ]}
-      >
-        <View
-          style={[
-            styles.radioOuter,
-            { borderColor: isSelected ? Colors.accent : theme.borderLight },
-          ]}
-        >
-          {isSelected && <View style={styles.radioInner} />}
-        </View>
-        <View style={[styles.methodIcon, { backgroundColor: isSelected ? "#fff" : theme.borderLight }]}>
-          <Feather name={getMethodIcon(method.type)} size={20} color={isSelected ? Colors.accent : theme.textSecondary} />
-        </View>
-        <View style={styles.methodInfo}>
-          <ThemedText style={styles.methodLabel}>{method.label}</ThemedText>
-          <ThemedText style={[styles.methodLast4, { color: theme.textSecondary }]}>
-            {method.type === "apple_pay" ? "Apple Pay" : `ending in ${method.last4}`}
-          </ThemedText>
-        </View>
-        {method.isDefault && (
-          <View style={[styles.defaultBadge, { backgroundColor: Colors.accentLight }]}>
-            <ThemedText style={styles.defaultBadgeText}>Default</ThemedText>
-          </View>
-        )}
-      </Pressable>
+      <ThemedView style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color={Colors.accent} />
+      </ThemedView>
     );
-  };
+  }
+
+  if (isError || !data?.invoice) {
+    return (
+      <ThemedView style={[styles.container, styles.centered]}>
+        <Feather name="alert-circle" size={40} color={theme.textTertiary} />
+        <ThemedText style={[styles.errorText, { color: theme.textSecondary }]}>
+          Invoice not found
+        </ThemedText>
+        <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <ThemedText style={{ color: Colors.accent }}>Go back</ThemedText>
+        </Pressable>
+      </ThemedView>
+    );
+  }
+
+  const invoice = data.invoice;
+  const totalAmount = invoice.total || invoice.amount || "0.00";
+  const isPaid = invoice.status === "paid";
 
   return (
     <ThemedView style={styles.container}>
@@ -145,72 +144,88 @@ export default function PaymentScreen() {
         showsVerticalScrollIndicator={false}
       >
         <GlassCard style={styles.invoiceCard}>
-          <ThemedText style={styles.invoiceTitle}>Invoice Summary</ThemedText>
-
-          {invoice.items.map((item, index) => (
-            <View key={index} style={styles.lineItem}>
-              <ThemedText style={[styles.lineItemDesc, { color: theme.textSecondary }]}>
-                {item.description}
+          <View style={styles.invoiceHeader}>
+            <ThemedText style={styles.invoiceTitle}>Invoice Summary</ThemedText>
+            <View style={[styles.statusBadge, { backgroundColor: isPaid ? "#D1FAE5" : Colors.accentLight }]}>
+              <ThemedText style={[styles.statusText, { color: isPaid ? "#065F46" : Colors.accent }]}>
+                {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
               </ThemedText>
-              <ThemedText style={styles.lineItemAmount}>${item.total}</ThemedText>
             </View>
-          ))}
-
-          <View style={styles.lineItem}>
-            <ThemedText style={[styles.lineItemDesc, { color: theme.textSecondary }]}>
-              Labor ({invoice.laborHours} hrs @ ${invoice.laborRate}/hr)
-            </ThemedText>
-            <ThemedText style={styles.lineItemAmount}>${invoice.laborTotal}</ThemedText>
           </View>
+
+          <View style={styles.invoiceNumber}>
+            <ThemedText style={[styles.invoiceNumLabel, { color: theme.textSecondary }]}>
+              Invoice
+            </ThemedText>
+            <ThemedText style={styles.invoiceNumValue}>{invoice.invoiceNumber}</ThemedText>
+          </View>
+
+          {invoice.dueDate ? (
+            <View style={styles.dueDateRow}>
+              <Feather name="calendar" size={14} color={theme.textSecondary} />
+              <ThemedText style={[styles.dueDateText, { color: theme.textSecondary }]}>
+                Due {new Date(invoice.dueDate).toLocaleDateString()}
+              </ThemedText>
+            </View>
+          ) : null}
 
           <View style={[styles.divider, { backgroundColor: theme.borderLight }]} />
 
+          {invoice.notes ? (
+            <View style={styles.notesRow}>
+              <ThemedText style={[styles.notesLabel, { color: theme.textSecondary }]}>Notes</ThemedText>
+              <ThemedText style={styles.notesText}>{invoice.notes}</ThemedText>
+              <View style={[styles.divider, { backgroundColor: theme.borderLight }]} />
+            </View>
+          ) : null}
+
           <View style={styles.totalRow}>
             <ThemedText style={styles.totalLabel}>Total Due</ThemedText>
-            <ThemedText style={styles.totalAmount}>${invoice.total}</ThemedText>
+            <ThemedText style={styles.totalAmount}>${parseFloat(totalAmount).toFixed(2)}</ThemedText>
           </View>
         </GlassCard>
 
-        <ThemedText style={styles.sectionTitle}>Payment Method</ThemedText>
-
-        {paymentMethods.length > 0 ? (
-          <View style={styles.methodsList}>
-            {paymentMethods.map(renderPaymentMethod)}
-          </View>
+        {isPaid ? (
+          <GlassCard style={styles.paidCard}>
+            <View style={styles.paidRow}>
+              <Feather name="check-circle" size={24} color="#065F46" />
+              <ThemedText style={styles.paidText}>This invoice has been paid</ThemedText>
+            </View>
+          </GlassCard>
         ) : (
-          <View style={styles.emptyMethods}>
-            <Feather name="credit-card" size={32} color={theme.textTertiary} />
-            <ThemedText style={[styles.emptyText, { color: theme.textSecondary }]}>
-              No payment methods saved
+          <View style={styles.infoBox}>
+            <Feather name="lock" size={16} color={theme.textSecondary} />
+            <ThemedText style={[styles.infoText, { color: theme.textSecondary }]}>
+              Secure payment powered by Stripe. You will be directed to a hosted checkout page to complete payment.
             </ThemedText>
           </View>
         )}
 
-        <Pressable
-          onPress={() => navigation.navigate("PaymentMethods")}
-          style={[styles.addMethodBtn, { borderColor: theme.borderLight }]}
-        >
-          <Feather name="plus" size={20} color={Colors.accent} />
-          <ThemedText style={[styles.addMethodText, { color: Colors.accent }]}>
-            Add Payment Method
-          </ThemedText>
-        </Pressable>
+        {paymentError ? (
+          <View style={[styles.errorBox, { borderColor: "#EF4444" }]}>
+            <Feather name="alert-circle" size={16} color="#EF4444" />
+            <ThemedText style={styles.errorBoxText}>{paymentError}</ThemedText>
+          </View>
+        ) : null}
       </ScrollView>
 
-      <View
-        style={[
-          styles.bottomBar,
-          { backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.md },
-        ]}
-      >
-        <PrimaryButton
-          onPress={handlePayment}
-          disabled={!selectedMethodId || isProcessing}
-          loading={isProcessing}
+      {!isPaid ? (
+        <View
+          style={[
+            styles.bottomBar,
+            { backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.md },
+          ]}
         >
-          {`Pay $${invoice.total}`}
-        </PrimaryButton>
-      </View>
+          <PrimaryButton
+            onPress={handlePayment}
+            disabled={isProcessing}
+            loading={isProcessing}
+            testID="button-pay-invoice"
+          >
+            {`Pay $${parseFloat(totalAmount).toFixed(2)} via Stripe`}
+          </PrimaryButton>
+        </View>
+      ) : null}
     </ThemedView>
   );
 }
@@ -219,29 +234,75 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  centered: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  errorText: {
+    ...Typography.subhead,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  backBtn: {
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+  },
   invoiceCard: {
     marginBottom: Spacing.lg,
   },
-  invoiceTitle: {
-    ...Typography.headline,
-    marginBottom: Spacing.md,
-  },
-  lineItem: {
+  invoiceHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingVertical: Spacing.xs,
+    alignItems: "center",
+    marginBottom: Spacing.md,
   },
-  lineItemDesc: {
-    ...Typography.body,
-    flex: 1,
+  invoiceTitle: {
+    ...Typography.headline,
   },
-  lineItemAmount: {
+  statusBadge: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.sm,
+  },
+  statusText: {
+    ...Typography.caption1,
+    fontWeight: "600",
+  },
+  invoiceNumber: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: Spacing.xs,
+  },
+  invoiceNumLabel: {
     ...Typography.body,
-    fontWeight: "500",
+  },
+  invoiceNumValue: {
+    ...Typography.body,
+    fontWeight: "600",
+  },
+  dueDateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    marginBottom: Spacing.md,
+  },
+  dueDateText: {
+    ...Typography.caption1,
   },
   divider: {
     height: 1,
     marginVertical: Spacing.md,
+  },
+  notesRow: {
+    marginBottom: 0,
+  },
+  notesLabel: {
+    ...Typography.caption1,
+    marginBottom: Spacing.xs,
+  },
+  notesText: {
+    ...Typography.body,
+    marginBottom: Spacing.sm,
   },
   totalRow: {
     flexDirection: "row",
@@ -256,85 +317,43 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: Colors.accent,
   },
-  sectionTitle: {
-    ...Typography.headline,
-    marginBottom: Spacing.md,
+  paidCard: {
+    marginBottom: Spacing.lg,
   },
-  methodsList: {
-    gap: Spacing.sm,
-  },
-  methodCard: {
+  paidRow: {
     flexDirection: "row",
     alignItems: "center",
+    gap: Spacing.sm,
+  },
+  paidText: {
+    ...Typography.subhead,
+    color: "#065F46",
+    fontWeight: "600",
+  },
+  infoBox: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    alignItems: "flex-start",
+    paddingHorizontal: Spacing.xs,
+    marginBottom: Spacing.md,
+  },
+  infoText: {
+    ...Typography.body,
+    flex: 1,
+  },
+  errorBox: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    alignItems: "flex-start",
     padding: Spacing.md,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
+    backgroundColor: "#FEF2F2",
   },
-  radioOuter: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: Spacing.md,
-  },
-  radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.accent,
-  },
-  methodIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: Spacing.md,
-  },
-  methodInfo: {
+  errorBoxText: {
+    ...Typography.body,
+    color: "#EF4444",
     flex: 1,
-  },
-  methodLabel: {
-    ...Typography.subhead,
-    fontWeight: "600",
-  },
-  methodLast4: {
-    ...Typography.caption1,
-  },
-  defaultBadge: {
-    paddingHorizontal: Spacing.xs,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  defaultBadgeText: {
-    ...Typography.caption2,
-    color: Colors.accent,
-    fontWeight: "600",
-  },
-  emptyMethods: {
-    alignItems: "center",
-    paddingVertical: Spacing.xl,
-  },
-  emptyText: {
-    ...Typography.subhead,
-    marginTop: Spacing.sm,
-  },
-  addMethodBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.sm,
-    paddingVertical: Spacing.md,
-    marginTop: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    borderStyle: "dashed",
-  },
-  addMethodText: {
-    ...Typography.subhead,
-    fontWeight: "600",
   },
   bottomBar: {
     position: "absolute",

@@ -69,7 +69,7 @@ export default function HomeScreen() {
   const fetchAppointments = useCallback(async () => {
     if (!user?.id) return;
     try {
-      const response = await fetch(new URL(`/api/appointments/${user.id}`, getApiUrl()).href);
+      const response = await fetch(new URL(`/api/users/${user.id}/appointments`, getApiUrl()).href);
       if (response.ok) {
         const data = await response.json();
         setAppointments(data.appointments || []);

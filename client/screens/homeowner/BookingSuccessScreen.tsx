@@ -1,11 +1,12 @@
-import React, { useEffect, useMemo } from "react";
-import { StyleSheet, View } from "react-native";
+import React, { useEffect } from "react";
+import { StyleSheet, View, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRoute, useNavigation, RouteProp, CommonActions } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeIn, ZoomIn } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { useQuery } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -13,11 +14,21 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { SecondaryButton } from "@/components/SecondaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography } from "@/constants/theme";
-import { useHomeownerStore } from "@/state/homeownerStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { getApiUrl } from "@/lib/query-client";
 
 type ScreenRouteProp = RouteProp<RootStackParamList, "BookingSuccess">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+interface AppointmentRecord {
+  id: string;
+  serviceName: string;
+  scheduledDate: string;
+  scheduledTime: string;
+  status: string;
+  estimatedPrice: string | null;
+  description: string | null;
+}
 
 export default function BookingSuccessScreen() {
   const insets = useSafeAreaInsets();
@@ -26,8 +37,18 @@ export default function BookingSuccessScreen() {
   const { theme } = useTheme();
   const { jobId } = route.params;
 
-  const jobs = useHomeownerStore((s) => s.jobs);
-  const job = useMemo(() => jobs.find((j) => j.id === jobId), [jobs, jobId]);
+  const { data: aptData, isLoading } = useQuery<{ appointment: AppointmentRecord }>({
+    queryKey: ["/api/appointments", jobId],
+    enabled: !!jobId && jobId !== "booking",
+    queryFn: async () => {
+      const url = new URL(`/api/appointments/${jobId}`, getApiUrl());
+      const res = await fetch(url.toString());
+      if (!res.ok) throw new Error("Failed to load appointment");
+      return res.json();
+    },
+  });
+
+  const appointment = aptData?.appointment;
 
   useEffect(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -54,6 +75,12 @@ export default function BookingSuccessScreen() {
     );
   };
 
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "";
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  };
+
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <View style={styles.content}>
@@ -70,59 +97,59 @@ export default function BookingSuccessScreen() {
           </ThemedText>
         </Animated.View>
 
-        {job && (
+        {isLoading ? (
+          <Animated.View entering={FadeIn.delay(500).duration(400)} style={styles.detailsCard}>
+            <ActivityIndicator size="large" color={Colors.accent} />
+          </Animated.View>
+        ) : appointment ? (
           <Animated.View entering={FadeIn.delay(500).duration(400)} style={styles.detailsCard}>
             <View style={[styles.card, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
               <View style={styles.cardRow}>
-                <Feather name="user" size={18} color={theme.textSecondary} />
-                <ThemedText style={styles.cardLabel}>Provider</ThemedText>
-                <ThemedText style={styles.cardValue}>{job.providerName}</ThemedText>
-              </View>
-              <View style={styles.cardRow}>
                 <Feather name="tool" size={18} color={theme.textSecondary} />
                 <ThemedText style={styles.cardLabel}>Service</ThemedText>
-                <ThemedText style={styles.cardValue}>{job.service}</ThemedText>
+                <ThemedText style={styles.cardValue}>{appointment.serviceName}</ThemedText>
               </View>
-              <View style={styles.cardRow}>
-                <Feather name="calendar" size={18} color={theme.textSecondary} />
-                <ThemedText style={styles.cardLabel}>Date</ThemedText>
-                <ThemedText style={styles.cardValue}>{job.scheduledDate}</ThemedText>
-              </View>
-              <View style={styles.cardRow}>
-                <Feather name="clock" size={18} color={theme.textSecondary} />
-                <ThemedText style={styles.cardLabel}>Time</ThemedText>
-                <ThemedText style={styles.cardValue}>{job.scheduledTime}</ThemedText>
+              {appointment.scheduledDate ? (
+                <View style={styles.cardRow}>
+                  <Feather name="calendar" size={18} color={theme.textSecondary} />
+                  <ThemedText style={styles.cardLabel}>Date</ThemedText>
+                  <ThemedText style={styles.cardValue}>{formatDate(appointment.scheduledDate)}</ThemedText>
+                </View>
+              ) : null}
+              {appointment.scheduledTime ? (
+                <View style={styles.cardRow}>
+                  <Feather name="clock" size={18} color={theme.textSecondary} />
+                  <ThemedText style={styles.cardLabel}>Time</ThemedText>
+                  <ThemedText style={styles.cardValue}>{appointment.scheduledTime}</ThemedText>
+                </View>
+              ) : null}
+              <View style={[styles.cardRow, { borderBottomWidth: 0 }]}>
+                <Feather name="info" size={18} color={theme.textSecondary} />
+                <ThemedText style={styles.cardLabel}>Status</ThemedText>
+                <ThemedText style={[styles.cardValue, { color: Colors.accent, textTransform: "capitalize" }]}>
+                  {appointment.status || "Pending"}
+                </ThemedText>
               </View>
             </View>
           </Animated.View>
+        ) : (
+          <Animated.View entering={FadeIn.delay(500).duration(400)} style={styles.detailsCard}>
+            <View style={[styles.card, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
+              <ThemedText style={[styles.cardValue, { textAlign: "center", color: theme.textSecondary }]}>
+                Your appointment has been submitted and is pending confirmation.
+              </ThemedText>
+            </View>
+          </Animated.View>
         )}
-
-        <Animated.View entering={FadeIn.delay(700).duration(400)} style={styles.nextSteps}>
-          <ThemedText style={styles.nextStepsTitle}>What's Next?</ThemedText>
-          <View style={styles.stepRow}>
-            <View style={[styles.stepDot, { backgroundColor: Colors.accent }]} />
-            <ThemedText style={[styles.stepText, { color: theme.textSecondary }]}>
-              Your provider will confirm the appointment
-            </ThemedText>
-          </View>
-          <View style={styles.stepRow}>
-            <View style={[styles.stepDot, { backgroundColor: Colors.accent }]} />
-            <ThemedText style={[styles.stepText, { color: theme.textSecondary }]}>
-              You'll receive reminders before the service
-            </ThemedText>
-          </View>
-          <View style={styles.stepRow}>
-            <View style={[styles.stepDot, { backgroundColor: Colors.accent }]} />
-            <ThemedText style={[styles.stepText, { color: theme.textSecondary }]}>
-              Message your provider anytime with questions
-            </ThemedText>
-          </View>
-        </Animated.View>
       </View>
 
-      <Animated.View entering={FadeIn.delay(900).duration(400)} style={styles.buttons}>
-        <PrimaryButton onPress={handleViewJob}>View Job Details</PrimaryButton>
-        <SecondaryButton onPress={handleGoHome} style={styles.secondaryBtn}>Back to Home</SecondaryButton>
+      <Animated.View entering={FadeIn.delay(700).duration(400)} style={styles.actions}>
+        <PrimaryButton onPress={handleViewJob} style={styles.actionBtn}>
+          View Appointment
+        </PrimaryButton>
+        <SecondaryButton onPress={handleGoHome} style={styles.actionBtn}>
+          Back to Home
+        </SecondaryButton>
       </Animated.View>
     </ThemedView>
   );
@@ -131,46 +158,49 @@ export default function BookingSuccessScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: Spacing.screenPadding,
+    justifyContent: "space-between",
   },
   content: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: Spacing.xl,
   },
   iconContainer: {
     marginBottom: Spacing.xl,
   },
   iconCircle: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     alignItems: "center",
     justifyContent: "center",
   },
   title: {
-    ...Typography.title1,
-    fontWeight: "700",
+    ...Typography.largeTitle,
     textAlign: "center",
-    marginBottom: Spacing.xs,
+    marginBottom: Spacing.sm,
   },
   subtitle: {
-    ...Typography.body,
+    ...Typography.subhead,
     textAlign: "center",
+    marginBottom: Spacing.xl,
   },
   detailsCard: {
     width: "100%",
-    marginTop: Spacing.xl,
+    maxWidth: 400,
   },
   card: {
-    padding: Spacing.lg,
     borderRadius: 16,
     borderWidth: 1,
+    overflow: "hidden",
   },
   cardRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: Spacing.sm,
+    padding: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0,0,0,0.07)",
     gap: Spacing.sm,
   },
   cardLabel: {
@@ -180,35 +210,12 @@ const styles = StyleSheet.create({
   cardValue: {
     ...Typography.subhead,
     fontWeight: "600",
+    textAlign: "right",
+    flex: 2,
   },
-  nextSteps: {
-    width: "100%",
-    marginTop: Spacing.xl,
+  actions: {
+    padding: Spacing.xl,
+    gap: Spacing.md,
   },
-  nextStepsTitle: {
-    ...Typography.headline,
-    marginBottom: Spacing.md,
-  },
-  stepRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: Spacing.sm,
-    gap: Spacing.sm,
-  },
-  stepDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginTop: 6,
-  },
-  stepText: {
-    ...Typography.body,
-    flex: 1,
-  },
-  buttons: {
-    paddingBottom: Spacing.lg,
-  },
-  secondaryBtn: {
-    marginTop: Spacing.sm,
-  },
+  actionBtn: {},
 });

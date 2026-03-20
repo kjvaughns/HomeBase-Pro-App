@@ -343,7 +343,7 @@ export default function ClientsScreen() {
   };
 
   const handleAddClient = () => {
-    navigation.navigate("AddClient" as any);
+    navigation.navigate("AddClient");
   };
 
   const handleFilterChange = (id: string) => {

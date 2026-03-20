@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
@@ -18,12 +19,13 @@ import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useProviderStore } from "@/state/providerStore";
 import { useThemeStore } from "@/state/themeStore";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 export default function ProviderMoreScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useFloatingTabBarHeight();
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { theme, isDark } = useTheme();
   const { user, providerProfile, logout } = useAuthStore();
   const toggleDarkMode = useThemeStore((s) => s.toggleDarkMode);
@@ -40,7 +42,7 @@ export default function ProviderMoreScreen() {
     setNeedsRoleSelection(false);
     navigation.reset({
       index: 0,
-      routes: [{ name: "HomeTabs" }],
+      routes: [{ name: "Main" }],
     });
   };
 
@@ -60,7 +62,7 @@ export default function ProviderMoreScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Animated.View entering={FadeInDown.delay(100).duration(400)}>
-          <GlassCard style={styles.profileCard} onPress={() => {}}>
+          <GlassCard style={styles.profileCard} onPress={() => navigation.navigate("BusinessProfile")}>
             <View style={styles.profileContent}>
               <Avatar uri={user?.avatarUrl} name={user?.name} size="large" showBadge />
               <View style={styles.profileInfo}>

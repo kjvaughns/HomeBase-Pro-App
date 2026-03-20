@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -9,9 +9,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
@@ -24,6 +25,9 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { useAuthStore } from "@/state/authStore";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
+import { useQueryClient } from "@tanstack/react-query";
 
 type PricingModel = "fixed" | "variable" | "service_call" | "quote";
 type BillingFrequency = "once" | "weekly" | "biweekly" | "monthly";
@@ -73,6 +77,15 @@ export default function NewServiceScreen() {
   const insets = useSafeAreaInsets();
   const { theme, isDark } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute();
+  const { providerProfile } = useAuthStore();
+  const queryClient = useQueryClient();
+  const providerId = providerProfile?.id;
+
+  const routeParams = route.params as RootStackParamList["EditService"] | undefined;
+  const editServiceId = routeParams?.serviceId;
+  const editServiceData = routeParams?.service;
+  const isEditMode = !!editServiceId;
 
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
@@ -87,10 +100,27 @@ export default function NewServiceScreen() {
     { id: "1", question: "Do you have pets? (Yes/No)" },
   ]);
   const [newQuestion, setNewQuestion] = useState("");
+  const [showQuestionInput, setShowQuestionInput] = useState(false);
   const [discountName, setDiscountName] = useState("");
   const [discountPercent, setDiscountPercent] = useState("");
   const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (isEditMode && editServiceData) {
+      const svc = editServiceData;
+      if (svc.name) setName(String(svc.name));
+      if (svc.category) setCategory(String(svc.category));
+      if (svc.description) setDescription(String(svc.description));
+      if (svc.pricingType) setPricingModel(String(svc.pricingType) as PricingModel);
+      if (svc.basePrice) setPrice(String(svc.basePrice));
+      if (svc.duration) setDuration(String(svc.duration));
+      if (svc.isPublished !== undefined) setInstantBooking(!!svc.isPublished);
+    }
+    if (isEditMode) {
+      navigation.setOptions({ headerTitle: "Edit Service" });
+    }
+  }, [isEditMode, editServiceData, navigation]);
 
   const scrollRef = useRef<ScrollView>(null);
 
@@ -139,20 +169,44 @@ export default function NewServiceScreen() {
   };
 
   const handleSave = async () => {
-    if (!name.trim() || !category) return;
+    if (!name.trim() || !category || !providerId) return;
     
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setIsSaving(true);
     
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    
-    setIsSaving(false);
-    navigation.goBack();
+    try {
+      const payload = {
+        name: name.trim(),
+        category,
+        description: description.trim() || null,
+        pricingType: pricingModel,
+        basePrice: price ? price : null,
+        duration: duration ? parseInt(duration, 10) : null,
+        isPublished: false,
+      };
+
+      const url = isEditMode
+        ? new URL(`/api/provider/${providerId}/custom-services/${editServiceId}`, getApiUrl())
+        : new URL(`/api/provider/${providerId}/custom-services`, getApiUrl());
+      const method = isEditMode ? "PUT" : "POST";
+      const response = await apiRequest(method, url.toString(), payload);
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: "Unknown error" }));
+        Alert.alert("Error", err.error || "Failed to save service");
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "custom-services"] });
+      navigation.goBack();
+    } catch {
+      Alert.alert("Error", "Failed to save service. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handlePreview = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    navigation.navigate("ServicePreview" as any, {
+    navigation.navigate("ServicePreview", {
       service: {
         name,
         category,
@@ -513,12 +567,39 @@ export default function NewServiceScreen() {
                 <ThemedText type="body" style={{ fontWeight: "600" }}>
                   Intake Questions
                 </ThemedText>
-                <Pressable onPress={() => {}}>
+                <Pressable onPress={() => setShowQuestionInput((v) => !v)}>
                   <ThemedText style={{ color: Colors.accent, fontWeight: "500" }}>
-                    + Add
+                    {showQuestionInput ? "Cancel" : "+ Add"}
                   </ThemedText>
                 </Pressable>
               </View>
+
+              {showQuestionInput ? (
+                <View style={styles.questionInputRow}>
+                  <TextInput
+                    style={[styles.questionInput, { color: theme.text, borderColor: theme.borderLight }]}
+                    placeholder="Enter a question for the homeowner..."
+                    placeholderTextColor={theme.textTertiary}
+                    value={newQuestion}
+                    onChangeText={setNewQuestion}
+                    onSubmitEditing={() => {
+                      handleAddQuestion();
+                      setShowQuestionInput(false);
+                    }}
+                    returnKeyType="done"
+                    autoFocus
+                  />
+                  <Pressable
+                    onPress={() => {
+                      handleAddQuestion();
+                      setShowQuestionInput(false);
+                    }}
+                    style={[styles.questionAddBtn, { backgroundColor: Colors.accent }]}
+                  >
+                    <Feather name="check" size={16} color="#fff" />
+                  </Pressable>
+                </View>
+              ) : null}
 
               {intakeQuestions.map((q) => (
                 <View
@@ -778,6 +859,27 @@ const styles = StyleSheet.create({
     padding: Spacing.sm,
     borderRadius: BorderRadius.sm,
     marginBottom: Spacing.xs,
+  },
+  questionInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  questionInput: {
+    flex: 1,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    fontSize: 14,
+  },
+  questionAddBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
   },
   actionsContainer: {
     gap: Spacing.sm,
