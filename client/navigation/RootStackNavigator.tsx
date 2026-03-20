@@ -45,7 +45,6 @@ import AddClientScreen from "@/screens/provider/AddClientScreen";
 import AddJobScreen from "@/screens/provider/AddJobScreen";
 import AddInvoiceScreen from "@/screens/provider/AddInvoiceScreen";
 import InvoiceDetailScreen from "@/screens/provider/InvoiceDetailScreen";
-import ServiceBuilderScreen from "@/screens/provider/ServiceBuilderScreen";
 import ServicesScreen from "@/screens/provider/ServicesScreen";
 import NewServiceScreen from "@/screens/provider/NewServiceScreen";
 import PublicProfileScreen from "@/screens/provider/PublicProfileScreen";
@@ -171,7 +170,6 @@ export type RootStackParamList = {
   AddInvoice: { clientId?: string } | undefined;
   InvoiceDetail: { invoiceId: string };
   Services: undefined;
-  ServiceBuilder: undefined;
   NewService: undefined;
   EditService: { serviceId: string; service?: Record<string, unknown> };
   ServicePreview: { service: any };
@@ -533,13 +531,6 @@ export default function RootStackNavigator() {
         component={ServicesScreen}
         options={{
           headerTitle: "My Services",
-        }}
-      />
-      <Stack.Screen
-        name="ServiceBuilder"
-        component={ServiceBuilderScreen}
-        options={{
-          headerTitle: "AI Service Builder",
         }}
       />
       <Stack.Screen

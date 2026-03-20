@@ -160,6 +160,7 @@ export const providerCustomServices = pgTable("provider_custom_services", {
   basePrice: decimal("base_price", { precision: 10, scale: 2 }),
   priceFrom: decimal("price_from", { precision: 10, scale: 2 }),
   priceTo: decimal("price_to", { precision: 10, scale: 2 }),
+  priceTiersJson: text("price_tiers_json"),
   duration: integer("duration").default(60),
   isPublished: boolean("is_published").default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),

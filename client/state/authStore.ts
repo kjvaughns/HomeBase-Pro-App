@@ -22,6 +22,7 @@ export interface ProviderProfile {
   rating: number;
   reviewCount: number;
   completedJobs: number;
+  serviceArea?: string;
 }
 
 interface AuthState {

@@ -1,21 +1,21 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   StyleSheet,
   View,
   ScrollView,
   TextInput,
   Pressable,
-  Switch,
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
-  Alert,
+  ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
+import type { ComponentProps } from "react";
 import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "@/components/ThemedText";
@@ -29,54 +29,126 @@ import { useAuthStore } from "@/state/authStore";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { useQueryClient } from "@tanstack/react-query";
 
-type PricingModel = "fixed" | "variable" | "service_call" | "quote";
-type BillingFrequency = "once" | "weekly" | "biweekly" | "monthly";
+type FeatherIconName = ComponentProps<typeof Feather>["name"];
+type PricingModel = "flat" | "variable" | "quote";
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-interface IntakeQuestion {
+interface PriceTier {
   id: string;
-  question: string;
+  label: string;
+  price: string;
 }
 
-const CATEGORIES = ["Cleaning", "HVAC", "Handyman", "Plumbing", "Electrical", "Landscaping"];
+interface PriceSuggestion {
+  minPrice: number;
+  maxPrice: number;
+  unit: string;
+  hint: string;
+}
 
-const PRICING_MODELS: { id: PricingModel; name: string; description: string; icon: string }[] = [
+interface CategoryOption {
+  id: string;
+  icon: FeatherIconName;
+}
+
+interface PricingOption {
+  id: PricingModel;
+  name: string;
+  description: string;
+  icon: FeatherIconName;
+}
+
+const CATEGORIES: CategoryOption[] = [
+  { id: "Cleaning", icon: "home" },
+  { id: "HVAC", icon: "thermometer" },
+  { id: "Plumbing", icon: "droplet" },
+  { id: "Electrical", icon: "zap" },
+  { id: "Landscaping", icon: "sun" },
+  { id: "Handyman", icon: "tool" },
+  { id: "Painting", icon: "edit-3" },
+  { id: "Roofing", icon: "triangle" },
+];
+
+const DURATION_OPTIONS = [
+  { label: "30 min", value: 30 },
+  { label: "1 hr", value: 60 },
+  { label: "1.5 hr", value: 90 },
+  { label: "2 hr", value: 120 },
+  { label: "3 hr", value: 180 },
+  { label: "4 hr", value: 240 },
+];
+
+const PRICING_MODELS: PricingOption[] = [
   {
-    id: "fixed",
-    name: "Fixed Price",
-    description: "Simple flat rate for the service.",
+    id: "flat",
+    name: "Flat Rate",
+    description: "One price for the whole job",
     icon: "dollar-sign",
   },
   {
     id: "variable",
-    name: "Variable Pricing",
-    description: "Price adjusts based on size or units.",
+    name: "Size / Tier Based",
+    description: "Different prices by size or scope",
     icon: "sliders",
   },
   {
-    id: "service_call",
-    name: "Service Call",
-    description: "Fee for showing up + hourly rate.",
-    icon: "phone",
-  },
-  {
     id: "quote",
-    name: "Quote Only",
-    description: "No price shown. Requires estimate.",
+    name: "Custom Quote",
+    description: "Customer requests a quote",
     icon: "file-text",
   },
 ];
 
-const BILLING_OPTIONS: { id: BillingFrequency; label: string }[] = [
-  { id: "once", label: "Once" },
-  { id: "weekly", label: "Weekly" },
-  { id: "biweekly", label: "2 Wks" },
-  { id: "monthly", label: "Month" },
-];
+const KEYWORD_CATEGORY_MAP: Record<string, string> = {
+  clean: "Cleaning",
+  maid: "Cleaning",
+  vacuum: "Cleaning",
+  sweep: "Cleaning",
+  hvac: "HVAC",
+  heat: "HVAC",
+  cool: "HVAC",
+  air: "HVAC",
+  furnace: "HVAC",
+  ac: "HVAC",
+  plumb: "Plumbing",
+  drain: "Plumbing",
+  pipe: "Plumbing",
+  leak: "Plumbing",
+  faucet: "Plumbing",
+  toilet: "Plumbing",
+  electric: "Electrical",
+  wire: "Electrical",
+  outlet: "Electrical",
+  panel: "Electrical",
+  light: "Electrical",
+  lawn: "Landscaping",
+  garden: "Landscaping",
+  mow: "Landscaping",
+  trim: "Landscaping",
+  landscape: "Landscaping",
+  tree: "Landscaping",
+  paint: "Painting",
+  handyman: "Handyman",
+  repair: "Handyman",
+  fix: "Handyman",
+  install: "Handyman",
+  roof: "Roofing",
+  gutter: "Roofing",
+  shingle: "Roofing",
+};
+
+function suggestCategory(name: string): string | null {
+  const lower = name.toLowerCase();
+  for (const [keyword, cat] of Object.entries(KEYWORD_CATEGORY_MAP)) {
+    if (lower.includes(keyword)) return cat;
+  }
+  return null;
+}
 
 export default function NewServiceScreen() {
   const insets = useSafeAreaInsets();
-  const { theme, isDark } = useTheme();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { theme } = useTheme();
+  const navigation = useNavigation<NavigationProp>();
   const route = useRoute();
   const { providerProfile } = useAuthStore();
   const queryClient = useQueryClient();
@@ -89,22 +161,25 @@ export default function NewServiceScreen() {
 
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
-  const [description, setDescription] = useState("");
-  const [pricingModel, setPricingModel] = useState<PricingModel>("fixed");
-  const [price, setPrice] = useState("");
-  const [billingFrequency, setBillingFrequency] = useState<BillingFrequency>("once");
-  const [duration, setDuration] = useState("60");
-  const [instantBooking, setInstantBooking] = useState(true);
-  const [requirePhotos, setRequirePhotos] = useState(false);
-  const [intakeQuestions, setIntakeQuestions] = useState<IntakeQuestion[]>([
-    { id: "1", question: "Do you have pets? (Yes/No)" },
+  const [suggestedCategory, setSuggestedCategory] = useState<string | null>(null);
+  const [categorySuggestionDismissed, setCategorySuggestionDismissed] = useState(false);
+  const [pricingModel, setPricingModel] = useState<PricingModel>("flat");
+  const [flatPrice, setFlatPrice] = useState("");
+  const [priceTiers, setPriceTiers] = useState<PriceTier[]>([
+    { id: "1", label: "Small", price: "" },
+    { id: "2", label: "Medium", price: "" },
+    { id: "3", label: "Large", price: "" },
   ]);
-  const [newQuestion, setNewQuestion] = useState("");
-  const [showQuestionInput, setShowQuestionInput] = useState(false);
-  const [discountName, setDiscountName] = useState("");
-  const [discountPercent, setDiscountPercent] = useState("");
-  const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
+  const [duration, setDuration] = useState(60);
+  const [description, setDescription] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isImprovingDescription, setIsImprovingDescription] = useState(false);
+  const [priceSuggestion, setPriceSuggestion] = useState<PriceSuggestion | null>(null);
+  const [priceSuggestionDismissed, setPriceSuggestionDismissed] = useState(false);
+  const [showSavedTip, setShowSavedTip] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
+  const priceFetchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (isEditMode && editServiceData) {
@@ -112,79 +187,158 @@ export default function NewServiceScreen() {
       if (svc.name) setName(String(svc.name));
       if (svc.category) setCategory(String(svc.category));
       if (svc.description) setDescription(String(svc.description));
-      if (svc.pricingType) setPricingModel(String(svc.pricingType) as PricingModel);
-      if (svc.basePrice) setPrice(String(svc.basePrice));
-      if (svc.duration) setDuration(String(svc.duration));
-      if (svc.isPublished !== undefined) setInstantBooking(!!svc.isPublished);
+      if (svc.duration) setDuration(Number(svc.duration));
+      if (svc.pricingType) {
+        const pt = String(svc.pricingType);
+        if (pt === "fixed") setPricingModel("flat");
+        else if (pt === "variable") setPricingModel("variable");
+        else if (pt === "quote") setPricingModel("quote");
+        else setPricingModel("flat");
+      }
+      if (svc.basePrice) setFlatPrice(String(svc.basePrice));
+      if (svc.priceTiersJson) {
+        try {
+          const parsed = JSON.parse(String(svc.priceTiersJson));
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setPriceTiers(parsed);
+          }
+        } catch {}
+      }
     }
     if (isEditMode) {
       navigation.setOptions({ headerTitle: "Edit Service" });
     }
   }, [isEditMode, editServiceData, navigation]);
 
-  const scrollRef = useRef<ScrollView>(null);
+  const handleNameChange = useCallback((text: string) => {
+    setName(text);
+    const suggestion = suggestCategory(text);
+    if (suggestion && suggestion !== category) {
+      setSuggestedCategory(suggestion);
+      setCategorySuggestionDismissed(false);
+    } else if (!suggestion) {
+      setSuggestedCategory(null);
+    }
+  }, [category]);
 
-  const handleSelectCategory = (cat: string) => {
-    Haptics.selectionAsync();
-    setCategory(cat);
+  const applyCategorySuggestion = () => {
+    if (suggestedCategory) {
+      Haptics.selectionAsync();
+      setCategory(suggestedCategory);
+      setSuggestedCategory(null);
+    }
   };
 
-  const handleSelectPricing = (model: PricingModel) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setPricingModel(model);
-  };
+  const fetchPriceSuggestion = useCallback(async (svcName: string, cat: string, pricing: PricingModel) => {
+    if (!svcName.trim() || !cat) return;
+    try {
+      const url = new URL("/api/ai/suggest-price", getApiUrl());
+      const response = await fetch(url.toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          serviceName: svcName,
+          category: cat,
+          pricingType: pricing,
+          location: providerProfile?.serviceArea || undefined,
+        }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.suggestion) {
+          setPriceSuggestion(data.suggestion);
+          setPriceSuggestionDismissed(false);
+        }
+      }
+    } catch {}
+  }, [providerProfile?.serviceArea]);
 
-  const handleSelectBilling = (freq: BillingFrequency) => {
-    Haptics.selectionAsync();
-    setBillingFrequency(freq);
-  };
-
-  const handleGenerateDescription = async () => {
+  useEffect(() => {
+    if (pricingModel === "quote") {
+      setPriceSuggestion(null);
+      return;
+    }
     if (!name.trim() || !category) return;
-    
+    if (priceFetchTimeout.current) clearTimeout(priceFetchTimeout.current);
+    priceFetchTimeout.current = setTimeout(() => {
+      fetchPriceSuggestion(name, category, pricingModel);
+    }, 800);
+    return () => {
+      if (priceFetchTimeout.current) clearTimeout(priceFetchTimeout.current);
+    };
+  }, [name, category, pricingModel, fetchPriceSuggestion]);
+
+  const handleImproveDescription = async () => {
+    if (!name.trim() || !category) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setIsGeneratingDescription(true);
-    
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    
-    const generated = `Professional ${category.toLowerCase()} service. Our ${name.toLowerCase()} includes thorough attention to detail, quality workmanship, and customer satisfaction guaranteed.`;
-    setDescription(generated);
-    setIsGeneratingDescription(false);
+    setIsImprovingDescription(true);
+    try {
+      const url = new URL("/api/ai/suggest-description", getApiUrl());
+      const response = await fetch(url.toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ serviceName: name.trim(), category }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.description) setDescription(data.description);
+      }
+    } catch {}
+    setIsImprovingDescription(false);
   };
 
-  const handleAddQuestion = () => {
-    if (!newQuestion.trim()) return;
-    
+  const addTier = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setIntakeQuestions((prev) => [
-      ...prev,
-      { id: Date.now().toString(), question: newQuestion.trim() },
-    ]);
-    setNewQuestion("");
+    setPriceTiers((prev) => [...prev, { id: Date.now().toString(), label: "", price: "" }]);
   };
 
-  const handleRemoveQuestion = (id: string) => {
+  const removeTier = (id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setIntakeQuestions((prev) => prev.filter((q) => q.id !== id));
+    setPriceTiers((prev) => prev.filter((t) => t.id !== id));
   };
+
+  const updateTier = (id: string, field: "label" | "price", value: string) => {
+    setPriceTiers((prev) => prev.map((t) => t.id === id ? { ...t, [field]: value } : t));
+  };
+
+  const pricingTypeToDB = (model: PricingModel): string => {
+    if (model === "flat") return "fixed";
+    if (model === "variable") return "variable";
+    return "quote";
+  };
+
+  const isValid = name.trim().length > 0 && category.length > 0 && (
+    pricingModel === "quote" ||
+    (pricingModel === "flat" && flatPrice.trim().length > 0) ||
+    (pricingModel === "variable" && priceTiers.some((t) => t.label.trim() && t.price.trim()))
+  );
 
   const handleSave = async () => {
-    if (!name.trim() || !category || !providerId) return;
-    
+    if (!isValid || !providerId) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setIsSaving(true);
-    
-    try {
-      const payload = {
-        name: name.trim(),
-        category,
-        description: description.trim() || null,
-        pricingType: pricingModel,
-        basePrice: price ? price : null,
-        duration: duration ? parseInt(duration, 10) : null,
-        isPublished: false,
-      };
+    setSaveError("");
 
+    const tiersJson = pricingModel === "variable"
+      ? JSON.stringify(priceTiers.filter((t) => t.label.trim() && t.price.trim()))
+      : null;
+
+    const firstTierPrice = pricingModel === "variable"
+      ? priceTiers.find((t) => t.price.trim())?.price || null
+      : null;
+
+    const payload = {
+      name: name.trim(),
+      category,
+      description: description.trim() || null,
+      pricingType: pricingTypeToDB(pricingModel),
+      basePrice: pricingModel === "flat" ? flatPrice : firstTierPrice,
+      priceTiersJson: tiersJson,
+      duration,
+      isPublished: true,
+    };
+
+    try {
       const url = isEditMode
         ? new URL(`/api/provider/${providerId}/custom-services/${editServiceId}`, getApiUrl())
         : new URL(`/api/provider/${providerId}/custom-services`, getApiUrl());
@@ -192,33 +346,24 @@ export default function NewServiceScreen() {
       const response = await apiRequest(method, url.toString(), payload);
       if (!response.ok) {
         const err = await response.json().catch(() => ({ error: "Unknown error" }));
-        Alert.alert("Error", err.error || "Failed to save service");
+        setSaveError(err.error || "Failed to save service");
         return;
       }
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "custom-services"] });
-      navigation.goBack();
+      if (!isEditMode) {
+        setShowSavedTip(true);
+      } else {
+        navigation.goBack();
+      }
     } catch {
-      Alert.alert("Error", "Failed to save service. Please try again.");
+      setSaveError("Failed to save service. Please try again.");
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handlePreview = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    navigation.navigate("ServicePreview", {
-      service: {
-        name,
-        category,
-        description,
-        pricingModel,
-        price,
-        duration,
-      },
-    });
-  };
-
-  const isValid = name.trim() && category;
+  const sectionStyle: ViewStyle = styles.section;
+  const tipCardStyle: ViewStyle = StyleSheet.flatten([styles.tipCard, { borderColor: Colors.accent + "40" }]);
 
   return (
     <ThemedView style={styles.container}>
@@ -228,426 +373,396 @@ export default function NewServiceScreen() {
         keyboardVerticalOffset={100}
       >
         <ScrollView
-          ref={scrollRef}
           style={styles.flex}
-          contentContainerStyle={[
-            styles.content,
-            { paddingBottom: insets.bottom + 100 },
-          ]}
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 120 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <Animated.View entering={FadeInDown.delay(50).duration(300)}>
-            <GlassCard style={styles.section}>
-              <ThemedText style={styles.sectionTitle}>SERVICE BASICS</ThemedText>
-              
-              <View style={styles.inputGroup}>
-                <ThemedText type="caption" style={[styles.label, { color: theme.textSecondary }]}>
-                  Service Name
-                </ThemedText>
-                <TextInput
-                  style={[
-                    styles.textInput,
-                    {
-                      backgroundColor: theme.backgroundElevated,
-                      color: theme.text,
-                      borderColor: theme.borderLight,
-                    },
-                  ]}
-                  placeholder="e.g., Deep Clean"
-                  placeholderTextColor={theme.textSecondary}
-                  value={name}
-                  onChangeText={setName}
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <ThemedText type="caption" style={[styles.label, { color: theme.textSecondary }]}>
-                  Category
-                </ThemedText>
-                <View style={styles.categoryGrid}>
-                  {CATEGORIES.map((cat) => (
-                    <Pressable
-                      key={cat}
-                      onPress={() => handleSelectCategory(cat)}
-                      style={[
-                        styles.categoryOption,
-                        {
-                          backgroundColor:
-                            category === cat ? Colors.accent : theme.backgroundElevated,
-                          borderColor:
-                            category === cat ? Colors.accent : theme.borderLight,
-                        },
-                      ]}
-                    >
-                      <ThemedText
-                        style={[
-                          styles.categoryOptionText,
-                          { color: category === cat ? "#fff" : theme.text },
-                        ]}
-                      >
-                        {cat}
-                      </ThemedText>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <View style={styles.labelRow}>
-                  <ThemedText type="caption" style={[styles.label, { color: theme.textSecondary }]}>
-                    Description
-                  </ThemedText>
+          {showSavedTip ? (
+            <Animated.View entering={FadeIn.duration(300)}>
+              <GlassCard style={tipCardStyle}>
+                <View style={styles.tipRow}>
+                  <View style={[styles.tipIcon, { backgroundColor: Colors.accent + "20" }]}>
+                    <Feather name="camera" size={18} color={Colors.accent} />
+                  </View>
+                  <View style={styles.tipContent}>
+                    <ThemedText style={styles.tipTitle}>Service saved!</ThemedText>
+                    <ThemedText style={[styles.tipBody, { color: theme.textSecondary }]}>
+                      Add photos to your profile to help customers trust your work and book faster.
+                    </ThemedText>
+                  </View>
                   <Pressable
-                    onPress={handleGenerateDescription}
-                    disabled={isGeneratingDescription || !name.trim() || !category}
-                    style={[
-                      styles.aiButton,
-                      {
-                        opacity: !name.trim() || !category ? 0.5 : 1,
-                      },
-                    ]}
+                    onPress={() => navigation.goBack()}
+                    style={styles.tipClose}
                   >
-                    {isGeneratingDescription ? (
-                      <ActivityIndicator size="small" color={Colors.accent} />
-                    ) : (
-                      <>
-                        <Feather name="zap" size={12} color={Colors.accent} />
-                        <ThemedText style={[styles.aiButtonText, { color: Colors.accent }]}>
-                          Generate with AI
-                        </ThemedText>
-                      </>
-                    )}
+                    <Feather name="x" size={18} color={theme.textSecondary} />
                   </Pressable>
                 </View>
-                <TextInput
-                  style={[
-                    styles.textInput,
-                    styles.textArea,
-                    {
-                      backgroundColor: theme.backgroundElevated,
-                      color: theme.text,
-                      borderColor: theme.borderLight,
-                    },
-                  ]}
-                  placeholder="Describe what's included in this service..."
-                  placeholderTextColor={theme.textSecondary}
-                  value={description}
-                  onChangeText={setDescription}
-                  multiline
-                  numberOfLines={3}
-                  textAlignVertical="top"
-                />
-              </View>
+                <Pressable
+                  style={[styles.tipAction, { borderTopColor: theme.borderLight }]}
+                  onPress={() => navigation.goBack()}
+                >
+                  <ThemedText style={[styles.tipActionText, { color: Colors.accent }]}>
+                    Done
+                  </ThemedText>
+                </Pressable>
+              </GlassCard>
+            </Animated.View>
+          ) : null}
+
+          <Animated.View entering={FadeInDown.delay(50).duration(300)}>
+            <GlassCard style={sectionStyle}>
+              <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
+                SERVICE NAME
+              </ThemedText>
+              <TextInput
+                style={[
+                  styles.nameInput,
+                  { color: theme.text, borderColor: theme.borderLight, backgroundColor: theme.backgroundElevated },
+                ]}
+                placeholder="e.g., Deep Clean, AC Tune-Up, Drain Clearing..."
+                placeholderTextColor={theme.textTertiary}
+                value={name}
+                onChangeText={handleNameChange}
+                returnKeyType="next"
+                testID="input-service-name"
+              />
+              {suggestedCategory && !categorySuggestionDismissed ? (
+                <Animated.View
+                  entering={FadeIn.duration(200)}
+                  style={[styles.categorySuggestion, { backgroundColor: Colors.accent + "10", borderColor: Colors.accent + "30" }]}
+                >
+                  <Feather name="tag" size={13} color={Colors.accent} />
+                  <ThemedText style={[styles.categorySuggestionText, { color: Colors.accent }]}>
+                    Suggested category:
+                  </ThemedText>
+                  <Pressable
+                    onPress={applyCategorySuggestion}
+                    style={[styles.categorySuggestionBtn, { backgroundColor: Colors.accent }]}
+                  >
+                    <ThemedText style={styles.categorySuggestionBtnText}>{suggestedCategory}</ThemedText>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setCategorySuggestionDismissed(true)}
+                    style={styles.categorySuggestionDismiss}
+                  >
+                    <Feather name="x" size={14} color={Colors.accent} />
+                  </Pressable>
+                </Animated.View>
+              ) : null}
             </GlassCard>
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(100).duration(300)}>
-            <GlassCard style={styles.section}>
-              <ThemedText style={styles.sectionTitle}>PRICING MODEL</ThemedText>
-              
-              <View style={styles.pricingGrid}>
-                {PRICING_MODELS.map((model) => (
-                  <Pressable
-                    key={model.id}
-                    onPress={() => handleSelectPricing(model.id)}
-                    style={[
-                      styles.pricingCard,
-                      {
-                        backgroundColor:
-                          pricingModel === model.id
-                            ? Colors.accent + "15"
-                            : theme.backgroundElevated,
-                        borderColor:
-                          pricingModel === model.id ? Colors.accent : "transparent",
-                      },
-                    ]}
-                  >
-                    <View
+            <GlassCard style={sectionStyle}>
+              <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
+                CATEGORY
+              </ThemedText>
+              <View style={styles.categoryGrid}>
+                {CATEGORIES.map((cat) => {
+                  const selected = category === cat.id;
+                  return (
+                    <Pressable
+                      key={cat.id}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setCategory(cat.id);
+                        setSuggestedCategory(null);
+                      }}
                       style={[
-                        styles.pricingIcon,
+                        styles.categoryChip,
                         {
-                          backgroundColor:
-                            pricingModel === model.id
-                              ? Colors.accent
-                              : theme.cardBackground,
+                          backgroundColor: selected ? Colors.accent : theme.backgroundElevated,
+                          borderColor: selected ? Colors.accent : theme.borderLight,
                         },
                       ]}
+                      testID={`chip-category-${cat.id}`}
                     >
                       <Feather
-                        name={model.icon as any}
-                        size={18}
-                        color={pricingModel === model.id ? "#fff" : theme.textSecondary}
+                        name={cat.icon}
+                        size={14}
+                        color={selected ? "#fff" : theme.textSecondary}
+                        style={{ marginRight: 5 }}
                       />
-                    </View>
-                    <View style={styles.pricingInfo}>
-                      <ThemedText type="body" style={styles.pricingName}>
-                        {model.name}
-                      </ThemedText>
                       <ThemedText
-                        type="caption"
-                        style={{ color: theme.textSecondary }}
-                        numberOfLines={2}
+                        style={[styles.categoryChipText, { color: selected ? "#fff" : theme.text }]}
                       >
-                        {model.description}
+                        {cat.id}
                       </ThemedText>
-                    </View>
-                    <View
-                      style={[
-                        styles.radioOuter,
-                        {
-                          borderColor:
-                            pricingModel === model.id ? Colors.accent : theme.borderLight,
-                        },
-                      ]}
-                    >
-                      {pricingModel === model.id ? (
-                        <View style={[styles.radioInner, { backgroundColor: Colors.accent }]} />
-                      ) : null}
-                    </View>
-                  </Pressable>
-                ))}
+                    </Pressable>
+                  );
+                })}
               </View>
-
-              {pricingModel !== "quote" ? (
-                <View style={styles.priceInputRow}>
-                  <View style={styles.dollarIcon}>
-                    <ThemedText style={{ color: theme.textSecondary, fontWeight: "600" }}>
-                      $
-                    </ThemedText>
-                  </View>
-                  <TextInput
-                    style={[
-                      styles.priceInput,
-                      {
-                        backgroundColor: theme.backgroundElevated,
-                        color: theme.text,
-                        borderColor: theme.borderLight,
-                      },
-                    ]}
-                    placeholder="0.00"
-                    placeholderTextColor={theme.textSecondary}
-                    value={price}
-                    onChangeText={setPrice}
-                    keyboardType="decimal-pad"
-                  />
-                </View>
-              ) : null}
             </GlassCard>
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(150).duration(300)}>
-            <GlassCard style={styles.section}>
-              <ThemedText style={styles.sectionTitle}>BILLING FREQUENCY</ThemedText>
-              
-              <View style={styles.billingRow}>
-                {BILLING_OPTIONS.map((option) => (
-                  <Pressable
-                    key={option.id}
-                    onPress={() => handleSelectBilling(option.id)}
-                    style={[
-                      styles.billingOption,
-                      {
-                        backgroundColor:
-                          billingFrequency === option.id
-                            ? Colors.accent
-                            : theme.backgroundElevated,
-                        borderColor:
-                          billingFrequency === option.id
-                            ? Colors.accent
-                            : theme.borderLight,
-                      },
-                    ]}
-                  >
-                    <ThemedText
+            <GlassCard style={sectionStyle}>
+              <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
+                PRICING MODEL
+              </ThemedText>
+              <View style={styles.pricingGrid}>
+                {PRICING_MODELS.map((model) => {
+                  const selected = pricingModel === model.id;
+                  return (
+                    <Pressable
+                      key={model.id}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setPricingModel(model.id);
+                        setPriceSuggestionDismissed(false);
+                      }}
                       style={[
-                        styles.billingText,
-                        { color: billingFrequency === option.id ? "#fff" : theme.text },
+                        styles.pricingCard,
+                        {
+                          backgroundColor: selected ? Colors.accent + "12" : theme.backgroundElevated,
+                          borderColor: selected ? Colors.accent : "transparent",
+                        },
                       ]}
+                      testID={`option-pricing-${model.id}`}
                     >
-                      {option.label}
-                    </ThemedText>
-                  </Pressable>
-                ))}
+                      <View
+                        style={[
+                          styles.pricingIconBox,
+                          { backgroundColor: selected ? Colors.accent : theme.cardBackground },
+                        ]}
+                      >
+                        <Feather
+                          name={model.icon}
+                          size={18}
+                          color={selected ? "#fff" : theme.textSecondary}
+                        />
+                      </View>
+                      <View style={styles.pricingInfo}>
+                        <ThemedText style={styles.pricingName}>{model.name}</ThemedText>
+                        <ThemedText style={[styles.pricingDesc, { color: theme.textSecondary }]}>
+                          {model.description}
+                        </ThemedText>
+                      </View>
+                      <View
+                        style={[
+                          styles.radioOuter,
+                          { borderColor: selected ? Colors.accent : theme.borderLight },
+                        ]}
+                      >
+                        {selected ? (
+                          <View style={[styles.radioInner, { backgroundColor: Colors.accent }]} />
+                        ) : null}
+                      </View>
+                    </Pressable>
+                  );
+                })}
               </View>
 
-              <View style={styles.durationRow}>
-                <View style={styles.durationLabel}>
-                  <Feather name="clock" size={18} color={theme.textSecondary} />
-                  <ThemedText type="body" style={{ marginLeft: Spacing.sm }}>
-                    Duration
+              {pricingModel === "flat" ? (
+                <Animated.View entering={FadeInDown.duration(200)} style={styles.priceSection}>
+                  <ThemedText style={[styles.subLabel, { color: theme.textSecondary }]}>
+                    Price
                   </ThemedText>
-                </View>
-                <ThemedText type="body" style={{ color: Colors.accent, fontWeight: "600" }}>
-                  {duration} mins
-                </ThemedText>
-              </View>
+                  <View style={styles.priceInputRow}>
+                    <ThemedText style={[styles.dollarSign, { color: theme.textSecondary }]}>$</ThemedText>
+                    <TextInput
+                      style={[
+                        styles.priceInput,
+                        { color: theme.text, borderColor: theme.borderLight, backgroundColor: theme.backgroundElevated },
+                      ]}
+                      placeholder="0.00"
+                      placeholderTextColor={theme.textTertiary}
+                      value={flatPrice}
+                      onChangeText={setFlatPrice}
+                      keyboardType="decimal-pad"
+                      testID="input-flat-price"
+                    />
+                  </View>
+                  {priceSuggestion && !priceSuggestionDismissed ? (
+                    <Animated.View entering={FadeIn.duration(250)} style={[styles.suggestionBanner, { backgroundColor: Colors.accent + "10", borderColor: Colors.accent + "30" }]}>
+                      <Feather name="trending-up" size={13} color={Colors.accent} style={{ marginRight: 6 }} />
+                      <ThemedText style={[styles.suggestionText, { color: Colors.accent, flex: 1 }]}>
+                        Suggested: ${priceSuggestion.minPrice}–${priceSuggestion.maxPrice} {priceSuggestion.unit}
+                      </ThemedText>
+                      <Pressable onPress={() => setPriceSuggestionDismissed(true)}>
+                        <Feather name="x" size={14} color={Colors.accent} />
+                      </Pressable>
+                    </Animated.View>
+                  ) : null}
+                </Animated.View>
+              ) : pricingModel === "variable" ? (
+                <Animated.View entering={FadeInDown.duration(200)} style={styles.priceSection}>
+                  <View style={styles.tiersHeader}>
+                    <ThemedText style={[styles.subLabel, { color: theme.textSecondary }]}>
+                      Price Tiers
+                    </ThemedText>
+                    <Pressable onPress={addTier} style={[styles.addTierBtn, { backgroundColor: Colors.accent + "15" }]}>
+                      <Feather name="plus" size={14} color={Colors.accent} />
+                      <ThemedText style={[styles.addTierText, { color: Colors.accent }]}>Add tier</ThemedText>
+                    </Pressable>
+                  </View>
+                  {priceTiers.map((tier, index) => (
+                    <View key={tier.id} style={styles.tierRow}>
+                      <TextInput
+                        style={[
+                          styles.tierLabelInput,
+                          { color: theme.text, borderColor: theme.borderLight, backgroundColor: theme.backgroundElevated },
+                        ]}
+                        placeholder="e.g., Small"
+                        placeholderTextColor={theme.textTertiary}
+                        value={tier.label}
+                        onChangeText={(v) => updateTier(tier.id, "label", v)}
+                        testID={`input-tier-label-${index}`}
+                      />
+                      <View style={styles.tierPriceRow}>
+                        <ThemedText style={[styles.dollarSign, { color: theme.textSecondary }]}>$</ThemedText>
+                        <TextInput
+                          style={[
+                            styles.tierPriceInput,
+                            { color: theme.text, borderColor: theme.borderLight, backgroundColor: theme.backgroundElevated },
+                          ]}
+                          placeholder="0"
+                          placeholderTextColor={theme.textTertiary}
+                          value={tier.price}
+                          onChangeText={(v) => updateTier(tier.id, "price", v)}
+                          keyboardType="decimal-pad"
+                          testID={`input-tier-price-${index}`}
+                        />
+                      </View>
+                      {priceTiers.length > 1 ? (
+                        <Pressable onPress={() => removeTier(tier.id)} style={styles.removeTierBtn}>
+                          <Feather name="x" size={16} color={theme.textSecondary} />
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  ))}
+                  {priceSuggestion && !priceSuggestionDismissed ? (
+                    <Animated.View entering={FadeIn.duration(250)} style={[styles.suggestionBanner, { backgroundColor: Colors.accent + "10", borderColor: Colors.accent + "30" }]}>
+                      <Feather name="trending-up" size={13} color={Colors.accent} style={{ marginRight: 6 }} />
+                      <ThemedText style={[styles.suggestionText, { color: Colors.accent, flex: 1 }]}>
+                        Market range: ${priceSuggestion.minPrice}–${priceSuggestion.maxPrice} {priceSuggestion.unit}
+                      </ThemedText>
+                      <Pressable onPress={() => setPriceSuggestionDismissed(true)}>
+                        <Feather name="x" size={14} color={Colors.accent} />
+                      </Pressable>
+                    </Animated.View>
+                  ) : null}
+                </Animated.View>
+              ) : (
+                <Animated.View entering={FadeInDown.duration(200)} style={[styles.quoteNotice, { backgroundColor: theme.backgroundElevated }]}>
+                  <Feather name="info" size={16} color={theme.textSecondary} style={{ marginRight: Spacing.sm }} />
+                  <ThemedText style={[styles.quoteNoticeText, { color: theme.textSecondary }]}>
+                    No price is shown to customers. They will submit a request and you respond with a custom quote.
+                  </ThemedText>
+                </Animated.View>
+              )}
             </GlassCard>
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(200).duration(300)}>
-            <GlassCard style={styles.section}>
-              <ThemedText style={styles.sectionTitle}>DISCOUNTS & OFFERS</ThemedText>
-              
-              <View style={styles.discountRow}>
-                <View style={styles.discountIcon}>
-                  <Feather name="tag" size={16} color={theme.textSecondary} />
-                </View>
-                <TextInput
-                  style={[
-                    styles.discountNameInput,
-                    {
-                      backgroundColor: theme.backgroundElevated,
-                      color: theme.text,
-                    },
-                  ]}
-                  placeholder="Name (e.g. Senior)"
-                  placeholderTextColor={theme.textSecondary}
-                  value={discountName}
-                  onChangeText={setDiscountName}
-                />
-                <TextInput
-                  style={[
-                    styles.discountPercentInput,
-                    {
-                      backgroundColor: theme.backgroundElevated,
-                      color: theme.text,
-                    },
-                  ]}
-                  placeholder="0"
-                  placeholderTextColor={theme.textSecondary}
-                  value={discountPercent}
-                  onChangeText={setDiscountPercent}
-                  keyboardType="number-pad"
-                />
-                <ThemedText style={{ color: theme.textSecondary, marginRight: Spacing.sm }}>
-                  %
-                </ThemedText>
-                <Pressable
-                  style={[styles.addDiscountBtn, { backgroundColor: theme.backgroundElevated }]}
-                >
-                  <Feather name="plus" size={18} color={theme.textSecondary} />
-                </Pressable>
-              </View>
-              
-              <ThemedText
-                type="caption"
-                style={[styles.noDiscounts, { color: theme.textSecondary }]}
-              >
-                No discounts active for this service.
+            <GlassCard style={sectionStyle}>
+              <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
+                DURATION
               </ThemedText>
+              <View style={styles.durationRow}>
+                {DURATION_OPTIONS.map((opt) => {
+                  const selected = duration === opt.value;
+                  return (
+                    <Pressable
+                      key={opt.value}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setDuration(opt.value);
+                      }}
+                      style={[
+                        styles.durationChip,
+                        {
+                          backgroundColor: selected ? Colors.accent : theme.backgroundElevated,
+                          borderColor: selected ? Colors.accent : theme.borderLight,
+                        },
+                      ]}
+                      testID={`chip-duration-${opt.value}`}
+                    >
+                      <ThemedText style={[styles.durationChipText, { color: selected ? "#fff" : theme.text }]}>
+                        {opt.label}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </View>
             </GlassCard>
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(250).duration(300)}>
-            <GlassCard style={styles.section}>
-              <ThemedText style={styles.sectionTitle}>BOOKING RULES</ThemedText>
-              
-              <View style={styles.toggleRow}>
-                <View>
-                  <ThemedText type="body" style={{ fontWeight: "600" }}>
-                    Instant Booking
-                  </ThemedText>
-                  <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-                    Allow clients to book without approval
-                  </ThemedText>
-                </View>
-                <Switch
-                  value={instantBooking}
-                  onValueChange={setInstantBooking}
-                  trackColor={{ false: theme.borderLight, true: Colors.accent }}
-                  thumbColor="#fff"
-                  ios_backgroundColor={theme.borderLight}
-                />
-              </View>
-
-              <View style={styles.divider} />
-
-              <View style={styles.intakeHeader}>
-                <ThemedText type="body" style={{ fontWeight: "600" }}>
-                  Intake Questions
+            <GlassCard style={sectionStyle}>
+              <View style={styles.descHeader}>
+                <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
+                  DESCRIPTION
                 </ThemedText>
-                <Pressable onPress={() => setShowQuestionInput((v) => !v)}>
-                  <ThemedText style={{ color: Colors.accent, fontWeight: "500" }}>
-                    {showQuestionInput ? "Cancel" : "+ Add"}
-                  </ThemedText>
-                </Pressable>
+                <ThemedText style={[styles.optionalLabel, { color: theme.textTertiary }]}>
+                  Optional
+                </ThemedText>
               </View>
-
-              {showQuestionInput ? (
-                <View style={styles.questionInputRow}>
-                  <TextInput
-                    style={[styles.questionInput, { color: theme.text, borderColor: theme.borderLight }]}
-                    placeholder="Enter a question for the homeowner..."
-                    placeholderTextColor={theme.textTertiary}
-                    value={newQuestion}
-                    onChangeText={setNewQuestion}
-                    onSubmitEditing={() => {
-                      handleAddQuestion();
-                      setShowQuestionInput(false);
-                    }}
-                    returnKeyType="done"
-                    autoFocus
-                  />
-                  <Pressable
-                    onPress={() => {
-                      handleAddQuestion();
-                      setShowQuestionInput(false);
-                    }}
-                    style={[styles.questionAddBtn, { backgroundColor: Colors.accent }]}
-                  >
-                    <Feather name="check" size={16} color="#fff" />
-                  </Pressable>
-                </View>
+              <TextInput
+                style={[
+                  styles.descInput,
+                  { color: theme.text, borderColor: theme.borderLight, backgroundColor: theme.backgroundElevated },
+                ]}
+                placeholder="Describe what's included, tools you use, what makes you stand out..."
+                placeholderTextColor={theme.textTertiary}
+                value={description}
+                onChangeText={setDescription}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+                testID="input-description"
+              />
+              <Pressable
+                onPress={handleImproveDescription}
+                disabled={isImprovingDescription || !name.trim() || !category}
+                style={[
+                  styles.improveBtn,
+                  {
+                    backgroundColor: Colors.accent + "12",
+                    borderColor: Colors.accent + "30",
+                    opacity: (!name.trim() || !category) ? 0.5 : 1,
+                  },
+                ]}
+                testID="button-improve-description"
+              >
+                {isImprovingDescription ? (
+                  <ActivityIndicator size="small" color={Colors.accent} style={{ marginRight: 6 }} />
+                ) : (
+                  <Feather name="zap" size={14} color={Colors.accent} style={{ marginRight: 6 }} />
+                )}
+                <ThemedText style={[styles.improveBtnText, { color: Colors.accent }]}>
+                  {isImprovingDescription ? "Improving..." : "Improve description with AI"}
+                </ThemedText>
+              </Pressable>
+              {priceSuggestion?.hint && !priceSuggestionDismissed && name.trim().length > 0 && category.length > 0 ? (
+                <Animated.View entering={FadeIn.duration(250)} style={[styles.hintRow, { backgroundColor: theme.backgroundElevated }]}>
+                  <Feather name="info" size={13} color={theme.textTertiary} style={{ marginRight: 5 }} />
+                  <ThemedText style={[styles.hintText, { color: theme.textTertiary }]}>
+                    {priceSuggestion.hint}
+                  </ThemedText>
+                </Animated.View>
               ) : null}
-
-              {intakeQuestions.map((q) => (
-                <View
-                  key={q.id}
-                  style={[styles.questionChip, { backgroundColor: theme.backgroundElevated }]}
-                >
-                  <ThemedText type="caption" style={{ flex: 1 }}>
-                    {q.question}
-                  </ThemedText>
-                  <Pressable onPress={() => handleRemoveQuestion(q.id)}>
-                    <Feather name="x" size={16} color={theme.textSecondary} />
-                  </Pressable>
-                </View>
-              ))}
-
-              <View style={styles.divider} />
-
-              <View style={styles.toggleRow}>
-                <ThemedText type="body" style={{ fontWeight: "600" }}>
-                  Require Photos
-                </ThemedText>
-                <Switch
-                  value={requirePhotos}
-                  onValueChange={setRequirePhotos}
-                  trackColor={{ false: theme.borderLight, true: Colors.accent }}
-                  thumbColor="#fff"
-                  ios_backgroundColor={theme.borderLight}
-                />
-              </View>
             </GlassCard>
           </Animated.View>
 
+          {saveError.length > 0 ? (
+            <Animated.View entering={FadeIn.duration(200)}>
+              <View style={[styles.errorBanner, { backgroundColor: "#FF453A20", borderColor: "#FF453A40" }]}>
+                <Feather name="alert-circle" size={16} color="#FF453A" style={{ marginRight: 6 }} />
+                <ThemedText style={[styles.errorText, { color: "#FF453A" }]}>{saveError}</ThemedText>
+              </View>
+            </Animated.View>
+          ) : null}
+
           <Animated.View entering={FadeInDown.delay(300).duration(300)}>
-            <View style={styles.actionsContainer}>
-              <PrimaryButton onPress={handleSave} disabled={!isValid || isSaving}>
-                {isSaving ? "Saving..." : "Save Service"}
-              </PrimaryButton>
-              
-              <Pressable
-                style={[styles.previewButton, { borderColor: theme.borderLight }]}
-                onPress={handlePreview}
-              >
-                <Feather name="eye" size={18} color={theme.text} />
-                <ThemedText style={{ marginLeft: Spacing.sm }}>
-                  Preview as Homeowner
-                </ThemedText>
-              </Pressable>
-            </View>
+            <PrimaryButton
+              onPress={handleSave}
+              disabled={!isValid || isSaving}
+              testID="button-save-service"
+            >
+              {isSaving ? "Saving..." : isEditMode ? "Save Changes" : "Save Service"}
+            </PrimaryButton>
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -656,12 +771,8 @@ export default function NewServiceScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  flex: {
-    flex: 1,
-  },
+  container: { flex: 1 },
+  flex: { flex: 1 },
   content: {
     padding: Spacing.screenPadding,
     gap: Spacing.md,
@@ -674,51 +785,55 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     letterSpacing: 0.5,
     marginBottom: Spacing.md,
-    opacity: 0.7,
   },
-  inputGroup: {
-    marginBottom: Spacing.md,
-  },
-  label: {
-    marginBottom: Spacing.xs,
-  },
-  labelRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: Spacing.xs,
-  },
-  textInput: {
+  nameInput: {
     ...Typography.body,
     padding: Spacing.md,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
+    fontSize: 16,
   },
-  textArea: {
-    minHeight: 80,
-    paddingTop: Spacing.md,
-  },
-  aiButton: {
+  categorySuggestion: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    marginTop: Spacing.sm,
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    gap: Spacing.xs,
   },
-  aiButtonText: {
-    ...Typography.caption2,
+  categorySuggestionText: {
+    ...Typography.caption1,
     fontWeight: "500",
+  },
+  categorySuggestionBtn: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.sm,
+  },
+  categorySuggestionBtnText: {
+    ...Typography.caption2,
+    color: "#fff",
+    fontWeight: "700",
+  },
+  categorySuggestionDismiss: {
+    marginLeft: "auto",
+    padding: 2,
   },
   categoryGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: Spacing.xs,
+    gap: Spacing.xs + 2,
   },
-  categoryOption: {
+  categoryChip: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
   },
-  categoryOptionText: {
+  categoryChipText: {
     ...Typography.subhead,
     fontWeight: "500",
   },
@@ -730,9 +845,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: Spacing.md,
     borderRadius: BorderRadius.md,
-    borderWidth: 1,
+    borderWidth: 1.5,
   },
-  pricingIcon: {
+  pricingIconBox: {
     width: 40,
     height: 40,
     borderRadius: BorderRadius.md,
@@ -740,12 +855,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: Spacing.md,
   },
-  pricingInfo: {
-    flex: 1,
-  },
+  pricingInfo: { flex: 1 },
   pricingName: {
+    ...Typography.body,
     fontWeight: "600",
     marginBottom: 2,
+  },
+  pricingDesc: {
+    ...Typography.caption1,
   },
   radioOuter: {
     width: 22,
@@ -760,13 +877,22 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
   },
+  priceSection: {
+    marginTop: Spacing.md,
+  },
+  subLabel: {
+    ...Typography.caption1,
+    fontWeight: "600",
+    marginBottom: Spacing.xs,
+  },
   priceInputRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: Spacing.md,
   },
-  dollarIcon: {
-    marginRight: Spacing.sm,
+  dollarSign: {
+    ...Typography.title2,
+    fontWeight: "600",
+    marginRight: Spacing.xs,
   },
   priceInput: {
     ...Typography.title2,
@@ -776,121 +902,183 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     fontWeight: "600",
   },
-  billingRow: {
+  tiersHeader: {
     flexDirection: "row",
-    gap: Spacing.xs,
-    marginBottom: Spacing.md,
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Spacing.sm,
   },
-  billingOption: {
+  addTierBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.sm,
+    gap: 4,
+  },
+  addTierText: {
+    ...Typography.caption1,
+    fontWeight: "600",
+  },
+  tierRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  tierLabelInput: {
+    ...Typography.body,
     flex: 1,
-    paddingVertical: Spacing.sm + 2,
-    borderRadius: BorderRadius.md,
+    padding: Spacing.sm + 2,
+    borderRadius: BorderRadius.sm,
     borderWidth: 1,
+  },
+  tierPriceRow: {
+    flexDirection: "row",
     alignItems: "center",
   },
-  billingText: {
-    ...Typography.subhead,
+  tierPriceInput: {
+    ...Typography.body,
+    width: 80,
+    padding: Spacing.sm + 2,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    fontWeight: "600",
+  },
+  removeTierBtn: {
+    padding: 6,
+  },
+  suggestionBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    marginTop: Spacing.sm,
+  },
+  suggestionText: {
+    ...Typography.caption1,
     fontWeight: "500",
+  },
+  quoteNotice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    marginTop: Spacing.md,
+  },
+  quoteNoticeText: {
+    ...Typography.caption1,
+    flex: 1,
+    lineHeight: 18,
   },
   durationRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingTop: Spacing.sm,
+    flexWrap: "wrap",
+    gap: Spacing.xs + 2,
   },
-  durationLabel: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  discountRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.xs,
-    marginBottom: Spacing.sm,
-  },
-  discountIcon: {
-    padding: Spacing.sm,
-  },
-  discountNameInput: {
-    flex: 2,
-    ...Typography.body,
-    padding: Spacing.sm,
-    borderRadius: BorderRadius.md,
-  },
-  discountPercentInput: {
-    width: 50,
-    ...Typography.body,
-    padding: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    textAlign: "center",
-  },
-  addDiscountBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: BorderRadius.sm,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  noDiscounts: {
-    fontStyle: "italic",
-    textAlign: "center",
+  durationChip: {
+    paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
-  },
-  toggleRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: Spacing.xs,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: "rgba(128,128,128,0.2)",
-    marginVertical: Spacing.md,
-  },
-  intakeHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: Spacing.sm,
-  },
-  questionChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: Spacing.sm,
-    borderRadius: BorderRadius.sm,
-    marginBottom: Spacing.xs,
-  },
-  questionInputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    marginBottom: Spacing.sm,
-  },
-  questionInput: {
-    flex: 1,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
-    fontSize: 14,
-  },
-  questionAddBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  actionsContainer: {
-    gap: Spacing.sm,
-    marginTop: Spacing.md,
-  },
-  previewButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: Spacing.md,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
+  },
+  durationChipText: {
+    ...Typography.subhead,
+    fontWeight: "500",
+  },
+  descHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Spacing.md,
+  },
+  optionalLabel: {
+    ...Typography.caption2,
+    marginBottom: Spacing.md,
+  },
+  descInput: {
+    ...Typography.body,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    minHeight: 100,
+    paddingTop: Spacing.md,
+  },
+  improveBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: Spacing.sm + 2,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    marginTop: Spacing.sm,
+  },
+  improveBtnText: {
+    ...Typography.caption1,
+    fontWeight: "600",
+  },
+  hintRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    marginTop: Spacing.sm,
+  },
+  hintText: {
+    ...Typography.caption2,
+    flex: 1,
+    lineHeight: 16,
+  },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+  },
+  errorText: {
+    ...Typography.body,
+    flex: 1,
+  },
+  tipCard: {
+    padding: 0,
+    overflow: "hidden",
+    borderWidth: 1,
+  },
+  tipRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    padding: Spacing.md,
+    gap: Spacing.md,
+  },
+  tipIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tipContent: { flex: 1 },
+  tipTitle: {
+    ...Typography.body,
+    fontWeight: "700",
+    marginBottom: 3,
+  },
+  tipBody: {
+    ...Typography.caption1,
+    lineHeight: 18,
+  },
+  tipClose: {
+    padding: 4,
+  },
+  tipAction: {
+    borderTopWidth: 1,
+    paddingVertical: Spacing.md,
+    alignItems: "center",
+  },
+  tipActionText: {
+    ...Typography.body,
+    fontWeight: "600",
   },
 });

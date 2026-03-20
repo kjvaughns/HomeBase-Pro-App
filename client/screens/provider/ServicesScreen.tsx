@@ -40,6 +40,7 @@ interface ProviderService {
   basePrice: string | null;
   priceFrom: string | null;
   priceTo: string | null;
+  priceTiersJson: string | null;
   duration: number | null;
   isPublished: boolean;
 }
@@ -58,7 +59,24 @@ function getPricingLabel(type: PricingType): string {
 function getPriceDisplay(service: ProviderService): string {
   switch (service.pricingType) {
     case "fixed": return service.basePrice ? `$${parseFloat(service.basePrice).toFixed(0)}` : "TBD";
-    case "variable": return (service.priceFrom && service.priceTo) ? `$${parseFloat(service.priceFrom).toFixed(0)} - $${parseFloat(service.priceTo).toFixed(0)}` : "Variable";
+    case "variable": {
+      if (service.priceTiersJson) {
+        try {
+          const tiers: Array<{ label: string; price: string }> = JSON.parse(service.priceTiersJson);
+          if (tiers.length > 0) {
+            const prices = tiers.map((t) => parseFloat(t.price)).filter((p) => !isNaN(p));
+            if (prices.length > 1) {
+              return `$${Math.min(...prices).toFixed(0)} – $${Math.max(...prices).toFixed(0)}`;
+            } else if (prices.length === 1) {
+              return `From $${prices[0].toFixed(0)}`;
+            }
+          }
+        } catch {}
+      }
+      return (service.priceFrom && service.priceTo)
+        ? `$${parseFloat(service.priceFrom).toFixed(0)} - $${parseFloat(service.priceTo).toFixed(0)}`
+        : service.basePrice ? `From $${parseFloat(service.basePrice).toFixed(0)}` : "Tiered";
+    }
     case "service_call": return service.basePrice ? `$${parseFloat(service.basePrice).toFixed(0)} + hourly` : "Call for price";
     case "quote": return "Ask for Price";
   }

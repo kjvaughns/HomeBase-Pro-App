@@ -989,207 +989,101 @@ Respond with a JSON object ONLY (no markdown, no explanation):
     }
   });
 
-  // ============ SERVICE BUILDER ROUTES ============
+  // ============ INLINE AI SUGGESTION ROUTES ============
 
-  const SERVICE_BUILDER_PROMPT = `You are HomeBase's AI Service Builder assistant. Help service providers create optimized, professional service listings.
-
-Industry-specific pricing models:
-- HVAC: Service call fee + hourly labor + parts markup. Typical: $79-149 service call, $85-150/hour labor
-- Plumbing: Service call + hourly OR flat rate for common jobs. Typical: $75-125/hour, drain cleaning $150-300
-- Electrical: Hourly with minimum call fee. Typical: $80-120/hour, 1-2 hour minimum
-- Cleaning: Hourly OR per square foot OR flat rate packages. Typical: $25-50/hour, $0.10-0.25/sqft
-- Landscaping: Per visit, per acre, or subscription/package. Typical: mowing $30-80/visit
-- Handyman: Hourly with minimum. Typical: $50-100/hour, 2-hour minimum
-- Painting: Per room, per sqft, or project quote. Typical: $300-800/room, $2-6/sqft
-- Roofing: Per square (100 sqft) or project-based. Typical: $300-700/square
-
-Always respond with valid JSON containing:
-- message: Your conversational response text
-- nextStep: "type" | "name" | "pricing" | "details" | "review"
-- options: array of {id, label, description, icon} if showing choices (optional)
-- showInput: boolean if text input needed (optional)
-- inputType: "text" | "price" | "select" (optional)
-- serviceDraft: partial service object to update (optional)
-
-Be encouraging and professional. Use industry knowledge to suggest optimal pricing and descriptions.`;
-
-  app.post("/api/service-builder/next", async (req: Request, res: Response) => {
+  app.post("/api/ai/suggest-description", async (req: Request, res: Response) => {
     try {
-      const { step, input, serviceDraft } = req.body;
-
-      const businessType = serviceDraft?.businessType || input;
-      let responseData;
-
-      if (step === "type") {
-        const pricingOptions = getPricingOptionsForType(businessType);
-        responseData = {
-          message: `Great choice! ${getBusinessTypeIntro(businessType)} Let's set up your first service. What would you like to call it?`,
-          nextStep: "name",
-          showInput: true,
-          inputType: "text",
-        };
-      } else if (step === "name") {
-        const pricingOptions = getPricingOptionsForType(serviceDraft?.businessType || "general");
-        responseData = {
-          message: `"${input}" - nice! Now let's set your pricing. Based on ${getBusinessTypeName(serviceDraft?.businessType)} industry standards, here are the most effective pricing models:`,
-          nextStep: "pricing",
-          options: pricingOptions,
-          serviceDraft: { serviceName: input },
-        };
-      } else if (step === "pricing") {
-        const pricingInfo = getPricingDefaults(serviceDraft?.businessType, input);
-        const description = generateServiceDescription(serviceDraft?.serviceName, serviceDraft?.businessType, input);
-        
-        responseData = {
-          message: `Perfect! I've set up ${pricingInfo.label} pricing for you. Based on market rates for ${getBusinessTypeName(serviceDraft?.businessType)}, I recommend starting at ${pricingInfo.suggestedPrice}. Here's a professional description I created for your service:`,
-          nextStep: "review",
-          serviceDraft: { 
-            pricingModel: input, 
-            basePrice: pricingInfo.defaultPrice,
-            priceUnit: pricingInfo.unit,
-            description: description,
-          },
-        };
-      } else {
-        responseData = {
-          message: "Your service is ready to publish!",
-          nextStep: "review",
-        };
+      const { serviceName, category } = req.body as { serviceName: string; category: string };
+      if (!serviceName || !category) {
+        return res.status(400).json({ error: "serviceName and category are required" });
       }
 
-      res.json(responseData);
+      const prompt = `You are a professional copywriter for home service businesses. Write a concise, compelling service description for a provider listing.
+
+Service Name: ${serviceName}
+Category: ${category}
+
+Write a 2-3 sentence professional description that:
+- Highlights key benefits for the homeowner
+- Mentions quality and reliability
+- Sounds natural and specific to this service type
+
+Respond with ONLY the description text, no quotes, no extra formatting.`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 200,
+      });
+
+      const description = response.choices[0]?.message?.content?.trim() || "";
+      res.json({ description });
     } catch (error) {
-      console.error("Service builder error:", error);
-      res.status(500).json({ error: "Failed to process service builder request" });
+      console.error("Suggest description error:", error);
+      res.status(500).json({ error: "Failed to generate description" });
     }
   });
 
-  function getBusinessTypeIntro(type: string): string {
-    const intros: Record<string, string> = {
-      hvac: "HVAC is a high-demand field with great earning potential.",
-      plumbing: "Plumbing services are always in demand, especially for emergencies.",
-      electrical: "Electrical work commands premium rates due to licensing requirements.",
-      cleaning: "Cleaning services offer flexible scheduling and recurring revenue.",
-      landscaping: "Lawn care is perfect for building subscription-based income.",
-      handyman: "Handyman services are versatile and always needed.",
-      painting: "Painting projects offer great margins on labor.",
-      roofing: "Roofing is seasonal but highly profitable per project.",
-    };
-    return intros[type] || "Home services are always in demand.";
-  }
+  app.post("/api/ai/suggest-price", async (req: Request, res: Response) => {
+    try {
+      const { serviceName, category, pricingType, location } = req.body as {
+        serviceName: string;
+        category: string;
+        pricingType: string;
+        location?: string;
+      };
 
-  function getBusinessTypeName(type: string): string {
-    const names: Record<string, string> = {
-      hvac: "HVAC",
-      plumbing: "plumbing",
-      electrical: "electrical",
-      cleaning: "cleaning",
-      landscaping: "landscaping",
-      handyman: "handyman",
-      painting: "painting",
-      roofing: "roofing",
-    };
-    return names[type] || "home services";
-  }
+      if (!serviceName || !category || !pricingType) {
+        return res.status(400).json({ error: "serviceName, category, and pricingType are required" });
+      }
 
-  function getPricingOptionsForType(type: string) {
-    const options: Record<string, Array<{id: string; label: string; description: string; icon: string}>> = {
-      hvac: [
-        { id: "service_call", label: "Service Call + Hourly", description: "Diagnostic fee plus labor rate", icon: "clock" },
-        { id: "flat", label: "Flat Rate", description: "Fixed price per job type", icon: "tag" },
-      ],
-      plumbing: [
-        { id: "hourly", label: "Hourly Rate", description: "Charge by the hour", icon: "clock" },
-        { id: "flat", label: "Flat Rate", description: "Fixed price for common jobs", icon: "tag" },
-        { id: "service_call", label: "Service Call + Labor", description: "Call fee plus hourly", icon: "phone" },
-      ],
-      electrical: [
-        { id: "hourly", label: "Hourly Rate", description: "Standard hourly billing", icon: "clock" },
-        { id: "flat", label: "Flat Rate", description: "Per-project pricing", icon: "tag" },
-      ],
-      cleaning: [
-        { id: "hourly", label: "Hourly Rate", description: "Great for deep cleans", icon: "clock" },
-        { id: "per_sqft", label: "Per Square Foot", description: "Scale with home size", icon: "maximize" },
-        { id: "flat", label: "Package Rate", description: "Fixed weekly/monthly packages", icon: "package" },
-      ],
-      landscaping: [
-        { id: "flat", label: "Per Visit", description: "Fixed price each visit", icon: "calendar" },
-        { id: "subscription", label: "Monthly Subscription", description: "Recurring revenue", icon: "repeat" },
-      ],
-      handyman: [
-        { id: "hourly", label: "Hourly Rate", description: "Flexible for varied tasks", icon: "clock" },
-        { id: "flat", label: "Per Job", description: "Quote per project", icon: "clipboard" },
-      ],
-      painting: [
-        { id: "per_sqft", label: "Per Square Foot", description: "Industry standard", icon: "maximize" },
-        { id: "flat", label: "Per Room", description: "Easy for clients", icon: "home" },
-      ],
-      roofing: [
-        { id: "per_sqft", label: "Per Square", description: "Per 100 sq ft roofing", icon: "triangle" },
-        { id: "flat", label: "Project Quote", description: "Custom per job", icon: "file-text" },
-      ],
-    };
-    return options[type] || [
-      { id: "hourly", label: "Hourly Rate", description: "Charge by the hour", icon: "clock" },
-      { id: "flat", label: "Flat Rate", description: "Fixed price per job", icon: "tag" },
-    ];
-  }
+      const pricingContext: Record<string, string> = {
+        "flat": "a single flat rate for the entire job",
+        "variable": "tier-based pricing (e.g., small/medium/large with different rates)",
+        "service_call": "a service call fee plus hourly labor",
+        "quote": "custom quote only — no upfront price",
+      };
 
-  function getPricingDefaults(businessType: string, pricingModel: string) {
-    const defaults: Record<string, Record<string, {defaultPrice: number; unit: string; label: string; suggestedPrice: string}>> = {
-      hvac: {
-        service_call: { defaultPrice: 89, unit: "service call", label: "service call + hourly", suggestedPrice: "$89 service call + $95/hour" },
-        flat: { defaultPrice: 150, unit: "job", label: "flat rate", suggestedPrice: "$150-400 per job type" },
-        hourly: { defaultPrice: 95, unit: "hour", label: "hourly", suggestedPrice: "$85-120/hour" },
-      },
-      plumbing: {
-        hourly: { defaultPrice: 95, unit: "hour", label: "hourly", suggestedPrice: "$85-125/hour" },
-        flat: { defaultPrice: 175, unit: "job", label: "flat rate", suggestedPrice: "$175-350 for common jobs" },
-        service_call: { defaultPrice: 75, unit: "service call", label: "service call", suggestedPrice: "$75 call fee + $90/hour" },
-      },
-      electrical: {
-        hourly: { defaultPrice: 100, unit: "hour", label: "hourly", suggestedPrice: "$90-130/hour" },
-        flat: { defaultPrice: 200, unit: "job", label: "flat rate", suggestedPrice: "$150-500 per project" },
-      },
-      cleaning: {
-        hourly: { defaultPrice: 35, unit: "hour", label: "hourly", suggestedPrice: "$30-50/hour" },
-        per_sqft: { defaultPrice: 0.15, unit: "sq ft", label: "per square foot", suggestedPrice: "$0.10-0.25/sq ft" },
-        flat: { defaultPrice: 150, unit: "visit", label: "package", suggestedPrice: "$120-200 per visit" },
-      },
-      landscaping: {
-        flat: { defaultPrice: 50, unit: "visit", label: "per visit", suggestedPrice: "$40-80 per visit" },
-        subscription: { defaultPrice: 150, unit: "month", label: "monthly", suggestedPrice: "$125-200/month" },
-      },
-      handyman: {
-        hourly: { defaultPrice: 65, unit: "hour", label: "hourly", suggestedPrice: "$55-85/hour" },
-        flat: { defaultPrice: 150, unit: "job", label: "per job", suggestedPrice: "$100-300 per project" },
-      },
-      painting: {
-        per_sqft: { defaultPrice: 3.5, unit: "sq ft", label: "per square foot", suggestedPrice: "$2.50-5.00/sq ft" },
-        flat: { defaultPrice: 400, unit: "room", label: "per room", suggestedPrice: "$300-600 per room" },
-      },
-      roofing: {
-        per_sqft: { defaultPrice: 450, unit: "square", label: "per square", suggestedPrice: "$350-600 per square" },
-        flat: { defaultPrice: 5000, unit: "project", label: "project", suggestedPrice: "$4,000-12,000 per project" },
-      },
-    };
+      const prompt = `You are a pricing expert for home service providers. Suggest a competitive price range for this service.
 
-    return defaults[businessType]?.[pricingModel] || { defaultPrice: 75, unit: "hour", label: "standard", suggestedPrice: "$50-100/hour" };
-  }
+Service Name: ${serviceName}
+Category: ${category}
+Pricing Type: ${pricingType} (${pricingContext[pricingType] || pricingType})
+${location ? `Location: ${location}` : ""}
 
-  function generateServiceDescription(serviceName: string, businessType: string, pricingModel: string): string {
-    const templates: Record<string, string> = {
-      hvac: `Professional ${serviceName || "HVAC service"} with fast response times. Licensed and insured technicians provide quality workmanship on all heating, cooling, and ventilation systems. Same-day appointments available for urgent issues.`,
-      plumbing: `Expert ${serviceName || "plumbing service"} for residential and commercial properties. From minor repairs to major installations, we deliver reliable solutions. Available for emergency calls 24/7.`,
-      electrical: `Licensed ${serviceName || "electrical service"} ensuring safety and code compliance. Experienced electricians handle everything from outlet repairs to panel upgrades. Free estimates provided.`,
-      cleaning: `Thorough ${serviceName || "cleaning service"} that leaves your space spotless. We use eco-friendly products and pay attention to every detail. Flexible scheduling to fit your needs.`,
-      landscaping: `Professional ${serviceName || "lawn care"} to keep your outdoor space beautiful. Regular maintenance, seasonal cleanup, and custom landscaping solutions. Reliable weekly service available.`,
-      handyman: `Versatile ${serviceName || "handyman service"} for all your home repair needs. No job too small. From quick fixes to weekend projects, we get it done right the first time.`,
-      painting: `Quality ${serviceName || "painting service"} with meticulous prep work and clean lines. Premium paints, professional results. Interior and exterior work with color consultation included.`,
-      roofing: `Trusted ${serviceName || "roofing service"} protecting your home from the elements. Expert repairs, replacements, and inspections. Comprehensive warranties on all work performed.`,
-    };
-    return templates[businessType] || `Professional ${serviceName || "service"} delivered with expertise and care. Quality workmanship guaranteed.`;
-  }
+Industry benchmarks:
+- HVAC: $89-149 service call, $85-150/hour, $150-400 flat jobs
+- Plumbing: $75-125/hour, $150-300 drain cleaning, $75-125 service call
+- Electrical: $80-130/hour, 2-hour minimum
+- Cleaning: $30-50/hour, $120-200 flat visit, $0.10-0.25/sqft
+- Landscaping: $40-80/visit, $125-200/month subscription
+- Handyman: $55-85/hour, $100-300 per job
+- Painting: $2.50-5.00/sqft, $300-600/room
+- Roofing: $350-600/square, $4,000-12,000 project
+
+Respond ONLY with a JSON object:
+{"minPrice": <number>, "maxPrice": <number>, "unit": "<string, e.g. 'per hour', 'flat rate', 'per visit'>", "hint": "<1 short sentence tip>"}`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 150,
+      });
+
+      const content = response.choices[0]?.message?.content || "";
+      try {
+        const suggestion = JSON.parse(content.replace(/```json\n?|\n?```/g, "").trim());
+        res.json({ suggestion });
+      } catch {
+        res.json({
+          suggestion: { minPrice: 50, maxPrice: 150, unit: "per job", hint: "Price competitively to win your first bookings." },
+        });
+      }
+    } catch (error) {
+      console.error("Suggest price error:", error);
+      res.status(500).json({ error: "Failed to generate price suggestion" });
+    }
+  });
 
   // ============ SMART INTAKE ROUTES ============
 
@@ -1691,7 +1585,7 @@ Respond with JSON only:
         return res.status(403).json({ error: "Forbidden" });
       }
       // Allowlist mutable fields only — prevent mass-assignment of id/providerId/createdAt
-      const { name, category, description, pricingType, basePrice, priceFrom, priceTo, duration, isPublished } = req.body;
+      const { name, category, description, pricingType, basePrice, priceFrom, priceTo, priceTiersJson, duration, isPublished } = req.body;
       const allowedUpdate: Partial<typeof providerCustomServices.$inferInsert> = {};
       if (name !== undefined) allowedUpdate.name = name;
       if (category !== undefined) allowedUpdate.category = category;
@@ -1700,6 +1594,7 @@ Respond with JSON only:
       if (basePrice !== undefined) allowedUpdate.basePrice = basePrice;
       if (priceFrom !== undefined) allowedUpdate.priceFrom = priceFrom;
       if (priceTo !== undefined) allowedUpdate.priceTo = priceTo;
+      if (priceTiersJson !== undefined) allowedUpdate.priceTiersJson = priceTiersJson;
       if (duration !== undefined) allowedUpdate.duration = duration;
       if (isPublished !== undefined) allowedUpdate.isPublished = isPublished;
       const [svc] = await db.update(providerCustomServices)

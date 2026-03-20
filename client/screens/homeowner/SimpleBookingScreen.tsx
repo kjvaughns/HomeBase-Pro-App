@@ -64,6 +64,7 @@ interface ProviderService {
   basePrice: string | null;
   priceFrom: string | null;
   priceTo: string | null;
+  priceTiersJson: string | null;
   duration: number | null;
 }
 
@@ -308,8 +309,23 @@ export default function SimpleBookingScreen() {
             providerServices.map((svc) => {
               const isSelected = selectedServiceId === svc.id;
               let priceLabel = "Contact for pricing";
-              if (svc.basePrice) priceLabel = `$${parseFloat(svc.basePrice).toFixed(0)}`;
-              else if (svc.priceFrom && svc.priceTo) priceLabel = `$${parseFloat(svc.priceFrom).toFixed(0)} - $${parseFloat(svc.priceTo).toFixed(0)}`;
+              if (svc.pricingType === "quote") {
+                priceLabel = "Quote required";
+              } else if (svc.priceTiersJson) {
+                try {
+                  const tiers: Array<{ label: string; price: string }> = JSON.parse(svc.priceTiersJson);
+                  const prices = tiers.map((t) => parseFloat(t.price)).filter((p) => !isNaN(p));
+                  if (prices.length > 1) {
+                    priceLabel = `$${Math.min(...prices).toFixed(0)} – $${Math.max(...prices).toFixed(0)}`;
+                  } else if (prices.length === 1) {
+                    priceLabel = `From $${prices[0].toFixed(0)}`;
+                  }
+                } catch {}
+              } else if (svc.basePrice) {
+                priceLabel = `$${parseFloat(svc.basePrice).toFixed(0)}`;
+              } else if (svc.priceFrom && svc.priceTo) {
+                priceLabel = `$${parseFloat(svc.priceFrom).toFixed(0)} - $${parseFloat(svc.priceTo).toFixed(0)}`;
+              }
               return (
                 <Pressable
                   key={svc.id}
@@ -437,7 +453,36 @@ export default function SimpleBookingScreen() {
         ]}
       >
         <View style={styles.priceRow}>
-          {selectedService?.basePrice ? (
+          {selectedService?.pricingType === "quote" ? (
+            <ThemedText style={[styles.priceLabel, { color: theme.textSecondary }]}>
+              Quote will be provided
+            </ThemedText>
+          ) : selectedService?.priceTiersJson ? (
+            (() => {
+              try {
+                const tiers: Array<{ label: string; price: string }> = JSON.parse(selectedService.priceTiersJson);
+                const prices = tiers.map((t) => parseFloat(t.price)).filter((p) => !isNaN(p));
+                if (prices.length > 1) {
+                  return (
+                    <>
+                      <ThemedText style={[styles.priceLabel, { color: theme.textSecondary }]}>Range</ThemedText>
+                      <ThemedText style={styles.priceValue}>
+                        ${Math.min(...prices).toFixed(0)} – ${Math.max(...prices).toFixed(0)}
+                      </ThemedText>
+                    </>
+                  );
+                } else if (prices.length === 1) {
+                  return (
+                    <>
+                      <ThemedText style={[styles.priceLabel, { color: theme.textSecondary }]}>From</ThemedText>
+                      <ThemedText style={styles.priceValue}>${prices[0].toFixed(0)}</ThemedText>
+                    </>
+                  );
+                }
+              } catch {}
+              return <ThemedText style={[styles.priceLabel, { color: theme.textSecondary }]}>Price to be confirmed</ThemedText>;
+            })()
+          ) : selectedService?.basePrice ? (
             <>
               <ThemedText style={[styles.priceLabel, { color: theme.textSecondary }]}>Price</ThemedText>
               <ThemedText style={styles.priceValue}>
