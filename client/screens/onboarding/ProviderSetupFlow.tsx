@@ -35,7 +35,7 @@ import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useOnboardingStore } from "@/state/onboardingStore";
 import { useAuthStore } from "@/state/authStore";
 import { useProviderStore } from "@/state/providerStore";
-import { apiRequest } from "@/lib/query-client";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ProviderSetupFlow">;
 
@@ -92,6 +92,7 @@ interface SetupData {
   category: string;
   serviceArea: string;
   serviceName: string;
+  serviceDescription: string;
   servicePrice: string;
   quoteRequired: boolean;
   serviceDuration: number;
@@ -275,9 +276,40 @@ function Step2CreateService({
     hint: string;
   } | null>(null);
   const [loadingPrice, setLoadingPrice] = useState(false);
+  const [loadingDescription, setLoadingDescription] = useState(false);
   const priceDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const descDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const suggestions = category ? (SERVICE_NAME_SUGGESTIONS[category] || []).slice(0, 3) : [];
+
+  const fetchDescription = async (serviceName: string) => {
+    if (!serviceName.trim() || !category) return;
+    setLoadingDescription(true);
+    try {
+      const res = await apiRequest("POST", "/api/ai/suggest-description", {
+        serviceName: serviceName.trim(),
+        category,
+      });
+      const json = await res.json();
+      if (json.description) onChange({ serviceDescription: json.description });
+    } catch {
+      // silently fail
+    } finally {
+      setLoadingDescription(false);
+    }
+  };
+
+  useEffect(() => {
+    if (descDebounceRef.current) clearTimeout(descDebounceRef.current);
+    if (!data.serviceName.trim() || !category) {
+      onChange({ serviceDescription: "" });
+      return;
+    }
+    descDebounceRef.current = setTimeout(() => fetchDescription(data.serviceName), 1200);
+    return () => {
+      if (descDebounceRef.current) clearTimeout(descDebounceRef.current);
+    };
+  }, [data.serviceName, category]);
 
   useEffect(() => {
     if (priceDebounceRef.current) clearTimeout(priceDebounceRef.current);
@@ -343,14 +375,14 @@ function Step2CreateService({
           <View style={styles.suggestionRow}>
             <Feather name="zap" size={12} color={Colors.accent} />
             <ThemedText type="caption" style={{ color: Colors.accent, marginRight: Spacing.sm }}>
-              Suggestions:
+              Quick picks:
             </ThemedText>
             {suggestions.map((s) => (
               <Pressable
                 key={s}
                 onPress={() => {
                   Haptics.selectionAsync();
-                  onChange({ serviceName: s });
+                  onChange({ serviceName: s, serviceDescription: "" });
                 }}
                 style={[
                   styles.suggestionChip,
@@ -369,6 +401,31 @@ function Step2CreateService({
                 </ThemedText>
               </Pressable>
             ))}
+          </View>
+        ) : null}
+
+        {data.serviceDescription || loadingDescription ? (
+          <View style={[styles.descriptionPreview, { backgroundColor: Colors.accent + "08", borderColor: Colors.accent + "30" }]}>
+            {loadingDescription ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.xs }}>
+                <ActivityIndicator size="small" color={Colors.accent} />
+                <ThemedText type="caption" style={{ color: Colors.accent }}>
+                  Writing description...
+                </ThemedText>
+              </View>
+            ) : (
+              <>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: Spacing.xs }}>
+                  <Feather name="zap" size={11} color={Colors.accent} />
+                  <ThemedText type="caption" style={{ color: Colors.accent, fontWeight: "600" }}>
+                    AI Description
+                  </ThemedText>
+                </View>
+                <ThemedText type="caption" style={{ color: theme.textSecondary, lineHeight: 18 }}>
+                  {data.serviceDescription}
+                </ThemedText>
+              </>
+            )}
           </View>
         ) : null}
 
@@ -1205,7 +1262,7 @@ function Step8YouAreLive({
 export default function ProviderSetupFlow({ navigation }: Props) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
-  const { setHasCompletedProviderSetup } = useOnboardingStore();
+  const { setHasCompletedProviderSetup, providerPreSignupData } = useOnboardingStore();
   const { user, providerProfile } = useAuthStore();
   const { addOnboardingService, setProviderAvailability, setProviderBusinessProfile } = useProviderStore();
 
@@ -1214,10 +1271,11 @@ export default function ProviderSetupFlow({ navigation }: Props) {
   const [serviceError, setServiceError] = useState<string | null>(null);
   const [savingService, setSavingService] = useState(false);
   const [data, setData] = useState<SetupData>({
-    businessName: user?.name || "",
-    category: "",
-    serviceArea: "",
+    businessName: providerPreSignupData?.businessName || user?.name || "",
+    category: providerPreSignupData?.category || "",
+    serviceArea: providerPreSignupData?.serviceArea || "",
     serviceName: "",
+    serviceDescription: "",
     servicePrice: "",
     quoteRequired: false,
     serviceDuration: 60,
@@ -1277,7 +1335,7 @@ export default function ProviderSetupFlow({ navigation }: Props) {
           await apiRequest("POST", `/api/provider/${providerProfile.id}/custom-services`, {
             name: service.name,
             category: data.category || "General",
-            description: "",
+            description: data.serviceDescription.trim() || "",
             pricingType: data.quoteRequired ? "quote" : "fixed",
             basePrice: service.price !== null ? String(service.price) : undefined,
             duration: service.durationMinutes,
@@ -1493,6 +1551,13 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
     borderWidth: 1,
+  },
+  descriptionPreview: {
+    borderWidth: 1,
+    borderRadius: BorderRadius.sm,
+    padding: Spacing.sm,
+    marginBottom: Spacing.sm,
+    marginTop: Spacing.xs,
   },
   pricingRow: {
     flexDirection: "row",

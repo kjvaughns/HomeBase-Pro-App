@@ -20,6 +20,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useOnboardingStore } from "@/state/onboardingStore";
+import type { ProviderPreSignupData } from "@/state/onboardingStore";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ProviderOnboarding">;
 
@@ -43,7 +44,7 @@ const SERVICE_CATEGORIES = [
 export default function ProviderOnboardingScreen({ navigation }: Props) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
-  const { setHasCompletedFirstLaunch } = useOnboardingStore();
+  const { setHasCompletedFirstLaunch, setProviderPreSignupData } = useOnboardingStore();
 
   const [currentStep, setCurrentStep] = useState(0);
   const [businessName, setBusinessName] = useState("");
@@ -76,6 +77,11 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
     if (currentStep < TOTAL_STEPS - 1) {
       animateTransition(() => setCurrentStep((s) => s + 1));
     } else {
+      setProviderPreSignupData({
+        businessName: businessName.trim(),
+        category,
+        serviceArea: serviceArea.trim(),
+      });
       setHasCompletedFirstLaunch(true);
       navigation.reset({ index: 0, routes: [{ name: "SignUp" }] });
     }

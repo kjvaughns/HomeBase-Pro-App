@@ -11,6 +11,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuthStore } from "@/state/authStore";
+import { useOnboardingStore } from "@/state/onboardingStore";
 import { apiRequest } from "@/lib/query-client";
 import { Spacing, Colors, Typography } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -22,6 +23,7 @@ export default function SignUpScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { login } = useAuthStore();
+  const { selectedAccountType } = useOnboardingStore();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -85,10 +87,17 @@ export default function SignUpScreen({ navigation }: Props) {
           phone: data.user.phone,
           avatarUrl: data.user.avatarUrl,
         });
-        navigation.reset({
-          index: 0,
-          routes: [{ name: "Onboarding" }],
-        });
+        if (selectedAccountType === "provider") {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "ProviderSetupFlow" }],
+          });
+        } else {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "Onboarding" }],
+          });
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Sign up failed";

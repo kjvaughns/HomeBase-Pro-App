@@ -3,15 +3,23 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type AccountType = "homeowner" | "provider";
 
+export interface ProviderPreSignupData {
+  businessName: string;
+  category: string;
+  serviceArea: string;
+}
+
 interface OnboardingState {
   hasCompletedFirstLaunch: boolean;
   hasCompletedProviderSetup: boolean;
   selectedAccountType: AccountType | null;
+  providerPreSignupData: ProviderPreSignupData | null;
   isHydrated: boolean;
   
   setHasCompletedFirstLaunch: (completed: boolean) => void;
   setHasCompletedProviderSetup: (completed: boolean) => void;
   setAccountType: (type: AccountType) => void;
+  setProviderPreSignupData: (data: ProviderPreSignupData | null) => void;
   reset: () => void;
   hydrate: () => Promise<void>;
 }
@@ -35,6 +43,7 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
   hasCompletedFirstLaunch: false,
   hasCompletedProviderSetup: false,
   selectedAccountType: null,
+  providerPreSignupData: null,
   isHydrated: false,
 
   setHasCompletedFirstLaunch: (completed: boolean) => {
@@ -52,11 +61,16 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
     saveToStorage(get());
   },
 
+  setProviderPreSignupData: (data: ProviderPreSignupData | null) => {
+    set({ providerPreSignupData: data });
+  },
+
   reset: () => {
     set({
       hasCompletedFirstLaunch: false,
       hasCompletedProviderSetup: false,
       selectedAccountType: null,
+      providerPreSignupData: null,
     });
     AsyncStorage.removeItem(STORAGE_KEY);
   },
