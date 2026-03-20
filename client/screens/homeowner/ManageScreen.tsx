@@ -2,7 +2,7 @@ import React, { useState, useCallback } from "react";
 import { StyleSheet, View, FlatList, RefreshControl, ScrollView, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
-import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
@@ -72,7 +72,7 @@ type Section = {
 export default function ManageScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
-  const tabBarHeight = useBottomTabBarHeight();
+  const tabBarHeight = useFloatingTabBarHeight();
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
   const { isAuthenticated, user } = useAuthStore();

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from "react";
 import { StyleSheet, View, FlatList, RefreshControl, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
-import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import { useNavigation } from "@react-navigation/native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
@@ -670,7 +670,7 @@ function MonthView({ selectedDate, jobs, onDateSelect, onJobPress }: MonthViewPr
 export default function ScheduleScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
-  const tabBarHeight = useBottomTabBarHeight();
+  const tabBarHeight = useFloatingTabBarHeight();
   const navigation = useNavigation<any>();
   const { theme } = useTheme();
   const { providerProfile } = useAuthStore();

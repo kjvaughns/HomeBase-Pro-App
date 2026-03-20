@@ -1,0 +1,187 @@
+Good catch. That chat-based “AI service builder” is exactly the kind of thing that sounds cool but kills usability.
+
+You don’t want providers **talking to AI to build their business**.
+You want them **setting up their business fast**, with AI quietly making it better.
+
+Here’s the prompt to fix it properly:
+
+---
+
+## 🔧 Prompt: Replace AI Service Builder with Smart Service Setup
+
+Analyze the current “AI service builder” feature and completely remove or replace it with a simple, structured service creation system enhanced by inline AI suggestions.
+
+---
+
+## Phase 1: Remove the Current System
+
+Identify and remove:
+
+* chat-based service builder UI
+* unnecessary conversational flows
+* anything that slows down creating a service
+* any AI that requires typing prompts to function
+
+If AI adds friction, remove it.
+
+---
+
+## Phase 2: Build Simple Service Creation
+
+Create a clean, fast “Add Service” flow.
+
+### Required Fields:
+
+* Service Name
+
+* Description (optional but recommended)
+
+* Pricing Type:
+
+  * Fixed price
+  * Starting price
+  * Quote required
+
+* Price (if applicable)
+
+* Duration
+
+* Service Area (optional if global)
+
+---
+
+## Phase 3: Smart Pricing Models (Important)
+
+Support real world service logic:
+
+### 1. Flat Rate
+
+Example: Lawn cut = $50
+
+### 2. Size Based Pricing
+
+Example:
+
+* Small yard (0–5,000 sqft)
+* Medium yard (5,000–10,000 sqft)
+* Large yard (10,000+ sqft)
+
+### 3. Custom Quote
+
+User submits request, provider confirms price
+
+UI must make this simple, not overwhelming.
+
+---
+
+## Phase 4: AI Enhancement (Non-Chat, Inline Only)
+
+AI should assist silently and instantly.
+
+### Examples:
+
+When typing service name:
+
+* Suggest common services
+* Auto-complete categories
+
+When adding description:
+
+* “Improve description” button
+* Auto rewrite to sound more professional
+
+When setting price:
+
+* Suggest price ranges based on service type + location
+
+When finishing service:
+
+* Tip:
+  “Providers with photos get 30% more bookings”
+  “Adding 2 more services increases visibility”
+
+When leaving fields blank:
+
+* Suggest smart defaults
+
+---
+
+## Phase 5: AI Suggestion System (Global Behavior)
+
+Replace chat AI with:
+
+* Inline suggestions
+* Small tips
+* Smart autofill
+* One-click improvements
+
+Design:
+
+* subtle UI (not intrusive)
+* small hint text or suggestion cards
+* dismissible
+
+NO chat bubbles
+NO typing prompts
+NO “ask AI” flows unless absolutely needed
+
+---
+
+## Phase 6: UX Requirements
+
+* Service creation must take under 60 seconds
+* No step should feel confusing
+* No long forms
+* Use progressive disclosure (show more only when needed)
+
+---
+
+## Phase 7: Integration With Booking System
+
+Ensure every service:
+
+* connects directly to booking flow
+* has clear duration and pricing logic
+* works with AI scheduling
+* appears correctly on booking page
+
+---
+
+## Phase 8: Deliverables
+
+1. Remove old AI builder completely
+2. New simple service creation flow
+3. Smart pricing logic system
+4. Inline AI suggestions system
+5. List of removed complexity
+6. Any gaps in service → booking connection
+
+---
+
+## ⚠️ Reality check
+
+Right now your instinct is correct.
+
+If providers have to:
+“figure out how to use your AI”
+
+you already lost.
+
+They should feel like:
+“This app just gets it and helps me automatically”
+
+---
+
+## One thing I want you to think about next
+
+Be honest:
+
+Are you trying to impress users with AI
+or actually help them make money faster?
+
+Because those lead to two very different products.
+
+If you want, next I can:
+
+* design the exact **service creation UI layout**
+* or map how services connect to **booking + payments cleanly** (this is where most apps break)

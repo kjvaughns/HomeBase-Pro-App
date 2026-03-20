@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { StyleSheet, View, FlatList, RefreshControl, Pressable, Modal, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
-import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
@@ -92,7 +92,7 @@ const HOME_TOOLS: HomeTool[] = [
 export default function FindScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
-  const tabBarHeight = useBottomTabBarHeight();
+  const tabBarHeight = useFloatingTabBarHeight();
   const navigation = useNavigation<NavigationProp>();
   const { theme, isDark } = useTheme();
   const { isAuthenticated } = useAuthStore();

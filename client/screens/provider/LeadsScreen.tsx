@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { StyleSheet, FlatList, RefreshControl, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
-import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 
@@ -28,7 +28,7 @@ const filterOptions: FilterOption<LeadFilter>[] = [
 export default function LeadsScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
-  const tabBarHeight = useBottomTabBarHeight();
+  const tabBarHeight = useFloatingTabBarHeight();
 
   const leads = useProviderStore((s) => s.leads);
   const contactLead = useProviderStore((s) => s.contactLead);

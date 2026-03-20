@@ -1,0 +1,237 @@
+Good. This is exactly where you tighten the product.
+
+Here’s a **focused prompt** that forces the builder to:
+
+1. audit your provider side
+2. cut the junk
+3. build a real onboarding that actually leads to activation
+
+---
+
+## 🔧 Provider Audit + Onboarding Build Prompt
+
+Analyze the entire HomeBase provider side codebase and redesign it to support a clean, high-converting onboarding flow that leads providers to their first real outcome: getting booked and getting paid.
+
+---
+
+## Phase 1: Full Provider Side Audit
+
+Scan the entire provider portal and identify:
+
+### 1. UX Problems
+
+* confusing navigation
+* cluttered screens
+* unclear actions
+* too many features too early
+* anything that would overwhelm a new provider
+
+### 2. Product Gaps
+
+* missing steps required to:
+
+  * accept bookings
+  * manage schedule
+  * get paid
+* unclear setup requirements
+* anything that would block a provider from going live
+
+### 3. Overbuilt / Useless Features
+
+* features that are not needed for MVP
+* duplicate functionality
+* AI features that don’t provide real value
+* anything that slows down onboarding
+
+### 4. Technical Issues
+
+* broken flows
+* bad state management
+* unnecessary complexity
+* slow loading areas
+* poor routing between screens
+
+---
+
+## Output Required (Audit)
+
+Return:
+
+1. Top 10 issues blocking provider activation
+2. Features to REMOVE or postpone
+3. Features that must be simplified
+4. Critical missing pieces for MVP
+
+---
+
+## Phase 2: Define Ideal Provider Onboarding Flow
+
+Design a step-by-step onboarding that gets a provider from signup → ready to accept bookings.
+
+The onboarding must be short, clear, and outcome-driven.
+
+---
+
+## Core Goal
+
+By the end of onboarding, the provider must have:
+
+* at least 1 service created
+* availability set
+* booking link generated
+* payment setup ready (real or mocked)
+
+If this is not achieved, onboarding is incomplete.
+
+---
+
+## Required Onboarding Steps
+
+### Step 1: Business Basics
+
+* business name
+* service category
+* service area
+
+Keep it fast. Autofill where possible.
+
+---
+
+### Step 2: Services Setup
+
+* create at least 1 service
+* required:
+
+  * name
+  * price or “quote required”
+  * duration
+
+Provide smart defaults to reduce friction.
+
+---
+
+### Step 3: Availability
+
+* working hours
+* basic schedule
+
+Keep UI extremely simple.
+
+---
+
+### Step 4: Booking Preview
+
+* show their live booking page
+* let them see exactly what customers will see
+
+This builds confidence.
+
+---
+
+### Step 5: Payments Setup
+
+* connect Stripe (or mock for now)
+* explain simply:
+  “Get paid directly through HomeBase”
+
+---
+
+### Step 6: Paywall + Trial
+
+* show clear value:
+
+  * get booked
+  * manage clients
+  * get paid
+* offer free trial as primary CTA
+* secondary: view plans
+
+---
+
+### Step 7: Activation Screen
+
+* “You’re live”
+* show:
+
+  * booking link
+  * copy/share button
+* CTA:
+  “Send your link and get your first booking”
+
+---
+
+## Phase 3: UX + Design Requirements
+
+* One step per screen
+* Progress indicator at top
+* No overwhelming forms
+* Use defaults wherever possible
+* Allow skipping non-critical fields
+* Clean, modern, premium design
+
+---
+
+## Phase 4: AI Integration (Use Carefully)
+
+Only include AI where it actually reduces effort:
+
+* suggest service names and pricing
+* auto-generate descriptions
+* recommend availability blocks
+* help write bio
+
+Do NOT force AI into every step.
+
+---
+
+## Phase 5: Simplification Rules
+
+* Remove anything not required to:
+  get booked → manage job → get paid
+
+* If a feature does not help a provider make money or save time immediately, move it out of onboarding
+
+---
+
+## Phase 6: Deliverables
+
+1. Full audit report of provider side
+2. Clean onboarding flow structure
+3. Updated screen breakdown (step by step)
+4. List of removed or postponed features
+5. Rebuilt onboarding UX (connected and working)
+6. Any remaining risks or blockers
+
+---
+
+## Non Negotiable
+
+This onboarding must make a provider feel:
+
+“I can actually use this to run my business today”
+
+Not:
+“This looks cool but I don’t know where to start”
+
+---
+
+## ⚠️ Reality check for you
+
+If your onboarding takes more than 2 to 3 minutes to complete, you’re losing people.
+
+If they don’t see a booking link at the end, you failed.
+
+If they don’t understand how they make money using your app, you failed.
+
+---
+
+## One thing you need to decide next
+
+Do you want onboarding to be:
+
+A. required before entering dashboard
+B. skippable but incomplete accounts are restricted
+
+Pick one.
+
+I’d push you toward one of these hard depending on how serious you are about activation.

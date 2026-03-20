@@ -2,7 +2,7 @@ import React, { useMemo, useCallback, useEffect, useState } from "react";
 import { StyleSheet, View, ScrollView, Pressable, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
-import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import { useNavigation, useFocusEffect, CompositeNavigationProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
@@ -56,7 +56,7 @@ const STATUS_MAP: Record<JobStatus, { label: string; status: "success" | "info" 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
-  const tabBarHeight = useBottomTabBarHeight();
+  const tabBarHeight = useFloatingTabBarHeight();
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
   const { user } = useAuthStore();
