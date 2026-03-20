@@ -1,5 +1,14 @@
 import React, { useState, useRef } from "react";
-import { StyleSheet, View, Animated, ScrollView, Pressable, TextInput } from "react-native";
+import {
+  StyleSheet,
+  View,
+  Animated,
+  ScrollView,
+  Pressable,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -8,7 +17,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
+import { Spacing, Colors, BorderRadius } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useOnboardingStore } from "@/state/onboardingStore";
 
@@ -16,16 +25,39 @@ type Props = NativeStackScreenProps<RootStackParamList, "ProviderOnboarding">;
 
 const STEPS = [
   {
+    id: "welcome",
+    title: "Grow your business\nwith HomeBase",
+    subtitle: "Join pros who use HomeBase to find clients, get paid, and stay organized.",
+  },
+  {
     id: "services",
-    title: "What services do you offer?",
-    subtitle: "Select the categories that best describe your work",
-    icon: "tool" as const,
+    title: "What services do\nyou offer?",
+    subtitle: "Select all that apply — you can update this later.",
+  },
+  {
+    id: "location",
+    title: "Where do you\nwork?",
+    subtitle: "Enter your city or service area so homeowners nearby can find you.",
+  },
+  {
+    id: "business",
+    title: "Tell us about\nyour business",
+    subtitle: "A few quick details to help build your profile.",
+  },
+  {
+    id: "bio",
+    title: "What makes you\nstand out?",
+    subtitle: "A short intro that appears on your public profile.",
   },
   {
     id: "features",
-    title: "Powerful Tools Await",
-    subtitle: "Everything you need to run your service business professionally",
-    icon: "zap" as const,
+    title: "Everything you\nneed to succeed",
+    subtitle: "Built-in tools that save time and help you win more jobs.",
+  },
+  {
+    id: "ready",
+    title: "You're ready\nto get started",
+    subtitle: "Create your account to claim your profile and start getting clients.",
   },
 ];
 
@@ -36,95 +68,71 @@ const SERVICE_CATEGORIES = [
   { id: "cleaning", label: "Cleaning", icon: "home" as const },
   { id: "landscaping", label: "Landscaping", icon: "sun" as const },
   { id: "handyman", label: "Handyman", icon: "tool" as const },
-  { id: "roofing", label: "Roofing", icon: "home" as const },
+  { id: "roofing", label: "Roofing", icon: "umbrella" as const },
   { id: "painting", label: "Painting", icon: "edit-2" as const },
   { id: "pest", label: "Pest Control", icon: "shield" as const },
+  { id: "moving", label: "Moving", icon: "truck" as const },
+  { id: "appliance", label: "Appliances", icon: "settings" as const },
   { id: "other", label: "Other", icon: "more-horizontal" as const },
 ];
 
+const EXPERIENCE_OPTIONS = [
+  { id: "1-2", label: "1–2 years" },
+  { id: "3-5", label: "3–5 years" },
+  { id: "6-10", label: "6–10 years" },
+  { id: "10+", label: "10+ years" },
+];
+
 const FEATURES = [
-  {
-    icon: "link" as const,
-    title: "Smart Booking Links",
-    description: "Share custom booking pages to capture leads 24/7",
-  },
-  {
-    icon: "users" as const,
-    title: "Client CRM",
-    description: "Manage all your clients, jobs, and history in one place",
-  },
-  {
-    icon: "dollar-sign" as const,
-    title: "Easy Invoicing",
-    description: "Create and send professional invoices in seconds",
-  },
-  {
-    icon: "credit-card" as const,
-    title: "Get Paid Faster",
-    description: "Accept payments directly through Stripe Connect",
-  },
-  {
-    icon: "cpu" as const,
-    title: "AI Business Assistant",
-    description: "Get help with quotes, emails, and business decisions",
-  },
-  {
-    icon: "bar-chart-2" as const,
-    title: "Analytics Dashboard",
-    description: "Track revenue, jobs, and growth metrics",
-  },
+  { icon: "link" as const, title: "Smart Booking Links", description: "Capture leads 24/7 with a custom booking page" },
+  { icon: "users" as const, title: "Client CRM", description: "All your clients, jobs, and history in one place" },
+  { icon: "file-text" as const, title: "Professional Invoicing", description: "Send polished invoices in seconds" },
+  { icon: "credit-card" as const, title: "Get Paid Faster", description: "Accept payments via Stripe Connect" },
+  { icon: "cpu" as const, title: "AI Business Assistant", description: "Quotes, emails, and decisions — on demand" },
+  { icon: "bar-chart-2" as const, title: "Analytics Dashboard", description: "Track revenue, jobs, and growth at a glance" },
 ];
 
 export default function ProviderOnboardingScreen({ navigation }: Props) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const { setHasCompletedFirstLaunch } = useOnboardingStore();
+
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [location, setLocation] = useState("");
+  const [businessName, setBusinessName] = useState("");
+  const [experience, setExperience] = useState("");
+  const [bio, setBio] = useState("");
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
 
   const animateTransition = (callback: () => void) => {
     Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 150,
-        useNativeDriver: false,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: -30,
-        duration: 150,
-        useNativeDriver: false,
-      }),
+      Animated.timing(fadeAnim, { toValue: 0, duration: 140, useNativeDriver: false }),
+      Animated.timing(slideAnim, { toValue: -24, duration: 140, useNativeDriver: false }),
     ]).start(() => {
       callback();
-      slideAnim.setValue(30);
+      slideAnim.setValue(24);
       Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: false,
-        }),
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          tension: 50,
-          friction: 8,
-          useNativeDriver: false,
-        }),
+        Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: false }),
+        Animated.spring(slideAnim, { toValue: 0, tension: 52, friction: 8, useNativeDriver: false }),
       ]).start();
     });
   };
 
   const handleNext = () => {
     if (currentStep < STEPS.length - 1) {
-      animateTransition(() => setCurrentStep(currentStep + 1));
+      animateTransition(() => setCurrentStep((s) => s + 1));
     } else {
       setHasCompletedFirstLaunch(true);
-      navigation.reset({
-        index: 0,
-        routes: [{ name: "SignUp" }],
-      });
+      navigation.reset({ index: 0, routes: [{ name: "SignUp" }] });
+    }
+  };
+
+  const handleBack = () => {
+    if (currentStep > 0) {
+      animateTransition(() => setCurrentStep((s) => s - 1));
     }
   };
 
@@ -135,84 +143,211 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
   };
 
   const step = STEPS[currentStep];
+  const isLast = currentStep === STEPS.length - 1;
 
   const renderStepContent = () => {
     switch (step.id) {
+      case "welcome":
+        return (
+          <View style={styles.welcomeContent}>
+            <View style={[styles.welcomeIconRing, { borderColor: Colors.accent + "30" }]}>
+              <View style={[styles.welcomeIconCircle, { backgroundColor: Colors.accent }]}>
+                <Feather name="briefcase" size={36} color="#FFFFFF" />
+              </View>
+            </View>
+            <View style={styles.statsRow}>
+              <StatCard value="10k+" label="Homeowners" />
+              <StatCard value="4.9" label="Avg rating" />
+              <StatCard value="Free" label="To join" />
+            </View>
+            <View style={styles.welcomePoints}>
+              <WelcomePoint icon="check-circle" text="Build a profile that wins trust" />
+              <WelcomePoint icon="check-circle" text="Get booked directly through the app" />
+              <WelcomePoint icon="check-circle" text="Manage clients and payments in one place" />
+            </View>
+          </View>
+        );
+
       case "services":
         return (
           <View style={styles.servicesContent}>
             <View style={styles.servicesGrid}>
-              {SERVICE_CATEGORIES.map((category) => (
+              {SERVICE_CATEGORIES.map((cat) => {
+                const selected = selectedServices.includes(cat.id);
+                return (
+                  <Pressable
+                    key={cat.id}
+                    onPress={() => toggleService(cat.id)}
+                    style={[
+                      styles.serviceCard,
+                      {
+                        backgroundColor: selected ? Colors.accent + "14" : theme.backgroundSecondary,
+                        borderColor: selected ? Colors.accent : "transparent",
+                        borderWidth: selected ? 2 : 0,
+                      },
+                    ]}
+                  >
+                    <Feather
+                      name={cat.icon}
+                      size={22}
+                      color={selected ? Colors.accent : theme.textSecondary}
+                    />
+                    <ThemedText
+                      style={[
+                        styles.serviceLabel,
+                        { color: selected ? Colors.accent : theme.text, fontWeight: selected ? "600" : "400" },
+                      ]}
+                    >
+                      {cat.label}
+                    </ThemedText>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {selectedServices.length > 0 && (
+              <ThemedText style={[styles.selectionNote, { color: Colors.accent }]}>
+                {selectedServices.length} service{selectedServices.length !== 1 ? "s" : ""} selected
+              </ThemedText>
+            )}
+          </View>
+        );
+
+      case "location":
+        return (
+          <View style={styles.inputContent}>
+            <View style={[styles.inputWrapper, { backgroundColor: theme.backgroundSecondary, borderColor: location ? Colors.accent : theme.border }]}>
+              <Feather name="map-pin" size={18} color={location ? Colors.accent : theme.textSecondary} />
+              <TextInput
+                style={[styles.textInput, { color: theme.text }]}
+                placeholder="City, State  (e.g. Austin, TX)"
+                placeholderTextColor={theme.textTertiary}
+                value={location}
+                onChangeText={setLocation}
+                autoCapitalize="words"
+                returnKeyType="done"
+              />
+            </View>
+            <ThemedText style={[styles.inputHint, { color: theme.textTertiary }]}>
+              You can expand or change your service area anytime.
+            </ThemedText>
+          </View>
+        );
+
+      case "business":
+        return (
+          <View style={styles.inputContent}>
+            <View style={[styles.inputWrapper, { backgroundColor: theme.backgroundSecondary, borderColor: businessName ? Colors.accent : theme.border }]}>
+              <Feather name="briefcase" size={18} color={businessName ? Colors.accent : theme.textSecondary} />
+              <TextInput
+                style={[styles.textInput, { color: theme.text }]}
+                placeholder="Business name (or your name)"
+                placeholderTextColor={theme.textTertiary}
+                value={businessName}
+                onChangeText={setBusinessName}
+                autoCapitalize="words"
+                returnKeyType="next"
+              />
+            </View>
+            <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+              Years of experience
+            </ThemedText>
+            <View style={styles.experienceRow}>
+              {EXPERIENCE_OPTIONS.map((opt) => (
                 <Pressable
-                  key={category.id}
-                  onPress={() => toggleService(category.id)}
+                  key={opt.id}
+                  onPress={() => setExperience(opt.id)}
                   style={[
-                    styles.serviceCard,
+                    styles.experienceChip,
                     {
-                      backgroundColor: selectedServices.includes(category.id)
-                        ? Colors.accent + "15"
-                        : theme.backgroundSecondary,
-                      borderColor: selectedServices.includes(category.id)
-                        ? Colors.accent
-                        : "transparent",
-                      borderWidth: selectedServices.includes(category.id) ? 2 : 0,
+                      backgroundColor: experience === opt.id ? Colors.accent + "14" : theme.backgroundSecondary,
+                      borderColor: experience === opt.id ? Colors.accent : theme.border,
                     },
                   ]}
                 >
-                  <Feather
-                    name={category.icon}
-                    size={24}
-                    color={
-                      selectedServices.includes(category.id) ? Colors.accent : theme.textSecondary
-                    }
-                  />
                   <ThemedText
-                    type="caption"
-                    style={{
-                      textAlign: "center",
-                      color: selectedServices.includes(category.id)
-                        ? Colors.accent
-                        : theme.text,
-                      fontWeight: selectedServices.includes(category.id) ? "600" : "400",
-                    }}
+                    style={[
+                      styles.experienceLabel,
+                      { color: experience === opt.id ? Colors.accent : theme.textSecondary, fontWeight: experience === opt.id ? "600" : "400" },
+                    ]}
                   >
-                    {category.label}
+                    {opt.label}
                   </ThemedText>
                 </Pressable>
               ))}
             </View>
-            {selectedServices.length > 0 && (
-              <ThemedText
-                type="caption"
-                style={{ textAlign: "center", color: Colors.accent, marginTop: Spacing.md }}
-              >
-                {selectedServices.length} service{selectedServices.length > 1 ? "s" : ""} selected
-              </ThemedText>
-            )}
+          </View>
+        );
+
+      case "bio":
+        return (
+          <View style={styles.inputContent}>
+            <View
+              style={[
+                styles.bioWrapper,
+                { backgroundColor: theme.backgroundSecondary, borderColor: bio ? Colors.accent : theme.border },
+              ]}
+            >
+              <TextInput
+                style={[styles.bioInput, { color: theme.text }]}
+                placeholder="Ex: Licensed plumber with 8 years of experience. Known for same-day service and honest pricing."
+                placeholderTextColor={theme.textTertiary}
+                value={bio}
+                onChangeText={(t) => setBio(t.slice(0, 200))}
+                multiline
+                numberOfLines={5}
+                textAlignVertical="top"
+                returnKeyType="done"
+              />
+            </View>
+            <ThemedText style={[styles.inputHint, { color: theme.textTertiary }]}>
+              {bio.length}/200 characters
+            </ThemedText>
           </View>
         );
 
       case "features":
         return (
           <View style={styles.featuresContent}>
-            {FEATURES.map((feature, index) => (
-              <View
-                key={index}
-                style={[styles.featureCard, { backgroundColor: theme.backgroundSecondary }]}
-              >
+            {FEATURES.map((feat, i) => (
+              <View key={i} style={[styles.featureRow, { backgroundColor: theme.backgroundSecondary }]}>
                 <View style={[styles.featureIcon, { backgroundColor: Colors.accent + "15" }]}>
-                  <Feather name={feature.icon} size={20} color={Colors.accent} />
+                  <Feather name={feat.icon} size={18} color={Colors.accent} />
                 </View>
                 <View style={styles.featureText}>
-                  <ThemedText type="body" style={{ fontWeight: "600" }}>
-                    {feature.title}
-                  </ThemedText>
-                  <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-                    {feature.description}
+                  <ThemedText style={styles.featureTitle}>{feat.title}</ThemedText>
+                  <ThemedText style={[styles.featureDesc, { color: theme.textSecondary }]}>
+                    {feat.description}
                   </ThemedText>
                 </View>
               </View>
             ))}
+          </View>
+        );
+
+      case "ready":
+        return (
+          <View style={styles.readyContent}>
+            <View style={[styles.readyIconRing, { borderColor: Colors.accent + "30" }]}>
+              <View style={[styles.readyIconCircle, { backgroundColor: Colors.accent }]}>
+                <Feather name="check" size={40} color="#FFFFFF" />
+              </View>
+            </View>
+            <View style={styles.readySummary}>
+              {selectedServices.length > 0 && (
+                <SummaryRow icon="tool" label={`${selectedServices.length} service${selectedServices.length !== 1 ? "s" : ""} selected`} />
+              )}
+              {location.trim() ? (
+                <SummaryRow icon="map-pin" label={location.trim()} />
+              ) : null}
+              {businessName.trim() ? (
+                <SummaryRow icon="briefcase" label={businessName.trim()} />
+              ) : null}
+              {experience ? (
+                <SummaryRow icon="award" label={`${experience} years experience`} />
+              ) : null}
+              <SummaryRow icon="star" label="Public profile ready to go live" />
+              <SummaryRow icon="credit-card" label="Free to create — no card required" />
+            </View>
           </View>
         );
 
@@ -223,156 +358,218 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
 
   return (
     <ThemedView style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top + Spacing.md }]}>
-        <View style={styles.progressContainer}>
-          {STEPS.map((_, index) => (
-            <View
-              key={index}
-              style={[
-                styles.progressDot,
-                {
-                  backgroundColor: index <= currentStep ? Colors.accent : theme.border,
-                  width: index === currentStep ? 24 : 8,
-                },
-              ]}
-            />
-          ))}
-        </View>
-      </View>
-
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <Animated.View
-          style={{
-            opacity: fadeAnim,
-            transform: [{ translateX: slideAnim }],
-          }}
-        >
-          <View style={styles.stepHeader}>
-            <ThemedText type="h2" style={styles.stepTitle}>
-              {step.title}
-            </ThemedText>
-            <ThemedText type="body" style={[styles.stepSubtitle, { color: theme.textSecondary }]}>
-              {step.subtitle}
-            </ThemedText>
+        <View style={[styles.topBar, { paddingTop: insets.top + Spacing.sm }]}>
+          <Pressable onPress={handleBack} style={styles.backButton} hitSlop={12}>
+            {currentStep > 0 ? (
+              <Feather name="arrow-left" size={20} color={theme.textSecondary} />
+            ) : (
+              <View style={{ width: 20 }} />
+            )}
+          </Pressable>
+
+          <View style={styles.progressRow}>
+            {STEPS.map((_, i) => (
+              <View
+                key={i}
+                style={[
+                  styles.progressDot,
+                  {
+                    backgroundColor: i <= currentStep ? Colors.accent : theme.border,
+                    width: i === currentStep ? 20 : 6,
+                  },
+                ]}
+              />
+            ))}
           </View>
 
-          {renderStepContent()}
-        </Animated.View>
-      </ScrollView>
-
-      <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.lg }]}>
-        <PrimaryButton onPress={handleNext} testID="button-next">
-          {currentStep === STEPS.length - 1 ? "Create Account" : "Continue"}
-        </PrimaryButton>
-        {currentStep === 0 && (
           <Pressable
             onPress={() => navigation.navigate("Login")}
-            style={styles.loginLink}
+            style={styles.skipButton}
+            hitSlop={12}
           >
-            <ThemedText type="body" style={{ color: theme.textSecondary }}>
-              Already have an account?{" "}
-            </ThemedText>
-            <ThemedText type="body" style={{ color: Colors.accent, fontWeight: "600" }}>
-              Sign In
+            <ThemedText style={[styles.skipText, { color: theme.textTertiary }]}>
+              Sign in
             </ThemedText>
           </Pressable>
-        )}
-      </View>
+        </View>
+
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Animated.View style={{ opacity: fadeAnim, transform: [{ translateX: slideAnim }] }}>
+            <View style={styles.stepHeader}>
+              <ThemedText style={styles.stepTitle}>{step.title}</ThemedText>
+              <ThemedText style={[styles.stepSubtitle, { color: theme.textSecondary }]}>
+                {step.subtitle}
+              </ThemedText>
+            </View>
+            {renderStepContent()}
+          </Animated.View>
+        </ScrollView>
+
+        <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.lg }]}>
+          <PrimaryButton onPress={handleNext} testID="button-next">
+            {isLast ? "Create Account" : "Continue"}
+          </PrimaryButton>
+        </View>
+      </KeyboardAvoidingView>
     </ThemedView>
   );
 }
 
-function BenefitItem({ icon, text }: { icon: keyof typeof Feather.glyphMap; text: string }) {
+function StatCard({ value, label }: { value: string; label: string }) {
+  const { theme } = useTheme();
   return (
-    <View style={styles.benefitItem}>
-      <Feather name={icon} size={20} color={Colors.accent} />
-      <ThemedText type="body">{text}</ThemedText>
+    <View style={[styles.statCard, { backgroundColor: theme.backgroundSecondary }]}>
+      <ThemedText style={styles.statValue}>{value}</ThemedText>
+      <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>{label}</ThemedText>
+    </View>
+  );
+}
+
+function WelcomePoint({ icon, text }: { icon: keyof typeof Feather.glyphMap; text: string }) {
+  const { theme } = useTheme();
+  return (
+    <View style={styles.welcomePoint}>
+      <Feather name={icon} size={18} color={Colors.accent} />
+      <ThemedText style={[styles.welcomePointText, { color: theme.textSecondary }]}>{text}</ThemedText>
+    </View>
+  );
+}
+
+function SummaryRow({ icon, label }: { icon: keyof typeof Feather.glyphMap; label: string }) {
+  const { theme } = useTheme();
+  return (
+    <View style={styles.summaryRow}>
+      <View style={[styles.summaryIcon, { backgroundColor: Colors.accent + "14" }]}>
+        <Feather name={icon} size={16} color={Colors.accent} />
+      </View>
+      <ThemedText style={[styles.summaryLabel, { color: theme.textSecondary }]}>{label}</ThemedText>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
+  flex: { flex: 1 },
+  container: { flex: 1 },
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: Spacing.screenPadding,
+    paddingBottom: Spacing.sm,
   },
-  progressContainer: {
+  backButton: {
+    width: 32,
+    alignItems: "flex-start",
+  },
+  progressRow: {
+    flex: 1,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    gap: 6,
-    paddingVertical: Spacing.md,
+    gap: 5,
   },
   progressDot: {
-    height: 8,
-    borderRadius: 4,
+    height: 6,
+    borderRadius: 3,
   },
-  scrollView: {
-    flex: 1,
+  skipButton: {
+    width: 48,
+    alignItems: "flex-end",
   },
+  skipText: {
+    fontSize: 13,
+  },
+  scrollView: { flex: 1 },
   scrollContent: {
     paddingHorizontal: Spacing.screenPadding,
-    paddingTop: Spacing.xl,
-    paddingBottom: Spacing.xl,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing["2xl"],
   },
   stepHeader: {
     marginBottom: Spacing.xl,
   },
   stepTitle: {
-    textAlign: "center",
+    fontSize: 28,
+    fontWeight: "700",
+    letterSpacing: -0.5,
+    lineHeight: 34,
     marginBottom: Spacing.sm,
   },
   stepSubtitle: {
-    textAlign: "center",
+    fontSize: 15,
     lineHeight: 22,
   },
+
   welcomeContent: {
     alignItems: "center",
     gap: Spacing.xl,
   },
-  welcomeIcon: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+  welcomeIconRing: {
+    width: 128,
+    height: 128,
+    borderRadius: 64,
+    borderWidth: 2,
     alignItems: "center",
     justifyContent: "center",
   },
-  statsContainer: {
+  welcomeIconCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  statsRow: {
     flexDirection: "row",
-    gap: Spacing.md,
+    gap: Spacing.sm,
+    width: "100%",
   },
   statCard: {
     flex: 1,
     alignItems: "center",
-    padding: Spacing.lg,
+    paddingVertical: Spacing.lg,
     borderRadius: BorderRadius.lg,
+    gap: 2,
   },
-  benefitsList: {
+  statValue: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: Colors.accent,
+  },
+  statLabel: {
+    fontSize: 11,
+    fontWeight: "500",
+  },
+  welcomePoints: {
     width: "100%",
     gap: Spacing.md,
   },
-  benefitItem: {
+  welcomePoint: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.md,
   },
-  servicesContent: {
-    gap: Spacing.md,
+  welcomePointText: {
+    fontSize: 15,
+    flex: 1,
   },
+
+  servicesContent: { gap: Spacing.md },
   servicesGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: Spacing.sm,
-    justifyContent: "center",
   },
   serviceCard: {
-    width: "30%",
+    width: "30.5%",
     aspectRatio: 1,
     alignItems: "center",
     justifyContent: "center",
@@ -380,10 +577,69 @@ const styles = StyleSheet.create({
     padding: Spacing.sm,
     gap: Spacing.xs,
   },
-  featuresContent: {
+  serviceLabel: {
+    fontSize: 11,
+    textAlign: "center",
+  },
+  selectionNote: {
+    textAlign: "center",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+
+  inputContent: { gap: Spacing.md },
+  inputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1.5,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
     gap: Spacing.sm,
   },
-  featureCard: {
+  textInput: {
+    flex: 1,
+    fontSize: 15,
+    padding: 0,
+  },
+  inputHint: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    marginTop: Spacing.sm,
+  },
+  experienceRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+  },
+  experienceChip: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1.5,
+  },
+  experienceLabel: {
+    fontSize: 14,
+  },
+  bioWrapper: {
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1.5,
+    padding: Spacing.md,
+    minHeight: 130,
+  },
+  bioInput: {
+    fontSize: 15,
+    lineHeight: 22,
+    padding: 0,
+    flex: 1,
+  },
+
+  featuresContent: { gap: Spacing.sm },
+  featureRow: {
     flexDirection: "row",
     alignItems: "center",
     padding: Spacing.md,
@@ -391,24 +647,64 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   featureIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
   },
-  featureText: {
-    flex: 1,
-    gap: 2,
+  featureText: { flex: 1, gap: 1 },
+  featureTitle: {
+    fontSize: 14,
+    fontWeight: "600",
   },
-  footer: {
-    paddingHorizontal: Spacing.screenPadding,
+  featureDesc: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+
+  readyContent: {
+    alignItems: "center",
+    gap: Spacing.xl,
+  },
+  readyIconRing: {
+    width: 128,
+    height: 128,
+    borderRadius: 64,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  readyIconCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  readySummary: {
+    width: "100%",
+    gap: Spacing.sm,
+  },
+  summaryRow: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: Spacing.md,
   },
-  loginLink: {
-    flexDirection: "row",
-    justifyContent: "center",
+  summaryIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
-    paddingVertical: Spacing.sm,
+    justifyContent: "center",
+  },
+  summaryLabel: {
+    fontSize: 14,
+    flex: 1,
+  },
+
+  footer: {
+    paddingHorizontal: Spacing.screenPadding,
+    paddingTop: Spacing.md,
   },
 });
