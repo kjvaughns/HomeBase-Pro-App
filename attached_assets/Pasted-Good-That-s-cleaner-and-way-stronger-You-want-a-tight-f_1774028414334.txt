@@ -1,0 +1,125 @@
+Good. That’s cleaner and way stronger.
+
+You want a **tight first impression**, not options overload.
+
+Here’s the **refined prompt** you should use:
+
+---
+
+## 🔧 Prompt (Updated App Start Experience)
+
+Redesign the HomeBase app launch and entry experience to be minimal, premium, and extremely fast.
+
+## Launch / Splash Experience
+
+When the app opens:
+
+1. Show a clean splash screen
+
+* Centered HomeBase logo
+* Subtle fade or scale animation (0.8s–1.2s max)
+* Background: clean, neutral (light or dark mode aware)
+* No text, no loading spinners unless necessary
+
+Then transition immediately to the entry screen.
+
+---
+
+## Entry Screen (Core Decision Screen)
+
+After splash, show ONLY two options:
+
+### Join as Homeowner
+
+“Find and book trusted service pros”
+
+### Join as Provider
+
+“Run and grow your service business”
+
+Design requirements:
+
+* Two large card-style buttons or stacked buttons
+* Strong visual hierarchy
+* Plenty of spacing
+* Smooth tap animations
+* Use brand color as accent only (not overwhelming)
+* No extra buttons, links, or distractions
+* No navbar, no back button
+
+This screen should feel like:
+Apple-level simple and premium
+
+---
+
+## Interaction Behavior
+
+When user taps:
+
+### Homeowner
+
+* Enter app in guest mode immediately
+* No signup wall yet
+* Let them explore
+
+### Provider
+
+* Immediately start onboarding flow
+* No dashboard access until onboarding is complete
+
+---
+
+## Technical Requirements
+
+* Splash screen should be native-feeling and fast
+* Avoid long load times
+* Preload minimal required assets only
+* Smooth transition between splash → entry
+
+---
+
+## Design Rules (Non-negotiable)
+
+* Remove ALL clutter from entry experience
+* No modals on launch
+* No forced login upfront
+* No feature explanations
+* No carousels or tutorials
+
+Clarity > everything
+
+---
+
+## UX Goal
+
+Within 3 seconds, user understands:
+“This app is for homeowners OR service providers”
+
+And takes action.
+
+---
+
+## ⚠️ Now the part you need to hear
+
+Don’t overthink this screen.
+
+This is not where you “sell the vision.”
+This is where you **get a click**.
+
+Your old mistake:
+trying to explain too much too early
+
+This fixes that.
+
+---
+
+## One more thing you should decide right now
+
+Do you want:
+
+A. Remember user type forever after first selection
+B. Let them switch between homeowner and provider later
+
+Pick one.
+
+If you don’t decide this early, your routing and auth logic will get messy fast.
