@@ -51,7 +51,7 @@ export default function NotificationsScreen() {
     queryKey: ["/api/notifications", user?.id],
     queryFn: async () => {
       if (!user?.id) return { notifications: [] };
-      const response = await fetch(new URL(`/api/notifications/${user.id}`, getApiUrl()).toString());
+      const response = await apiRequest("GET", `/api/notifications/${user.id}`);
       if (!response.ok) throw new Error("Failed to fetch notifications");
       return response.json();
     },

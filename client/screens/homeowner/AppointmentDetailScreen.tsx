@@ -99,7 +99,7 @@ export default function AppointmentDetailScreen() {
   const { data, isLoading, error } = useQuery<{ appointment: Appointment }>({
     queryKey: ["/api/appointment", appointmentId],
     queryFn: async () => {
-      const response = await fetch(new URL(`/api/appointment/${appointmentId}`, getApiUrl()).toString());
+      const response = await apiRequest("GET", `/api/appointment/${appointmentId}`);
       if (!response.ok) throw new Error("Failed to fetch appointment");
       return response.json();
     },

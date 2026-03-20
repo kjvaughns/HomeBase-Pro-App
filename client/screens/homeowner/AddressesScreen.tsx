@@ -16,7 +16,7 @@ import { AddressAutocomplete, EnrichmentData } from "@/components/AddressAutocom
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
-import { getApiUrl } from "@/lib/query-client";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
 
 interface Home {
   id: string;
@@ -61,7 +61,7 @@ export default function AddressesScreen() {
   const fetchHomes = useCallback(async () => {
     if (!user?.id) return;
     try {
-      const response = await fetch(new URL(`/api/homes/${user.id}`, getApiUrl()).href);
+      const response = await apiRequest("GET", `/api/homes/${user.id}`);
       if (response.ok) {
         const data = await response.json();
         setHomes(data.homes || []);
@@ -136,11 +136,7 @@ export default function AddressesScreen() {
         isDefault: homes.length === 0,
       };
 
-      const response = await fetch(new URL("/api/homes", getApiUrl()).href, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(homeData),
-      });
+      const response = await apiRequest("POST", "/api/homes", homeData);
 
       if (response.ok) {
         setShowAddModal(false);
@@ -161,11 +157,7 @@ export default function AddressesScreen() {
 
     setIsSaving(true);
     try {
-      const response = await fetch(new URL(`/api/homes/${editingHome.id}`, getApiUrl()).href, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label: nickname }),
-      });
+      const response = await apiRequest("PUT", `/api/homes/${editingHome.id}`, { label: nickname });
 
       if (response.ok) {
         setEditingHome(null);
@@ -183,11 +175,7 @@ export default function AddressesScreen() {
   const handleSetDefault = async (homeId: string) => {
     Haptics.selectionAsync();
     try {
-      const response = await fetch(new URL(`/api/homes/${homeId}`, getApiUrl()).href, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isDefault: true }),
-      });
+      const response = await apiRequest("PUT", `/api/homes/${homeId}`, { isDefault: true });
 
       if (response.ok) {
         setHomes((prev) =>
@@ -214,9 +202,7 @@ export default function AddressesScreen() {
           onPress: async () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             try {
-              const response = await fetch(new URL(`/api/homes/${home.id}`, getApiUrl()).href, {
-                method: "DELETE",
-              });
+              const response = await apiRequest("DELETE", `/api/homes/${home.id}`);
               if (response.ok) {
                 await fetchHomes();
               }

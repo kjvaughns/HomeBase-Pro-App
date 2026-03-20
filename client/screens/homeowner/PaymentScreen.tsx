@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import { StyleSheet, View, ScrollView, ActivityIndicator, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -17,6 +17,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { getApiUrl, apiRequest } from "@/lib/query-client";
+import { useAuthStore } from "@/state/authStore";
 
 type ScreenRouteProp = RouteProp<RootStackParamList, "Payment">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -47,6 +48,8 @@ export default function PaymentScreen() {
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery<{ invoice: InvoiceRecord; payments: unknown[] }>({
     queryKey: ["/api/invoices", invoiceId],
@@ -59,13 +62,47 @@ export default function PaymentScreen() {
     enabled: !!invoiceId,
   });
 
+  const { sessionToken } = useAuthStore();
+
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
+
+  const stopPolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+  }, []);
+
+  const startPolling = useCallback((onPaid: () => void) => {
+    const authHeaders: Record<string, string> = sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {};
+    pollingIntervalRef.current = setInterval(async () => {
+      try {
+        const url = new URL(`/api/invoices/${invoiceId}`, getApiUrl());
+        const res = await fetch(url.toString(), { headers: authHeaders, credentials: "include" });
+        if (res.ok) {
+          const pollData = await res.json();
+          if (pollData?.invoice?.status === "paid") {
+            stopPolling();
+            onPaid();
+          }
+        }
+      } catch {
+      }
+    }, 3000);
+  }, [invoiceId, sessionToken, stopPolling]);
+
   const handlePayment = async () => {
     setIsProcessing(true);
     setPaymentError(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      // Create a Stripe Checkout session for this invoice
       const res = await apiRequest("POST", `/api/invoices/${invoiceId}/checkout`, {});
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({ error: "Payment setup failed" }));
@@ -77,17 +114,27 @@ export default function PaymentScreen() {
         throw new Error("No checkout URL received from server");
       }
 
-      // Open Stripe hosted checkout in the browser
-      const result = await WebBrowser.openBrowserAsync(checkoutUrl);
+      startPolling(() => {
+        WebBrowser.dismissBrowser();
+        setPaymentSuccess(true);
+        queryClient.invalidateQueries({ queryKey: ["/api/invoices", invoiceId] });
+        queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      });
 
-      // After browser closes, refresh invoice status
+      await WebBrowser.openBrowserAsync(checkoutUrl);
+      stopPolling();
+
       await refetch();
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
 
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const refreshed = await refetch();
+      const status = (refreshed.data as { invoice?: { status?: string } } | undefined)?.invoice?.status;
 
-      if (result.type === "opened" || result.type === "cancel" || result.type === "dismiss") {
-        // Navigate back — invoice status will reflect payment if completed via Stripe
+      if (status === "paid") {
+        setPaymentSuccess(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
         navigation.dispatch(
           CommonActions.reset({
             index: 1,
@@ -99,6 +146,7 @@ export default function PaymentScreen() {
         );
       }
     } catch (err) {
+      stopPolling();
       const message = err instanceof Error ? err.message : "Payment failed";
       setPaymentError(message);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -131,7 +179,37 @@ export default function PaymentScreen() {
 
   const invoice = data.invoice;
   const totalAmount = invoice.total || invoice.amount || "0.00";
-  const isPaid = invoice.status === "paid";
+  const isPaid = invoice.status === "paid" || paymentSuccess;
+
+  if (paymentSuccess || isPaid) {
+    return (
+      <ThemedView style={[styles.container, styles.centered]}>
+        <View style={[styles.successIconCircle, { backgroundColor: "#D1FAE5" }]}>
+          <Feather name="check-circle" size={56} color="#065F46" />
+        </View>
+        <ThemedText style={styles.successTitle}>Payment Complete</ThemedText>
+        <ThemedText style={[styles.successSubtitle, { color: theme.textSecondary }]}>
+          Your invoice has been paid successfully.
+        </ThemedText>
+        <PrimaryButton
+          onPress={() =>
+            navigation.dispatch(
+              CommonActions.reset({
+                index: 1,
+                routes: [
+                  { name: "Main" },
+                  { name: "JobDetail", params: { jobId } },
+                ],
+              })
+            )
+          }
+          style={styles.successBtn}
+        >
+          View Job
+        </PrimaryButton>
+      </ThemedView>
+    );
+  }
 
   return (
     <ThemedView style={styles.container}>
@@ -364,5 +442,28 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "rgba(0,0,0,0.1)",
+  },
+  successIconCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.xl,
+  },
+  successTitle: {
+    ...Typography.title1,
+    fontWeight: "700",
+    marginBottom: Spacing.sm,
+    textAlign: "center",
+  },
+  successSubtitle: {
+    ...Typography.body,
+    textAlign: "center",
+    marginBottom: Spacing.xl,
+    paddingHorizontal: Spacing.screenPadding,
+  },
+  successBtn: {
+    width: "80%",
   },
 });

@@ -14,7 +14,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
-import { getApiUrl } from "@/lib/query-client";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
 
 type TabType = "overview" | "history" | "assets" | "documents" | "insights";
 
@@ -119,7 +119,7 @@ export default function HouseFaxScreen() {
       return;
     }
     try {
-      const response = await fetch(new URL(`/api/homes/${user.id}`, getApiUrl()).href);
+      const response = await apiRequest("GET", `/api/homes/${user.id}`);
       if (response.ok) {
         const data = await response.json();
         const homesArray = Array.isArray(data?.homes) ? data.homes : [];

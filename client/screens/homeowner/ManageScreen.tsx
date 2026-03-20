@@ -20,7 +20,7 @@ import { SkeletonCard } from "@/components/SkeletonLoader";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuthStore } from "@/state/authStore";
-import { getApiUrl } from "@/lib/query-client";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type AppointmentStatus = "pending" | "confirmed" | "in_progress" | "completed" | "cancelled";
@@ -89,7 +89,7 @@ export default function ManageScreen() {
       return;
     }
     try {
-      const response = await fetch(new URL(`/api/users/${user.id}/appointments`, getApiUrl()).href);
+      const response = await apiRequest("GET", `/api/users/${user.id}/appointments`);
       const data = await response.json();
       setAppointments(data.appointments || []);
     } catch (error) {

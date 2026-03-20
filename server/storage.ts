@@ -71,6 +71,7 @@ export interface IStorage {
   cancelAppointment(id: string): Promise<Appointment | undefined>;
   
   getNotifications(userId: string): Promise<Notification[]>;
+  getNotification(id: string): Promise<Notification | undefined>;
   markNotificationRead(id: string): Promise<void>;
   createNotification(userId: string, title: string, message: string, type: string, data?: string): Promise<Notification>;
 }
@@ -223,6 +224,11 @@ export class DatabaseStorage implements IStorage {
 
   async getNotifications(userId: string): Promise<Notification[]> {
     return db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(desc(notifications.createdAt));
+  }
+
+  async getNotification(id: string): Promise<Notification | undefined> {
+    const [notification] = await db.select().from(notifications).where(eq(notifications.id, id));
+    return notification;
   }
 
   async markNotificationRead(id: string): Promise<void> {

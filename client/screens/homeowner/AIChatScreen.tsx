@@ -21,7 +21,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
-import { getApiUrl } from "@/lib/query-client";
+import { getApiUrl, apiRequest } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -75,14 +75,7 @@ export default function AIChatScreen() {
       const apiUrl = getApiUrl();
       const history = messages.map(m => ({ role: m.role, content: m.content }));
       
-      const response = await fetch(new URL("/api/chat/simple", apiUrl).toString(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text.trim(), history }),
-      });
-
-      if (!response.ok) throw new Error("Failed to get response");
-
+      const response = await apiRequest("POST", "/api/chat/simple", { message: text.trim(), history });
       const data = await response.json();
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),

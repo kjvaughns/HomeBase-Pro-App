@@ -13,7 +13,7 @@ import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
-import { getApiUrl } from "@/lib/query-client";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 
 interface Prediction {
@@ -119,11 +119,7 @@ export function AddressAutocomplete({
     setIsEnriching(true);
 
     try {
-      const response = await fetch(new URL("/api/housefax/enrich", getApiUrl()).href, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address: prediction.description }),
-      });
+      const response = await apiRequest("POST", "/api/housefax/enrich", { address: prediction.description });
       
       const data = await response.json();
       

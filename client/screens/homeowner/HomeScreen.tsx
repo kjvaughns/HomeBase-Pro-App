@@ -24,7 +24,7 @@ import { useAuthStore } from "@/state/authStore";
 import { useHomeownerStore } from "@/state/homeownerStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { Job, JobStatus, ServiceCategory } from "@/state/types";
-import { getApiUrl } from "@/lib/query-client";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
 
 interface Appointment {
   id: string;
@@ -69,7 +69,7 @@ export default function HomeScreen() {
   const fetchAppointments = useCallback(async () => {
     if (!user?.id) return;
     try {
-      const response = await fetch(new URL(`/api/users/${user.id}/appointments`, getApiUrl()).href);
+      const response = await apiRequest("GET", `/api/users/${user.id}/appointments`);
       if (response.ok) {
         const data = await response.json();
         setAppointments(data.appointments || []);

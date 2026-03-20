@@ -90,9 +90,7 @@ export default function SimpleBookingScreen() {
   const { data: servicesData, isLoading: servicesLoading } = useQuery<{ services: ProviderService[] }>({
     queryKey: ["/api/provider", params.providerId, "custom-services", "published"],
     queryFn: async () => {
-      const url = new URL(`/api/provider/${params.providerId}/custom-services`, getApiUrl());
-      url.searchParams.set("publishedOnly", "true");
-      const res = await fetch(url.toString());
+      const res = await apiRequest("GET", `/api/provider/${params.providerId}/custom-services?publishedOnly=true`);
       return res.json();
     },
     enabled: !!params.providerId,
@@ -104,9 +102,10 @@ export default function SimpleBookingScreen() {
   }>({
     queryKey: ["/api/provider", params.providerId, "availability", selectedDate],
     queryFn: async () => {
-      const url = new URL(`/api/provider/${params.providerId}/availability`, getApiUrl());
-      if (selectedDate) url.searchParams.set("date", selectedDate);
-      const res = await fetch(url.toString());
+      const path = selectedDate
+        ? `/api/provider/${params.providerId}/availability?date=${encodeURIComponent(selectedDate)}`
+        : `/api/provider/${params.providerId}/availability`;
+      const res = await apiRequest("GET", path);
       return res.json();
     },
     enabled: !!params.providerId && !!selectedDate,

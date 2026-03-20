@@ -179,15 +179,11 @@ export default function AddJobScreen() {
 
     setPricingLoading(true);
     try {
-      const response = await fetch(new URL("/api/ai/pricing-assistant", getApiUrl()).toString(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          providerId,
-          serviceName,
-          description,
-          clientId: selectedClientId,
-        }),
+      const response = await apiRequest("POST", "/api/ai/pricing-assistant", {
+        providerId,
+        serviceName,
+        description,
+        clientId: selectedClientId,
       });
       const data = await response.json();
       if (data.suggestion) {

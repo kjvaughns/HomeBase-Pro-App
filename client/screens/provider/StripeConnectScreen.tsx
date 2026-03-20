@@ -57,7 +57,7 @@ export default function StripeConnectScreen() {
   const { data: connectStatus, isLoading: loadingStatus, refetch: refetchStatus } = useQuery<ConnectStatus>({
     queryKey: ["/api/stripe/connect/status", providerId],
     queryFn: async () => {
-      const response = await fetch(new URL(`/api/stripe/connect/status/${providerId}`, getApiUrl()).toString());
+      const response = await apiRequest("GET", `/api/stripe/connect/status/${providerId}`);
       if (!response.ok) throw new Error("Failed to fetch status");
       return response.json();
     },
@@ -72,7 +72,7 @@ export default function StripeConnectScreen() {
   const { data: invoicesData, refetch: refetchInvoices } = useQuery<{ invoices: Invoice[] }>({
     queryKey: ["/api/stripe/invoices", providerId],
     queryFn: async () => {
-      const response = await fetch(new URL(`/api/stripe/invoices?providerId=${providerId}`, getApiUrl()).toString());
+      const response = await apiRequest("GET", `/api/stripe/invoices?providerId=${providerId}`);
       if (!response.ok) throw new Error("Failed to fetch invoices");
       return response.json();
     },

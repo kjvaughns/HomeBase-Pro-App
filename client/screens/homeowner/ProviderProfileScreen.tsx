@@ -225,10 +225,9 @@ export default function ProviderProfileScreen() {
           style={[styles.serviceRow, { borderColor: theme.borderLight }]}
           onPress={() => {
             if (isAuthenticated) {
-              navigation.navigate("BookingRequest", {
+              navigation.navigate("SimpleBooking", {
                 providerId: provider.id,
-                categoryId: provider.categoryIds?.[0] ?? "",
-                service,
+                providerName: provider.businessName,
               });
             } else {
               setShowAccountGate(true);

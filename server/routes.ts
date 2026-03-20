@@ -57,6 +57,71 @@ interface ChatMessage {
   content: string;
 }
 
+import type { NextFunction, RequestHandler } from "express";
+
+import { randomBytes } from "node:crypto";
+
+declare module "express-serve-static-core" {
+  interface Request {
+    authenticatedUserId?: string;
+  }
+}
+
+const sessionStore = new Map<string, { userId: string; createdAt: number }>();
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+export function createSessionToken(userId: string): string {
+  const token = randomBytes(32).toString("hex");
+  sessionStore.set(token, { userId, createdAt: Date.now() });
+  return token;
+}
+
+export function destroySessionToken(token: string): void {
+  sessionStore.delete(token);
+}
+
+const requireAuth: RequestHandler = (req, res, next) => {
+  const authHeader = req.headers["authorization"];
+  const raw = Array.isArray(authHeader) ? authHeader[0] : authHeader;
+  const token = raw?.startsWith("Bearer ") ? raw.slice(7) : undefined;
+  if (!token) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  const session = sessionStore.get(token);
+  if (!session || Date.now() - session.createdAt > SESSION_TTL_MS) {
+    sessionStore.delete(token);
+    res.status(401).json({ error: "Session expired or invalid" });
+    return;
+  }
+  req.authenticatedUserId = session.userId;
+  next();
+};
+
+const aiRateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+const aiRateLimit: RequestHandler = (req, res, next) => {
+  const userId = req.authenticatedUserId!;
+  const now = Date.now();
+  const windowMs = 60 * 1000;
+  const limit = 20;
+
+  const entry = aiRateLimitMap.get(userId);
+  if (!entry || entry.resetAt < now) {
+    aiRateLimitMap.set(userId, { count: 1, resetAt: now + windowMs });
+    next();
+    return;
+  }
+
+  if (entry.count >= limit) {
+    res.status(429).json({ error: "Too many AI requests. Please wait a minute and try again." });
+    return;
+  }
+
+  entry.count += 1;
+  next();
+};
+
 function formatUserResponse(user: { firstName?: string | null; lastName?: string | null; [key: string]: unknown }) {
   const { firstName, lastName, password, ...rest } = user;
   const name = [firstName, lastName].filter(Boolean).join(" ") || null;
@@ -108,7 +173,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const user = await storage.createUser(parsed.data);
-      res.status(201).json({ user: formatUserResponse(user) });
+      const token = createSessionToken(user.id);
+      res.status(201).json({ user: formatUserResponse(user), token });
     } catch (error) {
       console.error("Signup error:", error);
       res.status(500).json({ error: "Failed to create account" });
@@ -136,15 +202,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user.isProvider = true;
       }
 
-      res.json({ user: formatUserResponse(user), providerProfile });
+      const token = createSessionToken(user.id);
+      res.json({ user: formatUserResponse(user), providerProfile, token });
     } catch (error) {
       console.error("Login error:", error);
       res.status(500).json({ error: "Failed to login" });
     }
   });
 
-  app.get("/api/user/:id", async (req: Request<IdParams>, res: Response) => {
+  app.get("/api/user/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
+      const authUserId = req.authenticatedUserId!;
+      if (req.params.id !== authUserId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const user = await storage.getUser(req.params.id);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
@@ -156,13 +227,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/user/:id", async (req: Request<IdParams>, res: Response) => {
+  app.put("/api/user/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
-      const { name, ...restBody } = req.body;
+      const authUserId = req.authenticatedUserId!;
+      if (req.params.id !== authUserId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const { name, phone, avatarUrl } = req.body;
       const nameFields = name ? parseUserName(name) : {};
-      const updateData = { ...restBody, ...nameFields };
-      
-      const user = await storage.updateUser(req.params.id, updateData);
+      const safeUpdate: Record<string, unknown> = { ...nameFields };
+      if (phone !== undefined) safeUpdate.phone = phone;
+      if (avatarUrl !== undefined) safeUpdate.avatarUrl = avatarUrl;
+
+      const user = await storage.updateUser(req.params.id, safeUpdate);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
@@ -173,8 +251,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/homes/:userId", async (req: Request<UserIdParams>, res: Response) => {
+  app.get("/api/homes/:userId", requireAuth, async (req: Request<UserIdParams>, res: Response) => {
     try {
+      const authUserId = req.authenticatedUserId!;
+      if (req.params.userId !== authUserId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const homes = await storage.getHomes(req.params.userId);
       res.json({ homes: homes.map(formatHomeResponse) });
     } catch (error) {
@@ -183,11 +265,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/homes", async (req: Request, res: Response) => {
+  app.post("/api/homes", requireAuth, async (req: Request, res: Response) => {
     try {
       const { nickname, address, zipCode, label, street, zip, ...rest } = req.body;
       const homeData = {
         ...rest,
+        userId: req.authenticatedUserId,
         label: nickname || label || "My Home",
         street: address || street,
         zip: zipCode || zip,
@@ -253,8 +336,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/homes/:id", async (req: Request<IdParams>, res: Response) => {
+  app.put("/api/homes/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
+      const authUserId = req.authenticatedUserId!;
+      const existing = await storage.getHome(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ error: "Home not found" });
+      }
+      if (existing.userId !== authUserId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const { nickname, address, zipCode, ...rest } = req.body;
       const updateData: Record<string, unknown> = { ...rest };
       if (nickname !== undefined) updateData.label = nickname;
@@ -272,8 +363,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/homes/:id", async (req: Request<IdParams>, res: Response) => {
+  app.delete("/api/homes/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
+      const authUserId = req.authenticatedUserId!;
+      const home = await storage.getHome(req.params.id);
+      if (!home) {
+        return res.status(404).json({ error: "Home not found" });
+      }
+      if (home.userId !== authUserId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const deleted = await storage.deleteHome(req.params.id);
       if (!deleted) {
         return res.status(404).json({ error: "Home not found" });
@@ -288,7 +387,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============ HouseFax API Endpoints ============
 
   // Google Places autocomplete for address input
-  app.get("/api/housefax/autocomplete", async (req: Request, res: Response) => {
+  app.get("/api/housefax/autocomplete", requireAuth, async (req: Request, res: Response) => {
     try {
       const query = req.query.q as string;
       if (!query || query.length < 3) {
@@ -303,7 +402,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get place details from Google place ID
-  app.get("/api/housefax/place/:placeId", async (req: Request<{ placeId: string }>, res: Response) => {
+  app.get("/api/housefax/place/:placeId", requireAuth, async (req: Request<{ placeId: string }>, res: Response) => {
     try {
       const details = await getPlaceDetails(req.params.placeId);
       if (!details) {
@@ -317,7 +416,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Geocode an address
-  app.post("/api/housefax/geocode", async (req: Request, res: Response) => {
+  app.post("/api/housefax/geocode", requireAuth, async (req: Request, res: Response) => {
     try {
       const { address } = req.body;
       if (!address) {
@@ -335,7 +434,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Fetch Zillow property data
-  app.post("/api/housefax/zillow", async (req: Request, res: Response) => {
+  app.post("/api/housefax/zillow", requireAuth, async (req: Request, res: Response) => {
     try {
       const { address } = req.body;
       if (!address) {
@@ -353,7 +452,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Full property enrichment (Zillow + Google)
-  app.post("/api/housefax/enrich", async (req: Request, res: Response) => {
+  app.post("/api/housefax/enrich", requireAuth, async (req: Request, res: Response) => {
     try {
       const { address } = req.body;
       if (!address) {
@@ -368,11 +467,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Enrich an existing home with HouseFax data
-  app.post("/api/homes/:id/enrich", async (req: Request<IdParams>, res: Response) => {
+  app.post("/api/homes/:id/enrich", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
       const home = await storage.getHome(req.params.id);
       if (!home) {
         return res.status(404).json({ error: "Home not found" });
+      }
+      if (home.userId !== req.authenticatedUserId) {
+        return res.status(403).json({ error: "Access denied" });
       }
 
       const fullAddress = `${home.street}, ${home.city}, ${home.state} ${home.zip}`;
@@ -425,11 +527,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get HouseFax context for AI
-  app.get("/api/homes/:id/housefax-context", async (req: Request<IdParams>, res: Response) => {
+  app.get("/api/homes/:id/housefax-context", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
       const home = await storage.getHome(req.params.id);
       if (!home) {
         return res.status(404).json({ error: "Home not found" });
+      }
+      if (home.userId !== req.authenticatedUserId) {
+        return res.status(403).json({ error: "Access denied" });
       }
       const context = buildHouseFaxContext(home);
       res.json({ context });
@@ -487,8 +592,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/users/:userId/appointments", async (req: Request<UserIdParams>, res: Response) => {
+  app.get("/api/users/:userId/appointments", requireAuth, async (req: Request<UserIdParams>, res: Response) => {
     try {
+      const authUserId = req.authenticatedUserId!;
+      if (req.params.userId !== authUserId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const appointments = await storage.getAppointments(req.params.userId);
       res.json({ appointments });
     } catch (error) {
@@ -497,13 +606,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/appointment/:id", async (req: Request<IdParams>, res: Response) => {
+  app.get("/api/appointment/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
+      const authUserId = req.authenticatedUserId!;
       const appointment = await storage.getAppointment(req.params.id);
       if (!appointment) {
         return res.status(404).json({ error: "Appointment not found" });
       }
-      
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      const isOwner = appointment.userId === authUserId;
+      const isProvider = providerRecord && appointment.providerId === providerRecord.id;
+      if (!isOwner && !isProvider) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const provider = await storage.getProvider(appointment.providerId);
       
       let statusHistory = [];
@@ -535,7 +650,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/appointments", async (req: Request, res: Response) => {
+  app.post("/api/appointments", requireAuth, async (req: Request, res: Response) => {
     try {
       const parsed = insertAppointmentSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -607,8 +722,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/appointments/:id", async (req: Request<IdParams>, res: Response) => {
+  app.put("/api/appointments/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
+      const authUserId = req.authenticatedUserId!;
+      const existing = await storage.getAppointment(req.params.id);
+      if (!existing) return res.status(404).json({ error: "Appointment not found" });
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      const isOwner = existing.userId === authUserId;
+      const isProvider = providerRecord && existing.providerId === providerRecord.id;
+      if (!isOwner && !isProvider) return res.status(403).json({ error: "Access denied" });
       const appointment = await storage.updateAppointment(req.params.id, req.body);
       if (!appointment) {
         return res.status(404).json({ error: "Appointment not found" });
@@ -620,8 +742,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/appointments/:id/cancel", async (req: Request<IdParams>, res: Response) => {
+  app.post("/api/appointments/:id/cancel", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
+      const authUserId = req.authenticatedUserId!;
+      const existing = await storage.getAppointment(req.params.id);
+      if (!existing) return res.status(404).json({ error: "Appointment not found" });
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      const isOwner = existing.userId === authUserId;
+      const isProvider = providerRecord && existing.providerId === providerRecord.id;
+      if (!isOwner && !isProvider) return res.status(403).json({ error: "Access denied" });
       const appointment = await storage.cancelAppointment(req.params.id);
       if (!appointment) {
         return res.status(404).json({ error: "Appointment not found" });
@@ -642,8 +771,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/appointments/:id/reschedule", async (req: Request<IdParams>, res: Response) => {
+  app.post("/api/appointments/:id/reschedule", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
+      const authUserId = req.authenticatedUserId!;
+      const existing = await storage.getAppointment(req.params.id);
+      if (!existing) return res.status(404).json({ error: "Appointment not found" });
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      const isOwner = existing.userId === authUserId;
+      const isProvider = providerRecord && existing.providerId === providerRecord.id;
+      if (!isOwner && !isProvider) return res.status(403).json({ error: "Access denied" });
       const { scheduledDate, scheduledTime } = req.body;
       
       if (!scheduledDate || !scheduledTime) {
@@ -675,11 +811,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/appointments/:id", async (req: Request<IdParams>, res: Response) => {
+  app.get("/api/appointments/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
+      const authUserId = req.authenticatedUserId!;
       const appointment = await storage.getAppointment(req.params.id);
       if (!appointment) {
         return res.status(404).json({ error: "Appointment not found" });
+      }
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      const isOwner = appointment.userId === authUserId;
+      const isProvider = providerRecord && appointment.providerId === providerRecord.id;
+      if (!isOwner && !isProvider) {
+        return res.status(403).json({ error: "Access denied" });
       }
       // Enrich with provider identity so homeowner can see who is doing the work
       const provider = await storage.getProvider(appointment.providerId);
@@ -693,8 +836,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/notifications/:userId", async (req: Request<UserIdParams>, res: Response) => {
+  app.get("/api/notifications/:userId", requireAuth, async (req: Request<UserIdParams>, res: Response) => {
     try {
+      const authUserId = req.authenticatedUserId!;
+      if (req.params.userId !== authUserId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const notifications = await storage.getNotifications(req.params.userId);
       res.json({ notifications });
     } catch (error) {
@@ -703,8 +850,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/notifications/:id/read", async (req: Request<IdParams>, res: Response) => {
+  app.post("/api/notifications/:id/read", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
+      const notification = await storage.getNotification(req.params.id);
+      if (!notification) return res.status(404).json({ error: "Notification not found" });
+      if (notification.userId !== req.authenticatedUserId) return res.status(403).json({ error: "Access denied" });
       await storage.markNotificationRead(req.params.id);
       res.json({ success: true });
     } catch (error) {
@@ -713,7 +863,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/chat", async (req: Request, res: Response) => {
+  app.post("/api/chat", requireAuth, aiRateLimit, async (req: Request, res: Response) => {
     try {
       const { messages, homeId } = req.body as { messages: ChatMessage[]; homeId?: string };
 
@@ -786,7 +936,7 @@ Always respond with valid JSON in this format:
 
 Be conversational and helpful. If they just have a question, answer it. If they have a problem needing professional help, guide them AND offer to connect with pros.`;
 
-  app.post("/api/chat/simple", async (req: Request, res: Response) => {
+  app.post("/api/chat/simple", requireAuth, aiRateLimit, async (req: Request, res: Response) => {
     try {
       const { message, history, homeId } = req.body as { 
         message: string; 
@@ -850,7 +1000,7 @@ Be conversational and helpful. If they just have a question, answer it. If they 
 
   // ============ PROVIDER AI ASSISTANT ============
 
-  app.post("/api/ai/provider-assistant", async (req: Request, res: Response) => {
+  app.post("/api/ai/provider-assistant", requireAuth, aiRateLimit, async (req: Request, res: Response) => {
     try {
       const { message, businessContext, conversationHistory } = req.body as {
         message: string;
@@ -898,7 +1048,7 @@ Be conversational and helpful. If they just have a question, answer it. If they 
 
   // ============ AI PRICING ASSISTANT ============
 
-  app.post("/api/ai/pricing-assistant", async (req: Request, res: Response) => {
+  app.post("/api/ai/pricing-assistant", requireAuth, aiRateLimit, async (req: Request, res: Response) => {
     try {
       const { providerId, serviceName, description, clientId } = req.body as {
         providerId?: string;
@@ -991,7 +1141,7 @@ Respond with a JSON object ONLY (no markdown, no explanation):
 
   // ============ INLINE AI SUGGESTION ROUTES ============
 
-  app.post("/api/ai/suggest-description", async (req: Request, res: Response) => {
+  app.post("/api/ai/suggest-description", requireAuth, aiRateLimit, async (req: Request, res: Response) => {
     try {
       const { serviceName, category } = req.body as { serviceName: string; category: string };
       if (!serviceName || !category) {
@@ -1024,7 +1174,7 @@ Respond with ONLY the description text, no quotes, no extra formatting.`;
     }
   });
 
-  app.post("/api/ai/suggest-service-names", async (req: Request, res: Response) => {
+  app.post("/api/ai/suggest-service-names", requireAuth, aiRateLimit, async (req: Request, res: Response) => {
     try {
       const { category } = req.body as { category: string };
       if (!category) {
@@ -1063,7 +1213,7 @@ Respond with ONLY a JSON array of exactly 3 strings, example: ["Drain Cleaning &
     }
   });
 
-  app.post("/api/ai/suggest-price", async (req: Request, res: Response) => {
+  app.post("/api/ai/suggest-price", requireAuth, aiRateLimit, async (req: Request, res: Response) => {
     try {
       const { serviceName, category, pricingType, location } = req.body as {
         serviceName: string;
@@ -1124,7 +1274,7 @@ Respond ONLY with a JSON object:
     }
   });
 
-  app.post("/api/ai/improve-bio", async (req: Request, res: Response) => {
+  app.post("/api/ai/improve-bio", requireAuth, aiRateLimit, async (req: Request, res: Response) => {
     try {
       const { currentBio, businessName, category } = req.body as {
         currentBio: string;
@@ -1213,7 +1363,7 @@ Respond with valid JSON only containing:
 - factors: array of strings explaining what affects the price
 - recommendation: brief recommendation for the homeowner`;
 
-  app.post("/api/intake/analyze", async (req: Request, res: Response) => {
+  app.post("/api/intake/analyze", requireAuth, aiRateLimit, async (req: Request, res: Response) => {
     try {
       const { problem, conversationHistory } = req.body as { 
         problem: string; 
@@ -1263,7 +1413,7 @@ Respond with valid JSON only containing:
     }
   });
 
-  app.post("/api/intake/refine", async (req: Request, res: Response) => {
+  app.post("/api/intake/refine", requireAuth, aiRateLimit, async (req: Request, res: Response) => {
     try {
       const { originalAnalysis, answers } = req.body as {
         originalAnalysis: {
@@ -1337,7 +1487,7 @@ Provide a comprehensive JSON analysis with:
     }
   });
 
-  app.post("/api/intake/match-providers", async (req: Request, res: Response) => {
+  app.post("/api/intake/match-providers", requireAuth, aiRateLimit, async (req: Request, res: Response) => {
     try {
       const { category, zipCode } = req.body as { category: string; zipCode?: string };
 
@@ -1387,7 +1537,7 @@ Provide a comprehensive JSON analysis with:
     return Math.round(ratingScore + reviewScore + experienceScore + verifiedBonus);
   }
 
-  app.post("/api/intake/explain-issue", async (req: Request, res: Response) => {
+  app.post("/api/intake/explain-issue", requireAuth, aiRateLimit, async (req: Request, res: Response) => {
     try {
       const { problem, category, answers, service, providerName } = req.body as {
         problem: string;
@@ -1457,7 +1607,7 @@ Respond with JSON only:
   // ============ HOME SERVICE HISTORY & REMINDERS ============
   
   // Get service history for a home (completed appointments)
-  app.get("/api/homes/:homeId/service-history", async (req: Request<{ homeId: string }>, res: Response) => {
+  app.get("/api/homes/:homeId/service-history", requireAuth, async (req: Request<{ homeId: string }>, res: Response) => {
     try {
       const { homeId } = req.params;
       const serviceHistory = await db.select()
@@ -1473,7 +1623,7 @@ Respond with JSON only:
   });
   
   // Get maintenance reminders for a home
-  app.get("/api/homes/:homeId/reminders", async (req: Request<{ homeId: string }>, res: Response) => {
+  app.get("/api/homes/:homeId/reminders", requireAuth, async (req: Request<{ homeId: string }>, res: Response) => {
     try {
       const { homeId } = req.params;
       const reminders = await db.select()
@@ -1489,7 +1639,7 @@ Respond with JSON only:
   });
   
   // Create maintenance reminder
-  app.post("/api/homes/:homeId/reminders", async (req: Request<{ homeId: string }>, res: Response) => {
+  app.post("/api/homes/:homeId/reminders", requireAuth, async (req: Request<{ homeId: string }>, res: Response) => {
     try {
       const { homeId } = req.params;
       const { title, description, category, frequency, nextDueAt, userId } = req.body;
@@ -1514,7 +1664,7 @@ Respond with JSON only:
   });
   
   // Mark reminder as completed (updates lastCompletedAt and nextDueAt)
-  app.put("/api/reminders/:id/complete", async (req: Request<{ id: string }>, res: Response) => {
+  app.put("/api/reminders/:id/complete", requireAuth, async (req: Request<{ id: string }>, res: Response) => {
     try {
       const { id } = req.params;
       
@@ -1552,7 +1702,7 @@ Respond with JSON only:
 
   // ============ PROVIDER AVAILABILITY ENDPOINT ============
 
-  app.get("/api/provider/:providerId/availability", async (req: Request<ProviderIdParams>, res: Response) => {
+  app.get("/api/provider/:providerId/availability", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
     try {
       const { date } = req.query as { date?: string };
 
@@ -1620,7 +1770,7 @@ Respond with JSON only:
 
   // ============ PROVIDER CUSTOM SERVICES ROUTES ============
 
-  app.get("/api/provider/:providerId/custom-services", async (req: Request<ProviderIdParams>, res: Response) => {
+  app.get("/api/provider/:providerId/custom-services", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
     try {
       const publishedOnly = req.query.publishedOnly === "true";
       const conditions = publishedOnly
@@ -1636,7 +1786,7 @@ Respond with JSON only:
     }
   });
 
-  app.post("/api/provider/:providerId/custom-services", async (req: Request<ProviderIdParams>, res: Response) => {
+  app.post("/api/provider/:providerId/custom-services", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
     try {
       // Verify provider exists before creating service
       const provider = await storage.getProvider(req.params.providerId);
@@ -1655,7 +1805,7 @@ Respond with JSON only:
     }
   });
 
-  app.put("/api/provider/:providerId/custom-services/:id", async (req: Request<ProviderIdParams & IdParams>, res: Response) => {
+  app.put("/api/provider/:providerId/custom-services/:id", requireAuth, async (req: Request<ProviderIdParams & IdParams>, res: Response) => {
     try {
       const [existing] = await db.select().from(providerCustomServices)
         .where(eq(providerCustomServices.id, req.params.id));
@@ -1687,7 +1837,7 @@ Respond with JSON only:
     }
   });
 
-  app.delete("/api/provider/:providerId/custom-services/:id", async (req: Request<ProviderIdParams & IdParams>, res: Response) => {
+  app.delete("/api/provider/:providerId/custom-services/:id", requireAuth, async (req: Request<ProviderIdParams & IdParams>, res: Response) => {
     try {
       const [existing] = await db.select().from(providerCustomServices)
         .where(eq(providerCustomServices.id, req.params.id));
@@ -1707,7 +1857,7 @@ Respond with JSON only:
   // ============ PROVIDER PORTAL ROUTES ============
 
   // Provider registration/onboarding
-  app.post("/api/provider/register", async (req: Request, res: Response) => {
+  app.post("/api/provider/register", requireAuth, async (req: Request, res: Response) => {
     try {
       const parsed = insertProviderSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -1737,7 +1887,7 @@ Respond with JSON only:
   });
 
   // Get provider by user ID
-  app.get("/api/provider/user/:userId", async (req: Request<UserIdParams>, res: Response) => {
+  app.get("/api/provider/user/:userId", requireAuth, async (req: Request<UserIdParams>, res: Response) => {
     try {
       const provider = await storage.getProviderByUserId(req.params.userId);
       if (!provider) {
@@ -1751,7 +1901,7 @@ Respond with JSON only:
   });
 
   // Update provider profile
-  app.put("/api/provider/:id", async (req: Request<IdParams>, res: Response) => {
+  app.put("/api/provider/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
       const provider = await storage.updateProvider(req.params.id, req.body);
       if (!provider) {
@@ -1765,7 +1915,7 @@ Respond with JSON only:
   });
 
   // Provider dashboard stats
-  app.get("/api/provider/:id/stats", async (req: Request<IdParams>, res: Response) => {
+  app.get("/api/provider/:id/stats", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
       const stats = await storage.getProviderStats(req.params.id);
       res.json({ stats });
@@ -1777,7 +1927,7 @@ Respond with JSON only:
 
   // ============ CLIENTS ROUTES ============
 
-  app.get("/api/provider/:providerId/clients", async (req: Request<ProviderIdParams>, res: Response) => {
+  app.get("/api/provider/:providerId/clients", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
     try {
       const clients = await storage.getClients(req.params.providerId);
       res.json({ clients });
@@ -1787,7 +1937,7 @@ Respond with JSON only:
     }
   });
 
-  app.get("/api/clients/:id", async (req: Request<IdParams>, res: Response) => {
+  app.get("/api/clients/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
       const client = await storage.getClient(req.params.id);
       if (!client) {
@@ -1803,7 +1953,7 @@ Respond with JSON only:
     }
   });
 
-  app.post("/api/clients", async (req: Request, res: Response) => {
+  app.post("/api/clients", requireAuth, async (req: Request, res: Response) => {
     try {
       const parsed = insertClientSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -1827,7 +1977,7 @@ Respond with JSON only:
     }
   });
 
-  app.put("/api/clients/:id", async (req: Request<IdParams>, res: Response) => {
+  app.put("/api/clients/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
       const client = await storage.updateClient(req.params.id, req.body);
       if (!client) {
@@ -1840,7 +1990,7 @@ Respond with JSON only:
     }
   });
 
-  app.delete("/api/clients/:id", async (req: Request<IdParams>, res: Response) => {
+  app.delete("/api/clients/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
       const deleted = await storage.deleteClient(req.params.id);
       if (!deleted) {
@@ -1855,7 +2005,7 @@ Respond with JSON only:
 
   // ============ JOBS ROUTES ============
 
-  app.get("/api/provider/:providerId/jobs", async (req: Request<ProviderIdParams>, res: Response) => {
+  app.get("/api/provider/:providerId/jobs", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
     try {
       const jobs = await storage.getJobs(req.params.providerId);
       res.json({ jobs });
@@ -1865,7 +2015,7 @@ Respond with JSON only:
     }
   });
 
-  app.get("/api/jobs/:id", async (req: Request<IdParams>, res: Response) => {
+  app.get("/api/jobs/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
       const job = await storage.getJob(req.params.id);
       if (!job) {
@@ -1879,8 +2029,15 @@ Respond with JSON only:
   });
 
   // Get job linked to an appointment (by appointmentId FK)
-  app.get("/api/appointments/:id/job", async (req: Request<IdParams>, res: Response) => {
+  app.get("/api/appointments/:id/job", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
+      const authUserId = req.authenticatedUserId!;
+      const appointment = await storage.getAppointment(req.params.id);
+      if (!appointment) return res.json({ job: null });
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      const isOwner = appointment.userId === authUserId;
+      const isProvider = providerRecord && appointment.providerId === providerRecord.id;
+      if (!isOwner && !isProvider) return res.status(403).json({ error: "Access denied" });
       const [job] = await db.select().from(jobs)
         .where(eq(jobs.appointmentId, req.params.id))
         .limit(1);
@@ -1893,12 +2050,17 @@ Respond with JSON only:
   });
 
   // Get invoice linked to a job
-  app.get("/api/jobs/:id/invoice", async (req: Request<IdParams>, res: Response) => {
+  app.get("/api/jobs/:id/invoice", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
+      const authUserId = req.authenticatedUserId!;
+      const providerRecord = await storage.getProviderByUserId(authUserId);
       const [invoice] = await db.select().from(invoices)
         .where(eq(invoices.jobId, req.params.id))
         .limit(1);
       if (!invoice) return res.json({ invoice: null });
+      const isHomeowner = invoice.homeownerUserId === authUserId;
+      const isProvider = providerRecord && invoice.providerId === providerRecord.id;
+      if (!isHomeowner && !isProvider) return res.status(403).json({ error: "Access denied" });
       res.json({ invoice });
     } catch (error) {
       console.error("Get job invoice error:", error);
@@ -1906,7 +2068,7 @@ Respond with JSON only:
     }
   });
 
-  app.post("/api/jobs", async (req: Request, res: Response) => {
+  app.post("/api/jobs", requireAuth, async (req: Request, res: Response) => {
     try {
       // Convert scheduledDate string to Date
       const jobData = {
@@ -1925,7 +2087,7 @@ Respond with JSON only:
     }
   });
 
-  app.put("/api/jobs/:id", async (req: Request<IdParams>, res: Response) => {
+  app.put("/api/jobs/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
       const job = await storage.updateJob(req.params.id, req.body);
       if (!job) {
@@ -1938,7 +2100,7 @@ Respond with JSON only:
     }
   });
 
-  app.post("/api/jobs/:id/complete", async (req: Request<IdParams>, res: Response) => {
+  app.post("/api/jobs/:id/complete", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
       const { finalPrice } = req.body;
       const job = await storage.completeJob(req.params.id, finalPrice);
@@ -1952,7 +2114,7 @@ Respond with JSON only:
     }
   });
 
-  app.post("/api/jobs/:id/start", async (req: Request<IdParams>, res: Response) => {
+  app.post("/api/jobs/:id/start", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
       const job = await storage.updateJob(req.params.id, { status: "in_progress" });
       if (!job) {
@@ -1965,7 +2127,7 @@ Respond with JSON only:
     }
   });
 
-  app.delete("/api/jobs/:id", async (req: Request<IdParams>, res: Response) => {
+  app.delete("/api/jobs/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
       const deleted = await storage.deleteJob(req.params.id);
       if (!deleted) {
@@ -1980,7 +2142,7 @@ Respond with JSON only:
 
   // ============ INVOICES ROUTES ============
 
-  app.get("/api/provider/:providerId/invoices", async (req: Request<ProviderIdParams>, res: Response) => {
+  app.get("/api/provider/:providerId/invoices", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
     try {
       const invoices = await storage.getInvoices(req.params.providerId);
       res.json({ invoices });
@@ -1990,11 +2152,18 @@ Respond with JSON only:
     }
   });
 
-  app.get("/api/invoices/:id", async (req: Request<IdParams>, res: Response) => {
+  app.get("/api/invoices/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
+      const authUserId = req.authenticatedUserId!;
       const invoice = await storage.getInvoice(req.params.id);
       if (!invoice) {
         return res.status(404).json({ error: "Invoice not found" });
+      }
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      const isProvider = providerRecord && invoice.providerId === providerRecord.id;
+      const isHomeowner = invoice.homeownerUserId === authUserId;
+      if (!isProvider && !isHomeowner) {
+        return res.status(403).json({ error: "Access denied" });
       }
       const payments = await storage.getPaymentsByInvoice(req.params.id);
       res.json({ invoice, payments });
@@ -2004,7 +2173,7 @@ Respond with JSON only:
     }
   });
 
-  app.get("/api/provider/:providerId/next-invoice-number", async (req: Request<ProviderIdParams>, res: Response) => {
+  app.get("/api/provider/:providerId/next-invoice-number", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
     try {
       const invoiceNumber = await storage.getNextInvoiceNumber(req.params.providerId);
       res.json({ invoiceNumber });
@@ -2014,7 +2183,7 @@ Respond with JSON only:
     }
   });
 
-  app.post("/api/invoices", async (req: Request, res: Response) => {
+  app.post("/api/invoices", requireAuth, async (req: Request, res: Response) => {
     try {
       // Auto-generate invoice number if not provided
       const invoiceNumber = req.body.invoiceNumber || `INV-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
@@ -2038,7 +2207,7 @@ Respond with JSON only:
   });
 
   // Create and immediately send invoice (one-step flow)
-  app.post("/api/invoices/create-and-send", async (req: Request, res: Response) => {
+  app.post("/api/invoices/create-and-send", requireAuth, async (req: Request, res: Response) => {
     try {
       // Auto-generate invoice number
       const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
@@ -2112,8 +2281,17 @@ Respond with JSON only:
     }
   });
 
-  app.put("/api/invoices/:id", async (req: Request<IdParams>, res: Response) => {
+  app.put("/api/invoices/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
+      const authUserId = req.authenticatedUserId!;
+      const existing = await storage.getInvoice(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ error: "Invoice not found" });
+      }
+      const provider = await storage.getProviderByUserId(authUserId);
+      if (!provider || existing.providerId !== provider.id) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const invoice = await storage.updateInvoice(req.params.id, req.body);
       if (!invoice) {
         return res.status(404).json({ error: "Invoice not found" });
@@ -2125,7 +2303,7 @@ Respond with JSON only:
     }
   });
 
-  app.post("/api/invoices/:id/send", async (req: Request<IdParams>, res: Response) => {
+  app.post("/api/invoices/:id/send", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
       const invoiceId = req.params.id;
       
@@ -2183,7 +2361,7 @@ Respond with JSON only:
     }
   });
 
-  app.post("/api/invoices/:id/mark-paid", async (req: Request<IdParams>, res: Response) => {
+  app.post("/api/invoices/:id/mark-paid", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
       const { providerId } = req.body;
       if (!providerId) {
@@ -2207,7 +2385,7 @@ Respond with JSON only:
     }
   });
 
-  app.post("/api/invoices/:id/cancel", async (req: Request<IdParams>, res: Response) => {
+  app.post("/api/invoices/:id/cancel", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
       const invoice = await storage.cancelInvoice(req.params.id);
       if (!invoice) {
@@ -2222,7 +2400,7 @@ Respond with JSON only:
 
   // ============ PAYMENTS ROUTES ============
 
-  app.get("/api/provider/:providerId/payments", async (req: Request<ProviderIdParams>, res: Response) => {
+  app.get("/api/provider/:providerId/payments", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
     try {
       const payments = await storage.getPayments(req.params.providerId);
       res.json({ payments });
@@ -2232,7 +2410,7 @@ Respond with JSON only:
     }
   });
 
-  app.post("/api/payments", async (req: Request, res: Response) => {
+  app.post("/api/payments", requireAuth, async (req: Request, res: Response) => {
     try {
       const parsed = insertPaymentSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -2321,7 +2499,7 @@ Respond with JSON only:
     }
   });
 
-  app.post("/api/stripe/create-payment-intent", async (req: Request, res: Response) => {
+  app.post("/api/stripe/create-payment-intent", requireAuth, async (req: Request, res: Response) => {
     try {
       const { amount, currency = 'usd', customerId } = req.body;
       if (!amount) {
@@ -2338,7 +2516,7 @@ Respond with JSON only:
     }
   });
 
-  app.post("/api/stripe/create-customer", async (req: Request, res: Response) => {
+  app.post("/api/stripe/create-customer", requireAuth, async (req: Request, res: Response) => {
     try {
       const { email, userId } = req.body;
       if (!email || !userId) {
@@ -2352,7 +2530,7 @@ Respond with JSON only:
     }
   });
 
-  app.post("/api/stripe/create-checkout-session", async (req: Request, res: Response) => {
+  app.post("/api/stripe/create-checkout-session", requireAuth, async (req: Request, res: Response) => {
     try {
       const { customerId, priceId, successUrl, cancelUrl } = req.body;
       if (!customerId || !priceId) {
@@ -2371,7 +2549,7 @@ Respond with JSON only:
     }
   });
 
-  app.post("/api/stripe/customer-portal", async (req: Request, res: Response) => {
+  app.post("/api/stripe/customer-portal", requireAuth, async (req: Request, res: Response) => {
     try {
       const { customerId, returnUrl } = req.body;
       if (!customerId) {
@@ -2393,7 +2571,7 @@ Respond with JSON only:
   // ============================================
 
   // Start Stripe Connect onboarding for provider (frontend uses this path)
-  app.post("/api/stripe/connect/onboard/:providerId", async (req: Request<{ providerId: string }>, res: Response) => {
+  app.post("/api/stripe/connect/onboard/:providerId", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
     try {
       const { providerId } = req.params;
       const result = await createConnectAccountLink(providerId);
@@ -2405,7 +2583,7 @@ Respond with JSON only:
   });
 
   // Refresh Stripe Connect onboarding link
-  app.post("/api/stripe/connect/refresh-link/:providerId", async (req: Request<{ providerId: string }>, res: Response) => {
+  app.post("/api/stripe/connect/refresh-link/:providerId", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
     try {
       const { providerId } = req.params;
       const result = await refreshConnectAccountLink(providerId);
@@ -2444,7 +2622,7 @@ Respond with JSON only:
   });
 
   // Create invoice with line items (frontend path)
-  app.post("/api/stripe/invoices", async (req: Request, res: Response) => {
+  app.post("/api/stripe/invoices", requireAuth, async (req: Request, res: Response) => {
     try {
       const {
         providerId,
@@ -2537,7 +2715,7 @@ Respond with JSON only:
   });
 
   // Get invoices for provider
-  app.get("/api/stripe/invoices", async (req: Request, res: Response) => {
+  app.get("/api/stripe/invoices", requireAuth, async (req: Request, res: Response) => {
     try {
       const { providerId } = req.query;
       if (!providerId) {
@@ -2556,7 +2734,7 @@ Respond with JSON only:
   });
 
   // Send invoice
-  app.post("/api/stripe/invoices/:invoiceId/send", async (req: Request<{ invoiceId: string }>, res: Response) => {
+  app.post("/api/stripe/invoices/:invoiceId/send", requireAuth, async (req: Request<{ invoiceId: string }>, res: Response) => {
     try {
       const { invoiceId } = req.params;
 
@@ -2578,7 +2756,7 @@ Respond with JSON only:
   });
 
   // Create Stripe checkout session for invoice payment
-  app.post("/api/stripe/invoices/:invoiceId/checkout", async (req: Request<{ invoiceId: string }>, res: Response) => {
+  app.post("/api/stripe/invoices/:invoiceId/checkout", requireAuth, async (req: Request<{ invoiceId: string }>, res: Response) => {
     try {
       const { invoiceId } = req.params;
       const result = await createStripeCheckoutSession(invoiceId);
@@ -2590,7 +2768,7 @@ Respond with JSON only:
   });
 
   // Apply credits to invoice
-  app.post("/api/stripe/invoices/:invoiceId/apply-credits", async (req: Request<{ invoiceId: string }>, res: Response) => {
+  app.post("/api/stripe/invoices/:invoiceId/apply-credits", requireAuth, async (req: Request<{ invoiceId: string }>, res: Response) => {
     try {
       const { invoiceId } = req.params;
       const { userId, amountCents } = req.body;
@@ -2606,7 +2784,7 @@ Respond with JSON only:
   });
 
   // Create Connect account and onboarding link for provider
-  app.post("/api/connect/account-link", async (req: Request, res: Response) => {
+  app.post("/api/connect/account-link", requireAuth, async (req: Request, res: Response) => {
     try {
       const { providerId } = req.body;
       if (!providerId) {
@@ -2621,7 +2799,7 @@ Respond with JSON only:
   });
 
   // Refresh Connect account onboarding link
-  app.post("/api/connect/refresh-link", async (req: Request, res: Response) => {
+  app.post("/api/connect/refresh-link", requireAuth, async (req: Request, res: Response) => {
     try {
       const { providerId } = req.body;
       if (!providerId) {
@@ -2648,7 +2826,7 @@ Respond with JSON only:
   });
 
   // Create or update provider plan
-  app.post("/api/providers/:providerId/plan", async (req: Request<{ providerId: string }>, res: Response) => {
+  app.post("/api/providers/:providerId/plan", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
     try {
       const { providerId } = req.params;
       const { planTier, platformFeePercent, platformFeeFixedCents } = req.body;
@@ -2689,7 +2867,7 @@ Respond with JSON only:
   });
 
   // Get provider plan
-  app.get("/api/providers/:providerId/plan", async (req: Request<{ providerId: string }>, res: Response) => {
+  app.get("/api/providers/:providerId/plan", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
     try {
       const { providerId } = req.params;
       const plan = await getProviderPlan(providerId);
@@ -2701,7 +2879,7 @@ Respond with JSON only:
   });
 
   // Preview platform fee for a given amount
-  app.post("/api/connect/fee-preview", async (req: Request, res: Response) => {
+  app.post("/api/connect/fee-preview", requireAuth, async (req: Request, res: Response) => {
     try {
       const { providerId, totalCents } = req.body;
       if (!providerId || totalCents === undefined) {
@@ -2720,7 +2898,7 @@ Respond with JSON only:
   // ============================================
 
   // Create invoice with line items and platform fee calculation
-  app.post("/api/invoices/create", async (req: Request, res: Response) => {
+  app.post("/api/invoices/create", requireAuth, async (req: Request, res: Response) => {
     try {
       const {
         providerId,
@@ -2822,7 +3000,7 @@ Respond with JSON only:
   });
 
   // Send invoice (mark as sent and optionally generate payment link + send email)
-  app.post("/api/invoices/:invoiceId/send", async (req: Request<{ invoiceId: string }>, res: Response) => {
+  app.post("/api/invoices/:invoiceId/send", requireAuth, async (req: Request<{ invoiceId: string }>, res: Response) => {
     try {
       const { invoiceId } = req.params;
       const { deliveryMethod, generatePaymentLink } = req.body;
@@ -2913,7 +3091,7 @@ Respond with JSON only:
   });
 
   // Create payment intent for invoice (for in-app payment sheet)
-  app.post("/api/invoices/:invoiceId/payment-intent", async (req: Request<{ invoiceId: string }>, res: Response) => {
+  app.post("/api/invoices/:invoiceId/payment-intent", requireAuth, async (req: Request<{ invoiceId: string }>, res: Response) => {
     try {
       const { invoiceId } = req.params;
       const { payerUserId } = req.body;
@@ -2926,7 +3104,7 @@ Respond with JSON only:
   });
 
   // Create Stripe checkout session for invoice (hosted payment page)
-  app.post("/api/invoices/:invoiceId/checkout", async (req: Request<{ invoiceId: string }>, res: Response) => {
+  app.post("/api/invoices/:invoiceId/checkout", requireAuth, async (req: Request<{ invoiceId: string }>, res: Response) => {
     try {
       const { invoiceId } = req.params;
       const result = await createStripeCheckoutSession(invoiceId);
@@ -2938,7 +3116,7 @@ Respond with JSON only:
   });
 
   // Apply credits to invoice
-  app.post("/api/invoices/:invoiceId/apply-credits", async (req: Request<{ invoiceId: string }>, res: Response) => {
+  app.post("/api/invoices/:invoiceId/apply-credits", requireAuth, async (req: Request<{ invoiceId: string }>, res: Response) => {
     try {
       const { invoiceId } = req.params;
       const { userId, amountCents } = req.body;
@@ -2956,9 +3134,12 @@ Respond with JSON only:
   });
 
   // Get user credits balance
-  app.get("/api/users/:userId/credits", async (req: Request<{ userId: string }>, res: Response) => {
+  app.get("/api/users/:userId/credits", requireAuth, async (req: Request<{ userId: string }>, res: Response) => {
     try {
       const { userId } = req.params;
+      if (userId !== req.authenticatedUserId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const [credits] = await db
         .select()
         .from(userCredits)
@@ -2975,9 +3156,12 @@ Respond with JSON only:
   });
 
   // Add credits to user wallet (for RevenueCat integration)
-  app.post("/api/users/:userId/credits/add", async (req: Request<{ userId: string }>, res: Response) => {
+  app.post("/api/users/:userId/credits/add", requireAuth, async (req: Request<{ userId: string }>, res: Response) => {
     try {
       const { userId } = req.params;
+      if (userId !== req.authenticatedUserId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const { amountCents, reason } = req.body;
 
       if (!amountCents || amountCents <= 0) {
@@ -3055,7 +3239,7 @@ Respond with JSON only:
   });
 
   // Get payouts for provider
-  app.get("/api/providers/:providerId/payouts", async (req: Request<{ providerId: string }>, res: Response) => {
+  app.get("/api/providers/:providerId/payouts", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
     try {
       const { providerId } = req.params;
       const providerPayouts = await db
@@ -3075,7 +3259,7 @@ Respond with JSON only:
   // ============================================
 
   // Get booking links for provider
-  app.get("/api/providers/:providerId/booking-links", async (req: Request<{ providerId: string }>, res: Response) => {
+  app.get("/api/providers/:providerId/booking-links", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
     try {
       const { providerId } = req.params;
       const links = await storage.getBookingLinksByProvider(providerId);
@@ -3087,7 +3271,7 @@ Respond with JSON only:
   });
 
   // Create booking link for provider
-  app.post("/api/providers/:providerId/booking-links", async (req: Request<{ providerId: string }>, res: Response) => {
+  app.post("/api/providers/:providerId/booking-links", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
     try {
       const { providerId } = req.params;
       const { slug, welcomeMessage, confirmationMessage, depositRequired, depositAmount, depositPercentage, intakeQuestions, serviceCatalog, availabilityRules, brandColor, logoUrl } = req.body;
@@ -3163,7 +3347,7 @@ Respond with JSON only:
   });
 
   // Update booking link
-  app.put("/api/booking-links/:id", async (req: Request<{ id: string }>, res: Response) => {
+  app.put("/api/booking-links/:id", requireAuth, async (req: Request<{ id: string }>, res: Response) => {
     try {
       const { id } = req.params;
       const updates = req.body;
@@ -3190,7 +3374,7 @@ Respond with JSON only:
   });
 
   // Delete booking link
-  app.delete("/api/booking-links/:id", async (req: Request<{ id: string }>, res: Response) => {
+  app.delete("/api/booking-links/:id", requireAuth, async (req: Request<{ id: string }>, res: Response) => {
     try {
       const { id } = req.params;
       await storage.deleteBookingLink(id);
@@ -3238,7 +3422,7 @@ Respond with JSON only:
   });
 
   // Get intake submissions for provider
-  app.get("/api/providers/:providerId/intake-submissions", async (req: Request<{ providerId: string }>, res: Response) => {
+  app.get("/api/providers/:providerId/intake-submissions", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
     try {
       const { providerId } = req.params;
       const submissions = await storage.getIntakeSubmissionsByProvider(providerId);
@@ -3250,7 +3434,7 @@ Respond with JSON only:
   });
 
   // Update intake submission (review, convert, decline)
-  app.put("/api/intake-submissions/:id", async (req: Request<{ id: string }>, res: Response) => {
+  app.put("/api/intake-submissions/:id", requireAuth, async (req: Request<{ id: string }>, res: Response) => {
     try {
       const { id } = req.params;
       const updates = req.body;

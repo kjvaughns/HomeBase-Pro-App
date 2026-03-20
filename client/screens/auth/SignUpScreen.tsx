@@ -90,7 +90,7 @@ export default function SignUpScreen({ navigation }: Props) {
           email: data.user.email,
           phone: data.user.phone,
           avatarUrl: data.user.avatarUrl,
-        });
+        }, null, data.token ?? null);
         if (selectedAccountType === "provider") {
           navigation.reset({
             index: 0,

@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { useAuthStore } from "@/state/authStore";
 
 /**
  * Gets the base URL for the Express API server (e.g., "http://localhost:3000")
@@ -16,6 +17,14 @@ export function getApiUrl(): string {
   return url.href;
 }
 
+function getAuthHeaders(): Record<string, string> {
+  const { sessionToken } = useAuthStore.getState();
+  if (sessionToken) {
+    return { Authorization: `Bearer ${sessionToken}` };
+  }
+  return {};
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -31,9 +40,14 @@ export async function apiRequest(
   const baseUrl = getApiUrl();
   const url = new URL(route, baseUrl);
 
+  const headers: Record<string, string> = {
+    ...getAuthHeaders(),
+    ...(data ? { "Content-Type": "application/json" } : {}),
+  };
+
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers,
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
@@ -53,6 +67,7 @@ export const getQueryFn: <T>(options: {
 
     const res = await fetch(url, {
       credentials: "include",
+      headers: getAuthHeaders(),
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
@@ -69,7 +84,7 @@ export const queryClient = new QueryClient({
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      staleTime: 1000 * 60 * 5, // 5 minutes - allows data to refresh
+      staleTime: 1000 * 60 * 5,
       retry: false,
     },
     mutations: {

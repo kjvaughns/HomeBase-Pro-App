@@ -76,7 +76,7 @@ export default function LoginScreen({ navigation }: Props) {
           email: data.user.email,
           phone: data.user.phone,
           avatarUrl: data.user.avatarUrl,
-        }, providerProfile);
+        }, providerProfile, data.token ?? null);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Login failed";

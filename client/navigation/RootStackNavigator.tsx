@@ -27,10 +27,6 @@ import BudgeterScreen from "@/screens/homeowner/BudgeterScreen";
 import ServiceHistoryScreen from "@/screens/homeowner/ServiceHistoryScreen";
 import ProviderListScreen from "@/screens/homeowner/ProviderListScreen";
 import ProviderProfileScreen from "@/screens/homeowner/ProviderProfileScreen";
-import BookingRequestScreen from "@/screens/homeowner/BookingRequestScreen";
-import BookingScheduleScreen from "@/screens/homeowner/BookingScheduleScreen";
-import BookingAddressScreen from "@/screens/homeowner/BookingAddressScreen";
-import BookingConfirmScreen from "@/screens/homeowner/BookingConfirmScreen";
 import BookingSuccessScreen from "@/screens/homeowner/BookingSuccessScreen";
 import JobDetailScreen from "@/screens/homeowner/JobDetailScreen";
 import AppointmentDetailScreen from "@/screens/homeowner/AppointmentDetailScreen";
@@ -117,43 +113,6 @@ export type RootStackParamList = {
       urgency: UrgencyLevel;
       category: string;
     };
-  };
-  BookingRequest: {
-    providerId: string;
-    categoryId: string;
-    service: string;
-  };
-  BookingSchedule: {
-    providerId: string;
-    categoryId: string;
-    service: string;
-    description: string;
-    urgency: UrgencyLevel;
-    size: JobSize;
-    photoUrls: string[];
-  };
-  BookingAddress: {
-    providerId: string;
-    categoryId: string;
-    service: string;
-    description: string;
-    urgency: UrgencyLevel;
-    size: JobSize;
-    photoUrls: string[];
-    scheduledDate: string;
-    scheduledTime: string;
-  };
-  BookingConfirm: {
-    providerId: string;
-    categoryId: string;
-    service: string;
-    description: string;
-    urgency: UrgencyLevel;
-    size: JobSize;
-    photoUrls: string[];
-    scheduledDate: string;
-    scheduledTime: string;
-    addressId: string;
   };
   BookingSuccess: { jobId: string };
   JobDetail: { jobId: string };
@@ -377,34 +336,6 @@ export default function RootStackNavigator() {
         component={ProviderProfileScreen}
         options={{
           headerTitle: "",
-        }}
-      />
-      <Stack.Screen
-        name="BookingRequest"
-        component={BookingRequestScreen}
-        options={{
-          headerTitle: "Request Details",
-        }}
-      />
-      <Stack.Screen
-        name="BookingSchedule"
-        component={BookingScheduleScreen}
-        options={{
-          headerTitle: "Schedule",
-        }}
-      />
-      <Stack.Screen
-        name="BookingAddress"
-        component={BookingAddressScreen}
-        options={{
-          headerTitle: "Service Address",
-        }}
-      />
-      <Stack.Screen
-        name="BookingConfirm"
-        component={BookingConfirmScreen}
-        options={{
-          headerTitle: "Confirm Booking",
         }}
       />
       <Stack.Screen

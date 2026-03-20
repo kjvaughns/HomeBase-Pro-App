@@ -26,7 +26,7 @@ import { AccountGateModal } from "@/components/AccountGateModal";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuthStore } from "@/state/authStore";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
-import { getApiUrl } from "@/lib/query-client";
+import { getApiUrl, apiRequest } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -137,14 +137,7 @@ export default function SmartIntakeScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
-      const response = await fetch(new URL("/api/intake/analyze", getApiUrl()).toString(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ problem }),
-      });
-
-      if (!response.ok) throw new Error("Failed to analyze");
-
+      const response = await apiRequest("POST", "/api/intake/analyze", { problem });
       const data = await response.json();
       setAnalysis(data.analysis);
       setStep("questions");
@@ -206,21 +199,14 @@ export default function SmartIntakeScreen() {
           : (answers[q.id] as string) || "",
       }));
 
-      const response = await fetch(new URL("/api/intake/refine", getApiUrl()).toString(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          originalAnalysis: {
-            category: analysis.category,
-            summary: analysis.summary,
-            severity: analysis.severity,
-          },
-          answers: formattedAnswers,
-        }),
+      const response = await apiRequest("POST", "/api/intake/refine", {
+        originalAnalysis: {
+          category: analysis.category,
+          summary: analysis.summary,
+          severity: analysis.severity,
+        },
+        answers: formattedAnswers,
       });
-
-      if (!response.ok) throw new Error("Failed to refine");
-
       const data = await response.json();
       setRefinedAnalysis(data.refinedAnalysis);
       setStep("options");
@@ -242,14 +228,7 @@ export default function SmartIntakeScreen() {
 
     setIsLoading(true);
     try {
-      const response = await fetch(new URL("/api/intake/match-providers", getApiUrl()).toString(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category: analysis.category }),
-      });
-
-      if (!response.ok) throw new Error("Failed to match providers");
-
+      const response = await apiRequest("POST", "/api/intake/match-providers", { category: analysis.category });
       const data = await response.json();
       setProviders(data.providers || []);
       setStep("providers");

@@ -28,12 +28,13 @@ export interface ProviderProfile {
 interface AuthState {
   isAuthenticated: boolean;
   user: User | null;
+  sessionToken: string | null;
   activeRole: UserRole;
   providerProfile: ProviderProfile | null;
   isHydrated: boolean;
   needsRoleSelection: boolean;
   
-  login: (user: User, providerProfile?: ProviderProfile | null) => void;
+  login: (user: User, providerProfile?: ProviderProfile | null, token?: string | null) => void;
   logout: () => void;
   setActiveRole: (role: UserRole) => void;
   setNeedsRoleSelection: (needs: boolean) => void;
@@ -49,15 +50,17 @@ const STORAGE_KEY = "auth-storage";
 export const useAuthStore = create<AuthState>()((set, get) => ({
   isAuthenticated: false,
   user: null,
+  sessionToken: null,
   activeRole: "guest",
   providerProfile: null,
   isHydrated: false,
   needsRoleSelection: true,
 
-  login: (user: User, providerProfile?: ProviderProfile | null) => {
+  login: (user: User, providerProfile?: ProviderProfile | null, token?: string | null) => {
     const newState = {
       isAuthenticated: true,
       user,
+      sessionToken: token || null,
       activeRole: "guest" as UserRole,
       providerProfile: providerProfile || null,
       needsRoleSelection: true,
@@ -70,6 +73,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     const newState = {
       isAuthenticated: false,
       user: null,
+      sessionToken: null,
       activeRole: "guest" as UserRole,
       providerProfile: null,
     };
@@ -124,6 +128,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         set({
           isAuthenticated: data.isAuthenticated || false,
           user: data.user || null,
+          sessionToken: data.sessionToken || null,
           activeRole: data.activeRole || "guest",
           providerProfile: data.providerProfile || null,
           needsRoleSelection: data.needsRoleSelection ?? true,
@@ -144,6 +149,7 @@ async function saveToStorage(state: AuthState) {
     const data = {
       isAuthenticated: state.isAuthenticated,
       user: state.user,
+      sessionToken: state.sessionToken,
       activeRole: state.activeRole,
       providerProfile: state.providerProfile,
       needsRoleSelection: state.needsRoleSelection,

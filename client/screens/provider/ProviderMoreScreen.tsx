@@ -113,7 +113,7 @@ export default function ProviderMoreScreen() {
               title="AI Service Builder"
               subtitle="Create optimized service listings"
               leftIcon="cpu"
-              onPress={() => navigation.navigate("Services")}
+              onPress={() => navigation.navigate("NewService")}
             />
             <ListRow
               title="Public Booking Page"

@@ -115,21 +115,14 @@ Provider Business Context:
     setIsLoading(true);
     
     try {
-      const response = await fetch(new URL("/api/ai/provider-assistant", getApiUrl()).toString(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text.trim(),
-          businessContext: getBusinessContext(),
-          conversationHistory: messages.slice(-10).map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
-        }),
+      const response = await apiRequest("POST", "/api/ai/provider-assistant", {
+        message: text.trim(),
+        businessContext: getBusinessContext(),
+        conversationHistory: messages.slice(-10).map((m) => ({
+          role: m.role,
+          content: m.content,
+        })),
       });
-      
-      if (!response.ok) throw new Error("Failed to get response");
-      
       const data = await response.json();
       
       const assistantMessage: Message = {
