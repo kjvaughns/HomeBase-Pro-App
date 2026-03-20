@@ -37,45 +37,45 @@ export default function AccountTypeSelectionScreen({ navigation }: Props) {
         Animated.timing(headerOpacity, {
           toValue: 1,
           duration: 400,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.spring(headerTranslateY, {
           toValue: 0,
           tension: 50,
           friction: 8,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ]),
       Animated.parallel([
         Animated.timing(card1Opacity, {
           toValue: 1,
           duration: 350,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.spring(card1TranslateY, {
           toValue: 0,
           tension: 50,
           friction: 8,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ]),
       Animated.parallel([
         Animated.timing(card2Opacity, {
           toValue: 1,
           duration: 350,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.spring(card2TranslateY, {
           toValue: 0,
           tension: 50,
           friction: 8,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ]),
       Animated.timing(buttonOpacity, {
         toValue: 1,
         duration: 250,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     ]).start();
   }, []);

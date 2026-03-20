@@ -90,12 +90,12 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
       Animated.timing(fadeAnim, {
         toValue: 0,
         duration: 150,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.timing(slideAnim, {
         toValue: -30,
         duration: 150,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     ]).start(() => {
       callback();
@@ -104,13 +104,13 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
         Animated.timing(fadeAnim, {
           toValue: 1,
           duration: 200,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.spring(slideAnim, {
           toValue: 0,
           tension: 50,
           friction: 8,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ]).start();
     });

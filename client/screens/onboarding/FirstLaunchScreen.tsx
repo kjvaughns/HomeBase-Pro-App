@@ -39,54 +39,54 @@ export default function FirstLaunchScreen({ navigation }: Props) {
           toValue: 1,
           tension: 40,
           friction: 6,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(logoOpacity, {
           toValue: 1,
           duration: 500,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ]),
       Animated.timing(glowOpacity, {
         toValue: 1,
         duration: 600,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.parallel([
         Animated.timing(titleOpacity, {
           toValue: 1,
           duration: 400,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.spring(titleTranslateY, {
           toValue: 0,
           tension: 50,
           friction: 8,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ]),
       Animated.timing(subtitleOpacity, {
         toValue: 1,
         duration: 300,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.parallel([
         Animated.timing(featuresOpacity, {
           toValue: 1,
           duration: 400,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.spring(featuresTranslateY, {
           toValue: 0,
           tension: 50,
           friction: 8,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ]),
       Animated.timing(buttonOpacity, {
         toValue: 1,
         duration: 300,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     ]).start();
   }, []);
@@ -112,13 +112,13 @@ export default function FirstLaunchScreen({ navigation }: Props) {
           Animated.timing(cardOpacity, {
             toValue: 1,
             duration: 400,
-            useNativeDriver: true,
+            useNativeDriver: false,
           }),
           Animated.spring(cardTranslateX, {
             toValue: 0,
             tension: 50,
             friction: 8,
-            useNativeDriver: true,
+            useNativeDriver: false,
           }),
         ]),
       ]).start();
