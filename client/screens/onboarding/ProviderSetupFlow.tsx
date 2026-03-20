@@ -29,6 +29,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { GlassCard } from "@/components/GlassCard";
+import { ZipCodeAreaInput } from "@/components/ZipCodeAreaInput";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -233,27 +234,15 @@ function Step1BusinessBasics({
           })}
         </View>
 
-        <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary, marginTop: Spacing.lg }]}>
-          Service Area{" "}
-          <ThemedText type="caption" style={{ color: theme.textTertiary }}>
-            (optional)
-          </ThemedText>
-        </ThemedText>
-        <TextInput
-          style={[
-            styles.textInput,
-            {
-              backgroundColor: theme.backgroundElevated,
-              color: theme.text,
-              borderColor: theme.borderLight,
-            },
-          ]}
-          placeholder="e.g. San Francisco, East Bay"
-          placeholderTextColor={theme.textSecondary}
-          value={data.serviceArea}
-          onChangeText={(v) => onChange({ serviceArea: v })}
-          testID="input-service-area"
-        />
+        <View style={{ marginTop: Spacing.lg }}>
+          <ZipCodeAreaInput
+            label="Service area"
+            optional
+            value={data.serviceArea}
+            onChange={(v) => onChange({ serviceArea: v })}
+            testID="input-service-area"
+          />
+        </View>
       </GlassCard>
     </ScrollView>
   );
@@ -892,7 +881,14 @@ function Step5BookingPreview({ data }: { data: SetupData }) {
               </ThemedText>
               <ThemedText type="caption" style={{ color: theme.textSecondary, marginTop: 2 }}>
                 {categoryLabel}
-                {data.serviceArea ? ` · ${data.serviceArea}` : ""}
+                {data.serviceArea ? (() => {
+                  const zips = data.serviceArea.split(",").map((z) => z.trim()).filter(Boolean);
+                  return zips.length > 1
+                    ? ` · ${zips[0]} +${zips.length - 1} ZIPs`
+                    : zips.length === 1
+                    ? ` · ${zips[0]}`
+                    : "";
+                })() : ""}
               </ThemedText>
             </View>
           </View>

@@ -16,6 +16,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { ZipCodeAreaInput } from "@/components/ZipCodeAreaInput";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -305,28 +306,12 @@ function BusinessBasicsStep({
         })}
       </View>
 
-      <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary, marginTop: Spacing.lg }]}>
-        Service area{" "}
-        <ThemedText style={[styles.fieldLabel, { color: theme.textTertiary }]}>(optional)</ThemedText>
-      </ThemedText>
-      <View
-        style={[
-          styles.inputWrapper,
-          {
-            backgroundColor: theme.backgroundSecondary,
-            borderColor: serviceArea ? Colors.accent : theme.border,
-          },
-        ]}
-      >
-        <Feather name="map-pin" size={17} color={serviceArea ? Colors.accent : theme.textSecondary} />
-        <TextInput
-          style={[styles.textInput, { color: theme.text }]}
-          placeholder="City, State (e.g. Austin, TX)"
-          placeholderTextColor={theme.textTertiary}
+      <View style={{ marginTop: Spacing.lg }}>
+        <ZipCodeAreaInput
+          label="Service area"
+          optional
           value={serviceArea}
-          onChangeText={setServiceArea}
-          autoCapitalize="words"
-          returnKeyType="done"
+          onChange={setServiceArea}
           testID="input-service-area"
         />
       </View>
