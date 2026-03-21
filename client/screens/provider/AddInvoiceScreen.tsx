@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, ScrollView, View, Alert, KeyboardAvoidingView, Platform, Pressable } from "react-native";
+import { StyleSheet, ScrollView, View, KeyboardAvoidingView, Platform, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -16,6 +16,7 @@ import { Spacing, Typography, Colors, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useTheme } from "@/hooks/useTheme";
 import { apiRequest } from "@/lib/query-client";
+import * as Haptics from "expo-haptics";
 
 interface Client {
   id: string;
@@ -78,19 +79,14 @@ export default function AddInvoiceScreen() {
       const response = await apiRequest("POST", "/api/invoices/create-and-send", data);
       return response.json();
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "invoices"] });
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "stats"] });
-      
-      if (data.emailSent) {
-        Alert.alert("Invoice Sent", "Invoice has been created and emailed to the client.");
-      } else if (data.invoice && !data.emailSent) {
-        Alert.alert("Invoice Created", data.emailError || "Invoice saved. Client has no email on file.");
-      }
       navigation.goBack();
     },
     onError: (error) => {
-      Alert.alert("Error", "Failed to create invoice. Please try again.");
+      setFormError("Failed to create invoice. Please try again.");
       console.error("Create invoice error:", error);
     },
   });
@@ -108,29 +104,32 @@ export default function AddInvoiceScreen() {
       return response.json();
     },
     onSuccess: () => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "invoices"] });
-      Alert.alert("Draft Saved", "Invoice has been saved as a draft.");
       navigation.goBack();
     },
     onError: (error) => {
-      Alert.alert("Error", "Failed to save invoice. Please try again.");
+      setFormError("Failed to save invoice. Please try again.");
       console.error("Save invoice error:", error);
     },
   });
 
+  const [formError, setFormError] = useState<string | null>(null);
+
   const validateForm = () => {
+    setFormError(null);
     if (!selectedClientId) {
-      Alert.alert("Required Field", "Please select a client.");
+      setFormError("Please select a client.");
       return false;
     }
 
     if (!amount.trim() || isNaN(parseFloat(amount))) {
-      Alert.alert("Required Field", "Please enter a valid amount.");
+      setFormError("Please enter a valid amount.");
       return false;
     }
 
     if (!providerId) {
-      Alert.alert("Error", "Provider profile not found.");
+      setFormError("Provider profile not found.");
       return false;
     }
     
@@ -304,19 +303,30 @@ export default function AddInvoiceScreen() {
             />
           </GlassCard>
 
+          {formError ? (
+            <View style={[styles.errorBox, { backgroundColor: Colors.errorLight }]}>
+              <Feather name="alert-circle" size={16} color={Colors.error} />
+              <ThemedText style={[styles.errorText, { color: Colors.error }]}>
+                {formError}
+              </ThemedText>
+            </View>
+          ) : null}
+
           <View style={styles.buttons}>
             <PrimaryButton
               onPress={handleCreateAndSend}
-              disabled={createMutation.isPending || saveDraftMutation.isPending || clients.length === 0}
+              loading={createMutation.isPending}
+              disabled={saveDraftMutation.isPending || clients.length === 0}
             >
-              {createMutation.isPending ? "Sending..." : "Create & Send Invoice"}
+              Create & Send Invoice
             </PrimaryButton>
             
             <SecondaryButton
               onPress={handleSaveDraft}
-              disabled={createMutation.isPending || saveDraftMutation.isPending || clients.length === 0}
+              loading={saveDraftMutation.isPending}
+              disabled={createMutation.isPending || clients.length === 0}
             >
-              {saveDraftMutation.isPending ? "Saving..." : "Save as Draft"}
+              Save as Draft
             </SecondaryButton>
             
             <Pressable
@@ -383,6 +393,18 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     borderRadius: BorderRadius.md,
     gap: Spacing.md,
+  },
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  errorText: {
+    ...Typography.subhead,
+    flex: 1,
   },
   jobInfo: {
     flex: 1,

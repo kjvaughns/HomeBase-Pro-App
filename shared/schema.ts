@@ -121,6 +121,12 @@ export const providers = pgTable("providers", {
   serviceArea: text("service_area"),
   yearsExperience: integer("years_experience").default(0),
   capabilityTags: text("capability_tags").array().default(sql`ARRAY[]::text[]`),
+  businessHours: text("business_hours"),
+  bookingPolicies: text("booking_policies"),
+  serviceRadius: integer("service_radius"),
+  serviceZipCodes: text("service_zip_codes"),
+  serviceCities: text("service_cities"),
+  isPublicProfile: boolean("is_public_profile").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

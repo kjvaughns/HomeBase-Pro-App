@@ -1,17 +1,15 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   StyleSheet,
   View,
   ScrollView,
-  Image,
   Pressable,
   Share,
-  Alert,
   ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation } from "@react-navigation/native";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -22,14 +20,12 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { SecondaryButton } from "@/components/SecondaryButton";
 import { Avatar } from "@/components/Avatar";
+import { StatusPill } from "@/components/StatusPill";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
-import { RootStackParamList } from "@/navigation/RootStackNavigator";
-import { getApiUrl } from "@/lib/query-client";
-
-type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 interface ProviderService {
   id: string;
@@ -49,12 +45,15 @@ interface BookingLink {
 
 export default function PublicProfileScreen() {
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation<NavigationProp>();
+  const headerHeight = useHeaderHeight();
+  const navigation = useNavigation<any>();
   const { theme } = useTheme();
   const { user, providerProfile } = useAuthStore();
-  const providerId = providerProfile?.id;
 
+  const providerId = providerProfile?.id;
   const businessName = providerProfile?.businessName || "Your Business Name";
+
+  const [copyFeedback, setCopyFeedback] = useState(false);
 
   const { data: bookingLinksData } = useQuery<{ bookingLinks: BookingLink[] }>({
     queryKey: ["/api/providers", providerId, "booking-links"],
@@ -66,207 +65,328 @@ export default function PublicProfileScreen() {
     enabled: !!providerId,
   });
 
+  const { data: reviewsData } = useQuery<{ reviews: any[] }>({
+    queryKey: ["/api/provider", providerId, "reviews"],
+    enabled: !!providerId,
+  });
+
   const activeLink = bookingLinksData?.bookingLinks?.find((l) => l.status === "active");
   const slug = activeLink?.slug;
   const domain = process.env.EXPO_PUBLIC_DOMAIN || "localhost:5000";
-  const profileUrl = slug ? `${domain}/book/${slug}` : null;
+  const profileUrl = slug ? `https://${domain}/book/${slug}` : null;
   const services = servicesData?.services || [];
+  const reviews = reviewsData?.reviews || [];
+
+  const providerRating = providerProfile?.rating ? Number(providerProfile.rating) : 0;
+  const reviewCount = providerProfile?.reviewCount || reviews.length;
 
   const formatPrice = (svc: ProviderService): string => {
-    if (svc.pricingType === "quote") return "Quote";
-    if (svc.basePrice) return `$${svc.basePrice}`;
+    if (svc.pricingType === "quote") return "Get Quote";
+    if (svc.basePrice) return `$${parseFloat(svc.basePrice).toLocaleString()}`;
     return "Contact";
   };
 
+  const handleCopyLink = async () => {
+    if (!profileUrl) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    await Clipboard.setStringAsync(profileUrl);
+    setCopyFeedback(true);
+    setTimeout(() => setCopyFeedback(false), 2500);
+  };
+
   const handleShare = async () => {
-    if (!profileUrl) {
-      Alert.alert("No Booking Link", "Create a booking link first from the Business Profile screen.");
-      return;
-    }
+    if (!profileUrl) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await Share.share({
-        message: `Book my services at https://${profileUrl}`,
-        url: `https://${profileUrl}`,
+        message: `Book ${businessName} — ${profileUrl}`,
+        url: profileUrl,
       });
-    } catch (error) {
-      console.error("Share error:", error);
-    }
+    } catch {}
   };
 
-  const handleCopyLink = async () => {
-    if (!profileUrl) {
-      Alert.alert("No Booking Link", "Create a booking link first from the Business Profile screen.");
-      return;
-    }
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    await Clipboard.setStringAsync(`https://${profileUrl}`);
-    Alert.alert("Copied!", "Your booking link has been copied to clipboard.");
-  };
-
-  const renderStars = (rating: number) => {
-    return (
-      <View style={styles.starsRow}>
-        {[1, 2, 3, 4, 5].map((star) => (
-          <Feather
-            key={star}
-            name="star"
-            size={14}
-            color={star <= rating ? Colors.accent : theme.backgroundTertiary}
-            style={{ marginRight: 2 }}
-          />
-        ))}
-      </View>
-    );
-  };
-
-  const providerRating = providerProfile?.rating ? Number(providerProfile.rating) : 0;
-  const reviewCount = providerProfile?.reviewCount || 0;
+  const renderStars = (rating: number, size = 14) => (
+    <View style={styles.starsRow}>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <Feather
+          key={star}
+          name="star"
+          size={size}
+          color={star <= Math.round(rating) ? Colors.warning : theme.backgroundTertiary}
+        />
+      ))}
+    </View>
+  );
 
   return (
     <ThemedView style={styles.container}>
       <ScrollView
-        style={styles.flex}
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + Spacing.md, paddingBottom: insets.bottom + 100 },
-        ]}
+        contentContainerStyle={{
+          paddingTop: headerHeight + Spacing.lg,
+          paddingBottom: insets.bottom + 120,
+          paddingHorizontal: Spacing.screenPadding,
+        }}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View entering={FadeIn.delay(50).duration(300)}>
-          <View style={styles.header}>
-            <Pressable
-              style={[styles.backButton, { backgroundColor: theme.backgroundSecondary }]}
-              onPress={() => navigation.goBack()}
-            >
-              <Feather name="arrow-left" size={20} color={theme.text} />
-            </Pressable>
-            <ThemedText style={styles.headerTitle}>Public Profile</ThemedText>
-            <View style={styles.headerActions}>
-              <View style={{ width: 40 }} />
-            </View>
-          </View>
-        </Animated.View>
-
-        <Animated.View entering={FadeInDown.delay(100).duration(300)}>
-          <GlassCard style={styles.linkCard}>
-            <View style={styles.linkHeader}>
-              <Feather name="link" size={18} color={Colors.accent} />
-              <ThemedText style={styles.linkLabel}>Your Booking Link</ThemedText>
-            </View>
-            <View style={[styles.linkDisplay, { backgroundColor: theme.backgroundSecondary }]}>
-              <ThemedText style={styles.linkText}>
-                {profileUrl || "No booking link created yet"}
-              </ThemedText>
-            </View>
-            {profileUrl ? (
-              <View style={styles.linkActions}>
-                <Pressable style={styles.linkButton} onPress={handleCopyLink}>
-                  <Feather name="copy" size={16} color={Colors.accent} />
-                  <ThemedText style={[styles.linkButtonText, { color: Colors.accent }]}>Copy</ThemedText>
-                </Pressable>
-                <Pressable style={styles.linkButton} onPress={handleShare}>
-                  <Feather name="share" size={16} color={Colors.accent} />
-                  <ThemedText style={[styles.linkButtonText, { color: Colors.accent }]}>Share</ThemedText>
-                </Pressable>
+        {/* Hero Card */}
+        <Animated.View entering={FadeInDown.delay(0).duration(400)}>
+          <GlassCard style={styles.heroCard}>
+            <View style={styles.heroTop}>
+              <Avatar uri={user?.avatarUrl} name={businessName} size="large" />
+              <View style={styles.heroInfo}>
+                <ThemedText style={styles.heroName}>{businessName}</ThemedText>
+                {providerProfile?.serviceArea ? (
+                  <ThemedText style={[styles.heroTagline, { color: theme.textSecondary }]} numberOfLines={2}>
+                    Serving {providerProfile.serviceArea}
+                  </ThemedText>
+                ) : null}
               </View>
-            ) : null}
+            </View>
+
+            {/* Trust bar */}
+            <View style={styles.trustBar}>
+              {providerRating > 0 ? (
+                <View style={styles.trustItem}>
+                  {renderStars(providerRating)}
+                  <ThemedText style={[styles.trustLabel, { color: theme.textSecondary }]}>
+                    {providerRating.toFixed(1)} ({reviewCount})
+                  </ThemedText>
+                </View>
+              ) : null}
+
+              {providerProfile?.completedJobs > 0 ? (
+                <View style={styles.trustItem}>
+                  <Feather name="check-circle" size={14} color={Colors.accent} />
+                  <ThemedText style={[styles.trustLabel, { color: theme.textSecondary }]}>
+                    {providerProfile.completedJobs} jobs done
+                  </ThemedText>
+                </View>
+              ) : null}
+
+              <View style={[styles.verifiedBadge, { backgroundColor: Colors.accentLight }]}>
+                <Feather name="shield" size={12} color={Colors.accent} />
+                <ThemedText style={[styles.verifiedText, { color: Colors.accent }]}>
+                  Verified
+                </ThemedText>
+              </View>
+            </View>
           </GlassCard>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(150).duration(300)}>
-          <ThemedText style={[styles.sectionLabel, { color: theme.textSecondary }]}>
-            PREVIEW
-          </ThemedText>
-          <View style={[styles.previewContainer, { backgroundColor: theme.backgroundSecondary, borderColor: theme.borderLight }]}>
-            <View style={styles.heroSection}>
-              <Image
-                source={{ uri: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800&q=80" }}
-                style={styles.coverImage}
-              />
-              <View style={styles.coverOverlay} />
-
-              <View style={styles.profileSection}>
-                <View style={[styles.avatarWrapper, { borderColor: theme.backgroundDefault }]}>
-                  <Avatar uri={user?.avatarUrl} name={businessName} size="large" />
-                </View>
-                <ThemedText style={styles.businessName}>{businessName}</ThemedText>
-                {providerRating > 0 ? (
-                  <View style={styles.ratingContainer}>
-                    {renderStars(Math.round(providerRating))}
-                    <ThemedText style={[styles.ratingText, { color: theme.textSecondary }]}>
-                      {providerRating.toFixed(1)} ({reviewCount} {reviewCount === 1 ? "review" : "reviews"})
-                    </ThemedText>
-                  </View>
-                ) : null}
-                <View style={styles.badgesRow}>
-                  <View style={[styles.badge, { backgroundColor: Colors.accentLight }]}>
-                    <Feather name="check-circle" size={12} color={Colors.accent} />
-                    <ThemedText style={[styles.badgeText, { color: Colors.accent }]}>Verified</ThemedText>
-                  </View>
-                </View>
-              </View>
+        {/* Booking Link */}
+        <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+          <GlassCard style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Feather name="link-2" size={16} color={Colors.accent} />
+              <ThemedText style={styles.sectionTitle}>Your Booking Link</ThemedText>
             </View>
 
-            <View style={styles.contentSection}>
-              <View style={styles.servicesSection}>
-                <ThemedText style={styles.sectionTitle}>Services</ThemedText>
-                {servicesLoading ? (
-                  <ActivityIndicator size="small" color={Colors.accent} />
-                ) : services.length > 0 ? (
-                  services.map((service) => (
-                    <View
-                      key={service.id}
-                      style={[styles.serviceCard, { backgroundColor: theme.backgroundDefault }]}
-                    >
-                      <View style={styles.serviceInfo}>
-                        <ThemedText style={styles.serviceName}>{service.name}</ThemedText>
-                        {service.description ? (
-                          <ThemedText style={[styles.serviceDesc, { color: theme.textSecondary }]}>
-                            {service.description}
-                          </ThemedText>
-                        ) : null}
-                      </View>
-                      <View style={styles.servicePrice}>
-                        <ThemedText style={[styles.priceText, { color: Colors.accent }]}>
-                          {formatPrice(service)}
+            {profileUrl ? (
+              <>
+                <View style={[styles.linkBox, { backgroundColor: theme.backgroundSecondary }]}>
+                  <ThemedText style={[styles.linkText, { color: theme.textSecondary }]} numberOfLines={1}>
+                    {profileUrl}
+                  </ThemedText>
+                </View>
+
+                {copyFeedback ? (
+                  <Animated.View entering={FadeIn.duration(200)}>
+                    <View style={[styles.copyBanner, { backgroundColor: Colors.accentLight }]}>
+                      <Feather name="check" size={14} color={Colors.accent} />
+                      <ThemedText style={[styles.copyBannerText, { color: Colors.accent }]}>
+                        Link copied to clipboard
+                      </ThemedText>
+                    </View>
+                  </Animated.View>
+                ) : null}
+
+                <View style={styles.linkActions}>
+                  <Pressable
+                    style={[styles.linkActionBtn, { backgroundColor: Colors.accentLight }]}
+                    onPress={handleCopyLink}
+                  >
+                    <Feather name="copy" size={16} color={Colors.accent} />
+                    <ThemedText style={[styles.linkActionText, { color: Colors.accent }]}>
+                      Copy Link
+                    </ThemedText>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.linkActionBtn, { backgroundColor: theme.backgroundSecondary }]}
+                    onPress={handleShare}
+                  >
+                    <Feather name="share" size={16} color={theme.text} />
+                    <ThemedText style={styles.linkActionText}>Share</ThemedText>
+                  </Pressable>
+                </View>
+              </>
+            ) : (
+              <View style={styles.noLinkState}>
+                <Feather name="link" size={28} color={theme.textTertiary} style={{ marginBottom: Spacing.sm }} />
+                <ThemedText style={[styles.noLinkTitle, { color: theme.textSecondary }]}>
+                  No booking link yet
+                </ThemedText>
+                <ThemedText style={[styles.noLinkSubtitle, { color: theme.textTertiary }]}>
+                  Create a booking link from your Business Profile to allow clients to book directly.
+                </ThemedText>
+              </View>
+            )}
+          </GlassCard>
+        </Animated.View>
+
+        {/* Services Preview */}
+        <Animated.View entering={FadeInDown.delay(150).duration(400)}>
+          <GlassCard style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Feather name="tool" size={16} color={Colors.accent} />
+              <ThemedText style={styles.sectionTitle}>Services You Offer</ThemedText>
+            </View>
+
+            {servicesLoading ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator size="small" color={Colors.accent} />
+              </View>
+            ) : services.length > 0 ? (
+              services.map((svc, idx) => (
+                <View
+                  key={svc.id}
+                  style={[
+                    styles.serviceRow,
+                    idx < services.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.separator },
+                  ]}
+                >
+                  <View style={styles.serviceLeft}>
+                    <ThemedText style={styles.serviceName}>{svc.name}</ThemedText>
+                    {svc.description ? (
+                      <ThemedText style={[styles.serviceDesc, { color: theme.textSecondary }]} numberOfLines={1}>
+                        {svc.description}
+                      </ThemedText>
+                    ) : null}
+                    {svc.category ? (
+                      <View style={[styles.categoryTag, { backgroundColor: theme.backgroundSecondary }]}>
+                        <ThemedText style={[styles.categoryTagText, { color: theme.textTertiary }]}>
+                          {svc.category}
                         </ThemedText>
                       </View>
-                    </View>
-                  ))
-                ) : (
-                  <ThemedText style={[styles.emptyText, { color: theme.textSecondary }]}>
-                    No services added yet. Add services from the Services screen.
+                    ) : null}
+                  </View>
+                  <ThemedText style={[styles.servicePrice, { color: Colors.accent }]}>
+                    {formatPrice(svc)}
                   </ThemedText>
-                )}
+                </View>
+              ))
+            ) : (
+              <View style={styles.emptyServices}>
+                <ThemedText style={[styles.emptyText, { color: theme.textSecondary }]}>
+                  No services added yet. Add services from Service Builder.
+                </ThemedText>
+                <Pressable
+                  style={[styles.addServiceBtn, { backgroundColor: Colors.accentLight }]}
+                  onPress={() => navigation.navigate("NewService")}
+                >
+                  <Feather name="plus" size={14} color={Colors.accent} />
+                  <ThemedText style={[styles.addServiceText, { color: Colors.accent }]}>
+                    Add a Service
+                  </ThemedText>
+                </Pressable>
+              </View>
+            )}
+          </GlassCard>
+        </Animated.View>
+
+        {/* Recent Reviews */}
+        {reviews.length > 0 ? (
+          <Animated.View entering={FadeInDown.delay(200).duration(400)}>
+            <GlassCard style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Feather name="star" size={16} color={Colors.warning} />
+                <ThemedText style={styles.sectionTitle}>Recent Reviews</ThemedText>
+                <View style={styles.sectionBadge}>
+                  <ThemedText style={[styles.sectionBadgeText, { color: Colors.accent }]}>
+                    {providerRating.toFixed(1)}
+                  </ThemedText>
+                </View>
               </View>
 
-              <View style={styles.contactSection}>
-                <ThemedText style={styles.sectionTitle}>Contact</ThemedText>
-                {user?.phone ? (
-                  <View style={styles.contactRow}>
-                    <Feather name="phone" size={16} color={theme.textSecondary} />
-                    <ThemedText style={[styles.contactText, { color: theme.textSecondary }]}>
-                      {user.phone}
-                    </ThemedText>
+              {reviews.slice(0, 3).map((review, idx) => (
+                <View
+                  key={review.id}
+                  style={[
+                    styles.reviewRow,
+                    idx < Math.min(reviews.length, 3) - 1 && {
+                      borderBottomWidth: StyleSheet.hairlineWidth,
+                      borderBottomColor: theme.separator,
+                    },
+                  ]}
+                >
+                  <View style={styles.reviewHeader}>
+                    <ThemedText style={styles.reviewerName}>{review.reviewerName}</ThemedText>
+                    {renderStars(review.rating)}
                   </View>
-                ) : null}
-                {user?.email ? (
-                  <View style={styles.contactRow}>
-                    <Feather name="mail" size={16} color={theme.textSecondary} />
-                    <ThemedText style={[styles.contactText, { color: theme.textSecondary }]}>
-                      {user.email}
+                  {review.comment ? (
+                    <ThemedText style={[styles.reviewComment, { color: theme.textSecondary }]} numberOfLines={2}>
+                      {review.comment}
                     </ThemedText>
-                  </View>
-                ) : null}
-              </View>
+                  ) : null}
+                </View>
+              ))}
+
+              {reviews.length > 3 ? (
+                <Pressable
+                  style={styles.seeAllReviews}
+                  onPress={() => navigation.navigate("Reviews")}
+                >
+                  <ThemedText style={[styles.seeAllText, { color: Colors.accent }]}>
+                    See all {reviews.length} reviews
+                  </ThemedText>
+                  <Feather name="arrow-right" size={14} color={Colors.accent} />
+                </Pressable>
+              ) : null}
+            </GlassCard>
+          </Animated.View>
+        ) : null}
+
+        {/* Contact */}
+        <Animated.View entering={FadeInDown.delay(250).duration(400)}>
+          <GlassCard style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Feather name="user" size={16} color={Colors.accent} />
+              <ThemedText style={styles.sectionTitle}>Contact Info</ThemedText>
             </View>
-          </View>
+
+            {user?.email ? (
+              <View style={styles.contactRow}>
+                <View style={[styles.contactIcon, { backgroundColor: theme.backgroundSecondary }]}>
+                  <Feather name="mail" size={16} color={theme.textSecondary} />
+                </View>
+                <ThemedText style={[styles.contactText, { color: theme.textSecondary }]}>
+                  {user.email}
+                </ThemedText>
+              </View>
+            ) : null}
+
+            {user?.phone ? (
+              <View style={styles.contactRow}>
+                <View style={[styles.contactIcon, { backgroundColor: theme.backgroundSecondary }]}>
+                  <Feather name="phone" size={16} color={theme.textSecondary} />
+                </View>
+                <ThemedText style={[styles.contactText, { color: theme.textSecondary }]}>
+                  {user.phone}
+                </ThemedText>
+              </View>
+            ) : null}
+
+            {!user?.email && !user?.phone ? (
+              <ThemedText style={[styles.emptyText, { color: theme.textSecondary }]}>
+                No contact info on file. Update your profile to add contact details.
+              </ThemedText>
+            ) : null}
+          </GlassCard>
         </Animated.View>
       </ScrollView>
 
+      {/* Footer CTA */}
       <Animated.View
-        entering={FadeIn.delay(300).duration(300)}
+        entering={FadeIn.delay(400).duration(300)}
         style={[
           styles.footer,
           {
@@ -276,9 +396,24 @@ export default function PublicProfileScreen() {
           },
         ]}
       >
-        <PrimaryButton onPress={handleShare}>
-          Share Your Profile
-        </PrimaryButton>
+        {profileUrl ? (
+          <View style={styles.footerButtons}>
+            <View style={styles.footerSecondary}>
+              <SecondaryButton onPress={handleCopyLink}>
+                Copy Link
+              </SecondaryButton>
+            </View>
+            <View style={styles.footerPrimary}>
+              <PrimaryButton onPress={handleShare}>
+                Share Profile
+              </PrimaryButton>
+            </View>
+          </View>
+        ) : (
+          <PrimaryButton onPress={() => navigation.navigate("BusinessProfile")}>
+            Create Booking Link
+          </PrimaryButton>
+        )}
       </Animated.View>
     </ThemedView>
   );
@@ -288,160 +423,149 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  flex: {
+  heroCard: {
+    marginBottom: Spacing.lg,
+  },
+  heroTop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  heroInfo: {
     flex: 1,
   },
-  content: {
-    paddingHorizontal: Spacing.screenPadding,
+  heroName: {
+    ...Typography.title2,
+    fontWeight: "700",
+    marginBottom: 4,
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: Spacing.lg,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    ...Typography.title3,
-    fontWeight: "600",
-  },
-  headerActions: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-  },
-  linkCard: {
-    marginBottom: Spacing.lg,
-  },
-  linkHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  linkLabel: {
+  heroTagline: {
     ...Typography.subhead,
-    fontWeight: "600",
+    lineHeight: 20,
   },
-  linkDisplay: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm + 2,
-    borderRadius: BorderRadius.md,
-    marginBottom: Spacing.md,
-  },
-  linkText: {
-    ...Typography.body,
-    fontFamily: "monospace",
-  },
-  linkActions: {
+  trustBar: {
     flexDirection: "row",
-    gap: Spacing.lg,
+    flexWrap: "wrap",
+    gap: Spacing.md,
+    paddingTop: Spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(0,0,0,0.06)",
+    alignItems: "center",
   },
-  linkButton: {
+  trustItem: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.xs,
   },
-  linkButtonText: {
-    ...Typography.subhead,
-    fontWeight: "500",
-  },
-  sectionLabel: {
-    ...Typography.footnote,
-    fontWeight: "500",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: Spacing.sm,
-    marginLeft: Spacing.xs,
-  },
-  previewContainer: {
-    borderRadius: BorderRadius.lg,
-    overflow: "hidden",
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  heroSection: {
-    height: 200,
-    position: "relative",
-  },
-  coverImage: {
-    width: "100%",
-    height: "100%",
-  },
-  coverOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.3)",
-  },
-  profileSection: {
-    position: "absolute",
-    bottom: -50,
-    left: 0,
-    right: 0,
-    alignItems: "center",
-  },
-  avatarWrapper: {
-    borderWidth: 4,
-    borderRadius: 50,
-  },
-  businessName: {
-    ...Typography.title2,
-    fontWeight: "700",
-    marginTop: Spacing.sm,
-    textAlign: "center",
-  },
-  ratingContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    marginTop: Spacing.xs,
+  trustLabel: {
+    ...Typography.caption1,
   },
   starsRow: {
     flexDirection: "row",
+    gap: 2,
   },
-  ratingText: {
-    ...Typography.footnote,
-  },
-  badgesRow: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-    marginTop: Spacing.sm,
-  },
-  badge: {
+  verifiedBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: Spacing.xs,
+    borderRadius: BorderRadius.pill,
     paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.full,
+    paddingVertical: 2,
   },
-  badgeText: {
-    ...Typography.caption1,
+  verifiedText: {
+    ...Typography.caption2,
     fontWeight: "600",
   },
-  contentSection: {
-    paddingTop: 60,
-    paddingHorizontal: Spacing.md,
-    paddingBottom: Spacing.lg,
+  section: {
+    marginBottom: Spacing.lg,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   sectionTitle: {
     ...Typography.headline,
-    fontWeight: "600",
-    marginBottom: Spacing.sm,
+    flex: 1,
   },
-  servicesSection: {
-    marginBottom: Spacing.xl,
+  sectionBadge: {
+    backgroundColor: Colors.accentLight,
+    borderRadius: BorderRadius.pill,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
   },
-  serviceCard: {
-    flexDirection: "row",
-    padding: Spacing.md,
+  sectionBadgeText: {
+    ...Typography.caption1,
+    fontWeight: "700",
+  },
+  linkBox: {
     borderRadius: BorderRadius.md,
-    marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm + 2,
+    marginBottom: Spacing.md,
   },
-  serviceInfo: {
+  linkText: {
+    ...Typography.footnote,
+    fontFamily: "monospace",
+  },
+  copyBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    marginBottom: Spacing.md,
+    alignSelf: "flex-start",
+  },
+  copyBannerText: {
+    ...Typography.caption1,
+    fontWeight: "600",
+  },
+  linkActions: {
+    flexDirection: "row",
+    gap: Spacing.md,
+  },
+  linkActionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.sm,
+  },
+  linkActionText: {
+    ...Typography.subhead,
+    fontWeight: "600",
+  },
+  noLinkState: {
+    alignItems: "center",
+    paddingVertical: Spacing.lg,
+  },
+  noLinkTitle: {
+    ...Typography.subhead,
+    fontWeight: "600",
+    marginBottom: Spacing.xs,
+  },
+  noLinkSubtitle: {
+    ...Typography.footnote,
+    textAlign: "center",
+    lineHeight: 18,
+  },
+  loadingRow: {
+    paddingVertical: Spacing.lg,
+    alignItems: "center",
+  },
+  serviceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: Spacing.md,
+    gap: Spacing.md,
+  },
+  serviceLeft: {
     flex: 1,
   },
   serviceName: {
@@ -451,27 +575,87 @@ const styles = StyleSheet.create({
   },
   serviceDesc: {
     ...Typography.caption1,
+    marginBottom: Spacing.xs,
+  },
+  categoryTag: {
+    alignSelf: "flex-start",
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.sm,
+    marginTop: 2,
+  },
+  categoryTagText: {
+    ...Typography.caption2,
+    fontWeight: "500",
   },
   servicePrice: {
-    alignItems: "flex-end",
-    justifyContent: "center",
-    gap: Spacing.xs,
+    ...Typography.subhead,
+    fontWeight: "700",
   },
-  priceText: {
-    ...Typography.footnote,
-    fontWeight: "600",
+  emptyServices: {
+    alignItems: "center",
+    paddingVertical: Spacing.md,
   },
   emptyText: {
     ...Typography.body,
     textAlign: "center",
-    paddingVertical: Spacing.lg,
+    lineHeight: 22,
+    marginBottom: Spacing.md,
   },
-  contactSection: {},
+  addServiceBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  addServiceText: {
+    ...Typography.subhead,
+    fontWeight: "600",
+  },
+  reviewRow: {
+    paddingVertical: Spacing.md,
+  },
+  reviewHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.xs,
+  },
+  reviewerName: {
+    ...Typography.subhead,
+    fontWeight: "600",
+  },
+  reviewComment: {
+    ...Typography.body,
+    lineHeight: 20,
+  },
+  seeAllReviews: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    paddingTop: Spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(0,0,0,0.06)",
+    justifyContent: "center",
+  },
+  seeAllText: {
+    ...Typography.subhead,
+    fontWeight: "600",
+  },
   contactRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.md,
     paddingVertical: Spacing.sm,
+  },
+  contactIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
   },
   contactText: {
     ...Typography.body,
@@ -484,5 +668,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.screenPadding,
     paddingTop: Spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  footerButtons: {
+    flexDirection: "row",
+    gap: Spacing.md,
+  },
+  footerSecondary: {
+    width: 120,
+  },
+  footerPrimary: {
+    flex: 1,
   },
 });

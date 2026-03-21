@@ -37,7 +37,7 @@ The application comprises a client-side React Native Expo app (SDK 55, React Nat
 - **Onboarding Flows**: Separate animated onboarding for each role - Homeowners set priorities and see tool highlights, Providers see business features and Stripe Connect teaser. Progress indicators and staggered animations throughout.
 - **Role Gateway**: After onboarding, quick role switching available between Homeowner and Provider views.
 - **Booking Links**: Providers can create public booking pages with customizable intake forms, AI quote generation, deposit support, and custom questions.
-- **Database Schema**: PostgreSQL database with Drizzle ORM managing various tables including `users`, `homes`, `providers`, `appointments`, `clients`, `jobs`, `invoices`, `bookingLinks`, and `intakeSubmissions`.
+- **Database Schema**: PostgreSQL database with Drizzle ORM managing various tables including `users`, `homes`, `providers`, `appointments`, `clients`, `jobs`, `invoices`, `bookingLinks`, and `intakeSubmissions`. The `providers` table includes `businessHours` (JSON), `bookingPolicies` (JSON), `serviceRadius`, `serviceZipCodes`, `serviceCities`, and `isPublicProfile` fields for the Business Hub feature.
 - **API Endpoints**: Comprehensive RESTful API for authentication, home management, appointments, notifications, AI chat, booking links, and all provider portal functionalities.
 
 ## External Dependencies

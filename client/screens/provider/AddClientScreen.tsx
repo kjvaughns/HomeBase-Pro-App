@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, ScrollView, View, Alert, KeyboardAvoidingView, Platform } from "react-native";
+import { StyleSheet, ScrollView, View, KeyboardAvoidingView, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation } from "@react-navigation/native";
@@ -12,9 +12,11 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { SecondaryButton } from "@/components/SecondaryButton";
 import { GlassCard } from "@/components/GlassCard";
 import { AddressAutocomplete, EnrichmentData } from "@/components/AddressAutocomplete";
-import { Spacing, Typography } from "@/constants/theme";
+import { Spacing, Typography, Colors, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest } from "@/lib/query-client";
+import * as Haptics from "expo-haptics";
+import { Feather } from "@expo/vector-icons";
 
 export default function AddClientScreen() {
   const insets = useSafeAreaInsets();
@@ -56,35 +58,32 @@ export default function AddClientScreen() {
       const response = await apiRequest("POST", "/api/clients", data);
       return response.json();
     },
-    onSuccess: (data) => {
-      Alert.alert("Success", "Client added successfully!", [
-        {
-          text: "OK",
-          onPress: () => {
-            queryClient.invalidateQueries({ queryKey: ["/api/provider", providerProfile?.id, "clients"] });
-            queryClient.invalidateQueries({ queryKey: ["/api/provider", providerProfile?.id, "stats"] });
-            navigation.goBack();
-          },
-        },
-      ]);
+    onSuccess: () => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      queryClient.invalidateQueries({ queryKey: ["/api/provider", providerProfile?.id, "clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/provider", providerProfile?.id, "stats"] });
+      navigation.goBack();
     },
     onError: (error: any) => {
-      const message = error?.message?.includes("already exists") 
+      const message = error?.message?.includes("already exists")
         ? "A client with this email already exists."
         : "Failed to create client. Please try again.";
-      Alert.alert("Error", message);
+      setErrorMessage(message);
       console.error("Create client error:", error);
     },
   });
 
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   const handleSave = () => {
+    setErrorMessage(null);
     if (!firstName.trim() || !lastName.trim()) {
-      Alert.alert("Required Fields", "Please enter the client's first and last name.");
+      setErrorMessage("Please enter the client's first and last name.");
       return;
     }
 
     if (!providerProfile?.id) {
-      Alert.alert("Error", "Provider profile not found.");
+      setErrorMessage("Provider profile not found.");
       return;
     }
 
@@ -213,12 +212,21 @@ export default function AddClientScreen() {
             />
           </GlassCard>
 
+          {errorMessage ? (
+            <View style={[styles.errorBox, { backgroundColor: Colors.errorLight }]}>
+              <Feather name="alert-circle" size={16} color={Colors.error} />
+              <ThemedText style={[styles.errorText, { color: Colors.error }]}>
+                {errorMessage}
+              </ThemedText>
+            </View>
+          ) : null}
+
           <View style={styles.buttons}>
             <PrimaryButton
               onPress={handleSave}
-              disabled={createMutation.isPending}
+              loading={createMutation.isPending}
             >
-              {createMutation.isPending ? "Saving..." : "Save Client"}
+              Save Client
             </PrimaryButton>
             
             <SecondaryButton
@@ -255,5 +263,17 @@ const styles = StyleSheet.create({
   buttons: {
     gap: Spacing.md,
     marginTop: Spacing.md,
+  },
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  errorText: {
+    ...Typography.subhead,
+    flex: 1,
   },
 });

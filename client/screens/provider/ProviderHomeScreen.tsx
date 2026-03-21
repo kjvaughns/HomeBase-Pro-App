@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { StyleSheet, View, ScrollView, RefreshControl, Pressable, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -14,6 +14,7 @@ import { Avatar } from "@/components/Avatar";
 import { GlassCard } from "@/components/GlassCard";
 import { JobCard } from "@/components/JobCard";
 import { SectionHeader } from "@/components/SectionHeader";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
@@ -46,16 +47,63 @@ interface Client {
   phone?: string;
 }
 
+function ProfileMissingCTA({ navigation }: { navigation: any }) {
+  const { theme } = useTheme();
+  return (
+    <ThemedView style={styles.container}>
+      <View style={styles.centerContent}>
+        <View style={[styles.missingIcon, { backgroundColor: Colors.accentLight }]}>
+          <Feather name="user-x" size={32} color={Colors.accent} />
+        </View>
+        <ThemedText style={styles.missingTitle}>Profile setup needed</ThemedText>
+        <ThemedText style={[styles.missingSubtitle, { color: theme.textSecondary }]}>
+          Your provider profile isn't set up yet. Complete setup to start taking jobs and managing clients.
+        </ThemedText>
+        <PrimaryButton
+          onPress={() => navigation.navigate("ProviderSetup")}
+          style={styles.setupButton}
+        >
+          Complete Provider Setup
+        </PrimaryButton>
+      </View>
+    </ThemedView>
+  );
+}
+
 export default function ProviderHomeScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useFloatingTabBarHeight();
   const navigation = useNavigation<any>();
   const { theme } = useTheme();
-  const { user, providerProfile } = useAuthStore();
+  const { user, providerProfile, createProviderProfile } = useAuthStore();
   const queryClient = useQueryClient();
 
   const providerId = providerProfile?.id;
+
+  // Auto-recover: if providerProfile is null in the store, try fetching from API
+  const { data: fetchedProviderData, isLoading: profileLoading } = useQuery<{ provider: any }>({
+    queryKey: ["/api/provider/user", user?.id],
+    enabled: !providerId && !!user?.id,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (fetchedProviderData?.provider && !providerId) {
+      const p = fetchedProviderData.provider;
+      createProviderProfile({
+        id: p.id,
+        userId: p.userId,
+        businessName: p.businessName,
+        services: p.services || [],
+        status: p.status || "approved",
+        rating: p.rating || 0,
+        reviewCount: p.reviewCount || 0,
+        completedJobs: p.completedJobs || 0,
+        serviceArea: p.serviceArea,
+      });
+    }
+  }, [fetchedProviderData, providerId]);
 
   const { data: statsData, isLoading: statsLoading, refetch: refetchStats } = useQuery<{ stats: ProviderStats }>({
     queryKey: ["/api/provider", providerId, "stats"],
@@ -130,14 +178,23 @@ export default function ProviderHomeScreen() {
 
   const isLoading = statsLoading || jobsLoading;
 
-  if (!providerId) {
+  // Loading — trying to recover the provider profile from API
+  if (!providerId && profileLoading) {
     return (
       <ThemedView style={styles.container}>
         <View style={styles.centerContent}>
-          <ThemedText style={styles.noProviderText}>Provider profile not found</ThemedText>
+          <ActivityIndicator size="large" color={Colors.accent} />
+          <ThemedText style={[styles.loadingText, { color: theme.textSecondary }]}>
+            Loading your profile...
+          </ThemedText>
         </View>
       </ThemedView>
     );
+  }
+
+  // No profile found even after API fetch — show proper CTA
+  if (!providerId && !profileLoading) {
+    return <ProfileMissingCTA navigation={navigation} />;
   }
 
   return (
@@ -168,7 +225,7 @@ export default function ProviderHomeScreen() {
                 </ThemedText>
                 <ThemedText style={styles.greetingName}>{user?.name?.split(" ")[0]}</ThemedText>
               </View>
-              <Pressable 
+              <Pressable
                 style={styles.notificationIcon}
                 onPress={() => navigation.navigate("Notifications")}
               >
@@ -187,7 +244,7 @@ export default function ProviderHomeScreen() {
               <ActivityIndicator size="small" color={Colors.accent} />
             ) : (
               <View style={styles.summaryGrid}>
-                <Pressable 
+                <Pressable
                   style={styles.summaryItem}
                   onPress={() => navigation.navigate("ClientsTab")}
                 >
@@ -202,7 +259,7 @@ export default function ProviderHomeScreen() {
 
                 <View style={[styles.summaryDivider, { backgroundColor: theme.separator }]} />
 
-                <Pressable 
+                <Pressable
                   style={styles.summaryItem}
                   onPress={() => navigation.navigate("ScheduleTab")}
                 >
@@ -229,7 +286,7 @@ export default function ProviderHomeScreen() {
 
                 <View style={[styles.summaryDivider, { backgroundColor: theme.separator }]} />
 
-                <Pressable 
+                <Pressable
                   style={styles.summaryItem}
                   onPress={() => navigation.navigate("MoneyTab")}
                 >
@@ -270,10 +327,14 @@ export default function ProviderHomeScreen() {
             <View style={styles.ratingContent}>
               <View style={styles.ratingStars}>
                 <Feather name="star" size={20} color={Colors.warning} />
-                <ThemedText style={styles.ratingValue}>{providerProfile?.rating || 0}</ThemedText>
+                <ThemedText style={styles.ratingValue}>
+                  {providerProfile?.rating ? Number(providerProfile.rating).toFixed(1) : "—"}
+                </ThemedText>
               </View>
               <ThemedText style={[styles.ratingLabel, { color: theme.textSecondary }]}>
-                {providerProfile?.reviewCount || 0} reviews
+                {providerProfile?.reviewCount > 0
+                  ? `${providerProfile.reviewCount} reviews`
+                  : "No reviews yet"}
               </ThemedText>
             </View>
           </GlassCard>
@@ -293,7 +354,9 @@ export default function ProviderHomeScreen() {
           </Animated.View>
         ) : null}
 
-        <Animated.View entering={FadeInDown.delay(inProgressJobs.length > 0 ? 500 : 400).duration(400)}>
+        <Animated.View
+          entering={FadeInDown.delay(inProgressJobs.length > 0 ? 500 : 400).duration(400)}
+        >
           <SectionHeader
             title="Upcoming Jobs"
             actionLabel="See All"
@@ -313,10 +376,10 @@ export default function ProviderHomeScreen() {
               key={job.id}
               entering={FadeInDown.delay((inProgressJobs.length > 0 ? 600 : 500) + index * 100).duration(400)}
             >
-              <JobCard 
-                job={formatJobForCard(job)} 
-                onPress={() => navigation.navigate("ProviderJobDetail", { jobId: job.id })} 
-                testID={`job-${job.id}`} 
+              <JobCard
+                job={formatJobForCard(job)}
+                onPress={() => navigation.navigate("ProviderJobDetail", { jobId: job.id })}
+                testID={`job-${job.id}`}
               />
             </Animated.View>
           ))
@@ -327,7 +390,7 @@ export default function ProviderHomeScreen() {
               <ThemedText style={[styles.emptyText, { color: theme.textSecondary }]}>
                 No upcoming jobs scheduled
               </ThemedText>
-              <Pressable 
+              <Pressable
                 style={[styles.addJobButton, { backgroundColor: Colors.accentLight }]}
                 onPress={() => navigation.navigate("ScheduleTab")}
               >
@@ -352,9 +415,33 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: Spacing.screenPadding,
   },
-  noProviderText: {
+  loadingText: {
     ...Typography.body,
+    marginTop: Spacing.md,
+  },
+  missingIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: BorderRadius.xl,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.lg,
+  },
+  missingTitle: {
+    ...Typography.title2,
+    marginBottom: Spacing.sm,
+    textAlign: "center",
+  },
+  missingSubtitle: {
+    ...Typography.body,
+    textAlign: "center",
+    marginBottom: Spacing.xl,
+    lineHeight: 22,
+  },
+  setupButton: {
+    width: "100%",
   },
   greetingCard: {
     marginBottom: Spacing.lg,

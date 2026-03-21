@@ -77,7 +77,7 @@ export default function ProviderMoreScreen() {
                   <View style={styles.ratingRow}>
                     <Feather name="star" size={14} color={Colors.warning} />
                     <ThemedText style={styles.ratingText}>
-                      {providerProfile?.rating || 4.9}
+                      {providerProfile?.rating ? Number(providerProfile.rating).toFixed(1) : "New"}
                     </ThemedText>
                   </View>
                 </View>
@@ -110,22 +110,22 @@ export default function ProviderMoreScreen() {
               </View>
             </View>
             <ListRow
-              title="AI Service Builder"
-              subtitle="Create optimized service listings"
-              leftIcon="cpu"
+              title="Service Builder"
+              subtitle="Create and manage your service listings"
+              leftIcon="tool"
               onPress={() => navigation.navigate("NewService")}
             />
             <ListRow
-              title="Public Booking Page"
-              subtitle="Shareable profile for clients"
-              leftIcon="link"
-              onPress={() => navigation.navigate("BusinessProfile")}
-            />
-            <ListRow
-              title="Business Details"
-              subtitle="Policies, areas, hours"
+              title="Business Profile & Booking"
+              subtitle="Hours, policies, public page"
               leftIcon="settings"
               onPress={() => navigation.navigate("BusinessDetails")}
+            />
+            <ListRow
+              title="Preview Public Page"
+              subtitle="See what clients see when they find you"
+              leftIcon="eye"
+              onPress={() => navigation.navigate("BusinessProfile")}
               isLast
             />
           </View>

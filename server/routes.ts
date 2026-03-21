@@ -7,8 +7,8 @@ import { insertUserSchema, loginSchema, insertHomeSchema, insertAppointmentSchem
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
 import { db } from "./db";
-import { sql, eq, and } from "drizzle-orm";
-import { appointments, maintenanceReminders, homes } from "@shared/schema";
+import { sql, eq, and, desc } from "drizzle-orm";
+import { appointments, maintenanceReminders, homes, reviews } from "@shared/schema";
 import { sendInvoiceEmail } from "./emailService";
 import { 
   searchPlaces, 
@@ -2150,6 +2150,28 @@ Respond with JSON only:
     } catch (error) {
       console.error("Get provider stats error:", error);
       res.status(500).json({ error: "Failed to get provider stats" });
+    }
+  });
+
+  // Provider reviews
+  app.get("/api/provider/:id/reviews", requireAuth, async (req: Request<IdParams>, res: Response) => {
+    try {
+      const reviewRows = await db
+        .select({
+          id: reviews.id,
+          rating: reviews.rating,
+          comment: reviews.comment,
+          createdAt: reviews.createdAt,
+          reviewerName: sql<string>`TRIM(CONCAT(COALESCE(${users.firstName}, ''), ' ', COALESCE(${users.lastName}, '')))`,
+        })
+        .from(reviews)
+        .innerJoin(users, eq(reviews.userId, users.id))
+        .where(eq(reviews.providerId, req.params.id))
+        .orderBy(desc(reviews.createdAt));
+      res.json({ reviews: reviewRows });
+    } catch (error) {
+      console.error("Get provider reviews error:", error);
+      res.status(500).json({ error: "Failed to fetch reviews" });
     }
   });
 
