@@ -1,0 +1,222 @@
+Use this prompt for Replit:
+
+Build a full fix and refinement pass for the HomeBase Pro portal. Do not make surface level edits. Diagnose the actual data flow, broken bindings, and weak UI patterns, then rebuild the affected areas so they are production ready, clean, and consistent with HomeBase branding.
+
+Main goals:
+
+1. Fix provider profile loading on Home
+   The Home screen currently says “Provider profile not found.”
+   Find the root cause and fix it properly.
+   Make sure the logged in provider always loads their real provider profile from Supabase.
+   If a provider record does not exist yet, automatically create the provider profile from auth user metadata and send them into provider onboarding instead of showing an error screen.
+   Do not leave the app in a broken empty state.
+   Create proper loading, empty, and recovery states.
+
+Requirements:
+Use the authenticated user id as the source of truth
+Ensure provider_profiles query matches the correct user id
+Add robust null checks and fallback creation logic
+If onboarding is incomplete, show a useful CTA instead of “profile not found”
+Refresh Home data after profile creation or edits
+
+2. Rebuild the quick action flows
+   The Add Client, Add Schedule, and New Invoice buttons do not work well.
+   The current bottom sheet form UI is weak and feels cluttered.
+   Replace the current flow with a simpler, cleaner experience.
+
+Requirements:
+Remove the ugly bottom pop up form pattern for these actions
+Use full screen forms or step based modal screens with clear spacing and hierarchy
+Each flow should feel fast, modern, and dead simple
+Reduce form fields to only what is necessary first
+Use progressive disclosure for advanced options
+Add proper validation, success states, and cancel handling
+
+Rebuild these flows:
+Add Client
+Fields: full name, phone, email, address, notes optional
+
+Add Schedule
+Fields: client, service, date, time, duration, notes optional
+
+New Invoice
+Fields: client, service or custom line item, amount, due date, notes optional
+
+Make sure all three flows actually save data correctly and update the UI instantly after creation.
+
+3. Replace AI Service Builder with the new Service Builder
+   The “AI Service Builder” should no longer exist in this old form.
+   Replace it everywhere in the provider portal with the new service builder we already created.
+
+Requirements:
+Update label, route, icons, references, and navigation
+Do not leave old naming anywhere in UI copy, buttons, settings pages, or empty states
+Ensure the new service builder opens the correct screen and uses the current service creation flow
+If there are old components or routes tied to AI Service Builder, remove or refactor them cleanly
+
+4. Completely redesign Business Details and Public Booking setup
+   The Public Booking Page is weak and should not be a separate weakly connected page.
+   Move public profile and booking page management into Business Details.
+
+Business Details should become the main place where a provider manages:
+Business logo
+Business name
+Business description
+Contact info
+Service areas
+Business hours
+Booking policies
+Services shown on public profile
+Public booking link
+Preview of public booking page
+
+Requirements:
+Refactor Business Details into a clean editable business profile hub
+This page should be properly linked to the provider’s actual saved data
+No fake placeholders unless real data is missing
+Organize sections clearly:
+Branding
+Business Info
+Contact
+Service Areas
+Hours
+Booking Policies
+Public Booking
+
+In the Public Booking section include:
+Generated public booking link
+Copy link button
+Open preview button
+Toggle for whether profile is public
+Option to customize headline, intro text, and featured services
+
+5. Rebuild the public booking page preview
+   The public booking page currently looks bad.
+   Redesign it to feel premium, trustworthy, and conversion focused.
+
+Requirements:
+Provider can preview exactly what customers will see
+Public page should display:
+logo
+business name
+description
+trust markers like verified badge only if real
+services
+service areas
+hours
+contact info
+booking CTA
+
+The design should feel like a real booking landing page, not a rough internal tool.
+Focus on clean spacing, modern cards, stronger typography, and a polished mobile first layout.
+If no custom logo exists, use a tasteful fallback avatar or monogram.
+Make the page feel good enough for a provider to actually share.
+
+6. Fix Business Details data bindings
+   Business details are not showing correctly right now.
+   Audit every field and connect it to the right data source.
+
+Requirements:
+Make sure the values displayed in Business Details come from the actual provider profile and related tables
+Saving changes must persist correctly in Supabase
+After saving, the updated data must appear across:
+Home
+Business Details
+Public Booking Preview
+Any provider profile surfaces
+
+Do not use mismatched mock data.
+If fields require schema updates, make the necessary Supabase changes and update types.
+
+7. Fix Reviews
+   Reviews are not showing accurate information or real reviews.
+   Fix the reviews data source and display logic.
+
+Requirements:
+Show the provider’s actual review count, average rating, and individual reviews
+Ensure reviews are tied to the correct provider id
+If review data comes from jobs or bookings, map it correctly
+Include reviewer name or safe display name, rating, date, and review text
+Handle empty states gracefully
+Do not hardcode fake review values like 4.9 or 45 reviews unless they are real
+
+8. Improve Accounting
+   The Accounting tab needs a full UX and data cleanup.
+   Right now it does not feel polished or trustworthy.
+
+Requirements:
+Redesign Accounting with simpler structure and cleaner visual hierarchy
+Separate into clear tabs or cards:
+Payouts
+Bank account
+Tax info
+Transactions or invoices if applicable
+
+Important:
+Never expose full sensitive bank details in plain view
+Mask account and routing information properly
+Use secure editing patterns
+Show verification status clearly
+Explain what each section is for in plain language
+Make it feel secure and professional
+
+If Stripe Connect is being used:
+Pull real onboarding and payout status when available
+Show account status, payouts enabled, charges enabled, onboarding incomplete, etc.
+Add CTA to continue Stripe onboarding if needed
+
+9. Improve UX consistency across the portal
+   Apply a full UI polish pass across the affected provider portal screens.
+
+Requirements:
+Use consistent spacing, card styles, icon sizing, border radius, and typography
+Reduce visual clutter
+Make forms easier to scan
+Ensure buttons are consistent and actually work
+Fix layout issues, broken states, overflow issues, and mismatched copy
+Keep HomeBase green branding but make the experience more premium and native feeling
+Do not overuse bottom sheets
+Prefer cleaner full page management screens for more complex edits
+
+10. Technical expectations
+    Before changing UI, inspect the existing components, routes, provider profile queries, and Supabase schema.
+    Then implement the fixes properly.
+
+Deliverables:
+Fix the broken provider profile loading issue
+Refactor Business Details into the true business profile management center
+Replace AI Service Builder with the new Service Builder
+Rebuild Add Client, Add Schedule, and New Invoice flows
+Redesign Public Booking setup and preview
+Fix Reviews data
+Improve Accounting tab
+Clean up old code and remove dead components tied to outdated flows
+
+Also do this:
+List the root causes you found before fixing them
+Then implement the fixes
+Then provide a short changelog of exactly what was updated
+Then list any manual steps I need to take in Supabase, Stripe, or environment variables if needed
+
+Important constraints:
+Do not break existing auth
+Do not use fake data where real user data should be shown
+Do not leave placeholder UI in final screens unless there is a proper empty state
+Do not create duplicate profile tables or duplicate business info sources
+Use the existing HomeBase design language, but make it cleaner, simpler, and more premium
+
+Priority order:
+
+1. Provider profile not found issue
+2. Business Details and Public Booking refactor
+3. Quick action flow rebuild
+4. Replace AI Service Builder
+5. Reviews fix
+6. Accounting redesign
+
+At the end, give me:
+A summary of what was broken
+What you changed
+What still needs manual setup from me
+
+If you want, I can also turn this into a tighter “developer execution prompt” version that’s more technical and less brand focused.
