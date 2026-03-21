@@ -1180,7 +1180,7 @@ export default function ProviderSetupFlow({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const safeTop = insets.top || 50;
   const { setHasCompletedProviderSetup, setNeedsProviderSetup, providerPreSignupData } = useOnboardingStore();
-  const { user, providerProfile, activateProviderMode } = useAuthStore();
+  const { user, providerProfile, activateProviderMode, setNeedsRoleSelection } = useAuthStore();
   const { addOnboardingService, setProviderAvailability, setProviderBusinessProfile } = useProviderStore();
 
   const [step, setStep] = useState(1);
@@ -1287,11 +1287,11 @@ export default function ProviderSetupFlow({ navigation }: Props) {
   const handleGoToDashboard = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setHasCompletedProviderSetup(true);
-    activateProviderMode(); // bypasses the canAccessProviderMode guard for new providers
-    // Clearing this flag causes RootStackNavigator to reactively swap its
-    // initial route from ProviderSetupFlow → Main (ProviderTabNavigator).
-    // No navigation.reset needed — and calling one would fail because
-    // "Main" is not registered while showProviderSetup=true.
+    activateProviderMode(); // sets activeRole="provider", bypasses canAccessProviderMode guard
+    setNeedsRoleSelection(false); // clear role-selection state set by login()
+    // Clearing needsProviderSetup last: RootStackNavigator reacts by swapping
+    // initial route ProviderSetupFlow → Main (ProviderTabNavigator).
+    // All four updates are batched in one React render, preventing any transient flash.
     setNeedsProviderSetup(false);
   };
 

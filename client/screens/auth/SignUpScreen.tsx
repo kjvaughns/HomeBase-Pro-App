@@ -92,12 +92,12 @@ export default function SignUpScreen({ navigation }: Props) {
           avatarUrl: data.user.avatarUrl,
         }, null, data.token ?? null);
         if (selectedAccountType === "provider") {
-          // Set needsProviderSetup FIRST so showRoleGateway is guarded (!needsProviderSetup)
-          // before setNeedsRoleSelection(false) clears the transient needsRoleSelection=true
-          // that login() sets. This prevents any flash of RoleGateway.
+          // Set needsProviderSetup FIRST so showRoleGateway is guarded (!needsProviderSetup).
+          // login() resets activeRole to "guest"; set a neutral homeowner role while setup runs.
+          // setNeedsRoleSelection is NOT cleared here — it is cleared in handleGoToDashboard
+          // after the 7-step setup completes, keeping role-selection lifecycle clean.
           setNeedsProviderSetup(true);
-          setNeedsRoleSelection(false);
-          // activeRole stays "homeowner" until ProviderSetupFlow calls activateProviderMode()
+          setActiveRole("homeowner"); // neutral role; activateProviderMode() called at setup end
         } else {
           setNeedsRoleSelection(false);
           setActiveRole("homeowner");
