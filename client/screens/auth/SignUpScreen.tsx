@@ -11,7 +11,6 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuthStore } from "@/state/authStore";
-import { useOnboardingStore } from "@/state/onboardingStore";
 import { apiRequest } from "@/lib/query-client";
 import { Spacing, Colors, Typography } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -23,13 +22,8 @@ export default function SignUpScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { login, setNeedsRoleSelection, setActiveRole } = useAuthStore();
-  const { selectedAccountType, providerPreSignupData, setNeedsProviderSetup } = useOnboardingStore();
 
-  const [name, setName] = useState(
-    selectedAccountType === "provider" && providerPreSignupData?.businessName
-      ? providerPreSignupData.businessName
-      : ""
-  );
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
@@ -91,21 +85,14 @@ export default function SignUpScreen({ navigation }: Props) {
           phone: data.user.phone,
           avatarUrl: data.user.avatarUrl,
         }, null, data.token ?? null);
-        if (selectedAccountType === "provider") {
-          // Set needsProviderSetup FIRST so showRoleGateway is guarded (!needsProviderSetup).
-          // login() resets activeRole to "guest"; set a neutral homeowner role while setup runs.
-          // setNeedsRoleSelection is NOT cleared here — it is cleared in handleGoToDashboard
-          // after the 7-step setup completes, keeping role-selection lifecycle clean.
-          setNeedsProviderSetup(true);
-          setActiveRole("homeowner"); // neutral role; activateProviderMode() called at setup end
-        } else {
-          setNeedsRoleSelection(false);
-          setActiveRole("homeowner");
-          navigation.reset({
-            index: 0,
-            routes: [{ name: "Onboarding" }],
-          });
-        }
+        // SignUpScreen is only used by homeowners.
+        // Providers sign up through the last step of ProviderOnboardingScreen.
+        setNeedsRoleSelection(false);
+        setActiveRole("homeowner");
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "Onboarding" }],
+        });
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Sign up failed";

@@ -153,10 +153,10 @@ export default function RootStackNavigator() {
   const screenOptions = useScreenOptions();
   const { theme } = useTheme();
   const { isAuthenticated, isHydrated, activeRole, canAccessProviderMode, needsRoleSelection } = useAuthStore();
-  const { hasCompletedFirstLaunch, hasCompletedProviderSetup, needsProviderSetup, isHydrated: onboardingHydrated } = useOnboardingStore();
+  const { hasCompletedFirstLaunch, hasCompletedProviderSetup, isHydrated: onboardingHydrated } = useOnboardingStore();
 
   // canAccessProviderMode checks for an approved provider profile (existing providers).
-  // hasCompletedProviderSetup covers new providers who just finished onboarding
+  // hasCompletedProviderSetup covers new providers who finished ProviderOnboarding
   // but don't yet have a persisted/approved profile in the backend.
   const isProviderMode = isAuthenticated && activeRole === "provider" &&
     (canAccessProviderMode() || hasCompletedProviderSetup);
@@ -176,13 +176,7 @@ export default function RootStackNavigator() {
   const showFirstLaunch = !hasCompletedFirstLaunch && !isAuthenticated;
 
   // Show role gateway if authenticated but hasn't selected a role yet.
-  // Exclude the provider-signup path (needsProviderSetup) to prevent any
-  // transient flash of RoleGateway between login() and setNeedsRoleSelection(false).
-  const showRoleGateway = isAuthenticated && needsRoleSelection && !needsProviderSetup;
-
-  // Show provider setup flow right after a new provider signs up
-  // (declarative alternative to navigation.reset — avoids race conditions)
-  const showProviderSetup = isAuthenticated && needsProviderSetup;
+  const showRoleGateway = isAuthenticated && needsRoleSelection;
 
   return (
     <Stack.Navigator screenOptions={screenOptions}>
@@ -196,12 +190,6 @@ export default function RootStackNavigator() {
         <Stack.Screen
           name="RoleGateway"
           component={RoleGatewayScreen}
-          options={{ headerShown: false }}
-        />
-      ) : showProviderSetup ? (
-        <Stack.Screen
-          name="ProviderSetupFlow"
-          component={ProviderSetupFlow}
           options={{ headerShown: false }}
         />
       ) : (
