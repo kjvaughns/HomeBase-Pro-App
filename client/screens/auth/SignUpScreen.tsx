@@ -23,7 +23,7 @@ export default function SignUpScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { login, setNeedsRoleSelection, setActiveRole } = useAuthStore();
-  const { selectedAccountType, providerPreSignupData } = useOnboardingStore();
+  const { selectedAccountType, providerPreSignupData, setNeedsProviderSetup } = useOnboardingStore();
 
   const [name, setName] = useState(
     selectedAccountType === "provider" && providerPreSignupData?.businessName
@@ -91,14 +91,16 @@ export default function SignUpScreen({ navigation }: Props) {
           phone: data.user.phone,
           avatarUrl: data.user.avatarUrl,
         }, null, data.token ?? null);
-        // Bypass the RoleGateway — we already know the role from the signup flow
-        setNeedsRoleSelection(false);
         if (selectedAccountType === "provider") {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: "ProviderSetupFlow" }],
-          });
+          // Declarative routing: set flag, let RootStackNavigator react.
+          // Calling navigation.reset from a screen that is about to unmount
+          // (because !isAuthenticated flips) silently fails — the flag approach
+          // is race-condition-free.
+          setNeedsRoleSelection(false);
+          setNeedsProviderSetup(true);
+          setActiveRole("homeowner"); // neutral until ProviderSetupFlow completes
         } else {
+          setNeedsRoleSelection(false);
           setActiveRole("homeowner");
           navigation.reset({
             index: 0,

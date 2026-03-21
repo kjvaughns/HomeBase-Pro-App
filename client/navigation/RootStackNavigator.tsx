@@ -153,9 +153,13 @@ export default function RootStackNavigator() {
   const screenOptions = useScreenOptions();
   const { theme } = useTheme();
   const { isAuthenticated, isHydrated, activeRole, canAccessProviderMode, needsRoleSelection } = useAuthStore();
-  const { hasCompletedFirstLaunch, isHydrated: onboardingHydrated } = useOnboardingStore();
+  const { hasCompletedFirstLaunch, hasCompletedProviderSetup, needsProviderSetup, isHydrated: onboardingHydrated } = useOnboardingStore();
 
-  const isProviderMode = isAuthenticated && activeRole === "provider" && canAccessProviderMode();
+  // canAccessProviderMode checks for an approved provider profile (existing providers).
+  // hasCompletedProviderSetup covers new providers who just finished onboarding
+  // but don't yet have a persisted/approved profile in the backend.
+  const isProviderMode = isAuthenticated && activeRole === "provider" &&
+    (canAccessProviderMode() || hasCompletedProviderSetup);
 
   const getMainComponent = () => {
     if (isProviderMode) {
@@ -174,6 +178,10 @@ export default function RootStackNavigator() {
   // Show role gateway if authenticated but hasn't selected a role yet
   const showRoleGateway = isAuthenticated && needsRoleSelection;
 
+  // Show provider setup flow right after a new provider signs up
+  // (declarative alternative to navigation.reset — avoids race conditions)
+  const showProviderSetup = isAuthenticated && needsProviderSetup && !showRoleGateway;
+
   return (
     <Stack.Navigator screenOptions={screenOptions}>
       {showFirstLaunch ? (
@@ -186,6 +194,12 @@ export default function RootStackNavigator() {
         <Stack.Screen
           name="RoleGateway"
           component={RoleGatewayScreen}
+          options={{ headerShown: false }}
+        />
+      ) : showProviderSetup ? (
+        <Stack.Screen
+          name="ProviderSetupFlow"
+          component={ProviderSetupFlow}
           options={{ headerShown: false }}
         />
       ) : (
@@ -237,11 +251,6 @@ export default function RootStackNavigator() {
       <Stack.Screen
         name="Onboarding"
         component={OnboardingScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="ProviderSetupFlow"
-        component={ProviderSetupFlow}
         options={{ headerShown: false }}
       />
       <Stack.Screen

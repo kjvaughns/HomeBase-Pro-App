@@ -1179,8 +1179,8 @@ export default function ProviderSetupFlow({ navigation }: Props) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const safeTop = insets.top || 50;
-  const { setHasCompletedProviderSetup, providerPreSignupData } = useOnboardingStore();
-  const { user, providerProfile } = useAuthStore();
+  const { setHasCompletedProviderSetup, setNeedsProviderSetup, providerPreSignupData } = useOnboardingStore();
+  const { user, providerProfile, setActiveRole } = useAuthStore();
   const { addOnboardingService, setProviderAvailability, setProviderBusinessProfile } = useProviderStore();
 
   const [step, setStep] = useState(1);
@@ -1287,6 +1287,12 @@ export default function ProviderSetupFlow({ navigation }: Props) {
   const handleGoToDashboard = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setHasCompletedProviderSetup(true);
+    setActiveRole("provider"); // switch to provider mode before clearing flag
+    // Clearing this flag causes RootStackNavigator to reactively swap its
+    // initial route from ProviderSetupFlow → Main (ProviderTabNavigator).
+    // No navigation.reset needed — and calling one would fail because
+    // "Main" is not registered while showProviderSetup=true.
+    setNeedsProviderSetup(false);
   };
 
   const enterAnim = goingBack ? FadeInLeft.duration(280) : FadeInRight.duration(280);

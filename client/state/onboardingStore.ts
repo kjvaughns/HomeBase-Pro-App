@@ -12,12 +12,14 @@ export interface ProviderPreSignupData {
 interface OnboardingState {
   hasCompletedFirstLaunch: boolean;
   hasCompletedProviderSetup: boolean;
+  needsProviderSetup: boolean;
   selectedAccountType: AccountType | null;
   providerPreSignupData: ProviderPreSignupData | null;
   isHydrated: boolean;
   
   setHasCompletedFirstLaunch: (completed: boolean) => void;
   setHasCompletedProviderSetup: (completed: boolean) => void;
+  setNeedsProviderSetup: (v: boolean) => void;
   setAccountType: (type: AccountType) => void;
   setProviderPreSignupData: (data: ProviderPreSignupData | null) => void;
   reset: () => void;
@@ -42,6 +44,7 @@ async function saveToStorage(state: Partial<OnboardingState>) {
 export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
   hasCompletedFirstLaunch: false,
   hasCompletedProviderSetup: false,
+  needsProviderSetup: false,
   selectedAccountType: null,
   providerPreSignupData: null,
   isHydrated: false,
@@ -54,6 +57,10 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
   setHasCompletedProviderSetup: (completed: boolean) => {
     set({ hasCompletedProviderSetup: completed });
     saveToStorage(get());
+  },
+
+  setNeedsProviderSetup: (v: boolean) => {
+    set({ needsProviderSetup: v });
   },
 
   setAccountType: (type: AccountType) => {
