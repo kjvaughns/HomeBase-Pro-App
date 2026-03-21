@@ -122,6 +122,30 @@ const aiRateLimit: RequestHandler = (req, res, next) => {
   next();
 };
 
+const onboardingRateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+const onboardingRateLimit: RequestHandler = (req, res, next) => {
+  const ip = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
+  const now = Date.now();
+  const windowMs = 10 * 60 * 1000;
+  const limit = 30;
+
+  const entry = onboardingRateLimitMap.get(ip);
+  if (!entry || entry.resetAt < now) {
+    onboardingRateLimitMap.set(ip, { count: 1, resetAt: now + windowMs });
+    next();
+    return;
+  }
+
+  if (entry.count >= limit) {
+    res.status(429).json({ error: "Too many requests. Please slow down." });
+    return;
+  }
+
+  entry.count += 1;
+  next();
+};
+
 function formatUserResponse(user: { firstName?: string | null; lastName?: string | null; [key: string]: unknown }) {
   const { firstName, lastName, password, ...rest } = user;
   const name = [firstName, lastName].filter(Boolean).join(" ") || null;
@@ -1311,6 +1335,210 @@ Respond ONLY with the improved bio text, no quotes, no explanations.`;
     } catch (error) {
       console.error("Improve bio error:", error);
       res.status(500).json({ error: "Failed to improve bio" });
+    }
+  });
+
+  // ============ PUBLIC AI ONBOARDING ROUTES (no auth required) ============
+
+  app.post("/api/ai/onboarding/suggest-business-names", onboardingRateLimit, async (req: Request, res: Response) => {
+    try {
+      const { category } = req.body as { category: string };
+      if (!category) return res.status(400).json({ error: "category is required" });
+
+      const prompt = `You are a branding expert for home service businesses. Suggest 3 professional, memorable business names for a "${category}" service provider.
+
+Rules:
+- Each name should be 2-4 words
+- Sound established and trustworthy (not generic like "Best Service Co")
+- Mix styles: one classic, one modern, one clever
+- Real business names that a homeowner would trust
+
+Respond with ONLY a JSON object: {"names": ["Name One", "Name Two", "Name Three"]}`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 100,
+        response_format: { type: "json_object" },
+      });
+
+      const raw = response.choices[0]?.message?.content?.trim() || '{"names":[]}';
+      const parsed = JSON.parse(raw);
+      res.json({ names: Array.isArray(parsed.names) ? parsed.names.slice(0, 3) : [] });
+    } catch (error) {
+      console.error("Suggest business names error:", error);
+      res.status(500).json({ error: "Failed to suggest business names" });
+    }
+  });
+
+  app.post("/api/ai/onboarding/suggest-service-names", onboardingRateLimit, async (req: Request, res: Response) => {
+    try {
+      const { category } = req.body as { category: string };
+      if (!category) return res.status(400).json({ error: "category is required" });
+
+      const prompt = `You are a home services expert. Suggest 3 popular, specific service names for a "${category}" provider.
+
+Rules:
+- Each name should be 3-6 words, specific and professional
+- Focus on high-demand services homeowners commonly book
+- No generic names like "General Service" or "Home Service"
+
+Respond with ONLY a JSON object: {"names": ["Service One", "Service Two", "Service Three"]}`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 120,
+        response_format: { type: "json_object" },
+      });
+
+      const raw = response.choices[0]?.message?.content?.trim() || '{"names":[]}';
+      const parsed = JSON.parse(raw);
+      res.json({ names: Array.isArray(parsed.names) ? parsed.names.slice(0, 3) : [] });
+    } catch (error) {
+      console.error("Suggest service names error:", error);
+      res.status(500).json({ error: "Failed to suggest service names" });
+    }
+  });
+
+  app.post("/api/ai/onboarding/suggest-description", onboardingRateLimit, async (req: Request, res: Response) => {
+    try {
+      const { serviceName, category } = req.body as { serviceName: string; category: string };
+      if (!serviceName || !category) return res.status(400).json({ error: "serviceName and category are required" });
+
+      const prompt = `You are a professional copywriter for home service businesses. Write a concise, compelling service description for a provider listing.
+
+Service Name: ${serviceName}
+Category: ${category}
+
+Write a 2-3 sentence professional description that:
+- Highlights key benefits for the homeowner
+- Mentions quality and reliability
+- Sounds natural and specific to this service type
+
+Respond with ONLY the description text, no quotes, no extra formatting.`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 150,
+      });
+
+      const description = response.choices[0]?.message?.content?.trim() || "";
+      res.json({ description });
+    } catch (error) {
+      console.error("Suggest description error:", error);
+      res.status(500).json({ error: "Failed to suggest description" });
+    }
+  });
+
+  app.post("/api/ai/onboarding/suggest-price", onboardingRateLimit, async (req: Request, res: Response) => {
+    try {
+      const { serviceName, category, pricingType, location } = req.body as {
+        serviceName: string;
+        category: string;
+        pricingType: string;
+        location?: string;
+      };
+      if (!serviceName || !category || !pricingType) {
+        return res.status(400).json({ error: "serviceName, category, and pricingType are required" });
+      }
+
+      const prompt = `You are a pricing expert for home service providers. Suggest a competitive price range for this service.
+
+Service: ${serviceName}
+Category: ${category}
+Pricing Type: ${pricingType}
+${location ? `Location: ${location}` : ""}
+
+Respond ONLY with a JSON object:
+{"suggestion": {"minPrice": 80, "maxPrice": 150, "unit": "per job", "hint": "one short sentence on pricing context"}}`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 120,
+        response_format: { type: "json_object" },
+      });
+
+      const raw = response.choices[0]?.message?.content?.trim() || "{}";
+      const parsed = JSON.parse(raw);
+      res.json(parsed);
+    } catch (error) {
+      console.error("Suggest price error:", error);
+      res.status(500).json({ error: "Failed to suggest price" });
+    }
+  });
+
+  app.post("/api/ai/onboarding/generate-bio", onboardingRateLimit, async (req: Request, res: Response) => {
+    try {
+      const { businessName, category, serviceName } = req.body as {
+        businessName: string;
+        category: string;
+        serviceName?: string;
+      };
+      if (!businessName || !category) return res.status(400).json({ error: "businessName and category are required" });
+
+      const prompt = `You are a professional copywriter who helps home service providers craft compelling business bios.
+
+Write a confident, professional 2-3 sentence bio for:
+- Business: ${businessName}
+- Category: ${category}
+- Specializes in: ${serviceName || category}
+
+The bio should:
+- Sound established and trustworthy
+- Highlight commitment to quality and homeowner satisfaction
+- Feel personal, not like a template
+- Use proper grammar and punctuation
+
+Respond ONLY with the bio text. No quotes, no labels, no extra formatting.`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 200,
+      });
+
+      const bio = response.choices[0]?.message?.content?.trim() || "";
+      res.json({ bio });
+    } catch (error) {
+      console.error("Generate bio error:", error);
+      res.status(500).json({ error: "Failed to generate bio" });
+    }
+  });
+
+  app.post("/api/ai/onboarding/polish-text", onboardingRateLimit, async (req: Request, res: Response) => {
+    try {
+      const { text, context } = req.body as { text: string; context?: string };
+      if (!text || !text.trim()) return res.status(400).json({ error: "text is required" });
+
+      const prompt = `You are a professional editor. Fix the grammar, punctuation, capitalization, and clarity of the following text written by a home service provider${context ? ` (context: ${context})` : ""}.
+
+Original text:
+"${text.trim()}"
+
+Rules:
+- Fix all grammar, spelling, and punctuation errors
+- Improve sentence structure if needed
+- Keep the meaning and voice intact — do not add new information
+- Use proper capitalization
+- Keep it the same length or shorter
+
+Respond ONLY with the polished text. No quotes, no explanations.`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 300,
+      });
+
+      const rawPolished = response.choices[0]?.message?.content?.trim() || text;
+      const polished = rawPolished.replace(/^["']|["']$/g, "").trim();
+      res.json({ polished });
+    } catch (error) {
+      console.error("Polish text error:", error);
+      res.status(500).json({ error: "Failed to polish text" });
     }
   });
 

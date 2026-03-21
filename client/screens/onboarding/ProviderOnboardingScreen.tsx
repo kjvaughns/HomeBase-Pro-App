@@ -334,7 +334,14 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
           />
         )}
         {step === 5 && (
-          <BioStep theme={theme} bio={bio} setBio={setBio} />
+          <BioStep
+            theme={theme}
+            bio={bio}
+            setBio={setBio}
+            businessName={businessName}
+            category={category}
+            serviceName={serviceName}
+          />
         )}
         {step === 6 && (
           <CreateAccountStep
@@ -439,6 +446,20 @@ function BusinessStep({
   category: string;
   setCategory: (v: string) => void;
 }) {
+  const [nameSuggestions, setNameSuggestions] = useState<string[]>([]);
+  const [loadingNames, setLoadingNames] = useState(false);
+
+  useEffect(() => {
+    if (!category) { setNameSuggestions([]); return; }
+    setLoadingNames(true);
+    setNameSuggestions([]);
+    apiRequest("POST", "/api/ai/onboarding/suggest-business-names", { category })
+      .then((r) => r.json())
+      .then((json) => { if (Array.isArray(json.names)) setNameSuggestions(json.names.slice(0, 3)); })
+      .catch(() => {})
+      .finally(() => setLoadingNames(false));
+  }, [category]);
+
   return (
     <ScrollView
       style={styles.scrollView}
@@ -475,6 +496,28 @@ function BusinessStep({
           testID="input-business-name"
         />
       </View>
+
+      {(loadingNames || nameSuggestions.length > 0) ? (
+        <View style={styles.aiSuggestionRow}>
+          <Feather name="zap" size={12} color={Colors.accent} />
+          <ThemedText style={[styles.captionText, { color: theme.textTertiary, marginLeft: 4, marginRight: 6 }]}>
+            Quick picks:
+          </ThemedText>
+          {loadingNames ? (
+            <ActivityIndicator size="small" color={Colors.accent} />
+          ) : (
+            nameSuggestions.map((name) => (
+              <Pressable
+                key={name}
+                onPress={() => { Haptics.selectionAsync(); setBusinessName(name); }}
+                style={[styles.suggestionChip, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border }]}
+              >
+                <ThemedText style={[styles.captionText, { color: theme.text }]}>{name}</ThemedText>
+              </Pressable>
+            ))
+          )}
+        </View>
+      ) : null}
 
       <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary, marginTop: Spacing.lg }]}>
         Primary service
@@ -555,7 +598,7 @@ function ServiceStep({
   useEffect(() => {
     if (!category) return;
     setLoadingSuggestions(true);
-    apiRequest("POST", "/api/ai/suggest-service-names", { category })
+    apiRequest("POST", "/api/ai/onboarding/suggest-service-names", { category })
       .then((res) => res.json())
       .then((json) => { if (Array.isArray(json.names)) setAiSuggestions(json.names.slice(0, 3)); })
       .catch(() => {})
@@ -567,7 +610,7 @@ function ServiceStep({
     if (!serviceName.trim() || !category) { setServiceDescription(""); return; }
     descDebounceRef.current = setTimeout(async () => {
       try {
-        const res = await apiRequest("POST", "/api/ai/suggest-description", { serviceName: serviceName.trim(), category });
+        const res = await apiRequest("POST", "/api/ai/onboarding/suggest-description", { serviceName: serviceName.trim(), category });
         const json = await res.json();
         if (json.description) setServiceDescription(json.description);
       } catch { /* silently fail */ }
@@ -581,7 +624,7 @@ function ServiceStep({
     priceDebounceRef.current = setTimeout(async () => {
       setLoadingPrice(true);
       try {
-        const res = await apiRequest("POST", "/api/ai/suggest-price", { serviceName: serviceName.trim(), category, pricingType: "flat" });
+        const res = await apiRequest("POST", "/api/ai/onboarding/suggest-price", { serviceName: serviceName.trim(), category, pricingType: "flat" });
         const json = await res.json();
         if (json.suggestion) setPriceSuggestion(json.suggestion);
       } catch { /* silently fail */ }
@@ -905,12 +948,60 @@ function BioStep({
   theme,
   bio,
   setBio,
+  businessName,
+  category,
+  serviceName,
 }: {
   theme: ReturnType<typeof useTheme>["theme"];
   bio: string;
   setBio: (v: string) => void;
+  businessName: string;
+  category: string;
+  serviceName: string;
 }) {
   const MAX = 300;
+  const [generatingBio, setGeneratingBio] = useState(false);
+  const [polishingBio, setPolishingBio] = useState(false);
+  const [bioError, setBioError] = useState("");
+  const hasGenerated = bio.length > 0;
+
+  const handleGenerateBio = async () => {
+    if (!businessName && !category) return;
+    setGeneratingBio(true);
+    setBioError("");
+    try {
+      const res = await apiRequest("POST", "/api/ai/onboarding/generate-bio", {
+        businessName: businessName || category,
+        category,
+        serviceName: serviceName || undefined,
+      });
+      const json = await res.json();
+      if (json.bio) setBio(json.bio.slice(0, MAX));
+    } catch {
+      setBioError("Couldn't generate bio. Try again.");
+    } finally {
+      setGeneratingBio(false);
+    }
+  };
+
+  const handlePolishBio = async () => {
+    if (!bio.trim()) return;
+    setPolishingBio(true);
+    setBioError("");
+    try {
+      const res = await apiRequest("POST", "/api/ai/onboarding/polish-text", {
+        text: bio.trim(),
+        context: "home service provider business bio",
+      });
+      const json = await res.json();
+      if (json.polished) setBio(json.polished.slice(0, MAX));
+    } catch {
+      setBioError("Couldn't polish text. Try again.");
+    } finally {
+      setPolishingBio(false);
+    }
+  };
+
   return (
     <ScrollView
       style={styles.scrollView}
@@ -939,7 +1030,7 @@ function BioStep({
           placeholder="Tell customers about your experience, specialties, and what makes you the best choice..."
           placeholderTextColor={theme.textTertiary}
           value={bio}
-          onChangeText={(v) => setBio(v.slice(0, MAX))}
+          onChangeText={(v) => { setBio(v.slice(0, MAX)); setBioError(""); }}
           multiline
           numberOfLines={5}
           textAlignVertical="top"
@@ -947,6 +1038,59 @@ function BioStep({
         />
         <ThemedText style={[styles.captionText, { color: theme.textTertiary, textAlign: "right", marginTop: Spacing.xs }]}>
           {bio.length}/{MAX}
+        </ThemedText>
+      </View>
+
+      {bioError.length > 0 ? (
+        <ThemedText style={[styles.captionText, { color: "#E05555", marginTop: Spacing.xs }]}>{bioError}</ThemedText>
+      ) : null}
+
+      <View style={styles.aiBioRow}>
+        <Pressable
+          onPress={handleGenerateBio}
+          disabled={generatingBio || polishingBio}
+          style={[
+            styles.aiActionBtn,
+            { borderColor: Colors.accent, backgroundColor: Colors.accent + "10" },
+          ]}
+          testID="button-generate-bio"
+        >
+          {generatingBio ? (
+            <ActivityIndicator size="small" color={Colors.accent} />
+          ) : (
+            <Feather name="zap" size={13} color={Colors.accent} />
+          )}
+          <ThemedText style={[styles.captionText, { color: Colors.accent, marginLeft: 5, fontWeight: "600" }]}>
+            {hasGenerated ? "Rewrite bio" : "Write my bio"}
+          </ThemedText>
+        </Pressable>
+
+        {bio.trim().length > 20 ? (
+          <Pressable
+            onPress={handlePolishBio}
+            disabled={generatingBio || polishingBio}
+            style={[
+              styles.aiActionBtn,
+              { borderColor: theme.border, backgroundColor: theme.backgroundSecondary },
+            ]}
+            testID="button-polish-bio"
+          >
+            {polishingBio ? (
+              <ActivityIndicator size="small" color={theme.textSecondary} />
+            ) : (
+              <Feather name="edit-3" size={13} color={theme.textSecondary} />
+            )}
+            <ThemedText style={[styles.captionText, { color: theme.textSecondary, marginLeft: 5 }]}>
+              Polish my writing
+            </ThemedText>
+          </Pressable>
+        ) : null}
+      </View>
+
+      <View style={[styles.aiInfoBadge, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border }]}>
+        <Feather name="info" size={12} color={theme.textTertiary} />
+        <ThemedText style={[styles.captionText, { color: theme.textTertiary, marginLeft: 6, flex: 1 }]}>
+          AI uses your business name and category to write a professional bio. You can edit it after.
         </ThemedText>
       </View>
     </ScrollView>
@@ -1186,6 +1330,36 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 20,
     borderWidth: 1,
+  },
+  aiSuggestionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: Spacing.xs,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.xs,
+  },
+  aiBioRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  aiActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+  },
+  aiInfoBadge: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    marginTop: Spacing.md,
   },
   captionText: { fontSize: 12 },
 
