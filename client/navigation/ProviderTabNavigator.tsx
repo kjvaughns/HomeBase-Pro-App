@@ -66,15 +66,30 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
           left: (width - finalWidth) / 2,
           width: finalWidth,
           height: tabHeight,
+          borderWidth: 0.5,
+          borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.10)",
+          shadowOpacity: isDark ? 0.22 : 0.09,
+          shadowRadius: isDark ? 16 : 12,
         },
       ]}
     >
       {Platform.OS === "ios" ? (
-        <BlurView
-          intensity={80}
-          tint={isDark ? "systemMaterialDark" : "systemMaterial"}
-          style={[StyleSheet.absoluteFill, styles.blurView]}
-        />
+        <>
+          <BlurView
+            intensity={isDark ? 80 : 60}
+            tint={isDark ? "systemMaterialDark" : "systemUltraThinMaterialLight"}
+            style={[StyleSheet.absoluteFill, styles.blurView]}
+          />
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              {
+                backgroundColor: isDark ? "rgba(28,28,30,0.25)" : "rgba(255,255,255,0.55)",
+                borderRadius: 24,
+              },
+            ]}
+          />
+        </>
       ) : (
         <View
           style={[
