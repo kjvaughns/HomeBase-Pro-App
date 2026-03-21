@@ -1180,7 +1180,7 @@ export default function ProviderSetupFlow({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const safeTop = insets.top || 50;
   const { setHasCompletedProviderSetup, setNeedsProviderSetup, providerPreSignupData } = useOnboardingStore();
-  const { user, providerProfile, setActiveRole } = useAuthStore();
+  const { user, providerProfile, activateProviderMode } = useAuthStore();
   const { addOnboardingService, setProviderAvailability, setProviderBusinessProfile } = useProviderStore();
 
   const [step, setStep] = useState(1);
@@ -1287,7 +1287,7 @@ export default function ProviderSetupFlow({ navigation }: Props) {
   const handleGoToDashboard = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setHasCompletedProviderSetup(true);
-    setActiveRole("provider"); // switch to provider mode before clearing flag
+    activateProviderMode(); // bypasses the canAccessProviderMode guard for new providers
     // Clearing this flag causes RootStackNavigator to reactively swap its
     // initial route from ProviderSetupFlow → Main (ProviderTabNavigator).
     // No navigation.reset needed — and calling one would fail because

@@ -175,12 +175,14 @@ export default function RootStackNavigator() {
   // Show first launch for new users who haven't completed onboarding
   const showFirstLaunch = !hasCompletedFirstLaunch && !isAuthenticated;
 
-  // Show role gateway if authenticated but hasn't selected a role yet
-  const showRoleGateway = isAuthenticated && needsRoleSelection;
+  // Show role gateway if authenticated but hasn't selected a role yet.
+  // Exclude the provider-signup path (needsProviderSetup) to prevent any
+  // transient flash of RoleGateway between login() and setNeedsRoleSelection(false).
+  const showRoleGateway = isAuthenticated && needsRoleSelection && !needsProviderSetup;
 
   // Show provider setup flow right after a new provider signs up
   // (declarative alternative to navigation.reset — avoids race conditions)
-  const showProviderSetup = isAuthenticated && needsProviderSetup && !showRoleGateway;
+  const showProviderSetup = isAuthenticated && needsProviderSetup;
 
   return (
     <Stack.Navigator screenOptions={screenOptions}>

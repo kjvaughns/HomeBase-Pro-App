@@ -92,13 +92,12 @@ export default function SignUpScreen({ navigation }: Props) {
           avatarUrl: data.user.avatarUrl,
         }, null, data.token ?? null);
         if (selectedAccountType === "provider") {
-          // Declarative routing: set flag, let RootStackNavigator react.
-          // Calling navigation.reset from a screen that is about to unmount
-          // (because !isAuthenticated flips) silently fails — the flag approach
-          // is race-condition-free.
-          setNeedsRoleSelection(false);
+          // Set needsProviderSetup FIRST so showRoleGateway is guarded (!needsProviderSetup)
+          // before setNeedsRoleSelection(false) clears the transient needsRoleSelection=true
+          // that login() sets. This prevents any flash of RoleGateway.
           setNeedsProviderSetup(true);
-          setActiveRole("homeowner"); // neutral until ProviderSetupFlow completes
+          setNeedsRoleSelection(false);
+          // activeRole stays "homeowner" until ProviderSetupFlow calls activateProviderMode()
         } else {
           setNeedsRoleSelection(false);
           setActiveRole("homeowner");

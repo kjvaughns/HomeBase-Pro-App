@@ -37,6 +37,7 @@ interface AuthState {
   login: (user: User, providerProfile?: ProviderProfile | null, token?: string | null) => void;
   logout: () => void;
   setActiveRole: (role: UserRole) => void;
+  activateProviderMode: () => void;
   setNeedsRoleSelection: (needs: boolean) => void;
   createProviderProfile: (profile: ProviderProfile) => void;
   updateProviderStatus: (status: ProviderStatus) => void;
@@ -88,6 +89,13 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       return;
     }
     set({ activeRole: role });
+    saveToStorage(get());
+  },
+
+  activateProviderMode: () => {
+    // Bypasses the canAccessProviderMode guard for use only after completing
+    // ProviderSetupFlow — new providers don't have an approved backend profile yet.
+    set({ activeRole: "provider" });
     saveToStorage(get());
   },
 

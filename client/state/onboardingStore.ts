@@ -76,6 +76,7 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
     set({
       hasCompletedFirstLaunch: false,
       hasCompletedProviderSetup: false,
+      needsProviderSetup: false,
       selectedAccountType: null,
       providerPreSignupData: null,
     });
