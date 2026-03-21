@@ -21,6 +21,9 @@ expo-env.d.ts
 # Metro
 .metro-health-check*
 
+# Replit runtime caches (contain non-deletable binaries)
+.cache/
+
 # debug
 npm-debug.*
 yarn-debug.*
