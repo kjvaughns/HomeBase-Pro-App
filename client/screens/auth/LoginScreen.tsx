@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, View, Pressable, Alert } from "react-native";
+import { StyleSheet, View, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -82,8 +82,15 @@ export default function LoginScreen({ navigation }: Props) {
       const message = error instanceof Error ? error.message : "Login failed";
       if (message.includes("401") || message.includes("Invalid")) {
         setErrors({ password: "Invalid email or password" });
+      } else if (
+        message.toLowerCase().includes("network") ||
+        message.toLowerCase().includes("failed to fetch") ||
+        message.toLowerCase().includes("timeout") ||
+        message.toLowerCase().includes("connection")
+      ) {
+        setErrors({ email: "Can't reach HomeBase. Check your internet connection and try again." });
       } else {
-        Alert.alert("Error", "Unable to sign in. Please try again.");
+        setErrors({ email: "Something went wrong. Please try again." });
       }
     } finally {
       setLoading(false);

@@ -58,13 +58,14 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   needsRoleSelection: true,
 
   login: (user: User, providerProfile?: ProviderProfile | null, token?: string | null) => {
+    const hasApprovedProvider = providerProfile?.status === "approved";
     const newState = {
       isAuthenticated: true,
       user,
       sessionToken: token || null,
-      activeRole: "guest" as UserRole,
+      activeRole: hasApprovedProvider ? ("guest" as UserRole) : ("homeowner" as UserRole),
       providerProfile: providerProfile || null,
-      needsRoleSelection: true,
+      needsRoleSelection: hasApprovedProvider,
     };
     set(newState);
     saveToStorage(get());
