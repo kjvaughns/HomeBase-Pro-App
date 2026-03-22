@@ -260,28 +260,29 @@ function serveLandingPage({
 function setupMetroProxy(app: express.Application) {
   const METRO_PORT = 8081;
   const metroProxy = createProxyMiddleware({
+    pathFilter: (path: string) =>
+      path.startsWith("/_expo") ||
+      path.startsWith("/index.bundle") ||
+      path.startsWith("/index.map") ||
+      path.startsWith("/__metro__") ||
+      path.startsWith("/__hmr") ||
+      path.startsWith("/hot") ||
+      path.startsWith("/debugger-ui"),
     target: `http://localhost:${METRO_PORT}`,
     changeOrigin: false,
     ws: true,
     on: {
-      error: (_err, _req, res) => {
-        if (res && !('headersSent' in res && (res as any).headersSent)) {
-          (res as any).status?.(502)?.send?.("Metro dev server not reachable");
+      error: (_err: any, _req: any, res: any) => {
+        if (res && typeof res.status === "function" && !res.headersSent) {
+          res.status(502).send("Metro dev server not reachable");
         }
       },
     },
   });
 
-  // Proxy all Metro/Expo dev server paths to the Metro bundler
-  app.use("/_expo", metroProxy);
-  app.use("/index.bundle", metroProxy);
-  app.use("/index.map", metroProxy);
-  app.use("/__metro__", metroProxy);
-  app.use("/__hmr", metroProxy);
-  app.use("/debugger-ui", metroProxy);
-  app.use("/hot", metroProxy);
-
-  log("Metro proxy configured: /_expo, *.bundle → localhost:8081");
+  // Mount globally so the full path is preserved when forwarding to Metro
+  app.use(metroProxy);
+  log("Metro proxy configured: /_expo/* → localhost:8081");
 }
 
 function configureExpoAndLanding(app: express.Application) {
