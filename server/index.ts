@@ -1,5 +1,6 @@
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
+import { createProxyMiddleware } from "http-proxy-middleware";
 import { registerRoutes } from "./routes";
 import * as fs from "fs";
 import * as path from "path";
@@ -256,6 +257,33 @@ function serveLandingPage({
   res.status(200).send(html);
 }
 
+function setupMetroProxy(app: express.Application) {
+  const METRO_PORT = 8081;
+  const metroProxy = createProxyMiddleware({
+    target: `http://localhost:${METRO_PORT}`,
+    changeOrigin: false,
+    ws: true,
+    on: {
+      error: (_err, _req, res) => {
+        if (res && !('headersSent' in res && (res as any).headersSent)) {
+          (res as any).status?.(502)?.send?.("Metro dev server not reachable");
+        }
+      },
+    },
+  });
+
+  // Proxy all Metro/Expo dev server paths to the Metro bundler
+  app.use("/_expo", metroProxy);
+  app.use("/index.bundle", metroProxy);
+  app.use("/index.map", metroProxy);
+  app.use("/__metro__", metroProxy);
+  app.use("/__hmr", metroProxy);
+  app.use("/debugger-ui", metroProxy);
+  app.use("/hot", metroProxy);
+
+  log("Metro proxy configured: /_expo, *.bundle → localhost:8081");
+}
+
 function configureExpoAndLanding(app: express.Application) {
   const templatePath = path.resolve(
     process.cwd(),
@@ -436,6 +464,7 @@ function setupErrorHandler(app: express.Application) {
 
 (async () => {
   setupCors(app);
+  setupMetroProxy(app);
   setupStripeWebhook(app);
   setupBodyParsing(app);
   setupRequestLogging(app);
