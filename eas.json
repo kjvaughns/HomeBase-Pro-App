@@ -15,7 +15,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo.spock.replit.dev:5000"
+        "EXPO_PUBLIC_DOMAIN": "71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo.spock.replit.dev"
       }
     },
     "development-simulator": {
@@ -34,7 +34,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo.spock.replit.dev:5000"
+        "EXPO_PUBLIC_DOMAIN": "71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo.spock.replit.dev"
       }
     },
     "production": {
@@ -43,9 +43,12 @@
         "resourceClass": "m-medium"
       },
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo.spock.replit.dev:5000"
+        "EXPO_PUBLIC_DOMAIN": "71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo.spock.replit.dev"
       }
     }
+  },
+  "update": {
+    "channel": "main"
   },
   "submit": {
     "production": {}

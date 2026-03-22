@@ -260,17 +260,22 @@ function serveLandingPage({
 function setupMetroProxy(app: express.Application) {
   const METRO_PORT = 8081;
   const metroProxy = createProxyMiddleware({
-    pathFilter: (path: string) =>
+    pathFilter: (path: string, req: any) =>
       path.startsWith("/_expo") ||
       path.startsWith("/index.bundle") ||
       path.startsWith("/index.map") ||
       path.startsWith("/__metro__") ||
       path.startsWith("/__hmr") ||
       path.startsWith("/hot") ||
-      path.startsWith("/debugger-ui"),
+      path.startsWith("/debugger-ui") ||
+      path.startsWith("/client/") ||
+      path.startsWith("/assets/") ||
+      (path === "/" && !!(req.headers && req.headers["expo-platform"])),
     target: `http://localhost:${METRO_PORT}`,
     changeOrigin: false,
     ws: true,
+    proxyTimeout: 10 * 60 * 1000,
+    timeout: 10 * 60 * 1000,
     on: {
       error: (_err: any, _req: any, res: any) => {
         if (res && typeof res.status === "function" && !res.headersSent) {
@@ -282,7 +287,7 @@ function setupMetroProxy(app: express.Application) {
 
   // Mount globally so the full path is preserved when forwarding to Metro
   app.use(metroProxy);
-  log("Metro proxy configured: /_expo/* → localhost:8081");
+  log("Metro proxy configured: /_expo/*, /client/*, /assets/* → localhost:8081");
 }
 
 function configureExpoAndLanding(app: express.Application) {
