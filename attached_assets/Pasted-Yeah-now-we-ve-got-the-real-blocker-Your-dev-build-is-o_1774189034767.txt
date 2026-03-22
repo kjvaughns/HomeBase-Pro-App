@@ -1,0 +1,66 @@
+Yeah, now we’ve got the real blocker.
+
+Your dev build is opening, but the project URL is **timing out**. That means the phone can see the link, but it is **not getting a working response from the dev server**. In Expo’s docs, the usual fixes when the dev server cannot be reached are to clear local state, avoid bad LAN routing, and use a tunnel or a published update instead of relying on a live local server. ([Expo Documentation][1])
+
+For your setup, the problem is probably **Replit as the host**, not your iPhone anymore. Replit is a rough environment for a live Metro server to feed an iPhone dev build reliably. The timeout screen you showed is exactly what happens when the dev client cannot get the manifest and bundle in time from the server URL. ([Expo Documentation][2])
+
+Do this in this order:
+
+### 1. Clear Expo state and restart with tunnel
+
+Run:
+
+```bash
+rm -rf .expo
+npx expo start --dev-client --tunnel --clear
+```
+
+Expo recommends clearing `.expo` when the development server connection is failing, and using `--tunnel` when LAN or direct routing does not work. ([Expo Documentation][1])
+
+### 2. Ignore the React Native DevTools warning for now
+
+That `libnspr4.so` message is ugly, but your Metro server still started and generated a QR. It is likely not the main reason your phone cannot load the app. The more important issue is the connection timing out to the project URL. ([Expo Documentation][3])
+
+### 3. Open the HomeBase dev app and scan again
+
+Use the QR **inside the HomeBase dev app** or paste the URL manually there. The dev client launcher supports scanning or manual entry when it cannot auto detect the bundler. ([Expo Documentation][2])
+
+### 4. If it still times out, stop using the live Replit server for phone testing
+
+At that point, don’t keep punching the wall. Use a **published update** instead of a live development server. Expo says development builds can load **published updates** from Expo hosting, which means you do **not** need to keep a local machine or server running. ([Expo Documentation][2])
+
+Run:
+
+```bash
+eas update --branch main --message "test build"
+```
+
+Then get your project update URL and load it in the dev build using **Enter URL manually**. Expo documents the format as:
+
+```text
+https://u.expo.dev/[your-project-id]?channel-name=main
+```
+
+and says a development build can open a published update from that URL. ([Expo Documentation][2])
+
+### My blunt recommendation
+
+For **Replit + iPhone**, stop relying on the live Metro connection unless the tunnel suddenly works after clearing state. The more dependable route is:
+
+1. keep the HomeBase development build installed
+2. use `eas update` for JS changes
+3. reload the app from the published update URL
+
+That avoids Replit networking headaches entirely. Expo specifically says published updates let a dev build load code without needing the dev machine running. ([Expo Documentation][2])
+
+Run the clear and tunnel command first. If it times out again, send me the exact output of:
+
+```bash
+npx expo start --dev-client --tunnel --clear
+```
+
+and I’ll tell you whether to abandon Metro and switch fully to `eas update`.
+
+[1]: https://docs.expo.dev/workflow/common-development-errors/?utm_source=chatgpt.com "Common development errors"
+[2]: https://docs.expo.dev/develop/development-builds/development-workflows/?utm_source=chatgpt.com "Tools, workflows and extensions"
+[3]: https://docs.expo.dev/debugging/tools/?utm_source=chatgpt.com "Debugging and profiling tools"

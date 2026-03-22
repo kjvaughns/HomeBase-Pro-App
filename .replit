@@ -86,7 +86,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "REACT_NATIVE_DEBUGGER_OPEN=0 EXPO_PACKAGER_PROXY_URL=https://$REPLIT_DEV_DOMAIN REACT_NATIVE_PACKAGER_HOSTNAME=$REPLIT_DEV_DOMAIN EXPO_PUBLIC_DOMAIN=$REPLIT_DEV_DOMAIN npx expo start --go --port 8081"
+args = "REACT_NATIVE_DEBUGGER_OPEN=0 EXPO_PACKAGER_PROXY_URL=https://$REPLIT_DEV_DOMAIN REACT_NATIVE_PACKAGER_HOSTNAME=$REPLIT_DEV_DOMAIN EXPO_PUBLIC_DOMAIN=$REPLIT_DEV_DOMAIN NODE_OPTIONS='--require /home/runner/workspace/metro-patch.js' npx expo start --dev-client --port 8081"
 waitForPort = 8081
 
 [userenv]
