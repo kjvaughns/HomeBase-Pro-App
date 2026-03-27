@@ -302,6 +302,108 @@ function configureExpoAndLanding(app: express.Application) {
 
   log("Serving static Expo files with dynamic manifest routing");
 
+  // Live Expo Go QR code page — reads the tunnel URL written by expo-start.py
+  app.get("/qr", (_req: Request, res: Response) => {
+    let tunnelUrl = "";
+    try {
+      tunnelUrl = fs.readFileSync("/tmp/expo-tunnel-url.txt", "utf8").trim();
+    } catch (_) {}
+
+    const ready = !!tunnelUrl;
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="refresh" content="5">
+  <title>HomeBase - Open in Expo Go</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #111;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 20px;
+    }
+    .card {
+      background: #1c1c1e;
+      border-radius: 20px;
+      padding: 40px 32px;
+      text-align: center;
+      max-width: 360px;
+      width: 100%;
+    }
+    .dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      display: inline-block; margin-right: 8px;
+      background: ${ready ? "#38AE5F" : "#f59e0b"};
+    }
+    .status {
+      font-size: 13px;
+      color: ${ready ? "#38AE5F" : "#f59e0b"};
+      margin-bottom: 24px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    h1 { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
+    .sub { font-size: 14px; color: #888; margin-bottom: 28px; line-height: 1.5; }
+    #qr-wrap {
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px;
+      display: inline-block;
+      margin-bottom: 24px;
+    }
+    .url-box {
+      background: #2c2c2e;
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: #aaa;
+      word-break: break-all;
+      margin-bottom: 8px;
+    }
+    .hint { font-size: 12px; color: #555; }
+    .spinner {
+      width: 48px; height: 48px;
+      border: 3px solid #333;
+      border-top-color: #38AE5F;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+      margin: 20px auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="status"><span class="dot"></span>${ready ? "Tunnel ready" : "Waiting for Metro..."}</div>
+    <h1>Open in Expo Go</h1>
+    <p class="sub">Scan with your iPhone camera to open HomeBase in Expo Go</p>
+    ${ready ? `
+    <div id="qr-wrap"><canvas id="qr"></canvas></div>
+    <div class="url-box">${tunnelUrl}</div>
+    <p class="hint">Page refreshes automatically</p>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"><\/script>
+    <script>
+      QRCode.toCanvas(document.getElementById('qr'), '${tunnelUrl}', {
+        width: 220, margin: 0, color: { dark: '#000', light: '#fff' }
+      });
+    <\/script>
+    ` : `
+    <div class="spinner"></div>
+    <p class="hint">Metro is starting up. This page refreshes every 5 seconds.</p>
+    `}
+  </div>
+</body>
+</html>`;
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(html);
+  });
+
   // Web preview info page
   app.get("/web", (req: Request, res: Response) => {
     const html = `<!DOCTYPE html>

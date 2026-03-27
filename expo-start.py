@@ -73,11 +73,14 @@ function fetchTunnelUrl() {
             manifest?.debuggerHost;
           if (host) {
             const url = `exp://${host}`;
+            // Write tunnel URL to file so the backend /qr page can read it
+            const fs = require("fs");
+            try { fs.writeFileSync("/tmp/expo-tunnel-url.txt", url, "utf8"); } catch (_) {}
             console.log("\n");
             console.log("============================================");
             console.log("  EXPO GO URL READY");
-            console.log("  Open Expo Go -> tap 'Enter URL manually'");
             console.log(`  URL: ${url}`);
+            console.log("  Open Replit preview to scan the QR code");
             console.log("============================================");
             console.log("\n");
             return;
