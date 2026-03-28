@@ -385,7 +385,7 @@
             </div>
             <p class="step-description">Use your phone's camera or Expo Go</p>
             <div class="qr-code" id="qr-code"></div>
-            <a href="exps://EXPS_URL_PLACEHOLDER" class="open-button"
+            <a href="EXP_FULL_URL_PLACEHOLDER" id="open-btn" class="open-button"
               >Open in Expo Go</a
             >
           </div>
@@ -406,7 +406,7 @@
           /iPhone|iPad|iPod/i.test(ua) ||
           (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
-        const deepLink = "exps://EXPS_URL_PLACEHOLDER";
+        let deepLink = "EXP_FULL_URL_PLACEHOLDER";
 
         // Adjust store buttons based on platform
         const appStoreBtn = document.getElementById("app-store-btn");
@@ -459,6 +459,29 @@
             loadingEl.style.display = "none";
             contentEl.style.display = "block";
           }, 500);
+        }
+
+        // Poll for the live tunnel URL every 3 seconds and update QR + button
+        // when it becomes available (tunnel warms up ~30s after Metro starts).
+        var isFallback = deepLink.indexOf("spock.replit.dev") !== -1 ||
+                         deepLink.indexOf("replit.dev") !== -1;
+        if (isFallback) {
+          var pollInterval = setInterval(async function () {
+            try {
+              var r = await fetch("/api/tunnel-url");
+              var data = await r.json();
+              if (data.ready && data.url && data.url !== deepLink) {
+                deepLink = data.url;
+                // Update QR code
+                qrCode.update({ data: deepLink });
+                // Update "Open in Expo Go" button
+                var btn = document.getElementById("open-btn");
+                if (btn) btn.href = deepLink;
+                // Stop polling
+                clearInterval(pollInterval);
+              }
+            } catch (_) {}
+          }, 3000);
         }
       })();
     </script>

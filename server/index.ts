@@ -245,12 +245,20 @@ function serveLandingPage({
   const baseUrl = `${protocol}://${host}`;
   const expsUrl = `${host}`;
 
+  // Try to use the live tunnel URL written by expo-start.py; fall back to Replit host.
+  let expFullUrl = `exps://${expsUrl}`;
+  try {
+    const tunnelUrl = fs.readFileSync("/tmp/expo-tunnel-url.txt", "utf8").trim();
+    if (tunnelUrl) expFullUrl = tunnelUrl;
+  } catch (_) {}
+
   log(`baseUrl`, baseUrl);
-  log(`expsUrl`, expsUrl);
+  log(`expFullUrl`, expFullUrl);
 
   const html = landingPageTemplate
     .replace(/BASE_URL_PLACEHOLDER/g, baseUrl)
     .replace(/EXPS_URL_PLACEHOLDER/g, expsUrl)
+    .replace(/EXP_FULL_URL_PLACEHOLDER/g, expFullUrl)
     .replace(/APP_NAME_PLACEHOLDER/g, appName);
 
   res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -402,6 +410,16 @@ function configureExpoAndLanding(app: express.Application) {
 </html>`;
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.send(html);
+  });
+
+  // JSON endpoint: returns the live tunnel URL written by expo-start.py
+  app.get("/api/tunnel-url", (_req: Request, res: Response) => {
+    let tunnelUrl: string | null = null;
+    try {
+      const content = fs.readFileSync("/tmp/expo-tunnel-url.txt", "utf8").trim();
+      if (content) tunnelUrl = content;
+    } catch (_) {}
+    res.json({ url: tunnelUrl, ready: !!tunnelUrl });
   });
 
   // Web preview info page
