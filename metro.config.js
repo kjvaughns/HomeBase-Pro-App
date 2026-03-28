@@ -33,4 +33,19 @@ config.transformer = {
   },
 };
 
+// Rewrite the Host header for any Replit proxy domain to localhost:8081
+// so Metro's built-in host validation accepts the request.
+config.server = {
+  ...config.server,
+  enhanceMiddleware: (metroMiddleware) => {
+    return (req, res, next) => {
+      const host = req.headers && req.headers.host;
+      if (host && (host.includes('.replit.dev') || host.includes('.replit.app'))) {
+        req.headers.host = 'localhost:8081';
+      }
+      return metroMiddleware(req, res, next);
+    };
+  },
+};
+
 module.exports = config;
