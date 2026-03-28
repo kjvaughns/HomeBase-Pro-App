@@ -276,7 +276,7 @@ function setupMetroProxy(app: express.Application) {
       path.startsWith("/hot") ||
       path.startsWith("/debugger-ui") ||
       path.startsWith("/client/") ||
-      path.startsWith("/assets/") ||
+      (path.startsWith("/assets/") && !!(req.query?.platform || req.query?.hash || req.headers?.["expo-platform"])) ||
       (path === "/" && !!(req.headers && req.headers["expo-platform"])),
     target: `http://localhost:${METRO_PORT}`,
     changeOrigin: false,
