@@ -279,7 +279,7 @@ function setupMetroProxy(app: express.Application) {
       (path.startsWith("/assets/") && !!(req.query?.platform || req.query?.hash || req.headers?.["expo-platform"])) ||
       (path === "/" && !!(req.headers && req.headers["expo-platform"])),
     target: `http://localhost:${METRO_PORT}`,
-    changeOrigin: false,
+    changeOrigin: true,
     ws: true,
     proxyTimeout: 10 * 60 * 1000,
     timeout: 10 * 60 * 1000,
