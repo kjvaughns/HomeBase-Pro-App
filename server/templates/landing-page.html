@@ -463,8 +463,8 @@
 
         // Poll for the live tunnel URL every 3 seconds and update QR + button
         // when it becomes available (tunnel warms up ~30s after Metro starts).
-        var isFallback = deepLink.indexOf("spock.replit.dev") !== -1 ||
-                         deepLink.indexOf("replit.dev") !== -1;
+        // Poll whenever the URL is not already a direct exp:// tunnel URL.
+        var isFallback = deepLink.indexOf("exp://") !== 0;
         if (isFallback) {
           var pollInterval = setInterval(async function () {
             try {

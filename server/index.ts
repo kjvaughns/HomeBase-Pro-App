@@ -257,7 +257,6 @@ function serveLandingPage({
 
   const html = landingPageTemplate
     .replace(/BASE_URL_PLACEHOLDER/g, baseUrl)
-    .replace(/EXPS_URL_PLACEHOLDER/g, expsUrl)
     .replace(/EXP_FULL_URL_PLACEHOLDER/g, expFullUrl)
     .replace(/APP_NAME_PLACEHOLDER/g, appName);
 
