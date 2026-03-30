@@ -52,6 +52,7 @@ import ReviewsScreen from "@/screens/provider/ReviewsScreen";
 import ProviderResourcesScreen from "@/screens/provider/ProviderResourcesScreen";
 import ProviderAIAssistantScreen from "@/screens/provider/ProviderAIAssistantScreen";
 import StripeConnectScreen from "@/screens/provider/StripeConnectScreen";
+import BusinessHubScreen from "@/screens/provider/BusinessHubScreen";
 import SavedProvidersScreen from "@/screens/homeowner/SavedProvidersScreen";
 import HelpCenterScreen from "@/screens/homeowner/HelpCenterScreen";
 import ContactUsScreen from "@/screens/homeowner/ContactUsScreen";
@@ -143,6 +144,7 @@ export type RootStackParamList = {
   ProviderResources: undefined;
   ProviderAIAssistant: undefined;
   StripeConnect: undefined;
+  BusinessHub: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -535,6 +537,13 @@ export default function RootStackNavigator() {
         component={StripeConnectScreen}
         options={{
           headerTitle: "Stripe Payments",
+        }}
+      />
+      <Stack.Screen
+        name="BusinessHub"
+        component={BusinessHubScreen}
+        options={{
+          headerTitle: "Business Hub",
         }}
       />
     </Stack.Navigator>

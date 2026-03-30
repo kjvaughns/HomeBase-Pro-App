@@ -110,22 +110,10 @@ export default function ProviderMoreScreen() {
               </View>
             </View>
             <ListRow
-              title="Service Builder"
-              subtitle="Create and manage your service listings"
-              leftIcon="tool"
-              onPress={() => navigation.navigate("NewService")}
-            />
-            <ListRow
-              title="Business Profile & Booking"
-              subtitle="Hours, policies, public page"
-              leftIcon="settings"
-              onPress={() => navigation.navigate("BusinessDetails")}
-            />
-            <ListRow
-              title="Preview Public Page"
-              subtitle="See what clients see when they find you"
-              leftIcon="eye"
-              onPress={() => navigation.navigate("BusinessProfile")}
+              title="Business Hub"
+              subtitle="Profile, services, booking links, and policies"
+              leftIcon="briefcase"
+              onPress={() => navigation.navigate("BusinessHub")}
               isLast
             />
           </View>

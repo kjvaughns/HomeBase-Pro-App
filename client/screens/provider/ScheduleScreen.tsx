@@ -20,6 +20,7 @@ import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type ViewMode = "list" | "month";
+type DateRange = "today" | "week" | "month" | "all";
 
 interface Job {
   id: string;
@@ -247,6 +248,13 @@ function MonthView({ selectedDate, jobs, onDateSelect, onJobPress }: MonthViewPr
   );
 }
 
+const DATE_RANGE_CHIPS: { key: DateRange; label: string }[] = [
+  { key: "today", label: "Today" },
+  { key: "week", label: "Week" },
+  { key: "month", label: "Month" },
+  { key: "all", label: "All" },
+];
+
 export default function ScheduleScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
@@ -270,6 +278,7 @@ export default function ScheduleScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [dateRange, setDateRange] = useState<DateRange>("week");
 
   const jobs = jobsData?.jobs || [];
   const clients = clientsData?.clients || [];
@@ -289,6 +298,27 @@ export default function ScheduleScreen() {
     status: job.status,
     price: parseFloat(job.estimatedPrice || "0"),
   });
+
+  const filteredJobs = useMemo(() => {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayEnd = new Date(todayStart.getTime() + 86400000 - 1);
+    const weekEnd = new Date(todayStart.getTime() + 7 * 86400000 - 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+    return jobs
+      .filter((job) => {
+        if (job.status === "cancelled") return false;
+        if (dateRange === "all") return true;
+        const jobDate = new Date(job.scheduledDate);
+        if (dateRange === "today") return jobDate >= todayStart && jobDate <= todayEnd;
+        if (dateRange === "week") return jobDate >= todayStart && jobDate <= weekEnd;
+        if (dateRange === "month") return jobDate >= todayStart && jobDate <= monthEnd;
+        return true;
+      })
+      .map(formatJobForDisplay)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [jobs, clients, dateRange]);
 
   const formattedJobs = useMemo(() => {
     return jobs
@@ -320,7 +350,7 @@ export default function ScheduleScreen() {
           <ThemedText style={styles.headerTitle}>
             {isCalendarView
               ? `${MONTHS[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`
-              : "All Jobs"}
+              : "Schedule"}
           </ThemedText>
           <View style={styles.headerActions}>
             <Pressable
@@ -348,6 +378,37 @@ export default function ScheduleScreen() {
             </Pressable>
           </View>
         </View>
+
+        {!isCalendarView ? (
+          <View style={styles.chipsRow}>
+            {DATE_RANGE_CHIPS.map((chip) => {
+              const isActive = dateRange === chip.key;
+              return (
+                <Pressable
+                  key={chip.key}
+                  onPress={() => setDateRange(chip.key)}
+                  style={[
+                    styles.chip,
+                    {
+                      backgroundColor: isActive ? Colors.accent : theme.cardBackground,
+                      borderColor: isActive ? Colors.accent : theme.borderLight,
+                    },
+                  ]}
+                  testID={`chip-range-${chip.key}`}
+                >
+                  <ThemedText
+                    style={[
+                      styles.chipText,
+                      { color: isActive ? "#FFFFFF" : theme.textSecondary },
+                    ]}
+                  >
+                    {chip.label}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
       </View>
 
       <View style={[styles.content, { paddingBottom: tabBarHeight + Spacing.lg }]}>
@@ -358,7 +419,7 @@ export default function ScheduleScreen() {
             </View>
           ) : (
             <FlatList
-              data={formattedJobs}
+              data={filteredJobs}
               renderItem={({ item, index }) => (
                 <Animated.View entering={FadeInDown.delay(index * 50).duration(300)}>
                   <View style={styles.listJobItem}>
@@ -372,13 +433,13 @@ export default function ScheduleScreen() {
               keyExtractor={(item) => item.id}
               contentContainerStyle={[
                 styles.listContent,
-                formattedJobs.length === 0 && styles.emptyContainer,
+                filteredJobs.length === 0 && styles.emptyContainer,
               ]}
               ListEmptyComponent={
                 <EmptyState
                   image={require("../../../assets/images/empty-bookings.png")}
                   title="No jobs scheduled"
-                  description="Add a job to get started."
+                  description={dateRange === "today" ? "No jobs for today." : dateRange === "week" ? "No jobs this week." : "Add a job to get started."}
                 />
               }
               showsVerticalScrollIndicator={false}
@@ -406,7 +467,23 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: Spacing.screenPadding,
-    paddingBottom: Spacing.md,
+    paddingBottom: Spacing.sm,
+  },
+  chipsRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  chip: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs + 2,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  chipText: {
+    ...Typography.caption1,
+    fontWeight: "600",
   },
   headerRow: {
     flexDirection: "row",
