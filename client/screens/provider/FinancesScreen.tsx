@@ -3,7 +3,6 @@ import {
   StyleSheet,
   View,
   FlatList,
-  ScrollView,
   RefreshControl,
   Pressable,
   ActivityIndicator,
@@ -11,6 +10,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -22,12 +22,11 @@ import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { StatusPill } from "@/components/StatusPill";
 import { FilterChips, FilterOption } from "@/components/FilterChips";
-import { PrimaryButton } from "@/components/PrimaryButton";
 import { EmptyState } from "@/components/EmptyState";
-import { ListRow } from "@/components/ListRow";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 interface Invoice {
   id: string;
@@ -63,7 +62,6 @@ interface StripeStatus {
 }
 
 type InvoiceFilter = "all" | "pending" | "paid";
-type ActiveTab = "invoices" | "account";
 
 const filterOptions: FilterOption<InvoiceFilter>[] = [
   { key: "all", label: "All" },
@@ -75,12 +73,11 @@ export default function FinancesScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useFloatingTabBarHeight();
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { theme } = useTheme();
   const { providerProfile } = useAuthStore();
 
   const providerId = providerProfile?.id;
-  const [activeTab, setActiveTab] = useState<ActiveTab>("invoices");
   const [filter, setFilter] = useState<InvoiceFilter>("all");
   const [refreshing, setRefreshing] = useState(false);
 
@@ -110,7 +107,6 @@ export default function FinancesScreen() {
   const stats = statsData?.stats || { revenueMTD: 0, jobsCompleted: 0, activeClients: 0, upcomingJobs: 0 };
   const connectStatus = stripeData?.connectStatus;
   const isConnected = connectStatus?.chargesEnabled && connectStatus?.payoutsEnabled;
-  const isPending = connectStatus?.status === "pending";
 
   const getClientName = (clientId: string): string => {
     const client = clients.find((c) => c.id === clientId);
@@ -153,110 +149,8 @@ export default function FinancesScreen() {
     return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
-  const getStripeStatusPill = () => {
-    if (!connectStatus || connectStatus.status === "not_started") {
-      return <StatusPill status="warning" label="Not Connected" size="small" />;
-    }
-    if (isConnected) return <StatusPill status="success" label="Active" size="small" />;
-    if (isPending) return <StatusPill status="warning" label="In Review" size="small" />;
-    return <StatusPill status="error" label="Restricted" size="small" />;
-  };
-
-  const getStripeDescription = () => {
-    if (!connectStatus || connectStatus.status === "not_started") {
-      return "Connect your Stripe account to receive direct client payments, manage invoices, and get paid faster.";
-    }
-    if (isConnected) return "Your Stripe account is fully set up. You can receive payments and send payouts.";
-    if (isPending) return "Your account is under review. This usually takes 1-2 business days.";
-    return "Some features are restricted. Complete your Stripe onboarding to resolve this.";
-  };
-
-  const renderSegment = () => (
-    <View style={[styles.segmentContainer, { backgroundColor: theme.backgroundSecondary }]}>
-      <Pressable
-        style={[styles.segment, activeTab === "invoices" && { backgroundColor: theme.cardBackground }]}
-        onPress={() => { Haptics.selectionAsync(); setActiveTab("invoices"); }}
-      >
-        <Feather name="file-text" size={14} color={activeTab === "invoices" ? Colors.accent : theme.textSecondary} style={{ marginRight: 6 }} />
-        <ThemedText style={[styles.segmentText, { color: activeTab === "invoices" ? Colors.accent : theme.textSecondary }]}>
-          Invoices
-        </ThemedText>
-      </Pressable>
-      <Pressable
-        style={[styles.segment, activeTab === "account" && { backgroundColor: theme.cardBackground }]}
-        onPress={() => { Haptics.selectionAsync(); setActiveTab("account"); }}
-      >
-        <Feather name="credit-card" size={14} color={activeTab === "account" ? Colors.accent : theme.textSecondary} style={{ marginRight: 6 }} />
-        <ThemedText style={[styles.segmentText, { color: activeTab === "account" ? Colors.accent : theme.textSecondary }]}>
-          Account
-        </ThemedText>
-      </Pressable>
-    </View>
-  );
-
-  const renderInvoicesHeader = () => (
-    <View style={styles.headerContainer}>
-      <Animated.View entering={FadeInDown.delay(50).duration(400)}>
-        <GlassCard style={styles.balanceCard}>
-          <View style={styles.balanceHeader}>
-            <ThemedText style={[styles.balanceLabel, { color: theme.textSecondary }]}>
-              Revenue This Month
-            </ThemedText>
-            <Pressable
-              style={styles.newInvoiceBtn}
-              onPress={() => navigation.navigate("AddInvoice")}
-            >
-              <Feather name="plus" size={14} color={Colors.accent} />
-              <ThemedText style={[styles.newInvoiceBtnText, { color: Colors.accent }]}>
-                New Invoice
-              </ThemedText>
-            </Pressable>
-          </View>
-          <ThemedText style={styles.balanceValue}>
-            ${stats.revenueMTD.toLocaleString()}
-          </ThemedText>
-          <View style={styles.pendingRow}>
-            <Feather name="clock" size={13} color={theme.textTertiary} />
-            <ThemedText style={[styles.pendingText, { color: theme.textTertiary }]}>
-              ${pendingAmount.toLocaleString()} pending
-            </ThemedText>
-          </View>
-        </GlassCard>
-      </Animated.View>
-
-      <Animated.View entering={FadeInDown.delay(100).duration(400)} style={styles.statsRow}>
-        <GlassCard style={styles.statCard}>
-          <View style={[styles.statIcon, { backgroundColor: Colors.accentLight }]}>
-            <Feather name="trending-up" size={18} color={Colors.accent} />
-          </View>
-          <ThemedText style={styles.statValue}>{stats.jobsCompleted}</ThemedText>
-          <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Jobs done</ThemedText>
-        </GlassCard>
-        <GlassCard style={styles.statCard}>
-          <View style={[styles.statIcon, { backgroundColor: Colors.accentLight }]}>
-            <Feather name="dollar-sign" size={18} color={Colors.accent} />
-          </View>
-          <ThemedText style={styles.statValue}>
-            ${stats.jobsCompleted > 0 ? Math.round(stats.revenueMTD / stats.jobsCompleted) : 0}
-          </ThemedText>
-          <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Avg per job</ThemedText>
-        </GlassCard>
-      </Animated.View>
-
-      <Animated.View entering={FadeInDown.delay(150).duration(400)}>
-        <FilterChips
-          options={filterOptions}
-          selected={filter}
-          onSelect={setFilter}
-          scrollable={false}
-          style={styles.filterChips}
-        />
-      </Animated.View>
-    </View>
-  );
-
   const renderInvoice = ({ item, index }: { item: Invoice; index: number }) => (
-    <Animated.View entering={FadeInDown.delay(200 + index * 40).duration(300)}>
+    <Animated.View entering={FadeInDown.delay(index * 40).duration(300)}>
       <Pressable
         style={[styles.invoiceRow, { backgroundColor: theme.cardBackground }]}
         onPress={() => navigation.navigate("InvoiceDetail", { invoiceId: item.id })}
@@ -285,196 +179,132 @@ export default function FinancesScreen() {
     </Animated.View>
   );
 
-  const renderAccountTab = () => (
-    <ScrollView
-      contentContainerStyle={[styles.accountContent, { paddingBottom: tabBarHeight + Spacing.xl }]}
-      showsVerticalScrollIndicator={false}
-    >
-      <Animated.View entering={FadeInDown.delay(50).duration(300)}>
-        <GlassCard style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleRow}>
-              <Feather name="zap" size={16} color={Colors.accent} />
-              <ThemedText style={styles.sectionTitle}>Stripe Connect</ThemedText>
+  const ListHeader = () => (
+    <View>
+      <Animated.View entering={FadeInDown.delay(50).duration(400)}>
+        <GlassCard style={styles.balanceCard}>
+          <View style={styles.balanceHeader}>
+            <ThemedText style={[styles.balanceLabel, { color: theme.textSecondary }]}>
+              Revenue This Month
+            </ThemedText>
+            <Pressable
+              style={styles.newInvoiceBtn}
+              onPress={() => { Haptics.selectionAsync(); navigation.navigate("AddInvoice"); }}
+            >
+              <Feather name="plus" size={14} color={Colors.accent} />
+              <ThemedText style={[styles.newInvoiceBtnText, { color: Colors.accent }]}>
+                New Invoice
+              </ThemedText>
+            </Pressable>
+          </View>
+          <ThemedText style={styles.balanceValue}>
+            ${stats.revenueMTD.toLocaleString()}
+          </ThemedText>
+          <View style={styles.statsRow}>
+            <View style={styles.miniStat}>
+              <ThemedText style={[styles.miniStatValue, { color: Colors.accent }]}>
+                {stats.jobsCompleted}
+              </ThemedText>
+              <ThemedText style={[styles.miniStatLabel, { color: theme.textSecondary }]}>jobs done</ThemedText>
             </View>
-            {getStripeStatusPill()}
-          </View>
-          <ThemedText style={[styles.sectionDesc, { color: theme.textSecondary }]}>
-            {getStripeDescription()}
-          </ThemedText>
-          {isConnected ? (
-            <View style={styles.connectedRow}>
-              <View style={[styles.connectedBadge, { backgroundColor: Colors.accentLight }]}>
-                <Feather name="check-circle" size={14} color={Colors.accent} />
-                <ThemedText style={[styles.connectedText, { color: Colors.accent }]}>Payments enabled</ThemedText>
-              </View>
-              <View style={[styles.connectedBadge, { backgroundColor: Colors.accentLight }]}>
-                <Feather name="send" size={14} color={Colors.accent} />
-                <ThemedText style={[styles.connectedText, { color: Colors.accent }]}>Payouts enabled</ThemedText>
-              </View>
+            <View style={[styles.miniDivider, { backgroundColor: theme.separator }]} />
+            <View style={styles.miniStat}>
+              <ThemedText style={[styles.miniStatValue, { color: theme.textSecondary }]}>
+                ${pendingAmount.toLocaleString()}
+              </ThemedText>
+              <ThemedText style={[styles.miniStatLabel, { color: theme.textSecondary }]}>pending</ThemedText>
             </View>
-          ) : null}
-          <View style={[styles.menuSection, { backgroundColor: theme.backgroundSecondary }]}>
-            <ListRow
-              title="Stripe Account Setup"
-              subtitle="Onboarding, identity, bank account"
-              leftIcon="credit-card"
-              onPress={() => navigation.navigate("StripeConnect")}
-              isFirst
-              isLast
-            />
+            <View style={[styles.miniDivider, { backgroundColor: theme.separator }]} />
+            <View style={styles.miniStat}>
+              <ThemedText style={[styles.miniStatValue, { color: theme.textSecondary }]}>
+                ${stats.jobsCompleted > 0 ? Math.round(stats.revenueMTD / stats.jobsCompleted).toLocaleString() : 0}
+              </ThemedText>
+              <ThemedText style={[styles.miniStatLabel, { color: theme.textSecondary }]}>avg/job</ThemedText>
+            </View>
           </View>
         </GlassCard>
       </Animated.View>
 
-      <Animated.View entering={FadeInDown.delay(100).duration(300)}>
-        <GlassCard style={styles.section}>
-          <View style={styles.sectionTitleRow}>
-            <Feather name="file-plus" size={16} color={Colors.accent} />
-            <ThemedText style={styles.sectionTitle}>Invoicing</ThemedText>
-          </View>
-          <ThemedText style={[styles.sectionDesc, { color: theme.textSecondary }]}>
-            Create professional invoices, send them directly to clients, and track payment status.
-          </ThemedText>
-          <View style={[styles.menuSection, { backgroundColor: theme.backgroundSecondary }]}>
-            <ListRow
-              title="Create Invoice"
-              subtitle="Bill clients with itemized invoices"
-              leftIcon="file-plus"
-              onPress={() => navigation.navigate("AddInvoice")}
-              isFirst
-            />
-            <ListRow
-              title="Invoice History"
-              subtitle="View and manage all invoices"
-              leftIcon="list"
-              onPress={() => setActiveTab("invoices")}
-              isLast
-            />
-          </View>
-        </GlassCard>
-      </Animated.View>
+      {!isConnected ? (
+        <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+          <Pressable
+            style={[styles.stripeCtaCard, { backgroundColor: theme.cardBackground, borderColor: Colors.accent + "30" }]}
+            onPress={() => navigation.navigate("StripeConnect")}
+          >
+            <View style={styles.stripeCtaRow}>
+              <View style={[styles.stripeCtaIcon, { backgroundColor: Colors.accentLight }]}>
+                <Feather name="credit-card" size={18} color={Colors.accent} />
+              </View>
+              <View style={styles.stripeCtaText}>
+                <ThemedText style={styles.stripeCtaTitle}>
+                  {connectStatus?.status === "pending" ? "Stripe account in review" : "Connect Stripe to get paid"}
+                </ThemedText>
+                <ThemedText style={[styles.stripeCtaSubtitle, { color: theme.textSecondary }]}>
+                  {connectStatus?.status === "pending"
+                    ? "Your account is under review. Usually takes 1-2 business days."
+                    : "Accept payments and send payouts directly to your bank account."}
+                </ThemedText>
+              </View>
+              <Feather name="chevron-right" size={18} color={theme.textSecondary} />
+            </View>
+          </Pressable>
+        </Animated.View>
+      ) : null}
 
-      <Animated.View entering={FadeInDown.delay(150).duration(300)}>
-        <GlassCard style={styles.section}>
-          <View style={styles.sectionTitleRow}>
-            <Feather name="trending-up" size={16} color={Colors.accent} />
-            <ThemedText style={styles.sectionTitle}>Earnings</ThemedText>
-          </View>
-          <ThemedText style={[styles.sectionDesc, { color: theme.textSecondary }]}>
-            Track revenue, monitor trends, and understand your business performance.
-          </ThemedText>
-          <View style={[styles.menuSection, { backgroundColor: theme.backgroundSecondary }]}>
-            <ListRow
-              title="Payout History"
-              subtitle="View all payouts to your bank account"
-              leftIcon="send"
-              onPress={() => navigation.navigate("StripeConnect")}
-              isFirst
-            />
-            <ListRow
-              title="Platform Credits"
-              subtitle="Credits earned and applied"
-              leftIcon="gift"
-              onPress={() => navigation.navigate("StripeConnect")}
-              isLast
-            />
-          </View>
-        </GlassCard>
-      </Animated.View>
-
-      <Animated.View entering={FadeInDown.delay(200).duration(300)}>
-        <View style={[styles.infoBox, { backgroundColor: theme.backgroundSecondary }]}>
-          <Feather name="lock" size={13} color={Colors.accent} />
-          <ThemedText style={[styles.infoText, { color: theme.textSecondary }]}>
-            All financial data is encrypted and secured by Stripe. HomeBase never stores your banking credentials.
-          </ThemedText>
+      <Animated.View entering={FadeInDown.delay(isConnected ? 100 : 150).duration(400)}>
+        <View style={styles.invoicesHeader}>
+          <ThemedText style={styles.invoicesTitle}>Invoices</ThemedText>
         </View>
+        <FilterChips
+          options={filterOptions}
+          selected={filter}
+          onSelect={(v) => { Haptics.selectionAsync(); setFilter(v); }}
+          scrollable={false}
+          style={styles.filterChips}
+        />
       </Animated.View>
-    </ScrollView>
+    </View>
   );
 
   return (
     <ThemedView style={styles.container}>
-      {activeTab === "invoices" ? (
-        <FlatList
-          data={filteredInvoices}
-          renderItem={renderInvoice}
-          keyExtractor={(item) => item.id}
-          ListHeaderComponent={
-            <View>
-              {renderSegment()}
-              {renderInvoicesHeader()}
+      <FlatList
+        data={filteredInvoices}
+        renderItem={renderInvoice}
+        keyExtractor={(item) => item.id}
+        ListHeaderComponent={<ListHeader />}
+        ListEmptyComponent={
+          isLoading ? (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator size="large" color={Colors.accent} />
             </View>
-          }
-          ListEmptyComponent={
-            isLoading ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator size="large" color={Colors.accent} />
-              </View>
-            ) : (
-              <View style={styles.emptyContainer}>
-                <EmptyState
-                  image={require("../../../assets/images/empty-bookings.png")}
-                  title="No invoices yet"
-                  description="Create your first invoice to start tracking payments."
-                />
-              </View>
-            )
-          }
-          contentContainerStyle={{
-            paddingTop: headerHeight + Spacing.md,
-            paddingBottom: tabBarHeight + Spacing.xl,
-            paddingHorizontal: Spacing.screenPadding,
-          }}
-          scrollIndicatorInsets={{ bottom: insets.bottom }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
-          }
-        />
-      ) : (
-        <ScrollView
-          contentContainerStyle={{
-            paddingTop: headerHeight + Spacing.md,
-            paddingHorizontal: Spacing.screenPadding,
-          }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
-          }
-        >
-          {renderSegment()}
-          {renderAccountTab()}
-        </ScrollView>
-      )}
+          ) : (
+            <View style={styles.emptyContainer}>
+              <EmptyState
+                image={require("../../../assets/images/empty-bookings.png")}
+                title="No invoices yet"
+                description="Create your first invoice to start tracking payments."
+              />
+            </View>
+          )
+        }
+        contentContainerStyle={{
+          paddingTop: headerHeight + Spacing.md,
+          paddingBottom: tabBarHeight + Spacing.xl,
+          paddingHorizontal: Spacing.screenPadding,
+        }}
+        scrollIndicatorInsets={{ bottom: insets.bottom }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
+        }
+      />
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  segmentContainer: {
-    flexDirection: "row",
-    borderRadius: BorderRadius.md,
-    padding: 3,
-    marginBottom: Spacing.lg,
-  },
-  segment: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.sm,
-  },
-  segmentText: {
-    ...Typography.subhead,
-    fontWeight: "600",
-  },
-  headerContainer: {
-    marginBottom: Spacing.sm,
-  },
   balanceCard: {
     marginBottom: Spacing.md,
   },
@@ -487,11 +317,6 @@ const styles = StyleSheet.create({
   balanceLabel: {
     ...Typography.subhead,
   },
-  balanceValue: {
-    ...Typography.largeTitle,
-    fontWeight: "700",
-    marginBottom: Spacing.xs,
-  },
   newInvoiceBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -501,37 +326,68 @@ const styles = StyleSheet.create({
     ...Typography.subhead,
     fontWeight: "600",
   },
-  pendingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  pendingText: {
-    ...Typography.caption1,
+  balanceValue: {
+    ...Typography.largeTitle,
+    fontWeight: "700",
+    marginBottom: Spacing.md,
   },
   statsRow: {
     flexDirection: "row",
-    gap: Spacing.md,
-    marginBottom: Spacing.md,
+    alignItems: "center",
   },
-  statCard: {
+  miniStat: {
     flex: 1,
     alignItems: "center",
   },
-  statIcon: {
-    width: 36,
-    height: 36,
+  miniStatValue: {
+    ...Typography.headline,
+    fontWeight: "600",
+  },
+  miniStatLabel: {
+    ...Typography.caption2,
+    marginTop: 2,
+  },
+  miniDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 32,
+  },
+  stripeCtaCard: {
+    borderRadius: BorderRadius.card,
+    borderWidth: 1,
+    marginBottom: Spacing.md,
+    overflow: "hidden",
+  },
+  stripeCtaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
+    gap: Spacing.md,
+  },
+  stripeCtaIcon: {
+    width: 40,
+    height: 40,
     borderRadius: BorderRadius.md,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: Spacing.xs,
   },
-  statValue: {
-    ...Typography.headline,
+  stripeCtaText: {
+    flex: 1,
+  },
+  stripeCtaTitle: {
+    ...Typography.callout,
+    fontWeight: "600",
     marginBottom: 2,
   },
-  statLabel: {
-    ...Typography.caption2,
+  stripeCtaSubtitle: {
+    ...Typography.footnote,
+    lineHeight: 18,
+  },
+  invoicesHeader: {
+    marginBottom: Spacing.sm,
+  },
+  invoicesTitle: {
+    ...Typography.title3,
+    fontWeight: "600",
   },
   filterChips: {
     marginBottom: Spacing.sm,
@@ -539,99 +395,42 @@ const styles = StyleSheet.create({
   invoiceRow: {
     flexDirection: "row",
     alignItems: "center",
-    padding: Spacing.md,
     borderRadius: BorderRadius.card,
+    padding: Spacing.md,
     marginBottom: Spacing.sm,
+    gap: Spacing.md,
   },
   invoiceIcon: {
     width: 40,
     height: 40,
-    borderRadius: BorderRadius.iconContainer,
+    borderRadius: BorderRadius.md,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: Spacing.md,
   },
-  invoiceInfo: { flex: 1 },
+  invoiceInfo: {
+    flex: 1,
+  },
   invoiceClient: {
-    ...Typography.body,
-    fontWeight: "500",
+    ...Typography.callout,
+    fontWeight: "600",
+    marginBottom: 2,
   },
   invoiceDate: {
     ...Typography.caption1,
-    marginTop: 2,
   },
   invoiceRight: {
     alignItems: "flex-end",
     gap: Spacing.xs,
   },
   invoiceAmount: {
-    ...Typography.body,
-    fontWeight: "600",
+    ...Typography.callout,
+    fontWeight: "700",
   },
   loadingRow: {
-    paddingVertical: Spacing["2xl"],
+    paddingVertical: Spacing.xl * 2,
     alignItems: "center",
   },
   emptyContainer: {
-    paddingVertical: Spacing.xl,
-  },
-  accountContent: {},
-  section: {
-    marginBottom: Spacing.lg,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: Spacing.sm,
-  },
-  sectionTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    marginBottom: Spacing.sm,
-  },
-  sectionTitle: {
-    ...Typography.headline,
-  },
-  sectionDesc: {
-    ...Typography.body,
-    lineHeight: 22,
-    marginBottom: Spacing.md,
-  },
-  connectedRow: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-    flexWrap: "wrap",
-    marginBottom: Spacing.md,
-  },
-  connectedBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-  },
-  connectedText: {
-    ...Typography.caption1,
-    fontWeight: "600",
-  },
-  menuSection: {
-    borderRadius: BorderRadius.lg,
-    overflow: "hidden",
-  },
-  infoBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  infoText: {
-    ...Typography.caption1,
-    flex: 1,
-    lineHeight: 18,
+    paddingTop: Spacing.xl,
   },
 });
