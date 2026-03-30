@@ -10,11 +10,7 @@ export function initializePurchases(userId?: string) {
 
   if (!apiKey) return;
   Purchases.setLogLevel(LOG_LEVEL.WARN);
-  Purchases.configure({ apiKey });
-
-  if (userId) {
-    Purchases.logIn(userId).catch(() => {});
-  }
+  Purchases.configure({ apiKey, appUserID: userId || null });
 }
 
 export async function getOfferings() {
