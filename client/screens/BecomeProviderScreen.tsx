@@ -59,7 +59,9 @@ export default function BecomeProviderScreen() {
     },
     onError: async (error: any) => {
       const message: string = error.message || "";
-      if (message.includes("409") && message.includes("already has a provider profile")) {
+      const isAlreadyProvider =
+        message.startsWith("409:") && message.includes("already has a provider profile");
+      if (isAlreadyProvider) {
         try {
           const res = await apiRequest("GET", `/api/provider/user/${user!.id}`);
           const data = await res.json();
@@ -81,7 +83,8 @@ export default function BecomeProviderScreen() {
             queryClient.invalidateQueries({ queryKey: ["/api/provider"] });
             return;
           }
-        } catch {
+        } catch (fetchErr) {
+          console.error("Failed to recover existing provider profile:", fetchErr);
         }
       }
       Alert.alert(
