@@ -892,6 +892,8 @@ export default function ScheduleScreen() {
     );
   };
 
+  const isCalendarView = viewMode === "month";
+
   return (
     <ThemedView style={styles.container}>
       <View
@@ -901,51 +903,55 @@ export default function ScheduleScreen() {
         ]}
       >
         <View style={styles.headerRow}>
-          {viewMode === "list" ? (
-            <View style={{ flex: 1 }}>
-              <DateRangePicker
-                preset={dateRangePreset}
-                onPresetChange={setDateRangePreset}
-                customStart={customStartDate}
-                customEnd={customEndDate}
-                onCustomStartChange={setCustomStartDate}
-                onCustomEndChange={setCustomEndDate}
-              />
-            </View>
-          ) : (
-            <DateNavigator
-              date={selectedDate}
-              viewMode={viewMode}
-              onPrevious={handlePrevious}
-              onNext={handleNext}
-              onToday={handleToday}
+          <View style={{ flex: 1 }}>
+            <DateRangePicker
+              preset={dateRangePreset}
+              onPresetChange={(p) => {
+                setDateRangePreset(p);
+                if (p !== "custom") {
+                  setViewMode("list");
+                }
+              }}
+              customStart={customStartDate}
+              customEnd={customEndDate}
+              onCustomStartChange={setCustomStartDate}
+              onCustomEndChange={setCustomEndDate}
             />
-          )}
-          <Pressable
-            style={[styles.addButton, { backgroundColor: Colors.accent }]}
-            onPress={handleAddJob}
-          >
-            <Feather name="plus" size={20} color="white" />
-          </Pressable>
+          </View>
+          <View style={styles.headerActions}>
+            <Pressable
+              style={[
+                styles.calendarToggle,
+                {
+                  backgroundColor: isCalendarView ? Colors.accent : theme.cardBackground,
+                  borderColor: isCalendarView ? Colors.accent : theme.borderLight,
+                },
+              ]}
+              onPress={() => {
+                setViewMode(isCalendarView ? "list" : "month");
+                setSelectedDate(new Date());
+              }}
+            >
+              <Feather
+                name="calendar"
+                size={16}
+                color={isCalendarView ? "#fff" : theme.textSecondary}
+              />
+            </Pressable>
+            <Pressable
+              style={[styles.addButton, { backgroundColor: Colors.accent }]}
+              onPress={handleAddJob}
+            >
+              <Feather name="plus" size={20} color="white" />
+            </Pressable>
+          </View>
         </View>
-        <ViewModeTabs selected={viewMode} onSelect={setViewMode} />
         <StatusFilterChips selected={statusFilter} onSelect={setStatusFilter} />
       </View>
 
       <View style={[styles.content, { paddingBottom: tabBarHeight + Spacing.lg }]}>
-        {viewMode === "list" && renderListView()}
-        {viewMode === "day" && (
-          <DayTimeline jobs={dayJobs} onJobPress={handleJobPress} />
-        )}
-        {viewMode === "week" && (
-          <WeekView
-            selectedDate={selectedDate}
-            jobs={formattedJobs}
-            onDateSelect={setSelectedDate}
-            onJobPress={handleJobPress}
-          />
-        )}
-        {viewMode === "month" && (
+        {!isCalendarView && renderListView()}
+        {isCalendarView && (
           <MonthView
             selectedDate={selectedDate}
             jobs={formattedJobs}
@@ -970,6 +976,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginLeft: Spacing.sm,
+  },
+  calendarToggle: {
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
   },
   addButton: {
     width: 40,

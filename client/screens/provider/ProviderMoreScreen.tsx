@@ -137,15 +137,15 @@ export default function ProviderMoreScreen() {
           </ThemedText>
           <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
             <ListRow
-              title="Accounting"
-              subtitle="Bank account & tax info"
+              title="Stripe Payments"
+              subtitle="Bank account & payment setup"
               leftIcon="credit-card"
-              onPress={() => navigation.navigate("Accounting")}
+              onPress={() => navigation.navigate("StripeConnect")}
               isFirst
             />
             <ListRow
               title="Reviews"
-              subtitle={`${providerProfile?.reviewCount || 45} reviews`}
+              subtitle={`${providerProfile?.reviewCount || 0} reviews`}
               leftIcon="star"
               onPress={() => navigation.navigate("Reviews")}
               isLast

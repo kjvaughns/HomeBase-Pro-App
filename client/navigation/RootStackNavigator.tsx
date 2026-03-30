@@ -416,40 +416,28 @@ export default function RootStackNavigator() {
         name="AddClient"
         component={AddClientScreen}
         options={{
-          presentation: "formSheet",
           headerTitle: "Add Client",
-          sheetAllowedDetents: [0.75, 1.0],
-          sheetCornerRadius: 20,
         }}
       />
       <Stack.Screen
         name="AddJob"
         component={AddJobScreen}
         options={{
-          presentation: "formSheet",
           headerTitle: "Add Job",
-          sheetAllowedDetents: [0.85, 1.0],
-          sheetCornerRadius: 20,
         }}
       />
       <Stack.Screen
         name="AddInvoice"
         component={AddInvoiceScreen}
         options={{
-          presentation: "formSheet",
           headerTitle: "New Invoice",
-          sheetAllowedDetents: [0.85, 1.0],
-          sheetCornerRadius: 20,
         }}
       />
       <Stack.Screen
         name="InvoiceDetail"
         component={InvoiceDetailScreen}
         options={{
-          presentation: "formSheet",
           headerTitle: "Invoice",
-          sheetAllowedDetents: [0.8, 1.0],
-          sheetCornerRadius: 20,
         }}
       />
       <Stack.Screen
@@ -499,20 +487,14 @@ export default function RootStackNavigator() {
         name="ContactUs"
         component={ContactUsScreen}
         options={{
-          presentation: "formSheet",
           headerTitle: "Contact Us",
-          sheetAllowedDetents: [0.65, 1.0],
-          sheetCornerRadius: 20,
         }}
       />
       <Stack.Screen
         name="BookingPolicies"
         component={BookingPoliciesScreen}
         options={{
-          presentation: "formSheet",
           headerTitle: "Booking Policies",
-          sheetAllowedDetents: [0.6, 1.0],
-          sheetCornerRadius: 20,
         }}
       />
       <Stack.Screen
@@ -561,10 +543,7 @@ export default function RootStackNavigator() {
         name="StripeConnect"
         component={StripeConnectScreen}
         options={{
-          presentation: "formSheet",
           headerTitle: "Stripe Payments",
-          sheetAllowedDetents: [0.75, 1.0],
-          sheetCornerRadius: 20,
         }}
       />
     </Stack.Navigator>

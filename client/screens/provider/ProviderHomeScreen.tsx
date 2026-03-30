@@ -288,7 +288,7 @@ export default function ProviderHomeScreen() {
 
                 <Pressable
                   style={styles.summaryItem}
-                  onPress={() => navigation.navigate("MoneyTab")}
+                  onPress={() => navigation.navigate("FinancesTab")}
                 >
                   <View style={[styles.summaryIcon, { backgroundColor: Colors.accentLight }]}>
                     <Feather name="dollar-sign" size={18} color={Colors.accent} />
@@ -300,43 +300,6 @@ export default function ProviderHomeScreen() {
                 </Pressable>
               </View>
             )}
-          </GlassCard>
-        </Animated.View>
-
-        <Animated.View
-          entering={FadeInDown.delay(300).duration(400)}
-          style={styles.earningsRow}
-        >
-          <GlassCard style={styles.earningsCard}>
-            <View style={styles.earningsContent}>
-              <View>
-                <ThemedText style={[styles.earningsLabel, { color: theme.textSecondary }]}>
-                  Revenue MTD
-                </ThemedText>
-                <ThemedText style={styles.earningsValue}>
-                  ${stats.revenueMTD.toLocaleString()}
-                </ThemedText>
-              </View>
-              <View style={[styles.trendBadge, { backgroundColor: Colors.accentLight }]}>
-                <Feather name="trending-up" size={14} color={Colors.accent} />
-              </View>
-            </View>
-          </GlassCard>
-
-          <GlassCard style={styles.ratingCard}>
-            <View style={styles.ratingContent}>
-              <View style={styles.ratingStars}>
-                <Feather name="star" size={20} color={Colors.warning} />
-                <ThemedText style={styles.ratingValue}>
-                  {providerProfile?.rating ? Number(providerProfile.rating).toFixed(1) : "—"}
-                </ThemedText>
-              </View>
-              <ThemedText style={[styles.ratingLabel, { color: theme.textSecondary }]}>
-                {providerProfile?.reviewCount > 0
-                  ? `${providerProfile.reviewCount} reviews`
-                  : "No reviews yet"}
-              </ThemedText>
-            </View>
           </GlassCard>
         </Animated.View>
 
@@ -500,53 +463,6 @@ const styles = StyleSheet.create({
   summaryDivider: {
     width: StyleSheet.hairlineWidth,
     height: 48,
-  },
-  earningsRow: {
-    flexDirection: "row",
-    gap: Spacing.md,
-    marginBottom: Spacing.sectionGap,
-  },
-  earningsCard: {
-    flex: 1,
-  },
-  earningsContent: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  earningsLabel: {
-    ...Typography.caption1,
-    marginBottom: 4,
-  },
-  earningsValue: {
-    ...Typography.title2,
-  },
-  trendBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.sm,
-    gap: 4,
-  },
-  ratingCard: {
-    flex: 1,
-  },
-  ratingContent: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  ratingStars: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.xs,
-    marginBottom: 4,
-  },
-  ratingValue: {
-    ...Typography.title2,
-  },
-  ratingLabel: {
-    ...Typography.caption1,
   },
   emptyCard: {
     alignItems: "center",
