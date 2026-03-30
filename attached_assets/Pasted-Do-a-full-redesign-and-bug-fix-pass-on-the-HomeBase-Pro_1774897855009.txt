@@ -1,0 +1,106 @@
+Do a full redesign and bug fix pass on the HomeBase Pro provider portal.
+
+Main goal:
+Make the provider portal feel simple, premium, modern, and fully aligned with the homeowner portal and the overall HomeBase brand. The current provider app feels too fragmented, some forms are broken, and several screens need to be condensed, combined, and redesigned.
+
+Critical bugs to fix first:
+1. Add Client, Add Job, New Invoice, and Contact Us are currently opening as slide up sheets or partial modals but rendering blank white screens.
+2. These flows must be converted into proper full screen pages or full screen forms, not bottom sheets.
+3. Each of these screens must render correctly with full content, safe area handling, scrolling, keyboard avoidance, and sticky save or submit buttons.
+
+Required UX changes:
+1. Replace broken bottom sheet style forms with full screen form pages for:
+   • Add Client
+   • Add Job
+   • New Invoice
+   • Schedule creation or edit flow
+   • Contact Us
+   • Any other important create flow
+
+2. Condense and combine related pages so the app feels more cohesive:
+   • Merge Money and Accounting into one clear financial hub
+   • Combine Stripe setup, invoicing, payouts, and earnings into one clean Payments or Finances section
+   • Combine Business Details, Public Profile, Booking Policies, Service Area, Booking Link, and profile visibility into one Business Profile section with grouped cards or tabs
+   • Keep the information architecture simple and obvious
+
+3. Redesign the Service Builder:
+   • Make the New Service flow cleaner, tighter, and easier to use
+   • Improve layout hierarchy for category, pricing model, duration, price, and description
+   • Reduce empty space
+   • Make the pricing model selector feel polished and easier to understand
+   • Make the service creation flow feel premium and production ready
+
+4. Redesign the Dashboard:
+   • Keep it simple, but make it more useful
+   • Show clear next steps such as finish Stripe setup, add first client, create first service, create booking link, send first invoice
+   • Improve action hierarchy and reduce dead space
+   • Make stats feel more intentional and visually aligned with the homeowner app
+
+5. Simplify the Schedule screen:
+   • Reduce filter clutter
+   • Improve visual hierarchy between time range filters and calendar views
+   • Make list, day, week, month feel easier to scan
+   • Keep the plus CTA but make the whole page cleaner and more intuitive
+
+6. Improve empty states:
+   • Reviews, Schedule, Invoices, Services, Booking Link, and Clients should all have better empty states
+   • Each empty state should explain what the feature does and provide a direct action button
+   • Empty states should feel helpful, not dead
+
+7. Improve Booking Link and Public Profile flow:
+   • Make this feel like a business growth tool
+   • Add preview page button
+   • Add copy link and share link actions
+   • Make it clear how providers edit what clients see
+   • Pull public business info from the correct business profile data
+
+8. Improve consistency across the whole provider portal:
+   • Standardize headers
+   • Standardize card spacing and padding
+   • Standardize CTA placement
+   • Standardize empty states
+   • Standardize icon use
+   • Standardize form field styling
+   • Make all screens feel like one product, not separate pages built at different times
+
+9. Remove or fix anything that looks like a debug or misplaced floating control:
+   • The blue gear floating button should not appear unless it is an intentional production feature
+   • Audit all floating buttons and overlays
+
+10. Match the provider portal more closely to the homeowner portal:
+   • Use the same design language
+   • Similar visual polish
+   • Similar component quality
+   • Similar spacing rhythm
+   • Same premium HomeBase brand feel
+
+Design direction:
+   • Minimal
+   • Modern
+   • Clean
+   • Mobile first
+   • Native iOS feeling
+   • Premium but simple
+   • Strong visual hierarchy
+   • Less clutter
+   • Fewer unnecessary screens
+   • Better conversion and usability for home service pros
+
+Implementation requirements:
+   • Audit all current provider portal screens
+   • Identify broken navigation or rendering issues
+   • Refactor all create flows to full screen pages
+   • Rework page architecture where screens are redundant or overlapping
+   • Ensure all pages are responsive and scroll correctly
+   • Ensure forms handle keyboard and safe area correctly
+   • Ensure all mock or live data bindings are correct
+   • Ensure business details, reviews, invoices, and public profile data display accurately
+   • Ensure the final result is production quality, not placeholder quality
+
+Output required:
+1. A list of the root cause issues found
+2. A redesigned provider portal structure
+3. Updated screen by screen UX improvements
+4. The actual code changes needed
+5. Any navigation or layout refactors required
+6. A final pass for consistency and production readiness
