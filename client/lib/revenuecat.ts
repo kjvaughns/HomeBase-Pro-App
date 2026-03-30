@@ -27,7 +27,7 @@ export async function purchaseProviderSubscription(pkg: PurchasesPackage) {
   try {
     const { customerInfo } = await Purchases.purchasePackage(pkg);
     return { success: true, customerInfo };
-  } catch (e) {
+  } catch (e: any) {
     throw e;
   }
 }
