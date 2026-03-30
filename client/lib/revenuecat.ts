@@ -17,7 +17,7 @@ export async function getProviderSubscriptionOfferings() {
   try {
     const offerings = await Purchases.getOfferings();
     return offerings.current;
-  } catch {
+  } catch (e) {
     return null;
   }
 }
