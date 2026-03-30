@@ -51,11 +51,3 @@ export async function restorePurchases() {
     return { success: false, error: e };
   }
 }
-
-export async function logOutPurchases() {
-  try {
-    await Purchases.logOut();
-  } catch {
-    // already logged out or anonymous
-  }
-}
