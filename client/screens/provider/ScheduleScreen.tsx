@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useCallback } from "react";
-import { StyleSheet, View, FlatList, RefreshControl, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import React, { useState, useMemo } from "react";
+import { StyleSheet, View, FlatList, RefreshControl, Pressable, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
@@ -20,7 +20,6 @@ import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type ViewMode = "list" | "month";
-type DateRangePreset = "today" | "week" | "month" | "custom";
 
 interface Job {
   id: string;
@@ -45,11 +44,7 @@ const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 function formatDate(date: Date): string {
-  return `${MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
-}
-
-function formatDateShort(date: Date): string {
-  return `${MONTHS[date.getMonth()].substring(0, 3)} ${date.getDate()}`;
+  return `${MONTHS[date.getMonth()].substring(0, 3)} ${date.getDate()}, ${date.getFullYear()}`;
 }
 
 function isSameDay(d1: Date, d2: Date): boolean {
@@ -64,12 +59,12 @@ function getMonthDates(date: Date): (Date | null)[][] {
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
   const weeks: (Date | null)[][] = [];
-  
+
   let currentWeek: (Date | null)[] = [];
   for (let i = 0; i < firstDay.getDay(); i++) {
     currentWeek.push(null);
   }
-  
+
   for (let day = 1; day <= lastDay.getDate(); day++) {
     currentWeek.push(new Date(year, month, day));
     if (currentWeek.length === 7) {
@@ -77,192 +72,34 @@ function getMonthDates(date: Date): (Date | null)[][] {
       currentWeek = [];
     }
   }
-  
+
   if (currentWeek.length > 0) {
     while (currentWeek.length < 7) {
       currentWeek.push(null);
     }
     weeks.push(currentWeek);
   }
-  
+
   return weeks;
 }
 
 function getStatusType(status: Job["status"]): "info" | "warning" | "success" | "neutral" {
   switch (status) {
-    case "scheduled":
-      return "info";
-    case "in_progress":
-      return "warning";
-    case "completed":
-      return "success";
-    default:
-      return "neutral";
+    case "scheduled": return "info";
+    case "in_progress": return "warning";
+    case "completed": return "success";
+    default: return "neutral";
   }
 }
 
 function getStatusLabel(status: Job["status"]): string {
   switch (status) {
-    case "scheduled":
-      return "Scheduled";
-    case "in_progress":
-      return "In Progress";
-    case "completed":
-      return "Completed";
-    case "cancelled":
-      return "Cancelled";
-    default:
-      return status;
+    case "scheduled": return "Scheduled";
+    case "in_progress": return "In Progress";
+    case "completed": return "Completed";
+    case "cancelled": return "Cancelled";
+    default: return status;
   }
-}
-
-type StatusFilter = "all" | "scheduled" | "in_progress" | "completed";
-
-interface StatusFilterChipsProps {
-  selected: StatusFilter;
-  onSelect: (filter: StatusFilter) => void;
-}
-
-function StatusFilterChips({ selected, onSelect }: StatusFilterChipsProps) {
-  const { theme } = useTheme();
-  const filters: { key: StatusFilter; label: string }[] = [
-    { key: "all", label: "All" },
-    { key: "scheduled", label: "Scheduled" },
-    { key: "in_progress", label: "In Progress" },
-    { key: "completed", label: "Completed" },
-  ];
-
-  return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.statusFilterContainer}
-    >
-      {filters.map((filter) => (
-        <Pressable
-          key={filter.key}
-          style={[
-            styles.statusFilterChip,
-            { borderColor: theme.separator },
-            selected === filter.key && { backgroundColor: Colors.accent, borderColor: Colors.accent },
-          ]}
-          onPress={() => onSelect(filter.key)}
-        >
-          <ThemedText
-            type="caption"
-            style={[
-              { color: theme.textSecondary },
-              selected === filter.key && { color: "#FFFFFF", fontWeight: "600" },
-            ]}
-          >
-            {filter.label}
-          </ThemedText>
-        </Pressable>
-      ))}
-    </ScrollView>
-  );
-}
-
-interface DateRangePickerProps {
-  preset: DateRangePreset;
-  onPresetChange: (preset: DateRangePreset) => void;
-  customStart: Date | null;
-  customEnd: Date | null;
-  onCustomStartChange: (date: Date) => void;
-  onCustomEndChange: (date: Date) => void;
-}
-
-function DateRangePicker({ 
-  preset, 
-  onPresetChange, 
-  customStart, 
-  customEnd,
-  onCustomStartChange,
-  onCustomEndChange 
-}: DateRangePickerProps) {
-  const { theme } = useTheme();
-  const presets: { key: DateRangePreset; label: string }[] = [
-    { key: "today", label: "Today" },
-    { key: "week", label: "This Week" },
-    { key: "month", label: "This Month" },
-    { key: "custom", label: "Custom" },
-  ];
-
-  const handlePresetChange = (newPreset: DateRangePreset) => {
-    onPresetChange(newPreset);
-    if (newPreset === "custom" && !customStart) {
-      onCustomStartChange(new Date());
-      const endDate = new Date();
-      endDate.setDate(endDate.getDate() + 7);
-      onCustomEndChange(endDate);
-    }
-  };
-
-  return (
-    <View style={styles.dateRangePicker}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.dateRangePresets}
-      >
-        {presets.map((p) => (
-          <Pressable
-            key={p.key}
-            style={[
-              styles.dateRangeChip,
-              { borderColor: theme.separator },
-              preset === p.key && { backgroundColor: Colors.accent, borderColor: Colors.accent },
-            ]}
-            onPress={() => handlePresetChange(p.key)}
-          >
-            <ThemedText
-              type="caption"
-              style={[
-                { color: theme.textSecondary },
-                preset === p.key && { color: "#FFFFFF", fontWeight: "600" },
-              ]}
-            >
-              {p.label}
-            </ThemedText>
-          </Pressable>
-        ))}
-      </ScrollView>
-      
-      {preset === "custom" ? (
-        <View style={styles.customDateRow}>
-          <Pressable
-            style={[styles.customDateButton, { backgroundColor: theme.cardBackground }]}
-            onPress={() => {
-              const newDate = new Date(customStart || new Date());
-              newDate.setDate(newDate.getDate() - 1);
-              onCustomStartChange(newDate);
-            }}
-          >
-            <Feather name="chevron-left" size={16} color={theme.text} />
-          </Pressable>
-          <View style={styles.customDateLabels}>
-            <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-              {customStart ? formatDateShort(customStart) : "Start"}
-            </ThemedText>
-            <ThemedText type="caption" style={{ color: theme.textSecondary }}> - </ThemedText>
-            <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-              {customEnd ? formatDateShort(customEnd) : "End"}
-            </ThemedText>
-          </View>
-          <Pressable
-            style={[styles.customDateButton, { backgroundColor: theme.cardBackground }]}
-            onPress={() => {
-              const newDate = new Date(customEnd || new Date());
-              newDate.setDate(newDate.getDate() + 1);
-              onCustomEndChange(newDate);
-            }}
-          >
-            <Feather name="chevron-right" size={16} color={theme.text} />
-          </Pressable>
-        </View>
-      ) : null}
-    </View>
-  );
 }
 
 interface FormattedJob {
@@ -279,30 +116,25 @@ interface FormattedJob {
 interface JobListItemProps {
   job: FormattedJob;
   onPress: () => void;
-  showTime?: boolean;
 }
 
-function JobListItem({ job, onPress, showTime = true }: JobListItemProps) {
+function JobListItem({ job, onPress }: JobListItemProps) {
   const { theme } = useTheme();
 
   return (
     <Pressable onPress={onPress}>
       <GlassCard style={styles.jobListItem}>
         <View style={styles.jobListRow}>
-          {showTime ? (
+          {job.time ? (
             <View style={styles.timeColumn}>
-              <ThemedText type="body" style={{ fontWeight: "600" }}>
-                {job.time || "TBD"}
-              </ThemedText>
+              <ThemedText style={styles.timeText}>{job.time}</ThemedText>
             </View>
           ) : null}
           <View style={styles.jobDetails}>
-            <ThemedText type="body" style={{ fontWeight: "600" }}>{job.customerName}</ThemedText>
-            <ThemedText type="caption" style={{ color: Colors.accent }}>
-              {job.service}
-            </ThemedText>
+            <ThemedText style={styles.jobCustomer}>{job.customerName}</ThemedText>
+            <ThemedText style={[styles.jobService, { color: Colors.accent }]}>{job.service}</ThemedText>
             {job.address ? (
-              <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+              <ThemedText style={[styles.jobAddress, { color: theme.textSecondary }]}>
                 {job.address}
               </ThemedText>
             ) : null}
@@ -327,10 +159,7 @@ function MonthView({ selectedDate, jobs, onDateSelect, onJobPress }: MonthViewPr
   const weeks = getMonthDates(selectedDate);
   const today = new Date();
 
-  const getJobsForDate = (date: Date) => {
-    return jobs.filter((job) => isSameDay(new Date(job.date), date));
-  };
-
+  const getJobsForDate = (date: Date) => jobs.filter((j) => isSameDay(new Date(j.date), date));
   const selectedDayJobs = getJobsForDate(selectedDate);
 
   return (
@@ -338,9 +167,7 @@ function MonthView({ selectedDate, jobs, onDateSelect, onJobPress }: MonthViewPr
       <View style={styles.calendarHeader}>
         {DAYS_OF_WEEK.map((day) => (
           <View key={day} style={styles.calendarHeaderDay}>
-            <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-              {day}
-            </ThemedText>
+            <ThemedText style={[styles.calendarDayLabel, { color: theme.textSecondary }]}>{day}</ThemedText>
           </View>
         ))}
       </View>
@@ -349,27 +176,26 @@ function MonthView({ selectedDate, jobs, onDateSelect, onJobPress }: MonthViewPr
         <View key={weekIndex} style={styles.calendarWeek}>
           {week.map((date, dayIndex) => {
             if (!date) {
-              return <View key={dayIndex} style={styles.calendarDay} />;
+              return <View key={`empty-${dayIndex}`} style={styles.calendarDay} />;
             }
-
-            const isSelected = isSameDay(date, selectedDate);
-            const isToday = isSameDay(date, today);
             const dayJobs = getJobsForDate(date);
+            const isToday = isSameDay(date, today);
+            const isSelected = isSameDay(date, selectedDate);
 
             return (
               <Pressable
-                key={dayIndex}
+                key={date.toISOString()}
                 style={[
                   styles.calendarDay,
+                  isToday && { backgroundColor: Colors.accentLight },
                   isSelected && { backgroundColor: Colors.accent },
-                  isToday && !isSelected && { borderWidth: 1, borderColor: Colors.accent },
                 ]}
                 onPress={() => onDateSelect(date)}
               >
                 <ThemedText
-                  type="caption"
                   style={[
-                    isSelected && { color: "#FFFFFF", fontWeight: "600" },
+                    styles.calendarDayNum,
+                    isSelected && { color: "#FFFFFF" },
                   ]}
                 >
                   {date.getDate()}
@@ -393,32 +219,30 @@ function MonthView({ selectedDate, jobs, onDateSelect, onJobPress }: MonthViewPr
         </View>
       ))}
 
-      <View style={styles.monthSummary}>
-        <GlassCard>
-          <ThemedText type="label" style={{ color: theme.textSecondary, marginBottom: Spacing.sm }}>
-            {formatDateShort(selectedDate)}
+      <GlassCard style={styles.monthSummary}>
+        <ThemedText style={[styles.selectedDateLabel, { color: theme.textSecondary }]}>
+          {formatDate(selectedDate)}
+        </ThemedText>
+        {selectedDayJobs.length > 0 ? (
+          selectedDayJobs.map((job) => (
+            <Pressable key={job.id} onPress={() => onJobPress(job)} style={styles.monthJobItem}>
+              <View style={[styles.monthJobDot, { backgroundColor: Colors.accent }]} />
+              <View style={{ flex: 1 }}>
+                <ThemedText style={styles.monthJobTitle}>
+                  {job.time ? `${job.time} - ` : ""}{job.service}
+                </ThemedText>
+                <ThemedText style={[styles.monthJobCustomer, { color: theme.textSecondary }]}>
+                  {job.customerName}
+                </ThemedText>
+              </View>
+            </Pressable>
+          ))
+        ) : (
+          <ThemedText style={[styles.monthJobCustomer, { color: theme.textSecondary }]}>
+            No jobs scheduled
           </ThemedText>
-          {selectedDayJobs.length > 0 ? (
-            selectedDayJobs.map((job) => (
-              <Pressable key={job.id} onPress={() => onJobPress(job)} style={styles.monthJobItem}>
-                <View style={[styles.monthJobDot, { backgroundColor: Colors.accent }]} />
-                <View style={{ flex: 1 }}>
-                  <ThemedText type="caption" style={{ fontWeight: "600" }}>
-                    {job.time || "TBD"} - {job.service}
-                  </ThemedText>
-                  <ThemedText type="small" style={{ color: theme.textSecondary }}>
-                    {job.customerName}
-                  </ThemedText>
-                </View>
-              </Pressable>
-            ))
-          ) : (
-            <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-              No jobs scheduled
-            </ThemedText>
-          )}
-        </GlassCard>
-      </View>
+        )}
+      </GlassCard>
     </View>
   );
 }
@@ -446,21 +270,13 @@ export default function ScheduleScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [statusFilter, setStatusFilter] = useState<"all" | "scheduled" | "in_progress" | "completed">("all");
-  const [dateRangePreset, setDateRangePreset] = useState<DateRangePreset>("week");
-  const [customStartDate, setCustomStartDate] = useState<Date | null>(null);
-  const [customEndDate, setCustomEndDate] = useState<Date | null>(null);
-  const [showDatePicker, setShowDatePicker] = useState<"start" | "end" | null>(null);
 
   const jobs = jobsData?.jobs || [];
   const clients = clientsData?.clients || [];
 
   const getClientName = (clientId: string): string => {
     const client = clients.find((c) => c.id === clientId);
-    if (client) {
-      return `${client.firstName} ${client.lastName}`;
-    }
-    return "Unknown Client";
+    return client ? `${client.firstName} ${client.lastName}` : "Unknown Client";
   };
 
   const formatJobForDisplay = (job: Job): FormattedJob => ({
@@ -476,67 +292,10 @@ export default function ScheduleScreen() {
 
   const formattedJobs = useMemo(() => {
     return jobs
-      .filter((job) => {
-        if (job.status === "cancelled") return false;
-        if (statusFilter === "all") return true;
-        return job.status === statusFilter;
-      })
+      .filter((job) => job.status !== "cancelled")
       .map(formatJobForDisplay)
-      .sort((a, b) => {
-        const dateA = new Date(a.date);
-        const dateB = new Date(b.date);
-        return dateA.getTime() - dateB.getTime();
-      });
-  }, [jobs, clients, statusFilter]);
-
-  const dayJobs = useMemo(() => {
-    return formattedJobs.filter((job) => isSameDay(new Date(job.date), selectedDate));
-  }, [formattedJobs, selectedDate]);
-
-  const getDateRange = useCallback((): { start: Date; end: Date } => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    switch (dateRangePreset) {
-      case "today":
-        const endOfToday = new Date(today);
-        endOfToday.setHours(23, 59, 59, 999);
-        return { start: today, end: endOfToday };
-      case "week": {
-        const startOfWeek = new Date(today);
-        startOfWeek.setDate(today.getDate() - today.getDay());
-        const endOfWeek = new Date(startOfWeek);
-        endOfWeek.setDate(startOfWeek.getDate() + 6);
-        endOfWeek.setHours(23, 59, 59, 999);
-        return { start: startOfWeek, end: endOfWeek };
-      }
-      case "month": {
-        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-        const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-        endOfMonth.setHours(23, 59, 59, 999);
-        return { start: startOfMonth, end: endOfMonth };
-      }
-      case "custom":
-        if (customStartDate && customEndDate) {
-          const start = new Date(customStartDate);
-          start.setHours(0, 0, 0, 0);
-          const end = new Date(customEndDate);
-          end.setHours(23, 59, 59, 999);
-          return { start, end };
-        }
-        return { start: today, end: today };
-      default:
-        return { start: today, end: today };
-    }
-  }, [dateRangePreset, customStartDate, customEndDate]);
-
-  const rangeJobs = useMemo(() => {
-    const { start, end } = getDateRange();
-    return formattedJobs.filter((job) => {
-      const jobDate = new Date(job.date);
-      return jobDate >= start && jobDate <= end;
-    });
-  }, [formattedJobs, getDateRange]);
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [jobs, clients]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -552,88 +311,17 @@ export default function ScheduleScreen() {
     navigation.navigate("AddJob");
   };
 
-  const renderListView = () => {
-    if (isLoading) {
-      return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.accent} />
-        </View>
-      );
-    }
-
-    const { start, end } = getDateRange();
-    const dateRangeLabel = dateRangePreset === "custom" 
-      ? `${formatDateShort(start)} - ${formatDateShort(end)}`
-      : dateRangePreset === "today" 
-        ? "Today"
-        : dateRangePreset === "week"
-          ? "This Week"
-          : "This Month";
-
-    return (
-      <FlatList
-        data={rangeJobs}
-        renderItem={({ item, index }) => (
-          <Animated.View entering={FadeInDown.delay(index * 50).duration(300)}>
-            <View style={styles.listJobItem}>
-              <ThemedText type="caption" style={{ color: theme.textSecondary, marginBottom: 4 }}>
-                {formatDate(new Date(item.date))}
-              </ThemedText>
-              <JobListItem job={item} onPress={() => handleJobPress(item)} />
-            </View>
-          </Animated.View>
-        )}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={[
-          styles.listContent,
-          rangeJobs.length === 0 && styles.emptyContainer,
-        ]}
-        ListHeaderComponent={
-          <ThemedText type="caption" style={[styles.listHeader, { color: theme.textSecondary }]}>
-            {rangeJobs.length} job{rangeJobs.length !== 1 ? "s" : ""} in {dateRangeLabel}
-          </ThemedText>
-        }
-        ListEmptyComponent={
-          <EmptyState
-            image={require("../../../assets/images/empty-bookings.png")}
-            title="No jobs scheduled"
-            description={`No jobs found in the selected time range.`}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
-        }
-      />
-    );
-  };
-
   const isCalendarView = viewMode === "month";
 
   return (
     <ThemedView style={styles.container}>
-      <View
-        style={[
-          styles.header,
-          { paddingTop: headerHeight + Spacing.md },
-        ]}
-      >
+      <View style={[styles.header, { paddingTop: headerHeight + Spacing.md }]}>
         <View style={styles.headerRow}>
-          <View style={{ flex: 1 }}>
-            <DateRangePicker
-              preset={dateRangePreset}
-              onPresetChange={(p) => {
-                setDateRangePreset(p);
-                if (p !== "custom") {
-                  setViewMode("list");
-                }
-              }}
-              customStart={customStartDate}
-              customEnd={customEndDate}
-              onCustomStartChange={setCustomStartDate}
-              onCustomEndChange={setCustomEndDate}
-            />
-          </View>
+          <ThemedText style={styles.headerTitle}>
+            {isCalendarView
+              ? `${MONTHS[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`
+              : "All Jobs"}
+          </ThemedText>
           <View style={styles.headerActions}>
             <Pressable
               style={[
@@ -647,27 +335,59 @@ export default function ScheduleScreen() {
                 setViewMode(isCalendarView ? "list" : "month");
                 setSelectedDate(new Date());
               }}
+              testID="button-calendar-toggle"
             >
-              <Feather
-                name="calendar"
-                size={16}
-                color={isCalendarView ? "#fff" : theme.textSecondary}
-              />
+              <Feather name="calendar" size={16} color={isCalendarView ? "#fff" : theme.textSecondary} />
             </Pressable>
             <Pressable
               style={[styles.addButton, { backgroundColor: Colors.accent }]}
               onPress={handleAddJob}
+              testID="button-add-job"
             >
               <Feather name="plus" size={20} color="white" />
             </Pressable>
           </View>
         </View>
-        <StatusFilterChips selected={statusFilter} onSelect={setStatusFilter} />
       </View>
 
       <View style={[styles.content, { paddingBottom: tabBarHeight + Spacing.lg }]}>
-        {!isCalendarView && renderListView()}
-        {isCalendarView && (
+        {!isCalendarView ? (
+          isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={Colors.accent} />
+            </View>
+          ) : (
+            <FlatList
+              data={formattedJobs}
+              renderItem={({ item, index }) => (
+                <Animated.View entering={FadeInDown.delay(index * 50).duration(300)}>
+                  <View style={styles.listJobItem}>
+                    <ThemedText style={[styles.dateLabel, { color: theme.textSecondary }]}>
+                      {formatDate(new Date(item.date))}
+                    </ThemedText>
+                    <JobListItem job={item} onPress={() => handleJobPress(item)} />
+                  </View>
+                </Animated.View>
+              )}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={[
+                styles.listContent,
+                formattedJobs.length === 0 && styles.emptyContainer,
+              ]}
+              ListEmptyComponent={
+                <EmptyState
+                  image={require("../../../assets/images/empty-bookings.png")}
+                  title="No jobs scheduled"
+                  description="Add a job to get started."
+                />
+              }
+              showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
+              }
+            />
+          )
+        ) : (
           <MonthView
             selectedDate={selectedDate}
             jobs={formattedJobs}
@@ -690,14 +410,17 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "space-between",
+  },
+  headerTitle: {
+    ...Typography.title3,
+    fontWeight: "600",
   },
   headerActions: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.sm,
-    marginLeft: Spacing.sm,
   },
   calendarToggle: {
     width: 36,
@@ -714,17 +437,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  statusFilterContainer: {
-    paddingVertical: Spacing.sm,
-    gap: Spacing.sm,
-    flexDirection: "row",
-  },
-  statusFilterChip: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
-  },
   content: {
     flex: 1,
   },
@@ -735,11 +447,18 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: Spacing.screenPadding,
-    gap: Spacing.sm,
+    paddingBottom: Spacing.xl,
   },
   emptyContainer: {
     flexGrow: 1,
     justifyContent: "center",
+  },
+  listJobItem: {
+    marginBottom: Spacing.sm,
+  },
+  dateLabel: {
+    ...Typography.caption1,
+    marginBottom: Spacing.xs,
   },
   jobListItem: {
     marginBottom: 0,
@@ -750,11 +469,25 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   timeColumn: {
-    width: 60,
+    width: 56,
+  },
+  timeText: {
+    ...Typography.callout,
+    fontWeight: "600",
   },
   jobDetails: {
     flex: 1,
     gap: 2,
+  },
+  jobCustomer: {
+    ...Typography.callout,
+    fontWeight: "600",
+  },
+  jobService: {
+    ...Typography.footnote,
+  },
+  jobAddress: {
+    ...Typography.caption1,
   },
   monthView: {
     flex: 1,
@@ -768,6 +501,9 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
   },
+  calendarDayLabel: {
+    ...Typography.caption2,
+  },
   calendarWeek: {
     flexDirection: "row",
     marginBottom: 4,
@@ -778,6 +514,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: BorderRadius.sm,
+  },
+  calendarDayNum: {
+    ...Typography.footnote,
   },
   calendarDots: {
     flexDirection: "row",
@@ -792,6 +531,10 @@ const styles = StyleSheet.create({
   monthSummary: {
     marginTop: Spacing.md,
   },
+  selectedDateLabel: {
+    ...Typography.caption1,
+    marginBottom: Spacing.sm,
+  },
   monthJobItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -803,41 +546,11 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
   },
-  dateRangePicker: {
-    gap: Spacing.sm,
+  monthJobTitle: {
+    ...Typography.caption1,
+    fontWeight: "600",
   },
-  dateRangePresets: {
-    gap: Spacing.sm,
-    flexDirection: "row",
-  },
-  dateRangeChip: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
-  },
-  customDateRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    marginTop: Spacing.xs,
-  },
-  customDateButton: {
-    width: 32,
-    height: 32,
-    borderRadius: BorderRadius.full,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  customDateLabels: {
-    flex: 1,
-    flexDirection: "row",
-    justifyContent: "center",
-  },
-  listJobItem: {
-    marginBottom: Spacing.sm,
-  },
-  listHeader: {
-    marginBottom: Spacing.sm,
+  monthJobCustomer: {
+    ...Typography.caption2,
   },
 });

@@ -16,6 +16,7 @@ import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/query-client";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -55,10 +56,11 @@ interface ProviderStats {
 }
 
 interface StripeStatus {
-  status: "not_started" | "pending" | "complete" | "restricted";
+  exists: boolean;
+  onboardingStatus: "not_started" | "pending" | "complete";
   chargesEnabled: boolean;
   payoutsEnabled: boolean;
-  accountId?: string;
+  detailsSubmitted: boolean;
 }
 
 type InvoiceFilter = "all" | "pending" | "paid";
@@ -96,8 +98,13 @@ export default function FinancesScreen() {
     enabled: !!providerId,
   });
 
-  const { data: stripeData } = useQuery<{ connectStatus: StripeStatus }>({
-    queryKey: ["/api/stripe/connect/status"],
+  const { data: stripeStatus } = useQuery<StripeStatus>({
+    queryKey: ["/api/stripe/connect/status", providerId],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/stripe/connect/status/${providerId}`);
+      if (!response.ok) throw new Error("Failed to fetch Stripe status");
+      return response.json();
+    },
     enabled: !!providerId,
     retry: false,
   });
@@ -105,8 +112,7 @@ export default function FinancesScreen() {
   const invoices = invoicesData?.invoices || [];
   const clients = clientsData?.clients || [];
   const stats = statsData?.stats || { revenueMTD: 0, jobsCompleted: 0, activeClients: 0, upcomingJobs: 0 };
-  const connectStatus = stripeData?.connectStatus;
-  const isConnected = connectStatus?.chargesEnabled && connectStatus?.payoutsEnabled;
+  const isConnected = stripeStatus?.chargesEnabled && stripeStatus?.payoutsEnabled;
 
   const getClientName = (clientId: string): string => {
     const client = clients.find((c) => c.id === clientId);

@@ -4,9 +4,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/query-client";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -18,6 +20,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 interface ProviderStats {
   revenueMTD: number;
@@ -47,7 +50,7 @@ interface Client {
   phone?: string;
 }
 
-function ProfileMissingCTA({ navigation }: { navigation: any }) {
+function ProfileMissingCTA({ navigation }: { navigation: NativeStackNavigationProp<RootStackParamList> }) {
   const { theme } = useTheme();
   return (
     <ThemedView style={styles.container}>
@@ -74,7 +77,7 @@ export default function ProviderHomeScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useFloatingTabBarHeight();
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { theme } = useTheme();
   const { user, providerProfile, createProviderProfile } = useAuthStore();
   const queryClient = useQueryClient();
@@ -118,6 +121,28 @@ export default function ProviderHomeScreen() {
   const { data: clientsData } = useQuery<{ clients: Client[] }>({
     queryKey: ["/api/provider", providerId, "clients"],
     enabled: !!providerId,
+  });
+
+  const { data: stripeStatusData } = useQuery<{ chargesEnabled: boolean; payoutsEnabled: boolean }>({
+    queryKey: ["/api/stripe/connect/status", providerId],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/stripe/connect/status/${providerId}`);
+      if (!response.ok) throw new Error("Failed to fetch Stripe status");
+      return response.json();
+    },
+    enabled: !!providerId,
+    retry: false,
+  });
+
+  const { data: bookingLinksData } = useQuery<{ bookingLinks: { id: string }[] }>({
+    queryKey: ["/api/provider", providerId, "booking-links"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/booking-links?providerId=${providerId}`);
+      if (!response.ok) throw new Error("Failed to fetch booking links");
+      return response.json();
+    },
+    enabled: !!providerId,
+    retry: false,
   });
 
   const [refreshing, setRefreshing] = useState(false);
@@ -177,6 +202,48 @@ export default function ProviderHomeScreen() {
   });
 
   const isLoading = statsLoading || jobsLoading;
+
+  const isStripeConnected = stripeStatusData?.chargesEnabled && stripeStatusData?.payoutsEnabled;
+  const hasClients = clients.length > 0;
+  const hasBookingLink = (bookingLinksData?.bookingLinks?.length ?? 0) > 0;
+  const hasCompletedJob = stats.jobsCompleted > 0;
+
+  const gettingStartedSteps = [
+    {
+      key: "stripe",
+      label: "Set up payments",
+      subtitle: "Connect Stripe to get paid",
+      icon: "credit-card" as const,
+      done: !!isStripeConnected,
+      onPress: () => navigation.navigate("StripeConnect"),
+    },
+    {
+      key: "client",
+      label: "Add your first client",
+      subtitle: "Build your client list",
+      icon: "user-plus" as const,
+      done: hasClients,
+      onPress: () => navigation.navigate("ClientsTab"),
+    },
+    {
+      key: "booking",
+      label: "Create a booking link",
+      subtitle: "Let clients book you online",
+      icon: "link" as const,
+      done: hasBookingLink,
+      onPress: () => navigation.navigate("MoreTab"),
+    },
+    {
+      key: "job",
+      label: "Complete your first job",
+      subtitle: "Start earning with HomeBase",
+      icon: "check-circle" as const,
+      done: hasCompletedJob,
+      onPress: () => navigation.navigate("ScheduleTab"),
+    },
+  ];
+
+  const showGettingStarted = !isLoading && gettingStartedSteps.some((s) => !s.done);
 
   // Loading — trying to recover the provider profile from API
   if (!providerId && profileLoading) {
@@ -287,6 +354,56 @@ export default function ProviderHomeScreen() {
             </View>
           )}
         </Animated.View>
+
+        {showGettingStarted ? (
+          <Animated.View entering={FadeInDown.delay(300).duration(400)}>
+            <SectionHeader title="Getting Started" />
+            <GlassCard style={styles.checklistCard}>
+              {gettingStartedSteps.map((step, index) => (
+                <Pressable
+                  key={step.key}
+                  style={[
+                    styles.checklistRow,
+                    index < gettingStartedSteps.length - 1 && {
+                      borderBottomWidth: StyleSheet.hairlineWidth,
+                      borderBottomColor: theme.separator,
+                    },
+                  ]}
+                  onPress={step.done ? undefined : step.onPress}
+                  testID={`checklist-${step.key}`}
+                >
+                  <View
+                    style={[
+                      styles.checklistIcon,
+                      { backgroundColor: step.done ? Colors.accentLight : theme.backgroundSecondary },
+                    ]}
+                  >
+                    <Feather
+                      name={step.done ? "check" : step.icon}
+                      size={16}
+                      color={step.done ? Colors.accent : theme.textSecondary}
+                    />
+                  </View>
+                  <View style={styles.checklistText}>
+                    <ThemedText
+                      style={[styles.checklistLabel, step.done && { color: theme.textSecondary }]}
+                    >
+                      {step.label}
+                    </ThemedText>
+                    <ThemedText style={[styles.checklistSubtitle, { color: theme.textSecondary }]}>
+                      {step.subtitle}
+                    </ThemedText>
+                  </View>
+                  {step.done ? (
+                    <ThemedText style={[styles.doneLabel, { color: Colors.accent }]}>Done</ThemedText>
+                  ) : (
+                    <Feather name="chevron-right" size={16} color={theme.textTertiary} />
+                  )}
+                </Pressable>
+              ))}
+            </GlassCard>
+          </Animated.View>
+        ) : null}
 
         {inProgressJobs.length > 0 ? (
           <Animated.View entering={FadeInDown.delay(400).duration(400)}>
@@ -460,6 +577,39 @@ const styles = StyleSheet.create({
   },
   addJobText: {
     ...Typography.callout,
+    fontWeight: "600",
+  },
+  checklistCard: {
+    padding: 0,
+    overflow: "hidden",
+  },
+  checklistRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    gap: Spacing.sm,
+  },
+  checklistIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checklistText: {
+    flex: 1,
+  },
+  checklistLabel: {
+    ...Typography.callout,
+    fontWeight: "600",
+  },
+  checklistSubtitle: {
+    ...Typography.caption1,
+    marginTop: 1,
+  },
+  doneLabel: {
+    ...Typography.footnote,
     fontWeight: "600",
   },
 });
