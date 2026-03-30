@@ -1,10 +1,9 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Platform } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import HomeownerTabNavigator from "@/navigation/HomeownerTabNavigator";
 import ProviderTabNavigator from "@/navigation/ProviderTabNavigator";
-import RoleGatewayScreen from "@/screens/RoleGatewayScreen";
 import RoleSwitchConfirmationScreen from "@/screens/RoleSwitchConfirmationScreen";
 import BecomeProviderScreen from "@/screens/BecomeProviderScreen";
 import FirstLaunchScreen from "@/screens/onboarding/FirstLaunchScreen";
@@ -73,7 +72,6 @@ export type RootStackParamList = {
   SignUp: undefined;
   ForgotPassword: undefined;
   Onboarding: undefined;
-  RoleGateway: undefined;
   Main: undefined;
   RoleSwitchConfirmation: { targetRole: UserRole };
   BecomeProvider: undefined;
@@ -152,8 +150,17 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export default function RootStackNavigator() {
   const screenOptions = useScreenOptions();
   const { theme } = useTheme();
-  const { isAuthenticated, isHydrated, activeRole, canAccessProviderMode, needsRoleSelection } = useAuthStore();
+  const { isAuthenticated, isHydrated, activeRole, canAccessProviderMode, needsRoleSelection, setActiveRole, setNeedsRoleSelection } = useAuthStore();
   const { hasCompletedFirstLaunch, hasCompletedProviderSetup, isHydrated: onboardingHydrated } = useOnboardingStore();
+
+  // Auto-resolve role selection: default to homeowner when the gateway would have shown.
+  // Users can still switch roles from within the app.
+  useEffect(() => {
+    if (isAuthenticated && needsRoleSelection) {
+      setActiveRole("homeowner");
+      setNeedsRoleSelection(false);
+    }
+  }, [isAuthenticated, needsRoleSelection]);
 
   // canAccessProviderMode checks for an approved provider profile (existing providers).
   // hasCompletedProviderSetup covers new providers who finished ProviderOnboarding
@@ -175,21 +182,12 @@ export default function RootStackNavigator() {
   // Show first launch for new users who haven't completed onboarding
   const showFirstLaunch = !hasCompletedFirstLaunch && !isAuthenticated;
 
-  // Show role gateway if authenticated but hasn't selected a role yet.
-  const showRoleGateway = isAuthenticated && needsRoleSelection;
-
   return (
     <Stack.Navigator screenOptions={screenOptions}>
       {showFirstLaunch ? (
         <Stack.Screen
           name="FirstLaunch"
           component={FirstLaunchScreen}
-          options={{ headerShown: false }}
-        />
-      ) : showRoleGateway ? (
-        <Stack.Screen
-          name="RoleGateway"
-          component={RoleGatewayScreen}
           options={{ headerShown: false }}
         />
       ) : (
