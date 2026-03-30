@@ -19,7 +19,7 @@ import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
-type ViewMode = "list" | "day" | "week" | "month";
+type ViewMode = "list" | "month";
 type DateRangePreset = "today" | "week" | "month" | "custom";
 
 interface Job {
@@ -56,18 +56,6 @@ function isSameDay(d1: Date, d2: Date): boolean {
   return d1.getFullYear() === d2.getFullYear() &&
          d1.getMonth() === d2.getMonth() &&
          d1.getDate() === d2.getDate();
-}
-
-function getWeekDates(date: Date): Date[] {
-  const week: Date[] = [];
-  const current = new Date(date);
-  const day = current.getDay();
-  current.setDate(current.getDate() - day);
-  for (let i = 0; i < 7; i++) {
-    week.push(new Date(current));
-    current.setDate(current.getDate() + 1);
-  }
-  return week;
 }
 
 function getMonthDates(date: Date): (Date | null)[][] {
@@ -175,46 +163,6 @@ function StatusFilterChips({ selected, onSelect }: StatusFilterChipsProps) {
   );
 }
 
-interface ViewModeTabsProps {
-  selected: ViewMode;
-  onSelect: (mode: ViewMode) => void;
-}
-
-function ViewModeTabs({ selected, onSelect }: ViewModeTabsProps) {
-  const { theme } = useTheme();
-  const modes: { key: ViewMode; label: string }[] = [
-    { key: "list", label: "List" },
-    { key: "day", label: "Day" },
-    { key: "week", label: "Week" },
-    { key: "month", label: "Month" },
-  ];
-
-  return (
-    <View style={[styles.viewModeTabs, { backgroundColor: theme.cardBackground }]}>
-      {modes.map((mode) => (
-        <Pressable
-          key={mode.key}
-          style={[
-            styles.viewModeTab,
-            selected === mode.key && { backgroundColor: Colors.accent },
-          ]}
-          onPress={() => onSelect(mode.key)}
-        >
-          <ThemedText
-            type="caption"
-            style={[
-              { color: theme.textSecondary },
-              selected === mode.key && { color: "#FFFFFF", fontWeight: "600" },
-            ]}
-          >
-            {mode.label}
-          </ThemedText>
-        </Pressable>
-      ))}
-    </View>
-  );
-}
-
 interface DateRangePickerProps {
   preset: DateRangePreset;
   onPresetChange: (preset: DateRangePreset) => void;
@@ -317,62 +265,6 @@ function DateRangePicker({
   );
 }
 
-interface DateNavigatorProps {
-  date: Date;
-  viewMode: ViewMode;
-  onPrevious: () => void;
-  onNext: () => void;
-  onToday: () => void;
-}
-
-function DateNavigator({ date, viewMode, onPrevious, onNext, onToday }: DateNavigatorProps) {
-  const { theme } = useTheme();
-  const today = new Date();
-  const isToday = isSameDay(date, today);
-
-  const getTitle = () => {
-    switch (viewMode) {
-      case "list":
-      case "day":
-        return formatDate(date);
-      case "week":
-        const weekDates = getWeekDates(date);
-        return `${formatDateShort(weekDates[0])} - ${formatDateShort(weekDates[6])}`;
-      case "month":
-        return `${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
-    }
-  };
-
-  return (
-    <View style={styles.dateNavigator}>
-      <View style={styles.dateNavRow}>
-        <Pressable
-          style={[styles.navButton, { backgroundColor: theme.cardBackground }]}
-          onPress={onPrevious}
-        >
-          <Feather name="chevron-left" size={20} color={theme.text} />
-        </Pressable>
-        <View style={styles.dateTitle}>
-          <ThemedText type="h3">{getTitle()}</ThemedText>
-        </View>
-        <Pressable
-          style={[styles.navButton, { backgroundColor: theme.cardBackground }]}
-          onPress={onNext}
-        >
-          <Feather name="chevron-right" size={20} color={theme.text} />
-        </Pressable>
-      </View>
-      {!isToday ? (
-        <Pressable style={styles.todayButton} onPress={onToday}>
-          <ThemedText type="caption" style={{ color: Colors.accent }}>
-            Today
-          </ThemedText>
-        </Pressable>
-      ) : null}
-    </View>
-  );
-}
-
 interface FormattedJob {
   id: string;
   customerName: string;
@@ -420,144 +312,6 @@ function JobListItem({ job, onPress, showTime = true }: JobListItemProps) {
         </View>
       </GlassCard>
     </Pressable>
-  );
-}
-
-interface DayTimelineProps {
-  jobs: FormattedJob[];
-  onJobPress: (job: FormattedJob) => void;
-}
-
-function DayTimeline({ jobs, onJobPress }: DayTimelineProps) {
-  const { theme } = useTheme();
-  const hours = Array.from({ length: 12 }, (_, i) => i + 7);
-
-  const getJobsForHour = (hour: number) => {
-    return jobs.filter((job) => {
-      if (!job.time) return false;
-      const timeParts = job.time.match(/(\d+):(\d+)\s*(AM|PM)/i);
-      if (!timeParts) return false;
-      let jobHour = parseInt(timeParts[1]);
-      const isPM = timeParts[3].toUpperCase() === "PM";
-      if (isPM && jobHour !== 12) jobHour += 12;
-      if (!isPM && jobHour === 12) jobHour = 0;
-      return jobHour === hour;
-    });
-  };
-
-  return (
-    <ScrollView style={styles.dayTimeline} showsVerticalScrollIndicator={false}>
-      {hours.map((hour) => {
-        const hourJobs = getJobsForHour(hour);
-        const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-        const ampm = hour >= 12 ? "PM" : "AM";
-
-        return (
-          <View key={hour} style={styles.timelineRow}>
-            <View style={styles.timelineHour}>
-              <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-                {displayHour} {ampm}
-              </ThemedText>
-            </View>
-            <View style={[styles.timelineLine, { backgroundColor: theme.separator }]} />
-            <View style={styles.timelineContent}>
-              {hourJobs.map((job) => (
-                <Pressable key={job.id} onPress={() => onJobPress(job)}>
-                  <View style={[styles.timelineJob, { backgroundColor: Colors.accent + "20" }]}>
-                    <ThemedText type="caption" style={{ color: Colors.accent, fontWeight: "600" }}>
-                      {job.service}
-                    </ThemedText>
-                    <ThemedText type="small" style={{ color: theme.textSecondary }}>
-                      {job.customerName}
-                    </ThemedText>
-                  </View>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        );
-      })}
-    </ScrollView>
-  );
-}
-
-interface WeekViewProps {
-  selectedDate: Date;
-  jobs: FormattedJob[];
-  onDateSelect: (date: Date) => void;
-  onJobPress: (job: FormattedJob) => void;
-}
-
-function WeekView({ selectedDate, jobs, onDateSelect, onJobPress }: WeekViewProps) {
-  const { theme } = useTheme();
-  const weekDates = getWeekDates(selectedDate);
-  const today = new Date();
-
-  const getJobsForDate = (date: Date) => {
-    return jobs.filter((job) => isSameDay(new Date(job.date), date));
-  };
-
-  const selectedDayJobs = getJobsForDate(selectedDate);
-
-  return (
-    <View style={styles.weekView}>
-      <View style={styles.weekDayRow}>
-        {weekDates.map((date, index) => {
-          const isSelected = isSameDay(date, selectedDate);
-          const isToday = isSameDay(date, today);
-          const dayJobs = getJobsForDate(date);
-
-          return (
-            <Pressable
-              key={index}
-              style={[
-                styles.weekDay,
-                isSelected && { backgroundColor: Colors.accent },
-                isToday && !isSelected && { borderWidth: 1, borderColor: Colors.accent },
-              ]}
-              onPress={() => onDateSelect(date)}
-            >
-              <ThemedText
-                type="caption"
-                style={[
-                  { color: theme.textSecondary },
-                  isSelected && { color: "#FFFFFF" },
-                ]}
-              >
-                {DAYS_OF_WEEK[date.getDay()]}
-              </ThemedText>
-              <ThemedText
-                type="body"
-                style={[
-                  { fontWeight: "600" },
-                  isSelected && { color: "#FFFFFF" },
-                ]}
-              >
-                {date.getDate()}
-              </ThemedText>
-              {dayJobs.length > 0 ? (
-                <View style={[styles.weekDayDot, isSelected && { backgroundColor: "#FFFFFF" }]} />
-              ) : null}
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <ScrollView style={styles.weekJobList} showsVerticalScrollIndicator={false}>
-        {selectedDayJobs.length > 0 ? (
-          selectedDayJobs.map((job) => (
-            <JobListItem key={job.id} job={job} onPress={() => onJobPress(job)} />
-          ))
-        ) : (
-          <View style={styles.emptyDay}>
-            <Feather name="calendar" size={40} color={theme.textSecondary} />
-            <ThemedText type="body" style={{ color: theme.textSecondary, marginTop: Spacing.sm }}>
-              No jobs scheduled
-            </ThemedText>
-          </View>
-        )}
-      </ScrollView>
-    </View>
   );
 }
 
@@ -790,44 +544,6 @@ export default function ScheduleScreen() {
     setRefreshing(false);
   };
 
-  const handlePrevious = useCallback(() => {
-    const newDate = new Date(selectedDate);
-    switch (viewMode) {
-      case "list":
-      case "day":
-        newDate.setDate(newDate.getDate() - 1);
-        break;
-      case "week":
-        newDate.setDate(newDate.getDate() - 7);
-        break;
-      case "month":
-        newDate.setMonth(newDate.getMonth() - 1);
-        break;
-    }
-    setSelectedDate(newDate);
-  }, [selectedDate, viewMode]);
-
-  const handleNext = useCallback(() => {
-    const newDate = new Date(selectedDate);
-    switch (viewMode) {
-      case "list":
-      case "day":
-        newDate.setDate(newDate.getDate() + 1);
-        break;
-      case "week":
-        newDate.setDate(newDate.getDate() + 7);
-        break;
-      case "month":
-        newDate.setMonth(newDate.getMonth() + 1);
-        break;
-    }
-    setSelectedDate(newDate);
-  }, [selectedDate, viewMode]);
-
-  const handleToday = useCallback(() => {
-    setSelectedDate(new Date());
-  }, []);
-
   const handleJobPress = (job: FormattedJob) => {
     navigation.navigate("ProviderJobDetail", { jobId: job.id });
   };
@@ -998,43 +714,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  dateNavigator: {
-    alignItems: "center",
-    marginBottom: Spacing.md,
-    flex: 1,
-  },
-  dateNavRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-  },
-  navButton: {
-    width: 36,
-    height: 36,
-    borderRadius: BorderRadius.full,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  dateTitle: {
-    minWidth: 180,
-    alignItems: "center",
-  },
-  todayButton: {
-    marginTop: Spacing.xs,
-    paddingVertical: Spacing.xs,
-    paddingHorizontal: Spacing.md,
-  },
-  viewModeTabs: {
-    flexDirection: "row",
-    borderRadius: BorderRadius.lg,
-    padding: 4,
-  },
-  viewModeTab: {
-    flex: 1,
-    paddingVertical: Spacing.sm,
-    alignItems: "center",
-    borderRadius: BorderRadius.md,
-  },
   statusFilterContainer: {
     paddingVertical: Spacing.sm,
     gap: Spacing.sm,
@@ -1076,63 +755,6 @@ const styles = StyleSheet.create({
   jobDetails: {
     flex: 1,
     gap: 2,
-  },
-  dayTimeline: {
-    flex: 1,
-    paddingHorizontal: Spacing.screenPadding,
-  },
-  timelineRow: {
-    flexDirection: "row",
-    minHeight: 60,
-    marginBottom: Spacing.xs,
-  },
-  timelineHour: {
-    width: 50,
-    paddingRight: Spacing.sm,
-  },
-  timelineLine: {
-    width: StyleSheet.hairlineWidth,
-    marginRight: Spacing.md,
-  },
-  timelineContent: {
-    flex: 1,
-    gap: Spacing.xs,
-  },
-  timelineJob: {
-    padding: Spacing.sm,
-    borderRadius: BorderRadius.sm,
-    borderLeftWidth: 3,
-    borderLeftColor: Colors.accent,
-  },
-  weekView: {
-    flex: 1,
-  },
-  weekDayRow: {
-    flexDirection: "row",
-    paddingHorizontal: Spacing.screenPadding,
-    marginBottom: Spacing.md,
-  },
-  weekDay: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md,
-  },
-  weekDayDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.accent,
-    marginTop: 4,
-  },
-  weekJobList: {
-    flex: 1,
-    paddingHorizontal: Spacing.screenPadding,
-  },
-  emptyDay: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: Spacing.xl,
   },
   monthView: {
     flex: 1,

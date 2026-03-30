@@ -236,71 +236,56 @@ export default function ProviderHomeScreen() {
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(200).duration(400)}>
-          <GlassCard style={styles.todaySummary}>
-            <ThemedText style={[styles.todayTitle, { color: theme.textSecondary }]}>
-              Dashboard
-            </ThemedText>
-            {isLoading ? (
+          {isLoading ? (
+            <GlassCard style={styles.todaySummary}>
               <ActivityIndicator size="small" color={Colors.accent} />
-            ) : (
-              <View style={styles.summaryGrid}>
-                <Pressable
-                  style={styles.summaryItem}
-                  onPress={() => navigation.navigate("ClientsTab")}
-                >
-                  <View style={[styles.summaryIcon, { backgroundColor: Colors.accentLight }]}>
-                    <Feather name="users" size={18} color={Colors.accent} />
-                  </View>
-                  <ThemedText style={styles.summaryValue}>{stats.activeClients}</ThemedText>
-                  <ThemedText style={[styles.summaryLabel, { color: theme.textSecondary }]}>
-                    Clients
-                  </ThemedText>
-                </Pressable>
+            </GlassCard>
+          ) : (
+            <View style={styles.statsGrid}>
+              <Pressable
+                style={[styles.statCard, { backgroundColor: theme.cardBackground }]}
+                onPress={() => navigation.navigate("ClientsTab")}
+              >
+                <View style={[styles.statIcon, { backgroundColor: Colors.accentLight }]}>
+                  <Feather name="users" size={16} color={Colors.accent} />
+                </View>
+                <ThemedText style={styles.statValue}>{stats.activeClients}</ThemedText>
+                <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Clients</ThemedText>
+              </Pressable>
 
-                <View style={[styles.summaryDivider, { backgroundColor: theme.separator }]} />
+              <Pressable
+                style={[styles.statCard, { backgroundColor: theme.cardBackground }]}
+                onPress={() => navigation.navigate("ScheduleTab")}
+              >
+                <View style={[styles.statIcon, { backgroundColor: Colors.accentLight }]}>
+                  <Feather name="calendar" size={16} color={Colors.accent} />
+                </View>
+                <ThemedText style={styles.statValue}>{stats.upcomingJobs}</ThemedText>
+                <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Upcoming</ThemedText>
+              </Pressable>
 
-                <Pressable
-                  style={styles.summaryItem}
-                  onPress={() => navigation.navigate("ScheduleTab")}
-                >
-                  <View style={[styles.summaryIcon, { backgroundColor: Colors.accentLight }]}>
-                    <Feather name="calendar" size={18} color={Colors.accent} />
-                  </View>
-                  <ThemedText style={styles.summaryValue}>{stats.upcomingJobs}</ThemedText>
-                  <ThemedText style={[styles.summaryLabel, { color: theme.textSecondary }]}>
-                    Upcoming
-                  </ThemedText>
-                </Pressable>
+              <Pressable
+                style={[styles.statCard, { backgroundColor: theme.cardBackground }]}
+              >
+                <View style={[styles.statIcon, { backgroundColor: Colors.accentLight }]}>
+                  <Feather name="check-circle" size={16} color={Colors.accent} />
+                </View>
+                <ThemedText style={styles.statValue}>{stats.jobsCompleted}</ThemedText>
+                <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Completed</ThemedText>
+              </Pressable>
 
-                <View style={[styles.summaryDivider, { backgroundColor: theme.separator }]} />
-
-                <Pressable style={styles.summaryItem}>
-                  <View style={[styles.summaryIcon, { backgroundColor: Colors.accentLight }]}>
-                    <Feather name="check-circle" size={18} color={Colors.accent} />
-                  </View>
-                  <ThemedText style={styles.summaryValue}>{stats.jobsCompleted}</ThemedText>
-                  <ThemedText style={[styles.summaryLabel, { color: theme.textSecondary }]}>
-                    Completed
-                  </ThemedText>
-                </Pressable>
-
-                <View style={[styles.summaryDivider, { backgroundColor: theme.separator }]} />
-
-                <Pressable
-                  style={styles.summaryItem}
-                  onPress={() => navigation.navigate("FinancesTab")}
-                >
-                  <View style={[styles.summaryIcon, { backgroundColor: Colors.accentLight }]}>
-                    <Feather name="dollar-sign" size={18} color={Colors.accent} />
-                  </View>
-                  <ThemedText style={styles.summaryValue}>${stats.revenueMTD.toLocaleString()}</ThemedText>
-                  <ThemedText style={[styles.summaryLabel, { color: theme.textSecondary }]}>
-                    This Month
-                  </ThemedText>
-                </Pressable>
-              </View>
-            )}
-          </GlassCard>
+              <Pressable
+                style={[styles.statCard, { backgroundColor: theme.cardBackground }]}
+                onPress={() => navigation.navigate("FinancesTab")}
+              >
+                <View style={[styles.statIcon, { backgroundColor: Colors.accentLight }]}>
+                  <Feather name="dollar-sign" size={16} color={Colors.accent} />
+                </View>
+                <ThemedText style={styles.statValue}>${stats.revenueMTD.toLocaleString()}</ThemedText>
+                <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>This Month</ThemedText>
+              </Pressable>
+            </View>
+          )}
         </Animated.View>
 
         {inProgressJobs.length > 0 ? (
@@ -430,39 +415,32 @@ const styles = StyleSheet.create({
   todaySummary: {
     marginBottom: Spacing.lg,
   },
-  todayTitle: {
-    ...Typography.footnote,
-    fontWeight: "500",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: Spacing.md,
-  },
-  summaryGrid: {
+  statsGrid: {
     flexDirection: "row",
-    alignItems: "center",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
   },
-  summaryItem: {
-    flex: 1,
-    alignItems: "center",
+  statCard: {
+    width: "48%",
+    borderRadius: BorderRadius.card,
+    padding: Spacing.md,
+    alignItems: "flex-start",
   },
-  summaryIcon: {
-    width: 36,
-    height: 36,
+  statIcon: {
+    width: 32,
+    height: 32,
     borderRadius: BorderRadius.md,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: Spacing.xs,
+    marginBottom: Spacing.sm,
   },
-  summaryValue: {
-    ...Typography.headline,
+  statValue: {
+    ...Typography.title2,
     marginBottom: 2,
   },
-  summaryLabel: {
-    ...Typography.caption2,
-  },
-  summaryDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: 48,
+  statLabel: {
+    ...Typography.caption1,
   },
   emptyCard: {
     alignItems: "center",

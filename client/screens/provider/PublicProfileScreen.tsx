@@ -469,7 +469,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.xs,
-    borderRadius: BorderRadius.pill,
+    borderRadius: BorderRadius.full,
     paddingHorizontal: Spacing.sm,
     paddingVertical: 2,
   },
@@ -492,7 +492,7 @@ const styles = StyleSheet.create({
   },
   sectionBadge: {
     backgroundColor: Colors.accentLight,
-    borderRadius: BorderRadius.pill,
+    borderRadius: BorderRadius.full,
     paddingHorizontal: Spacing.sm,
     paddingVertical: 2,
   },

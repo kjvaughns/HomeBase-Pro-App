@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
   filterChip: {
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.pill,
+    borderRadius: BorderRadius.full,
     borderWidth: 1,
   },
   filterLabel: {
