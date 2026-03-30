@@ -33,12 +33,7 @@ export async function purchaseProviderSubscription(pkg: PurchasesPackage) {
   }
 }
 
-export async function restorePurchases() {
-  const customerInfo = await Purchases.restorePurchases();
-  return customerInfo;
-}
-
-export async function getCustomerInfo() {
+export async function checkProviderSubscriptionStatus() {
   try {
     const customerInfo = await Purchases.getCustomerInfo();
     return customerInfo;
