@@ -10,7 +10,7 @@ import { Colors } from "@/constants/theme";
 interface AvatarProps {
   uri?: string;
   name?: string;
-  size?: "small" | "medium" | "large";
+  size?: "small" | "medium" | "large" | "xl";
   showBadge?: boolean;
 }
 
@@ -18,6 +18,7 @@ const sizes = {
   small: 40,
   medium: 56,
   large: 80,
+  xl: 104,
 };
 
 export function Avatar({

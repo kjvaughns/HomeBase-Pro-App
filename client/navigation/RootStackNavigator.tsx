@@ -465,7 +465,7 @@ export default function RootStackNavigator() {
         name="BusinessProfile"
         component={PublicProfileScreen}
         options={{
-          headerShown: false,
+          headerTitle: "Public Profile",
         }}
       />
       <Stack.Screen
