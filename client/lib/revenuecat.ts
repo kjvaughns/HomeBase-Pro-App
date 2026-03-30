@@ -18,6 +18,7 @@ export async function getProviderSubscriptionOfferings() {
     const offerings = await Purchases.getOfferings();
     return offerings.current;
   } catch (e) {
+    console.error('RevenueCat offerings error:', e);
     return null;
   }
 }
