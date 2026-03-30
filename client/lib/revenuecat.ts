@@ -16,7 +16,7 @@ export function initializePurchases(userId?: string) {
 export async function getProviderSubscriptionOfferings() {
   try {
     const offerings = await Purchases.getOfferings();
-    return offerings.current ?? null;
+    return offerings.current;
   } catch {
     return null;
   }
