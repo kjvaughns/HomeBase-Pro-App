@@ -58,7 +58,7 @@ const env = {
 
 const metro = spawn(
   "npx",
-  ["expo", "start", "--go", "--port", "8081"],
+  ["expo", "start", "--port", "8081"],
   { env, stdio: ["pipe", "inherit", "inherit"] }
 );
 

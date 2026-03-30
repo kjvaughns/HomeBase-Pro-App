@@ -15,7 +15,8 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo.spock.replit.dev"
+        "EXPO_PUBLIC_DOMAIN": "https://api.homebaseproapp.com",
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": ""
       }
     },
     "development-simulator": {
@@ -34,7 +35,8 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo.spock.replit.dev"
+        "EXPO_PUBLIC_DOMAIN": "https://api.homebaseproapp.com",
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": ""
       }
     },
     "production": {
@@ -43,7 +45,8 @@
         "resourceClass": "m-medium"
       },
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo.spock.replit.dev"
+        "EXPO_PUBLIC_DOMAIN": "https://api.homebaseproapp.com",
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": ""
       }
     }
   },

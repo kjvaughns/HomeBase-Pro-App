@@ -43,7 +43,22 @@
       ],
       "expo-web-browser",
       "expo-font",
-      "expo-image"
+      "expo-image",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
+      ],
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.homebasepro.app"
+        }
+      ],
+      "react-native-purchases"
     ],
     "experiments": {
       "reactCompiler": true
