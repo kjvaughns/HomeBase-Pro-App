@@ -38,8 +38,17 @@ export async function checkProviderSubscriptionStatus() {
     const customerInfo = await Purchases.getCustomerInfo();
     const isActive = Object.keys(customerInfo.entitlements.active).length > 0;
     return { isSubscribed: isActive, customerInfo };
-  } catch {
-    return { isActive: false, customerInfo: null };
+  } catch (e) {
+    return { isSubscribed: false, customerInfo: null };
+  }
+}
+
+export async function restorePurchases() {
+  try {
+    const customerInfo = await Purchases.restorePurchases();
+    return { success: true, customerInfo };
+  } catch (e) {
+    return { success: false, error: e };
   }
 }
 

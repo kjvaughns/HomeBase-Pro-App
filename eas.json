@@ -16,7 +16,9 @@
       },
       "env": {
         "EXPO_PUBLIC_DOMAIN": "https://api.homebaseproapp.com",
-        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": ""
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "",
+        "EXPO_PUBLIC_REVENUECAT_IOS_KEY": "",
+        "EXPO_PUBLIC_REVENUECAT_ANDROID_KEY": ""
       }
     },
     "development-simulator": {
@@ -36,7 +38,9 @@
       },
       "env": {
         "EXPO_PUBLIC_DOMAIN": "https://api.homebaseproapp.com",
-        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": ""
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "",
+        "EXPO_PUBLIC_REVENUECAT_IOS_KEY": "",
+        "EXPO_PUBLIC_REVENUECAT_ANDROID_KEY": ""
       }
     },
     "production": {
@@ -46,7 +50,9 @@
       },
       "env": {
         "EXPO_PUBLIC_DOMAIN": "https://api.homebaseproapp.com",
-        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": ""
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "",
+        "EXPO_PUBLIC_REVENUECAT_IOS_KEY": "",
+        "EXPO_PUBLIC_REVENUECAT_ANDROID_KEY": ""
       }
     }
   },
