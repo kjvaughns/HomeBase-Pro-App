@@ -57,10 +57,36 @@ export default function BecomeProviderScreen() {
       setNeedsRoleSelection(false);
       queryClient.invalidateQueries({ queryKey: ["/api/provider"] });
     },
-    onError: (error: any) => {
+    onError: async (error: any) => {
+      const message: string = error.message || "";
+      if (message.includes("409") && message.includes("already has a provider profile")) {
+        try {
+          const res = await apiRequest("GET", `/api/provider/user/${user!.id}`);
+          const data = await res.json();
+          const provider = data.provider ?? data;
+          if (provider?.id) {
+            createProviderProfile({
+              id: provider.id,
+              userId: provider.userId,
+              businessName: provider.businessName,
+              services: [],
+              status: "approved",
+              rating: 0,
+              reviewCount: 0,
+              completedJobs: 0,
+            });
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setActiveRole("provider");
+            setNeedsRoleSelection(false);
+            queryClient.invalidateQueries({ queryKey: ["/api/provider"] });
+            return;
+          }
+        } catch {
+        }
+      }
       Alert.alert(
         "Registration Failed",
-        error.message || "Unable to create your provider profile. Please try again."
+        "Unable to create your provider profile. Please try again."
       );
     },
   });
