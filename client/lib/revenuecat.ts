@@ -23,7 +23,7 @@ export async function getProviderSubscriptionOfferings() {
   }
 }
 
-export async function purchasePackage(pkg: PurchasesPackage) {
+export async function purchaseProviderSubscription(pkg: PurchasesPackage) {
   const { customerInfo } = await Purchases.purchasePackage(pkg);
   return customerInfo;
 }
