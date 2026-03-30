@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Book a Service — HomeBase</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --accent: #38AE5F;
+      --accent-light: rgba(56, 174, 95, 0.12);
+      --bg: #F5F5F7;
+      --card: #FFFFFF;
+      --text: #111111;
+      --text-secondary: #6B6B6B;
+      --text-tertiary: #ADADAD;
+      --border: rgba(0,0,0,0.08);
+      --radius: 16px;
+      --radius-sm: 10px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    /* Header */
+    .header {
+      background: rgba(255,255,255,0.8);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 20px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header-logo {
+      width: 32px;
+      height: 32px;
+      background: var(--accent);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .header-logo svg { display: block; }
+    .header-brand { font-size: 17px; font-weight: 700; color: var(--text); }
+
+    /* Main content */
+    .container { max-width: 520px; margin: 0 auto; padding: 24px 16px 60px; }
+
+    /* Loading / Error */
+    .center-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 60vh;
+      text-align: center;
+      gap: 12px;
+      color: var(--text-secondary);
+    }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Cards */
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+    }
+
+    /* Hero */
+    .hero {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .avatar {
+      width: 64px; height: 64px;
+      border-radius: 50%;
+      background: var(--accent-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--accent);
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .hero-info h1 { font-size: 22px; font-weight: 700; }
+    .hero-info .location { font-size: 14px; color: var(--text-secondary); margin-top: 3px; }
+
+    .trust-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+    .trust-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .stars { display: flex; gap: 2px; }
+    .star { font-size: 12px; }
+    .star.filled { color: #F59E0B; }
+    .star.empty { color: var(--text-tertiary); }
+    .badge {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--accent-light);
+      color: var(--accent);
+      border-radius: 20px;
+      padding: 3px 10px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    /* Section titles */
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+
+    /* Welcome message */
+    .welcome-msg {
+      font-size: 15px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    /* Services */
+    .service-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .service-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .service-row:first-child { padding-top: 0; }
+    .service-name { font-size: 15px; font-weight: 500; }
+    .service-desc { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+    .service-price {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--accent);
+      white-space: nowrap;
+      margin-left: 16px;
+      flex-shrink: 0;
+    }
+
+    /* Form */
+    .form-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+
+    .form-group { margin-bottom: 14px; }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 15px;
+      font-family: inherit;
+      color: var(--text);
+      background: var(--bg);
+      outline: none;
+      transition: border-color 0.15s;
+      -webkit-appearance: none;
+    }
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus {
+      border-color: var(--accent);
+      background: #fff;
+    }
+    .form-group textarea { resize: vertical; min-height: 90px; }
+    .form-group input::placeholder,
+    .form-group textarea::placeholder { color: var(--text-tertiary); }
+
+    .required { color: var(--accent); }
+
+    /* Custom intake questions */
+    .custom-q { margin-bottom: 14px; }
+    .custom-q label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+
+    /* Submit button */
+    .btn-submit {
+      width: 100%;
+      padding: 15px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      margin-top: 8px;
+      transition: opacity 0.15s;
+    }
+    .btn-submit:hover { opacity: 0.9; }
+    .btn-submit:active { opacity: 0.8; }
+    .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Success state */
+    .success-card {
+      text-align: center;
+      padding: 40px 24px;
+    }
+    .success-icon {
+      width: 64px; height: 64px;
+      background: var(--accent-light);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      font-size: 28px;
+    }
+    .success-title { font-size: 22px; font-weight: 700; margin-bottom: 10px; }
+    .success-desc { font-size: 15px; color: var(--text-secondary); line-height: 1.6; }
+
+    /* Error banner */
+    .error-banner {
+      background: #FEF2F2;
+      border: 1px solid #FECACA;
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      font-size: 14px;
+      color: #DC2626;
+      margin-bottom: 14px;
+      display: none;
+    }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      padding: 24px 0;
+      font-size: 13px;
+      color: var(--text-tertiary);
+    }
+    .footer a { color: var(--accent); text-decoration: none; }
+
+    /* Hidden */
+    .hidden { display: none !important; }
+
+    @media (min-width: 600px) {
+      .container { padding: 32px 24px 80px; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-logo">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M3 9.5L12 3L21 9.5V21H15V15H9V21H3V9.5Z" fill="white"/>
+    </svg>
+  </div>
+  <span class="header-brand">HomeBase</span>
+</header>
+
+<div class="container">
+  <!-- Loading -->
+  <div id="loading" class="center-state">
+    <div class="spinner"></div>
+    <p>Loading booking page...</p>
+  </div>
+
+  <!-- Error -->
+  <div id="error-state" class="center-state hidden">
+    <p style="font-size: 40px; margin-bottom: 4px;">&#128533;</p>
+    <p style="font-size: 17px; font-weight: 600; color: var(--text);">Page not found</p>
+    <p style="font-size: 14px;">This booking link may have been disabled or the URL is incorrect.</p>
+  </div>
+
+  <!-- Content -->
+  <div id="content" class="hidden">
+
+    <!-- Provider Hero Card -->
+    <div class="card">
+      <div class="hero">
+        <div class="avatar" id="provider-avatar"></div>
+        <div class="hero-info">
+          <h1 id="provider-name">-</h1>
+          <div class="location" id="provider-location"></div>
+        </div>
+      </div>
+      <div class="trust-row" id="trust-row"></div>
+    </div>
+
+    <!-- Welcome message -->
+    <div class="card" id="welcome-card">
+      <div class="section-title">A message from your provider</div>
+      <p class="welcome-msg" id="welcome-msg"></p>
+    </div>
+
+    <!-- Services -->
+    <div class="card" id="services-card">
+      <div class="section-title">Services offered</div>
+      <div id="services-list"></div>
+    </div>
+
+    <!-- Booking Form -->
+    <div class="card" id="form-card">
+      <div class="form-title">Request a Service</div>
+      <div class="error-banner" id="form-error"></div>
+
+      <div class="form-group">
+        <label>Full Name <span class="required">*</span></label>
+        <input type="text" id="field-name" placeholder="Jane Smith" autocomplete="name" />
+      </div>
+
+      <div class="form-group">
+        <label>Email Address</label>
+        <input type="email" id="field-email" placeholder="jane@email.com" autocomplete="email" />
+      </div>
+
+      <div class="form-group">
+        <label>Phone Number</label>
+        <input type="tel" id="field-phone" placeholder="(555) 000-0000" autocomplete="tel" />
+      </div>
+
+      <div class="form-group">
+        <label>Service Address</label>
+        <input type="text" id="field-address" placeholder="123 Main St, City, State" autocomplete="street-address" />
+      </div>
+
+      <div class="form-group">
+        <label>Describe the Issue <span class="required">*</span></label>
+        <textarea id="field-problem" placeholder="Tell the provider what you need help with..."></textarea>
+      </div>
+
+      <!-- Dynamic intake questions injected here -->
+      <div id="custom-questions"></div>
+
+      <button class="btn-submit" id="btn-submit" type="button">Send Request</button>
+    </div>
+
+    <!-- Success -->
+    <div class="card success-card hidden" id="success-card">
+      <div class="success-icon">&#10003;</div>
+      <div class="success-title">Request Sent!</div>
+      <p class="success-desc" id="success-msg">Your request has been submitted. The provider will be in touch soon.</p>
+    </div>
+
+  </div>
+</div>
+
+<div class="footer" id="footer" style="display:none">
+  Powered by <a href="https://homebaseproapp.com">HomeBase</a>
+</div>
+
+<script>
+(function () {
+  const slug = location.pathname.replace(/^\/book\//, '').replace(/\/$/, '');
+
+  const $ = (id) => document.getElementById(id);
+
+  function stars(rating) {
+    let html = '<div class="stars">';
+    for (let i = 1; i <= 5; i++) {
+      html += `<span class="star ${i <= Math.round(rating) ? 'filled' : 'empty'}">&#9733;</span>`;
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function initials(name) {
+    if (!name) return 'P';
+    return name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
+  }
+
+  function formatPrice(svc) {
+    if (svc.pricingType === 'quote') return 'Get Quote';
+    if (svc.basePrice) return '$' + parseFloat(svc.basePrice).toLocaleString();
+    return 'Contact';
+  }
+
+  function showError() {
+    $('loading').classList.add('hidden');
+    $('error-state').classList.remove('hidden');
+  }
+
+  async function load() {
+    try {
+      const apiBase = location.origin;
+      const res = await fetch(`${apiBase}/api/book/${slug}`);
+      if (!res.ok) { showError(); return; }
+      const { bookingLink, provider } = await res.json();
+
+      // Populate provider hero
+      const avatarEl = $('provider-avatar');
+      if (provider.avatarUrl) {
+        const img = document.createElement('img');
+        img.src = provider.avatarUrl;
+        img.onerror = () => { avatarEl.textContent = initials(provider.businessName); };
+        avatarEl.appendChild(img);
+      } else {
+        avatarEl.textContent = initials(provider.businessName);
+      }
+
+      $('provider-name').textContent = provider.businessName || 'Your Provider';
+
+      if (provider.serviceArea) {
+        $('provider-location').textContent = 'Serving ' + provider.serviceArea;
+      }
+
+      // Trust row
+      const trustRow = $('trust-row');
+      let trustHtml = '';
+      const rating = parseFloat(provider.rating || '0');
+      if (rating > 0) {
+        trustHtml += `<div class="trust-item">${stars(rating)}<span>${rating.toFixed(1)} (${provider.reviewCount || 0})</span></div>`;
+      }
+      if (provider.completedJobs > 0) {
+        trustHtml += `<div class="trust-item">&#10003; ${provider.completedJobs} jobs done</div>`;
+      }
+      trustHtml += `<div class="badge"><span>&#10003;</span> Verified</div>`;
+      trustRow.innerHTML = trustHtml;
+
+      // Welcome message
+      if (bookingLink.welcomeMessage) {
+        $('welcome-msg').textContent = bookingLink.welcomeMessage;
+      } else {
+        $('welcome-card').classList.add('hidden');
+      }
+
+      // Services
+      const catalog = Array.isArray(bookingLink.serviceCatalog) ? bookingLink.serviceCatalog : [];
+      if (catalog.length > 0) {
+        let svcsHtml = '';
+        catalog.forEach(svc => {
+          svcsHtml += `<div class="service-row">
+            <div>
+              <div class="service-name">${svc.name || ''}</div>
+              ${svc.description ? `<div class="service-desc">${svc.description}</div>` : ''}
+            </div>
+            <div class="service-price">${formatPrice(svc)}</div>
+          </div>`;
+        });
+        $('services-list').innerHTML = svcsHtml;
+      } else {
+        $('services-card').classList.add('hidden');
+      }
+
+      // Intake questions
+      const questions = Array.isArray(bookingLink.intakeQuestions) ? bookingLink.intakeQuestions : [];
+      if (questions.length > 0) {
+        const container = $('custom-questions');
+        questions.forEach((q, i) => {
+          const div = document.createElement('div');
+          div.className = 'form-group custom-q';
+          const label = document.createElement('label');
+          label.textContent = q.question || `Question ${i + 1}`;
+          div.appendChild(label);
+
+          if (q.type === 'select' && Array.isArray(q.options)) {
+            const sel = document.createElement('select');
+            sel.id = `custom-${i}`;
+            const opt0 = document.createElement('option');
+            opt0.value = '';
+            opt0.textContent = 'Select an option...';
+            sel.appendChild(opt0);
+            q.options.forEach(opt => {
+              const o = document.createElement('option');
+              o.value = opt;
+              o.textContent = opt;
+              sel.appendChild(o);
+            });
+            div.appendChild(sel);
+          } else {
+            const input = document.createElement(q.type === 'textarea' ? 'textarea' : 'input');
+            input.id = `custom-${i}`;
+            input.placeholder = q.placeholder || '';
+            if (input.tagName === 'INPUT') input.type = 'text';
+            div.appendChild(input);
+          }
+          container.appendChild(div);
+        });
+      }
+
+      // Show content
+      $('loading').classList.add('hidden');
+      $('content').classList.remove('hidden');
+      $('footer').style.display = '';
+
+      // Submit
+      $('btn-submit').addEventListener('click', async () => {
+        const name = $('field-name').value.trim();
+        const problem = $('field-problem').value.trim();
+        const errorBanner = $('form-error');
+
+        if (!name) {
+          errorBanner.textContent = 'Please enter your full name.';
+          errorBanner.style.display = 'block';
+          $('field-name').focus();
+          return;
+        }
+        if (!problem) {
+          errorBanner.textContent = 'Please describe the issue.';
+          errorBanner.style.display = 'block';
+          $('field-problem').focus();
+          return;
+        }
+        errorBanner.style.display = 'none';
+
+        const answers = {};
+        questions.forEach((q, i) => {
+          const el = document.getElementById(`custom-${i}`);
+          if (el) answers[q.question] = el.value;
+        });
+
+        $('btn-submit').disabled = true;
+        $('btn-submit').textContent = 'Sending...';
+
+        try {
+          const submitRes = await fetch(`${apiBase}/api/book/${slug}/submit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              clientName: name,
+              clientEmail: $('field-email').value.trim(),
+              clientPhone: $('field-phone').value.trim(),
+              address: $('field-address').value.trim(),
+              problemDescription: problem,
+              answersJson: JSON.stringify(answers),
+            }),
+          });
+
+          if (!submitRes.ok) {
+            const err = await submitRes.json().catch(() => ({}));
+            throw new Error(err.error || 'Submission failed.');
+          }
+
+          $('form-card').classList.add('hidden');
+          $('success-card').classList.remove('hidden');
+          $('success-msg').textContent = `Thanks, ${name.split(' ')[0]}! ${provider.businessName || 'Your provider'} will be in touch shortly.`;
+        } catch (err) {
+          errorBanner.textContent = err.message || 'Something went wrong. Please try again.';
+          errorBanner.style.display = 'block';
+          $('btn-submit').disabled = false;
+          $('btn-submit').textContent = 'Send Request';
+        }
+      });
+
+    } catch (err) {
+      console.error(err);
+      showError();
+    }
+  }
+
+  load();
+})();
+</script>
+</body>
+</html>

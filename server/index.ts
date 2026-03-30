@@ -310,6 +310,19 @@ function configureExpoAndLanding(app: express.Application) {
   const landingPageTemplate = fs.readFileSync(templatePath, "utf-8");
   const appName = getAppName();
 
+  // Public booking page — served at /book/:slug
+  const bookingPagePath = path.resolve(
+    process.cwd(),
+    "server",
+    "templates",
+    "booking-page.html",
+  );
+  app.get("/book/:slug", (_req: Request, res: Response) => {
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.sendFile(bookingPagePath);
+  });
+
   log("Serving static Expo files with dynamic manifest routing");
 
   // Live Expo Go QR code page — reads the tunnel URL written by expo-start.py
