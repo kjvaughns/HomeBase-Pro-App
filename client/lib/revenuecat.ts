@@ -37,7 +37,7 @@ export async function checkProviderSubscriptionStatus() {
   try {
     const customerInfo = await Purchases.getCustomerInfo();
     const isActive = Object.keys(customerInfo.entitlements.active).length > 0;
-    return { isActive, customerInfo };
+    return { isSubscribed: isActive, customerInfo };
   } catch {
     return { isActive: false, customerInfo: null };
   }
