@@ -14,6 +14,7 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import type { ComponentProps } from "react";
 
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
@@ -25,7 +26,42 @@ import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollV
 import { Spacing, Typography, Colors, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useTheme } from "@/hooks/useTheme";
-import { apiRequest, getApiUrl } from "@/lib/query-client";
+import { apiRequest } from "@/lib/query-client";
+
+type FeatherName = ComponentProps<typeof Feather>["name"];
+
+function SectionHeader({ icon, title, iconBg, children }: { icon: FeatherName; title: string; iconBg?: string; children?: React.ReactNode }) {
+  const { theme } = useTheme();
+  return (
+    <View style={sectionHeaderStyles.row}>
+      <View style={[sectionHeaderStyles.iconTile, { backgroundColor: iconBg ?? Colors.accentLight }]}>
+        <Feather name={icon} size={15} color={iconBg ? theme.textSecondary : Colors.accent} />
+      </View>
+      <ThemedText style={sectionHeaderStyles.title}>{title}</ThemedText>
+      {children}
+    </View>
+  );
+}
+
+const sectionHeaderStyles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  iconTile: {
+    width: 30,
+    height: 30,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  title: {
+    ...Typography.headline,
+    flex: 1,
+  },
+});
 
 interface Client {
   id: string;
@@ -60,7 +96,7 @@ export default function AddJobScreen() {
   const route = useRoute();
   const queryClient = useQueryClient();
   const { providerProfile } = useAuthStore();
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
 
   const providerId = providerProfile?.id;
   const preselectedClientId = (route.params as any)?.clientId;
@@ -144,10 +180,7 @@ export default function AddJobScreen() {
   });
 
   const handleSave = () => {
-    if (!selectedClientId || !serviceName.trim() || !providerId) {
-      return;
-    }
-
+    if (!selectedClientId || !serviceName.trim() || !providerId) return;
     createJobMutation.mutate({
       providerId,
       clientId: selectedClientId,
@@ -161,10 +194,7 @@ export default function AddJobScreen() {
   };
 
   const handleCreateClient = () => {
-    if (!newClientFirstName.trim() || !newClientLastName.trim() || !providerId) {
-      return;
-    }
-
+    if (!newClientFirstName.trim() || !newClientLastName.trim() || !providerId) return;
     createClientMutation.mutate({
       providerId,
       firstName: newClientFirstName.trim(),
@@ -176,7 +206,6 @@ export default function AddJobScreen() {
 
   const handleGetPricingSuggestion = async () => {
     if (!serviceName.trim()) return;
-
     setPricingLoading(true);
     try {
       const response = await apiRequest("POST", "/api/ai/pricing-assistant", {
@@ -204,13 +233,8 @@ export default function AddJobScreen() {
     }
   };
 
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-    });
-  };
+  const formatDate = (date: Date) =>
+    date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
   const formatTime = (time: string) => {
     const [hours, minutes] = time.split(":");
@@ -232,121 +256,138 @@ export default function AddJobScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
+        {/* Client */}
         <GlassCard style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Client</ThemedText>
-          
+          <SectionHeader icon="users" title="Client" />
           <Pressable
-            style={[styles.selector, { borderColor: theme.border }]}
+            style={[styles.selectorRow, { backgroundColor: theme.backgroundSecondary }]}
             onPress={() => setShowClientPicker(true)}
+            testID="selector-client"
           >
             {selectedClient ? (
-              <View style={styles.selectedClient}>
+              <>
                 <View style={[styles.clientAvatar, { backgroundColor: Colors.accent }]}>
                   <ThemedText style={styles.avatarText}>
                     {selectedClient.firstName[0]}{selectedClient.lastName[0]}
                   </ThemedText>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <ThemedText style={styles.clientName}>
+                <View style={styles.selectorBody}>
+                  <ThemedText style={styles.selectorValue}>
                     {selectedClient.firstName} {selectedClient.lastName}
                   </ThemedText>
                   {selectedClient.address ? (
-                    <ThemedText style={[styles.clientDetail, { color: theme.textSecondary }]}>
+                    <ThemedText style={[styles.selectorSub, { color: theme.textTertiary }]}>
                       {selectedClient.address}
                     </ThemedText>
                   ) : null}
                 </View>
-              </View>
+              </>
             ) : (
-              <ThemedText style={{ color: theme.textSecondary }}>
-                Select a client
-              </ThemedText>
+              <>
+                <View style={[styles.clientAvatar, { backgroundColor: theme.backgroundTertiary }]}>
+                  <Feather name="user" size={16} color={theme.textTertiary} />
+                </View>
+                <ThemedText style={[styles.selectorPlaceholder, { color: theme.textTertiary }]}>
+                  Select a client
+                </ThemedText>
+              </>
             )}
-            <Feather name="chevron-down" size={20} color={theme.textSecondary} />
+            <Feather name="chevron-down" size={18} color={Colors.accent} />
           </Pressable>
         </GlassCard>
 
+        {/* Service */}
         <GlassCard style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Service</ThemedText>
-          
+          <SectionHeader icon="tool" title="Service" />
           <Pressable
-            style={[styles.selector, { borderColor: theme.border }]}
+            style={[styles.selectorRow, { backgroundColor: theme.backgroundSecondary }]}
             onPress={() => setShowServicePicker(true)}
+            testID="selector-service"
           >
-            <ThemedText style={serviceName ? {} : { color: theme.textSecondary }}>
+            <View style={[styles.serviceIconWrap, { backgroundColor: Colors.accentLight }]}>
+              <Feather name="tool" size={14} color={Colors.accent} />
+            </View>
+            <ThemedText
+              style={[
+                styles.selectorBody,
+                serviceName
+                  ? styles.selectorValue
+                  : [styles.selectorPlaceholder, { color: theme.textTertiary }],
+              ]}
+            >
               {serviceName || "Select a service"}
             </ThemedText>
-            <Feather name="chevron-down" size={20} color={theme.textSecondary} />
+            <Feather name="chevron-down" size={18} color={Colors.accent} />
           </Pressable>
 
+          <View style={[styles.divider, { backgroundColor: theme.separator }]} />
+
           <TextField
-            label="Description (optional)"
             value={description}
             onChangeText={setDescription}
-            placeholder="Brief job description"
+            placeholder="Brief job description (optional)"
             multiline
             numberOfLines={3}
-            style={{ marginTop: Spacing.md }}
+            leftIcon="align-left"
           />
         </GlassCard>
 
+        {/* Schedule */}
         <GlassCard style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Schedule</ThemedText>
-          
-          <View style={styles.scheduleRow}>
+          <SectionHeader icon="calendar" title="Schedule" />
+          <View style={styles.pillRow}>
             <Pressable
-              style={[styles.scheduleButton, { borderColor: theme.border, flex: 1 }]}
+              style={[styles.pill, { backgroundColor: theme.backgroundSecondary }]}
               onPress={() => setShowDatePicker(true)}
+              testID="picker-date"
             >
-              <Feather name="calendar" size={18} color={Colors.accent} />
-              <ThemedText style={{ marginLeft: Spacing.sm }}>
-                {formatDate(scheduledDate)}
-              </ThemedText>
+              <Feather name="calendar" size={15} color={Colors.accent} />
+              <ThemedText style={styles.pillText}>{formatDate(scheduledDate)}</ThemedText>
             </Pressable>
-
             <Pressable
-              style={[styles.scheduleButton, { borderColor: theme.border, flex: 1, marginLeft: Spacing.md }]}
+              style={[styles.pill, { backgroundColor: theme.backgroundSecondary }]}
               onPress={() => setShowTimePicker(true)}
+              testID="picker-time"
             >
-              <Feather name="clock" size={18} color={Colors.accent} />
-              <ThemedText style={{ marginLeft: Spacing.sm }}>
-                {formatTime(scheduledTime)}
-              </ThemedText>
+              <Feather name="clock" size={15} color={Colors.accent} />
+              <ThemedText style={styles.pillText}>{formatTime(scheduledTime)}</ThemedText>
             </Pressable>
           </View>
         </GlassCard>
 
+        {/* Pricing */}
         <GlassCard style={styles.section}>
-          <View style={styles.pricingHeader}>
-            <ThemedText style={styles.sectionTitle}>Pricing</ThemedText>
+          <SectionHeader icon="dollar-sign" title="Pricing">
             <Pressable
-              style={[styles.aiButton, pricingLoading && { opacity: 0.6 }]}
+              style={[styles.aiChip, (pricingLoading || !serviceName.trim()) && styles.aiChipDisabled]}
               onPress={handleGetPricingSuggestion}
               disabled={pricingLoading || !serviceName.trim()}
+              testID="button-ai-suggest"
             >
               {pricingLoading ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
                 <>
-                  <Feather name="zap" size={14} color="#FFFFFF" />
-                  <ThemedText style={styles.aiButtonText}>AI Suggest</ThemedText>
+                  <Feather name="zap" size={12} color="#FFFFFF" />
+                  <ThemedText style={styles.aiChipText}>AI Suggest</ThemedText>
                 </>
               )}
             </Pressable>
-          </View>
-
+          </SectionHeader>
           <TextField
-            label="Estimated Price ($)"
             value={estimatedPrice}
             onChangeText={setEstimatedPrice}
             placeholder="0.00"
             keyboardType="decimal-pad"
+            leftIcon="dollar-sign"
+            testID="input-price"
           />
         </GlassCard>
 
+        {/* Notes */}
         <GlassCard style={styles.section}>
+          <SectionHeader icon="file-text" title="Notes" iconBg={undefined} />
           <TextField
-            label="Notes (optional)"
             value={notes}
             onChangeText={setNotes}
             placeholder="Any additional notes"
@@ -358,7 +399,7 @@ export default function AddJobScreen() {
         <View style={styles.buttonRow}>
           <SecondaryButton
             onPress={() => navigation.goBack()}
-            style={{ flex: 1 }}
+            style={styles.btnFlex}
           >
             Cancel
           </SecondaryButton>
@@ -366,7 +407,8 @@ export default function AddJobScreen() {
             onPress={handleSave}
             disabled={!canSave}
             loading={createJobMutation.isPending}
-            style={{ flex: 1, marginLeft: Spacing.md }}
+            style={styles.btnFlex}
+            testID="button-schedule-job"
           >
             Schedule Job
           </PrimaryButton>
@@ -403,54 +445,50 @@ export default function AddJobScreen() {
         />
       ) : null}
 
+      {/* Service Picker Modal */}
       <Modal
         visible={showServicePicker}
         transparent
         animationType="slide"
         onRequestClose={() => setShowServicePicker(false)}
       >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowServicePicker(false)}
-        >
-          <View style={[styles.modalContent, { backgroundColor: theme.backgroundElevated }]}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowServicePicker(false)}>
+          <View style={[styles.modalSheet, { backgroundColor: theme.backgroundElevated }]}>
+            <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <ThemedText style={styles.modalTitle}>Select Service</ThemedText>
-              <Pressable onPress={() => setShowServicePicker(false)}>
-                <Feather name="x" size={24} color={theme.text} />
+              <Pressable onPress={() => setShowServicePicker(false)} hitSlop={8}>
+                <Feather name="x" size={22} color={theme.textSecondary} />
               </Pressable>
             </View>
-            <ScrollView style={styles.modalList}>
+            <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
               {SERVICE_OPTIONS.map((service) => (
                 <Pressable
                   key={service}
                   style={[
                     styles.modalItem,
-                    serviceName === service && { backgroundColor: Colors.accent + "20" },
+                    serviceName === service && { backgroundColor: Colors.accentLight },
                   ]}
-                  onPress={() => {
-                    setServiceName(service);
-                    setShowServicePicker(false);
-                  }}
+                  onPress={() => { setServiceName(service); setShowServicePicker(false); }}
                 >
-                  <ThemedText>{service}</ThemedText>
+                  <ThemedText style={serviceName === service ? { color: Colors.accent, fontWeight: "600" } : {}}>
+                    {service}
+                  </ThemedText>
                   {serviceName === service ? (
-                    <Feather name="check" size={20} color={Colors.accent} />
+                    <Feather name="check" size={18} color={Colors.accent} />
                   ) : null}
                 </Pressable>
               ))}
             </ScrollView>
-            <View style={styles.customServiceRow}>
+            <View style={[styles.customRow, { borderTopColor: theme.separator }]}>
               <TextField
-                placeholder="Or enter custom service"
+                placeholder="Or type a custom service"
                 value={serviceName}
                 onChangeText={setServiceName}
                 style={{ flex: 1 }}
+                leftIcon="edit-2"
               />
-              <PrimaryButton
-                onPress={() => setShowServicePicker(false)}
-                style={{ marginLeft: Spacing.sm }}
-              >
+              <PrimaryButton onPress={() => setShowServicePicker(false)} style={{ marginLeft: Spacing.sm }}>
                 Done
               </PrimaryButton>
             </View>
@@ -458,47 +496,43 @@ export default function AddJobScreen() {
         </Pressable>
       </Modal>
 
+      {/* Client Picker Modal */}
       <Modal
         visible={showClientPicker}
         transparent
         animationType="slide"
         onRequestClose={() => setShowClientPicker(false)}
       >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowClientPicker(false)}
-        >
-          <View style={[styles.modalContent, { backgroundColor: theme.backgroundElevated }]}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowClientPicker(false)}>
+          <View style={[styles.modalSheet, { backgroundColor: theme.backgroundElevated }]}>
+            <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <ThemedText style={styles.modalTitle}>Select Client</ThemedText>
-              <Pressable onPress={() => setShowClientPicker(false)}>
-                <Feather name="x" size={24} color={theme.text} />
+              <Pressable onPress={() => setShowClientPicker(false)} hitSlop={8}>
+                <Feather name="x" size={22} color={theme.textSecondary} />
               </Pressable>
             </View>
 
-            <View style={[styles.searchBar, { backgroundColor: theme.backgroundRoot }]}>
-              <Feather name="search" size={18} color={theme.textSecondary} />
+            <View style={[styles.searchBar, { backgroundColor: theme.backgroundSecondary }]}>
+              <Feather name="search" size={16} color={theme.textTertiary} />
               <TextInput
                 style={[styles.searchInput, { color: theme.text }]}
                 placeholder="Search clients..."
-                placeholderTextColor={theme.textSecondary}
+                placeholderTextColor={theme.textTertiary}
                 value={clientSearch}
                 onChangeText={setClientSearch}
               />
             </View>
 
-            <ScrollView style={styles.modalList}>
+            <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
               <Pressable
                 style={[styles.modalItem, styles.addNewItem]}
-                onPress={() => {
-                  setShowClientPicker(false);
-                  setShowNewClientForm(true);
-                }}
+                onPress={() => { setShowClientPicker(false); setShowNewClientForm(true); }}
               >
                 <View style={[styles.addIcon, { backgroundColor: Colors.accent }]}>
                   <Feather name="plus" size={16} color="#FFFFFF" />
                 </View>
-                <ThemedText style={{ color: Colors.accent }}>Add New Client</ThemedText>
+                <ThemedText style={{ color: Colors.accent, fontWeight: "600" }}>Add New Client</ThemedText>
               </Pressable>
 
               {filteredClients.map((client) => (
@@ -506,12 +540,9 @@ export default function AddJobScreen() {
                   key={client.id}
                   style={[
                     styles.modalItem,
-                    selectedClientId === client.id && { backgroundColor: Colors.accent + "20" },
+                    selectedClientId === client.id && { backgroundColor: Colors.accentLight },
                   ]}
-                  onPress={() => {
-                    setSelectedClientId(client.id);
-                    setShowClientPicker(false);
-                  }}
+                  onPress={() => { setSelectedClientId(client.id); setShowClientPicker(false); }}
                 >
                   <View style={[styles.clientAvatar, { backgroundColor: Colors.accent }]}>
                     <ThemedText style={styles.avatarText}>
@@ -519,24 +550,24 @@ export default function AddJobScreen() {
                     </ThemedText>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <ThemedText>{client.firstName} {client.lastName}</ThemedText>
+                    <ThemedText style={selectedClientId === client.id ? { color: Colors.accent, fontWeight: "600" } : {}}>
+                      {client.firstName} {client.lastName}
+                    </ThemedText>
                     {client.phone ? (
-                      <ThemedText style={[styles.clientDetail, { color: theme.textSecondary }]}>
+                      <ThemedText style={[styles.selectorSub, { color: theme.textTertiary }]}>
                         {client.phone}
                       </ThemedText>
                     ) : null}
                   </View>
                   {selectedClientId === client.id ? (
-                    <Feather name="check" size={20} color={Colors.accent} />
+                    <Feather name="check" size={18} color={Colors.accent} />
                   ) : null}
                 </Pressable>
               ))}
 
               {filteredClients.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <ThemedText style={{ color: theme.textSecondary }}>
-                    No clients found
-                  </ThemedText>
+                <View style={styles.emptyModal}>
+                  <ThemedText style={{ color: theme.textSecondary }}>No clients found</ThemedText>
                 </View>
               ) : null}
             </ScrollView>
@@ -544,69 +575,35 @@ export default function AddJobScreen() {
         </Pressable>
       </Modal>
 
+      {/* New Client Quick-Form Modal */}
       <Modal
         visible={showNewClientForm}
         transparent
         animationType="slide"
         onRequestClose={() => setShowNewClientForm(false)}
       >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowNewClientForm(false)}
-        >
-          <Pressable style={[styles.modalContent, { backgroundColor: theme.backgroundElevated }]}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowNewClientForm(false)}>
+          <Pressable style={[styles.modalSheet, { backgroundColor: theme.backgroundElevated }]}>
+            <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <ThemedText style={styles.modalTitle}>New Client</ThemedText>
-              <Pressable onPress={() => setShowNewClientForm(false)}>
-                <Feather name="x" size={24} color={theme.text} />
+              <Pressable onPress={() => setShowNewClientForm(false)} hitSlop={8}>
+                <Feather name="x" size={22} color={theme.textSecondary} />
               </Pressable>
             </View>
-
             <View style={styles.formFields}>
-              <TextField
-                label="First Name"
-                value={newClientFirstName}
-                onChangeText={setNewClientFirstName}
-                placeholder="John"
-              />
-              <TextField
-                label="Last Name"
-                value={newClientLastName}
-                onChangeText={setNewClientLastName}
-                placeholder="Smith"
-                style={{ marginTop: Spacing.md }}
-              />
-              <TextField
-                label="Phone (optional)"
-                value={newClientPhone}
-                onChangeText={setNewClientPhone}
-                placeholder="(555) 123-4567"
-                keyboardType="phone-pad"
-                style={{ marginTop: Spacing.md }}
-              />
-              <TextField
-                label="Email (optional)"
-                value={newClientEmail}
-                onChangeText={setNewClientEmail}
-                placeholder="john@example.com"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                style={{ marginTop: Spacing.md }}
-              />
+              <TextField label="First Name" value={newClientFirstName} onChangeText={setNewClientFirstName} placeholder="John" leftIcon="user" />
+              <TextField label="Last Name" value={newClientLastName} onChangeText={setNewClientLastName} placeholder="Smith" leftIcon="user" style={{ marginTop: Spacing.md }} />
+              <TextField label="Phone (optional)" value={newClientPhone} onChangeText={setNewClientPhone} placeholder="(555) 123-4567" keyboardType="phone-pad" leftIcon="phone" style={{ marginTop: Spacing.md }} />
+              <TextField label="Email (optional)" value={newClientEmail} onChangeText={setNewClientEmail} placeholder="john@example.com" keyboardType="email-address" autoCapitalize="none" leftIcon="mail" style={{ marginTop: Spacing.md }} />
             </View>
-
             <View style={styles.buttonRow}>
-              <SecondaryButton
-                onPress={() => setShowNewClientForm(false)}
-                style={{ flex: 1 }}
-              >
-                Cancel
-              </SecondaryButton>
+              <SecondaryButton onPress={() => setShowNewClientForm(false)} style={styles.btnFlex}>Cancel</SecondaryButton>
               <PrimaryButton
                 onPress={handleCreateClient}
                 disabled={!newClientFirstName.trim() || !newClientLastName.trim()}
                 loading={createClientMutation.isPending}
-                style={{ flex: 1, marginLeft: Spacing.md }}
+                style={styles.btnFlex}
               >
                 Add Client
               </PrimaryButton>
@@ -615,49 +612,39 @@ export default function AddJobScreen() {
         </Pressable>
       </Modal>
 
+      {/* AI Pricing Modal */}
       <Modal
         visible={showPricingAssistant}
         transparent
         animationType="fade"
         onRequestClose={() => setShowPricingAssistant(false)}
       >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowPricingAssistant(false)}
-        >
-          <View style={[styles.pricingModal, { backgroundColor: theme.backgroundElevated }]}>
-            <View style={styles.modalHeader}>
-              <View style={styles.aiHeader}>
-                <Feather name="zap" size={20} color={Colors.accent} />
-                <ThemedText style={[styles.modalTitle, { marginLeft: Spacing.sm }]}>
-                  AI Pricing Suggestion
-                </ThemedText>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowPricingAssistant(false)}>
+          <View style={[styles.pricingCard, { backgroundColor: theme.backgroundElevated }]}>
+            <View style={styles.aiHeader}>
+              <View style={[styles.aiIconWrap, { backgroundColor: Colors.accentLight }]}>
+                <Feather name="zap" size={18} color={Colors.accent} />
               </View>
-              <Pressable onPress={() => setShowPricingAssistant(false)}>
-                <Feather name="x" size={24} color={theme.text} />
-              </Pressable>
+              <ThemedText style={styles.modalTitle}>AI Price Suggestion</ThemedText>
             </View>
 
             {pricingSuggestion ? (
               <>
-                <View style={styles.priceDisplay}>
-                  <ThemedText style={[styles.suggestedPrice, { color: Colors.accent }]}>
-                    ${pricingSuggestion.suggestedPrice.toFixed(2)}
+                <View style={[styles.priceHighlight, { backgroundColor: Colors.accentLight }]}>
+                  <ThemedText style={[styles.priceAmount, { color: Colors.accent }]}>
+                    ${pricingSuggestion.suggestedPrice}
                   </ThemedText>
-                  <ThemedText style={[styles.priceRange, { color: theme.textSecondary }]}>
-                    Range: ${pricingSuggestion.minPrice} - ${pricingSuggestion.maxPrice}
-                  </ThemedText>
-                </View>
-
-                <View style={[styles.reasoningBox, { backgroundColor: theme.backgroundRoot }]}>
-                  <ThemedText style={{ color: theme.textSecondary, lineHeight: 20 }}>
-                    {pricingSuggestion.reasoning}
+                  <ThemedText style={[styles.priceRange, { color: Colors.accent }]}>
+                    Range: ${pricingSuggestion.minPrice} – ${pricingSuggestion.maxPrice}
                   </ThemedText>
                 </View>
-
-                <PrimaryButton onPress={applyPricingSuggestion} style={{ marginTop: Spacing.lg }}>
-                  Apply This Price
-                </PrimaryButton>
+                <ThemedText style={[styles.priceReasoning, { color: theme.textSecondary }]}>
+                  {pricingSuggestion.reasoning}
+                </ThemedText>
+                <View style={styles.buttonRow}>
+                  <SecondaryButton onPress={() => setShowPricingAssistant(false)} style={styles.btnFlex}>Dismiss</SecondaryButton>
+                  <PrimaryButton onPress={applyPricingSuggestion} style={styles.btnFlex}>Apply Price</PrimaryButton>
+                </View>
               </>
             ) : null}
           </View>
@@ -668,180 +655,153 @@ export default function AddJobScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  section: {
-    marginBottom: Spacing.md,
-    padding: Spacing.lg,
-  },
-  sectionTitle: {
-    ...Typography.headline,
-    marginBottom: Spacing.md,
-  },
-  selector: {
+  container: { flex: 1 },
+  section: { marginBottom: Spacing.lg },
+  divider: { height: StyleSheet.hairlineWidth, marginVertical: Spacing.xs },
+  selectorRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.input,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm + 2,
+    gap: Spacing.sm,
+    minHeight: 48,
   },
-  selectedClient: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
+  selectorBody: { flex: 1 },
+  selectorValue: { ...Typography.body, fontWeight: "500" },
+  selectorPlaceholder: { ...Typography.body },
+  selectorSub: { ...Typography.caption1, marginTop: 2 },
   clientAvatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: Spacing.sm,
   },
-  avatarText: {
-    color: "#FFFFFF",
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  clientName: {
-    ...Typography.body,
-    fontWeight: "500",
-  },
-  clientDetail: {
-    ...Typography.caption,
-    marginTop: 2,
-  },
-  scheduleRow: {
-    flexDirection: "row",
-  },
-  scheduleButton: {
-    flexDirection: "row",
+  avatarText: { ...Typography.caption1, fontWeight: "700", color: "#FFFFFF" },
+  serviceIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: BorderRadius.sm,
     alignItems: "center",
     justifyContent: "center",
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderRadius: BorderRadius.md,
   },
-  pricingHeader: {
+  pillRow: { flexDirection: "row", gap: Spacing.md },
+  pill: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: Spacing.md,
-  },
-  aiButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.accent,
+    gap: Spacing.xs,
+    borderRadius: BorderRadius.full,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md,
   },
-  aiButtonText: {
-    color: "#FFFFFF",
-    fontWeight: "600",
-    marginLeft: Spacing.xs,
-    fontSize: 13,
-  },
-  buttonRow: {
+  pillText: { ...Typography.subhead, fontWeight: "500" },
+  aiChip: {
     flexDirection: "row",
-    marginTop: Spacing.lg,
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: Colors.accent,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
   },
+  aiChipDisabled: { opacity: 0.5 },
+  aiChipText: { ...Typography.caption1, fontWeight: "700", color: "#FFFFFF" },
+  buttonRow: { flexDirection: "row", gap: Spacing.md, marginTop: Spacing.md },
+  btnFlex: { flex: 1 },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(0,0,0,0.4)",
     justifyContent: "flex-end",
   },
-  modalContent: {
+  modalSheet: {
     borderTopLeftRadius: BorderRadius.xl,
     borderTopRightRadius: BorderRadius.xl,
-    padding: Spacing.lg,
+    paddingBottom: Spacing.xl,
     maxHeight: "80%",
+  },
+  modalHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(0,0,0,0.15)",
+    alignSelf: "center",
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
   modalHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
   },
-  modalTitle: {
-    ...Typography.title3,
-  },
-  modalList: {
-    maxHeight: 300,
-  },
+  modalTitle: { ...Typography.title3, fontWeight: "600" },
+  modalList: { maxHeight: 320 },
   modalItem: {
     flexDirection: "row",
     alignItems: "center",
-    padding: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    gap: Spacing.md,
     borderRadius: BorderRadius.md,
-    marginBottom: Spacing.xs,
+    marginHorizontal: Spacing.sm,
+    marginVertical: 2,
   },
-  addNewItem: {
-    borderWidth: 1,
-    borderColor: Colors.accent,
-    borderStyle: "dashed",
-    marginBottom: Spacing.md,
-  },
+  addNewItem: {},
   addIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: Spacing.sm,
-  },
-  customServiceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: Spacing.md,
-    paddingTop: Spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(128,128,128,0.2)",
   },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    marginBottom: Spacing.md,
+    gap: Spacing.sm,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.sm,
+    borderRadius: BorderRadius.input,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
   },
-  searchInput: {
-    flex: 1,
-    marginLeft: Spacing.sm,
-    fontSize: 16,
-  },
-  emptyState: {
-    padding: Spacing.xl,
+  searchInput: { flex: 1, ...Typography.body },
+  emptyModal: { alignItems: "center", paddingVertical: Spacing.xl },
+  customRow: {
+    flexDirection: "row",
     alignItems: "center",
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  formFields: {
-    marginBottom: Spacing.lg,
-  },
-  pricingModal: {
-    margin: Spacing.lg,
+  formFields: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.md },
+  pricingCard: {
+    margin: Spacing.xl,
     borderRadius: BorderRadius.xl,
     padding: Spacing.lg,
   },
   aiHeader: {
     flexDirection: "row",
     alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
   },
-  priceDisplay: {
-    alignItems: "center",
-    paddingVertical: Spacing.lg,
-  },
-  suggestedPrice: {
-    fontSize: 42,
-    fontWeight: "700",
-  },
-  priceRange: {
-    ...Typography.body,
-    marginTop: Spacing.xs,
-  },
-  reasoningBox: {
-    padding: Spacing.md,
+  aiIconWrap: {
+    width: 36,
+    height: 36,
     borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
   },
+  priceHighlight: {
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    alignItems: "center",
+    marginBottom: Spacing.md,
+  },
+  priceAmount: { ...Typography.largeTitle, fontWeight: "800" },
+  priceRange: { ...Typography.subhead, marginTop: 4 },
+  priceReasoning: { ...Typography.body, lineHeight: 22, marginBottom: Spacing.lg },
 });

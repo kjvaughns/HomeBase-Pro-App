@@ -4,6 +4,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation } from "@react-navigation/native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Feather } from "@expo/vector-icons";
+import type { ComponentProps } from "react";
 
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
@@ -14,16 +16,50 @@ import { SecondaryButton } from "@/components/SecondaryButton";
 import { GlassCard } from "@/components/GlassCard";
 import { AddressAutocomplete, EnrichmentData } from "@/components/AddressAutocomplete";
 import { Spacing, Typography, Colors, BorderRadius } from "@/constants/theme";
+import { useTheme } from "@/hooks/useTheme";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest } from "@/lib/query-client";
 import * as Haptics from "expo-haptics";
-import { Feather } from "@expo/vector-icons";
+
+type FeatherName = ComponentProps<typeof Feather>["name"];
+
+function SectionHeader({ icon, title, iconBg }: { icon: FeatherName; title: string; iconBg?: string }) {
+  const { theme } = useTheme();
+  return (
+    <View style={sectionHeaderStyles.row}>
+      <View style={[sectionHeaderStyles.iconTile, { backgroundColor: iconBg ?? Colors.accentLight }]}>
+        <Feather name={icon} size={15} color={iconBg ? theme.textSecondary : Colors.accent} />
+      </View>
+      <ThemedText style={sectionHeaderStyles.title}>{title}</ThemedText>
+    </View>
+  );
+}
+
+const sectionHeaderStyles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  iconTile: {
+    width: 30,
+    height: 30,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  title: {
+    ...Typography.headline,
+  },
+});
 
 export default function AddClientScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const navigation = useNavigation();
   const queryClient = useQueryClient();
+  const { theme } = useTheme();
   const { providerProfile } = useAuthStore();
 
   const [firstName, setFirstName] = useState("");
@@ -35,6 +71,7 @@ export default function AddClientScreen() {
   const [state, setState] = useState("");
   const [zip, setZip] = useState("");
   const [notes, setNotes] = useState("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleAddressSelected = (data: EnrichmentData) => {
     setAddress(data.street || "");
@@ -70,11 +107,8 @@ export default function AddClientScreen() {
         ? "A client with this email already exists."
         : "Failed to create client. Please try again.";
       setErrorMessage(message);
-      console.error("Create client error:", error);
     },
   });
-
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleSave = () => {
     setErrorMessage(null);
@@ -82,12 +116,10 @@ export default function AddClientScreen() {
       setErrorMessage("Please enter the client's first and last name.");
       return;
     }
-
     if (!providerProfile?.id) {
       setErrorMessage("Provider profile not found.");
       return;
     }
-
     createMutation.mutate({
       providerId: providerProfile.id,
       firstName: firstName.trim(),
@@ -112,126 +144,128 @@ export default function AddClientScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-          <GlassCard style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>Basic Info</ThemedText>
-            
-            <TextField
-              label="First Name"
-              value={firstName}
-              onChangeText={setFirstName}
-              placeholder="John"
-              autoCapitalize="words"
-            />
-            
-            <TextField
-              label="Last Name"
-              value={lastName}
-              onChangeText={setLastName}
-              placeholder="Doe"
-              autoCapitalize="words"
-            />
-            
-            <TextField
-              label="Email"
-              value={email}
-              onChangeText={setEmail}
-              placeholder="john@example.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-            
-            <TextField
-              label="Phone"
-              value={phone}
-              onChangeText={setPhone}
-              placeholder="(555) 123-4567"
-              keyboardType="phone-pad"
-            />
-          </GlassCard>
+        {/* Basic Info */}
+        <GlassCard style={styles.section}>
+          <SectionHeader icon="user" title="Basic Info" />
+          <TextField
+            value={firstName}
+            onChangeText={setFirstName}
+            placeholder="First name"
+            autoCapitalize="words"
+            leftIcon="user"
+            testID="input-first-name"
+          />
+          <View style={[styles.divider, { backgroundColor: theme.separator }]} />
+          <TextField
+            value={lastName}
+            onChangeText={setLastName}
+            placeholder="Last name"
+            autoCapitalize="words"
+            leftIcon="user"
+            testID="input-last-name"
+          />
+          <View style={[styles.divider, { backgroundColor: theme.separator }]} />
+          <TextField
+            value={email}
+            onChangeText={setEmail}
+            placeholder="Email address"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            leftIcon="mail"
+            testID="input-email"
+          />
+          <View style={[styles.divider, { backgroundColor: theme.separator }]} />
+          <TextField
+            value={phone}
+            onChangeText={setPhone}
+            placeholder="Phone number"
+            keyboardType="phone-pad"
+            leftIcon="phone"
+            testID="input-phone"
+          />
+        </GlassCard>
 
-          <GlassCard style={StyleSheet.flatten([styles.section, { zIndex: 1000 }])}>
-            <ThemedText style={styles.sectionTitle}>Address</ThemedText>
-            
-            <AddressAutocomplete
-              onAddressSelected={handleAddressSelected}
-              placeholder="Search for address..."
-              testID="input-address-search"
-            />
-            
-            <TextField
-              label="Street Address"
-              value={address}
-              onChangeText={setAddress}
-              placeholder="123 Main St"
-            />
-            
-            <TextField
-              label="City"
-              value={city}
-              onChangeText={setCity}
-              placeholder="San Francisco"
-              autoCapitalize="words"
-            />
-            
-            <View style={styles.row}>
-              <View style={styles.halfField}>
-                <TextField
-                  label="State"
-                  value={state}
-                  onChangeText={setState}
-                  placeholder="CA"
-                  autoCapitalize="characters"
-                />
-              </View>
-              <View style={styles.halfField}>
-                <TextField
-                  label="ZIP Code"
-                  value={zip}
-                  onChangeText={setZip}
-                  placeholder="94102"
-                  keyboardType="number-pad"
-                />
-              </View>
+        {/* Address */}
+        <GlassCard style={styles.addressSection}>
+          <SectionHeader icon="map-pin" title="Address" />
+          <AddressAutocomplete
+            onAddressSelected={handleAddressSelected}
+            placeholder="Search for address..."
+            testID="input-address-search"
+          />
+          <View style={[styles.divider, { backgroundColor: theme.separator }]} />
+          <TextField
+            value={address}
+            onChangeText={setAddress}
+            placeholder="Street address"
+            leftIcon="home"
+          />
+          <View style={[styles.divider, { backgroundColor: theme.separator }]} />
+          <TextField
+            value={city}
+            onChangeText={setCity}
+            placeholder="City"
+            autoCapitalize="words"
+            leftIcon="map"
+          />
+          <View style={[styles.divider, { backgroundColor: theme.separator }]} />
+          <View style={styles.row}>
+            <View style={styles.halfField}>
+              <TextField
+                value={state}
+                onChangeText={setState}
+                placeholder="State"
+                autoCapitalize="characters"
+              />
             </View>
-          </GlassCard>
-
-          <GlassCard style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>Notes</ThemedText>
-            
-            <TextField
-              label="Notes (optional)"
-              value={notes}
-              onChangeText={setNotes}
-              placeholder="Any additional notes about this client..."
-              multiline
-              numberOfLines={4}
-            />
-          </GlassCard>
-
-          {errorMessage ? (
-            <View style={[styles.errorBox, { backgroundColor: Colors.errorLight }]}>
-              <Feather name="alert-circle" size={16} color={Colors.error} />
-              <ThemedText style={[styles.errorText, { color: Colors.error }]}>
-                {errorMessage}
-              </ThemedText>
+            <View style={styles.halfField}>
+              <TextField
+                value={zip}
+                onChangeText={setZip}
+                placeholder="ZIP Code"
+                keyboardType="number-pad"
+              />
             </View>
-          ) : null}
-
-          <View style={styles.buttons}>
-            <PrimaryButton
-              onPress={handleSave}
-              loading={createMutation.isPending}
-            >
-              Save Client
-            </PrimaryButton>
-            
-            <SecondaryButton
-              onPress={() => navigation.goBack()}
-              disabled={createMutation.isPending}
-            >
-              Cancel
-            </SecondaryButton>
           </View>
+        </GlassCard>
+
+        {/* Notes */}
+        <GlassCard style={styles.section}>
+          <SectionHeader icon="file-text" title="Notes" iconBg={undefined} />
+          <TextField
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="Any additional notes about this client..."
+            multiline
+            numberOfLines={4}
+            testID="input-notes"
+          />
+        </GlassCard>
+
+        {errorMessage ? (
+          <View style={[styles.errorBox, { backgroundColor: Colors.errorLight }]}>
+            <Feather name="alert-circle" size={16} color={Colors.error} />
+            <ThemedText style={[styles.errorText, { color: Colors.error }]}>
+              {errorMessage}
+            </ThemedText>
+          </View>
+        ) : null}
+
+        <View style={styles.buttons}>
+          <PrimaryButton
+            onPress={handleSave}
+            loading={createMutation.isPending}
+            testID="button-save-client"
+          >
+            Save Client
+          </PrimaryButton>
+          <SecondaryButton
+            onPress={() => navigation.goBack()}
+            disabled={createMutation.isPending}
+          >
+            Cancel
+          </SecondaryButton>
+        </View>
       </KeyboardAwareScrollViewCompat>
     </ThemedView>
   );
@@ -244,9 +278,13 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: Spacing.lg,
   },
-  sectionTitle: {
-    ...Typography.headline,
-    marginBottom: Spacing.md,
+  addressSection: {
+    marginBottom: Spacing.lg,
+    zIndex: 1000,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: Spacing.xs,
   },
   row: {
     flexDirection: "row",
