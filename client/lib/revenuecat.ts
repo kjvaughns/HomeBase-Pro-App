@@ -13,7 +13,7 @@ export function initializePurchases(userId?: string) {
   Purchases.configure({ apiKey, appUserID: userId || null });
 }
 
-export async function getOfferings() {
+export async function getProviderSubscriptionOfferings() {
   try {
     const offerings = await Purchases.getOfferings();
     return offerings.current ?? null;
