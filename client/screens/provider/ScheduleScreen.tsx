@@ -73,7 +73,7 @@ const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "S
 
 const STATUS_COLOR: Record<JobStatus, string> = {
   scheduled: "#3B82F6",
-  confirmed: "#8B5CF6",
+  confirmed: "#F59E0B",
   on_my_way: "#F59E0B",
   arrived: "#F59E0B",
   in_progress: "#F59E0B",
@@ -137,8 +137,8 @@ function getInitials(name: string): string {
 
 function matchesFilter(status: JobStatus, filter: StatusFilter): boolean {
   if (filter === "all") return true;
-  if (filter === "scheduled") return status === "scheduled" || status === "confirmed";
-  if (filter === "active") return ["on_my_way", "arrived", "in_progress"].includes(status);
+  if (filter === "scheduled") return status === "scheduled";
+  if (filter === "active") return ["confirmed", "on_my_way", "arrived", "in_progress"].includes(status);
   if (filter === "done") return status === "completed";
   return true;
 }
@@ -294,21 +294,27 @@ interface TodayBannerProps {
 function TodayBanner({ jobs, getClientName }: TodayBannerProps) {
   const { theme } = useTheme();
   const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
   const todayJobs = jobs.filter(
     (j) => j.status !== "cancelled" && isSameDay(new Date(j.scheduledDate), now)
   );
   const totalRevenue = todayJobs.reduce((sum, j) => sum + parseFloat(j.estimatedPrice || "0"), 0);
 
+  // "Next up": a job that is not completed/cancelled AND whose scheduled time is in the future
   const upcomingJob = todayJobs
-    .filter((j) => j.status !== "completed" && j.status !== "cancelled")
+    .filter((j) => {
+      if (j.status === "completed" || j.status === "cancelled") return false;
+      if (!j.scheduledTime) return true; // no time set — treat as upcoming
+      const [hStr, mStr] = j.scheduledTime.split(":");
+      const jobMinutes = parseInt(hStr, 10) * 60 + parseInt(mStr || "0", 10);
+      return jobMinutes >= currentMinutes;
+    })
     .sort((a, b) => (a.scheduledTime || "").localeCompare(b.scheduledTime || ""))[0];
 
-  const nextUpText = upcomingJob
+  const nextUpLabel = upcomingJob
     ? `${upcomingJob.title}${upcomingJob.scheduledTime ? ` @ ${formatTime(upcomingJob.scheduledTime)}` : ""}`
-    : "All caught up today";
-
-  if (todayJobs.length === 0) return null;
+    : "All done for today";
 
   return (
     <Animated.View entering={FadeInUp.duration(300)}>
@@ -352,7 +358,7 @@ function TodayBanner({ jobs, getClientName }: TodayBannerProps) {
                 style={[styles.todayStatLabel, { color: theme.textTertiary }]}
                 numberOfLines={1}
               >
-                {nextUpText}
+                {nextUpLabel}
               </ThemedText>
             </View>
           </View>
@@ -722,7 +728,7 @@ export default function ScheduleScreen() {
 
   const listData = useMemo((): ListRow[] => {
     const rows: ListRow[] = [];
-    if (isToday && jobs.length > 0) {
+    if (isToday) {
       rows.push({ type: "banner", key: "banner" });
     }
     rows.push({ type: "dateHeader", key: "dateHeader", label: formatDateLabel(selectedDate) });
@@ -734,7 +740,7 @@ export default function ScheduleScreen() {
       }
     }
     return rows;
-  }, [filteredJobs, isToday, jobs.length, selectedDate]);
+  }, [filteredJobs, isToday, selectedDate]);
 
   const isCalendarMode = viewMode === "month";
 
