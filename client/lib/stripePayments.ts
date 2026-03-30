@@ -1,32 +1,23 @@
-import { Alert } from 'react-native';
+import { Platform } from 'react-native';
 
-const API_BASE = process.env.EXPO_PUBLIC_DOMAIN || '';
+const API_BASE = process.env.EXPO_PUBLIC_DOMAIN || 'https://home-base-pro-app.replit.app';
 
-export async function createPaymentIntentForBooking(params: {
-  amount: number;
-  currency?: string;
-  bookingId: string;
-  customerId?: string;
-  token: string;
-}) {
+export async function createPaymentIntentForBooking(bookingId: string, amount: number, currency: string = 'usd') {
   const response = await fetch(`${API_BASE}/api/payments/create-intent`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${params.token}`,
-    },
-    body: JSON.stringify({
-      amount: params.amount,
-      currency: params.currency ?? 'usd',
-      bookingId: params.bookingId,
-      customerId: params.customerId,
-    }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ bookingId, amount, currency }),
   });
+  if (!response.ok) throw new Error('Failed to create payment intent');
+  return response.json();
+}
 
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err?.message ?? 'Failed to create payment intent');
-  }
-
+export async function confirmBookingPayment(paymentIntentId: string, bookingId: string) {
+  const response = await fetch(`${API_BASE}/api/payments/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ paymentIntentId, bookingId }),
+  });
+  if (!response.ok) throw new Error('Failed to confirm payment');
   return response.json();
 }

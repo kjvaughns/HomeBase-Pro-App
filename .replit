@@ -98,6 +98,8 @@ args = "EXPO_PUBLIC_DOMAIN=$REPLIT_DEV_DOMAIN REACT_NATIVE_DEBUGGER_OPEN=0 node 
 [userenv.shared]
 EXPO_PUBLIC_REVENUECAT_API_KEY = "test_zZYZBXWbDqGeSvZkzZudxxaoCwj"
 EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY = "pk_test_51SGSjDIPJg4hfhnF7O1wPHht6zWQEHY9SVbaR89Bas9ID7BWzIvMpYukdTmwR0TW9fBdwiaU2wWdvyu5v2JEWkZD00pjoE91Ri"
+EXPO_PUBLIC_SUPABASE_URL = "https://yvedkmtjynhgsuxukxjj.supabase.co"
+EXPO_PUBLIC_SUPABASE_ANON_KEY = "sb_publishable_IZ9DbM1vrlxFIz8RpBjw0Q_Yjhb1PLJ"
 
 [postMerge]
 path = "scripts/post-merge.sh"

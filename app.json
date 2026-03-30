@@ -57,8 +57,7 @@
         {
           "merchantIdentifier": "merchant.com.homebasepro.app"
         }
-      ],
-      "react-native-purchases"
+      ]
     ],
     "experiments": {
       "reactCompiler": true
