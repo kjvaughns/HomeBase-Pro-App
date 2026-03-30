@@ -31,6 +31,9 @@ function setupCors(app: express.Application) {
       });
     }
 
+    origins.add("https://api.homebaseproapp.com");
+    origins.add("https://homebaseproapp.com");
+
     const origin = req.header("origin");
 
     // Allow localhost origins for Expo web development (any port)

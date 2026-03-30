@@ -4,8 +4,8 @@ import * as schema from "@shared/schema";
 
 const { Pool } = pg;
 
-// Use DATABASE_URL (Replit database) - schema is synced here via db:push
-const databaseUrl = process.env.DATABASE_URL;
+// Use Supabase as primary DB, fallback to Replit DATABASE_URL
+const databaseUrl = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
 
 if (!databaseUrl) {
   throw new Error(
