@@ -8,14 +8,8 @@ export function initializePurchases(userId?: string) {
   const apiKey =
     Platform.OS === 'ios' ? REVENUECAT_IOS_KEY : REVENUECAT_ANDROID_KEY;
 
-  if (!apiKey) {
-    return;
-  }
-
-  if (__DEV__) {
-    Purchases.setLogLevel(LOG_LEVEL.DEBUG);
-  }
-
+  if (!apiKey) return;
+  Purchases.setLogLevel(LOG_LEVEL.WARN);
   Purchases.configure({ apiKey });
 
   if (userId) {
