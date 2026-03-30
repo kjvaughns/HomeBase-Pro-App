@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, ScrollView, View, KeyboardAvoidingView, Platform } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation } from "@react-navigation/native";
@@ -7,6 +7,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { TextField } from "@/components/TextField";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { SecondaryButton } from "@/components/SecondaryButton";
@@ -103,19 +104,14 @@ export default function AddClientScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={headerHeight}
+      <KeyboardAwareScrollViewCompat
+        contentContainerStyle={{
+          paddingTop: headerHeight + Spacing.lg,
+          paddingBottom: insets.bottom + Spacing.xl,
+          paddingHorizontal: Spacing.screenPadding,
+        }}
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          contentContainerStyle={{
-            paddingTop: headerHeight + Spacing.lg,
-            paddingBottom: insets.bottom + Spacing.xl,
-            paddingHorizontal: Spacing.screenPadding,
-          }}
-          showsVerticalScrollIndicator={false}
-        >
           <GlassCard style={styles.section}>
             <ThemedText style={styles.sectionTitle}>Basic Info</ThemedText>
             
@@ -236,8 +232,7 @@ export default function AddClientScreen() {
               Cancel
             </SecondaryButton>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollViewCompat>
     </ThemedView>
   );
 }

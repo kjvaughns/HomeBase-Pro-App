@@ -4,7 +4,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import { useNavigation } from "@react-navigation/native";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -20,7 +19,6 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
-import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 interface ProviderStats {
   revenueMTD: number;
@@ -50,7 +48,7 @@ interface Client {
   phone?: string;
 }
 
-function ProfileMissingCTA({ navigation }: { navigation: NativeStackNavigationProp<RootStackParamList> }) {
+function ProfileMissingCTA({ navigation }: { navigation: any }) {
   const { theme } = useTheme();
   return (
     <ThemedView style={styles.container}>
@@ -77,7 +75,7 @@ export default function ProviderHomeScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useFloatingTabBarHeight();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation = useNavigation<any>();
   const { theme } = useTheme();
   const { user, providerProfile, createProviderProfile } = useAuthStore();
   const queryClient = useQueryClient();

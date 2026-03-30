@@ -2,12 +2,9 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   StyleSheet,
   View,
-  ScrollView,
   TextInput,
   Pressable,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -22,6 +19,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -30,7 +28,6 @@ import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { useQueryClient } from "@tanstack/react-query";
 
 type FeatherIconName = ComponentProps<typeof Feather>["name"];
-type PricingModel = "flat" | "variable" | "quote";
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 interface PriceTier {
@@ -50,6 +47,8 @@ interface CategoryOption {
   id: string;
   icon: FeatherIconName;
 }
+
+type PricingModel = "flat" | "variable" | "quote" | "service_call";
 
 interface PricingOption {
   id: PricingModel;
@@ -90,6 +89,12 @@ const PRICING_MODELS: PricingOption[] = [
     name: "Size / Tier Based",
     description: "Different prices by size or scope",
     icon: "sliders",
+  },
+  {
+    id: "service_call",
+    name: "Service Call",
+    description: "Diagnostic fee + additional labor",
+    icon: "tool",
   },
   {
     id: "quote",
@@ -165,6 +170,7 @@ export default function NewServiceScreen() {
   const [categorySuggestionDismissed, setCategorySuggestionDismissed] = useState(false);
   const [pricingModel, setPricingModel] = useState<PricingModel>("flat");
   const [flatPrice, setFlatPrice] = useState("");
+  const [serviceCallFee, setServiceCallFee] = useState("");
   const [priceTiers, setPriceTiers] = useState<PriceTier[]>([
     { id: "1", label: "Small", price: "" },
     { id: "2", label: "Medium", price: "" },
@@ -193,9 +199,15 @@ export default function NewServiceScreen() {
         if (pt === "fixed") setPricingModel("flat");
         else if (pt === "variable") setPricingModel("variable");
         else if (pt === "quote") setPricingModel("quote");
+        else if (pt === "service_call") setPricingModel("service_call");
         else setPricingModel("flat");
       }
-      if (svc.basePrice) setFlatPrice(String(svc.basePrice));
+      if (svc.basePrice) {
+        const bp = String(svc.basePrice);
+        const pt = String(svc.pricingType);
+        if (pt === "service_call") setServiceCallFee(bp);
+        else setFlatPrice(bp);
+      }
       if (svc.priceTiersJson) {
         try {
           const parsed = JSON.parse(String(svc.priceTiersJson));
@@ -304,13 +316,15 @@ export default function NewServiceScreen() {
   const pricingTypeToDB = (model: PricingModel): string => {
     if (model === "flat") return "fixed";
     if (model === "variable") return "variable";
+    if (model === "service_call") return "service_call";
     return "quote";
   };
 
   const isValid = name.trim().length > 0 && category.length > 0 && (
     pricingModel === "quote" ||
     (pricingModel === "flat" && flatPrice.trim().length > 0) ||
-    (pricingModel === "variable" && priceTiers.some((t) => t.label.trim() && t.price.trim()))
+    (pricingModel === "variable" && priceTiers.some((t) => t.label.trim() && t.price.trim())) ||
+    (pricingModel === "service_call" && serviceCallFee.trim().length > 0)
   );
 
   const handleSave = async () => {
@@ -327,12 +341,18 @@ export default function NewServiceScreen() {
       ? priceTiers.find((t) => t.price.trim())?.price || null
       : null;
 
+    const basePrice = pricingModel === "flat"
+      ? flatPrice
+      : pricingModel === "service_call"
+        ? serviceCallFee
+        : firstTierPrice;
+
     const payload = {
       name: name.trim(),
       category,
       description: description.trim() || null,
       pricingType: pricingTypeToDB(pricingModel),
-      basePrice: pricingModel === "flat" ? flatPrice : firstTierPrice,
+      basePrice,
       priceTiersJson: tiersJson,
       duration,
       isPublished: true,
@@ -367,17 +387,11 @@ export default function NewServiceScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <KeyboardAvoidingView
+      <KeyboardAwareScrollViewCompat
         style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={100}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 100 }]}
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          style={styles.flex}
-          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 120 }]}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
           {showSavedTip ? (
             <Animated.View entering={FadeIn.duration(300)}>
               <GlassCard style={tipCardStyle}>
@@ -644,6 +658,30 @@ export default function NewServiceScreen() {
                     </Animated.View>
                   ) : null}
                 </Animated.View>
+              ) : pricingModel === "service_call" ? (
+                <Animated.View entering={FadeInDown.duration(200)} style={styles.priceSection}>
+                  <ThemedText style={[styles.subLabel, { color: theme.textSecondary }]}>
+                    Diagnostic / Service Call Fee
+                  </ThemedText>
+                  <View style={styles.priceInputRow}>
+                    <ThemedText style={[styles.dollarSign, { color: theme.textSecondary }]}>$</ThemedText>
+                    <TextInput
+                      style={[
+                        styles.priceInput,
+                        { color: theme.text, borderColor: theme.borderLight, backgroundColor: theme.backgroundElevated },
+                      ]}
+                      placeholder="0.00"
+                      placeholderTextColor={theme.textTertiary}
+                      value={serviceCallFee}
+                      onChangeText={setServiceCallFee}
+                      keyboardType="decimal-pad"
+                      testID="input-service-call-fee"
+                    />
+                  </View>
+                  <ThemedText style={[styles.quoteNoticeText, { color: theme.textTertiary, marginTop: Spacing.sm }]}>
+                    This fee covers the visit and diagnosis. Additional labor is billed separately.
+                  </ThemedText>
+                </Animated.View>
               ) : (
                 <Animated.View entering={FadeInDown.duration(200)} style={[styles.quoteNotice, { backgroundColor: theme.backgroundElevated }]}>
                   <Feather name="info" size={16} color={theme.textSecondary} style={{ marginRight: Spacing.sm }} />
@@ -746,26 +784,23 @@ export default function NewServiceScreen() {
             </GlassCard>
           </Animated.View>
 
-          {saveError.length > 0 ? (
-            <Animated.View entering={FadeIn.duration(200)}>
-              <View style={[styles.errorBanner, { backgroundColor: "#FF453A20", borderColor: "#FF453A40" }]}>
-                <Feather name="alert-circle" size={16} color="#FF453A" style={{ marginRight: 6 }} />
-                <ThemedText style={[styles.errorText, { color: "#FF453A" }]}>{saveError}</ThemedText>
-              </View>
-            </Animated.View>
-          ) : null}
+      </KeyboardAwareScrollViewCompat>
 
-          <Animated.View entering={FadeInDown.delay(300).duration(300)}>
-            <PrimaryButton
-              onPress={handleSave}
-              disabled={!isValid || isSaving}
-              testID="button-save-service"
-            >
-              {isSaving ? "Saving..." : isEditMode ? "Save Changes" : "Save Service"}
-            </PrimaryButton>
-          </Animated.View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + Spacing.md }]}>
+        {saveError ? (
+          <View style={[styles.errorBanner, { backgroundColor: "#FF453A20", borderColor: "#FF453A40", marginBottom: Spacing.sm }]}>
+            <Feather name="alert-circle" size={16} color="#FF453A" style={{ marginRight: 6 }} />
+            <ThemedText style={[styles.errorText, { color: "#FF453A" }]}>{saveError}</ThemedText>
+          </View>
+        ) : null}
+        <PrimaryButton
+          onPress={handleSave}
+          disabled={!isValid || isSaving}
+          testID="button-save-service"
+        >
+          {isSaving ? "Saving..." : isEditMode ? "Save Changes" : "Save Service"}
+        </PrimaryButton>
+      </View>
     </ThemedView>
   );
 }
@@ -776,6 +811,11 @@ const styles = StyleSheet.create({
   content: {
     padding: Spacing.screenPadding,
     gap: Spacing.md,
+  },
+  stickyFooter: {
+    paddingHorizontal: Spacing.screenPadding,
+    paddingTop: Spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   section: {
     padding: Spacing.md,

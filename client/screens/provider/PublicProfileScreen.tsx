@@ -154,11 +154,11 @@ export default function PublicProfileScreen() {
                 </View>
               ) : null}
 
-              {providerProfile?.completedJobs > 0 ? (
+              {(providerProfile?.completedJobs ?? 0) > 0 ? (
                 <View style={styles.trustItem}>
                   <Feather name="check-circle" size={14} color={Colors.accent} />
                   <ThemedText style={[styles.trustLabel, { color: theme.textSecondary }]}>
-                    {providerProfile.completedJobs} jobs done
+                    {providerProfile?.completedJobs} jobs done
                   </ThemedText>
                 </View>
               ) : null}

@@ -243,10 +243,10 @@ export default function FinancesScreen() {
               </View>
               <View style={styles.stripeCtaText}>
                 <ThemedText style={styles.stripeCtaTitle}>
-                  {connectStatus?.status === "pending" ? "Stripe account in review" : "Connect Stripe to get paid"}
+                  {stripeStatus?.onboardingStatus === "pending" ? "Stripe account in review" : "Connect Stripe to get paid"}
                 </ThemedText>
                 <ThemedText style={[styles.stripeCtaSubtitle, { color: theme.textSecondary }]}>
-                  {connectStatus?.status === "pending"
+                  {stripeStatus?.onboardingStatus === "pending"
                     ? "Your account is under review. Usually takes 1-2 business days."
                     : "Accept payments and send payouts directly to your bank account."}
                 </ThemedText>
