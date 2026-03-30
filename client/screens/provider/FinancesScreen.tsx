@@ -290,6 +290,10 @@ export default function FinancesScreen() {
                 image={require("../../../assets/images/empty-bookings.png")}
                 title="No invoices yet"
                 description="Create your first invoice to start tracking payments."
+                primaryAction={{
+                  label: "Create Invoice",
+                  onPress: () => navigation.navigate("AddInvoice"),
+                }}
               />
             </View>
           )

@@ -468,6 +468,10 @@ export default function ScheduleScreen() {
                       ? "No jobs this week."
                       : "No jobs this month."
                   }
+                  primaryAction={{
+                    label: "Add Job",
+                    onPress: handleAddJob,
+                  }}
                 />
               }
               showsVerticalScrollIndicator={false}
