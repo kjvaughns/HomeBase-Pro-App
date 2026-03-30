@@ -24,8 +24,12 @@ export async function getProviderSubscriptionOfferings() {
 }
 
 export async function purchaseProviderSubscription(pkg: PurchasesPackage) {
-  const { customerInfo } = await Purchases.purchasePackage(pkg);
-  return customerInfo;
+  try {
+    const { customerInfo } = await Purchases.purchasePackage(pkg);
+    return customerInfo;
+  } catch (e) {
+    throw e;
+  }
 }
 
 export async function restorePurchases() {
