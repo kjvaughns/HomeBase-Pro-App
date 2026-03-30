@@ -29,7 +29,7 @@ export async function purchaseProviderSubscription(pkg: PurchasesPackage) {
     return { success: true, customerInfo };
   } catch (e: any) {
     if (!e.userCancelled) console.error('Purchase error:', e);
-    return { success: false, customerInfo: null };
+    return { success: false, error: e };
   }
 }
 
