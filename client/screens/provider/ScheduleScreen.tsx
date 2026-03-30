@@ -459,7 +459,10 @@ function EnhancedJobCard({ job, clientName, onPress, onQuickAction, isActionLoad
               {quickAction ? (
                 <Pressable
                   style={[styles.quickActionBtn, { backgroundColor: statusColor }]}
-                  onPress={() => onQuickAction(quickAction.next)}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    onQuickAction(quickAction.next);
+                  }}
                   disabled={isActionLoading}
                   testID={`quick-action-${job.id}`}
                 >
@@ -830,11 +833,14 @@ export default function ScheduleScreen() {
             clients={clients}
             getClientName={getClientName}
             onDateSelect={handleDateSelect}
-            onMonthChange={(delta) =>
-              setCalendarMonth(
-                (prev) => new Date(prev.getFullYear(), prev.getMonth() + delta, 1)
-              )
-            }
+            onMonthChange={(delta) => {
+              setCalendarMonth((prev) => {
+                const next = new Date(prev.getFullYear(), prev.getMonth() + delta, 1);
+                // Sync selectedDate to the 1st of the new month so day panel stays visible
+                setSelectedDate(new Date(next.getFullYear(), next.getMonth(), 1));
+                return next;
+              });
+            }}
             onJobPress={handleJobPress}
             onQuickAction={handleQuickAction}
             actionLoadingId={actionLoadingId}
