@@ -20,7 +20,7 @@ import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type ViewMode = "list" | "month";
-type DateRange = "today" | "week" | "month" | "all";
+type DateRange = "today" | "week" | "month";
 
 interface Job {
   id: string;
@@ -250,9 +250,8 @@ function MonthView({ selectedDate, jobs, onDateSelect, onJobPress }: MonthViewPr
 
 const DATE_RANGE_CHIPS: { key: DateRange; label: string }[] = [
   { key: "today", label: "Today" },
-  { key: "week", label: "Week" },
-  { key: "month", label: "Month" },
-  { key: "all", label: "All" },
+  { key: "week", label: "This Week" },
+  { key: "month", label: "This Month" },
 ];
 
 export default function ScheduleScreen() {
@@ -309,12 +308,10 @@ export default function ScheduleScreen() {
     return jobs
       .filter((job) => {
         if (job.status === "cancelled") return false;
-        if (dateRange === "all") return true;
         const jobDate = new Date(job.scheduledDate);
         if (dateRange === "today") return jobDate >= todayStart && jobDate <= todayEnd;
         if (dateRange === "week") return jobDate >= todayStart && jobDate <= weekEnd;
-        if (dateRange === "month") return jobDate >= todayStart && jobDate <= monthEnd;
-        return true;
+        return jobDate >= todayStart && jobDate <= monthEnd;
       })
       .map(formatJobForDisplay)
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -340,6 +337,25 @@ export default function ScheduleScreen() {
   const handleAddJob = () => {
     navigation.navigate("AddJob");
   };
+
+  // Build flat list with date section headers interleaved
+  type ListRow =
+    | { type: "header"; date: string; key: string }
+    | { type: "job"; data: FormattedJob; key: string };
+
+  const listData = useMemo((): ListRow[] => {
+    const rows: ListRow[] = [];
+    let lastDate = "";
+    for (const job of filteredJobs) {
+      const dateLabel = formatDate(new Date(job.date));
+      if (dateLabel !== lastDate) {
+        rows.push({ type: "header", date: dateLabel, key: `header-${dateLabel}` });
+        lastDate = dateLabel;
+      }
+      rows.push({ type: "job", data: job, key: `job-${job.id}` });
+    }
+    return rows;
+  }, [filteredJobs]);
 
   const isCalendarView = viewMode === "month";
 
@@ -419,27 +435,39 @@ export default function ScheduleScreen() {
             </View>
           ) : (
             <FlatList
-              data={filteredJobs}
-              renderItem={({ item, index }) => (
-                <Animated.View entering={FadeInDown.delay(index * 50).duration(300)}>
-                  <View style={styles.listJobItem}>
-                    <ThemedText style={[styles.dateLabel, { color: theme.textSecondary }]}>
-                      {formatDate(new Date(item.date))}
-                    </ThemedText>
-                    <JobListItem job={item} onPress={() => handleJobPress(item)} />
-                  </View>
-                </Animated.View>
-              )}
-              keyExtractor={(item) => item.id}
+              data={listData}
+              renderItem={({ item, index }) => {
+                if (item.type === "header") {
+                  return (
+                    <Animated.View entering={FadeInDown.delay(index * 30).duration(300)}>
+                      <ThemedText style={[styles.dateLabel, { color: theme.textSecondary }]}>
+                        {item.date}
+                      </ThemedText>
+                    </Animated.View>
+                  );
+                }
+                return (
+                  <Animated.View entering={FadeInDown.delay(index * 30).duration(300)}>
+                    <JobListItem job={item.data} onPress={() => handleJobPress(item.data)} />
+                  </Animated.View>
+                );
+              }}
+              keyExtractor={(item) => item.key}
               contentContainerStyle={[
                 styles.listContent,
-                filteredJobs.length === 0 && styles.emptyContainer,
+                listData.length === 0 && styles.emptyContainer,
               ]}
               ListEmptyComponent={
                 <EmptyState
                   image={require("../../../assets/images/empty-bookings.png")}
                   title="No jobs scheduled"
-                  description={dateRange === "today" ? "No jobs for today." : dateRange === "week" ? "No jobs this week." : "Add a job to get started."}
+                  description={
+                    dateRange === "today"
+                      ? "No jobs for today."
+                      : dateRange === "week"
+                      ? "No jobs this week."
+                      : "No jobs this month."
+                  }
                 />
               }
               showsVerticalScrollIndicator={false}
@@ -530,12 +558,12 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
   },
-  listJobItem: {
-    marginBottom: Spacing.sm,
-  },
   dateLabel: {
     ...Typography.caption1,
+    marginTop: Spacing.md,
     marginBottom: Spacing.xs,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   jobListItem: {
     marginBottom: 0,

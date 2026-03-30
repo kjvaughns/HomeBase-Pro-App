@@ -14,6 +14,7 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
+import type { ComponentProps } from "react";
 import { useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 
@@ -30,8 +31,9 @@ import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type HubTab = "profile" | "services" | "booking" | "policies";
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+type FeatherName = ComponentProps<typeof Feather>["name"];
 
-const TABS: { key: HubTab; label: string; icon: string }[] = [
+const TABS: { key: HubTab; label: string; icon: FeatherName }[] = [
   { key: "profile", label: "Profile", icon: "user" },
   { key: "services", label: "Services", icon: "tool" },
   { key: "booking", label: "Booking", icon: "link" },
@@ -390,7 +392,7 @@ export default function BusinessHubScreen() {
                 testID={`tab-hub-${tab.key}`}
               >
                 <Feather
-                  name={tab.icon as any}
+                  name={tab.icon}
                   size={14}
                   color={isActive ? "#FFFFFF" : theme.textSecondary}
                 />

@@ -202,11 +202,11 @@ export default function ProviderHomeScreen() {
   const isLoading = statsLoading || jobsLoading;
 
   const isStripeConnected = stripeStatusData?.chargesEnabled && stripeStatusData?.payoutsEnabled;
+  const hasServices = (providerProfile?.services?.length ?? 0) > 0;
   const hasClients = clients.length > 0;
   const hasBookingLink = (bookingLinksData?.bookingLinks?.length ?? 0) > 0;
-  const hasCompletedJob = stats.jobsCompleted > 0;
 
-  const gettingStartedSteps = [
+  const allGettingStartedSteps = [
     {
       key: "stripe",
       label: "Set up payments",
@@ -214,6 +214,14 @@ export default function ProviderHomeScreen() {
       icon: "credit-card" as const,
       done: !!isStripeConnected,
       onPress: () => navigation.navigate("StripeConnect"),
+    },
+    {
+      key: "service",
+      label: "Create your first service",
+      subtitle: "Define what you offer",
+      icon: "tool" as const,
+      done: hasServices,
+      onPress: () => navigation.navigate("BusinessHub"),
     },
     {
       key: "client",
@@ -231,17 +239,10 @@ export default function ProviderHomeScreen() {
       done: hasBookingLink,
       onPress: () => navigation.navigate("MoreTab"),
     },
-    {
-      key: "job",
-      label: "Complete your first job",
-      subtitle: "Start earning with HomeBase",
-      icon: "check-circle" as const,
-      done: hasCompletedJob,
-      onPress: () => navigation.navigate("ScheduleTab"),
-    },
   ];
 
-  const showGettingStarted = !isLoading && gettingStartedSteps.some((s) => !s.done);
+  const gettingStartedSteps = allGettingStartedSteps.filter((s) => !s.done);
+  const showGettingStarted = !isLoading && gettingStartedSteps.length > 0;
 
   // Loading — trying to recover the provider profile from API
   if (!providerId && profileLoading) {

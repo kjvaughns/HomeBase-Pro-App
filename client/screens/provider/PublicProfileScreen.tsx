@@ -14,6 +14,7 @@ import { Feather } from "@expo/vector-icons";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import * as Clipboard from "expo-clipboard";
+import * as WebBrowser from "expo-web-browser";
 import { useQuery } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
@@ -103,6 +104,12 @@ export default function PublicProfileScreen() {
         url: profileUrl,
       });
     } catch {}
+  };
+
+  const handlePreview = async () => {
+    if (!profileUrl) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await WebBrowser.openBrowserAsync(profileUrl);
   };
 
   const renderStars = (rating: number, size = 14) => (
@@ -207,8 +214,15 @@ export default function PublicProfileScreen() {
                   >
                     <Feather name="copy" size={16} color={Colors.accent} />
                     <ThemedText style={[styles.linkActionText, { color: Colors.accent }]}>
-                      Copy Link
+                      Copy
                     </ThemedText>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.linkActionBtn, { backgroundColor: theme.backgroundSecondary }]}
+                    onPress={handlePreview}
+                  >
+                    <Feather name="external-link" size={16} color={theme.text} />
+                    <ThemedText style={styles.linkActionText}>Preview</ThemedText>
                   </Pressable>
                   <Pressable
                     style={[styles.linkActionBtn, { backgroundColor: theme.backgroundSecondary }]}

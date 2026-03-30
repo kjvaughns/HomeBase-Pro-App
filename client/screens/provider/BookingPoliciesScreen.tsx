@@ -1,7 +1,8 @@
 import React, { useState, useCallback } from "react";
-import { StyleSheet, View, ScrollView, Switch, TextInput, Alert } from "react-native";
+import { StyleSheet, View, Switch, TextInput, Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useNavigation } from "@react-navigation/native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -75,7 +76,7 @@ export default function BookingPoliciesScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <ScrollView
+      <KeyboardAwareScrollViewCompat
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,
           paddingBottom: insets.bottom + Spacing.xl,
@@ -275,7 +276,7 @@ export default function BookingPoliciesScreen() {
             {isSaving ? "Saving..." : "Save Policies"}
           </PrimaryButton>
         </Animated.View>
-      </ScrollView>
+      </KeyboardAwareScrollViewCompat>
     </ThemedView>
   );
 }
