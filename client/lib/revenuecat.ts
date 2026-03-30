@@ -28,7 +28,8 @@ export async function purchaseProviderSubscription(pkg: PurchasesPackage) {
     const { customerInfo } = await Purchases.purchasePackage(pkg);
     return { success: true, customerInfo };
   } catch (e: any) {
-    throw e;
+    if (!e.userCancelled) console.error('Purchase error:', e);
+    return { success: false, customerInfo: null };
   }
 }
 
