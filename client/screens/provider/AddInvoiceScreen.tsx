@@ -6,7 +6,6 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
-import type { ComponentProps } from "react";
 
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
@@ -15,46 +14,12 @@ import { TextField } from "@/components/TextField";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { SecondaryButton } from "@/components/SecondaryButton";
 import { GlassCard } from "@/components/GlassCard";
+import { FormSectionHeader } from "@/components/FormSectionHeader";
 import { Spacing, Typography, Colors, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useTheme } from "@/hooks/useTheme";
 import { apiRequest } from "@/lib/query-client";
 import * as Haptics from "expo-haptics";
-
-type FeatherName = ComponentProps<typeof Feather>["name"];
-
-function SectionHeader({ icon, title, iconBg, children }: { icon: FeatherName; title: string; iconBg?: string; children?: React.ReactNode }) {
-  const { theme } = useTheme();
-  return (
-    <View style={sectionHeaderStyles.row}>
-      <View style={[sectionHeaderStyles.iconTile, { backgroundColor: iconBg ?? Colors.accentLight }]}>
-        <Feather name={icon} size={15} color={iconBg ? theme.textSecondary : Colors.accent} />
-      </View>
-      <ThemedText style={sectionHeaderStyles.title}>{title}</ThemedText>
-      {children}
-    </View>
-  );
-}
-
-const sectionHeaderStyles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  iconTile: {
-    width: 30,
-    height: 30,
-    borderRadius: BorderRadius.md,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  title: {
-    ...Typography.headline,
-    flex: 1,
-  },
-});
 
 interface Client {
   id: string;
@@ -214,7 +179,7 @@ export default function AddInvoiceScreen() {
       >
         {/* Client */}
         <GlassCard style={styles.section}>
-          <SectionHeader icon="users" title="Client" />
+          <FormSectionHeader icon="users" title="Client" />
 
           {clients.length === 0 ? (
             <View style={styles.emptyBox}>
@@ -279,11 +244,11 @@ export default function AddInvoiceScreen() {
         {/* Link to Job (optional) */}
         {selectedClientId && clientJobs.length > 0 ? (
           <GlassCard style={styles.section}>
-            <SectionHeader icon="briefcase" title="Link to Job" iconBg={theme.backgroundSecondary}>
+            <FormSectionHeader icon="briefcase" title="Link to Job" iconBg={theme.backgroundSecondary}>
               <View style={[styles.optionalBadge, { backgroundColor: theme.backgroundSecondary }]}>
                 <ThemedText style={[styles.optionalText, { color: theme.textTertiary }]}>Optional</ThemedText>
               </View>
-            </SectionHeader>
+            </FormSectionHeader>
             <View>
               {clientJobs.map((job, idx) => (
                 <Pressable
@@ -328,7 +293,7 @@ export default function AddInvoiceScreen() {
 
         {/* Invoice Details */}
         <GlassCard style={styles.section}>
-          <SectionHeader icon="file-text" title="Invoice Details" />
+          <FormSectionHeader icon="file-text" title="Invoice Details" />
 
           {/* Amount */}
           <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Amount</ThemedText>
@@ -338,6 +303,7 @@ export default function AddInvoiceScreen() {
             placeholder="0.00"
             keyboardType="decimal-pad"
             leftIcon="dollar-sign"
+            style={styles.amountInput}
             testID="input-amount"
           />
 
@@ -441,6 +407,10 @@ const styles = StyleSheet.create({
     ...Typography.footnote,
     fontWeight: "500",
     marginBottom: Spacing.xs,
+  },
+  amountInput: {
+    ...Typography.title3,
+    fontWeight: "700",
   },
   emptyBox: {
     alignItems: "center",

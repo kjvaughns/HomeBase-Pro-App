@@ -14,7 +14,6 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
-import type { ComponentProps } from "react";
 
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
@@ -22,46 +21,12 @@ import { TextField } from "@/components/TextField";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { SecondaryButton } from "@/components/SecondaryButton";
 import { GlassCard } from "@/components/GlassCard";
+import { FormSectionHeader } from "@/components/FormSectionHeader";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { Spacing, Typography, Colors, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useTheme } from "@/hooks/useTheme";
 import { apiRequest } from "@/lib/query-client";
-
-type FeatherName = ComponentProps<typeof Feather>["name"];
-
-function SectionHeader({ icon, title, iconBg, children }: { icon: FeatherName; title: string; iconBg?: string; children?: React.ReactNode }) {
-  const { theme } = useTheme();
-  return (
-    <View style={sectionHeaderStyles.row}>
-      <View style={[sectionHeaderStyles.iconTile, { backgroundColor: iconBg ?? Colors.accentLight }]}>
-        <Feather name={icon} size={15} color={iconBg ? theme.textSecondary : Colors.accent} />
-      </View>
-      <ThemedText style={sectionHeaderStyles.title}>{title}</ThemedText>
-      {children}
-    </View>
-  );
-}
-
-const sectionHeaderStyles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  iconTile: {
-    width: 30,
-    height: 30,
-    borderRadius: BorderRadius.md,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  title: {
-    ...Typography.headline,
-    flex: 1,
-  },
-});
 
 interface Client {
   id: string;
@@ -258,7 +223,7 @@ export default function AddJobScreen() {
       >
         {/* Client */}
         <GlassCard style={styles.section}>
-          <SectionHeader icon="users" title="Client" />
+          <FormSectionHeader icon="users" title="Client" />
           <Pressable
             style={[styles.selectorRow, { backgroundColor: theme.backgroundSecondary }]}
             onPress={() => setShowClientPicker(true)}
@@ -298,7 +263,7 @@ export default function AddJobScreen() {
 
         {/* Service */}
         <GlassCard style={styles.section}>
-          <SectionHeader icon="tool" title="Service" />
+          <FormSectionHeader icon="tool" title="Service" />
           <Pressable
             style={[styles.selectorRow, { backgroundColor: theme.backgroundSecondary }]}
             onPress={() => setShowServicePicker(true)}
@@ -334,7 +299,7 @@ export default function AddJobScreen() {
 
         {/* Schedule */}
         <GlassCard style={styles.section}>
-          <SectionHeader icon="calendar" title="Schedule" />
+          <FormSectionHeader icon="calendar" title="Schedule" />
           <View style={styles.pillRow}>
             <Pressable
               style={[styles.pill, { backgroundColor: theme.backgroundSecondary }]}
@@ -357,7 +322,7 @@ export default function AddJobScreen() {
 
         {/* Pricing */}
         <GlassCard style={styles.section}>
-          <SectionHeader icon="dollar-sign" title="Pricing">
+          <FormSectionHeader icon="dollar-sign" title="Pricing">
             <Pressable
               style={[styles.aiChip, (pricingLoading || !serviceName.trim()) && styles.aiChipDisabled]}
               onPress={handleGetPricingSuggestion}
@@ -373,7 +338,7 @@ export default function AddJobScreen() {
                 </>
               )}
             </Pressable>
-          </SectionHeader>
+          </FormSectionHeader>
           <TextField
             value={estimatedPrice}
             onChangeText={setEstimatedPrice}
@@ -386,7 +351,7 @@ export default function AddJobScreen() {
 
         {/* Notes */}
         <GlassCard style={styles.section}>
-          <SectionHeader icon="file-text" title="Notes" iconBg={undefined} />
+          <FormSectionHeader icon="file-text" title="Notes" iconBg={undefined} />
           <TextField
             value={notes}
             onChangeText={setNotes}

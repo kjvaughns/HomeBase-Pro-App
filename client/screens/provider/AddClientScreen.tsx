@@ -5,7 +5,6 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation } from "@react-navigation/native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
-import type { ComponentProps } from "react";
 
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
@@ -14,45 +13,13 @@ import { TextField } from "@/components/TextField";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { SecondaryButton } from "@/components/SecondaryButton";
 import { GlassCard } from "@/components/GlassCard";
+import { FormSectionHeader } from "@/components/FormSectionHeader";
 import { AddressAutocomplete, EnrichmentData } from "@/components/AddressAutocomplete";
 import { Spacing, Typography, Colors, BorderRadius } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest } from "@/lib/query-client";
 import * as Haptics from "expo-haptics";
-
-type FeatherName = ComponentProps<typeof Feather>["name"];
-
-function SectionHeader({ icon, title, iconBg }: { icon: FeatherName; title: string; iconBg?: string }) {
-  const { theme } = useTheme();
-  return (
-    <View style={sectionHeaderStyles.row}>
-      <View style={[sectionHeaderStyles.iconTile, { backgroundColor: iconBg ?? Colors.accentLight }]}>
-        <Feather name={icon} size={15} color={iconBg ? theme.textSecondary : Colors.accent} />
-      </View>
-      <ThemedText style={sectionHeaderStyles.title}>{title}</ThemedText>
-    </View>
-  );
-}
-
-const sectionHeaderStyles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  iconTile: {
-    width: 30,
-    height: 30,
-    borderRadius: BorderRadius.md,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  title: {
-    ...Typography.headline,
-  },
-});
 
 export default function AddClientScreen() {
   const insets = useSafeAreaInsets();
@@ -146,7 +113,7 @@ export default function AddClientScreen() {
       >
         {/* Basic Info */}
         <GlassCard style={styles.section}>
-          <SectionHeader icon="user" title="Basic Info" />
+          <FormSectionHeader icon="user" title="Basic Info" />
           <TextField
             value={firstName}
             onChangeText={setFirstName}
@@ -187,7 +154,7 @@ export default function AddClientScreen() {
 
         {/* Address */}
         <GlassCard style={styles.addressSection}>
-          <SectionHeader icon="map-pin" title="Address" />
+          <FormSectionHeader icon="map-pin" title="Address" />
           <AddressAutocomplete
             onAddressSelected={handleAddressSelected}
             placeholder="Search for address..."
@@ -231,7 +198,7 @@ export default function AddClientScreen() {
 
         {/* Notes */}
         <GlassCard style={styles.section}>
-          <SectionHeader icon="file-text" title="Notes" iconBg={undefined} />
+          <FormSectionHeader icon="message-circle" title="Notes" iconBg={undefined} />
           <TextField
             value={notes}
             onChangeText={setNotes}
