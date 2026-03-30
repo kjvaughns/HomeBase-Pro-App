@@ -2,11 +2,11 @@ import Purchases, { LOG_LEVEL, PurchasesPackage } from 'react-native-purchases';
 import { Platform } from 'react-native';
 
 const REVENUECAT_IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY || '';
-const REVENUECAT_API_KEY_ANDROID = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID ?? '';
+const REVENUECAT_ANDROID_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY || '';
 
 export function initializePurchases(userId?: string) {
   const apiKey =
-    Platform.OS === 'ios' ? REVENUECAT_IOS_KEY : REVENUECAT_API_KEY_ANDROID;
+    Platform.OS === 'ios' ? REVENUECAT_IOS_KEY : REVENUECAT_ANDROID_KEY;
 
   if (!apiKey) {
     return;
