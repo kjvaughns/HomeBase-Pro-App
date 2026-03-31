@@ -12,7 +12,13 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.homebasepro.app",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "HomeBase uses your camera to photograph your home, projects, and documents when submitting service requests or capturing job progress.",
+        "NSPhotoLibraryUsageDescription": "HomeBase accesses your photo library so you can attach photos of your home, projects, or documents to service requests and job records.",
+        "NSPhotoLibraryAddUsageDescription": "HomeBase saves photos related to your home projects and service records to your photo library.",
+        "NSMicrophoneUsageDescription": "HomeBase uses the microphone when recording video walkthroughs of your home or project areas to share with service providers.",
+        "NSLocationWhenInUseUsageDescription": "HomeBase uses your location to find nearby service providers and verify service addresses.",
+        "NSContactsUsageDescription": "HomeBase accesses your contacts so you can quickly add clients or invite service providers without retyping their information."
       }
     },
     "android": {
