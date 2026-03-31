@@ -61,12 +61,17 @@ The application comprises a client-side React Native Expo app (SDK 55, React Nat
 - **Custom domain setup**: After publishing on Replit, add `api.homebaseproapp.com` as a custom domain in Replit deployment settings pointing to the Express backend. Until mapped, the Replit autoscale URL (`*.replit.app`) serves as fallback.
 - **Verification script**: `./scripts/verify-api.sh [API_URL]` — checks `/api/health` (200) and `/api/auth/me` unauth (401)
 
-## Verified API Endpoints (tested 2026-03-31, Express + Supabase)
-- `GET /api/health` → `{"status":"ok","timestamp":"..."}` (no auth required)
+## Verified API Endpoints (2026-03-31, Express + Supabase)
+Verified against dev backend `https://71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo.spock.replit.dev:5000`:
+- `GET /api/health` → `{"status":"ok","timestamp":"2026-03-31T17:07:31.687Z"}` (HTTP 200)
 - `GET /api/auth/me` (unauthenticated) → HTTP 401
-- `POST /api/auth/login` with valid credentials → JWT token + user object
-- `GET /api/auth/me` (authenticated with Bearer token) → user email and profile
-- Test account credentials are stored in the Replit Secrets (do not commit to code)
+- `POST /api/auth/login` with valid credentials → HTTP 200 + `{"token":"...","user":{...}}`
+- `GET /api/auth/me` (authenticated Bearer token) → HTTP 200 + user email and profile
+
+To verify against production: `./scripts/verify-api.sh https://api.homebaseproapp.com TEST_EMAIL TEST_PASSWORD`
+Test account credentials are stored in the Replit Secrets (do not commit to code)
+
+**Deployment status**: App published to Replit autoscale. Custom domain `api.homebaseproapp.com` requires manual DNS + Replit domain configuration (add as custom domain in Replit deployment settings pointing to port 5000). Until domain is mapped, EAS builds pointing to `api.homebaseproapp.com` will not connect — temporarily switch `EXPO_PUBLIC_DOMAIN` in `eas.json` to the Replit autoscale URL if needed.
 
 ## Invoice System
 - **Line items**: `AddInvoiceScreen` supports multiple line items (description, qty, unit price) with auto-calculated totals
