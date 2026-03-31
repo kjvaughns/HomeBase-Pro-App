@@ -51,9 +51,10 @@ interface ProviderService {
 
 interface BookingLink {
   id: string;
-  title: string;
+  customTitle: string | null;
   isActive: boolean;
   slug: string;
+  status: "active" | "paused" | "disabled";
 }
 
 function getPricingLabel(type: string): string {
@@ -86,7 +87,7 @@ export default function BusinessHubScreen() {
   });
 
   const { data: bookingLinksData, isLoading: bookingLoading } = useQuery<{ bookingLinks: BookingLink[] }>({
-    queryKey: ["/api/provider", providerId, "booking-links"],
+    queryKey: ["/api/providers", providerId, "booking-links"],
     enabled: !!providerId && activeTab === "booking",
   });
 
@@ -266,7 +267,8 @@ export default function BusinessHubScreen() {
         <Animated.View entering={FadeInDown.duration(300)}>
           <Pressable
             style={[styles.addServiceBtn, { backgroundColor: Colors.accent }]}
-            onPress={() => navigation.navigate("BusinessProfile")}
+            onPress={() => navigation.navigate("BookingLink")}
+            testID="button-create-booking-link"
           >
             <Feather name="plus" size={16} color="#FFFFFF" />
             <ThemedText style={styles.addServiceLabel}>Create Booking Link</ThemedText>
@@ -281,24 +283,26 @@ export default function BusinessHubScreen() {
           ) : (
             bookingLinks.map((link, index) => (
               <Animated.View key={link.id} entering={FadeInDown.delay(index * 40).duration(300)}>
-                <GlassCard style={styles.serviceCard}>
-                  <View style={styles.serviceRow}>
-                    <View style={styles.serviceIcon}>
-                      <Feather name="link" size={16} color={Colors.accent} />
+                <Pressable onPress={() => navigation.navigate("BookingLink")} testID={`card-booking-link-${link.id}`}>
+                  <GlassCard style={styles.serviceCard}>
+                    <View style={styles.serviceRow}>
+                      <View style={styles.serviceIcon}>
+                        <Feather name="link" size={16} color={Colors.accent} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <ThemedText style={styles.serviceName}>{link.customTitle || "Booking Page"}</ThemedText>
+                        <ThemedText style={[styles.serviceCategory, { color: theme.textSecondary }]}>
+                          /{link.slug}
+                        </ThemedText>
+                      </View>
+                      <StatusPill
+                        status={(link.isActive && link.status === "active") ? "success" : "neutral"}
+                        label={(link.isActive && link.status === "active") ? "Active" : "Paused"}
+                        size="small"
+                      />
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <ThemedText style={styles.serviceName}>{link.title}</ThemedText>
-                      <ThemedText style={[styles.serviceCategory, { color: theme.textSecondary }]}>
-                        /{link.slug}
-                      </ThemedText>
-                    </View>
-                    <StatusPill
-                      status={link.isActive ? "success" : "neutral"}
-                      label={link.isActive ? "Active" : "Inactive"}
-                      size="small"
-                    />
-                  </View>
-                </GlassCard>
+                  </GlassCard>
+                </Pressable>
               </Animated.View>
             ))
           )}

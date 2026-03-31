@@ -52,6 +52,7 @@ import ProviderResourcesScreen from "@/screens/provider/ProviderResourcesScreen"
 import ProviderAIAssistantScreen from "@/screens/provider/ProviderAIAssistantScreen";
 import StripeConnectScreen from "@/screens/provider/StripeConnectScreen";
 import BusinessHubScreen from "@/screens/provider/BusinessHubScreen";
+import BookingLinkScreen from "@/screens/provider/BookingLinkScreen";
 import SavedProvidersScreen from "@/screens/homeowner/SavedProvidersScreen";
 import HelpCenterScreen from "@/screens/homeowner/HelpCenterScreen";
 import ContactUsScreen from "@/screens/homeowner/ContactUsScreen";
@@ -143,6 +144,7 @@ export type RootStackParamList = {
   ProviderAIAssistant: undefined;
   StripeConnect: undefined;
   BusinessHub: undefined;
+  BookingLink: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -542,6 +544,13 @@ export default function RootStackNavigator() {
         component={BusinessHubScreen}
         options={{
           headerTitle: "Business Hub",
+        }}
+      />
+      <Stack.Screen
+        name="BookingLink"
+        component={BookingLinkScreen}
+        options={{
+          headerTitle: "Booking Link",
         }}
       />
     </Stack.Navigator>

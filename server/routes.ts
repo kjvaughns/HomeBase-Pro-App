@@ -3603,7 +3603,7 @@ Respond with JSON only:
   app.post("/api/providers/:providerId/booking-links", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
     try {
       const { providerId } = req.params;
-      const { slug, welcomeMessage, confirmationMessage, depositRequired, depositAmount, depositPercentage, intakeQuestions, serviceCatalog, availabilityRules, brandColor, logoUrl } = req.body;
+      const { slug, customTitle, customDescription, welcomeMessage, confirmationMessage, instantBooking, showPricing, depositRequired, depositAmount, depositPercentage, intakeQuestions, serviceCatalog, availabilityRules, brandColor, logoUrl } = req.body;
 
       if (!slug) {
         return res.status(400).json({ error: "slug is required" });
@@ -3618,8 +3618,12 @@ Respond with JSON only:
       const link = await storage.createBookingLink({
         providerId,
         slug,
-        welcomeMessage,
-        confirmationMessage,
+        customTitle: customTitle || null,
+        customDescription: customDescription || null,
+        welcomeMessage: welcomeMessage || null,
+        confirmationMessage: confirmationMessage || null,
+        instantBooking: instantBooking || false,
+        showPricing: showPricing !== undefined ? showPricing : true,
         depositRequired: depositRequired || false,
         depositAmount,
         depositPercentage,
