@@ -156,7 +156,14 @@ export default function StripeConnectScreen() {
   const payInvoiceMutation = useMutation({
     mutationFn: async (invoiceId: string) => {
       const response = await apiRequest("POST", `/api/stripe/invoices/${invoiceId}/checkout`);
-      return response.json();
+      const data = await response.json();
+      if (!response.ok) {
+        if (response.status === 402 || data.error === "stripe_not_ready") {
+          throw new Error("Complete Stripe onboarding first to accept payments.");
+        }
+        throw new Error(data.error || "Failed to create checkout session");
+      }
+      return data;
     },
     onSuccess: (data) => {
       if (data.url) {
@@ -164,7 +171,7 @@ export default function StripeConnectScreen() {
       }
     },
     onError: (error: any) => {
-      Alert.alert("Error", error.message || "Failed to create checkout session");
+      Alert.alert("Payment Setup Required", error.message || "Failed to create checkout session");
     },
   });
 

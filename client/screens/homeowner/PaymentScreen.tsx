@@ -106,6 +106,9 @@ export default function PaymentScreen() {
       const res = await apiRequest("POST", `/api/invoices/${invoiceId}/checkout`, {});
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({ error: "Payment setup failed" }));
+        if (res.status === 402 || errBody.error === "stripe_not_ready") {
+          throw new Error("This provider has not yet completed payment setup. Please contact them directly to arrange payment.");
+        }
         throw new Error(errBody.error || "Failed to start payment");
       }
       const { checkoutUrl } = await res.json();

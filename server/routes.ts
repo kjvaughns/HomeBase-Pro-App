@@ -3418,6 +3418,14 @@ Respond with JSON only:
   app.post("/api/stripe/invoices/:invoiceId/checkout", requireAuth, async (req: Request<{ invoiceId: string }>, res: Response) => {
     try {
       const { invoiceId } = req.params;
+      // Gate: check that provider has charges enabled before creating checkout
+      const [inv] = await db.select({ providerId: invoices.providerId }).from(invoices).where(eq(invoices.id, invoiceId));
+      if (inv) {
+        const [connectAcct] = await db.select({ chargesEnabled: stripeConnectAccounts.chargesEnabled }).from(stripeConnectAccounts).where(eq(stripeConnectAccounts.providerId, inv.providerId));
+        if (!connectAcct || !connectAcct.chargesEnabled) {
+          return res.status(402).json({ error: "stripe_not_ready", message: "Provider has not completed Stripe onboarding" });
+        }
+      }
       const result = await createStripeCheckoutSession(invoiceId);
       res.json({ url: result.checkoutUrl, sessionId: result.sessionId });
     } catch (error: any) {
@@ -3763,6 +3771,14 @@ Respond with JSON only:
   app.post("/api/invoices/:invoiceId/checkout", requireAuth, async (req: Request<{ invoiceId: string }>, res: Response) => {
     try {
       const { invoiceId } = req.params;
+      // Gate: check that provider has charges enabled before creating checkout
+      const [inv] = await db.select({ providerId: invoices.providerId }).from(invoices).where(eq(invoices.id, invoiceId));
+      if (inv) {
+        const [connectAcct] = await db.select({ chargesEnabled: stripeConnectAccounts.chargesEnabled }).from(stripeConnectAccounts).where(eq(stripeConnectAccounts.providerId, inv.providerId));
+        if (!connectAcct || !connectAcct.chargesEnabled) {
+          return res.status(402).json({ error: "stripe_not_ready", message: "Provider has not completed Stripe onboarding" });
+        }
+      }
       const result = await createStripeCheckoutSession(invoiceId);
       res.json(result);
     } catch (error: any) {
@@ -4263,6 +4279,68 @@ Respond with JSON only:
         })
         .returning();
 
+      // For instant bookings: automatically create a client + job record
+      let instantClientId: string | undefined;
+      let instantJob: (typeof jobs.$inferSelect) | undefined;
+      if (link.instantBooking) {
+        try {
+          const nameParts = (clientName || "").trim().split(" ");
+          const firstName = nameParts[0] || "Unknown";
+          const lastName = nameParts.slice(1).join(" ") || "";
+
+          // Upsert client
+          let existingInstantClient: typeof clients.$inferSelect | undefined;
+          if (clientEmail) {
+            const [found] = await db
+              .select()
+              .from(clients)
+              .where(and(eq(clients.providerId, link.providerId), eq(clients.email, clientEmail)));
+            existingInstantClient = found;
+          }
+
+          if (existingInstantClient) {
+            instantClientId = existingInstantClient.id;
+          } else {
+            const [newC] = await db
+              .insert(clients)
+              .values({
+                providerId: link.providerId,
+                firstName,
+                lastName: lastName || null,
+                email: clientEmail || null,
+                phone: clientPhone || null,
+                address: address || null,
+              })
+              .returning({ id: clients.id });
+            instantClientId = newC.id;
+          }
+
+          // Create job
+          const preferredDate = preferredTimesJson?.[0] ? new Date(preferredTimesJson[0]) : new Date();
+          const [newJ] = await db
+            .insert(jobs)
+            .values({
+              providerId: link.providerId,
+              clientId: instantClientId,
+              title: problemDescription?.slice(0, 100) || "Service Request",
+              description: problemDescription || null,
+              scheduledDate: preferredDate,
+              status: "scheduled",
+              address: address || null,
+            })
+            .returning();
+          instantJob = newJ;
+
+          // Link submission to the new client
+          await db
+            .update(intakeSubmissions)
+            .set({ convertedClientId: instantClientId })
+            .where(eq(intakeSubmissions.id, submission.id));
+        } catch (instantErr) {
+          console.error("Instant booking client/job creation error (non-fatal):", instantErr);
+        }
+      }
+
       // Notify the provider's linked user
       try {
         const [providerRow] = await db
@@ -4294,6 +4372,8 @@ Respond with JSON only:
 
       res.status(201).json({
         submission,
+        ...(instantClientId ? { clientId: instantClientId } : {}),
+        ...(instantJob ? { job: instantJob } : {}),
         message: link.instantBooking
           ? "Your booking has been confirmed!"
           : "Your request has been submitted!",
@@ -4330,6 +4410,88 @@ Respond with JSON only:
     } catch (error: any) {
       console.error("Update intake submission error:", error);
       res.status(500).json({ error: error.message || "Failed to update submission" });
+    }
+  });
+
+  // Accept intake submission — creates a client + job record and marks submission as "confirmed"
+  app.post("/api/intake-submissions/:id/accept", requireAuth, async (req: Request<{ id: string }>, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { scheduledDate, scheduledTime, estimatedPrice, notes } = req.body;
+
+      const submission = await storage.getIntakeSubmission(id);
+      if (!submission) {
+        return res.status(404).json({ error: "Submission not found" });
+      }
+      if (submission.status === "confirmed") {
+        return res.status(400).json({ error: "Submission is already accepted" });
+      }
+
+      // Parse client name
+      const nameParts = (submission.clientName || "").trim().split(" ");
+      const firstName = nameParts[0] || "Unknown";
+      const lastName = nameParts.slice(1).join(" ") || "";
+
+      // Upsert client — check if a client with this email already exists for this provider
+      let existingClient: typeof clients.$inferSelect | undefined;
+      if (submission.clientEmail) {
+        const [found] = await db
+          .select()
+          .from(clients)
+          .where(and(eq(clients.providerId, submission.providerId), eq(clients.email, submission.clientEmail)));
+        existingClient = found;
+      }
+
+      let clientId: string;
+      if (existingClient) {
+        clientId = existingClient.id;
+      } else {
+        const [newClient] = await db
+          .insert(clients)
+          .values({
+            providerId: submission.providerId,
+            firstName,
+            lastName: lastName || null,
+            email: submission.clientEmail || null,
+            phone: submission.clientPhone || null,
+            address: submission.address || null,
+          })
+          .returning({ id: clients.id });
+        clientId = newClient.id;
+      }
+
+      // Create job record
+      const jobDate = scheduledDate ? new Date(scheduledDate) : new Date();
+      const [newJob] = await db
+        .insert(jobs)
+        .values({
+          providerId: submission.providerId,
+          clientId,
+          title: submission.problemDescription?.slice(0, 100) || "Service Request",
+          description: submission.problemDescription || null,
+          scheduledDate: jobDate,
+          scheduledTime: scheduledTime || null,
+          status: "scheduled",
+          address: submission.address || null,
+          estimatedPrice: estimatedPrice ? String(estimatedPrice) : null,
+          notes: notes || null,
+        })
+        .returning();
+
+      // Mark submission as confirmed and link to the converted client
+      await storage.updateIntakeSubmission(id, {
+        status: "confirmed",
+        convertedClientId: clientId,
+      });
+
+      res.status(201).json({
+        message: "Booking accepted",
+        clientId,
+        job: newJob,
+      });
+    } catch (error: any) {
+      console.error("Accept intake submission error:", error);
+      res.status(500).json({ error: error.message || "Failed to accept submission" });
     }
   });
 

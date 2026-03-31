@@ -1,17 +1,33 @@
-import React, { useState, useMemo } from "react";
-import { StyleSheet, FlatList, RefreshControl, View } from "react-native";
+import React, { useState, useMemo, useCallback } from "react";
+import {
+  StyleSheet,
+  FlatList,
+  RefreshControl,
+  View,
+  Modal,
+  TextInput,
+  Pressable,
+  ActivityIndicator,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Feather } from "@expo/vector-icons";
 
 import { ThemedView } from "@/components/ThemedView";
+import { ThemedText } from "@/components/ThemedText";
 import { LeadCard } from "@/components/LeadCard";
 import { FilterChips, FilterOption } from "@/components/FilterChips";
 import { EmptyState } from "@/components/EmptyState";
-import { Spacing, Colors } from "@/constants/theme";
+import { GlassCard } from "@/components/GlassCard";
+import { PrimaryButton } from "@/components/PrimaryButton";
+import { SecondaryButton } from "@/components/SecondaryButton";
+import { StatusPill } from "@/components/StatusPill";
+import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
+import { useTheme } from "@/hooks/useTheme";
 import { Lead } from "@/state/providerStore";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
@@ -27,16 +43,42 @@ const filterOptions: FilterOption<LeadFilter>[] = [
   { key: "lost", label: "Lost" },
 ];
 
+interface IntakeSubmission {
+  id: string;
+  clientName: string;
+  clientEmail?: string | null;
+  clientPhone?: string | null;
+  address?: string | null;
+  problemDescription: string;
+  status: string;
+  createdAt: string;
+  convertedClientId?: string | null;
+}
+
+interface AcceptModalState {
+  visible: boolean;
+  submission: IntakeSubmission | null;
+  scheduledDate: string;
+  notes: string;
+}
+
 export default function LeadsScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useFloatingTabBarHeight();
   const queryClient = useQueryClient();
+  const { theme } = useTheme();
 
   const { providerProfile } = useAuthStore();
   const providerId = providerProfile?.id;
 
   const [filter, setFilter] = useState<LeadFilter>("all");
+  const [acceptModal, setAcceptModal] = useState<AcceptModalState>({
+    visible: false,
+    submission: null,
+    scheduledDate: "",
+    notes: "",
+  });
 
   const { data, isLoading, refetch, isRefetching } = useQuery<{ leads: Lead[] }>({
     queryKey: ["/api/providers", providerId, "leads"],
@@ -52,7 +94,24 @@ export default function LeadsScreen() {
     },
   });
 
+  const { data: submissionsData, refetch: refetchSubmissions } = useQuery<{ submissions: IntakeSubmission[] }>({
+    queryKey: ["/api/providers", providerId, "intake-submissions"],
+    enabled: !!providerId,
+    queryFn: async () => {
+      const url = new URL(`/api/providers/${providerId}/intake-submissions`, getApiUrl());
+      const res = await fetch(url.toString(), {
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) throw new Error("Failed to fetch submissions");
+      return res.json();
+    },
+  });
+
   const leads: Lead[] = data?.leads ?? [];
+  const submissions: IntakeSubmission[] = (submissionsData?.submissions ?? []).filter(
+    (s) => s.status === "submitted"
+  );
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: Lead["status"] }) => {
@@ -60,6 +119,45 @@ export default function LeadsScreen() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/providers", providerId, "leads"] });
+    },
+  });
+
+  const declineSubmission = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("PUT", `/api/intake-submissions/${id}`, { status: "declined" });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/providers", providerId, "intake-submissions"] });
+      refetchSubmissions();
+    },
+  });
+
+  const acceptSubmission = useMutation({
+    mutationFn: async ({
+      id,
+      scheduledDate,
+      notes,
+    }: {
+      id: string;
+      scheduledDate?: string;
+      notes?: string;
+    }) => {
+      const res = await apiRequest("POST", `/api/intake-submissions/${id}/accept`, {
+        scheduledDate: scheduledDate || undefined,
+        notes: notes || undefined,
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to accept booking");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      queryClient.invalidateQueries({ queryKey: ["/api/providers", providerId, "intake-submissions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "clients"] });
+      refetchSubmissions();
+      setAcceptModal({ visible: false, submission: null, scheduledDate: "", notes: "" });
     },
   });
 
@@ -85,20 +183,84 @@ export default function LeadsScreen() {
     updateStatus.mutate({ id: lead.id, status: "lost" });
   };
 
-  const renderHeader = () => (
-    <View style={styles.filterWrapper}>
-      <FilterChips
-        options={filterOptionsWithCounts}
-        selected={filter}
-        onSelect={setFilter}
-        showCounts
-        style={styles.filterChips}
-      />
-    </View>
+  const handleRefresh = useCallback(() => {
+    refetch();
+    refetchSubmissions();
+  }, [refetch, refetchSubmissions]);
+
+  const openAcceptModal = (submission: IntakeSubmission) => {
+    setAcceptModal({
+      visible: true,
+      submission,
+      scheduledDate: "",
+      notes: "",
+    });
+  };
+
+  const renderSubmissionCard = ({ item, index }: { item: IntakeSubmission; index: number }) => (
+    <Animated.View entering={FadeInDown.delay(index * 50).duration(300)}>
+      <GlassCard style={styles.submissionCard} testID={`submission-${item.id}`}>
+        <View style={styles.submissionHeader}>
+          <View style={styles.submissionTitleRow}>
+            <View style={[styles.newDot, { backgroundColor: Colors.accent }]} />
+            <ThemedText type="h4" numberOfLines={1} style={styles.submissionName}>
+              {item.clientName}
+            </ThemedText>
+          </View>
+          <StatusPill status="info" label="New Request" size="small" />
+        </View>
+
+        <ThemedText
+          type="body"
+          style={[styles.submissionDesc, { color: theme.textSecondary }]}
+          numberOfLines={3}
+        >
+          {item.problemDescription}
+        </ThemedText>
+
+        {item.clientPhone ? (
+          <View style={styles.submissionMeta}>
+            <Feather name="phone" size={13} color={theme.textSecondary} />
+            <ThemedText type="small" style={{ color: theme.textSecondary }}>
+              {item.clientPhone}
+            </ThemedText>
+          </View>
+        ) : null}
+        {item.address ? (
+          <View style={styles.submissionMeta}>
+            <Feather name="map-pin" size={13} color={theme.textSecondary} />
+            <ThemedText type="small" style={{ color: theme.textSecondary }} numberOfLines={1}>
+              {item.address}
+            </ThemedText>
+          </View>
+        ) : null}
+
+        <View style={[styles.submissionActions, { borderTopColor: theme.separator }]}>
+          <SecondaryButton
+            onPress={() => {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+              declineSubmission.mutate(item.id);
+            }}
+            style={styles.actionBtnSmall}
+          >
+            Decline
+          </SecondaryButton>
+          <PrimaryButton
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              openAcceptModal(item);
+            }}
+            style={styles.actionBtnSmall}
+          >
+            Accept Booking
+          </PrimaryButton>
+        </View>
+      </GlassCard>
+    </Animated.View>
   );
 
   const renderLead = ({ item, index }: { item: Lead; index: number }) => (
-    <Animated.View entering={FadeInDown.delay(index * 50).duration(300)}>
+    <Animated.View entering={FadeInDown.delay((submissions.length + index) * 50).duration(300)}>
       <LeadCard
         lead={item}
         onPress={() => {}}
@@ -107,6 +269,40 @@ export default function LeadsScreen() {
         testID={`lead-${item.id}`}
       />
     </Animated.View>
+  );
+
+  const renderHeader = () => (
+    <View style={styles.filterWrapper}>
+      {submissions.length > 0 ? (
+        <View style={[styles.sectionLabel, { borderBottomColor: theme.separator }]}>
+          <Feather name="bell" size={14} color={Colors.accent} />
+          <ThemedText type="caption" style={[styles.sectionLabelText, { color: Colors.accent }]}>
+            Booking Requests ({submissions.length})
+          </ThemedText>
+        </View>
+      ) : null}
+
+      {submissions.map((sub, index) =>
+        renderSubmissionCard({ item: sub, index })
+      )}
+
+      {submissions.length > 0 && leads.length > 0 ? (
+        <View style={[styles.sectionLabel, { borderBottomColor: theme.separator }]}>
+          <Feather name="users" size={14} color={theme.textSecondary} />
+          <ThemedText type="caption" style={[styles.sectionLabelText, { color: theme.textSecondary }]}>
+            CRM Leads
+          </ThemedText>
+        </View>
+      ) : null}
+
+      <FilterChips
+        options={filterOptionsWithCounts}
+        selected={filter}
+        onSelect={setFilter}
+        showCounts
+        style={styles.filterChips}
+      />
+    </View>
   );
 
   const renderEmpty = () => (
@@ -128,24 +324,115 @@ export default function LeadsScreen() {
         renderItem={renderLead}
         keyExtractor={(item) => item.id}
         ListHeaderComponent={renderHeader}
-        ListEmptyComponent={renderEmpty}
+        ListEmptyComponent={filteredLeads.length === 0 && submissions.length === 0 ? renderEmpty : null}
         contentContainerStyle={[
           {
             paddingTop: headerHeight + Spacing.md,
             paddingBottom: tabBarHeight + Spacing.xl,
           },
-          filteredLeads.length === 0 && styles.emptyContainer,
+          filteredLeads.length === 0 && submissions.length === 0 && styles.emptyContainer,
         ]}
         scrollIndicatorInsets={{ bottom: insets.bottom }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
-            onRefresh={refetch}
+            onRefresh={handleRefresh}
             tintColor={Colors.accent}
           />
         }
       />
+
+      <Modal
+        visible={acceptModal.visible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAcceptModal((prev) => ({ ...prev, visible: false }))}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { backgroundColor: theme.backgroundDefault }]}>
+            <View style={styles.modalHandle} />
+            <ThemedText type="h3" style={styles.modalTitle}>
+              Accept Booking
+            </ThemedText>
+            {acceptModal.submission ? (
+              <ThemedText type="body" style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
+                Accepting request from {acceptModal.submission.clientName}. A client record and job will be created automatically.
+              </ThemedText>
+            ) : null}
+
+            <ThemedText type="label" style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+              Scheduled Date (optional)
+            </ThemedText>
+            <TextInput
+              style={[
+                styles.textInput,
+                {
+                  backgroundColor: theme.backgroundSecondary,
+                  color: theme.text,
+                  borderColor: theme.border,
+                },
+              ]}
+              value={acceptModal.scheduledDate}
+              onChangeText={(v) => setAcceptModal((prev) => ({ ...prev, scheduledDate: v }))}
+              placeholder="e.g. 2026-04-15"
+              placeholderTextColor={theme.textTertiary}
+              testID="accept-scheduled-date"
+            />
+
+            <ThemedText type="label" style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+              Notes (optional)
+            </ThemedText>
+            <TextInput
+              style={[
+                styles.textInput,
+                styles.textInputMulti,
+                {
+                  backgroundColor: theme.backgroundSecondary,
+                  color: theme.text,
+                  borderColor: theme.border,
+                },
+              ]}
+              value={acceptModal.notes}
+              onChangeText={(v) => setAcceptModal((prev) => ({ ...prev, notes: v }))}
+              placeholder="Any notes for this job..."
+              placeholderTextColor={theme.textTertiary}
+              multiline
+              numberOfLines={3}
+              testID="accept-notes"
+            />
+
+            <View style={styles.modalButtons}>
+              <SecondaryButton
+                onPress={() => setAcceptModal((prev) => ({ ...prev, visible: false }))}
+                style={styles.modalBtn}
+              >
+                Cancel
+              </SecondaryButton>
+              <PrimaryButton
+                onPress={() => {
+                  if (acceptModal.submission) {
+                    acceptSubmission.mutate({
+                      id: acceptModal.submission.id,
+                      scheduledDate: acceptModal.scheduledDate || undefined,
+                      notes: acceptModal.notes || undefined,
+                    });
+                  }
+                }}
+                disabled={acceptSubmission.isPending}
+                style={styles.modalBtn}
+              >
+                {acceptSubmission.isPending ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  "Confirm"
+                )}
+              </PrimaryButton>
+            </View>
+            <View style={{ height: insets.bottom }} />
+          </View>
+        </View>
+      </Modal>
     </ThemedView>
   );
 }
@@ -156,6 +443,7 @@ const styles = StyleSheet.create({
   },
   filterWrapper: {
     marginBottom: Spacing.md,
+    paddingHorizontal: Spacing.screenPadding,
   },
   filterChips: {
     paddingVertical: Spacing.sm,
@@ -163,6 +451,113 @@ const styles = StyleSheet.create({
   emptyContainer: {
     flexGrow: 1,
     justifyContent: "center",
-    paddingHorizontal: Spacing.screenPadding,
+  },
+  sectionLabel: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    paddingBottom: Spacing.sm,
+    marginBottom: Spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginTop: Spacing.sm,
+  },
+  sectionLabelText: {
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  submissionCard: {
+    marginBottom: Spacing.md,
+  },
+  submissionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.sm,
+  },
+  submissionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    flex: 1,
+    marginRight: Spacing.sm,
+  },
+  newDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  submissionName: {
+    flex: 1,
+  },
+  submissionDesc: {
+    marginBottom: Spacing.sm,
+  },
+  submissionMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    marginBottom: Spacing.xs,
+  },
+  submissionActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+    paddingTop: Spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  actionBtnSmall: {
+    paddingHorizontal: Spacing.md,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  modalSheet: {
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    padding: Spacing.xl,
+    paddingTop: Spacing.md,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#ccc",
+    alignSelf: "center",
+    marginBottom: Spacing.lg,
+  },
+  modalTitle: {
+    marginBottom: Spacing.sm,
+  },
+  modalSubtitle: {
+    marginBottom: Spacing.xl,
+  },
+  fieldLabel: {
+    marginBottom: Spacing.xs,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+    fontSize: 11,
+  },
+  textInput: {
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    marginBottom: Spacing.md,
+    fontSize: 15,
+  },
+  textInputMulti: {
+    height: 80,
+    textAlignVertical: "top",
+  },
+  modalButtons: {
+    flexDirection: "row",
+    gap: Spacing.md,
+    marginTop: Spacing.md,
+  },
+  modalBtn: {
+    flex: 1,
   },
 });

@@ -25,7 +25,6 @@ import Animated, {
 
 import { useTheme } from "@/hooks/useTheme";
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from "@/constants/theme";
-import { useProviderStore, type Client, type Job, type Invoice } from "@/state/providerStore";
 import { useAuthStore } from "@/state/authStore";
 import { getApiUrl, apiRequest } from "@/lib/query-client";
 
@@ -49,8 +48,8 @@ export default function ProviderAIAssistantScreen() {
   const headerHeight = useHeaderHeight();
   const flatListRef = useRef<FlatList>(null);
   
-  const { clients, jobs, invoices, getStats } = useProviderStore();
   const { providerProfile } = useAuthStore();
+  const providerId = providerProfile?.id;
   
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
@@ -79,25 +78,62 @@ export default function ProviderAIAssistantScreen() {
   const pulseStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulseScale.value }],
   }));
-  
-  const getBusinessContext = () => {
-    const stats = getStats();
-    const activeClients = clients.filter((c: Client) => c.status === "active").length;
-    const pendingInvoices = invoices.filter((i: Invoice) => i.status === "sent" || i.status === "overdue");
-    const totalPending = pendingInvoices.reduce((sum: number, i: Invoice) => sum + i.amount, 0);
-    const scheduledJobs = jobs.filter((j: Job) => j.status === "scheduled");
-    const completedJobs = jobs.filter((j: Job) => j.status === "completed").length;
-    
-    return `
+
+  const getBusinessContext = async (): Promise<string> => {
+    if (!providerId) {
+      return `Provider Business Context:\n- Business Name: ${providerProfile?.businessName || "Unknown"}`;
+    }
+    try {
+      const [clientsRes, jobsRes, invoicesRes, statsRes] = await Promise.allSettled([
+        apiRequest("GET", `/api/provider/${providerId}/clients`),
+        apiRequest("GET", `/api/provider/${providerId}/jobs`),
+        apiRequest("GET", `/api/provider/${providerId}/invoices`),
+        apiRequest("GET", `/api/provider/${providerId}/stats`),
+      ]);
+
+      let totalClients = 0;
+      let scheduledJobs = 0;
+      let completedJobs = 0;
+      let pendingInvoiceCount = 0;
+      let pendingInvoiceTotal = 0;
+      let revenueMTD = 0;
+      let upcomingJobs = 0;
+
+      if (clientsRes.status === "fulfilled" && clientsRes.value.ok) {
+        const d = await clientsRes.value.json();
+        totalClients = (d.clients || []).length;
+      }
+      if (jobsRes.status === "fulfilled" && jobsRes.value.ok) {
+        const d = await jobsRes.value.json();
+        const jobList = d.jobs || [];
+        scheduledJobs = jobList.filter((j: any) => j.status === "scheduled").length;
+        completedJobs = jobList.filter((j: any) => j.status === "completed").length;
+      }
+      if (invoicesRes.status === "fulfilled" && invoicesRes.value.ok) {
+        const d = await invoicesRes.value.json();
+        const invList = d.invoices || [];
+        const pending = invList.filter((i: any) => i.status === "sent" || i.status === "overdue");
+        pendingInvoiceCount = pending.length;
+        pendingInvoiceTotal = pending.reduce((sum: number, i: any) => sum + parseFloat(i.total || i.amount || "0"), 0);
+      }
+      if (statsRes.status === "fulfilled" && statsRes.value.ok) {
+        const d = await statsRes.value.json();
+        revenueMTD = d.revenueMTD || 0;
+        upcomingJobs = d.upcomingJobs || scheduledJobs;
+      }
+
+      return `
 Provider Business Context:
 - Business Name: ${providerProfile?.businessName || "Unknown"}
-- Total Clients: ${clients.length} (${activeClients} active)
-- Scheduled Jobs: ${scheduledJobs.length}
+- Total Clients: ${totalClients}
+- Scheduled/Upcoming Jobs: ${upcomingJobs || scheduledJobs}
 - Completed Jobs: ${completedJobs}
-- Pending Invoices: ${pendingInvoices.length} (Total: $${totalPending.toFixed(2)})
-- Provider Rating: ${stats.rating} stars (${stats.reviewCount} reviews)
-- Response Rate: ${stats.responseRate}%
-    `.trim();
+- Pending Invoices: ${pendingInvoiceCount} (Total outstanding: $${pendingInvoiceTotal.toFixed(2)})
+- Revenue This Month: $${revenueMTD.toFixed(2)}
+      `.trim();
+    } catch {
+      return `Provider Business Context:\n- Business Name: ${providerProfile?.businessName || "Unknown"}`;
+    }
   };
   
   const sendMessage = async (text: string) => {
@@ -115,9 +151,10 @@ Provider Business Context:
     setIsLoading(true);
     
     try {
+      const businessContext = await getBusinessContext();
       const response = await apiRequest("POST", "/api/ai/provider-assistant", {
         message: text.trim(),
-        businessContext: getBusinessContext(),
+        businessContext,
         conversationHistory: messages.slice(-10).map((m) => ({
           role: m.role,
           content: m.content,
