@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { StyleSheet, View, Switch, TextInput, Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -14,6 +14,8 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useProviderStore } from "@/state/providerStore";
+import { useAuthStore } from "@/state/authStore";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
 
 export default function BookingPoliciesScreen() {
   const insets = useSafeAreaInsets();
@@ -23,6 +25,8 @@ export default function BookingPoliciesScreen() {
 
   const bookingPolicies = useProviderStore((s) => s.bookingPolicies);
   const setBookingPolicies = useProviderStore((s) => s.setBookingPolicies);
+  const { providerProfile } = useAuthStore();
+  const providerId = providerProfile?.id;
 
   const [requireDeposit, setRequireDeposit] = useState(bookingPolicies?.requireDeposit ?? false);
   const [depositPercent, setDepositPercent] = useState(
@@ -42,7 +46,36 @@ export default function BookingPoliciesScreen() {
   );
   const [isSaving, setIsSaving] = useState(false);
 
+  // On mount: fetch latest from server and sync local state
+  useEffect(() => {
+    if (!providerId) return;
+    const userId = providerProfile?.userId;
+    if (!userId) return;
+    (async () => {
+      try {
+        const url = new URL(`/api/provider/user/${userId}`, getApiUrl());
+        const res = await fetch(url.toString(), { credentials: "include" });
+        if (!res.ok) return;
+        const data = await res.json();
+        const serverPolicies = data?.provider?.bookingPolicies;
+        if (serverPolicies && typeof serverPolicies === "object") {
+          setBookingPolicies(serverPolicies);
+          setRequireDeposit(serverPolicies.requireDeposit ?? false);
+          setDepositPercent(serverPolicies.depositPercent?.toString() ?? "25");
+          setCancellationHours(serverPolicies.cancellationHours?.toString() ?? "24");
+          setCancellationFeePercent(serverPolicies.cancellationFeePercent?.toString() ?? "50");
+          setRescheduleHours(serverPolicies.rescheduleHours?.toString() ?? "12");
+          setMaxReschedules(serverPolicies.maxReschedules?.toString() ?? "2");
+        }
+      } catch {}
+    })();
+  }, [providerId]);
+
   const handleSave = useCallback(async () => {
+    if (!providerId) {
+      Alert.alert("Error", "Provider profile not found. Please re-login.");
+      return;
+    }
     setIsSaving(true);
     try {
       const policies = {
@@ -54,16 +87,25 @@ export default function BookingPoliciesScreen() {
         maxReschedules: parseInt(maxReschedules) || 2,
       };
 
+      // Save to local store (AsyncStorage cache via Zustand persist)
       setBookingPolicies(policies);
+
+      // Save to database via API
+      await apiRequest(`/api/provider/${providerId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ bookingPolicies: policies }),
+      });
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert("Saved", "Your booking policies have been updated.");
       navigation.goBack();
-    } catch (err) {
-      Alert.alert("Error", "Failed to save policies. Please try again.");
+    } catch (err: any) {
+      Alert.alert("Error", err?.message ?? "Failed to save policies. Please try again.");
     } finally {
       setIsSaving(false);
     }
   }, [
+    providerId,
     requireDeposit,
     depositPercent,
     cancellationHours,

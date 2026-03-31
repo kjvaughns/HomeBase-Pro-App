@@ -2122,14 +2122,21 @@ Respond with JSON only:
       if (!provider) {
         return res.status(404).json({ error: "Provider not found" });
       }
-      res.json({ provider });
+      const parsed = { ...provider } as any;
+      if (parsed.bookingPolicies) {
+        try { parsed.bookingPolicies = JSON.parse(parsed.bookingPolicies); } catch {}
+      }
+      if (parsed.businessHours) {
+        try { parsed.businessHours = JSON.parse(parsed.businessHours); } catch {}
+      }
+      res.json({ provider: parsed });
     } catch (error) {
       console.error("Get provider error:", error);
       res.status(500).json({ error: "Failed to get provider" });
     }
   });
 
-  // Update provider profile
+  // Update provider profile (PUT - full update)
   app.put("/api/provider/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
       const provider = await storage.updateProvider(req.params.id, req.body);
@@ -2140,6 +2147,72 @@ Respond with JSON only:
     } catch (error) {
       console.error("Update provider error:", error);
       res.status(500).json({ error: "Failed to update provider" });
+    }
+  });
+
+  // Update provider profile (PATCH - partial update, serializes JSON fields)
+  app.patch("/api/provider/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
+    try {
+      const { id } = req.params;
+      const body = req.body;
+      const update: Record<string, any> = {};
+
+      const directFields = [
+        "businessName", "description", "phone", "email", "serviceArea",
+        "avatarUrl", "hourlyRate", "yearsExperience", "serviceRadius",
+        "serviceZipCodes", "serviceCities", "isPublicProfile",
+        "instantBooking", "advanceBookingDays",
+      ];
+      for (const field of directFields) {
+        if (body[field] !== undefined) update[field] = body[field];
+      }
+
+      // Serialize JSON object fields to text
+      if (body.bookingPolicies !== undefined) {
+        update.bookingPolicies =
+          typeof body.bookingPolicies === "string"
+            ? body.bookingPolicies
+            : JSON.stringify(body.bookingPolicies);
+      }
+      if (body.businessHours !== undefined) {
+        update.businessHours =
+          typeof body.businessHours === "string"
+            ? body.businessHours
+            : JSON.stringify(body.businessHours);
+      }
+      if (body.availability !== undefined) {
+        // Store availability merged into bookingPolicies to keep schema simple
+        const existing = await storage.getProvider(id);
+        let existingPolicies: Record<string, any> = {};
+        if (existing?.bookingPolicies) {
+          try { existingPolicies = JSON.parse(existing.bookingPolicies); } catch {}
+        }
+        const availability =
+          typeof body.availability === "string"
+            ? JSON.parse(body.availability)
+            : body.availability;
+        update.bookingPolicies = JSON.stringify({ ...existingPolicies, availability });
+      }
+
+      if (Object.keys(update).length === 0) {
+        return res.status(400).json({ error: "No valid fields to update" });
+      }
+
+      const provider = await storage.updateProvider(id, update);
+      if (!provider) {
+        return res.status(404).json({ error: "Provider not found" });
+      }
+
+      // Parse bookingPolicies back to object for the response
+      const parsed = { ...provider } as any;
+      if (parsed.bookingPolicies) {
+        try { parsed.bookingPolicies = JSON.parse(parsed.bookingPolicies); } catch {}
+      }
+
+      res.json({ provider: parsed });
+    } catch (error: any) {
+      console.error("Patch provider error:", error);
+      res.status(500).json({ error: error.message || "Failed to update provider" });
     }
   });
 
