@@ -10,7 +10,7 @@ import { db } from "./db";
 import { sql, eq, and, desc } from "drizzle-orm";
 import { appointments, maintenanceReminders, homes, reviews } from "@shared/schema";
 import { sendInvoiceEmail, sendProviderClientMessage } from "./emailService";
-import { dispatch, dispatchWithResult } from "./notificationService";
+import { dispatch, dispatchWithResult, dispatchNotification, sendPush } from "./notificationService";
 import { 
   searchPlaces, 
   getPlaceDetails, 
@@ -56,6 +56,8 @@ import {
   providerMessages,
   messageTemplates,
   type Job,
+  pushTokens,
+  notificationPreferences,
 } from "@shared/schema";
 
 interface IdParams { id: string; }
@@ -975,6 +977,146 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Mark notification read error:", error);
       res.status(500).json({ error: "Failed to mark notification as read" });
+    }
+  });
+
+  app.post("/api/notifications/:userId/read-all", requireAuth, async (req: Request<UserIdParams>, res: Response) => {
+    try {
+      const authUserId = req.authenticatedUserId!;
+      if (req.params.userId !== authUserId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      await db.update(notifications).set({ isRead: true }).where(
+        and(eq(notifications.userId, authUserId), eq(notifications.isRead, false))
+      );
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Mark all notifications read error:", error);
+      res.status(500).json({ error: "Failed to mark all notifications as read" });
+    }
+  });
+
+  app.get("/api/notifications/:userId/unread-count", requireAuth, async (req: Request<UserIdParams>, res: Response) => {
+    try {
+      const authUserId = req.authenticatedUserId!;
+      if (req.params.userId !== authUserId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const result = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(notifications)
+        .where(and(eq(notifications.userId, authUserId), eq(notifications.isRead, false)));
+      const count = result[0]?.count || 0;
+      res.json({ count });
+    } catch (error) {
+      console.error("Get unread count error:", error);
+      res.status(500).json({ error: "Failed to get unread count" });
+    }
+  });
+
+  app.post("/api/push-tokens", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.authenticatedUserId!;
+      const { token, platform } = req.body;
+      if (!token) {
+        return res.status(400).json({ error: "token is required" });
+      }
+      await db
+        .insert(pushTokens)
+        .values({ userId, token, platform: platform || "expo", isActive: true })
+        .onConflictDoNothing();
+      await db.update(pushTokens).set({ isActive: true, updatedAt: new Date() }).where(
+        and(eq(pushTokens.userId, userId), eq(pushTokens.token, token))
+      );
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Register push token error:", error);
+      res.status(500).json({ error: "Failed to register push token" });
+    }
+  });
+
+  app.delete("/api/push-tokens", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.authenticatedUserId!;
+      const { token } = req.body;
+      if (token) {
+        await db.update(pushTokens).set({ isActive: false, updatedAt: new Date() }).where(
+          and(eq(pushTokens.userId, userId), eq(pushTokens.token, token))
+        );
+      } else {
+        await db.update(pushTokens).set({ isActive: false, updatedAt: new Date() }).where(
+          eq(pushTokens.userId, userId)
+        );
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete push token error:", error);
+      res.status(500).json({ error: "Failed to delete push token" });
+    }
+  });
+
+  app.get("/api/notification-preferences/:userId", requireAuth, async (req: Request<UserIdParams>, res: Response) => {
+    try {
+      const authUserId = req.authenticatedUserId!;
+      if (req.params.userId !== authUserId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const [prefs] = await db
+        .select()
+        .from(notificationPreferences)
+        .where(eq(notificationPreferences.userId, authUserId));
+      if (!prefs) {
+        const defaults = {
+          emailBookingConfirmation: true, emailBookingReminder: true, emailBookingCancelled: true,
+          emailInvoiceCreated: true, emailInvoiceReminder: true, emailInvoicePaid: true,
+          emailPaymentFailed: true, emailReviewRequest: true,
+          pushEnabled: true, inAppEnabled: true,
+        };
+        res.json({ preferences: { userId: authUserId, ...defaults } });
+      } else {
+        res.json({ preferences: prefs });
+      }
+    } catch (error) {
+      console.error("Get notification preferences error:", error);
+      res.status(500).json({ error: "Failed to get notification preferences" });
+    }
+  });
+
+  app.post("/api/notification-preferences", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.authenticatedUserId!;
+      const updates = req.body;
+      const allowed = [
+        "emailBookingConfirmation", "emailBookingReminder", "emailBookingCancelled",
+        "emailInvoiceCreated", "emailInvoiceReminder", "emailInvoicePaid",
+        "emailPaymentFailed", "emailReviewRequest",
+        "pushEnabled", "inAppEnabled",
+      ];
+      const safeUpdates: Record<string, unknown> = { userId, updatedAt: new Date() };
+      for (const key of allowed) {
+        if (updates[key] !== undefined) safeUpdates[key] = updates[key];
+      }
+      const [existing] = await db
+        .select()
+        .from(notificationPreferences)
+        .where(eq(notificationPreferences.userId, userId));
+      if (existing) {
+        const [updated] = await db
+          .update(notificationPreferences)
+          .set(safeUpdates)
+          .where(eq(notificationPreferences.userId, userId))
+          .returning();
+        res.json({ preferences: updated });
+      } else {
+        const [created] = await db
+          .insert(notificationPreferences)
+          .values(safeUpdates as any)
+          .returning();
+        res.json({ preferences: created });
+      }
+    } catch (error) {
+      console.error("Update notification preferences error:", error);
+      res.status(500).json({ error: "Failed to update notification preferences" });
     }
   });
 

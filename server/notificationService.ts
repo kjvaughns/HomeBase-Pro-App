@@ -1,6 +1,6 @@
 import { db } from './db';
 import { eq, and } from 'drizzle-orm';
-import { notificationDeliveries, notificationPreferences } from '@shared/schema';
+import { notificationDeliveries, notificationPreferences, pushTokens, notifications } from '@shared/schema';
 import {
   sendWelcomeEmail,
   sendBookingConfirmationEmail,
@@ -67,6 +67,7 @@ export interface DispatchPayload {
   dueDate?: string;
   paymentLink?: string;
   paymentDate?: string;
+  paymentMethod?: string;
   lineItems?: Array<{ description: string; quantity: number; unitPrice: number; total: number }>;
   daysUntilDue?: number;
   daysOverdue?: number;
@@ -476,5 +477,121 @@ export async function hasDeliveryForRecord(
     return rows.length > 0;
   } catch {
     return false;
+  }
+}
+
+// ─── Push Notification Functions ───────────────────────────────────────────
+
+interface PushMessage {
+  to: string;
+  title: string;
+  body: string;
+  data?: Record<string, unknown>;
+  sound?: 'default' | null;
+  badge?: number;
+}
+
+interface ExpoPushResponse {
+  data: Array<{
+    status: 'ok' | 'error';
+    id?: string;
+    message?: string;
+    details?: Record<string, unknown>;
+  }>;
+}
+
+async function sendExpoPushNotifications(messages: PushMessage[]): Promise<void> {
+  if (messages.length === 0) return;
+
+  try {
+    const response = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(messages),
+    });
+
+    if (!response.ok) {
+      console.error('Expo push API error:', response.status, await response.text());
+      return;
+    }
+
+    const result = (await response.json()) as ExpoPushResponse;
+    for (const ticket of result.data || []) {
+      if (ticket.status === 'error') {
+        console.error('Push notification error:', ticket.message, ticket.details);
+        if (ticket.details?.error === 'DeviceNotRegistered') {
+          console.log('Device not registered, token should be cleaned up');
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Failed to send push notifications:', err);
+  }
+}
+
+type NotificationCategory = 'bookings' | 'invoices' | 'messages' | 'reminders';
+
+export async function sendPush(
+  userId: string,
+  title: string,
+  body: string,
+  data: Record<string, unknown> = {},
+  _category: NotificationCategory = 'bookings'
+): Promise<void> {
+  try {
+    const [prefs] = await db
+      .select()
+      .from(notificationPreferences)
+      .where(eq(notificationPreferences.userId, userId));
+
+    if (prefs && prefs.pushEnabled === false) {
+      return;
+    }
+
+    const tokens = await db
+      .select({ token: pushTokens.token })
+      .from(pushTokens)
+      .where(and(eq(pushTokens.userId, userId), eq(pushTokens.isActive, true)));
+
+    if (tokens.length === 0) return;
+
+    const messages: PushMessage[] = tokens.map((t) => ({
+      to: t.token,
+      title,
+      body,
+      data,
+      sound: 'default',
+    }));
+
+    await sendExpoPushNotifications(messages);
+  } catch (err) {
+    console.error('sendPush error:', err);
+  }
+}
+
+export async function dispatchNotification(
+  userId: string,
+  title: string,
+  message: string,
+  type: string,
+  data: Record<string, unknown> = {},
+  category: NotificationCategory = 'bookings'
+): Promise<void> {
+  try {
+    await db.insert(notifications).values({
+      userId,
+      title,
+      message,
+      type,
+      isRead: false,
+      data: JSON.stringify(data),
+    });
+
+    await sendPush(userId, title, message, data, category);
+  } catch (err) {
+    console.error('dispatchNotification error:', err);
   }
 }

@@ -31,9 +31,7 @@ export default function ProviderMoreScreen() {
   const toggleDarkMode = useThemeStore((s) => s.toggleDarkMode);
 
   const availableForWork = useProviderStore((s) => s.availableForWork);
-  const notificationsEnabled = useProviderStore((s) => s.notificationsEnabled);
   const setAvailableForWork = useProviderStore((s) => s.setAvailableForWork);
-  const setNotificationsEnabled = useProviderStore((s) => s.setNotificationsEnabled);
 
   const { setActiveRole, setNeedsRoleSelection } = useAuthStore();
 
@@ -152,22 +150,12 @@ export default function ProviderMoreScreen() {
             Settings
           </ThemedText>
           <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
-            <View style={styles.switchRow}>
-              <ListRow
-                title="Notifications"
-                leftIcon="bell"
-                showChevron={false}
-                isFirst
-              />
-              <View style={styles.switchContainer}>
-                <Switch
-                  value={notificationsEnabled}
-                  onValueChange={setNotificationsEnabled}
-                  trackColor={{ false: theme.backgroundTertiary, true: Colors.accent }}
-                  thumbColor="#FFFFFF"
-                />
-              </View>
-            </View>
+            <ListRow
+              title="Notification Preferences"
+              leftIcon="bell"
+              onPress={() => navigation.navigate("NotificationPreferences")}
+              isFirst
+            />
             <ListRow
               title="Switch to Homeowner Mode"
               subtitle="Browse and book services"

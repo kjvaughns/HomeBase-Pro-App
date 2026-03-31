@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { Platform } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 import HomeownerTabNavigator from "@/navigation/HomeownerTabNavigator";
 import ProviderTabNavigator from "@/navigation/ProviderTabNavigator";
@@ -35,6 +36,7 @@ import ProfileEditScreen from "@/screens/homeowner/ProfileEditScreen";
 import AddressesScreen from "@/screens/homeowner/AddressesScreen";
 import PaymentMethodsScreen from "@/screens/homeowner/PaymentMethodsScreen";
 import NotificationsScreen from "@/screens/homeowner/NotificationsScreen";
+import NotificationPreferencesScreen from "@/screens/homeowner/NotificationPreferencesScreen";
 import ClientDetailScreen from "@/screens/provider/ClientDetailScreen";
 import AddClientScreen from "@/screens/provider/AddClientScreen";
 import AddJobScreen from "@/screens/provider/AddJobScreen";
@@ -124,6 +126,7 @@ export type RootStackParamList = {
   Addresses: undefined;
   PaymentMethods: undefined;
   Notifications: undefined;
+  NotificationPreferences: undefined;
   ClientDetail: { clientId: string };
   AddClient: undefined;
   AddJob: { clientId?: string } | undefined;
@@ -164,6 +167,8 @@ export default function RootStackNavigator() {
   const { theme } = useTheme();
   const { isAuthenticated, isHydrated, activeRole, canAccessProviderMode, needsRoleSelection, setActiveRole, setNeedsRoleSelection } = useAuthStore();
   const { hasCompletedFirstLaunch, hasCompletedProviderSetup, isHydrated: onboardingHydrated } = useOnboardingStore();
+
+  usePushNotifications();
 
   // Auto-resolve role selection: default to homeowner when the gateway would have shown.
   // Users can still switch roles from within the app.
@@ -413,6 +418,13 @@ export default function RootStackNavigator() {
         component={NotificationsScreen}
         options={{
           headerTitle: "Notifications",
+        }}
+      />
+      <Stack.Screen
+        name="NotificationPreferences"
+        component={NotificationPreferencesScreen}
+        options={{
+          headerTitle: "Notification Preferences",
         }}
       />
       <Stack.Screen

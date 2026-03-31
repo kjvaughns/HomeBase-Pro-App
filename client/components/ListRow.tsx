@@ -25,6 +25,7 @@ interface ListRowProps {
   isFirst?: boolean;
   isLast?: boolean;
   testID?: string;
+  badge?: number;
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -42,6 +43,7 @@ export function ListRow({
   isFirst = false,
   isLast = false,
   testID,
+  badge,
 }: ListRowProps) {
   const { theme } = useTheme();
   const backgroundColor = useSharedValue("transparent");
@@ -116,6 +118,13 @@ export function ListRow({
         </View>
 
         <View style={styles.rightContainer}>
+          {badge !== undefined && badge > 0 ? (
+            <View style={styles.badge}>
+              <ThemedText style={styles.badgeText}>
+                {badge > 99 ? "99+" : String(badge)}
+              </ThemedText>
+            </View>
+          ) : null}
           {rightText ? (
             <ThemedText type="small" style={{ color: theme.textSecondary }}>
               {rightText}
@@ -182,5 +191,20 @@ const styles = StyleSheet.create({
   },
   rightElement: {
     marginLeft: Spacing.xs,
+  },
+  badge: {
+    backgroundColor: Colors.error,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 5,
+  },
+  badgeText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "700",
+    lineHeight: 14,
   },
 });

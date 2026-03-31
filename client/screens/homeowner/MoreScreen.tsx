@@ -18,6 +18,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useThemeStore } from "@/state/themeStore";
+import { useNotificationCount } from "@/hooks/useNotificationCount";
 
 export default function MoreScreen() {
   const insets = useSafeAreaInsets();
@@ -34,6 +35,7 @@ export default function MoreScreen() {
     setActiveRole,
     setNeedsRoleSelection,
   } = useAuthStore();
+  const { count: unreadCount } = useNotificationCount();
 
   const [showAccountGate, setShowAccountGate] = useState(false);
   
@@ -202,6 +204,12 @@ export default function MoreScreen() {
                   leftIcon="bell"
                   onPress={() => navigation.navigate("Notifications")}
                   isFirst
+                  badge={unreadCount > 0 ? unreadCount : undefined}
+                />
+                <ListRow
+                  title="Notification Preferences"
+                  leftIcon="settings"
+                  onPress={() => navigation.navigate("NotificationPreferences")}
                 />
                 <ListRow
                   title="Payment Methods"
