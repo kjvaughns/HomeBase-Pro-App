@@ -53,6 +53,8 @@ import ProviderAIAssistantScreen from "@/screens/provider/ProviderAIAssistantScr
 import StripeConnectScreen from "@/screens/provider/StripeConnectScreen";
 import BusinessHubScreen from "@/screens/provider/BusinessHubScreen";
 import BookingLinkScreen from "@/screens/provider/BookingLinkScreen";
+import SendMessageScreen from "@/screens/provider/SendMessageScreen";
+import MessageTemplatesScreen from "@/screens/provider/MessageTemplatesScreen";
 import SavedProvidersScreen from "@/screens/homeowner/SavedProvidersScreen";
 import HelpCenterScreen from "@/screens/homeowner/HelpCenterScreen";
 import ContactUsScreen from "@/screens/homeowner/ContactUsScreen";
@@ -145,6 +147,14 @@ export type RootStackParamList = {
   StripeConnect: undefined;
   BusinessHub: undefined;
   BookingLink: undefined;
+  SendMessage: {
+    clientId: string;
+    clientName: string;
+    clientEmail?: string | null;
+    jobId?: string;
+    invoiceId?: string;
+  };
+  MessageTemplates: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -551,6 +561,20 @@ export default function RootStackNavigator() {
         component={BookingLinkScreen}
         options={{
           headerTitle: "Booking Link",
+        }}
+      />
+      <Stack.Screen
+        name="SendMessage"
+        component={SendMessageScreen}
+        options={{
+          headerTitle: "Send Message",
+        }}
+      />
+      <Stack.Screen
+        name="MessageTemplates"
+        component={MessageTemplatesScreen}
+        options={{
+          headerTitle: "Message Templates",
         }}
       />
     </Stack.Navigator>

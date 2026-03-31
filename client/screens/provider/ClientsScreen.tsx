@@ -85,14 +85,23 @@ function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
+interface LastMessagePreview {
+  clientId: string;
+  body: string;
+  createdAt: string;
+  channel: string;
+  status: string;
+}
+
 interface ClientCardProps {
   client: Client;
   onPress: () => void;
   onCall: () => void;
   onMessage: () => void;
+  lastMessage?: LastMessagePreview;
 }
 
-function ClientCard({ client, onPress, onCall, onMessage }: ClientCardProps) {
+function ClientCard({ client, onPress, onCall, onMessage, lastMessage }: ClientCardProps) {
   const { theme } = useTheme();
 
   const statusColor = useMemo(() => {
@@ -179,6 +188,18 @@ function ClientCard({ client, onPress, onCall, onMessage }: ClientCardProps) {
           ) : null}
         </View>
 
+        {lastMessage ? (
+          <View style={[styles.lastMessageRow, { borderTopColor: theme.separator }]}>
+            <Feather name={lastMessage.channel === "sms" ? "message-square" : "mail"} size={12} color={theme.textSecondary} />
+            <ThemedText type="caption" style={{ color: theme.textSecondary, marginLeft: 4, flex: 1 }} numberOfLines={1}>
+              {lastMessage.body}
+            </ThemedText>
+            <ThemedText type="caption" style={{ color: theme.textSecondary, marginLeft: 4 }}>
+              {formatDate(lastMessage.createdAt)}
+            </ThemedText>
+          </View>
+        ) : null}
+
         <View style={styles.actionsRow}>
           <Pressable
             style={[styles.actionButton, { backgroundColor: theme.cardBackground }]}
@@ -237,6 +258,27 @@ export default function ClientsScreen() {
     queryKey: ["/api/provider", providerId, "clients"],
     enabled: !!providerId,
   });
+
+  const { data: lastMessagesData } = useQuery<{ lastMessages: LastMessagePreview[] }>({
+    queryKey: ["/api/providers", providerId, "clients", "last-messages"],
+    enabled: !!providerId,
+    queryFn: async () => {
+      const { getApiUrl } = await import("@/lib/query-client");
+      const { useAuthStore } = await import("@/state/authStore");
+      const url = new URL(`/api/providers/${providerId}/clients/last-messages`, getApiUrl());
+      const res = await fetch(url.toString(), {
+        headers: { Authorization: `Bearer ${useAuthStore.getState().token}` },
+      });
+      if (!res.ok) return { lastMessages: [] };
+      return res.json();
+    },
+  });
+
+  const lastMessageMap = useMemo(() => {
+    const map = new Map<string, LastMessagePreview>();
+    (lastMessagesData?.lastMessages || []).forEach((m) => map.set(m.clientId, m));
+    return map;
+  }, [lastMessagesData]);
 
   const clients: Client[] = useMemo(() => {
     return (clientsData?.clients || []).map((c) => ({
@@ -337,9 +379,12 @@ export default function ClientsScreen() {
   };
 
   const handleMessage = (client: Client) => {
-    if (client.phone) {
-      Linking.openURL(`sms:${client.phone}`);
-    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    navigation.navigate("SendMessage", {
+      clientId: client.id,
+      clientName: client.name,
+      clientEmail: client.email,
+    });
   };
 
   const handleAddClient = () => {
@@ -445,6 +490,7 @@ export default function ClientsScreen() {
         onPress={() => handleClientPress(item)}
         onCall={() => handleCall(item)}
         onMessage={() => handleMessage(item)}
+        lastMessage={lastMessageMap.get(item.id)}
       />
     </Animated.View>
   );
@@ -605,6 +651,13 @@ const styles = StyleSheet.create({
   },
   statItem: {
     gap: 2,
+  },
+  lastMessageRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: Spacing.sm,
+    paddingTop: Spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   actionsRow: {
     flexDirection: "row",

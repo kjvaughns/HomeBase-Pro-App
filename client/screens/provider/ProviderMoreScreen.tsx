@@ -114,6 +114,12 @@ export default function ProviderMoreScreen() {
               subtitle="Profile, services, booking links, and policies"
               leftIcon="briefcase"
               onPress={() => navigation.navigate("BusinessHub")}
+            />
+            <ListRow
+              title="Message Templates"
+              subtitle="Reusable email & SMS templates for clients"
+              leftIcon="mail"
+              onPress={() => navigation.navigate("MessageTemplates")}
               isLast
             />
           </View>

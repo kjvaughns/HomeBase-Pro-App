@@ -780,18 +780,6 @@ export const providerMessageTemplates = pgTable("provider_message_templates", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const providerMessages = pgTable("provider_messages", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
-  clientId: varchar("client_id").references(() => clients.id, { onDelete: "set null" }),
-  templateId: varchar("template_id").references(() => providerMessageTemplates.id, { onDelete: "set null" }),
-  subject: text("subject"),
-  body: text("body").notNull(),
-  channel: notificationChannelEnum("channel").default("email"),
-  sentAt: timestamp("sent_at"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
 export const notificationDeliveries = pgTable("notification_deliveries", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   channel: notificationChannelEnum("channel").notNull(),
@@ -811,8 +799,67 @@ export const notificationDeliveries = pgTable("notification_deliveries", {
 export type PushToken = typeof pushTokens.$inferSelect;
 export type NotificationPreference = typeof notificationPreferences.$inferSelect;
 export type ProviderMessageTemplate = typeof providerMessageTemplates.$inferSelect;
-export type ProviderMessage = typeof providerMessages.$inferSelect;
 export type NotificationDelivery = typeof notificationDeliveries.$inferSelect;
+
+// ─── Provider Messages ────────────────────────────────────────────────────────
+
+export const messageChannelEnum = pgEnum("message_channel", ["email", "sms"]);
+export const messageStatusEnum = pgEnum("message_status", ["sent", "failed", "pending_sms"]);
+
+export const providerMessages = pgTable("provider_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  jobId: varchar("job_id").references(() => jobs.id, { onDelete: "set null" }),
+  invoiceId: varchar("invoice_id").references(() => invoices.id, { onDelete: "set null" }),
+  channel: messageChannelEnum("channel").notNull().default("email"),
+  subject: text("subject"),
+  body: text("body").notNull(),
+  status: messageStatusEnum("status").notNull().default("sent"),
+  resendMessageId: text("resend_message_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const providerMessagesRelations = relations(providerMessages, ({ one }) => ({
+  provider: one(providers, { fields: [providerMessages.providerId], references: [providers.id] }),
+  client: one(clients, { fields: [providerMessages.clientId], references: [clients.id] }),
+  job: one(jobs, { fields: [providerMessages.jobId], references: [jobs.id] }),
+  invoice: one(invoices, { fields: [providerMessages.invoiceId], references: [invoices.id] }),
+}));
+
+export const insertProviderMessageSchema = createInsertSchema(providerMessages).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProviderMessage = typeof providerMessages.$inferSelect;
+export type InsertProviderMessage = z.infer<typeof insertProviderMessageSchema>;
+
+// ─── Message Templates ─────────────────────────────────────────────────────────
+
+export const messageTemplates = pgTable("message_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  channel: messageChannelEnum("channel").notNull().default("email"),
+  subject: text("subject"),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const messageTemplatesRelations = relations(messageTemplates, ({ one }) => ({
+  provider: one(providers, { fields: [messageTemplates.providerId], references: [providers.id] }),
+}));
+
+export const insertMessageTemplateSchema = createInsertSchema(messageTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MessageTemplate = typeof messageTemplates.$inferSelect;
+export type InsertMessageTemplate = z.infer<typeof insertMessageTemplateSchema>;
 
 // ─── Leads ────────────────────────────────────────────────────────────────────
 

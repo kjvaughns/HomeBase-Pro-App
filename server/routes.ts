@@ -9,7 +9,7 @@ import { getStripePublishableKey } from "./stripeClient";
 import { db } from "./db";
 import { sql, eq, and, desc } from "drizzle-orm";
 import { appointments, maintenanceReminders, homes, reviews } from "@shared/schema";
-import { sendInvoiceEmail } from "./emailService";
+import { sendInvoiceEmail, sendProviderClientMessage } from "./emailService";
 import { dispatch, dispatchWithResult } from "./notificationService";
 import { 
   searchPlaces, 
@@ -53,6 +53,8 @@ import {
   providerServices,
   services,
   providers,
+  providerMessages,
+  messageTemplates,
   type Job,
 } from "@shared/schema";
 
@@ -4257,6 +4259,285 @@ Respond with JSON only:
     } catch (error: any) {
       console.error("Delete lead error:", error);
       res.status(500).json({ error: error.message || "Failed to delete lead" });
+    }
+  });
+
+  // ============ Provider Messages Routes ============
+
+  // Rate limit map for provider messages (10/client/24h)
+  const messageLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+  function checkMessageRateLimit(providerId: string, clientId: string): boolean {
+    const key = `${providerId}:${clientId}`;
+    const now = Date.now();
+    const window = 24 * 60 * 60 * 1000;
+    const limit = 10;
+    const entry = messageLimitMap.get(key);
+    if (!entry || entry.resetAt < now) {
+      messageLimitMap.set(key, { count: 1, resetAt: now + window });
+      return true;
+    }
+    if (entry.count >= limit) return false;
+    entry.count += 1;
+    return true;
+  }
+
+  // POST /api/providers/:providerId/messages — send a message
+  app.post("/api/providers/:providerId/messages", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
+    try {
+      const authUserId = req.authenticatedUserId!;
+      const { providerId } = req.params;
+
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      if (!providerRecord || providerRecord.id !== providerId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const { clientId, channel, subject, body, jobId, invoiceId } = req.body;
+
+      if (!clientId || !body) {
+        return res.status(400).json({ error: "clientId and body are required" });
+      }
+
+      // Verify client belongs to this provider
+      const [client] = await db.select().from(clients).where(
+        and(eq(clients.id, clientId), eq(clients.providerId, providerId))
+      );
+      if (!client) {
+        return res.status(403).json({ error: "Client does not belong to this provider" });
+      }
+
+      // Rate limit
+      if (!checkMessageRateLimit(providerId, clientId)) {
+        return res.status(429).json({ error: "Rate limit exceeded: max 10 messages per client per 24 hours" });
+      }
+
+      // Substitute merge variables
+      const clientName = [client.firstName, client.lastName].filter(Boolean).join(" ");
+      let processedBody = body
+        .replace(/\{\{client_name\}\}/g, clientName)
+        .replace(/\{\{provider_name\}\}/g, providerRecord.businessName);
+      let processedSubject = (subject || `Message from ${providerRecord.businessName}`)
+        .replace(/\{\{client_name\}\}/g, clientName)
+        .replace(/\{\{provider_name\}\}/g, providerRecord.businessName);
+
+      if (jobId) {
+        const [jobRecord] = await db.select().from(jobs).where(eq(jobs.id, jobId));
+        if (jobRecord) {
+          processedBody = processedBody
+            .replace(/\{\{service\}\}/g, jobRecord.title || "")
+            .replace(/\{\{booking_date\}\}/g, jobRecord.scheduledDate ? new Date(jobRecord.scheduledDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "");
+          processedSubject = processedSubject
+            .replace(/\{\{service\}\}/g, jobRecord.title || "")
+            .replace(/\{\{booking_date\}\}/g, jobRecord.scheduledDate ? new Date(jobRecord.scheduledDate).toLocaleDateString() : "");
+        }
+      }
+
+      if (invoiceId) {
+        const [invoiceRecord] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+        if (invoiceRecord) {
+          const amount = invoiceRecord.total || invoiceRecord.amount || "0";
+          processedBody = processedBody.replace(/\{\{amount_due\}\}/g, `$${parseFloat(amount).toFixed(2)}`);
+          processedSubject = processedSubject.replace(/\{\{amount_due\}\}/g, `$${parseFloat(amount).toFixed(2)}`);
+        }
+      }
+
+      let status: "sent" | "failed" | "pending_sms" = "sent";
+      let resendMessageId: string | undefined;
+
+      if (channel === "email") {
+        if (!client.email) {
+          return res.status(400).json({ error: "Client does not have an email address" });
+        }
+        const emailResult = await sendProviderClientMessage({
+          clientEmail: client.email,
+          clientName,
+          providerName: providerRecord.businessName,
+          subject: processedSubject,
+          body: processedBody,
+        });
+        status = emailResult.success ? "sent" : "failed";
+        resendMessageId = emailResult.messageId;
+      } else if (channel === "sms") {
+        status = "pending_sms";
+      }
+
+      const [message] = await db.insert(providerMessages).values({
+        providerId,
+        clientId,
+        jobId: jobId || null,
+        invoiceId: invoiceId || null,
+        channel: channel || "email",
+        subject: processedSubject,
+        body: processedBody,
+        status,
+        resendMessageId: resendMessageId || null,
+      }).returning();
+
+      res.status(201).json({ message });
+    } catch (error: any) {
+      console.error("Send provider message error:", error);
+      res.status(500).json({ error: error.message || "Failed to send message" });
+    }
+  });
+
+  // GET /api/providers/:providerId/clients/:clientId/messages — message history
+  app.get("/api/providers/:providerId/clients/:clientId/messages", requireAuth, async (req: Request<{ providerId: string; clientId: string }>, res: Response) => {
+    try {
+      const authUserId = req.authenticatedUserId!;
+      const { providerId, clientId } = req.params;
+
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      if (!providerRecord || providerRecord.id !== providerId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const messages = await db.select().from(providerMessages)
+        .where(and(eq(providerMessages.providerId, providerId), eq(providerMessages.clientId, clientId)))
+        .orderBy(desc(providerMessages.createdAt));
+
+      res.json({ messages });
+    } catch (error: any) {
+      console.error("Get provider messages error:", error);
+      res.status(500).json({ error: "Failed to get messages" });
+    }
+  });
+
+  // GET /api/providers/:providerId/message-templates — list templates
+  app.get("/api/providers/:providerId/message-templates", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
+    try {
+      const authUserId = req.authenticatedUserId!;
+      const { providerId } = req.params;
+
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      if (!providerRecord || providerRecord.id !== providerId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const templates = await db.select().from(messageTemplates)
+        .where(eq(messageTemplates.providerId, providerId))
+        .orderBy(desc(messageTemplates.createdAt));
+
+      res.json({ templates });
+    } catch (error: any) {
+      console.error("Get message templates error:", error);
+      res.status(500).json({ error: "Failed to get templates" });
+    }
+  });
+
+  // POST /api/providers/:providerId/message-templates — create template
+  app.post("/api/providers/:providerId/message-templates", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
+    try {
+      const authUserId = req.authenticatedUserId!;
+      const { providerId } = req.params;
+
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      if (!providerRecord || providerRecord.id !== providerId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const { name, channel, subject, body } = req.body;
+      if (!name || !body) {
+        return res.status(400).json({ error: "name and body are required" });
+      }
+
+      const [template] = await db.insert(messageTemplates).values({
+        providerId,
+        name,
+        channel: channel || "email",
+        subject: subject || null,
+        body,
+      }).returning();
+
+      res.status(201).json({ template });
+    } catch (error: any) {
+      console.error("Create message template error:", error);
+      res.status(500).json({ error: "Failed to create template" });
+    }
+  });
+
+  // PATCH /api/providers/:providerId/message-templates/:templateId — update template
+  app.patch("/api/providers/:providerId/message-templates/:templateId", requireAuth, async (req: Request<{ providerId: string; templateId: string }>, res: Response) => {
+    try {
+      const authUserId = req.authenticatedUserId!;
+      const { providerId, templateId } = req.params;
+
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      if (!providerRecord || providerRecord.id !== providerId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const { name, channel, subject, body } = req.body;
+      const updates: Record<string, unknown> = { updatedAt: new Date() };
+      if (name !== undefined) updates.name = name;
+      if (channel !== undefined) updates.channel = channel;
+      if (subject !== undefined) updates.subject = subject;
+      if (body !== undefined) updates.body = body;
+
+      const [template] = await db.update(messageTemplates)
+        .set(updates)
+        .where(and(eq(messageTemplates.id, templateId), eq(messageTemplates.providerId, providerId)))
+        .returning();
+
+      if (!template) return res.status(404).json({ error: "Template not found" });
+      res.json({ template });
+    } catch (error: any) {
+      console.error("Update message template error:", error);
+      res.status(500).json({ error: "Failed to update template" });
+    }
+  });
+
+  // DELETE /api/providers/:providerId/message-templates/:templateId — delete template
+  app.delete("/api/providers/:providerId/message-templates/:templateId", requireAuth, async (req: Request<{ providerId: string; templateId: string }>, res: Response) => {
+    try {
+      const authUserId = req.authenticatedUserId!;
+      const { providerId, templateId } = req.params;
+
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      if (!providerRecord || providerRecord.id !== providerId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const [deleted] = await db.delete(messageTemplates)
+        .where(and(eq(messageTemplates.id, templateId), eq(messageTemplates.providerId, providerId)))
+        .returning();
+
+      if (!deleted) return res.status(404).json({ error: "Template not found" });
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete message template error:", error);
+      res.status(500).json({ error: "Failed to delete template" });
+    }
+  });
+
+  // GET /api/providers/:providerId/clients/:clientId/last-message — get last message for client list
+  app.get("/api/providers/:providerId/clients/last-messages", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
+    try {
+      const authUserId = req.authenticatedUserId!;
+      const { providerId } = req.params;
+
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      if (!providerRecord || providerRecord.id !== providerId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      // Get the most recent message per client
+      const lastMessages = await db.execute(sql`
+        SELECT DISTINCT ON (client_id) 
+          client_id as "clientId",
+          body,
+          created_at as "createdAt",
+          channel,
+          status
+        FROM provider_messages
+        WHERE provider_id = ${providerId}
+        ORDER BY client_id, created_at DESC
+      `);
+
+      res.json({ lastMessages: lastMessages.rows });
+    } catch (error: any) {
+      console.error("Get last messages error:", error);
+      res.status(500).json({ error: "Failed to get last messages" });
     }
   });
 

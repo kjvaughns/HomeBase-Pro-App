@@ -23,7 +23,8 @@ The application comprises a client-side React Native Expo app (SDK 55, React Nat
 - **Provider Capability Tags**: Skill-based tags displayed on provider cards.
 - **Service Summary Cards**: AI-generated scope of work summaries for booking.
 - **Data Management**: Full CRUD for appointments, clients, jobs, and invoices, with real-time tracking.
-- **Provider Portal**: Dashboard with real-time statistics, Clients CRM (with search, filter, sort, and quick actions), Schedule management, and an invoicing system. The `ClientDetailScreen` includes Overview, Jobs, Invoices, Notes, and Home (HouseFax) tabs.
+- **Provider Portal**: Dashboard with real-time statistics, Clients CRM (with search, filter, sort, and quick actions), Schedule management, and an invoicing system. The `ClientDetailScreen` includes Overview, Jobs, Invoices, Notes, Home (HouseFax), and Messages tabs.
+- **Provider-to-Client Messaging**: Providers can compose and send branded one-way emails or SMS messages directly to clients. Includes a full template management system (CRUD) with 5 built-in preset templates and merge variable support (`{{client_name}}`, `{{provider_name}}`, `{{service}}`, `{{booking_date}}`, `{{amount_due}}`). Message history appears in the Client Detail Messages tab. The last sent message shows as a preview on each client card in the clients list. Rate-limited to 10 messages per client per 24 hours. Email sent via Resend; SMS logged as `pending_sms`. Templates accessible from Provider More screen.
 - **Homeowner Tools**:
     - **Survival Kit**: Guided wizard for property details, generating personalized maintenance plans, cost estimates, and tips.
     - **HouseFax Ledger**: Home operating system with multi-home support, tracking expenses, maintenance history, assets, documents, and insights.
@@ -37,7 +38,7 @@ The application comprises a client-side React Native Expo app (SDK 55, React Nat
 - **Onboarding Flows**: Separate animated onboarding for each role - Homeowners set priorities and see tool highlights, Providers see business features and Stripe Connect teaser. Progress indicators and staggered animations throughout.
 - **Role Gateway**: After onboarding, quick role switching available between Homeowner and Provider views.
 - **Booking Links**: Providers can create public booking pages with customizable intake forms, AI quote generation, deposit support, and custom questions.
-- **Database Schema**: PostgreSQL database with Drizzle ORM managing 25 tables including `users`, `homes`, `providers`, `appointments`, `clients`, `jobs`, `invoices`, `bookingLinks`, and `intakeSubmissions`. The `providers` table includes `businessHours` (jsonb), `bookingPolicies` (jsonb), `serviceRadius`, `serviceZipCodes` (text[]), `serviceCities` (text[]), and `isPublic` fields for the Business Hub feature.
+- **Database Schema**: PostgreSQL database with Drizzle ORM managing 27 tables including `users`, `homes`, `providers`, `appointments`, `clients`, `jobs`, `invoices`, `bookingLinks`, `intakeSubmissions`, `provider_messages`, and `message_templates`. The `providers` table includes `businessHours` (jsonb), `bookingPolicies` (jsonb), `serviceRadius`, `serviceZipCodes` (text[]), `serviceCities` (text[]), and `isPublic` fields for the Business Hub feature.
 - **API Endpoints**: Comprehensive RESTful API for authentication, home management, appointments, notifications, AI chat, booking links, and all provider portal functionalities.
 
 ## External Dependencies

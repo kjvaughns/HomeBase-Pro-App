@@ -20,7 +20,16 @@ import { getApiUrl } from "@/lib/query-client";
 import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
-type TabType = "overview" | "jobs" | "invoices" | "notes" | "home";
+interface ProviderMessageRecord {
+  id: string;
+  channel: "email" | "sms";
+  subject?: string | null;
+  body: string;
+  status: "sent" | "failed" | "pending_sms";
+  createdAt: string;
+}
+
+type TabType = "overview" | "jobs" | "invoices" | "notes" | "home" | "messages";
 
 interface ClientRecord {
   id: string;
@@ -206,6 +215,9 @@ export default function ClientDetailScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { clientId } = route.params;
 
+  const { providerProfile } = useAuthStore();
+  const providerId = providerProfile?.id;
+
   const { data: clientDetailData, isLoading } = useQuery<{
     client: ClientRecord;
     jobs: JobRecord[];
@@ -217,6 +229,19 @@ export default function ClientDetailScreen() {
       const url = new URL(`/api/clients/${clientId}`, getApiUrl());
       const res = await fetch(url.toString());
       if (!res.ok) throw new Error("Failed to load client");
+      return res.json();
+    },
+  });
+
+  const { data: messagesData } = useQuery<{ messages: ProviderMessageRecord[] }>({
+    queryKey: ["/api/providers", providerId, "clients", clientId, "messages"],
+    enabled: !!providerId && !!clientId && activeTab === "messages",
+    queryFn: async () => {
+      const url = new URL(`/api/providers/${providerId}/clients/${clientId}/messages`, getApiUrl());
+      const res = await fetch(url.toString(), {
+        headers: { Authorization: `Bearer ${useAuthStore.getState().token}` },
+      });
+      if (!res.ok) throw new Error("Failed to load messages");
       return res.json();
     },
   });
@@ -254,7 +279,12 @@ export default function ClientDetailScreen() {
   };
 
   const handleMessage = () => {
-    Linking.openURL(`sms:${client.phone}`);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    navigation.navigate("SendMessage", {
+      clientId: client.id,
+      clientName: getClientName(client),
+      clientEmail: client.email,
+    });
   };
 
   const handleNewJob = () => {
@@ -501,6 +531,75 @@ export default function ClientDetailScreen() {
       )}
     </Animated.View>
   );
+
+  const renderMessages = () => {
+    const messages = messagesData?.messages || [];
+    return (
+      <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+        <Pressable
+          style={[styles.sendMessageBtn, { backgroundColor: Colors.accent }]}
+          onPress={() => navigation.navigate("SendMessage", {
+            clientId: client.id,
+            clientName: getClientName(client),
+            clientEmail: client.email,
+          })}
+          testID="send-message-button"
+        >
+          <Feather name="send" size={16} color="#FFFFFF" />
+          <ThemedText type="body" style={{ color: "#FFFFFF", marginLeft: Spacing.sm, fontWeight: "600" }}>
+            Send New Message
+          </ThemedText>
+        </Pressable>
+        {messages.length === 0 ? (
+          <GlassCard style={styles.emptyMessages}>
+            <Feather name="mail" size={32} color={theme.textSecondary} />
+            <ThemedText type="body" style={{ marginTop: Spacing.md, textAlign: "center", fontWeight: "600" }}>
+              No messages sent yet
+            </ThemedText>
+            <ThemedText type="caption" style={{ color: theme.textSecondary, textAlign: "center", marginTop: Spacing.xs }}>
+              Send a professional email or SMS to keep this client informed.
+            </ThemedText>
+          </GlassCard>
+        ) : (
+          messages.map((msg, i) => (
+            <Animated.View key={msg.id} entering={FadeInDown.delay(i * 50).duration(300)}>
+              <GlassCard style={styles.messageCard}>
+                <View style={styles.messageHeader}>
+                  <View style={[styles.channelBadge, { backgroundColor: Colors.accent + "20" }]}>
+                    <Feather name={msg.channel === "email" ? "mail" : "message-square"} size={12} color={Colors.accent} />
+                    <ThemedText type="caption" style={{ color: Colors.accent, marginLeft: 4, textTransform: "uppercase" }}>
+                      {msg.channel}
+                    </ThemedText>
+                  </View>
+                  <View style={[styles.statusBadge, {
+                    backgroundColor: msg.status === "sent" ? "#22C55E20" : msg.status === "failed" ? "#EF444420" : "#F59E0B20"
+                  }]}>
+                    <ThemedText type="caption" style={{
+                      color: msg.status === "sent" ? "#22C55E" : msg.status === "failed" ? "#EF4444" : "#F59E0B",
+                      textTransform: "capitalize"
+                    }}>
+                      {msg.status === "pending_sms" ? "Pending" : msg.status}
+                    </ThemedText>
+                  </View>
+                  <ThemedText type="caption" style={{ color: theme.textSecondary, marginLeft: "auto" }}>
+                    {formatDate(msg.createdAt)}
+                  </ThemedText>
+                </View>
+                {msg.subject ? (
+                  <ThemedText type="body" style={{ fontWeight: "600", marginTop: Spacing.sm }}>
+                    {msg.subject}
+                  </ThemedText>
+                ) : null}
+                <ThemedText type="body" style={{ color: theme.textSecondary, marginTop: Spacing.xs }} numberOfLines={3}>
+                  {msg.body}
+                </ThemedText>
+              </GlassCard>
+            </Animated.View>
+          ))
+        )}
+      </Animated.View>
+    );
+  };
 
   const renderHome = () => {
     const home = client.home;
@@ -787,6 +886,11 @@ export default function ClientDetailScreen() {
             active={activeTab === "home"}
             onPress={() => setActiveTab("home")}
           />
+          <TabButton
+            label="Messages"
+            active={activeTab === "messages"}
+            onPress={() => setActiveTab("messages")}
+          />
         </ScrollView>
 
         <View style={styles.tabContent}>
@@ -795,6 +899,7 @@ export default function ClientDetailScreen() {
           {activeTab === "invoices" && renderInvoices()}
           {activeTab === "notes" && renderNotes()}
           {activeTab === "home" && renderHome()}
+          {activeTab === "messages" && renderMessages()}
         </View>
       </ScrollView>
     </ThemedView>
@@ -1077,6 +1182,38 @@ const styles = StyleSheet.create({
   windowChip: {
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.full,
+  },
+  sendMessageBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.card,
+    marginBottom: Spacing.md,
+  },
+  emptyMessages: {
+    alignItems: "center",
+    paddingVertical: Spacing.xl,
+  },
+  messageCard: {
+    marginBottom: Spacing.sm,
+  },
+  messageHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+  },
+  channelBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+  },
+  statusBadge: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
     borderRadius: BorderRadius.full,
   },
 });

@@ -582,3 +582,78 @@ export async function sendJobStatusChangedEmail(data: {
     buildEmailBase('Job Status Update', body, 'View in HomeBase', 'https://homebaseproapp.com')
   );
 }
+
+interface ProviderClientMessageData {
+  clientEmail: string;
+  clientName: string;
+  providerName: string;
+  subject: string;
+  body: string;
+}
+
+export async function sendProviderClientMessage(data: ProviderClientMessageData): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  try {
+    const { client, fromEmail } = await getResendClient();
+
+    const bodyHtml = data.body.replace(/\n/g, '<br/>');
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f3f4f6;">
+        <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+          <div style="background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+            <div style="background: #38AE5F; padding: 32px; text-align: center;">
+              <h1 style="color: white; margin: 0; font-size: 22px;">${data.providerName}</h1>
+              <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px;">Sent via HomeBase</p>
+            </div>
+
+            <div style="padding: 32px;">
+              <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">
+                Hi ${data.clientName},
+              </p>
+
+              <div style="color: #374151; font-size: 15px; line-height: 1.7; margin-bottom: 24px;">
+                ${bodyHtml}
+              </div>
+
+              <div style="border-top: 1px solid #e5e7eb; padding-top: 20px; margin-top: 24px;">
+                <p style="color: #6b7280; font-size: 13px; margin: 0;">
+                  This message was sent to you by <strong>${data.providerName}</strong> through HomeBase. To reply, simply respond to this email.
+                </p>
+              </div>
+            </div>
+
+            <div style="background: #f9fafb; padding: 16px; text-align: center; border-top: 1px solid #e5e7eb;">
+              <p style="color: #9ca3af; font-size: 11px; margin: 0;">
+                Powered by HomeBase &mdash; The smart way to manage home services
+              </p>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const result = await client.emails.send({
+      from: fromEmail || 'HomeBase <noreply@resend.dev>',
+      to: data.clientEmail,
+      subject: data.subject || `Message from ${data.providerName}`,
+      html
+    });
+
+    if (result.error) {
+      console.error('Resend error:', result.error);
+      return { success: false, error: result.error.message };
+    }
+
+    return { success: true, messageId: result.data?.id };
+  } catch (error: any) {
+    console.error('Send provider client message error:', error);
+    return { success: false, error: error.message || 'Failed to send message' };
+  }
+}
