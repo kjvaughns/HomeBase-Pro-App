@@ -55,6 +55,7 @@ interface IntakeSubmission {
   status: string;
   createdAt: string;
   convertedClientId?: string | null;
+  preferredTimesJson?: string | null;
 }
 
 interface AcceptModalState {
@@ -89,8 +90,7 @@ export default function LeadsScreen() {
     queryFn: async () => {
       const url = new URL(`/api/providers/${providerId}/leads`, getApiUrl());
       const res = await fetch(url.toString(), {
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
       });
       if (!res.ok) throw new Error("Failed to fetch leads");
       return res.json();
@@ -103,8 +103,7 @@ export default function LeadsScreen() {
     queryFn: async () => {
       const url = new URL(`/api/providers/${providerId}/intake-submissions`, getApiUrl());
       const res = await fetch(url.toString(), {
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
       });
       if (!res.ok) throw new Error("Failed to fetch submissions");
       return res.json();
@@ -212,10 +211,25 @@ export default function LeadsScreen() {
   }, [refetch, refetchSubmissions]);
 
   const openAcceptModal = (submission: IntakeSubmission) => {
+    // Prefill scheduled date from the first preferred time the client requested
+    let prefillDate = "";
+    if (submission.preferredTimesJson) {
+      try {
+        const times = JSON.parse(submission.preferredTimesJson) as string[];
+        if (times.length > 0) {
+          const d = new Date(times[0]);
+          if (!isNaN(d.getTime())) {
+            prefillDate = d.toISOString().slice(0, 10); // "YYYY-MM-DD"
+          }
+        }
+      } catch {
+        // ignore parse errors
+      }
+    }
     setAcceptModal({
       visible: true,
       submission,
-      scheduledDate: "",
+      scheduledDate: prefillDate,
       notes: "",
     });
   };

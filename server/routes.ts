@@ -4512,6 +4512,21 @@ Respond with JSON only:
         return res.status(400).json({ error: "Submission has already been accepted" });
       }
 
+      // Resolve scheduled date: use request body value if provided, else fall back to
+      // the first preferred time the client requested in the original submission
+      let resolvedScheduledDate: Date | undefined = scheduledDate ? new Date(scheduledDate) : undefined;
+      if (!resolvedScheduledDate && submission.preferredTimesJson) {
+        try {
+          const preferred = JSON.parse(submission.preferredTimesJson) as string[];
+          if (preferred.length > 0) {
+            const parsed = new Date(preferred[0]);
+            if (!isNaN(parsed.getTime())) resolvedScheduledDate = parsed;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
       // Run conversion in a transaction using the shared helper
       const result = await db.transaction(async (tx) => {
         const converted = await convertIntakeToClientJob(tx, {
@@ -4522,7 +4537,7 @@ Respond with JSON only:
           clientPhone: submission.clientPhone,
           address: submission.address,
           problemDescription: submission.problemDescription,
-          scheduledDate: scheduledDate ? new Date(scheduledDate) : undefined,
+          scheduledDate: resolvedScheduledDate,
           scheduledTime: scheduledTime || null,
           estimatedPrice: estimatedPrice ? String(estimatedPrice) : null,
           notes: notes || null,
