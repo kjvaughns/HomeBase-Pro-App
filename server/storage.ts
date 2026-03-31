@@ -40,7 +40,7 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
-import { hash, compare } from "bcrypt";
+import { hash, compare } from "bcryptjs";
 
 const SALT_ROUNDS = 10;
 

@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { serviceCategories, services, providers, providerServices, users, homes, appointments } from "@shared/schema";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 
 // Test user credentials for demo/testing purposes
 export const TEST_USER_EMAIL = "test@homebase.com";
