@@ -122,7 +122,7 @@ export default function BusinessHubScreen() {
           <View style={styles.infoRow}>
             <ThemedText style={[styles.infoLabel, { color: theme.textSecondary }]}>License</ThemedText>
             <ThemedText style={styles.infoValue}>
-              {"Not provided"}
+              {providerProfile?.licenseNumber || "Not provided"}
             </ThemedText>
           </View>
           <View style={styles.infoRow}>

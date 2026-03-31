@@ -23,6 +23,7 @@ export interface ProviderProfile {
   reviewCount: number;
   completedJobs: number;
   serviceArea?: string;
+  licenseNumber?: string;
 }
 
 interface AuthState {
