@@ -8,6 +8,7 @@ import * as path from "path";
 import { runMigrations } from 'stripe-replit-sync';
 import { getStripeSync } from "./stripeClient";
 import { WebhookHandlers } from "./webhookHandlers";
+import { db } from "./db";
 
 const app = express();
 const log = console.log;
@@ -313,17 +314,19 @@ function configureExpoAndLanding(app: express.Application) {
   const landingPageTemplate = fs.readFileSync(templatePath, "utf-8");
   const appName = getAppName();
 
-  // Public booking page — served at /book/:slug
-  const bookingPagePath = path.resolve(
-    process.cwd(),
-    "server",
-    "templates",
-    "booking-page.html",
-  );
-  app.get("/book/:slug", (_req: Request, res: Response) => {
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-    res.sendFile(bookingPagePath);
+  // Public booking page — served at /book/:slug (SSR)
+  app.get("/book/:slug", async (req: Request<{ slug: string }>, res: Response) => {
+    try {
+      const { renderBookingPage } = await import("./bookingPage");
+      const { html, status } = await renderBookingPage(req.params.slug, db);
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.status(status).send(html);
+    } catch (err: any) {
+      console.error("Booking page render error:", err);
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.status(500).send("<!DOCTYPE html><html><body><h1>Internal Server Error</h1></body></html>");
+    }
   });
 
   log("Serving static Expo files with dynamic manifest routing");
