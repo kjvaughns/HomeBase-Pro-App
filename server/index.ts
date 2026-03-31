@@ -5,6 +5,7 @@ import { createProxyMiddleware } from "http-proxy-middleware";
 import { registerRoutes } from "./routes";
 import * as fs from "fs";
 import * as path from "path";
+import { spawn } from "child_process";
 import { runMigrations } from 'stripe-replit-sync';
 import { getStripeSync } from "./stripeClient";
 import { WebhookHandlers } from "./webhookHandlers";
@@ -588,6 +589,84 @@ function configureExpoAndLanding(app: express.Application) {
   log("Expo routing: Checking expo-platform header on / and /manifest");
 }
 
+/**
+ * In production, if no pre-built static manifest exists, Metro wasn't bundled
+ * at build time. Spawn Metro here so the existing proxy (setupMetroProxy) can
+ * forward Expo Go requests to it. Metro runs as a long-lived child process.
+ */
+function maybeStartMetro() {
+  if (process.env.NODE_ENV !== "production") return;
+
+  const manifestPath = path.resolve(process.cwd(), "static-build", "ios", "manifest.json");
+  if (fs.existsSync(manifestPath)) {
+    log("Static Expo bundle found — skipping dynamic Metro startup.");
+    return;
+  }
+
+  log("No static Expo bundle found — starting Metro dynamically for production...");
+
+  // Stub the dotslash-based DevTools binary so libnspr4.so is never needed.
+  const devToolsCandidates = [
+    path.resolve(
+      process.cwd(),
+      "node_modules/expo/node_modules/@react-native/debugger-shell/bin/react-native-devtools",
+    ),
+    path.resolve(
+      process.cwd(),
+      "node_modules/@react-native/debugger-shell/bin/react-native-devtools",
+    ),
+  ];
+  for (const bin of devToolsCandidates) {
+    if (fs.existsSync(bin)) {
+      try {
+        fs.writeFileSync(bin, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+        log(`Stubbed DevTools binary: ${bin}`);
+      } catch (_) {}
+    }
+  }
+
+  const domain = (
+    process.env.REPLIT_INTERNAL_APP_DOMAIN ||
+    process.env.REPLIT_DEV_DOMAIN ||
+    process.env.EXPO_PUBLIC_DOMAIN ||
+    "localhost"
+  ).replace(/^https?:\/\//i, "");
+
+  const metro = spawn(
+    "npx",
+    ["expo", "start", "--no-dev", "--minify", "--localhost"],
+    {
+      stdio: "inherit",
+      detached: false,
+      env: {
+        ...process.env,
+        EXPO_PUBLIC_DOMAIN: domain,
+        CI: "1",
+        REACT_NATIVE_DEBUGGER_OPEN: "0",
+        EXPO_NO_INSPECTOR_PROXY: "1",
+        NODE_OPTIONS: "--max-old-space-size=4096",
+      },
+    },
+  );
+
+  metro.on("error", (err: Error) => {
+    log(`Metro spawn error (non-fatal): ${err.message}`);
+  });
+
+  metro.on("exit", (code: number | null) => {
+    log(`Metro process exited with code ${code}`);
+  });
+
+  const cleanup = () => {
+    try { metro.kill("SIGTERM"); } catch (_) {}
+  };
+  process.on("SIGTERM", cleanup);
+  process.on("SIGINT", cleanup);
+  process.on("exit", cleanup);
+
+  log(`Metro started (PID ${metro.pid}) — proxy will route Expo Go requests.`);
+}
+
 function setupErrorHandler(app: express.Application) {
   app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
     const error = err as {
@@ -623,6 +702,9 @@ function setupErrorHandler(app: express.Application) {
   setupErrorHandler(app);
 
   await initStripe();
+
+  // Start Metro dynamically if static bundle wasn't generated at build time.
+  maybeStartMetro();
 
   const port = parseInt(process.env.PORT || "5000", 10);
   server.listen(

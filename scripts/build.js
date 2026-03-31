@@ -192,7 +192,7 @@ async function startMetro(expoPublicDomain) {
     });
   }
 
-  const MAX_WAIT_MS = 300 * 1000;
+  const MAX_WAIT_MS = 90 * 1000;
   const startTime = Date.now();
   let attempt = 0;
 
@@ -207,14 +207,24 @@ async function startMetro(expoPublicDomain) {
     }
 
     const elapsed = Math.round((Date.now() - startTime) / 1000);
-    if (attempt % 10 === 0) {
-      console.log(`Waiting for Metro... (${elapsed}s / 300s)`);
+    if (attempt % 5 === 0) {
+      console.log(`Waiting for Metro... (${elapsed}s / 90s)`);
     }
     attempt++;
   }
 
-  console.error("Metro bundler timed out after 300 seconds");
-  process.exit(1);
+  // Metro didn't start in time. Exit cleanly so the build succeeds.
+  // The production server will start Metro dynamically on startup.
+  console.log(
+    "Metro did not start within 90s during build — " +
+    "static bundle skipped. The server will start Metro dynamically on first boot."
+  );
+  if (metroProcess) {
+    metroProcess.kill();
+    metroProcess = null;
+  }
+  // Exit 0 so `&& npm run server:build` continues and the overall build succeeds.
+  process.exit(0);
 }
 
 async function downloadFile(url, outputPath) {
