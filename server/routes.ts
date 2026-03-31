@@ -4415,10 +4415,10 @@ Respond with JSON only:
         submission = sub;
       }
 
-      // Notify the provider's linked user
+      // Notify the provider's linked user and (for instant bookings) send confirmation email to client
       try {
         const [providerRow] = await db
-          .select({ userId: providers.userId })
+          .select({ userId: providers.userId, businessName: providers.businessName, email: providers.email })
           .from(providers)
           .where(eq(providers.id, link.providerId))
           .limit(1);
@@ -4439,6 +4439,27 @@ Respond with JSON only:
             isRead: false,
             data: JSON.stringify({ intakeSubmissionId: submission.id, clientName }),
           });
+
+          // For instant bookings, send a booking confirmation email to the client
+          if (link.instantBooking && clientEmail) {
+            const preferredDateStr = preferredTimesJson?.[0]
+              ? new Date(preferredTimesJson[0]).toLocaleDateString()
+              : "To be confirmed";
+            dispatch("booking.created", {
+              clientEmail,
+              clientName,
+              providerEmail: providerRow.email ?? undefined,
+              providerName: providerRow.businessName ?? link.title ?? "Your Provider",
+              serviceName: link.title ?? "Home Service",
+              appointmentDate: preferredDateStr,
+              appointmentTime: preferredTimesJson?.[0]
+                ? new Date(preferredTimesJson[0]).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                : undefined,
+              confirmationNumber: submission.id,
+              relatedRecordType: "intake_submission",
+              relatedRecordId: submission.id,
+            }).catch((e: unknown) => console.error("Instant booking email dispatch error:", e));
+          }
         }
       } catch (notifyErr) {
         console.error("Notification create error (non-fatal):", notifyErr);
@@ -4458,10 +4479,19 @@ Respond with JSON only:
     }
   });
 
-  // Get intake submissions for provider
+  // Get intake submissions for provider — ownership check
   app.get("/api/providers/:providerId/intake-submissions", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
     try {
       const { providerId } = req.params;
+      const authUserId = req.authenticatedUserId;
+      const [providerRow] = await db
+        .select({ userId: providers.userId })
+        .from(providers)
+        .where(eq(providers.id, providerId))
+        .limit(1);
+      if (!providerRow || providerRow.userId !== authUserId) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
       const submissions = await storage.getIntakeSubmissionsByProvider(providerId);
       res.json({ submissions });
     } catch (error: any) {
@@ -4470,12 +4500,26 @@ Respond with JSON only:
     }
   });
 
-  // Update intake submission (review, convert, decline)
+  // Update intake submission (review, convert, decline) — ownership check
   app.put("/api/intake-submissions/:id", requireAuth, async (req: Request<{ id: string }>, res: Response) => {
     try {
       const { id } = req.params;
       const updates = req.body;
-      
+      const authUserId = req.authenticatedUserId;
+
+      const existing = await storage.getIntakeSubmission(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Submission not found" });
+      }
+      const [providerRow] = await db
+        .select({ userId: providers.userId })
+        .from(providers)
+        .where(eq(providers.id, existing.providerId))
+        .limit(1);
+      if (!providerRow || providerRow.userId !== authUserId) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+
       const submission = await storage.updateIntakeSubmission(id, updates);
       if (!submission) {
         return res.status(404).json({ error: "Submission not found" });
@@ -4627,6 +4671,93 @@ Respond with JSON only:
     } catch (error: any) {
       console.error("Update lead error:", error);
       res.status(500).json({ error: error.message || "Failed to update lead" });
+    }
+  });
+
+  // Accept a lead — creates client + job record and marks lead as "won"
+  app.post("/api/leads/:id/accept", requireAuth, async (req: Request<{ id: string }>, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { scheduledDate, scheduledTime, estimatedPrice, notes } = req.body;
+      const authUserId = req.authenticatedUserId;
+
+      const [lead] = await db.select().from(leads).where(eq(leads.id, id)).limit(1);
+      if (!lead) return res.status(404).json({ error: "Lead not found" });
+
+      // Authorization: verify ownership via providers.userId
+      const [providerRow] = await db
+        .select({ userId: providers.userId })
+        .from(providers)
+        .where(eq(providers.id, lead.providerId))
+        .limit(1);
+      if (!providerRow || providerRow.userId !== authUserId) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+
+      if (lead.status === "won") {
+        return res.status(400).json({ error: "Lead has already been accepted" });
+      }
+
+      // Resolve scheduled date from request body
+      const resolvedDate = scheduledDate ? new Date(scheduledDate) : new Date();
+
+      // Create client + job in a transaction and mark lead as won
+      const result = await db.transaction(async (tx) => {
+        const nameParts = (lead.name || "").trim().split(" ");
+        const firstName = nameParts[0] || "Unknown";
+        const lastName = nameParts.slice(1).join(" ") || null;
+
+        // Upsert client by email
+        let clientId: string;
+        if (lead.email) {
+          const [found] = await tx
+            .select({ id: clients.id })
+            .from(clients)
+            .where(and(eq(clients.providerId, lead.providerId), eq(clients.email, lead.email)));
+          if (found) {
+            clientId = found.id;
+          } else {
+            const [newC] = await tx
+              .insert(clients)
+              .values({ providerId: lead.providerId, firstName, lastName, email: lead.email, phone: lead.phone || null })
+              .returning({ id: clients.id });
+            clientId = newC.id;
+          }
+        } else {
+          const [newC] = await tx
+            .insert(clients)
+            .values({ providerId: lead.providerId, firstName, lastName, email: null, phone: lead.phone || null })
+            .returning({ id: clients.id });
+          clientId = newC.id;
+        }
+
+        // Create job
+        const [newJob] = await tx
+          .insert(jobs)
+          .values({
+            providerId: lead.providerId,
+            clientId,
+            title: lead.service || lead.message?.slice(0, 100) || "Service Request",
+            description: lead.message || null,
+            scheduledDate: resolvedDate,
+            scheduledTime: scheduledTime || null,
+            status: "scheduled",
+            estimatedPrice: estimatedPrice ? String(estimatedPrice) : null,
+            notes: notes || null,
+          })
+          .returning();
+
+        // Mark lead as won
+        const now = new Date();
+        await tx.update(leads).set({ status: "won", updatedAt: now }).where(eq(leads.id, id));
+
+        return { clientId, job: newJob };
+      });
+
+      res.status(201).json({ message: "Lead accepted", clientId: result.clientId, job: result.job });
+    } catch (error: any) {
+      console.error("Accept lead error:", error);
+      res.status(500).json({ error: error.message || "Failed to accept lead" });
     }
   });
 

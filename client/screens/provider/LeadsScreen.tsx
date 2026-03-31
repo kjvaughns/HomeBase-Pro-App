@@ -65,6 +65,13 @@ interface AcceptModalState {
   notes: string;
 }
 
+interface LeadAcceptModalState {
+  visible: boolean;
+  lead: Lead | null;
+  scheduledDate: string;
+  notes: string;
+}
+
 export default function LeadsScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
@@ -80,6 +87,12 @@ export default function LeadsScreen() {
   const [acceptModal, setAcceptModal] = useState<AcceptModalState>({
     visible: false,
     submission: null,
+    scheduledDate: "",
+    notes: "",
+  });
+  const [leadAcceptModal, setLeadAcceptModal] = useState<LeadAcceptModalState>({
+    visible: false,
+    lead: null,
     scheduledDate: "",
     notes: "",
   });
@@ -183,6 +196,51 @@ export default function LeadsScreen() {
     },
   });
 
+  const acceptLead = useMutation({
+    mutationFn: async ({
+      id,
+      scheduledDate,
+      notes,
+    }: {
+      id: string;
+      scheduledDate?: string;
+      notes?: string;
+    }) => {
+      const url = new URL(`/api/leads/${id}/accept`, getApiUrl());
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: JSON.stringify({ scheduledDate: scheduledDate || undefined, notes: notes || undefined }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({ error: "Failed to accept lead" }));
+        throw new Error(d.error || "Failed to accept lead");
+      }
+      return res.json() as Promise<{ message: string; clientId: string; job: { id: string } }>;
+    },
+    onSuccess: (data) => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      queryClient.invalidateQueries({ queryKey: ["/api/providers", providerId, "leads"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "jobs"] });
+      setLeadAcceptModal({ visible: false, lead: null, scheduledDate: "", notes: "" });
+      Alert.alert(
+        "Lead Accepted",
+        "A client and job have been created successfully.",
+        [
+          { text: "Done", style: "cancel" },
+          {
+            text: "View Client",
+            onPress: () => (navigation as any).navigate("ClientDetail", { clientId: data.clientId }),
+          },
+        ]
+      );
+    },
+    onError: (err: Error) => {
+      Alert.alert("Error", err.message || "Failed to accept lead.");
+    },
+  });
+
   const filteredLeads = useMemo(() => {
     if (filter === "all") return leads;
     return leads.filter((l) => l.status === filter);
@@ -232,6 +290,10 @@ export default function LeadsScreen() {
       scheduledDate: prefillDate,
       notes: "",
     });
+  };
+
+  const openLeadAcceptModal = (lead: Lead) => {
+    setLeadAcceptModal({ visible: true, lead, scheduledDate: "", notes: "" });
   };
 
   const renderSubmissionCard = ({ item, index }: { item: IntakeSubmission; index: number }) => (
@@ -303,6 +365,14 @@ export default function LeadsScreen() {
         onPress={() => {}}
         onContact={() => handleContact(item)}
         onDecline={() => handleDecline(item)}
+        onAccept={
+          item.status === "new" || item.status === "contacted"
+            ? () => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                openLeadAcceptModal(item);
+              }
+            : undefined
+        }
         testID={`lead-${item.id}`}
       />
     </Animated.View>
@@ -460,6 +530,98 @@ export default function LeadsScreen() {
                 style={styles.modalBtn}
               >
                 {acceptSubmission.isPending ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  "Confirm"
+                )}
+              </PrimaryButton>
+            </View>
+            <View style={{ height: insets.bottom }} />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Lead Accept Modal */}
+      <Modal
+        visible={leadAcceptModal.visible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setLeadAcceptModal((prev) => ({ ...prev, visible: false }))}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { backgroundColor: theme.backgroundDefault }]}>
+            <View style={styles.modalHandle} />
+            <ThemedText type="h3" style={styles.modalTitle}>
+              Accept Lead
+            </ThemedText>
+            {leadAcceptModal.lead ? (
+              <ThemedText type="body" style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
+                Converting {leadAcceptModal.lead.name} to a client. A job will be created automatically.
+              </ThemedText>
+            ) : null}
+
+            <ThemedText type="label" style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+              Scheduled Date (optional)
+            </ThemedText>
+            <TextInput
+              style={[
+                styles.textInput,
+                {
+                  backgroundColor: theme.backgroundSecondary,
+                  color: theme.text,
+                  borderColor: theme.border,
+                },
+              ]}
+              value={leadAcceptModal.scheduledDate}
+              onChangeText={(v) => setLeadAcceptModal((prev) => ({ ...prev, scheduledDate: v }))}
+              placeholder="e.g. 2026-04-15"
+              placeholderTextColor={theme.textTertiary}
+              testID="lead-accept-scheduled-date"
+            />
+
+            <ThemedText type="label" style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+              Notes (optional)
+            </ThemedText>
+            <TextInput
+              style={[
+                styles.textInput,
+                styles.textInputMulti,
+                {
+                  backgroundColor: theme.backgroundSecondary,
+                  color: theme.text,
+                  borderColor: theme.border,
+                },
+              ]}
+              value={leadAcceptModal.notes}
+              onChangeText={(v) => setLeadAcceptModal((prev) => ({ ...prev, notes: v }))}
+              placeholder="Any notes for this job..."
+              placeholderTextColor={theme.textTertiary}
+              multiline
+              numberOfLines={3}
+              testID="lead-accept-notes"
+            />
+
+            <View style={styles.modalButtons}>
+              <SecondaryButton
+                onPress={() => setLeadAcceptModal((prev) => ({ ...prev, visible: false }))}
+                style={styles.modalBtn}
+              >
+                Cancel
+              </SecondaryButton>
+              <PrimaryButton
+                onPress={() => {
+                  if (leadAcceptModal.lead) {
+                    acceptLead.mutate({
+                      id: leadAcceptModal.lead.id,
+                      scheduledDate: leadAcceptModal.scheduledDate || undefined,
+                      notes: leadAcceptModal.notes || undefined,
+                    });
+                  }
+                }}
+                disabled={acceptLead.isPending}
+                style={styles.modalBtn}
+              >
+                {acceptLead.isPending ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   "Confirm"

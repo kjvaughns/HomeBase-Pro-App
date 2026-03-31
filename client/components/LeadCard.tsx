@@ -23,6 +23,7 @@ interface LeadCardProps {
   onPress: () => void;
   onContact?: () => void;
   onDecline?: () => void;
+  onAccept?: () => void;
   testID?: string;
 }
 
@@ -64,6 +65,7 @@ export function LeadCard({
   onPress,
   onContact,
   onDecline,
+  onAccept,
   testID,
 }: LeadCardProps) {
   const { theme, isDark } = useTheme();
@@ -162,24 +164,38 @@ export function LeadCard({
           ) : null}
         </View>
 
-        {lead.status === "new" && onContact && onDecline ? (
+        {(lead.status === "new" || lead.status === "contacted") && (onContact || onDecline || onAccept) ? (
           <View style={[styles.footer, { borderTopColor: theme.separator }]}>
-            <Button
-              variant="secondary"
-              size="small"
-              onPress={onDecline}
-              style={styles.actionBtn}
-            >
-              Pass
-            </Button>
-            <Button
-              variant="primary"
-              size="small"
-              onPress={onContact}
-              style={styles.actionBtn}
-            >
-              Contact
-            </Button>
+            {lead.status === "new" && onDecline ? (
+              <Button
+                variant="secondary"
+                size="small"
+                onPress={onDecline}
+                style={styles.actionBtn}
+              >
+                Pass
+              </Button>
+            ) : null}
+            {lead.status === "new" && onContact ? (
+              <Button
+                variant="secondary"
+                size="small"
+                onPress={onContact}
+                style={styles.actionBtn}
+              >
+                Contact
+              </Button>
+            ) : null}
+            {onAccept ? (
+              <Button
+                variant="primary"
+                size="small"
+                onPress={onAccept}
+                style={styles.actionBtn}
+              >
+                Accept
+              </Button>
+            ) : null}
           </View>
         ) : null}
       </View>
