@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, ScrollView, View, Alert, ActivityIndicator } from "react-native";
+import { StyleSheet, ScrollView, View, Alert, ActivityIndicator, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
@@ -79,6 +79,13 @@ export default function InvoiceDetailScreen() {
     queryKey: ["/api/provider", providerId, "clients"],
     enabled: !!providerId,
   });
+
+  const { data: connectData } = useQuery<{ chargesEnabled: boolean; stripeAccountId?: string | null }>({
+    queryKey: ["/api/stripe/connect/status", providerId],
+    enabled: !!providerId,
+  });
+
+  const stripeReady = !!(connectData?.chargesEnabled);
 
   const invoice = invoiceData?.invoice;
   const clients = clientsData?.clients || [];
@@ -211,6 +218,22 @@ export default function InvoiceDetailScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
+        {/* Stripe not-ready banner */}
+        {!stripeReady && connectData !== undefined ? (
+          <View style={[styles.stripeBanner, { backgroundColor: "#FFF3CD", borderColor: "#FBBF24" }]}>
+            <Feather name="alert-triangle" size={16} color="#B45309" />
+            <ThemedText style={styles.stripeBannerText}>
+              Online payments are unavailable. Complete Stripe onboarding to accept payments.
+            </ThemedText>
+            <Pressable
+              onPress={() => (navigation as any).navigate("StripeConnect")}
+              hitSlop={8}
+            >
+              <ThemedText style={[styles.stripeBannerCta, { color: Colors.accent }]}>Set Up</ThemedText>
+            </Pressable>
+          </View>
+        ) : null}
+
         {/* Header card */}
         <GlassCard style={styles.headerCard}>
           <View style={styles.headerRow}>
@@ -436,4 +459,23 @@ const styles = StyleSheet.create({
     borderTopColor: "rgba(128,128,128,0.2)",
   },
   buttons: { gap: Spacing.md, marginTop: Spacing.md },
+  stripeBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  stripeBannerText: {
+    flex: 1,
+    fontSize: 12,
+    color: "#92400E",
+    lineHeight: 16,
+  },
+  stripeBannerCta: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
 });

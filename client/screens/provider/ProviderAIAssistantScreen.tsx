@@ -42,6 +42,18 @@ const QUICK_PROMPTS = [
   "What clients have overdue payments?",
 ];
 
+interface JobRecord {
+  id: string;
+  status: string;
+}
+
+interface InvoiceRecord {
+  id: string;
+  status: string;
+  total?: string;
+  amount?: string;
+}
+
 export default function ProviderAIAssistantScreen() {
   const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -56,6 +68,9 @@ export default function ProviderAIAssistantScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+
+  // Cache business context so we don't re-fetch on every message send
+  const cachedContextRef = useRef<string | null>(null);
   
   const pulseScale = useSharedValue(1);
   
@@ -80,8 +95,16 @@ export default function ProviderAIAssistantScreen() {
   }));
 
   const getBusinessContext = async (): Promise<string> => {
+    // Return cached context if available (avoids refetching on every message)
+    if (cachedContextRef.current !== null) {
+      return cachedContextRef.current;
+    }
+
+    const fallback = `Provider Business Context:\n- Business Name: ${providerProfile?.businessName || "Unknown"}`;
+
     if (!providerId) {
-      return `Provider Business Context:\n- Business Name: ${providerProfile?.businessName || "Unknown"}`;
+      cachedContextRef.current = fallback;
+      return fallback;
     }
     try {
       const [clientsRes, jobsRes, invoicesRes, statsRes] = await Promise.allSettled([
@@ -101,20 +124,23 @@ export default function ProviderAIAssistantScreen() {
 
       if (clientsRes.status === "fulfilled" && clientsRes.value.ok) {
         const d = await clientsRes.value.json();
-        totalClients = (d.clients || []).length;
+        totalClients = (d.clients as unknown[]).length;
       }
       if (jobsRes.status === "fulfilled" && jobsRes.value.ok) {
         const d = await jobsRes.value.json();
-        const jobList = d.jobs || [];
-        scheduledJobs = jobList.filter((j: any) => j.status === "scheduled").length;
-        completedJobs = jobList.filter((j: any) => j.status === "completed").length;
+        const jobList = (d.jobs || []) as JobRecord[];
+        scheduledJobs = jobList.filter((j) => j.status === "scheduled").length;
+        completedJobs = jobList.filter((j) => j.status === "completed").length;
       }
       if (invoicesRes.status === "fulfilled" && invoicesRes.value.ok) {
         const d = await invoicesRes.value.json();
-        const invList = d.invoices || [];
-        const pending = invList.filter((i: any) => i.status === "sent" || i.status === "overdue");
+        const invList = (d.invoices || []) as InvoiceRecord[];
+        const pending = invList.filter((i) => i.status === "sent" || i.status === "overdue");
         pendingInvoiceCount = pending.length;
-        pendingInvoiceTotal = pending.reduce((sum: number, i: any) => sum + parseFloat(i.total || i.amount || "0"), 0);
+        pendingInvoiceTotal = pending.reduce(
+          (sum: number, i: InvoiceRecord) => sum + parseFloat(i.total || i.amount || "0"),
+          0
+        );
       }
       if (statsRes.status === "fulfilled" && statsRes.value.ok) {
         const d = await statsRes.value.json();
@@ -122,7 +148,7 @@ export default function ProviderAIAssistantScreen() {
         upcomingJobs = d.upcomingJobs || scheduledJobs;
       }
 
-      return `
+      const context = `
 Provider Business Context:
 - Business Name: ${providerProfile?.businessName || "Unknown"}
 - Total Clients: ${totalClients}
@@ -131,8 +157,12 @@ Provider Business Context:
 - Pending Invoices: ${pendingInvoiceCount} (Total outstanding: $${pendingInvoiceTotal.toFixed(2)})
 - Revenue This Month: $${revenueMTD.toFixed(2)}
       `.trim();
+
+      cachedContextRef.current = context;
+      return context;
     } catch {
-      return `Provider Business Context:\n- Business Name: ${providerProfile?.businessName || "Unknown"}`;
+      cachedContextRef.current = fallback;
+      return fallback;
     }
   };
   

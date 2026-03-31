@@ -3430,6 +3430,9 @@ Respond with JSON only:
       res.json({ url: result.checkoutUrl, sessionId: result.sessionId });
     } catch (error: any) {
       console.error("Create checkout session error:", error);
+      if (error.code === "stripe_not_ready" || error.message === "stripe_not_ready") {
+        return res.status(402).json({ error: "stripe_not_ready", message: "Provider has not completed Stripe onboarding" });
+      }
       res.status(500).json({ error: error.message || "Failed to create checkout session" });
     }
   });
@@ -3783,6 +3786,9 @@ Respond with JSON only:
       res.json(result);
     } catch (error: any) {
       console.error("Create checkout session error:", error);
+      if (error.code === "stripe_not_ready" || error.message === "stripe_not_ready") {
+        return res.status(402).json({ error: "stripe_not_ready", message: "Provider has not completed Stripe onboarding" });
+      }
       res.status(500).json({ error: error.message || "Failed to create checkout session" });
     }
   });
@@ -4331,10 +4337,14 @@ Respond with JSON only:
             .returning();
           instantJob = newJ;
 
-          // Link submission to the new client
+          // Link submission to the new client + job with full conversion fields
           await db
             .update(intakeSubmissions)
-            .set({ convertedClientId: instantClientId })
+            .set({
+              convertedClientId: instantClientId,
+              convertedJobId: newJ.id,
+              convertedAt: new Date(),
+            })
             .where(eq(intakeSubmissions.id, submission.id));
         } catch (instantErr) {
           console.error("Instant booking client/job creation error (non-fatal):", instantErr);
@@ -4418,11 +4428,22 @@ Respond with JSON only:
     try {
       const { id } = req.params;
       const { scheduledDate, scheduledTime, estimatedPrice, notes } = req.body;
+      const authUserId = req.authenticatedUserId;
 
       const submission = await storage.getIntakeSubmission(id);
       if (!submission) {
         return res.status(404).json({ error: "Submission not found" });
       }
+
+      // Authorization: verify the authenticated user owns this provider
+      const [providerOwner] = await db
+        .select({ userId: providers.userId })
+        .from(providers)
+        .where(eq(providers.id, submission.providerId));
+      if (!providerOwner || providerOwner.userId !== authUserId) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+
       if (submission.status === "confirmed") {
         return res.status(400).json({ error: "Submission is already accepted" });
       }
@@ -4432,62 +4453,84 @@ Respond with JSON only:
       const firstName = nameParts[0] || "Unknown";
       const lastName = nameParts.slice(1).join(" ") || "";
 
-      // Upsert client — check if a client with this email already exists for this provider
-      let existingClient: typeof clients.$inferSelect | undefined;
-      if (submission.clientEmail) {
-        const [found] = await db
-          .select()
-          .from(clients)
-          .where(and(eq(clients.providerId, submission.providerId), eq(clients.email, submission.clientEmail)));
-        existingClient = found;
-      }
+      // Run conversion in a transaction
+      const result = await db.transaction(async (tx) => {
+        // Upsert client — check if a client with this email already exists for this provider
+        let clientId: string;
+        if (submission.clientEmail) {
+          const [found] = await tx
+            .select({ id: clients.id })
+            .from(clients)
+            .where(and(eq(clients.providerId, submission.providerId), eq(clients.email, submission.clientEmail)));
+          if (found) {
+            clientId = found.id;
+          } else {
+            const [newClient] = await tx
+              .insert(clients)
+              .values({
+                providerId: submission.providerId,
+                firstName,
+                lastName: lastName || null,
+                email: submission.clientEmail || null,
+                phone: submission.clientPhone || null,
+                address: submission.address || null,
+              })
+              .returning({ id: clients.id });
+            clientId = newClient.id;
+          }
+        } else {
+          const [newClient] = await tx
+            .insert(clients)
+            .values({
+              providerId: submission.providerId,
+              firstName,
+              lastName: lastName || null,
+              email: null,
+              phone: submission.clientPhone || null,
+              address: submission.address || null,
+            })
+            .returning({ id: clients.id });
+          clientId = newClient.id;
+        }
 
-      let clientId: string;
-      if (existingClient) {
-        clientId = existingClient.id;
-      } else {
-        const [newClient] = await db
-          .insert(clients)
+        // Create job record
+        const jobDate = scheduledDate ? new Date(scheduledDate) : new Date();
+        const [newJob] = await tx
+          .insert(jobs)
           .values({
             providerId: submission.providerId,
-            firstName,
-            lastName: lastName || null,
-            email: submission.clientEmail || null,
-            phone: submission.clientPhone || null,
+            clientId,
+            title: submission.problemDescription?.slice(0, 100) || "Service Request",
+            description: submission.problemDescription || null,
+            scheduledDate: jobDate,
+            scheduledTime: scheduledTime || null,
+            status: "scheduled",
             address: submission.address || null,
+            estimatedPrice: estimatedPrice ? String(estimatedPrice) : null,
+            notes: notes || null,
           })
-          .returning({ id: clients.id });
-        clientId = newClient.id;
-      }
+          .returning();
 
-      // Create job record
-      const jobDate = scheduledDate ? new Date(scheduledDate) : new Date();
-      const [newJob] = await db
-        .insert(jobs)
-        .values({
-          providerId: submission.providerId,
-          clientId,
-          title: submission.problemDescription?.slice(0, 100) || "Service Request",
-          description: submission.problemDescription || null,
-          scheduledDate: jobDate,
-          scheduledTime: scheduledTime || null,
-          status: "scheduled",
-          address: submission.address || null,
-          estimatedPrice: estimatedPrice ? String(estimatedPrice) : null,
-          notes: notes || null,
-        })
-        .returning();
+        const now = new Date();
+        // Mark submission confirmed with full conversion fields
+        await tx
+          .update(intakeSubmissions)
+          .set({
+            status: "confirmed",
+            convertedClientId: clientId,
+            convertedJobId: newJob.id,
+            convertedAt: now,
+            updatedAt: now,
+          })
+          .where(eq(intakeSubmissions.id, id));
 
-      // Mark submission as confirmed and link to the converted client
-      await storage.updateIntakeSubmission(id, {
-        status: "confirmed",
-        convertedClientId: clientId,
+        return { clientId, job: newJob };
       });
 
       res.status(201).json({
         message: "Booking accepted",
-        clientId,
-        job: newJob,
+        clientId: result.clientId,
+        job: result.job,
       });
     } catch (error: any) {
       console.error("Accept intake submission error:", error);

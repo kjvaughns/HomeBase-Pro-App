@@ -269,7 +269,15 @@ export async function createStripeCheckoutSession(invoiceId: string) {
 
   const connectAccount = await getConnectAccount(invoice.providerId);
   if (!connectAccount) {
-    throw new Error("Provider has not set up payment processing");
+    const err = new Error("stripe_not_ready") as Error & { code: string };
+    err.code = "stripe_not_ready";
+    throw err;
+  }
+
+  if (!connectAccount.chargesEnabled) {
+    const err = new Error("stripe_not_ready") as Error & { code: string };
+    err.code = "stripe_not_ready";
+    throw err;
   }
 
   const [provider] = await db
