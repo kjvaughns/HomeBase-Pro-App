@@ -64,4 +64,4 @@ The application comprises a client-side React Native Expo app (SDK 55, React Nat
 - `GET /api/auth/me` (unauthenticated) → HTTP 401
 - `POST /api/auth/login` with valid credentials → JWT token + user object
 - `GET /api/auth/me` (authenticated with Bearer token) → user email and profile
-- Test account: `test@homebase.com` / `test123`
+- Test account credentials are stored in the Replit Secrets (do not commit to code)
