@@ -172,6 +172,7 @@ async function startMetro(expoPublicDomain) {
     detached: false,
     env: {
       ...env,
+      CI: "1",
       REACT_NATIVE_DEBUGGER_OPEN: "0",
       EXPO_NO_INSPECTOR_PROXY: "1",
       NODE_OPTIONS: "--max-old-space-size=4096",
