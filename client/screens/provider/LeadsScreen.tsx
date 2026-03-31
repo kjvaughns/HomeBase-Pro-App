@@ -463,13 +463,32 @@ export default function LeadsScreen() {
               Accept Booking
             </ThemedText>
             {acceptModal.submission ? (
-              <ThemedText type="body" style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
-                Accepting request from {acceptModal.submission.clientName}. A client record and job will be created automatically.
-              </ThemedText>
+              <View style={[styles.submissionSummary, { backgroundColor: theme.backgroundSecondary, borderColor: theme.borderLight }]}>
+                <View style={styles.summaryRow}>
+                  <Feather name="user" size={13} color={theme.textSecondary} />
+                  <ThemedText type="small" style={{ color: theme.text }}>{acceptModal.submission.clientName}</ThemedText>
+                </View>
+                {acceptModal.submission.problemDescription ? (
+                  <View style={styles.summaryRow}>
+                    <Feather name="file-text" size={13} color={theme.textSecondary} />
+                    <ThemedText type="small" style={{ color: theme.textSecondary, flex: 1 }} numberOfLines={2}>
+                      {acceptModal.submission.problemDescription}
+                    </ThemedText>
+                  </View>
+                ) : null}
+                {acceptModal.scheduledDate ? (
+                  <View style={styles.summaryRow}>
+                    <Feather name="calendar" size={13} color={Colors.accent} />
+                    <ThemedText type="small" style={{ color: Colors.accent }}>
+                      Requested: {acceptModal.scheduledDate}
+                    </ThemedText>
+                  </View>
+                ) : null}
+              </View>
             ) : null}
 
             <ThemedText type="label" style={[styles.fieldLabel, { color: theme.textSecondary }]}>
-              Scheduled Date (optional)
+              Confirm Date (pre-filled from request)
             </ThemedText>
             <TextInput
               style={[
@@ -732,6 +751,18 @@ const styles = StyleSheet.create({
   },
   modalSubtitle: {
     marginBottom: Spacing.xl,
+  },
+  submissionSummary: {
+    borderRadius: BorderRadius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    gap: Spacing.xs,
+  },
+  summaryRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.xs,
   },
   fieldLabel: {
     marginBottom: Spacing.xs,

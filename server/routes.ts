@@ -4556,9 +4556,13 @@ Respond with JSON only:
         return res.status(400).json({ error: "Submission has already been accepted" });
       }
 
-      // Resolve scheduled date: use request body value if provided, else fall back to
+      // Resolve scheduled date: use request body value if provided and valid, else fall back to
       // the first preferred time the client requested in the original submission
-      let resolvedScheduledDate: Date | undefined = scheduledDate ? new Date(scheduledDate) : undefined;
+      let resolvedScheduledDate: Date | undefined;
+      if (scheduledDate) {
+        const parsed = new Date(scheduledDate);
+        if (!isNaN(parsed.getTime())) resolvedScheduledDate = parsed;
+      }
       if (!resolvedScheduledDate && submission.preferredTimesJson) {
         try {
           const preferred = JSON.parse(submission.preferredTimesJson) as string[];
