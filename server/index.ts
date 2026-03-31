@@ -1,4 +1,5 @@
 import express from "express";
+import cookieParser from "cookie-parser";
 import type { Request, Response, NextFunction } from "express";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import { registerRoutes } from "./routes";
@@ -47,7 +48,7 @@ function setupCors(app: express.Application) {
         "Access-Control-Allow-Methods",
         "GET, POST, PUT, DELETE, OPTIONS",
       );
-      res.header("Access-Control-Allow-Headers", "Content-Type");
+      res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
       res.header("Access-Control-Allow-Credentials", "true");
     }
 
@@ -89,6 +90,8 @@ function setupStripeWebhook(app: express.Application) {
 }
 
 function setupBodyParsing(app: express.Application) {
+  app.use(cookieParser());
+
   app.use(
     express.json({
       verify: (req, _res, buf) => {

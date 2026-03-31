@@ -57,9 +57,8 @@ interface ChatMessage {
   content: string;
 }
 
-import type { NextFunction, RequestHandler } from "express";
-
-import { randomBytes } from "node:crypto";
+import type { RequestHandler } from "express";
+import { generateToken, authenticateJWT } from "./auth";
 
 declare module "express-serve-static-core" {
   interface Request {
@@ -67,36 +66,7 @@ declare module "express-serve-static-core" {
   }
 }
 
-const sessionStore = new Map<string, { userId: string; createdAt: number }>();
-const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-
-export function createSessionToken(userId: string): string {
-  const token = randomBytes(32).toString("hex");
-  sessionStore.set(token, { userId, createdAt: Date.now() });
-  return token;
-}
-
-export function destroySessionToken(token: string): void {
-  sessionStore.delete(token);
-}
-
-const requireAuth: RequestHandler = (req, res, next) => {
-  const authHeader = req.headers["authorization"];
-  const raw = Array.isArray(authHeader) ? authHeader[0] : authHeader;
-  const token = raw?.startsWith("Bearer ") ? raw.slice(7) : undefined;
-  if (!token) {
-    res.status(401).json({ error: "Authentication required" });
-    return;
-  }
-  const session = sessionStore.get(token);
-  if (!session || Date.now() - session.createdAt > SESSION_TTL_MS) {
-    sessionStore.delete(token);
-    res.status(401).json({ error: "Session expired or invalid" });
-    return;
-  }
-  req.authenticatedUserId = session.userId;
-  next();
-};
+const requireAuth: RequestHandler = authenticateJWT;
 
 const aiRateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
@@ -197,7 +167,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const user = await storage.createUser(parsed.data);
-      const token = createSessionToken(user.id);
+      const token = generateToken(user.id, user.isProvider ? "provider" : "homeowner");
+      res.cookie("token", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+      });
       res.status(201).json({ user: formatUserResponse(user), token });
     } catch (error) {
       console.error("Signup error:", error);
@@ -226,12 +201,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user.isProvider = true;
       }
 
-      const token = createSessionToken(user.id);
+      const token = generateToken(user.id, user.isProvider ? "provider" : "homeowner");
+      res.cookie("token", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+      });
       res.json({ user: formatUserResponse(user), providerProfile, token });
     } catch (error) {
       console.error("Login error:", error);
       res.status(500).json({ error: "Failed to login" });
     }
+  });
+
+  app.get("/api/auth/me", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.authenticatedUserId!;
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      const providerProfile = await storage.getProviderByUserId(userId);
+      res.json({ user: formatUserResponse(user), providerProfile });
+    } catch (error) {
+      console.error("Auth me error:", error);
+      res.status(500).json({ error: "Failed to get user" });
+    }
+  });
+
+  app.post("/api/auth/logout", (req: Request, res: Response) => {
+    res.clearCookie("token");
+    res.json({ success: true });
   });
 
   app.get("/api/user/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
