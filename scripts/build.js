@@ -121,7 +121,10 @@ async function startMetro(expoPublicDomain) {
   metroProcess = spawn("npm", ["run", "expo:start:static:build"], {
     stdio: ["ignore", "pipe", "pipe"],
     detached: false,
-    env,
+    env: {
+      ...env,
+      REACT_NATIVE_DEBUGGER_OPEN: "0",
+    },
   });
 
   if (metroProcess.stdout) {
@@ -137,17 +140,28 @@ async function startMetro(expoPublicDomain) {
     });
   }
 
-  for (let i = 0; i < 60; i++) {
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+  const MAX_WAIT_MS = 120 * 1000;
+  const startTime = Date.now();
+  let attempt = 0;
+
+  while (Date.now() - startTime < MAX_WAIT_MS) {
+    const delay = Math.min(1000 * Math.pow(1.3, attempt), 8000);
+    await new Promise((resolve) => setTimeout(resolve, delay));
 
     const healthy = await checkMetroHealth();
     if (healthy) {
       console.log("Metro ready");
       return;
     }
+
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
+    if (attempt % 5 === 0) {
+      console.log(`Waiting for Metro... (${elapsed}s elapsed)`);
+    }
+    attempt++;
   }
 
-  console.error("Metro timeout");
+  console.error("Metro bundler timed out after 120 seconds");
   process.exit(1);
 }
 
