@@ -53,3 +53,15 @@ The application comprises a client-side React Native Expo app (SDK 55, React Nat
 - **React Query**: Data fetching and caching.
 - **Expo**: React Native application framework.
 - **Express.js**: Backend web application framework.
+
+## Production API Configuration
+- **Backend API domain**: `api.homebaseproapp.com` (set as `EXPO_PUBLIC_DOMAIN` in the mobile app build)
+- **`getApiUrl()`**: Helper in `client/lib/query-client.ts` strips any protocol prefix from `EXPO_PUBLIC_DOMAIN` before constructing `https://` URLs — prevents double-protocol malformed URLs
+- **EAS build profiles**: All four profiles (`development`, `preview`, `staging`, `production`) use bare `api.homebaseproapp.com` (no protocol) as `EXPO_PUBLIC_DOMAIN`
+- **Note**: `api.homebaseproapp.com` must be added as a custom domain in Replit deployment settings after publishing, pointing to the Express backend on port 5000
+
+## Verified API Endpoints (tested against Supabase, 2026-03-31)
+- `GET /api/auth/me` (unauthenticated) → HTTP 401
+- `POST /api/auth/login` with valid credentials → JWT token + user object
+- `GET /api/auth/me` (authenticated with Bearer token) → user email and profile
+- Test account: `test@homebase.com` / `test123`
