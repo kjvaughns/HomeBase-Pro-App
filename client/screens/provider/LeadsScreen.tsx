@@ -5,14 +5,16 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { ThemedView } from "@/components/ThemedView";
 import { LeadCard } from "@/components/LeadCard";
 import { FilterChips, FilterOption } from "@/components/FilterChips";
 import { EmptyState } from "@/components/EmptyState";
-import { SkeletonCard } from "@/components/SkeletonLoader";
 import { Spacing, Colors } from "@/constants/theme";
-import { useProviderStore, Lead } from "@/state/providerStore";
+import { Lead } from "@/state/providerStore";
+import { useAuthStore } from "@/state/authStore";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
 
 type LeadFilter = "all" | "new" | "contacted" | "quoted" | "won" | "lost";
 
@@ -29,13 +31,40 @@ export default function LeadsScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useFloatingTabBarHeight();
+  const queryClient = useQueryClient();
 
-  const leads = useProviderStore((s) => s.leads);
-  const contactLead = useProviderStore((s) => s.contactLead);
-  const declineLead = useProviderStore((s) => s.declineLead);
+  const { providerProfile } = useAuthStore();
+  const providerId = providerProfile?.id;
 
-  const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<LeadFilter>("all");
+
+  const { data, isLoading, refetch, isRefetching } = useQuery<{ leads: Lead[] }>({
+    queryKey: ["/api/providers", providerId, "leads"],
+    enabled: !!providerId,
+    queryFn: async () => {
+      const url = new URL(`/api/providers/${providerId}/leads`, getApiUrl());
+      const res = await fetch(url.toString(), {
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) throw new Error("Failed to fetch leads");
+      return res.json();
+    },
+  });
+
+  const leads: Lead[] = data?.leads ?? [];
+
+  const updateStatus = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: Lead["status"] }) => {
+      return apiRequest(`/api/leads/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/providers", providerId, "leads"] });
+    },
+  });
 
   const filteredLeads = useMemo(() => {
     if (filter === "all") return leads;
@@ -49,23 +78,14 @@ export default function LeadsScreen() {
     }));
   }, [leads]);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
-  };
-
-  const handleLeadPress = (lead: Lead) => {
-    // Navigate to lead details
-  };
-
   const handleContact = (lead: Lead) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    contactLead(lead.id);
+    updateStatus.mutate({ id: lead.id, status: "contacted" });
   };
 
   const handleDecline = (lead: Lead) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    declineLead(lead.id);
+    updateStatus.mutate({ id: lead.id, status: "lost" });
   };
 
   const renderHeader = () => (
@@ -84,7 +104,7 @@ export default function LeadsScreen() {
     <Animated.View entering={FadeInDown.delay(index * 50).duration(300)}>
       <LeadCard
         lead={item}
-        onPress={() => handleLeadPress(item)}
+        onPress={() => {}}
         onContact={() => handleContact(item)}
         onDecline={() => handleDecline(item)}
         testID={`lead-${item.id}`}
@@ -123,8 +143,8 @@ export default function LeadsScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
+            refreshing={isRefetching}
+            onRefresh={refetch}
             tintColor={Colors.accent}
           />
         }

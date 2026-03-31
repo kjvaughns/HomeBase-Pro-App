@@ -727,3 +727,23 @@ export type BookingLink = typeof bookingLinks.$inferSelect;
 export type InsertBookingLink = z.infer<typeof insertBookingLinkSchema>;
 export type IntakeSubmission = typeof intakeSubmissions.$inferSelect;
 export type InsertIntakeSubmission = z.infer<typeof insertIntakeSubmissionSchema>;
+
+// ─── Leads ────────────────────────────────────────────────────────────────────
+
+export const leads = pgTable("leads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  service: text("service"),
+  message: text("message"),
+  status: text("status").notNull().default("new"),
+  source: text("source").default("direct"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertLeadSchema = createInsertSchema(leads).omit({ id: true, createdAt: true, updatedAt: true });
+export type Lead = typeof leads.$inferSelect;
+export type InsertLead = z.infer<typeof insertLeadSchema>;

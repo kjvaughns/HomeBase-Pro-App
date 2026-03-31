@@ -8,18 +8,16 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export interface Lead {
   id: string;
-  customerName: string;
-  customerAvatar?: string;
-  customerPhone?: string;
-  service: string;
-  description: string;
-  address: string;
-  distance?: string;
-  budget: number;
+  providerId: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  service?: string | null;
+  message?: string | null;
   status: "new" | "contacted" | "quoted" | "won" | "lost";
-  requestedDate?: string;
-  createdAt: string;
-  photos?: string[];
+  source?: string | null;
+  createdAt: string | null;
+  updatedAt?: string | null;
 }
 
 export interface JobChecklistItem {
@@ -216,48 +214,6 @@ export interface ProviderStats {
   newLeads: number;
   unreadMessages: number;
 }
-
-// ============================================
-// INITIAL MOCK DATA - 25+ Leads
-// ============================================
-
-const initialLeads: Lead[] = [
-  // NEW leads (8)
-  { id: "l1", customerName: "Sarah Wilson", service: "Bathroom Renovation", description: "Need complete bathroom remodel including new fixtures and tiling.", address: "321 Elm St, San Francisco", distance: "2.3 mi", budget: 5000, status: "new", requestedDate: "Next week", createdAt: "2 hours ago" },
-  { id: "l2", customerName: "David Brown", service: "Kitchen Plumbing", description: "Install new garbage disposal and fix leaky faucet.", address: "654 Maple Dr, Oakland", distance: "4.1 mi", budget: 350, status: "new", requestedDate: "This week", createdAt: "4 hours ago" },
-  { id: "l3", customerName: "Emma Rodriguez", service: "Water Heater", description: "40-gallon tank making strange noises, may need replacement.", address: "892 Pine Ave, Berkeley", distance: "5.2 mi", budget: 1200, status: "new", requestedDate: "ASAP", createdAt: "5 hours ago" },
-  { id: "l4", customerName: "James Mitchell", service: "Drain Cleaning", description: "Kitchen sink draining very slowly, tried Drano with no luck.", address: "445 Oak Blvd, San Francisco", distance: "1.8 mi", budget: 200, status: "new", requestedDate: "Tomorrow", createdAt: "6 hours ago" },
-  { id: "l5", customerName: "Lisa Chen", service: "Toilet Repair", description: "Toilet running constantly, wasting water.", address: "778 Cedar Ln, Daly City", distance: "3.5 mi", budget: 150, status: "new", requestedDate: "This week", createdAt: "8 hours ago" },
-  { id: "l6", customerName: "Michael Park", service: "Pipe Leak", description: "Noticed water stain on ceiling, possibly pipe leak above.", address: "123 Walnut St, San Mateo", distance: "8.2 mi", budget: 400, status: "new", requestedDate: "ASAP", createdAt: "12 hours ago" },
-  { id: "l7", customerName: "Amanda Foster", service: "Shower Installation", description: "Want to convert tub to walk-in shower.", address: "567 Birch Rd, San Francisco", distance: "2.1 mi", budget: 3500, status: "new", requestedDate: "Flexible", createdAt: "1 day ago" },
-  { id: "l8", customerName: "Kevin Wright", service: "Sump Pump", description: "Basement floods during heavy rain, need sump pump installed.", address: "234 Spruce Way, Oakland", distance: "4.8 mi", budget: 800, status: "new", requestedDate: "Before rainy season", createdAt: "1 day ago" },
-  
-  // CONTACTED leads (6)
-  { id: "l9", customerName: "Jennifer Lee", service: "Bathroom Faucet", description: "Replace old bathroom faucet with modern touchless.", address: "890 Ash Dr, San Francisco", distance: "1.2 mi", budget: 300, status: "contacted", requestedDate: "Next week", createdAt: "2 days ago" },
-  { id: "l10", customerName: "Robert Taylor", service: "Garbage Disposal", description: "Disposal jammed and won't turn on anymore.", address: "111 First Ave, Berkeley", distance: "5.5 mi", budget: 250, status: "contacted", requestedDate: "This week", createdAt: "2 days ago" },
-  { id: "l11", customerName: "Maria Santos", service: "Water Softener", description: "Hard water damaging appliances, need softener system.", address: "222 Second St, Oakland", distance: "4.3 mi", budget: 1500, status: "contacted", requestedDate: "This month", createdAt: "3 days ago" },
-  { id: "l12", customerName: "Thomas Anderson", service: "Outdoor Faucet", description: "Outdoor spigot leaking, need replacement before winter.", address: "333 Third Blvd, Alameda", distance: "6.1 mi", budget: 200, status: "contacted", requestedDate: "This week", createdAt: "3 days ago" },
-  { id: "l13", customerName: "Patricia Moore", service: "Dishwasher Hook-up", description: "New dishwasher needs plumbing connection.", address: "444 Fourth Pl, San Francisco", distance: "0.8 mi", budget: 250, status: "contacted", requestedDate: "When convenient", createdAt: "4 days ago" },
-  { id: "l14", customerName: "Daniel Kim", service: "Whole House Repipe", description: "Old galvanized pipes, want to repipe entire house.", address: "555 Fifth Ct, Daly City", distance: "3.9 mi", budget: 8000, status: "contacted", requestedDate: "Next month", createdAt: "4 days ago" },
-  
-  // QUOTED leads (5)
-  { id: "l15", customerName: "Emily Chen", service: "Tankless Water Heater", description: "Replace old 40-gallon tank with tankless system.", address: "987 Cedar Ln, San Francisco", distance: "2.4 mi", budget: 2500, status: "quoted", requestedDate: "Flexible", createdAt: "5 days ago" },
-  { id: "l16", customerName: "Christopher Davis", service: "Main Line Repair", description: "Roots causing main sewer line backup.", address: "666 Sixth Ave, Oakland", distance: "5.0 mi", budget: 4000, status: "quoted", requestedDate: "ASAP", createdAt: "5 days ago" },
-  { id: "l17", customerName: "Ashley Thompson", service: "Bathroom Addition", description: "Adding half bath to basement.", address: "777 Seventh Rd, Berkeley", distance: "5.8 mi", budget: 6500, status: "quoted", requestedDate: "Next month", createdAt: "6 days ago" },
-  { id: "l18", customerName: "Matthew White", service: "Gas Line Install", description: "Run gas line to outdoor BBQ area.", address: "888 Eighth St, San Mateo", distance: "9.1 mi", budget: 1200, status: "quoted", requestedDate: "Spring", createdAt: "1 week ago" },
-  { id: "l19", customerName: "Nicole Brown", service: "Shower Pan Replace", description: "Shower pan cracked and leaking into floor.", address: "999 Ninth Ln, San Francisco", distance: "1.5 mi", budget: 1800, status: "quoted", requestedDate: "ASAP", createdAt: "1 week ago" },
-  
-  // WON leads (4)
-  { id: "l20", customerName: "William Johnson", service: "Pipe Repair", description: "Burst pipe in wall, emergency repair.", address: "100 Tenth Ave, San Francisco", distance: "0.5 mi", budget: 600, status: "won", requestedDate: "Done", createdAt: "2 weeks ago" },
-  { id: "l21", customerName: "Elizabeth Harris", service: "Water Heater Install", description: "New 50-gallon water heater installation.", address: "200 Eleventh St, Oakland", distance: "4.6 mi", budget: 1400, status: "won", requestedDate: "Done", createdAt: "2 weeks ago" },
-  { id: "l22", customerName: "Andrew Martinez", service: "Drain Unclog", description: "Multiple drains clogged throughout house.", address: "300 Twelfth Blvd, Berkeley", distance: "5.3 mi", budget: 350, status: "won", requestedDate: "Done", createdAt: "3 weeks ago" },
-  { id: "l23", customerName: "Stephanie Clark", service: "Faucet Install", description: "Replace kitchen and bathroom faucets.", address: "400 Thirteenth Pl, Alameda", distance: "6.8 mi", budget: 500, status: "won", requestedDate: "Done", createdAt: "3 weeks ago" },
-  
-  // LOST leads (3)
-  { id: "l24", customerName: "Joshua Lewis", service: "Full Repipe", description: "Wanted full house repipe.", address: "500 Fourteenth Ct, Daly City", distance: "4.2 mi", budget: 12000, status: "lost", requestedDate: "N/A", createdAt: "1 month ago" },
-  { id: "l25", customerName: "Rachel Walker", service: "Pool Plumbing", description: "Pool plumbing repairs.", address: "600 Fifteenth Way, San Mateo", distance: "10.5 mi", budget: 2000, status: "lost", requestedDate: "N/A", createdAt: "1 month ago" },
-  { id: "l26", customerName: "Brandon Hall", service: "Sprinkler System", description: "Underground sprinkler installation.", address: "700 Sixteenth Dr, Oakland", distance: "5.9 mi", budget: 3500, status: "lost", requestedDate: "N/A", createdAt: "1 month ago" },
-];
 
 // ============================================
 // INITIAL MOCK DATA - 12+ Scheduled + 10+ Completed Jobs
@@ -612,7 +568,6 @@ export interface ProviderBusinessProfile {
 
 interface ProviderState {
   // Data
-  leads: Lead[];
   jobs: Job[];
   quotes: Quote[];
   messages: ProviderMessage[];
@@ -635,14 +590,7 @@ interface ProviderState {
   // Computed stats (cached)
   _statsCache: ProviderStats | null;
   
-  // Lead actions
-  contactLead: (leadId: string) => void;
-  declineLead: (leadId: string) => void;
-  sendQuote: (leadId: string, quote: Omit<Quote, "id" | "leadId" | "createdAt" | "status">) => void;
-  acceptLead: (leadId: string) => void;
-  
   // Job actions
-  scheduleJob: (leadId: string, date: string, time: string, price: number) => void;
   startJob: (jobId: string) => void;
   completeJob: (jobId: string) => void;
   cancelJob: (jobId: string) => void;
@@ -673,7 +621,6 @@ interface ProviderState {
   
   // Computed getters
   getStats: () => ProviderStats;
-  getLeadsByStatus: (status: Lead["status"]) => Lead[];
   getJobsByStatus: (status: Job["status"]) => Job[];
   getUnreadMessageCount: () => number;
   getNextJob: () => Job | undefined;
@@ -695,7 +642,6 @@ export const useProviderStore = create<ProviderState>()(
   persist(
     (set, get) => ({
       // Initial data - empty arrays for new providers (no mock data)
-      leads: [],
       jobs: [],
       quotes: [],
       messages: [],
@@ -715,79 +661,7 @@ export const useProviderStore = create<ProviderState>()(
       
       _statsCache: null,
       
-      // Lead actions
-      contactLead: (leadId) => {
-        set((state) => ({
-          leads: state.leads.map((l) =>
-            l.id === leadId ? { ...l, status: "contacted" as const } : l
-          ),
-          _statsCache: null,
-        }));
-      },
-      
-      declineLead: (leadId) => {
-        set((state) => ({
-          leads: state.leads.map((l) =>
-            l.id === leadId ? { ...l, status: "lost" as const } : l
-          ),
-          _statsCache: null,
-        }));
-      },
-      
-      sendQuote: (leadId, quoteData) => {
-        const quote: Quote = {
-          id: `q${Date.now()}`,
-          leadId,
-          ...quoteData,
-          createdAt: new Date().toISOString(),
-          status: "pending",
-        };
-        set((state) => ({
-          quotes: [...state.quotes, quote],
-          leads: state.leads.map((l) =>
-            l.id === leadId ? { ...l, status: "quoted" as const } : l
-          ),
-          _statsCache: null,
-        }));
-      },
-      
-      acceptLead: (leadId) => {
-        set((state) => ({
-          leads: state.leads.map((l) =>
-            l.id === leadId ? { ...l, status: "won" as const } : l
-          ),
-          _statsCache: null,
-        }));
-      },
-      
       // Job actions
-      scheduleJob: (leadId, date, time, price) => {
-        const lead = get().leads.find((l) => l.id === leadId);
-        if (!lead) return;
-        
-        const job: Job = {
-          id: `j${Date.now()}`,
-          leadId,
-          customerName: lead.customerName,
-          customerAvatar: lead.customerAvatar,
-          service: lead.service,
-          description: lead.description,
-          address: lead.address,
-          date,
-          time,
-          status: "scheduled",
-          price,
-        };
-        
-        set((state) => ({
-          jobs: [...state.jobs, job],
-          leads: state.leads.map((l) =>
-            l.id === leadId ? { ...l, status: "won" as const } : l
-          ),
-          _statsCache: null,
-        }));
-      },
-      
       startJob: (jobId) => {
         set((state) => ({
           jobs: state.jobs.map((j) =>
@@ -947,12 +821,11 @@ export const useProviderStore = create<ProviderState>()(
           reviewCount: 45,
           responseRate: 98,
           upcomingJobs: state.jobs.filter((j) => j.status === "scheduled").length,
-          newLeads: state.leads.filter((l) => l.status === "new").length,
+          newLeads: 0,
           unreadMessages: state.messages.reduce((sum, m) => sum + m.unreadCount, 0),
         };
       },
       
-      getLeadsByStatus: (status) => get().leads.filter((l) => l.status === status),
       getJobsByStatus: (status) => get().jobs.filter((j) => j.status === status),
       getUnreadMessageCount: () => get().messages.reduce((sum, m) => sum + m.unreadCount, 0),
       
@@ -1017,7 +890,6 @@ export const useProviderStore = create<ProviderState>()(
         const state = get();
         if (state.clients.length === 0) {
           set({
-            leads: initialLeads,
             jobs: initialJobs,
             messages: initialMessages,
             invoices: initialInvoices,
@@ -1033,7 +905,6 @@ export const useProviderStore = create<ProviderState>()(
       name: "provider-store",
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
-        leads: state.leads,
         jobs: state.jobs,
         quotes: state.quotes,
         messages: state.messages,

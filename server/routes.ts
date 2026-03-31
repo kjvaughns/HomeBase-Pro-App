@@ -46,6 +46,7 @@ import {
   clients,
   jobs,
   bookingLinks,
+  leads,
 } from "@shared/schema";
 
 interface IdParams { id: string; }
@@ -3664,6 +3665,32 @@ Respond with JSON only:
         preferredTimesJson: preferredTimesJson ? JSON.stringify(preferredTimesJson) : null,
       });
 
+      // Auto-create a lead for the provider if one doesn't already exist for this email
+      try {
+        const existingLeads = clientEmail
+          ? await db.select().from(leads)
+              .where(and(
+                eq(leads.providerId, link.providerId),
+                eq(leads.email, clientEmail)
+              ))
+              .limit(1)
+          : [];
+        if (existingLeads.length === 0) {
+          await db.insert(leads).values({
+            providerId: link.providerId,
+            name: clientName,
+            email: clientEmail || null,
+            phone: clientPhone || null,
+            service: null,
+            message: problemDescription || null,
+            status: "new",
+            source: "booking_page",
+          });
+        }
+      } catch (leadErr) {
+        console.error("Lead auto-create error (non-fatal):", leadErr);
+      }
+
       res.status(201).json({ submission, message: "Your request has been submitted!" });
     } catch (error: any) {
       console.error("Submit intake error:", error);
@@ -3697,6 +3724,77 @@ Respond with JSON only:
     } catch (error: any) {
       console.error("Update intake submission error:", error);
       res.status(500).json({ error: error.message || "Failed to update submission" });
+    }
+  });
+
+  // ─── Leads ────────────────────────────────────────────────────────────────────
+
+  // GET all leads for a provider
+  app.get("/api/providers/:providerId/leads", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
+    try {
+      const { providerId } = req.params;
+      const rows = await db.select().from(leads)
+        .where(eq(leads.providerId, providerId))
+        .orderBy(desc(leads.createdAt));
+      res.json({ leads: rows });
+    } catch (error: any) {
+      console.error("Get leads error:", error);
+      res.status(500).json({ error: error.message || "Failed to get leads" });
+    }
+  });
+
+  // POST create a lead manually
+  app.post("/api/providers/:providerId/leads", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
+    try {
+      const { providerId } = req.params;
+      const { name, email, phone, service, message, status, source } = req.body;
+      if (!name) return res.status(400).json({ error: "Name is required" });
+      const [lead] = await db.insert(leads).values({
+        providerId,
+        name,
+        email: email || null,
+        phone: phone || null,
+        service: service || null,
+        message: message || null,
+        status: status || "new",
+        source: source || "manual",
+      }).returning();
+      res.status(201).json({ lead });
+    } catch (error: any) {
+      console.error("Create lead error:", error);
+      res.status(500).json({ error: error.message || "Failed to create lead" });
+    }
+  });
+
+  // PATCH update a lead's status or fields
+  app.patch("/api/leads/:id", requireAuth, async (req: Request<{ id: string }>, res: Response) => {
+    try {
+      const { id } = req.params;
+      const updates: Partial<typeof leads.$inferInsert> = {};
+      const allowed = ["name", "email", "phone", "service", "message", "status", "source"] as const;
+      for (const key of allowed) {
+        if (req.body[key] !== undefined) (updates as any)[key] = req.body[key];
+      }
+      updates.updatedAt = new Date();
+      const [lead] = await db.update(leads).set(updates).where(eq(leads.id, id)).returning();
+      if (!lead) return res.status(404).json({ error: "Lead not found" });
+      res.json({ lead });
+    } catch (error: any) {
+      console.error("Update lead error:", error);
+      res.status(500).json({ error: error.message || "Failed to update lead" });
+    }
+  });
+
+  // DELETE a lead
+  app.delete("/api/leads/:id", requireAuth, async (req: Request<{ id: string }>, res: Response) => {
+    try {
+      const { id } = req.params;
+      const [deleted] = await db.delete(leads).where(eq(leads.id, id)).returning();
+      if (!deleted) return res.status(404).json({ error: "Lead not found" });
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete lead error:", error);
+      res.status(500).json({ error: error.message || "Failed to delete lead" });
     }
   });
 
