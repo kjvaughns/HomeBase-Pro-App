@@ -107,13 +107,15 @@ export default function ProviderAIAssistantScreen() {
       return fallback;
     }
     try {
-      const [clientsRes, jobsRes, invoicesRes, statsRes] = await Promise.allSettled([
+      const [profileRes, clientsRes, jobsRes, invoicesRes, statsRes] = await Promise.allSettled([
+        apiRequest("GET", `/api/providers/${providerId}`),
         apiRequest("GET", `/api/provider/${providerId}/clients`),
         apiRequest("GET", `/api/provider/${providerId}/jobs`),
         apiRequest("GET", `/api/provider/${providerId}/invoices`),
         apiRequest("GET", `/api/provider/${providerId}/stats`),
       ]);
 
+      let businessName = providerProfile?.businessName || "Unknown";
       let totalClients = 0;
       let scheduledJobs = 0;
       let completedJobs = 0;
@@ -122,6 +124,10 @@ export default function ProviderAIAssistantScreen() {
       let revenueMTD = 0;
       let upcomingJobs = 0;
 
+      if (profileRes.status === "fulfilled" && profileRes.value.ok) {
+        const d = await profileRes.value.json();
+        businessName = d.provider?.businessName || d.businessName || businessName;
+      }
       if (clientsRes.status === "fulfilled" && clientsRes.value.ok) {
         const d = await clientsRes.value.json();
         totalClients = (d.clients as unknown[]).length;
@@ -150,7 +156,7 @@ export default function ProviderAIAssistantScreen() {
 
       const context = `
 Provider Business Context:
-- Business Name: ${providerProfile?.businessName || "Unknown"}
+- Business Name: ${businessName}
 - Total Clients: ${totalClients}
 - Scheduled/Upcoming Jobs: ${upcomingJobs || scheduledJobs}
 - Completed Jobs: ${completedJobs}

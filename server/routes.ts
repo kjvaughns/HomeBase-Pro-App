@@ -159,6 +159,89 @@ function formatHomeResponse(home: { label: string; street: string; zip: string; 
   };
 }
 
+/**
+ * Shared conversion helper — upsert client, create job, and mark intake submission as converted.
+ * Used by both the manual accept endpoint and the instant booking flow.
+ */
+async function convertIntakeToClientJob(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  params: {
+    submissionId: string;
+    providerId: string;
+    clientName: string;
+    clientEmail: string | null | undefined;
+    clientPhone: string | null | undefined;
+    address: string | null | undefined;
+    problemDescription: string | null | undefined;
+    scheduledDate?: Date;
+    scheduledTime?: string | null;
+    estimatedPrice?: string | null;
+    notes?: string | null;
+    targetStatus?: "converted" | "confirmed";
+  }
+): Promise<{ clientId: string; job: typeof jobs.$inferSelect }> {
+  const {
+    submissionId, providerId, clientName, clientEmail, clientPhone, address,
+    problemDescription, scheduledDate, scheduledTime, estimatedPrice, notes,
+    targetStatus = "converted",
+  } = params;
+
+  const nameParts = (clientName || "").trim().split(" ");
+  const firstName = nameParts[0] || "Unknown";
+  const lastName = nameParts.slice(1).join(" ") || "";
+
+  // Upsert client by provider+email
+  let clientId: string;
+  if (clientEmail) {
+    const [found] = await tx
+      .select({ id: clients.id })
+      .from(clients)
+      .where(and(eq(clients.providerId, providerId), eq(clients.email, clientEmail)));
+    if (found) {
+      clientId = found.id;
+    } else {
+      const [newC] = await tx
+        .insert(clients)
+        .values({ providerId, firstName, lastName: lastName || null, email: clientEmail, phone: clientPhone || null, address: address || null })
+        .returning({ id: clients.id });
+      clientId = newC.id;
+    }
+  } else {
+    const [newC] = await tx
+      .insert(clients)
+      .values({ providerId, firstName, lastName: lastName || null, email: null, phone: clientPhone || null, address: address || null })
+      .returning({ id: clients.id });
+    clientId = newC.id;
+  }
+
+  // Create job
+  const jobDate = scheduledDate ?? new Date();
+  const [newJob] = await tx
+    .insert(jobs)
+    .values({
+      providerId,
+      clientId,
+      title: problemDescription?.slice(0, 100) || "Service Request",
+      description: problemDescription || null,
+      scheduledDate: jobDate,
+      scheduledTime: scheduledTime || null,
+      status: "scheduled",
+      address: address || null,
+      estimatedPrice: estimatedPrice || null,
+      notes: notes || null,
+    })
+    .returning();
+
+  // Mark submission with full conversion fields
+  const now = new Date();
+  await tx
+    .update(intakeSubmissions)
+    .set({ status: targetStatus, convertedClientId: clientId, convertedJobId: newJob.id, convertedAt: now, updatedAt: now })
+    .where(eq(intakeSubmissions.id, submissionId));
+
+  return { clientId, job: newJob };
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   await seedDatabase();
 
@@ -4272,6 +4355,7 @@ Respond with JSON only:
 
       if (link.instantBooking) {
         const txResult = await db.transaction(async (tx) => {
+          // Insert submission first with "confirmed" status
           const [sub] = await tx
             .insert(intakeSubmissions)
             .values({
@@ -4290,71 +4374,21 @@ Respond with JSON only:
             })
             .returning();
 
-          const nameParts = (clientName || "").trim().split(" ");
-          const firstName = nameParts[0] || "Unknown";
-          const lastName = nameParts.slice(1).join(" ") || "";
+          // Use shared helper to upsert client, create job, and stamp conversion fields
+          const preferredDate = preferredTimesJson?.[0] ? new Date(preferredTimesJson[0]) : undefined;
+          const converted = await convertIntakeToClientJob(tx, {
+            submissionId: sub.id,
+            providerId: link.providerId,
+            clientName,
+            clientEmail,
+            clientPhone,
+            address,
+            problemDescription,
+            scheduledDate: preferredDate,
+            targetStatus: "confirmed",
+          });
 
-          // Upsert client within transaction
-          let txClientId: string;
-          if (clientEmail) {
-            const [found] = await tx
-              .select({ id: clients.id })
-              .from(clients)
-              .where(and(eq(clients.providerId, link.providerId), eq(clients.email, clientEmail)));
-            if (found) {
-              txClientId = found.id;
-            } else {
-              const [newC] = await tx
-                .insert(clients)
-                .values({
-                  providerId: link.providerId,
-                  firstName,
-                  lastName: lastName || null,
-                  email: clientEmail || null,
-                  phone: clientPhone || null,
-                  address: address || null,
-                })
-                .returning({ id: clients.id });
-              txClientId = newC.id;
-            }
-          } else {
-            const [newC] = await tx
-              .insert(clients)
-              .values({
-                providerId: link.providerId,
-                firstName,
-                lastName: lastName || null,
-                email: null,
-                phone: clientPhone || null,
-                address: address || null,
-              })
-              .returning({ id: clients.id });
-            txClientId = newC.id;
-          }
-
-          // Create job within transaction
-          const preferredDate = preferredTimesJson?.[0] ? new Date(preferredTimesJson[0]) : new Date();
-          const [newJ] = await tx
-            .insert(jobs)
-            .values({
-              providerId: link.providerId,
-              clientId: txClientId,
-              title: problemDescription?.slice(0, 100) || "Service Request",
-              description: problemDescription || null,
-              scheduledDate: preferredDate,
-              status: "scheduled",
-              address: address || null,
-            })
-            .returning();
-
-          // Link submission to client + job with full conversion fields
-          const now = new Date();
-          await tx
-            .update(intakeSubmissions)
-            .set({ convertedClientId: txClientId, convertedJobId: newJ.id, convertedAt: now })
-            .where(eq(intakeSubmissions.id, sub.id));
-
-          return { sub, clientId: txClientId, job: newJ };
+          return { sub, clientId: converted.clientId, job: converted.job };
         });
 
         submission = txResult.sub;
@@ -4474,88 +4508,30 @@ Respond with JSON only:
         return res.status(403).json({ error: "Forbidden" });
       }
 
-      if (submission.status === "confirmed") {
-        return res.status(400).json({ error: "Submission is already accepted" });
+      if (submission.status === "converted" || submission.status === "confirmed") {
+        return res.status(400).json({ error: "Submission has already been accepted" });
       }
 
-      // Parse client name
-      const nameParts = (submission.clientName || "").trim().split(" ");
-      const firstName = nameParts[0] || "Unknown";
-      const lastName = nameParts.slice(1).join(" ") || "";
-
-      // Run conversion in a transaction
+      // Run conversion in a transaction using the shared helper
       const result = await db.transaction(async (tx) => {
-        // Upsert client — check if a client with this email already exists for this provider
-        let clientId: string;
+        const converted = await convertIntakeToClientJob(tx, {
+          submissionId: id,
+          providerId: submission.providerId,
+          clientName: submission.clientName || "Unknown",
+          clientEmail: submission.clientEmail,
+          clientPhone: submission.clientPhone,
+          address: submission.address,
+          problemDescription: submission.problemDescription,
+          scheduledDate: scheduledDate ? new Date(scheduledDate) : undefined,
+          scheduledTime: scheduledTime || null,
+          estimatedPrice: estimatedPrice ? String(estimatedPrice) : null,
+          notes: notes || null,
+          targetStatus: "converted",
+        });
+
+        // Mark related lead as won (if one exists with matching email)
         if (submission.clientEmail) {
-          const [found] = await tx
-            .select({ id: clients.id })
-            .from(clients)
-            .where(and(eq(clients.providerId, submission.providerId), eq(clients.email, submission.clientEmail)));
-          if (found) {
-            clientId = found.id;
-          } else {
-            const [newClient] = await tx
-              .insert(clients)
-              .values({
-                providerId: submission.providerId,
-                firstName,
-                lastName: lastName || null,
-                email: submission.clientEmail || null,
-                phone: submission.clientPhone || null,
-                address: submission.address || null,
-              })
-              .returning({ id: clients.id });
-            clientId = newClient.id;
-          }
-        } else {
-          const [newClient] = await tx
-            .insert(clients)
-            .values({
-              providerId: submission.providerId,
-              firstName,
-              lastName: lastName || null,
-              email: null,
-              phone: submission.clientPhone || null,
-              address: submission.address || null,
-            })
-            .returning({ id: clients.id });
-          clientId = newClient.id;
-        }
-
-        // Create job record
-        const jobDate = scheduledDate ? new Date(scheduledDate) : new Date();
-        const [newJob] = await tx
-          .insert(jobs)
-          .values({
-            providerId: submission.providerId,
-            clientId,
-            title: submission.problemDescription?.slice(0, 100) || "Service Request",
-            description: submission.problemDescription || null,
-            scheduledDate: jobDate,
-            scheduledTime: scheduledTime || null,
-            status: "scheduled",
-            address: submission.address || null,
-            estimatedPrice: estimatedPrice ? String(estimatedPrice) : null,
-            notes: notes || null,
-          })
-          .returning();
-
-        const now = new Date();
-        // Mark submission confirmed with full conversion fields
-        await tx
-          .update(intakeSubmissions)
-          .set({
-            status: "confirmed",
-            convertedClientId: clientId,
-            convertedJobId: newJob.id,
-            convertedAt: now,
-            updatedAt: now,
-          })
-          .where(eq(intakeSubmissions.id, id));
-
-        // If a matching lead exists for this provider+email, mark it as won
-        if (submission.clientEmail) {
+          const now = new Date();
           await tx
             .update(leads)
             .set({ status: "won", updatedAt: now })
@@ -4567,7 +4543,7 @@ Respond with JSON only:
             );
         }
 
-        return { clientId, job: newJob };
+        return converted;
       });
 
       res.status(201).json({

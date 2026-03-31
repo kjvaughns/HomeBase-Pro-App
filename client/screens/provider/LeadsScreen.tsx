@@ -8,9 +8,11 @@ import {
   TextInput,
   Pressable,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
+import { useNavigation } from "@react-navigation/native";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -30,7 +32,7 @@ import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { Lead } from "@/state/providerStore";
 import { useAuthStore } from "@/state/authStore";
-import { apiRequest, getApiUrl } from "@/lib/query-client";
+import { apiRequest, getApiUrl, getAuthHeaders } from "@/lib/query-client";
 
 type LeadFilter = "all" | "new" | "contacted" | "quoted" | "won" | "lost";
 
@@ -68,6 +70,7 @@ export default function LeadsScreen() {
   const tabBarHeight = useFloatingTabBarHeight();
   const queryClient = useQueryClient();
   const { theme } = useTheme();
+  const navigation = useNavigation();
 
   const { providerProfile } = useAuthStore();
   const providerId = providerProfile?.id;
@@ -142,17 +145,21 @@ export default function LeadsScreen() {
       scheduledDate?: string;
       notes?: string;
     }) => {
-      const res = await apiRequest("POST", `/api/intake-submissions/${id}/accept`, {
-        scheduledDate: scheduledDate || undefined,
-        notes: notes || undefined,
+      const baseUrl = getApiUrl();
+      const url = new URL(`/api/intake-submissions/${id}/accept`, baseUrl);
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: JSON.stringify({ scheduledDate: scheduledDate || undefined, notes: notes || undefined }),
+        credentials: "include",
       });
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({ error: "Failed to accept booking" }));
         throw new Error(data.error || "Failed to accept booking");
       }
-      return res.json();
+      return res.json() as Promise<{ message: string; clientId: string; job: { id: string } }>;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       queryClient.invalidateQueries({ queryKey: ["/api/providers", providerId, "intake-submissions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "clients"] });
@@ -160,6 +167,20 @@ export default function LeadsScreen() {
       queryClient.invalidateQueries({ queryKey: ["/api/providers", providerId, "leads"] });
       refetchSubmissions();
       setAcceptModal({ visible: false, submission: null, scheduledDate: "", notes: "" });
+      Alert.alert(
+        "Booking Accepted",
+        "A client and job have been created successfully.",
+        [
+          { text: "Done", style: "cancel" },
+          {
+            text: "View Client",
+            onPress: () => (navigation as any).navigate("ClientDetail", { clientId: data.clientId }),
+          },
+        ]
+      );
+    },
+    onError: (err: Error) => {
+      Alert.alert("Error", err.message || "Failed to accept booking.");
     },
   });
 
