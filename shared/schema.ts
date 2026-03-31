@@ -98,6 +98,7 @@ export const services = pgTable("services", {
   name: text("name").notNull(),
   description: text("description"),
   basePrice: decimal("base_price", { precision: 10, scale: 2 }),
+  isPublic: boolean("is_public").default(true),
 });
 
 export const servicesRelations = relations(services, ({ one, many }) => ({
@@ -115,6 +116,7 @@ export const providers = pgTable("providers", {
   email: text("email"),
   rating: decimal("rating", { precision: 2, scale: 1 }).default("0"),
   reviewCount: integer("review_count").default(0),
+  averageRating: decimal("average_rating", { precision: 3, scale: 2 }).default("0"),
   hourlyRate: decimal("hourly_rate", { precision: 10, scale: 2 }),
   isVerified: boolean("is_verified").default(false),
   isActive: boolean("is_active").default(true),
@@ -127,6 +129,8 @@ export const providers = pgTable("providers", {
   serviceZipCodes: text("service_zip_codes"),
   serviceCities: text("service_cities"),
   isPublicProfile: boolean("is_public_profile").default(false),
+  isPublic: boolean("is_public").default(true),
+  slug: text("slug").unique(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -505,20 +509,25 @@ export const bookingLinkStatusEnum = pgEnum("booking_link_status", ["active", "p
 export const quoteModeEnum = pgEnum("quote_mode", ["range", "fixed", "estimate_after_review"]);
 
 // Intake submission status enum
-export const intakeStatusEnum = pgEnum("intake_status", ["submitted", "reviewed", "converted", "declined", "expired"]);
+export const intakeStatusEnum = pgEnum("intake_status", ["submitted", "confirmed", "reviewed", "converted", "declined", "expired"]);
 
 // Provider booking links (public intake pages)
 export const bookingLinks = pgTable("booking_links", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+  providerId: varchar("provider_id").notNull().unique().references(() => providers.id, { onDelete: "cascade" }),
   slug: text("slug").notNull().unique(),
   status: bookingLinkStatusEnum("status").default("active"),
+  isActive: boolean("is_active").default(true),
+  instantBooking: boolean("instant_booking").default(false),
+  showPricing: boolean("show_pricing").default(true),
+  customTitle: text("custom_title"),
+  customDescription: text("custom_description"),
   depositRequired: boolean("deposit_required").default(false),
   depositAmount: decimal("deposit_amount", { precision: 10, scale: 2 }),
-  depositPercentage: integer("deposit_percentage"), // Alternative to fixed amount
-  serviceCatalog: text("service_catalog"), // JSON: list of services with pricing
-  availabilityRules: text("availability_rules"), // JSON: working hours, blackout dates
-  intakeQuestions: text("intake_questions"), // JSON: custom questions to ask
+  depositPercentage: integer("deposit_percentage"),
+  serviceCatalog: text("service_catalog"),
+  availabilityRules: text("availability_rules"),
+  intakeQuestions: text("intake_questions"),
   welcomeMessage: text("welcome_message"),
   confirmationMessage: text("confirmation_message"),
   brandColor: text("brand_color"),

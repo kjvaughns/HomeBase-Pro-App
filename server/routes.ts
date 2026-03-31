@@ -47,6 +47,11 @@ import {
   jobs,
   bookingLinks,
   leads,
+  intakeSubmissions,
+  notifications,
+  providerServices,
+  services,
+  providers,
 } from "@shared/schema";
 
 interface IdParams { id: string; }
@@ -3768,6 +3773,203 @@ Respond with JSON only:
     } catch (error: any) {
       console.error("Submit intake error:", error);
       res.status(500).json({ error: error.message || "Failed to submit request" });
+    }
+  });
+
+  // ── Public booking link endpoints (new /api/booking/:slug) ──────────────────
+
+  // GET /api/booking/:slug — returns full public profile payload
+  app.get("/api/booking/:slug", async (req: Request<{ slug: string }>, res: Response) => {
+    try {
+      const { slug } = req.params;
+
+      const [link] = await db
+        .select()
+        .from(bookingLinks)
+        .where(eq(bookingLinks.slug, slug))
+        .limit(1);
+
+      if (!link || link.isActive === false || link.status !== "active") {
+        return res.status(404).json({ error: "Booking page not found" });
+      }
+
+      const [provider] = await db
+        .select()
+        .from(providers)
+        .where(eq(providers.id, link.providerId))
+        .limit(1);
+
+      if (!provider || provider.isPublic === false) {
+        return res.status(404).json({ error: "Provider not found" });
+      }
+
+      // Fetch public custom services (isPublished = true)
+      const customServices = await db
+        .select()
+        .from(providerCustomServices)
+        .where(
+          and(
+            eq(providerCustomServices.providerId, provider.id),
+            eq(providerCustomServices.isPublished, true)
+          )
+        );
+
+      // Fetch catalog services via providerServices join where service isPublic = true
+      const catalogServices = await db
+        .select({
+          id: services.id,
+          name: services.name,
+          description: services.description,
+          basePrice: services.basePrice,
+          categoryId: services.categoryId,
+          price: providerServices.price,
+          providerServiceId: providerServices.id,
+        })
+        .from(providerServices)
+        .innerJoin(services, eq(providerServices.serviceId, services.id))
+        .where(
+          and(
+            eq(providerServices.providerId, provider.id),
+            eq(services.isPublic, true)
+          )
+        );
+
+      // Fetch 5 most recent reviews
+      const recentReviews = await db
+        .select({
+          id: reviews.id,
+          rating: reviews.rating,
+          comment: reviews.comment,
+          createdAt: reviews.createdAt,
+        })
+        .from(reviews)
+        .where(eq(reviews.providerId, provider.id))
+        .orderBy(desc(reviews.createdAt))
+        .limit(5);
+
+      res.json({
+        provider: {
+          id: provider.id,
+          businessName: provider.businessName,
+          description: provider.description,
+          avatarUrl: provider.avatarUrl,
+          serviceArea: provider.serviceArea,
+          businessHours: provider.businessHours ? (() => { try { return JSON.parse(provider.businessHours!); } catch { return provider.businessHours; } })() : null,
+          bookingPolicies: provider.bookingPolicies,
+          averageRating: provider.averageRating ?? provider.rating,
+          reviewCount: provider.reviewCount,
+        },
+        bookingLink: {
+          id: link.id,
+          slug: link.slug,
+          instantBooking: link.instantBooking,
+          showPricing: link.showPricing,
+          customTitle: link.customTitle,
+          customDescription: link.customDescription,
+          welcomeMessage: link.welcomeMessage,
+          brandColor: link.brandColor,
+          logoUrl: link.logoUrl,
+          intakeQuestions: link.intakeQuestions ? (() => { try { return JSON.parse(link.intakeQuestions!); } catch { return []; } })() : [],
+        },
+        services: {
+          custom: customServices,
+          catalog: catalogServices,
+        },
+        reviews: recentReviews,
+      });
+    } catch (error: any) {
+      console.error("Get public booking page error:", error);
+      res.status(500).json({ error: error.message || "Failed to get booking page" });
+    }
+  });
+
+  // POST /api/booking/:slug — submit a booking request
+  app.post("/api/booking/:slug", async (req: Request<{ slug: string }>, res: Response) => {
+    try {
+      const { slug } = req.params;
+      const {
+        clientName,
+        clientPhone,
+        clientEmail,
+        address,
+        problemDescription,
+        preferredTimesJson,
+        categoryId,
+        answersJson,
+      } = req.body;
+
+      if (!clientName || !problemDescription) {
+        return res.status(400).json({ error: "clientName and problemDescription are required" });
+      }
+
+      const [link] = await db
+        .select()
+        .from(bookingLinks)
+        .where(eq(bookingLinks.slug, slug))
+        .limit(1);
+
+      if (!link || link.isActive === false || link.status !== "active") {
+        return res.status(404).json({ error: "Booking page not found" });
+      }
+
+      const submissionStatus = (link.instantBooking ? "confirmed" : "submitted") as "confirmed" | "submitted";
+
+      const [submission] = await db
+        .insert(intakeSubmissions)
+        .values({
+          bookingLinkId: link.id,
+          providerId: link.providerId,
+          homeownerUserId: null,
+          clientName,
+          clientPhone: clientPhone || null,
+          clientEmail: clientEmail || null,
+          address: address || null,
+          problemDescription,
+          categoryId: categoryId || null,
+          answersJson: answersJson ? JSON.stringify(answersJson) : null,
+          preferredTimesJson: preferredTimesJson ? JSON.stringify(preferredTimesJson) : null,
+          status: submissionStatus,
+        })
+        .returning();
+
+      // Notify the provider's linked user
+      try {
+        const [providerRow] = await db
+          .select({ userId: providers.userId })
+          .from(providers)
+          .where(eq(providers.id, link.providerId))
+          .limit(1);
+
+        if (providerRow?.userId) {
+          const notificationTitle = link.instantBooking
+            ? "New Booking Confirmed"
+            : "New Booking Request";
+          const notificationMessage = link.instantBooking
+            ? `${clientName} has booked an appointment. Check your intake submissions for details.`
+            : `${clientName} submitted a new booking request. Review it in your intake submissions.`;
+
+          await db.insert(notifications).values({
+            userId: providerRow.userId,
+            title: notificationTitle,
+            message: notificationMessage,
+            type: "booking_request",
+            isRead: false,
+            data: JSON.stringify({ intakeSubmissionId: submission.id, clientName }),
+          });
+        }
+      } catch (notifyErr) {
+        console.error("Notification create error (non-fatal):", notifyErr);
+      }
+
+      res.status(201).json({
+        submission,
+        message: link.instantBooking
+          ? "Your booking has been confirmed!"
+          : "Your request has been submitted!",
+      });
+    } catch (error: any) {
+      console.error("Public booking submission error:", error);
+      res.status(500).json({ error: error.message || "Failed to submit booking request" });
     }
   });
 
