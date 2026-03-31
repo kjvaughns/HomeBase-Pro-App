@@ -94,6 +94,55 @@ function clearMetroCache() {
   console.log("Cache cleared");
 }
 
+function stubDevToolsBinary() {
+  // The react-native-devtools file uses #!/usr/bin/env dotslash as its interpreter.
+  // The dotslash binary requires libnspr4.so which is NOT available in the NixOS
+  // deployment container. Replace it with a POSIX no-op so dotslash is never invoked.
+  const candidates = [
+    path.join(
+      __dirname,
+      "../node_modules/expo/node_modules/@react-native/debugger-shell/bin/react-native-devtools",
+    ),
+    path.join(
+      __dirname,
+      "../node_modules/@react-native/debugger-shell/bin/react-native-devtools",
+    ),
+  ];
+
+  for (const devtoolsBinary of candidates) {
+    if (fs.existsSync(devtoolsBinary)) {
+      try {
+        fs.writeFileSync(devtoolsBinary, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+        console.log(`Disabled React Native DevTools binary: ${devtoolsBinary}`);
+      } catch (err) {
+        console.warn(`Could not stub DevTools binary (non-fatal): ${err.message}`);
+      }
+    }
+  }
+
+  // Also stub the fb-dotslash binary itself as a safety net
+  const dotslashCandidates = [
+    path.join(__dirname, "../node_modules/fb-dotslash/bin/dotslash"),
+    path.join(__dirname, "../node_modules/.bin/dotslash"),
+  ];
+  for (const dotslash of dotslashCandidates) {
+    const resolved = fs.existsSync(dotslash)
+      ? fs.realpathSync(dotslash)
+      : null;
+    if (resolved && !resolved.endsWith("/dotslash")) {
+      continue; // skip symlinks pointing elsewhere
+    }
+    if (resolved && fs.existsSync(resolved)) {
+      try {
+        fs.writeFileSync(resolved, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+        console.log(`Disabled dotslash binary: ${resolved}`);
+      } catch (err) {
+        console.warn(`Could not stub dotslash binary (non-fatal): ${err.message}`);
+      }
+    }
+  }
+}
+
 async function checkMetroHealth() {
   try {
     const response = await fetch("http://localhost:8081/status", {
@@ -124,6 +173,7 @@ async function startMetro(expoPublicDomain) {
     env: {
       ...env,
       REACT_NATIVE_DEBUGGER_OPEN: "0",
+      EXPO_NO_INSPECTOR_PROXY: "1",
     },
   });
 
@@ -520,6 +570,7 @@ async function main() {
 
   prepareDirectories(timestamp);
   clearMetroCache();
+  stubDevToolsBinary();
 
   await startMetro(domain);
 
