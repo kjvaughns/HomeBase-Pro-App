@@ -156,6 +156,8 @@ export default function LeadsScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       queryClient.invalidateQueries({ queryKey: ["/api/providers", providerId, "intake-submissions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/providers", providerId, "leads"] });
       refetchSubmissions();
       setAcceptModal({ visible: false, submission: null, scheduledDate: "", notes: "" });
     },

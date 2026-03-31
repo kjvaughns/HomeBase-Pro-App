@@ -16,7 +16,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
-import { getApiUrl, apiRequest } from "@/lib/query-client";
+import { getApiUrl, apiRequest, getAuthHeaders } from "@/lib/query-client";
 import { useAuthStore } from "@/state/authStore";
 
 type ScreenRouteProp = RouteProp<RootStackParamList, "Payment">;
@@ -103,7 +103,14 @@ export default function PaymentScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      const res = await apiRequest("POST", `/api/invoices/${invoiceId}/checkout`, {});
+      const baseUrl = getApiUrl();
+      const checkoutUrl_ = new URL(`/api/invoices/${invoiceId}/checkout`, baseUrl);
+      const res = await fetch(checkoutUrl_, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: JSON.stringify({}),
+        credentials: "include",
+      });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({ error: "Payment setup failed" }));
         if (res.status === 402 || errBody.error === "stripe_not_ready") {

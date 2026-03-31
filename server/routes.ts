@@ -4265,69 +4265,80 @@ Respond with JSON only:
         return res.status(404).json({ error: "Booking page not found" });
       }
 
-      const submissionStatus = (link.instantBooking ? "confirmed" : "submitted") as "confirmed" | "submitted";
-
-      const [submission] = await db
-        .insert(intakeSubmissions)
-        .values({
-          bookingLinkId: link.id,
-          providerId: link.providerId,
-          homeownerUserId: null,
-          clientName,
-          clientPhone: clientPhone || null,
-          clientEmail: clientEmail || null,
-          address: address || null,
-          problemDescription,
-          categoryId: categoryId || null,
-          answersJson: answersJson ? JSON.stringify(answersJson) : null,
-          preferredTimesJson: preferredTimesJson ? JSON.stringify(preferredTimesJson) : null,
-          status: submissionStatus,
-        })
-        .returning();
-
-      // For instant bookings: automatically create a client + job record
+      // For instant bookings: create submission + client + job atomically in a single transaction
+      let submission: typeof intakeSubmissions.$inferSelect;
       let instantClientId: string | undefined;
       let instantJob: (typeof jobs.$inferSelect) | undefined;
+
       if (link.instantBooking) {
-        try {
+        const txResult = await db.transaction(async (tx) => {
+          const [sub] = await tx
+            .insert(intakeSubmissions)
+            .values({
+              bookingLinkId: link.id,
+              providerId: link.providerId,
+              homeownerUserId: null,
+              clientName,
+              clientPhone: clientPhone || null,
+              clientEmail: clientEmail || null,
+              address: address || null,
+              problemDescription,
+              categoryId: categoryId || null,
+              answersJson: answersJson ? JSON.stringify(answersJson) : null,
+              preferredTimesJson: preferredTimesJson ? JSON.stringify(preferredTimesJson) : null,
+              status: "confirmed" as const,
+            })
+            .returning();
+
           const nameParts = (clientName || "").trim().split(" ");
           const firstName = nameParts[0] || "Unknown";
           const lastName = nameParts.slice(1).join(" ") || "";
 
-          // Upsert client
-          let existingInstantClient: typeof clients.$inferSelect | undefined;
+          // Upsert client within transaction
+          let txClientId: string;
           if (clientEmail) {
-            const [found] = await db
-              .select()
+            const [found] = await tx
+              .select({ id: clients.id })
               .from(clients)
               .where(and(eq(clients.providerId, link.providerId), eq(clients.email, clientEmail)));
-            existingInstantClient = found;
-          }
-
-          if (existingInstantClient) {
-            instantClientId = existingInstantClient.id;
+            if (found) {
+              txClientId = found.id;
+            } else {
+              const [newC] = await tx
+                .insert(clients)
+                .values({
+                  providerId: link.providerId,
+                  firstName,
+                  lastName: lastName || null,
+                  email: clientEmail || null,
+                  phone: clientPhone || null,
+                  address: address || null,
+                })
+                .returning({ id: clients.id });
+              txClientId = newC.id;
+            }
           } else {
-            const [newC] = await db
+            const [newC] = await tx
               .insert(clients)
               .values({
                 providerId: link.providerId,
                 firstName,
                 lastName: lastName || null,
-                email: clientEmail || null,
+                email: null,
                 phone: clientPhone || null,
                 address: address || null,
               })
               .returning({ id: clients.id });
-            instantClientId = newC.id;
+            txClientId = newC.id;
           }
 
-          // Create job
+          // Create job within transaction
           const preferredDate = preferredTimesJson?.[0] ? new Date(preferredTimesJson[0]) : new Date();
-          const [newJ] = await db
+          const [newJ] = await tx
             .insert(jobs)
             .values({
               providerId: link.providerId,
-              clientId: instantClientId,
+              clientId: txClientId,
               title: problemDescription?.slice(0, 100) || "Service Request",
               description: problemDescription || null,
               scheduledDate: preferredDate,
@@ -4335,20 +4346,39 @@ Respond with JSON only:
               address: address || null,
             })
             .returning();
-          instantJob = newJ;
 
-          // Link submission to the new client + job with full conversion fields
-          await db
+          // Link submission to client + job with full conversion fields
+          const now = new Date();
+          await tx
             .update(intakeSubmissions)
-            .set({
-              convertedClientId: instantClientId,
-              convertedJobId: newJ.id,
-              convertedAt: new Date(),
-            })
-            .where(eq(intakeSubmissions.id, submission.id));
-        } catch (instantErr) {
-          console.error("Instant booking client/job creation error (non-fatal):", instantErr);
-        }
+            .set({ convertedClientId: txClientId, convertedJobId: newJ.id, convertedAt: now })
+            .where(eq(intakeSubmissions.id, sub.id));
+
+          return { sub, clientId: txClientId, job: newJ };
+        });
+
+        submission = txResult.sub;
+        instantClientId = txResult.clientId;
+        instantJob = txResult.job;
+      } else {
+        const [sub] = await db
+          .insert(intakeSubmissions)
+          .values({
+            bookingLinkId: link.id,
+            providerId: link.providerId,
+            homeownerUserId: null,
+            clientName,
+            clientPhone: clientPhone || null,
+            clientEmail: clientEmail || null,
+            address: address || null,
+            problemDescription,
+            categoryId: categoryId || null,
+            answersJson: answersJson ? JSON.stringify(answersJson) : null,
+            preferredTimesJson: preferredTimesJson ? JSON.stringify(preferredTimesJson) : null,
+            status: "submitted" as const,
+          })
+          .returning();
+        submission = sub;
       }
 
       // Notify the provider's linked user
@@ -4523,6 +4553,19 @@ Respond with JSON only:
             updatedAt: now,
           })
           .where(eq(intakeSubmissions.id, id));
+
+        // If a matching lead exists for this provider+email, mark it as won
+        if (submission.clientEmail) {
+          await tx
+            .update(leads)
+            .set({ status: "won", updatedAt: now })
+            .where(
+              and(
+                eq(leads.providerId, submission.providerId),
+                eq(leads.email, submission.clientEmail)
+              )
+            );
+        }
 
         return { clientId, job: newJob };
       });

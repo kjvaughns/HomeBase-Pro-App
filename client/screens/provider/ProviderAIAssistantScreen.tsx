@@ -219,9 +219,9 @@ Provider Business Context:
       setIsListening(false);
     } else {
       setIsListening(true);
+      // Voice input is not yet integrated — just toggle the listening indicator
       setTimeout(() => {
         setIsListening(false);
-        setInputText("What are my upcoming jobs this week?");
       }, 3000);
     }
   };

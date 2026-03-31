@@ -22,7 +22,7 @@ export function getApiUrl(): string {
   return url.href;
 }
 
-function getAuthHeaders(): Record<string, string> {
+export function getAuthHeaders(): Record<string, string> {
   const { sessionToken } = useAuthStore.getState();
   if (sessionToken) {
     return { Authorization: `Bearer ${sessionToken}` };
