@@ -33,7 +33,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useOnboardingStore } from "@/state/onboardingStore";
-import { useAuthStore } from "@/state/authStore";
+import { useAuthStore, ProviderProfile } from "@/state/authStore";
 import { useProviderStore } from "@/state/providerStore";
 import { apiRequest } from "@/lib/query-client";
 
@@ -1044,7 +1044,7 @@ function Step7YouAreLive({
   onGoToDashboard,
 }: {
   data: SetupData;
-  providerProfile: ReturnType<typeof useAuthStore>["providerProfile"];
+  providerProfile: ProviderProfile | null;
   onGoToDashboard: () => void;
 }) {
   const { theme } = useTheme();

@@ -111,7 +111,7 @@ export function LeadCard({
 
       <View style={styles.content}>
         <View style={styles.header}>
-          <Avatar uri={null} name={lead.name} size="small" />
+          <Avatar uri={undefined} name={lead.name} size="small" />
           <View style={styles.headerInfo}>
             <ThemedText type="h4" numberOfLines={1}>
               {lead.service ?? "General Inquiry"}

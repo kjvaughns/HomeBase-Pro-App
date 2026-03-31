@@ -56,10 +56,7 @@ export default function LeadsScreen() {
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: Lead["status"] }) => {
-      return apiRequest(`/api/leads/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status }),
-      });
+      return apiRequest("PATCH", `/api/leads/${id}`, { status });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/providers", providerId, "leads"] });

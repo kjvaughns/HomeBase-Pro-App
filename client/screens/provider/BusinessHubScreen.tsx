@@ -122,7 +122,7 @@ export default function BusinessHubScreen() {
           <View style={styles.infoRow}>
             <ThemedText style={[styles.infoLabel, { color: theme.textSecondary }]}>License</ThemedText>
             <ThemedText style={styles.infoValue}>
-              {providerProfile?.licenseNumber || "Not provided"}
+              {"Not provided"}
             </ThemedText>
           </View>
           <View style={styles.infoRow}>
@@ -236,7 +236,7 @@ export default function BusinessHubScreen() {
                     size="small"
                   />
                   <Pressable
-                    onPress={() => navigation.navigate("EditService", { serviceId: item.id, service: item as Record<string, unknown> })}
+                    onPress={() => navigation.navigate("EditService", { serviceId: item.id, service: item as unknown as Record<string, unknown> })}
                     style={styles.editIconBtn}
                   >
                     <Feather name="chevron-right" size={18} color={theme.textTertiary} />

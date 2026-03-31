@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, Pressable, ViewStyle, Platform, View } from "react-native";
+import { StyleSheet, Pressable, ViewStyle, StyleProp, Platform, View } from "react-native";
 import { BlurView } from "expo-blur";
 import Animated, {
   useAnimatedStyle,
@@ -14,8 +14,8 @@ import { Spacing, BorderRadius, Animation, GlassEffect } from "@/constants/theme
 interface GlassCardProps {
   children: React.ReactNode;
   onPress?: () => void;
-  style?: ViewStyle;
-  contentStyle?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
+  contentStyle?: StyleProp<ViewStyle>;
   intensity?: "light" | "medium" | "heavy";
   noPadding?: boolean;
   testID?: string;

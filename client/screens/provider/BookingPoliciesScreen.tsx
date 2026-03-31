@@ -91,10 +91,7 @@ export default function BookingPoliciesScreen() {
       setBookingPolicies(policies);
 
       // Save to database via API
-      await apiRequest(`/api/provider/${providerId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ bookingPolicies: policies }),
-      });
+      await apiRequest("PATCH", `/api/provider/${providerId}`, { bookingPolicies: policies });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert("Saved", "Your booking policies have been updated.");
