@@ -2,8 +2,10 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { useAuthStore } from "@/state/authStore";
 
 /**
- * Gets the base URL for the Express API server (e.g., "http://localhost:3000")
- * @returns {string} The API base URL
+ * Gets the base URL for the Express API server.
+ * EXPO_PUBLIC_DOMAIN may be set with or without a protocol prefix.
+ * We always strip any existing prefix and rebuild with https:// to avoid
+ * constructing a double-protocol URL like https://https//api.example.com.
  */
 export function getApiUrl(): string {
   let host = process.env.EXPO_PUBLIC_DOMAIN;
@@ -12,7 +14,10 @@ export function getApiUrl(): string {
     throw new Error("EXPO_PUBLIC_DOMAIN is not set");
   }
 
-  let url = new URL(`https://${host}`);
+  // Strip any existing http:// or https:// prefix before constructing the URL
+  host = host.replace(/^https?:\/\//, "");
+
+  const url = new URL(`https://${host}`);
 
   return url.href;
 }
