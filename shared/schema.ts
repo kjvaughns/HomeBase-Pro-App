@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, boolean, decimal, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, boolean, decimal, pgEnum, json } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -123,13 +123,12 @@ export const providers = pgTable("providers", {
   serviceArea: text("service_area"),
   yearsExperience: integer("years_experience").default(0),
   capabilityTags: text("capability_tags").array().default(sql`ARRAY[]::text[]`),
-  businessHours: text("business_hours"),
-  bookingPolicies: text("booking_policies"),
+  businessHours: json("business_hours"),
+  bookingPolicies: json("booking_policies"),
   serviceRadius: integer("service_radius"),
-  serviceZipCodes: text("service_zip_codes"),
-  serviceCities: text("service_cities"),
-  isPublicProfile: boolean("is_public_profile").default(false),
-  isPublic: boolean("is_public").default(true),
+  serviceZipCodes: text("service_zip_codes").array(),
+  serviceCities: text("service_cities").array(),
+  isPublic: boolean("is_public").default(false),
   slug: text("slug").unique(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

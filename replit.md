@@ -37,11 +37,11 @@ The application comprises a client-side React Native Expo app (SDK 55, React Nat
 - **Onboarding Flows**: Separate animated onboarding for each role - Homeowners set priorities and see tool highlights, Providers see business features and Stripe Connect teaser. Progress indicators and staggered animations throughout.
 - **Role Gateway**: After onboarding, quick role switching available between Homeowner and Provider views.
 - **Booking Links**: Providers can create public booking pages with customizable intake forms, AI quote generation, deposit support, and custom questions.
-- **Database Schema**: PostgreSQL database with Drizzle ORM managing various tables including `users`, `homes`, `providers`, `appointments`, `clients`, `jobs`, `invoices`, `bookingLinks`, and `intakeSubmissions`. The `providers` table includes `businessHours` (JSON), `bookingPolicies` (JSON), `serviceRadius`, `serviceZipCodes`, `serviceCities`, and `isPublicProfile` fields for the Business Hub feature.
+- **Database Schema**: PostgreSQL database with Drizzle ORM managing 25 tables including `users`, `homes`, `providers`, `appointments`, `clients`, `jobs`, `invoices`, `bookingLinks`, and `intakeSubmissions`. The `providers` table includes `businessHours` (jsonb), `bookingPolicies` (jsonb), `serviceRadius`, `serviceZipCodes` (text[]), `serviceCities` (text[]), and `isPublic` fields for the Business Hub feature.
 - **API Endpoints**: Comprehensive RESTful API for authentication, home management, appointments, notifications, AI chat, booking links, and all provider portal functionalities.
 
 ## External Dependencies
-- **Supabase**: PostgreSQL database hosting.
+- **Supabase**: PostgreSQL database hosting. Connected via `SUPABASE_DATABASE_URL` (session-mode pooler URL for IPv4 connectivity). All 25 tables are live. `drizzle.config.ts` uses `SUPABASE_DATABASE_URL` first, falls back to `DATABASE_URL`.
 - **Drizzle ORM**: Type-safe database interaction.
 - **OpenAI GPT-4o-mini**: AI chat functionality.
 - **Stripe Connect**: Marketplace payment integration for invoicing, payment processing, platform fees, and credits wallet.

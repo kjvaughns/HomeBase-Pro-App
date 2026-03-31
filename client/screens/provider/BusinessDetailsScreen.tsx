@@ -109,14 +109,18 @@ export default function BusinessDetailsScreen() {
 
     if (provider.bookingPolicies) {
       try {
-        const parsed = JSON.parse(provider.bookingPolicies);
+        const parsed = typeof provider.bookingPolicies === "string"
+          ? JSON.parse(provider.bookingPolicies)
+          : provider.bookingPolicies;
         setPolicies({ ...DEFAULT_POLICIES, ...parsed });
       } catch {}
     }
 
     if (provider.businessHours) {
       try {
-        const parsed = JSON.parse(provider.businessHours);
+        const parsed = typeof provider.businessHours === "string"
+          ? JSON.parse(provider.businessHours)
+          : provider.businessHours;
         setHours({ ...DEFAULT_HOURS, ...parsed });
       } catch {}
     }
@@ -125,13 +129,13 @@ export default function BusinessDetailsScreen() {
       setServiceRadius(String(provider.serviceRadius));
     }
     if (provider.serviceZipCodes) {
-      setZipCodes(provider.serviceZipCodes);
+      setZipCodes(Array.isArray(provider.serviceZipCodes) ? provider.serviceZipCodes.join(", ") : provider.serviceZipCodes);
     }
     if (provider.serviceCities) {
-      setCities(provider.serviceCities);
+      setCities(Array.isArray(provider.serviceCities) ? provider.serviceCities.join(", ") : provider.serviceCities);
     }
-    if (provider.isPublicProfile !== undefined) {
-      setIsPublicProfile(provider.isPublicProfile);
+    if (provider.isPublic !== undefined) {
+      setIsPublicProfile(provider.isPublic);
     }
   }, [provider]);
 
@@ -155,7 +159,7 @@ export default function BusinessDetailsScreen() {
       serviceRadius: parseInt(serviceRadius) || null,
       serviceZipCodes: zipCodes.trim() || null,
       serviceCities: cities.trim() || null,
-      isPublicProfile,
+      isPublic: isPublicProfile,
     });
   };
 

@@ -2128,10 +2128,10 @@ Respond with JSON only:
         return res.status(404).json({ error: "Provider not found" });
       }
       const parsed = { ...provider } as any;
-      if (parsed.bookingPolicies) {
+      if (parsed.bookingPolicies && typeof parsed.bookingPolicies === "string") {
         try { parsed.bookingPolicies = JSON.parse(parsed.bookingPolicies); } catch {}
       }
-      if (parsed.businessHours) {
+      if (parsed.businessHours && typeof parsed.businessHours === "string") {
         try { parsed.businessHours = JSON.parse(parsed.businessHours); } catch {}
       }
       res.json({ provider: parsed });
@@ -2165,38 +2165,40 @@ Respond with JSON only:
       const directFields = [
         "businessName", "description", "phone", "email", "serviceArea",
         "avatarUrl", "hourlyRate", "yearsExperience", "serviceRadius",
-        "serviceZipCodes", "serviceCities", "isPublicProfile",
+        "serviceZipCodes", "serviceCities", "isPublic",
         "instantBooking", "advanceBookingDays",
       ];
       for (const field of directFields) {
         if (body[field] !== undefined) update[field] = body[field];
       }
 
-      // Serialize JSON object fields to text
+      // Store JSON object fields as objects (Supabase jsonb columns)
       if (body.bookingPolicies !== undefined) {
         update.bookingPolicies =
           typeof body.bookingPolicies === "string"
-            ? body.bookingPolicies
-            : JSON.stringify(body.bookingPolicies);
+            ? JSON.parse(body.bookingPolicies)
+            : body.bookingPolicies;
       }
       if (body.businessHours !== undefined) {
         update.businessHours =
           typeof body.businessHours === "string"
-            ? body.businessHours
-            : JSON.stringify(body.businessHours);
+            ? JSON.parse(body.businessHours)
+            : body.businessHours;
       }
       if (body.availability !== undefined) {
         // Store availability merged into bookingPolicies to keep schema simple
         const existing = await storage.getProvider(id);
         let existingPolicies: Record<string, any> = {};
         if (existing?.bookingPolicies) {
-          try { existingPolicies = JSON.parse(existing.bookingPolicies); } catch {}
+          existingPolicies = typeof existing.bookingPolicies === "string"
+            ? JSON.parse(existing.bookingPolicies as string)
+            : (existing.bookingPolicies as Record<string, any>) || {};
         }
         const availability =
           typeof body.availability === "string"
             ? JSON.parse(body.availability)
             : body.availability;
-        update.bookingPolicies = JSON.stringify({ ...existingPolicies, availability });
+        update.bookingPolicies = { ...existingPolicies, availability };
       }
 
       if (Object.keys(update).length === 0) {
