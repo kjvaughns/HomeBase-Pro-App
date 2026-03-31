@@ -21,16 +21,26 @@ type RouteParams = {
   InvoiceDetail: { invoiceId: string };
 };
 
+interface LineItemRecord {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+}
+
 interface Invoice {
   id: string;
   providerId: string;
   clientId: string;
   jobId?: string;
+  invoiceNumber?: string;
   amount: string;
+  total?: string;
   status: "draft" | "sent" | "paid" | "overdue" | "cancelled";
   dueDate?: string;
-  paidDate?: string;
+  paidAt?: string;
   notes?: string;
+  lineItems?: string | LineItemRecord[] | null;
   createdAt: string;
 }
 
@@ -40,6 +50,12 @@ interface Client {
   lastName: string;
   email?: string;
   phone?: string;
+}
+
+function parseLineItems(raw: Invoice["lineItems"]): LineItemRecord[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try { return JSON.parse(raw as string); } catch { return []; }
 }
 
 export default function InvoiceDetailScreen() {
@@ -66,18 +82,15 @@ export default function InvoiceDetailScreen() {
 
   const invoice = invoiceData?.invoice;
   const clients = clientsData?.clients || [];
+  const lineItems = invoice ? parseLineItems(invoice.lineItems) : [];
 
   const getClientName = (clientId: string): string => {
     const client = clients.find((c) => c.id === clientId);
-    if (client) {
-      return `${client.firstName} ${client.lastName}`;
-    }
-    return "Unknown Client";
+    return client ? `${client.firstName} ${client.lastName}` : "Unknown Client";
   };
 
-  const getClient = (clientId: string): Client | undefined => {
-    return clients.find((c) => c.id === clientId);
-  };
+  const getClient = (clientId: string): Client | undefined =>
+    clients.find((c) => c.id === clientId);
 
   const sendMutation = useMutation({
     mutationFn: async () => {
@@ -88,11 +101,11 @@ export default function InvoiceDetailScreen() {
       queryClient.invalidateQueries({ queryKey: ["/api/invoices", invoiceId] });
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "invoices"] });
       if (data.emailSent) {
-        Alert.alert("Invoice Sent", "Invoice has been sent and emailed to the client.");
+        Alert.alert("Invoice Sent", "Invoice emailed to the client.");
       } else if (data.emailError) {
-        Alert.alert("Invoice Sent", `Invoice status updated but email failed: ${data.emailError}`);
+        Alert.alert("Invoice Sent", `Status updated but email failed: ${data.emailError}`);
       } else {
-        Alert.alert("Invoice Sent", "Invoice has been marked as sent. No email address on file for client.");
+        Alert.alert("Invoice Sent", "Marked as sent. No email on file for this client.");
       }
     },
     onError: () => {
@@ -134,7 +147,7 @@ export default function InvoiceDetailScreen() {
   const handleSend = () => {
     Alert.alert(
       "Send Invoice",
-      "Are you sure you want to send this invoice to the client?",
+      "Send this invoice to the client via email?",
       [
         { text: "Cancel", style: "cancel" },
         { text: "Send", onPress: () => sendMutation.mutate() },
@@ -145,7 +158,7 @@ export default function InvoiceDetailScreen() {
   const handleMarkPaid = () => {
     Alert.alert(
       "Mark as Paid",
-      "Are you sure you want to mark this invoice as paid?",
+      "Mark this invoice as paid?",
       [
         { text: "Cancel", style: "cancel" },
         { text: "Mark Paid", onPress: () => markPaidMutation.mutate() },
@@ -156,7 +169,7 @@ export default function InvoiceDetailScreen() {
   const handleCancel = () => {
     Alert.alert(
       "Cancel Invoice",
-      "Are you sure you want to cancel this invoice? This action cannot be undone.",
+      "Cancel this invoice? This action cannot be undone.",
       [
         { text: "No", style: "cancel" },
         { text: "Yes, Cancel", style: "destructive", onPress: () => cancelMutation.mutate() },
@@ -169,20 +182,12 @@ export default function InvoiceDetailScreen() {
       case "paid": return "success";
       case "sent": return "info";
       case "overdue": return "warning";
-      case "draft": return "neutral";
-      case "cancelled": return "neutral";
       default: return "neutral";
     }
   };
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("en-US", { 
-      month: "long", 
-      day: "numeric", 
-      year: "numeric" 
-    });
-  };
+  const formatDate = (dateStr: string) =>
+    new Date(dateStr).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
   if (isLoading || !invoice) {
     return (
@@ -193,6 +198,7 @@ export default function InvoiceDetailScreen() {
   }
 
   const client = getClient(invoice.clientId);
+  const displayAmount = invoice.total || invoice.amount || "0";
   const isPending = sendMutation.isPending || markPaidMutation.isPending || cancelMutation.isPending;
 
   return (
@@ -205,14 +211,15 @@ export default function InvoiceDetailScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
+        {/* Header card */}
         <GlassCard style={styles.headerCard}>
           <View style={styles.headerRow}>
-            <View>
-              <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-                Invoice
+            <View style={styles.headerLeft}>
+              <ThemedText style={[styles.invoiceNumLabel, { color: theme.textTertiary }]}>
+                {invoice.invoiceNumber || `INV-${invoice.id.slice(0, 8).toUpperCase()}`}
               </ThemedText>
-              <ThemedText type="h2">
-                ${parseFloat(invoice.amount).toLocaleString()}
+              <ThemedText style={styles.amountDisplay}>
+                ${parseFloat(displayAmount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </ThemedText>
             </View>
             <StatusPill
@@ -222,26 +229,26 @@ export default function InvoiceDetailScreen() {
           </View>
         </GlassCard>
 
+        {/* Client */}
         <GlassCard style={styles.section}>
           <ThemedText style={styles.sectionTitle}>Client</ThemedText>
-          
           <View style={styles.clientRow}>
             <View style={[styles.clientAvatar, { backgroundColor: Colors.accent + "20" }]}>
-              <ThemedText style={{ color: Colors.accent, fontWeight: "600", fontSize: 18 }}>
+              <ThemedText style={[styles.avatarText, { color: Colors.accent }]}>
                 {client ? `${client.firstName[0]}${client.lastName[0]}` : "?"}
               </ThemedText>
             </View>
             <View style={styles.clientInfo}>
-              <ThemedText style={{ fontWeight: "600", fontSize: 16 }}>
+              <ThemedText style={styles.clientName}>
                 {getClientName(invoice.clientId)}
               </ThemedText>
               {client?.email ? (
-                <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+                <ThemedText style={[styles.clientDetail, { color: theme.textSecondary }]}>
                   {client.email}
                 </ThemedText>
               ) : null}
               {client?.phone ? (
-                <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+                <ThemedText style={[styles.clientDetail, { color: theme.textSecondary }]}>
                   {client.phone}
                 </ThemedText>
               ) : null}
@@ -249,20 +256,50 @@ export default function InvoiceDetailScreen() {
           </View>
         </GlassCard>
 
+        {/* Line items */}
+        {lineItems.length > 0 ? (
+          <GlassCard style={styles.section}>
+            <ThemedText style={styles.sectionTitle}>Line Items</ThemedText>
+            {lineItems.map((item, idx) => (
+              <View key={idx}>
+                {idx > 0 ? (
+                  <View style={[styles.itemDivider, { backgroundColor: theme.separator }]} />
+                ) : null}
+                <View style={styles.lineItemRow}>
+                  <View style={styles.lineItemDesc}>
+                    <ThemedText style={styles.lineItemName}>{item.description}</ThemedText>
+                    {item.quantity !== 1 ? (
+                      <ThemedText style={[styles.lineItemMeta, { color: theme.textTertiary }]}>
+                        {item.quantity} x ${item.unitPrice.toFixed(2)}
+                      </ThemedText>
+                    ) : null}
+                  </View>
+                  <ThemedText style={[styles.lineItemTotal, { color: theme.text }]}>
+                    ${item.total.toFixed(2)}
+                  </ThemedText>
+                </View>
+              </View>
+            ))}
+            <View style={[styles.subtotalRow, { borderTopColor: theme.separator }]}>
+              <ThemedText style={[styles.subtotalLabel, { color: theme.textSecondary }]}>Total</ThemedText>
+              <ThemedText style={[styles.subtotalAmount, { color: Colors.accent }]}>
+                ${parseFloat(displayAmount).toFixed(2)}
+              </ThemedText>
+            </View>
+          </GlassCard>
+        ) : null}
+
+        {/* Details */}
         <GlassCard style={styles.section}>
           <ThemedText style={styles.sectionTitle}>Details</ThemedText>
-          
+
           <View style={styles.detailRow}>
             <View style={[styles.detailIcon, { backgroundColor: theme.backgroundSecondary }]}>
               <Feather name="calendar" size={16} color={theme.textSecondary} />
             </View>
             <View>
-              <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-                Created
-              </ThemedText>
-              <ThemedText style={{ fontWeight: "500" }}>
-                {formatDate(invoice.createdAt)}
-              </ThemedText>
+              <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Created</ThemedText>
+              <ThemedText style={styles.detailValue}>{formatDate(invoice.createdAt)}</ThemedText>
             </View>
           </View>
 
@@ -272,27 +309,21 @@ export default function InvoiceDetailScreen() {
                 <Feather name="clock" size={16} color={theme.textSecondary} />
               </View>
               <View>
-                <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-                  Due Date
-                </ThemedText>
-                <ThemedText style={{ fontWeight: "500" }}>
-                  {formatDate(invoice.dueDate)}
-                </ThemedText>
+                <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Due Date</ThemedText>
+                <ThemedText style={styles.detailValue}>{formatDate(invoice.dueDate)}</ThemedText>
               </View>
             </View>
           ) : null}
 
-          {invoice.paidDate ? (
+          {invoice.paidAt ? (
             <View style={styles.detailRow}>
               <View style={[styles.detailIcon, { backgroundColor: Colors.accent + "20" }]}>
                 <Feather name="check-circle" size={16} color={Colors.accent} />
               </View>
               <View>
-                <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-                  Paid On
-                </ThemedText>
-                <ThemedText style={{ fontWeight: "500", color: Colors.accent }}>
-                  {formatDate(invoice.paidDate)}
+                <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Paid On</ThemedText>
+                <ThemedText style={[styles.detailValue, { color: Colors.accent }]}>
+                  {formatDate(invoice.paidAt)}
                 </ThemedText>
               </View>
             </View>
@@ -300,29 +331,30 @@ export default function InvoiceDetailScreen() {
 
           {invoice.notes ? (
             <View style={styles.notesSection}>
-              <ThemedText type="caption" style={{ color: theme.textSecondary, marginBottom: Spacing.xs }}>
+              <ThemedText style={[styles.detailLabel, { color: theme.textSecondary, marginBottom: Spacing.xs }]}>
                 Notes
               </ThemedText>
-              <ThemedText>{invoice.notes}</ThemedText>
+              <ThemedText style={styles.detailValue}>{invoice.notes}</ThemedText>
             </View>
           ) : null}
         </GlassCard>
 
+        {/* Actions */}
         <View style={styles.buttons}>
           {invoice.status === "draft" ? (
-            <PrimaryButton onPress={handleSend} disabled={isPending}>
+            <PrimaryButton onPress={handleSend} disabled={isPending} testID="button-send-invoice">
               {sendMutation.isPending ? "Sending..." : "Send Invoice"}
             </PrimaryButton>
           ) : null}
 
           {(invoice.status === "sent" || invoice.status === "overdue") ? (
-            <PrimaryButton onPress={handleMarkPaid} disabled={isPending}>
+            <PrimaryButton onPress={handleMarkPaid} disabled={isPending} testID="button-mark-paid">
               {markPaidMutation.isPending ? "Updating..." : "Mark as Paid"}
             </PrimaryButton>
           ) : null}
 
           {invoice.status !== "paid" && invoice.status !== "cancelled" ? (
-            <SecondaryButton onPress={handleCancel} disabled={isPending}>
+            <SecondaryButton onPress={handleCancel} disabled={isPending} testID="button-cancel-invoice">
               Cancel Invoice
             </SecondaryButton>
           ) : null}
@@ -333,34 +365,26 @@ export default function InvoiceDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerCard: {
-    marginBottom: Spacing.lg,
-  },
+  container: { flex: 1 },
+  loadingContainer: { flex: 1, alignItems: "center", justifyContent: "center" },
+  headerCard: { marginBottom: Spacing.lg },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
   },
-  section: {
-    marginBottom: Spacing.lg,
+  headerLeft: { flex: 1 },
+  invoiceNumLabel: {
+    ...Typography.caption1,
+    marginBottom: 4,
   },
-  sectionTitle: {
-    ...Typography.headline,
-    marginBottom: Spacing.md,
+  amountDisplay: {
+    ...Typography.title1,
+    fontWeight: "700",
   },
-  clientRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-  },
+  section: { marginBottom: Spacing.lg },
+  sectionTitle: { ...Typography.headline, marginBottom: Spacing.md },
+  clientRow: { flexDirection: "row", alignItems: "center", gap: Spacing.md },
   clientAvatar: {
     width: 50,
     height: 50,
@@ -368,9 +392,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  clientInfo: {
-    flex: 1,
+  avatarText: { ...Typography.title3, fontWeight: "700" },
+  clientInfo: { flex: 1 },
+  clientName: { ...Typography.subhead, fontWeight: "600" },
+  clientDetail: { ...Typography.caption1, marginTop: 2 },
+  // Line items
+  itemDivider: { height: StyleSheet.hairlineWidth, marginVertical: Spacing.sm },
+  lineItemRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", paddingVertical: Spacing.xs },
+  lineItemDesc: { flex: 1 },
+  lineItemName: { ...Typography.body, fontWeight: "500" },
+  lineItemMeta: { ...Typography.caption1, marginTop: 2 },
+  lineItemTotal: { ...Typography.body, fontWeight: "600" },
+  subtotalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: Spacing.md,
+    paddingTop: Spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
+  subtotalLabel: { ...Typography.headline, fontWeight: "600" },
+  subtotalAmount: { ...Typography.headline, fontWeight: "700" },
+  // Details
   detailRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -384,14 +427,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  detailLabel: { ...Typography.caption1, marginBottom: 2 },
+  detailValue: { ...Typography.body, fontWeight: "500" },
   notesSection: {
-    marginTop: Spacing.md,
+    marginTop: Spacing.sm,
     paddingTop: Spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "rgba(128, 128, 128, 0.2)",
+    borderTopColor: "rgba(128,128,128,0.2)",
   },
-  buttons: {
-    gap: Spacing.md,
-    marginTop: Spacing.md,
-  },
+  buttons: { gap: Spacing.md, marginTop: Spacing.md },
 });

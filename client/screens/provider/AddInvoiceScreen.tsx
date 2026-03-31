@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, View, Pressable } from "react-native";
+import { StyleSheet, View, Pressable, ScrollView, TextInput as RNTextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -36,6 +36,28 @@ interface Job {
   estimatedPrice?: string;
 }
 
+interface LineItem {
+  key: string;
+  description: string;
+  qty: string;
+  unitPrice: string;
+}
+
+const newLineItem = (): LineItem => ({
+  key: Math.random().toString(36).slice(2),
+  description: "",
+  qty: "1",
+  unitPrice: "",
+});
+
+function calcTotal(items: LineItem[]): number {
+  return items.reduce((sum, item) => {
+    const qty = parseFloat(item.qty) || 0;
+    const price = parseFloat(item.unitPrice) || 0;
+    return sum + qty * price;
+  }, 0);
+}
+
 export default function AddInvoiceScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
@@ -63,24 +85,48 @@ export default function AddInvoiceScreen() {
 
   const [selectedClientId, setSelectedClientId] = useState<string | null>(preselectedClientId || null);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
-  const [amount, setAmount] = useState("");
+  const [lineItems, setLineItems] = useState<LineItem[]>([newLineItem()]);
   const [dueDate, setDueDate] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [notes, setNotes] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
   const clientJobs = jobs.filter((job) => job.clientId === selectedClientId);
+  const total = calcTotal(lineItems);
+
+  const updateItem = (key: string, field: keyof Omit<LineItem, "key">, value: string) => {
+    setLineItems((prev) =>
+      prev.map((item) => (item.key === key ? { ...item, [field]: value } : item))
+    );
+  };
+
+  const removeItem = (key: string) => {
+    setLineItems((prev) => (prev.length > 1 ? prev.filter((item) => item.key !== key) : prev));
+  };
+
+  const addItem = () => {
+    setLineItems((prev) => [...prev, newLineItem()]);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const buildPayload = (sendImmediately: boolean) => ({
+    providerId: providerId!,
+    clientId: selectedClientId!,
+    jobId: selectedJobId || undefined,
+    lineItems: lineItems.map((item) => ({
+      description: item.description || "Service",
+      quantity: parseFloat(item.qty) || 1,
+      unitPrice: parseFloat(item.unitPrice) || 0,
+      total: (parseFloat(item.qty) || 1) * (parseFloat(item.unitPrice) || 0),
+    })),
+    amount: total.toFixed(2),
+    dueDate: dueDate ? dueDate.toISOString() : undefined,
+    notes: notes.trim() || undefined,
+    sendImmediately,
+  });
 
   const createMutation = useMutation({
-    mutationFn: async (data: {
-      providerId: string;
-      clientId: string;
-      jobId?: string;
-      amount: string;
-      dueDate?: string;
-      notes?: string;
-      sendImmediately?: boolean;
-    }) => {
+    mutationFn: async (data: ReturnType<typeof buildPayload>) => {
       const response = await apiRequest("POST", "/api/invoices/create-and-send", data);
       return response.json();
     },
@@ -90,21 +136,13 @@ export default function AddInvoiceScreen() {
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "stats"] });
       navigation.goBack();
     },
-    onError: (error) => {
+    onError: () => {
       setFormError("Failed to create invoice. Please try again.");
-      console.error("Create invoice error:", error);
     },
   });
 
   const saveDraftMutation = useMutation({
-    mutationFn: async (data: {
-      providerId: string;
-      clientId: string;
-      jobId?: string;
-      amount: string;
-      dueDate?: string;
-      notes?: string;
-    }) => {
+    mutationFn: async (data: ReturnType<typeof buildPayload>) => {
       const response = await apiRequest("POST", "/api/invoices", data);
       return response.json();
     },
@@ -113,43 +151,30 @@ export default function AddInvoiceScreen() {
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "invoices"] });
       navigation.goBack();
     },
-    onError: (error) => {
+    onError: () => {
       setFormError("Failed to save invoice. Please try again.");
-      console.error("Save invoice error:", error);
     },
   });
 
   const validateForm = () => {
     setFormError(null);
     if (!selectedClientId) { setFormError("Please select a client."); return false; }
-    if (!amount.trim() || isNaN(parseFloat(amount))) { setFormError("Please enter a valid amount."); return false; }
     if (!providerId) { setFormError("Provider profile not found."); return false; }
+    const hasValidItem = lineItems.some(
+      (item) => (parseFloat(item.unitPrice) || 0) > 0
+    );
+    if (!hasValidItem) { setFormError("Please add at least one line item with a price."); return false; }
     return true;
   };
 
   const handleCreateAndSend = () => {
     if (!validateForm()) return;
-    createMutation.mutate({
-      providerId: providerId!,
-      clientId: selectedClientId!,
-      jobId: selectedJobId || undefined,
-      amount: amount.trim(),
-      dueDate: dueDate ? dueDate.toISOString() : undefined,
-      notes: notes.trim() || undefined,
-      sendImmediately: true,
-    });
+    createMutation.mutate(buildPayload(true));
   };
 
   const handleSaveDraft = () => {
     if (!validateForm()) return;
-    saveDraftMutation.mutate({
-      providerId: providerId!,
-      clientId: selectedClientId!,
-      jobId: selectedJobId || undefined,
-      amount: amount.trim(),
-      dueDate: dueDate ? dueDate.toISOString() : undefined,
-      notes: notes.trim() || undefined,
-    });
+    saveDraftMutation.mutate(buildPayload(false));
   };
 
   const handleJobSelect = (jobId: string) => {
@@ -158,7 +183,14 @@ export default function AddInvoiceScreen() {
     } else {
       setSelectedJobId(jobId);
       const job = jobs.find((j) => j.id === jobId);
-      if (job?.estimatedPrice) setAmount(job.estimatedPrice);
+      if (job?.estimatedPrice) {
+        setLineItems([{
+          key: Math.random().toString(36).slice(2),
+          description: job.title,
+          qty: "1",
+          unitPrice: job.estimatedPrice,
+        }]);
+      }
     }
   };
 
@@ -194,14 +226,13 @@ export default function AddInvoiceScreen() {
               </ThemedText>
             </View>
           ) : (
-            <View style={styles.clientList}>
+            <View>
               {clients.map((client, idx) => (
                 <Pressable
                   key={client.id}
                   style={[
                     styles.clientRow,
                     idx > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.separator },
-                    selectedClientId === client.id && styles.clientRowSelected,
                   ]}
                   onPress={() => { setSelectedClientId(client.id); setSelectedJobId(null); }}
                   testID={`client-option-${client.id}`}
@@ -256,7 +287,6 @@ export default function AddInvoiceScreen() {
                   style={[
                     styles.jobRow,
                     idx > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.separator },
-                    selectedJobId === job.id && styles.jobRowSelected,
                   ]}
                   onPress={() => handleJobSelect(job.id)}
                   testID={`job-option-${job.id}`}
@@ -291,26 +321,98 @@ export default function AddInvoiceScreen() {
           </GlassCard>
         ) : null}
 
-        {/* Invoice Details */}
+        {/* Line Items */}
         <GlassCard style={styles.section}>
-          <FormSectionHeader icon="file-text" title="Invoice Details" />
+          <FormSectionHeader icon="list" title="Line Items" />
 
-          {/* Amount */}
-          <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Amount</ThemedText>
-          <TextField
-            value={amount}
-            onChangeText={setAmount}
-            placeholder="0.00"
-            keyboardType="decimal-pad"
-            leftIcon="dollar-sign"
-            style={styles.amountInput}
-            testID="input-amount"
-          />
+          {lineItems.map((item, idx) => (
+            <View key={item.key}>
+              {idx > 0 ? (
+                <View style={[styles.itemDivider, { backgroundColor: theme.separator }]} />
+              ) : null}
+              <View style={styles.lineItemRow}>
+                <View style={styles.lineItemMain}>
+                  <RNTextInput
+                    style={[styles.descriptionInput, { color: theme.text, borderBottomColor: theme.separator }]}
+                    placeholder="Description"
+                    placeholderTextColor={theme.textTertiary}
+                    value={item.description}
+                    onChangeText={(v) => updateItem(item.key, "description", v)}
+                    testID={`input-desc-${idx}`}
+                  />
+                  <View style={styles.lineItemAmountRow}>
+                    <View style={styles.qtyWrap}>
+                      <ThemedText style={[styles.fieldMini, { color: theme.textTertiary }]}>QTY</ThemedText>
+                      <RNTextInput
+                        style={[styles.qtyInput, { color: theme.text, backgroundColor: theme.backgroundSecondary }]}
+                        placeholder="1"
+                        placeholderTextColor={theme.textTertiary}
+                        value={item.qty}
+                        onChangeText={(v) => updateItem(item.key, "qty", v)}
+                        keyboardType="decimal-pad"
+                        testID={`input-qty-${idx}`}
+                      />
+                    </View>
+                    <View style={styles.priceWrap}>
+                      <ThemedText style={[styles.fieldMini, { color: theme.textTertiary }]}>UNIT PRICE</ThemedText>
+                      <View style={[styles.priceInputRow, { backgroundColor: theme.backgroundSecondary }]}>
+                        <ThemedText style={[styles.dollarSign, { color: theme.textSecondary }]}>$</ThemedText>
+                        <RNTextInput
+                          style={[styles.priceInput, { color: theme.text }]}
+                          placeholder="0.00"
+                          placeholderTextColor={theme.textTertiary}
+                          value={item.unitPrice}
+                          onChangeText={(v) => updateItem(item.key, "unitPrice", v)}
+                          keyboardType="decimal-pad"
+                          testID={`input-price-${idx}`}
+                        />
+                      </View>
+                    </View>
+                    <View style={styles.lineTotalWrap}>
+                      <ThemedText style={[styles.fieldMini, { color: theme.textTertiary }]}>TOTAL</ThemedText>
+                      <ThemedText style={[styles.lineTotalText, { color: Colors.accent }]}>
+                        ${((parseFloat(item.qty) || 0) * (parseFloat(item.unitPrice) || 0)).toFixed(2)}
+                      </ThemedText>
+                    </View>
+                  </View>
+                </View>
+                {lineItems.length > 1 ? (
+                  <Pressable
+                    style={[styles.removeBtn, { backgroundColor: theme.backgroundSecondary }]}
+                    onPress={() => removeItem(item.key)}
+                    hitSlop={8}
+                    testID={`button-remove-item-${idx}`}
+                  >
+                    <Feather name="trash-2" size={14} color={theme.textTertiary} />
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          ))}
 
-          <View style={[styles.divider, { backgroundColor: theme.separator }]} />
+          <Pressable
+            style={[styles.addItemBtn, { borderColor: Colors.accent + "40" }]}
+            onPress={addItem}
+            testID="button-add-line-item"
+          >
+            <Feather name="plus" size={14} color={Colors.accent} />
+            <ThemedText style={[styles.addItemText, { color: Colors.accent }]}>Add Line Item</ThemedText>
+          </Pressable>
 
-          {/* Due Date */}
-          <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Due Date (optional)</ThemedText>
+          {/* Total */}
+          <View style={[styles.totalRow, { borderTopColor: theme.separator }]}>
+            <ThemedText style={[styles.totalLabel, { color: theme.textSecondary }]}>Total</ThemedText>
+            <ThemedText style={[styles.totalAmount, { color: theme.text }]}>
+              ${total.toFixed(2)}
+            </ThemedText>
+          </View>
+        </GlassCard>
+
+        {/* Schedule & Notes */}
+        <GlassCard style={styles.section}>
+          <FormSectionHeader icon="calendar" title="Schedule" />
+
+          <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Due Date</ThemedText>
           <Pressable
             style={[styles.datePill, { backgroundColor: theme.backgroundSecondary }]}
             onPress={() => setShowDatePicker(true)}
@@ -318,13 +420,10 @@ export default function AddInvoiceScreen() {
           >
             <Feather name="calendar" size={15} color={dueDate ? Colors.accent : theme.textTertiary} />
             <ThemedText style={[styles.datePillText, { color: dueDate ? theme.text : theme.textTertiary }]}>
-              {dueDate ? formatDate(dueDate) : "Select due date"}
+              {dueDate ? formatDate(dueDate) : "Select due date (optional)"}
             </ThemedText>
             {dueDate ? (
-              <Pressable
-                onPress={() => setDueDate(null)}
-                hitSlop={8}
-              >
+              <Pressable onPress={() => setDueDate(null)} hitSlop={8}>
                 <Feather name="x" size={14} color={theme.textTertiary} />
               </Pressable>
             ) : null}
@@ -332,12 +431,11 @@ export default function AddInvoiceScreen() {
 
           <View style={[styles.divider, { backgroundColor: theme.separator }]} />
 
-          {/* Notes */}
           <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Notes (optional)</ThemedText>
           <TextField
             value={notes}
             onChangeText={setNotes}
-            placeholder="Add any notes or description..."
+            placeholder="Add any notes or additional details..."
             multiline
             numberOfLines={3}
             testID="input-notes"
@@ -345,34 +443,30 @@ export default function AddInvoiceScreen() {
         </GlassCard>
 
         {formError ? (
-          <View style={[styles.errorBox, { backgroundColor: Colors.errorLight }]}>
-            <Feather name="alert-circle" size={16} color={Colors.error} />
-            <ThemedText style={[styles.errorText, { color: Colors.error }]}>{formError}</ThemedText>
+          <View style={[styles.errorBox, { backgroundColor: "#FEF2F2" }]}>
+            <Feather name="alert-circle" size={16} color="#EF4444" />
+            <ThemedText style={[styles.errorText, { color: "#EF4444" }]}>{formError}</ThemedText>
           </View>
         ) : null}
 
         {/* Footer Actions */}
         <View style={styles.footer}>
-          <View style={styles.primaryRow}>
-            <PrimaryButton
-              onPress={handleCreateAndSend}
-              loading={createMutation.isPending}
-              disabled={anyLoading || clients.length === 0}
-              style={styles.btnFlex}
-              testID="button-create-send"
-            >
-              Send Invoice
-            </PrimaryButton>
-            <SecondaryButton
-              onPress={handleSaveDraft}
-              loading={saveDraftMutation.isPending}
-              disabled={anyLoading || clients.length === 0}
-              style={styles.btnFlex}
-              testID="button-save-draft"
-            >
-              Save Draft
-            </SecondaryButton>
-          </View>
+          <PrimaryButton
+            onPress={handleCreateAndSend}
+            loading={createMutation.isPending}
+            disabled={anyLoading || clients.length === 0}
+            testID="button-create-send"
+          >
+            Send Invoice
+          </PrimaryButton>
+          <SecondaryButton
+            onPress={handleSaveDraft}
+            loading={saveDraftMutation.isPending}
+            disabled={anyLoading || clients.length === 0}
+            testID="button-save-draft"
+          >
+            Save as Draft
+          </SecondaryButton>
           <Pressable
             onPress={() => navigation.goBack()}
             disabled={anyLoading}
@@ -402,15 +496,17 @@ export default function AddInvoiceScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   section: { marginBottom: Spacing.lg },
-  divider: { height: StyleSheet.hairlineWidth, marginVertical: Spacing.sm },
+  divider: { height: StyleSheet.hairlineWidth, marginVertical: Spacing.md },
   fieldLabel: {
     ...Typography.footnote,
     fontWeight: "500",
     marginBottom: Spacing.xs,
   },
-  amountInput: {
-    ...Typography.title3,
-    fontWeight: "700",
+  fieldMini: {
+    fontSize: 10,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+    marginBottom: 4,
   },
   emptyBox: {
     alignItems: "center",
@@ -433,14 +529,12 @@ const styles = StyleSheet.create({
     ...Typography.footnote,
     textAlign: "center",
   },
-  clientList: {},
   clientRow: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: Spacing.md,
     gap: Spacing.md,
   },
-  clientRowSelected: {},
   clientAvatar: {
     width: 40,
     height: 40,
@@ -476,7 +570,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     gap: Spacing.md,
   },
-  jobRowSelected: {},
   jobIconWrap: {
     width: 32,
     height: 32,
@@ -487,6 +580,78 @@ const styles = StyleSheet.create({
   jobInfo: { flex: 1 },
   jobTitle: { ...Typography.subhead, fontWeight: "600" },
   jobPrice: { ...Typography.caption1, fontWeight: "600", marginTop: 2 },
+  // Line items
+  itemDivider: { height: StyleSheet.hairlineWidth, marginVertical: Spacing.md },
+  lineItemRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.xs,
+  },
+  lineItemMain: { flex: 1 },
+  descriptionInput: {
+    ...Typography.body,
+    paddingVertical: Spacing.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginBottom: Spacing.sm,
+  },
+  lineItemAmountRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    alignItems: "flex-end",
+  },
+  qtyWrap: { width: 60 },
+  qtyInput: {
+    ...Typography.body,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+    textAlign: "center",
+  },
+  priceWrap: { flex: 1 },
+  priceInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+  },
+  dollarSign: { ...Typography.body, marginRight: 2 },
+  priceInput: { ...Typography.body, flex: 1 },
+  lineTotalWrap: { width: 64, alignItems: "flex-end" },
+  lineTotalText: { ...Typography.subhead, fontWeight: "700" },
+  removeBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: Spacing.xl,
+  },
+  addItemBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    marginTop: Spacing.md,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderRadius: BorderRadius.md,
+    alignSelf: "flex-start",
+  },
+  addItemText: { ...Typography.footnote, fontWeight: "600" },
+  totalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: Spacing.md,
+    paddingTop: Spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  totalLabel: { ...Typography.headline, fontWeight: "600" },
+  totalAmount: { ...Typography.title2, fontWeight: "700" },
+  // Schedule
   datePill: {
     flexDirection: "row",
     alignItems: "center",
@@ -496,10 +661,8 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     minHeight: 44,
   },
-  datePillText: {
-    ...Typography.body,
-    flex: 1,
-  },
+  datePillText: { ...Typography.body, flex: 1 },
+  // Error
   errorBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -509,9 +672,8 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   errorText: { ...Typography.subhead, flex: 1 },
-  footer: { marginTop: Spacing.md, gap: Spacing.sm },
-  primaryRow: { flexDirection: "row", gap: Spacing.md },
-  btnFlex: { flex: 1 },
+  // Footer
+  footer: { gap: Spacing.sm },
   cancelRow: { alignItems: "center", paddingVertical: Spacing.md },
   cancelText: { ...Typography.body },
 });

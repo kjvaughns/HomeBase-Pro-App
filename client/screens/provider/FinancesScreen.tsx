@@ -34,10 +34,12 @@ interface Invoice {
   providerId: string;
   clientId: string;
   jobId?: string;
+  invoiceNumber?: string;
   amount: string;
+  total?: string;
   status: "draft" | "sent" | "paid" | "overdue" | "cancelled";
   dueDate?: string;
-  paidDate?: string;
+  paidAt?: string;
   notes?: string;
   createdAt: string;
 }
@@ -132,7 +134,7 @@ export default function FinancesScreen() {
   const pendingAmount = useMemo(() => {
     return invoices
       .filter((inv) => inv.status === "sent" || inv.status === "overdue")
-      .reduce((sum, inv) => sum + parseFloat(inv.amount || "0"), 0);
+      .reduce((sum, inv) => sum + parseFloat(inv.total || inv.amount || "0"), 0);
   }, [invoices]);
 
   const onRefresh = async () => {
@@ -168,12 +170,12 @@ export default function FinancesScreen() {
         <View style={styles.invoiceInfo}>
           <ThemedText style={styles.invoiceClient}>{getClientName(item.clientId)}</ThemedText>
           <ThemedText style={[styles.invoiceDate, { color: theme.textSecondary }]}>
-            {formatDate(item.createdAt)}
+            {item.invoiceNumber || formatDate(item.createdAt)}
           </ThemedText>
         </View>
         <View style={styles.invoiceRight}>
           <ThemedText style={styles.invoiceAmount}>
-            ${parseFloat(item.amount || "0").toLocaleString()}
+            ${parseFloat(item.total || item.amount || "0").toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </ThemedText>
           <StatusPill
             status={getInvoiceStatusType(item.status)}

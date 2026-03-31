@@ -2516,13 +2516,29 @@ Respond with JSON only:
 
   app.post("/api/invoices", requireAuth, async (req: Request, res: Response) => {
     try {
-      // Auto-generate invoice number if not provided
       const invoiceNumber = req.body.invoiceNumber || `INV-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-      
-      // Convert dueDate string to Date
+
+      // Calculate total from line items if provided
+      const lineItemsInput: any[] = Array.isArray(req.body.lineItems) ? req.body.lineItems : [];
+      let total = parseFloat(req.body.amount || "0");
+      if (lineItemsInput.length > 0) {
+        total = lineItemsInput.reduce((sum: number, item: any) => {
+          return sum + (parseFloat(item.unitPrice) || 0) * (parseFloat(item.quantity) || 1);
+        }, 0);
+      }
+      const lineItemsJson = lineItemsInput.length > 0
+        ? JSON.stringify(lineItemsInput)
+        : (req.body.amount ? JSON.stringify([{ description: req.body.notes || "Service", quantity: 1, unitPrice: parseFloat(req.body.amount), total: parseFloat(req.body.amount) }]) : undefined);
+
       const invoiceData = {
-        ...req.body,
+        providerId: req.body.providerId,
+        clientId: req.body.clientId,
+        jobId: req.body.jobId || null,
         invoiceNumber,
+        total: total.toFixed(2),
+        status: "draft",
+        notes: req.body.notes || null,
+        lineItems: lineItemsJson,
         dueDate: req.body.dueDate ? new Date(req.body.dueDate) : undefined,
       };
       const parsed = insertInvoiceSchema.safeParse(invoiceData);
@@ -2540,59 +2556,78 @@ Respond with JSON only:
   // Create and immediately send invoice (one-step flow)
   app.post("/api/invoices/create-and-send", requireAuth, async (req: Request, res: Response) => {
     try {
-      // Auto-generate invoice number
       const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-      
-      // Build line items from amount
-      const amount = parseFloat(req.body.amount);
-      const lineItems = [{
-        description: req.body.notes || "Service",
-        quantity: 1,
-        unitPrice: amount,
-        total: amount
-      }];
-      
-      // Create invoice data
+
+      // Accept line items from frontend or fall back to single amount
+      const lineItemsInput: any[] = Array.isArray(req.body.lineItems) ? req.body.lineItems : [];
+      let amount: number;
+      let lineItems: any[];
+
+      if (lineItemsInput.length > 0) {
+        lineItems = lineItemsInput.map((item: any) => ({
+          description: item.description || "Service",
+          quantity: parseFloat(item.quantity) || 1,
+          unitPrice: parseFloat(item.unitPrice) || 0,
+          total: (parseFloat(item.quantity) || 1) * (parseFloat(item.unitPrice) || 0),
+        }));
+        amount = lineItems.reduce((sum: number, item: any) => sum + item.total, 0);
+      } else {
+        amount = parseFloat(req.body.amount) || 0;
+        lineItems = [{
+          description: req.body.notes || "Service",
+          quantity: 1,
+          unitPrice: amount,
+          total: amount,
+        }];
+      }
+
       const invoiceData = {
         providerId: req.body.providerId,
         clientId: req.body.clientId,
         jobId: req.body.jobId || null,
         invoiceNumber,
-        total: amount.toString(),
-        lineItems,
+        total: amount.toFixed(2),
+        lineItems: JSON.stringify(lineItems),
+        notes: req.body.notes || null,
         status: "sent",
-        dueDate: req.body.dueDate ? new Date(req.body.dueDate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days default
+        dueDate: req.body.dueDate
+          ? new Date(req.body.dueDate)
+          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       };
-      
+
       const parsed = insertInvoiceSchema.safeParse(invoiceData);
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
       }
-      
-      // Create the invoice
+
       const invoice = await storage.createInvoice(parsed.data);
-      
-      // Now send the email
+
+      // Send email
       let emailSent = false;
       let emailError: string | undefined;
-      
+
       if (invoice.clientId) {
         const client = await storage.getClient(invoice.clientId);
         const provider = await storage.getProvider(invoice.providerId);
-        
+
         if (client?.email && provider) {
           const clientName = [client.firstName, client.lastName].filter(Boolean).join(" ") || "Client";
-          
+
           const emailResult = await sendInvoiceEmail({
             clientEmail: client.email,
             clientName,
             providerName: provider.businessName || provider.userId || "Service Provider",
             invoiceNumber: invoice.invoiceNumber || invoiceNumber,
-            amount: amount,
+            amount,
             dueDate: invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : "Due on receipt",
-            lineItems,
+            lineItems: lineItems.map((item: any) => ({
+              description: item.description,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              total: item.total,
+            })),
           });
-          
+
           emailSent = emailResult.success;
           emailError = emailResult.error;
           console.log("Invoice email result:", emailResult);
@@ -2600,12 +2635,8 @@ Respond with JSON only:
           emailError = "Client has no email address on file.";
         }
       }
-      
-      res.status(201).json({ 
-        invoice, 
-        emailSent,
-        emailError 
-      });
+
+      res.status(201).json({ invoice, emailSent, emailError });
     } catch (error) {
       console.error("Create and send invoice error:", error);
       res.status(500).json({ error: "Failed to create invoice" });
