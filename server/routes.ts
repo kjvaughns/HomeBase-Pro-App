@@ -156,6 +156,11 @@ function formatHomeResponse(home: { label: string; street: string; zip: string; 
 export async function registerRoutes(app: Express): Promise<Server> {
   await seedDatabase();
 
+  // Health check endpoint (no auth required — used by load balancers and verification scripts)
+  app.get("/api/health", (_req: Request, res: Response) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
   app.post("/api/auth/signup", async (req: Request, res: Response) => {
     try {
       const { name, ...restBody } = req.body;

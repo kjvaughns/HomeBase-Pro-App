@@ -57,11 +57,19 @@ The application comprises a client-side React Native Expo app (SDK 55, React Nat
 ## Production API Configuration
 - **Backend API domain**: `api.homebaseproapp.com` (set as `EXPO_PUBLIC_DOMAIN` in the mobile app build)
 - **`getApiUrl()`**: Helper in `client/lib/query-client.ts` strips any protocol prefix from `EXPO_PUBLIC_DOMAIN` before constructing `https://` URLs — prevents double-protocol malformed URLs
-- **EAS build profiles**: All four profiles (`development`, `preview`, `staging`, `production`) use bare `api.homebaseproapp.com` (no protocol) as `EXPO_PUBLIC_DOMAIN`
-- **Note**: `api.homebaseproapp.com` must be added as a custom domain in Replit deployment settings after publishing, pointing to the Express backend on port 5000
+- **EAS build profiles**: All four profiles (`development`, `development-simulator`, `preview`, `production`) use bare `api.homebaseproapp.com` (no protocol) as `EXPO_PUBLIC_DOMAIN`
+- **Custom domain setup**: After publishing on Replit, add `api.homebaseproapp.com` as a custom domain in Replit deployment settings pointing to the Express backend. Until mapped, the Replit autoscale URL (`*.replit.app`) serves as fallback.
+- **Verification script**: `./scripts/verify-api.sh [API_URL]` — checks `/api/health` (200) and `/api/auth/me` unauth (401)
 
-## Verified API Endpoints (tested against Supabase, 2026-03-31)
+## Verified API Endpoints (tested 2026-03-31, Express + Supabase)
+- `GET /api/health` → `{"status":"ok","timestamp":"..."}` (no auth required)
 - `GET /api/auth/me` (unauthenticated) → HTTP 401
 - `POST /api/auth/login` with valid credentials → JWT token + user object
 - `GET /api/auth/me` (authenticated with Bearer token) → user email and profile
 - Test account credentials are stored in the Replit Secrets (do not commit to code)
+
+## Invoice System
+- **Line items**: `AddInvoiceScreen` supports multiple line items (description, qty, unit price) with auto-calculated totals
+- **Backend**: `POST /api/invoices/create-and-send` and `POST /api/invoices` both accept `lineItems[]` arrays, calculate total from items, store as JSON in `line_items` column
+- **Invoice detail**: `InvoiceDetailScreen` shows invoice number, line items breakdown, paid date (`paidAt`), and actions (send, mark paid, cancel)
+- **Email**: Resend connector sends itemized invoice emails; `GET /api/invoices/:id/checkout` creates Stripe hosted checkout session for client payment
