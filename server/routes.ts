@@ -10,6 +10,7 @@ import { db } from "./db";
 import { sql, eq, and, desc } from "drizzle-orm";
 import { appointments, maintenanceReminders, homes, reviews } from "@shared/schema";
 import { sendInvoiceEmail } from "./emailService";
+import { dispatch, dispatchWithResult } from "./notificationService";
 import { 
   searchPlaces, 
   getPlaceDetails, 
@@ -52,6 +53,7 @@ import {
   providerServices,
   services,
   providers,
+  type Job,
 } from "@shared/schema";
 
 interface IdParams { id: string; }
@@ -185,6 +187,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         maxAge: 30 * 24 * 60 * 60 * 1000,
       });
       res.status(201).json({ user: formatUserResponse(user), token });
+
+      // Fire welcome email (fire-and-forget)
+      const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "there";
+      dispatch('user.signup', { recipientUserId: user.id, recipientEmail: user.email, clientName: fullName });
     } catch (error) {
       console.error("Signup error:", error);
       res.status(500).json({ error: "Failed to create account" });
@@ -749,7 +755,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         "booking_confirmed",
         JSON.stringify({ appointmentId: appointment.id })
       );
-      
+
+      // Fire booking confirmation emails (fire-and-forget)
+      const [bookedUser] = await db.select().from(users).where(eq(users.id, parsed.data.userId)).catch(() => [null]);
+      const [bookedProvider] = await db.select().from(providers).where(eq(providers.id, parsed.data.providerId)).catch(() => [null]);
+      if (bookedUser && bookedProvider) {
+        dispatch('booking.created', {
+          clientEmail: bookedUser.email,
+          clientName: `${bookedUser.firstName || ''} ${bookedUser.lastName || ''}`.trim() || bookedUser.email,
+          providerEmail: bookedProvider.email ?? undefined,
+          providerName: bookedProvider.businessName,
+          serviceName: parsed.data.serviceName,
+          appointmentDate: parsed.data.scheduledDate,
+          appointmentTime: parsed.data.scheduledTime,
+          estimatedPrice: parsed.data.estimatedPrice ?? undefined,
+          confirmationNumber: appointment.id,
+          relatedRecordType: 'appointment',
+          relatedRecordId: appointment.id,
+          recipientUserId: bookedUser.id,
+        }).catch((e: unknown) => console.error('booking.created dispatch error:', e));
+      }
+
       res.status(201).json({ appointment });
     } catch (error) {
       console.error("Create appointment error:", error);
@@ -769,6 +795,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const appointment = await storage.updateAppointment(req.params.id, req.body);
       if (!appointment) {
         return res.status(404).json({ error: "Appointment not found" });
+      }
+      // Dispatch booking.updated notification (fire-and-forget)
+      const [updatedApptUser] = await db.select().from(users).where(eq(users.id, appointment.userId)).catch(() => [null]);
+      const [updatedApptProvider] = await db.select().from(providers).where(eq(providers.id, appointment.providerId)).catch(() => [null]);
+      if (updatedApptUser && updatedApptProvider) {
+        dispatch('booking.updated', {
+          clientEmail: updatedApptUser.email,
+          clientName: `${updatedApptUser.firstName || ''} ${updatedApptUser.lastName || ''}`.trim() || updatedApptUser.email,
+          providerName: updatedApptProvider.businessName,
+          serviceName: appointment.serviceName,
+          appointmentDate: appointment.scheduledDate,
+          appointmentTime: appointment.scheduledTime,
+          relatedRecordType: 'appointment',
+          relatedRecordId: appointment.id,
+          recipientUserId: updatedApptUser.id,
+        }).catch((e: unknown) => console.error('booking.updated dispatch error:', e));
       }
       res.json({ appointment });
     } catch (error) {
@@ -798,7 +840,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         "booking_cancelled",
         JSON.stringify({ appointmentId: appointment.id })
       );
-      
+
+      // Fire cancellation email (fire-and-forget)
+      const [cancelledUser] = await db.select().from(users).where(eq(users.id, appointment.userId)).catch(() => [null]);
+      const [cancelledProvider] = await db.select().from(providers).where(eq(providers.id, appointment.providerId)).catch(() => [null]);
+      if (cancelledUser && cancelledProvider) {
+        dispatch('booking.cancelled', {
+          clientEmail: cancelledUser.email,
+          clientName: `${cancelledUser.firstName || ''} ${cancelledUser.lastName || ''}`.trim() || cancelledUser.email,
+          providerName: cancelledProvider.businessName,
+          serviceName: appointment.serviceName,
+          appointmentDate: appointment.scheduledDate,
+          appointmentTime: appointment.scheduledTime,
+          relatedRecordType: 'appointment',
+          relatedRecordId: appointment.id,
+          recipientUserId: cancelledUser.id,
+        }).catch((e: unknown) => console.error('booking.cancelled dispatch error:', e));
+      }
+
       res.json({ appointment });
     } catch (error) {
       console.error("Cancel appointment error:", error);
@@ -838,7 +897,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         "booking_update",
         JSON.stringify({ appointmentId: appointment.id })
       );
-      
+
+      // Fire rescheduled email (fire-and-forget)
+      const [rescheduledUser] = await db.select().from(users).where(eq(users.id, appointment.userId)).catch(() => [null]);
+      const [rescheduledProvider] = await db.select().from(providers).where(eq(providers.id, appointment.providerId)).catch(() => [null]);
+      if (rescheduledUser && rescheduledProvider) {
+        dispatch('booking.rescheduled', {
+          clientEmail: rescheduledUser.email,
+          clientName: `${rescheduledUser.firstName || ''} ${rescheduledUser.lastName || ''}`.trim() || rescheduledUser.email,
+          providerName: rescheduledProvider.businessName,
+          serviceName: appointment.serviceName,
+          appointmentDate: scheduledDate,
+          appointmentTime: scheduledTime,
+          oldDate: existing.scheduledDate,
+          oldTime: existing.scheduledTime,
+          relatedRecordType: 'appointment',
+          relatedRecordId: appointment.id,
+          recipientUserId: rescheduledUser.id,
+        }).catch((e: unknown) => console.error('booking.rescheduled dispatch error:', e));
+      }
+
       res.json({ appointment });
     } catch (error) {
       console.error("Reschedule appointment error:", error);
@@ -2404,6 +2482,25 @@ Respond with JSON only:
     }
   });
 
+  async function dispatchJobStatusEmail(job: Job, newStatus: string): Promise<void> {
+    if (!job.clientId || !job.providerId) return;
+    const [client] = await db.select().from(clients).where(eq(clients.id, job.clientId)).catch(() => [null]);
+    const [provider] = await db.select().from(providers).where(eq(providers.id, job.providerId)).catch(() => [null]);
+    if (!client || !provider || !client.email) return;
+    await dispatch('job.status_changed', {
+      clientEmail: client.email,
+      clientName: `${client.firstName || ''} ${client.lastName || ''}`.trim() || client.email,
+      providerName: provider.businessName,
+      serviceName: job.title ?? 'your job',
+      newStatus,
+      scheduledDate: job.scheduledDate ? String(job.scheduledDate) : undefined,
+      notes: job.notes ?? undefined,
+      relatedRecordType: 'job',
+      relatedRecordId: job.id,
+      recipientUserId: client.homeownerUserId ?? undefined,
+    });
+  }
+
   app.post("/api/jobs", requireAuth, async (req: Request, res: Response) => {
     try {
       // Convert scheduledDate string to Date
@@ -2425,9 +2522,14 @@ Respond with JSON only:
 
   app.put("/api/jobs/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
+      const existing = await storage.getJob(req.params.id);
       const job = await storage.updateJob(req.params.id, req.body);
       if (!job) {
         return res.status(404).json({ error: "Job not found" });
+      }
+      // Dispatch job.status_changed when status field changes
+      if (req.body.status && existing && req.body.status !== existing.status) {
+        dispatchJobStatusEmail(job, req.body.status).catch((e: unknown) => console.error('job.status_changed dispatch error:', e));
       }
       res.json({ job });
     } catch (error) {
@@ -2443,6 +2545,8 @@ Respond with JSON only:
       if (!job) {
         return res.status(404).json({ error: "Job not found" });
       }
+      // Fire job status change email (fire-and-forget)
+      dispatchJobStatusEmail(job, 'completed').catch((e: unknown) => console.error('job.status_changed dispatch error:', e));
       res.json({ job });
     } catch (error) {
       console.error("Complete job error:", error);
@@ -2456,6 +2560,8 @@ Respond with JSON only:
       if (!job) {
         return res.status(404).json({ error: "Job not found" });
       }
+      // Fire job status change email (fire-and-forget)
+      dispatchJobStatusEmail(job, 'in_progress').catch((e: unknown) => console.error('job.status_changed dispatch error:', e));
       res.json({ job });
     } catch (error) {
       console.error("Start job error:", error);
@@ -2551,6 +2657,24 @@ Respond with JSON only:
         return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
       }
       const invoice = await storage.createInvoice(parsed.data);
+      // Dispatch invoice.created for provider bookkeeping (fire-and-forget, draft invoices)
+      if (invoice.clientId) {
+        const [draftClient] = await db.select().from(clients).where(eq(clients.id, invoice.clientId)).catch(() => [null]);
+        const [draftProvider] = await db.select().from(providers).where(eq(providers.id, invoice.providerId)).catch(() => [null]);
+        if (draftClient?.email && draftProvider) {
+          dispatch('invoice.created', {
+            clientEmail: draftClient.email,
+            clientName: [draftClient.firstName, draftClient.lastName].filter(Boolean).join(' ') || 'Client',
+            providerName: draftProvider.businessName,
+            invoiceNumber: invoice.invoiceNumber,
+            amount: parseFloat(invoice.total?.toString() || '0'),
+            dueDate: invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : 'Due on receipt',
+            relatedRecordType: 'invoice',
+            relatedRecordId: invoice.id,
+            recipientUserId: draftClient.homeownerUserId ?? undefined,
+          }).catch((e: unknown) => console.error('invoice.created dispatch error:', e));
+        }
+      }
       res.status(201).json({ invoice });
     } catch (error) {
       console.error("Create invoice error:", error);
@@ -2607,7 +2731,7 @@ Respond with JSON only:
 
       const invoice = await storage.createInvoice(parsed.data);
 
-      // Send email
+      // Send email via dispatcher
       let emailSent = false;
       let emailError: string | undefined;
 
@@ -2618,7 +2742,7 @@ Respond with JSON only:
         if (client?.email && provider) {
           const clientName = [client.firstName, client.lastName].filter(Boolean).join(" ") || "Client";
 
-          const emailResult = await sendInvoiceEmail({
+          const sendResult = await dispatchWithResult('invoice.sent', {
             clientEmail: client.email,
             clientName,
             providerName: provider.businessName || provider.userId || "Service Provider",
@@ -2631,11 +2755,11 @@ Respond with JSON only:
               unitPrice: item.unitPrice,
               total: item.total,
             })),
+            relatedRecordType: 'invoice',
+            relatedRecordId: invoice.id,
           });
-
-          emailSent = emailResult.success;
-          emailError = emailResult.error;
-          console.log("Invoice email result:", emailResult);
+          emailSent = sendResult.emailSent;
+          emailError = sendResult.emailError;
         } else if (!client?.email) {
           emailError = "Client has no email address on file.";
         }
@@ -2693,7 +2817,7 @@ Respond with JSON only:
           const lineItems = Array.isArray(rawLineItems) ? rawLineItems : (typeof rawLineItems === 'string' ? JSON.parse(rawLineItems) : []);
           const clientName = [client.firstName, client.lastName].filter(Boolean).join(" ") || "Client";
           
-          const emailResult = await sendInvoiceEmail({
+          const sendResult = await dispatchWithResult('invoice.sent', {
             clientEmail: client.email,
             clientName,
             providerName: provider.businessName || provider.userId || "Service Provider",
@@ -2704,13 +2828,13 @@ Respond with JSON only:
               description: item.description || item.name || "Service",
               quantity: item.quantity || 1,
               unitPrice: parseFloat(item.unitPrice?.toString() || item.price?.toString() || "0"),
-              total: parseFloat(item.total?.toString() || "0")
+              total: parseFloat(item.total?.toString() || "0"),
             })),
+            relatedRecordType: 'invoice',
+            relatedRecordId: invoice.id,
           });
-          
-          emailSent = emailResult.success;
-          emailError = emailResult.error;
-          console.log("Invoice email result:", emailResult);
+          emailSent = sendResult.emailSent;
+          emailError = sendResult.emailError;
         }
       }
       
@@ -2746,6 +2870,30 @@ Respond with JSON only:
       }
       const invoice = await storage.markInvoicePaid(req.params.id);
       res.json({ invoice });
+
+      // Dispatch paid notification (fire-and-forget)
+      if (invoice && invoice.clientId) {
+        try {
+          const [paidClient, paidProvider] = await Promise.all([
+            storage.getClient(invoice.clientId),
+            storage.getProvider(invoice.providerId),
+          ]);
+          if (paidClient?.email && paidProvider) {
+            const clientName = [paidClient.firstName, paidClient.lastName].filter(Boolean).join(" ") || "Client";
+            dispatch('invoice.paid', {
+              clientEmail: paidClient.email,
+              clientName,
+              providerName: paidProvider.businessName || "Service Provider",
+              invoiceNumber: invoice.invoiceNumber || `INV-${invoice.id.slice(0, 8)}`,
+              amount: parseFloat(invoice.total?.toString() || "0"),
+              paymentDate: new Date().toLocaleDateString(),
+              relatedRecordType: 'invoice',
+              relatedRecordId: invoice.id,
+              recipientUserId: paidClient.homeownerUserId ?? undefined,
+            });
+          }
+        } catch (_) {}
+      }
     } catch (error) {
       console.error("Mark invoice paid error:", error);
       res.status(500).json({ error: "Failed to mark invoice as paid" });
@@ -3409,7 +3557,7 @@ Respond with JSON only:
         const lineItems = Array.isArray(rawLineItems) ? rawLineItems : (typeof rawLineItems === 'string' ? JSON.parse(rawLineItems) : []);
         const clientName = [client.firstName, client.lastName].filter(Boolean).join(" ") || "Client";
         
-        const emailResult = await sendInvoiceEmail({
+        const sendResult = await dispatchWithResult('invoice.sent', {
           clientEmail: client.email,
           clientName,
           providerName: provider.businessName || provider.userId || "Service Provider",
@@ -3420,17 +3568,14 @@ Respond with JSON only:
             description: item.description || item.name || "Service",
             quantity: item.quantity || 1,
             unitPrice: parseFloat(item.unitPrice?.toString() || item.price?.toString() || "0"),
-            total: parseFloat(item.total?.toString() || "0")
+            total: parseFloat(item.total?.toString() || "0"),
           })),
-          paymentLink: hostedUrl || undefined
+          paymentLink: hostedUrl || undefined,
+          relatedRecordType: 'invoice',
+          relatedRecordId: invoice.id,
         });
-        
-        emailSent = emailResult.success;
-        emailError = emailResult.error;
-        
-        if (!emailResult.success) {
-          console.error("Failed to send invoice email:", emailResult.error);
-        }
+        emailSent = sendResult.emailSent;
+        emailError = sendResult.emailError;
       }
 
       const [updated] = await db

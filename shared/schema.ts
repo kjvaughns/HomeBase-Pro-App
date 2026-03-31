@@ -736,6 +736,84 @@ export type InsertBookingLink = z.infer<typeof insertBookingLinkSchema>;
 export type IntakeSubmission = typeof intakeSubmissions.$inferSelect;
 export type InsertIntakeSubmission = z.infer<typeof insertIntakeSubmissionSchema>;
 
+// ─── Communications & Notifications ───────────────────────────────────────────
+
+export const notificationChannelEnum = pgEnum("notification_channel", ["email", "push", "in_app", "sms"]);
+export const notificationDeliveryStatusEnum = pgEnum("notification_delivery_status", ["queued", "sent", "delivered", "failed", "pending_sms"]);
+
+export const pushTokens = pgTable("push_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  token: text("token").notNull(),
+  platform: text("platform").notNull(), // ios | android
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const notificationPreferences = pgTable("notification_preferences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
+  emailBookingConfirmation: boolean("email_booking_confirmation").default(true),
+  emailBookingReminder: boolean("email_booking_reminder").default(true),
+  emailBookingCancelled: boolean("email_booking_cancelled").default(true),
+  emailInvoiceCreated: boolean("email_invoice_created").default(true),
+  emailInvoiceReminder: boolean("email_invoice_reminder").default(true),
+  emailInvoicePaid: boolean("email_invoice_paid").default(true),
+  emailPaymentFailed: boolean("email_payment_failed").default(true),
+  emailReviewRequest: boolean("email_review_request").default(true),
+  pushEnabled: boolean("push_enabled").default(true),
+  inAppEnabled: boolean("in_app_enabled").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const providerMessageTemplates = pgTable("provider_message_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  subject: text("subject"),
+  body: text("body").notNull(),
+  eventType: text("event_type"), // booking_confirmation, invoice_sent, etc.
+  isDefault: boolean("is_default").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const providerMessages = pgTable("provider_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+  clientId: varchar("client_id").references(() => clients.id, { onDelete: "set null" }),
+  templateId: varchar("template_id").references(() => providerMessageTemplates.id, { onDelete: "set null" }),
+  subject: text("subject"),
+  body: text("body").notNull(),
+  channel: notificationChannelEnum("channel").default("email"),
+  sentAt: timestamp("sent_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const notificationDeliveries = pgTable("notification_deliveries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  channel: notificationChannelEnum("channel").notNull(),
+  status: notificationDeliveryStatusEnum("status").default("queued"),
+  eventType: text("event_type").notNull(),
+  recipientUserId: varchar("recipient_user_id").references(() => users.id, { onDelete: "set null" }),
+  recipientEmail: text("recipient_email"),
+  relatedRecordType: text("related_record_type"), // invoice | job | appointment | user
+  relatedRecordId: varchar("related_record_id"),
+  externalMessageId: text("external_message_id"),
+  error: text("error"),
+  metadata: text("metadata"), // JSON
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type PushToken = typeof pushTokens.$inferSelect;
+export type NotificationPreference = typeof notificationPreferences.$inferSelect;
+export type ProviderMessageTemplate = typeof providerMessageTemplates.$inferSelect;
+export type ProviderMessage = typeof providerMessages.$inferSelect;
+export type NotificationDelivery = typeof notificationDeliveries.$inferSelect;
+
 // ─── Leads ────────────────────────────────────────────────────────────────────
 
 export const leads = pgTable("leads", {

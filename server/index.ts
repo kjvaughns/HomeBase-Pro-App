@@ -10,6 +10,10 @@ import { runMigrations } from 'stripe-replit-sync';
 import { getStripeSync } from "./stripeClient";
 import { WebhookHandlers } from "./webhookHandlers";
 import { db } from "./db";
+import cron from "node-cron";
+import { eq, and, gte, lte, lt } from "drizzle-orm";
+import { appointments, invoices, clients, providers, users } from "@shared/schema";
+import { dispatch, hasDeliveryForRecord } from "./notificationService";
 
 const app = express();
 const log = console.log;
@@ -667,6 +671,235 @@ function maybeStartMetro() {
   log(`Metro started (PID ${metro.pid}) — proxy will route Expo Go requests.`);
 }
 
+/**
+ * Parse appointment datetime from scheduledDate (timestamp) + scheduledTime (text like "9:00 AM").
+ * scheduledDate may be stored as midnight UTC for the appointment day; scheduledTime carries the
+ * actual clock time. We combine them so reminder windows use the real appointment time.
+ */
+function parseAppointmentDatetime(scheduledDate: Date, scheduledTime: string | null): Date {
+  if (!scheduledTime) return scheduledDate;
+  // scheduledTime is stored as "HH:MM AM/PM" or "HH:MM" (24h)
+  const base = new Date(scheduledDate);
+  const match12 = scheduledTime.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  const match24 = scheduledTime.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (match12) {
+    let hours = parseInt(match12[1], 10);
+    const minutes = parseInt(match12[2], 10);
+    const period = match12[3].toUpperCase();
+    if (period === 'AM' && hours === 12) hours = 0;
+    if (period === 'PM' && hours !== 12) hours += 12;
+    base.setHours(hours, minutes, 0, 0);
+  } else if (match24) {
+    base.setHours(parseInt(match24[1], 10), parseInt(match24[2], 10), 0, 0);
+  }
+  return base;
+}
+
+async function runBookingReminder24h(): Promise<void> {
+  try {
+    const now = new Date();
+    // Query a broad date window (from 22h to 26h out) to account for time parsing;
+    // in-memory filter then narrows to the precise 23–25h window using real appointment datetime.
+    const broadFrom = new Date(now.getTime() + 22 * 60 * 60 * 1000);
+    const broadTo = new Date(now.getTime() + 26 * 60 * 60 * 1000);
+    const upcoming = await db.select().from(appointments).where(
+      and(gte(appointments.scheduledDate, broadFrom), lte(appointments.scheduledDate, broadTo), eq(appointments.status, "confirmed"))
+    );
+    const windowFrom = new Date(now.getTime() + 23 * 60 * 60 * 1000);
+    const windowTo = new Date(now.getTime() + 25 * 60 * 60 * 1000);
+    for (const appt of upcoming) {
+      const apptDatetime = parseAppointmentDatetime(appt.scheduledDate, appt.scheduledTime);
+      if (apptDatetime < windowFrom || apptDatetime > windowTo) continue;
+      const alreadySent = await hasDeliveryForRecord('booking.reminder_24h', appt.id);
+      if (alreadySent) continue;
+      const [user, provider] = await Promise.all([
+        db.select().from(users).where(eq(users.id, appt.userId)).then(r => r[0]),
+        db.select().from(providers).where(eq(providers.id, appt.providerId)).then(r => r[0]),
+      ]);
+      if (!user?.email) continue;
+      const name = [user.firstName, user.lastName].filter(Boolean).join(" ") || "there";
+      dispatch('booking.reminder_24h', {
+        recipientUserId: user.id,
+        clientEmail: user.email,
+        clientName: name,
+        providerName: provider?.businessName || "Your provider",
+        serviceName: appt.serviceName,
+        appointmentDate: apptDatetime.toLocaleDateString(),
+        appointmentTime: appt.scheduledTime,
+        relatedRecordType: 'appointment',
+        relatedRecordId: appt.id,
+      });
+    }
+    console.log(`[cron:24h-reminder] checked ${upcoming.length} upcoming appointments`);
+  } catch (err) {
+    console.error('[cron:24h-reminder] error:', err);
+  }
+}
+
+async function runBookingReminder2h(): Promise<void> {
+  try {
+    const now = new Date();
+    // Query broad window (1h–3h out), then in-memory filter to precise 1.5–2.5h window.
+    const broadFrom = new Date(now.getTime() + 60 * 60 * 1000);
+    const broadTo = new Date(now.getTime() + 3 * 60 * 60 * 1000);
+    const upcoming = await db.select().from(appointments).where(
+      and(gte(appointments.scheduledDate, broadFrom), lte(appointments.scheduledDate, broadTo), eq(appointments.status, "confirmed"))
+    );
+    const windowFrom = new Date(now.getTime() + 90 * 60 * 1000);
+    const windowTo = new Date(now.getTime() + 150 * 60 * 1000);
+    for (const appt of upcoming) {
+      const apptDatetime = parseAppointmentDatetime(appt.scheduledDate, appt.scheduledTime);
+      if (apptDatetime < windowFrom || apptDatetime > windowTo) continue;
+      const alreadySent = await hasDeliveryForRecord('booking.reminder_2h', appt.id);
+      if (alreadySent) continue;
+      const [user, provider] = await Promise.all([
+        db.select().from(users).where(eq(users.id, appt.userId)).then(r => r[0]),
+        db.select().from(providers).where(eq(providers.id, appt.providerId)).then(r => r[0]),
+      ]);
+      if (!user?.email) continue;
+      const name = [user.firstName, user.lastName].filter(Boolean).join(" ") || "there";
+      dispatch('booking.reminder_2h', {
+        recipientUserId: user.id,
+        clientEmail: user.email,
+        clientName: name,
+        providerName: provider?.businessName || "Your provider",
+        serviceName: appt.serviceName,
+        appointmentDate: apptDatetime.toLocaleDateString(),
+        appointmentTime: appt.scheduledTime,
+        relatedRecordType: 'appointment',
+        relatedRecordId: appt.id,
+      });
+    }
+    console.log(`[cron:2h-reminder] checked ${upcoming.length} upcoming appointments`);
+  } catch (err) {
+    console.error('[cron:2h-reminder] error:', err);
+  }
+}
+
+async function runInvoiceDueReminder(): Promise<void> {
+  try {
+    const now = new Date();
+    // Target invoices due in 2.5–3.5 days (tight 1h window around the 3-day mark)
+    const from = new Date(now.getTime() + 2.5 * 24 * 60 * 60 * 1000);
+    const to = new Date(now.getTime() + 3.5 * 24 * 60 * 60 * 1000);
+    const dueInvoices = await db.select().from(invoices).where(
+      and(
+        gte(invoices.dueDate, from),
+        lte(invoices.dueDate, to),
+        eq(invoices.status, "sent"),
+      )
+    );
+    for (const invoice of dueInvoices) {
+      if (!invoice.clientId && !invoice.homeownerUserId) continue;
+      const alreadySent = await hasDeliveryForRecord('invoice.reminder_3d', invoice.id);
+      if (alreadySent) continue;
+      const [client, provider] = await Promise.all([
+        invoice.clientId ? db.select().from(clients).where(eq(clients.id, invoice.clientId)).then(r => r[0]) : Promise.resolve(undefined),
+        db.select().from(providers).where(eq(providers.id, invoice.providerId)).then(r => r[0]),
+      ]);
+      // Prefer homeowner user email, fall back to client record
+      let recipientEmail = client?.email;
+      let recipientName = [client?.firstName, client?.lastName].filter(Boolean).join(" ") || "Client";
+      let recipientUserId: string | undefined;
+      if (invoice.homeownerUserId) {
+        const homeowner = await db.select().from(users).where(eq(users.id, invoice.homeownerUserId)).then(r => r[0]);
+        if (homeowner?.email) {
+          recipientEmail = homeowner.email;
+          recipientName = [homeowner.firstName, homeowner.lastName].filter(Boolean).join(" ") || "Client";
+          recipientUserId = homeowner.id;
+        }
+      }
+      if (!recipientEmail) continue;
+      const msUntilDue = invoice.dueDate ? invoice.dueDate.getTime() - now.getTime() : 0;
+      const daysUntilDue = Math.ceil(msUntilDue / (1000 * 60 * 60 * 24));
+      dispatch('invoice.reminder_3d', {
+        recipientUserId,
+        clientEmail: recipientEmail,
+        clientName: recipientName,
+        providerName: provider?.businessName || "Service Provider",
+        invoiceNumber: invoice.invoiceNumber || `INV-${invoice.id.slice(0, 8)}`,
+        amount: parseFloat(invoice.total?.toString() || "0"),
+        dueDate: invoice.dueDate ? invoice.dueDate.toLocaleDateString() : "Soon",
+        daysUntilDue,
+        paymentLink: invoice.hostedInvoiceUrl || undefined,
+        relatedRecordType: 'invoice',
+        relatedRecordId: invoice.id,
+      });
+    }
+    console.log(`[cron:invoice-due-reminder] checked ${dueInvoices.length} invoices`);
+  } catch (err) {
+    console.error('[cron:invoice-due-reminder] error:', err);
+  }
+}
+
+async function runInvoiceOverdueReminder(): Promise<void> {
+  try {
+    const now = new Date();
+    // Target invoices that became overdue 0.5–1.5 days ago (tight window around 1-day overdue mark)
+    const from = new Date(now.getTime() - 1.5 * 24 * 60 * 60 * 1000);
+    const to = new Date(now.getTime() - 0.5 * 24 * 60 * 60 * 1000);
+    const overdueInvoices = await db.select().from(invoices).where(
+      and(
+        gte(invoices.dueDate, from),
+        lt(invoices.dueDate, to),
+        eq(invoices.status, "sent"),
+      )
+    );
+    for (const invoice of overdueInvoices) {
+      if (!invoice.clientId && !invoice.homeownerUserId) continue;
+      const alreadySent = await hasDeliveryForRecord('invoice.overdue_1d', invoice.id);
+      if (alreadySent) continue;
+      const [client, provider] = await Promise.all([
+        invoice.clientId ? db.select().from(clients).where(eq(clients.id, invoice.clientId)).then(r => r[0]) : Promise.resolve(undefined),
+        db.select().from(providers).where(eq(providers.id, invoice.providerId)).then(r => r[0]),
+      ]);
+      // Prefer homeowner user email, fall back to client record
+      let recipientEmail = client?.email;
+      let recipientName = [client?.firstName, client?.lastName].filter(Boolean).join(" ") || "Client";
+      let recipientUserId: string | undefined;
+      if (invoice.homeownerUserId) {
+        const homeowner = await db.select().from(users).where(eq(users.id, invoice.homeownerUserId)).then(r => r[0]);
+        if (homeowner?.email) {
+          recipientEmail = homeowner.email;
+          recipientName = [homeowner.firstName, homeowner.lastName].filter(Boolean).join(" ") || "Client";
+          recipientUserId = homeowner.id;
+        }
+      }
+      if (!recipientEmail) continue;
+      const msOverdue = now.getTime() - (invoice.dueDate ? invoice.dueDate.getTime() : now.getTime());
+      const daysOverdue = Math.ceil(msOverdue / (1000 * 60 * 60 * 24));
+      dispatch('invoice.overdue_1d', {
+        recipientUserId,
+        clientEmail: recipientEmail,
+        clientName: recipientName,
+        providerName: provider?.businessName || "Service Provider",
+        invoiceNumber: invoice.invoiceNumber || `INV-${invoice.id.slice(0, 8)}`,
+        amount: parseFloat(invoice.total?.toString() || "0"),
+        dueDate: invoice.dueDate ? invoice.dueDate.toLocaleDateString() : "Past due",
+        daysOverdue,
+        paymentLink: invoice.hostedInvoiceUrl || undefined,
+        relatedRecordType: 'invoice',
+        relatedRecordId: invoice.id,
+      });
+    }
+    console.log(`[cron:invoice-overdue-reminder] checked ${overdueInvoices.length} invoices`);
+  } catch (err) {
+    console.error('[cron:invoice-overdue-reminder] error:', err);
+  }
+}
+
+function setupReminderJobs(): void {
+  // 24h booking reminder — runs every hour
+  cron.schedule('0 * * * *', runBookingReminder24h);
+  // 2h booking reminder — runs every 30 minutes
+  cron.schedule('*/30 * * * *', runBookingReminder2h);
+  // 3-days-before invoice due reminder — runs daily at 9am
+  cron.schedule('0 9 * * *', runInvoiceDueReminder);
+  // 1-day-overdue invoice reminder — runs daily at 10am
+  cron.schedule('0 10 * * *', runInvoiceOverdueReminder);
+  console.log('[cron] reminder jobs scheduled: 24h/2h booking reminders, 3d/1d invoice reminders');
+}
+
 function setupErrorHandler(app: express.Application) {
   app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
     const error = err as {
@@ -702,6 +935,9 @@ function setupErrorHandler(app: express.Application) {
   setupErrorHandler(app);
 
   await initStripe();
+
+  // Start reminder cron jobs
+  setupReminderJobs();
 
   // Start Metro dynamically if static bundle wasn't generated at build time.
   maybeStartMetro();

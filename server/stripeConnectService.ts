@@ -12,7 +12,10 @@ import {
   creditLedger,
   stripeWebhookEvents,
   providers,
+  clients,
+  users,
 } from "../shared/schema";
+import { dispatch } from "./notificationService";
 
 let stripe: Stripe | null = null;
 
@@ -525,17 +528,56 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
       .where(eq(payments.id, payment.id));
   }
 
-  await db
+  const [updatedInvoice] = await db
     .update(invoices)
     .set({
       status: "paid",
       paidAt: new Date(),
       updatedAt: new Date(),
     })
-    .where(eq(invoices.id, invoiceId));
+    .where(eq(invoices.id, invoiceId))
+    .returning();
+
+  // Dispatch invoice.paid notification via webhook
+  if (updatedInvoice) {
+    try {
+      const [provider] = await db.select().from(providers).where(eq(providers.id, updatedInvoice.providerId));
+      let clientEmail: string | undefined;
+      let clientName: string | undefined;
+      if (updatedInvoice.homeownerUserId) {
+        const [homeowner] = await db.select().from(users).where(eq(users.id, updatedInvoice.homeownerUserId));
+        if (homeowner) {
+          clientEmail = homeowner.email;
+          clientName = `${homeowner.firstName || ''} ${homeowner.lastName || ''}`.trim() || homeowner.email;
+        }
+      } else if (updatedInvoice.clientId) {
+        const [client] = await db.select().from(clients).where(eq(clients.id, updatedInvoice.clientId));
+        if (client) {
+          clientEmail = client.email ?? undefined;
+          clientName = `${client.firstName || ''} ${client.lastName || ''}`.trim() || clientEmail;
+        }
+      }
+      if (clientEmail && provider) {
+        dispatch('invoice.paid', {
+          clientEmail,
+          clientName: clientName ?? clientEmail,
+          providerName: provider.businessName,
+          invoiceNumber: updatedInvoice.invoiceNumber,
+          amount: typeof updatedInvoice.total === 'string' ? parseFloat(updatedInvoice.total) : (updatedInvoice.total ?? 0),
+          paymentDate: new Date().toLocaleDateString(),
+          relatedRecordType: 'invoice',
+          relatedRecordId: invoiceId,
+        }).catch((e: unknown) => console.error('invoice.paid dispatch error (webhook):', e));
+      }
+    } catch (err) {
+      console.error('Failed to dispatch invoice.paid from webhook:', err);
+    }
+  }
 }
 
 async function handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent) {
+  const invoiceId = paymentIntent.metadata?.invoiceId;
+
   const [payment] = await db
     .select()
     .from(payments)
@@ -546,6 +588,44 @@ async function handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent) {
       .update(payments)
       .set({ status: "failed" })
       .where(eq(payments.id, payment.id));
+  }
+
+  // Dispatch payment_failed notification
+  if (invoiceId) {
+    try {
+      const [failedInvoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+      if (failedInvoice) {
+        const [provider] = await db.select().from(providers).where(eq(providers.id, failedInvoice.providerId));
+        let clientEmail: string | undefined;
+        let clientName: string | undefined;
+        if (failedInvoice.homeownerUserId) {
+          const [homeowner] = await db.select().from(users).where(eq(users.id, failedInvoice.homeownerUserId));
+          if (homeowner) {
+            clientEmail = homeowner.email;
+            clientName = `${homeowner.firstName || ''} ${homeowner.lastName || ''}`.trim() || homeowner.email;
+          }
+        } else if (failedInvoice.clientId) {
+          const [client] = await db.select().from(clients).where(eq(clients.id, failedInvoice.clientId));
+          if (client) {
+            clientEmail = client.email ?? undefined;
+            clientName = `${client.firstName || ''} ${client.lastName || ''}`.trim() || clientEmail;
+          }
+        }
+        if (clientEmail && provider) {
+          dispatch('invoice.payment_failed', {
+            clientEmail,
+            clientName: clientName ?? clientEmail,
+            providerName: provider.businessName,
+            invoiceNumber: failedInvoice.invoiceNumber,
+            amount: typeof failedInvoice.total === 'string' ? parseFloat(failedInvoice.total) : (failedInvoice.total ?? 0),
+            relatedRecordType: 'invoice',
+            relatedRecordId: invoiceId,
+          }).catch((e: unknown) => console.error('invoice.payment_failed dispatch error:', e));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to dispatch invoice.payment_failed from webhook:', err);
+    }
   }
 }
 
