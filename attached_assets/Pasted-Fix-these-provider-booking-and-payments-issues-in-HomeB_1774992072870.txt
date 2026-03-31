@@ -1,0 +1,101 @@
+Fix these provider booking and payments issues in HomeBase Pro. Treat this as a production blocking bug and workflow pass, not a surface level UI cleanup.
+
+Issues to fix:
+
+1. Lead to client conversion UI is incomplete
+Current problem:
+When a booking or lead comes in, the provider does not have a clean action to accept it and convert it into an actual working client and scheduled appointment.
+
+Required fix:
+Create a clear provider action such as “Accept Booking” or “Convert to Client + Appointment”.
+When the provider accepts a lead or booking request, the system must:
+• create or match the client record
+• create the linked appointment or job
+• attach the selected service
+• attach date and time
+• attach booking notes
+• preserve the booking source
+• update booking status correctly
+• sync the result into clients, schedule, and booking history
+If a matching client already exists, avoid duplicates and merge intelligently.
+Add proper success and error states.
+Make sure this flow is obvious in the UI and not hidden.
+
+2. Stripe Connect must be required before payment
+Current problem:
+The app currently allows users to reach a broken or misleading invoice payment flow when the provider has not completed Stripe Connect onboarding.
+
+Required fix:
+Before any invoice payment or payment collection flow starts, check whether the provider is actually connected to Stripe Connect.
+If provider is not connected:
+• block payment flow
+• do not show broken checkout
+• show a clean setup required state
+• explain that provider must finish Stripe setup before collecting payments
+• add clear CTA to complete Stripe onboarding
+• return user to the correct Stripe setup screen
+If provider is connected:
+• allow payment flow normally
+Make sure this gate exists everywhere payments can be initiated, not just one screen.
+
+3. AI assistant is using mock store data
+Current problem:
+The AI booking assistant is still pulling mock provider or store data instead of real provider data.
+
+Required fix:
+Replace all mock provider data in the AI assistant and booking experience.
+The assistant must fetch and use real provider data from the correct source:
+• business name
+• services
+• pricing if applicable
+• service area
+• availability rules
+• business hours
+• booking policies
+• public profile details
+Audit all hardcoded values, fake stores, placeholder objects, and mock data fallbacks.
+If fallback logic is needed, make it explicit and safe.
+The AI assistant should generate responses based on the real provider the customer is booking with.
+
+4. Instant booking bypass is not implemented
+Current problem:
+Even when instant booking is toggled on, bookings still go to the leads bucket instead of becoming confirmed appointments.
+
+Required fix:
+Implement real branching logic for booking modes.
+If request only mode is enabled:
+• booking goes to leads or pending requests
+• provider must manually accept
+If instant booking is enabled:
+• booking should skip the leads queue
+• booking should immediately create confirmed client plus appointment records
+• booking status should be confirmed
+• schedule should update automatically
+• provider dashboard should reflect it as an actual booked job, not just a lead
+• client should get the correct confirmation state
+Make sure the toggle truly controls backend behavior, not just UI appearance.
+
+General implementation requirements:
+• audit both frontend and backend logic for these flows
+• fix database writes and relationships where needed
+• verify that booking, client, appointment, invoice, and payment records all stay in sync
+• remove placeholder logic
+• remove fake success states
+• make sure navigation and CTA paths are correct
+• show clean loading, success, empty, and error states
+• ensure idempotency so repeated actions do not create duplicates
+• ensure provider actions update the correct records across the app
+
+What I want in output:
+1. Root cause of each issue
+2. Exact files and logic that need to be changed
+3. Database or schema changes needed
+4. Backend functions or API routes that need to be added or fixed
+5. Frontend UI and UX changes needed
+6. Final end to end behavior after fix
+7. Any blockers still preventing true MVP readiness
+
+Important:
+Do not just patch the UI.
+Fix the real workflow so booking intake, client creation, appointment creation, Stripe payment gating, and AI data sourcing actually work end to end.
+If anything is still mocked, incomplete, or disconnected, call it out clearly and replace it with real logic.
