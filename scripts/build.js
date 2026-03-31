@@ -174,6 +174,7 @@ async function startMetro(expoPublicDomain) {
       ...env,
       REACT_NATIVE_DEBUGGER_OPEN: "0",
       EXPO_NO_INSPECTOR_PROXY: "1",
+      NODE_OPTIONS: "--max-old-space-size=4096",
     },
   });
 
@@ -190,12 +191,12 @@ async function startMetro(expoPublicDomain) {
     });
   }
 
-  const MAX_WAIT_MS = 120 * 1000;
+  const MAX_WAIT_MS = 300 * 1000;
   const startTime = Date.now();
   let attempt = 0;
 
   while (Date.now() - startTime < MAX_WAIT_MS) {
-    const delay = Math.min(1000 * Math.pow(1.3, attempt), 8000);
+    const delay = Math.min(2000 * Math.pow(1.5, attempt), 15000);
     await new Promise((resolve) => setTimeout(resolve, delay));
 
     const healthy = await checkMetroHealth();
@@ -205,13 +206,13 @@ async function startMetro(expoPublicDomain) {
     }
 
     const elapsed = Math.round((Date.now() - startTime) / 1000);
-    if (attempt % 5 === 0) {
-      console.log(`Waiting for Metro... (${elapsed}s elapsed)`);
+    if (attempt % 10 === 0) {
+      console.log(`Waiting for Metro... (${elapsed}s / 300s)`);
     }
     attempt++;
   }
 
-  console.error("Metro bundler timed out after 120 seconds");
+  console.error("Metro bundler timed out after 300 seconds");
   process.exit(1);
 }
 
