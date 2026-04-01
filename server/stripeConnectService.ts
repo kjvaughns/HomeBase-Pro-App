@@ -643,13 +643,25 @@ async function handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent) {
 }
 
 async function handleChargeRefunded(charge: Stripe.Charge) {
-  const paymentIntentId = charge.payment_intent?.toString();
-  if (!paymentIntentId) return;
+  const paymentIntentId = charge.payment_intent?.toString() ?? null;
+  const chargeId = charge.id;
 
-  const [payment] = await db
-    .select()
-    .from(payments)
-    .where(eq(payments.stripePaymentIntentId, paymentIntentId));
+  // Look up payment by paymentIntentId first, fall back to chargeId for legacy records
+  let payment: typeof payments.$inferSelect | undefined;
+  if (paymentIntentId) {
+    const [byIntent] = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.stripePaymentIntentId, paymentIntentId));
+    payment = byIntent;
+  }
+  if (!payment) {
+    const [byCharge] = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.stripeChargeId, chargeId));
+    payment = byCharge;
+  }
 
   if (payment) {
     await db
@@ -717,11 +729,13 @@ async function handlePayoutCreated(payout: Stripe.Payout, connectedAccountId: st
     .from(payouts)
     .where(eq(payouts.stripePayoutId, payout.id));
 
+  const stripeStatus = payout.status as "paid" | "pending" | "in_transit" | "canceled" | "failed";
+
   if (!existingPayout) {
     await db.insert(payouts).values({
       providerId,
       amountCents: payout.amount,
-      status: "pending",
+      status: stripeStatus,
       stripePayoutId: payout.id,
       arrivalDate,
       description: payout.description ?? null,
@@ -729,7 +743,7 @@ async function handlePayoutCreated(payout: Stripe.Payout, connectedAccountId: st
   } else {
     await db
       .update(payouts)
-      .set({ arrivalDate, description: payout.description ?? null })
+      .set({ status: stripeStatus, arrivalDate, description: payout.description ?? null })
       .where(eq(payouts.id, existingPayout.id));
   }
 }
