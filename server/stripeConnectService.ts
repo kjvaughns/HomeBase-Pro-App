@@ -475,15 +475,15 @@ export async function handleStripeWebhook(event: Stripe.Event) {
       break;
 
     case "payout.created":
-      await handlePayoutCreated(event.data.object as Stripe.Payout);
+      await handlePayoutCreated(event.data.object as Stripe.Payout, event.account ?? null);
       break;
 
     case "payout.paid":
-      await handlePayoutPaid(event.data.object as Stripe.Payout);
+      await handlePayoutPaid(event.data.object as Stripe.Payout, event.account ?? null);
       break;
 
     case "payout.failed":
-      await handlePayoutFailed(event.data.object as Stripe.Payout);
+      await handlePayoutFailed(event.data.object as Stripe.Payout, event.account ?? null);
       break;
 
     case "checkout.session.completed":
@@ -694,34 +694,38 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
   }
 }
 
-async function handlePayoutCreated(payout: Stripe.Payout) {
-  // Find the provider via stripeAccountId from the payout's account
-  // Payout events come with account context; upsert a payout record
+async function resolveProviderFromConnectAccount(connectedAccountId: string | null): Promise<string | null> {
+  if (!connectedAccountId) return null;
+  const [connectAccount] = await db
+    .select({ providerId: stripeConnectAccounts.providerId })
+    .from(stripeConnectAccounts)
+    .where(eq(stripeConnectAccounts.stripeAccountId, connectedAccountId));
+  return connectAccount?.providerId ?? null;
+}
+
+async function handlePayoutCreated(payout: Stripe.Payout, connectedAccountId: string | null) {
+  const providerId = await resolveProviderFromConnectAccount(connectedAccountId);
+  if (!providerId) {
+    console.warn(`handlePayoutCreated: no provider found for account ${connectedAccountId}`);
+    return;
+  }
+
+  const arrivalDate = payout.arrival_date ? new Date(payout.arrival_date * 1000) : null;
+
   const [existingPayout] = await db
     .select()
     .from(payouts)
     .where(eq(payouts.stripePayoutId, payout.id));
 
-  const arrivalDate = payout.arrival_date ? new Date(payout.arrival_date * 1000) : null;
-
   if (!existingPayout) {
-    // Look up the provider from the connect account
-    const [connectAccount] = await db
-      .select()
-      .from(stripeConnectAccounts)
-      // For connect webhooks the account ID is in the event's account field,
-      // but here we fall back to matching by stripePayoutId existence
-      .limit(1);
-    if (connectAccount) {
-      await db.insert(payouts).values({
-        providerId: connectAccount.providerId,
-        amountCents: payout.amount,
-        status: "pending",
-        stripePayoutId: payout.id,
-        arrivalDate,
-        description: payout.description ?? null,
-      }).onConflictDoNothing();
-    }
+    await db.insert(payouts).values({
+      providerId,
+      amountCents: payout.amount,
+      status: "pending",
+      stripePayoutId: payout.id,
+      arrivalDate,
+      description: payout.description ?? null,
+    }).onConflictDoNothing();
   } else {
     await db
       .update(payouts)
@@ -730,13 +734,13 @@ async function handlePayoutCreated(payout: Stripe.Payout) {
   }
 }
 
-async function handlePayoutPaid(payout: Stripe.Payout) {
+async function handlePayoutPaid(payout: Stripe.Payout, connectedAccountId: string | null) {
+  const arrivalDate = payout.arrival_date ? new Date(payout.arrival_date * 1000) : null;
+
   const [existingPayout] = await db
     .select()
     .from(payouts)
     .where(eq(payouts.stripePayoutId, payout.id));
-
-  const arrivalDate = payout.arrival_date ? new Date(payout.arrival_date * 1000) : null;
 
   if (existingPayout) {
     await db
@@ -747,10 +751,23 @@ async function handlePayoutPaid(payout: Stripe.Payout) {
         description: payout.description ?? existingPayout.description,
       })
       .where(eq(payouts.id, existingPayout.id));
+  } else {
+    // Payout created outside our system — create the record now
+    const providerId = await resolveProviderFromConnectAccount(connectedAccountId);
+    if (providerId) {
+      await db.insert(payouts).values({
+        providerId,
+        amountCents: payout.amount,
+        status: "paid",
+        stripePayoutId: payout.id,
+        arrivalDate,
+        description: payout.description ?? null,
+      }).onConflictDoNothing();
+    }
   }
 }
 
-async function handlePayoutFailed(payout: Stripe.Payout) {
+async function handlePayoutFailed(payout: Stripe.Payout, _connectedAccountId: string | null) {
   const [existingPayout] = await db
     .select()
     .from(payouts)

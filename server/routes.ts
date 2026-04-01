@@ -4016,10 +4016,26 @@ Respond with JSON only:
     }
   });
 
+  // Helper: verify calling user owns the given providerId
+  async function assertProviderOwnership(req: Request, providerId: string, res: Response): Promise<boolean> {
+    const authUserId = req.authenticatedUserId;
+    const [provider] = await db
+      .select({ userId: providers.userId })
+      .from(providers)
+      .where(eq(providers.id, providerId));
+    if (!provider || provider.userId !== authUserId) {
+      res.status(403).json({ error: "Forbidden" });
+      return false;
+    }
+    return true;
+  }
+
   // GET /api/providers/:providerId/stripe-payouts — live Stripe payout list
   app.get("/api/providers/:providerId/stripe-payouts", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
     try {
       const { providerId } = req.params;
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
+
       const connectAccount = await getConnectAccount(providerId);
       if (!connectAccount?.stripeAccountId) {
         return res.status(404).json({ error: "stripe_not_connected" });
@@ -4052,6 +4068,8 @@ Respond with JSON only:
   app.get("/api/providers/:providerId/stripe-payments", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
     try {
       const { providerId } = req.params;
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
+
       const connectAccount = await getConnectAccount(providerId);
       if (!connectAccount?.stripeAccountId) {
         return res.status(404).json({ error: "stripe_not_connected" });
@@ -4115,6 +4133,8 @@ Respond with JSON only:
   app.get("/api/providers/:providerId/stripe-refunds", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
     try {
       const { providerId } = req.params;
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
+
       const connectAccount = await getConnectAccount(providerId);
       if (!connectAccount?.stripeAccountId) {
         return res.status(404).json({ error: "stripe_not_connected" });

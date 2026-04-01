@@ -5,7 +5,6 @@ import {
   FlatList,
   RefreshControl,
   Pressable,
-  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -147,6 +146,26 @@ function formatRefundReason(reason: string | null): string {
   return reason.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// ─── Skeleton Loading ─────────────────────────────────────────────────────────
+
+function SkeletonRow({ theme }: { theme: ReturnType<typeof useTheme>["theme"] }) {
+  return (
+    <View style={[styles.row, { backgroundColor: theme.cardBackground }]}>
+      <View style={[styles.skeletonIcon, { backgroundColor: theme.separator }]} />
+      <View style={styles.rowInfo}>
+        <View style={[styles.skeletonLine, { backgroundColor: theme.separator, width: "50%" }]} />
+        <View style={[styles.skeletonLine, { backgroundColor: theme.separator, width: "35%", marginTop: 6 }]} />
+      </View>
+      <View style={styles.rowRight}>
+        <View style={[styles.skeletonLine, { backgroundColor: theme.separator, width: 64 }]} />
+        <View style={[styles.skeletonPill, { backgroundColor: theme.separator }]} />
+      </View>
+    </View>
+  );
+}
+
+const SKELETON_KEYS = ["sk1", "sk2", "sk3", "sk4", "sk5"];
+
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 export default function FinancesScreen() {
@@ -249,13 +268,13 @@ export default function FinancesScreen() {
 
   const renderPayout = ({ item, index }: { item: StripePayout; index: number }) => (
     <Animated.View entering={FadeInDown.delay(index * 40).duration(300)}>
-      <View style={[styles.row, { backgroundColor: theme.cardBackground }]}>
+      <View style={[styles.row, { backgroundColor: theme.cardBackground }]} testID={`payout-${item.id}`}>
         <View style={[styles.rowIcon, { backgroundColor: Colors.accentLight }]}>
           <Feather name="arrow-down-circle" size={16} color={Colors.accent} />
         </View>
         <View style={styles.rowInfo}>
           <ThemedText style={styles.rowTitle}>
-            {item.bankLast4 ? `Bank ••••${item.bankLast4}` : "Bank Account"}
+            {item.bankLast4 ? `Bank \u2022\u2022\u2022\u2022${item.bankLast4}` : "Bank Account"}
           </ThemedText>
           <ThemedText style={[styles.rowSub, { color: theme.textSecondary }]}>
             {item.arrivalDate
@@ -279,7 +298,9 @@ export default function FinancesScreen() {
     <Animated.View entering={FadeInDown.delay(index * 40).duration(300)}>
       <Pressable
         style={[styles.row, { backgroundColor: theme.cardBackground }]}
-        onPress={() => item.invoiceId ? navigation.navigate("InvoiceDetail", { invoiceId: item.invoiceId }) : null}
+        onPress={() => {
+          if (item.invoiceId) navigation.navigate("InvoiceDetail", { invoiceId: item.invoiceId });
+        }}
         testID={`payment-${item.chargeId}`}
       >
         <View style={[styles.rowIcon, { backgroundColor: Colors.accentLight }]}>
@@ -307,7 +328,7 @@ export default function FinancesScreen() {
 
   const renderRefund = ({ item, index }: { item: StripeRefund; index: number }) => (
     <Animated.View entering={FadeInDown.delay(index * 40).duration(300)}>
-      <View style={[styles.row, { backgroundColor: theme.cardBackground }]}>
+      <View style={[styles.row, { backgroundColor: theme.cardBackground }]} testID={`refund-${item.refundId}`}>
         <View style={[styles.rowIcon, { backgroundColor: "#FF3B3014" }]}>
           <Feather name="rotate-ccw" size={16} color="#FF3B30" />
         </View>
@@ -331,37 +352,9 @@ export default function FinancesScreen() {
     </Animated.View>
   );
 
-  // ── Tab state ─────────────────────────────────────────────────────────────
+  // ── Shared header + tab bar ────────────────────────────────────────────────
 
-  const isCurrentTabLoading =
-    (activeTab === "payouts" && payoutsLoading) ||
-    (activeTab === "payments" && paymentsLoading) ||
-    (activeTab === "refunds" && refundsLoading);
-
-  const currentData: any[] =
-    activeTab === "payouts" ? stripePayouts :
-    activeTab === "payments" ? stripePayments :
-    stripeRefunds;
-
-  const renderItem = activeTab === "payouts"
-    ? renderPayout
-    : activeTab === "payments"
-    ? renderPayment
-    : renderRefund;
-
-  const emptyTitle =
-    activeTab === "payouts" ? "No payouts yet" :
-    activeTab === "payments" ? "No payments yet" :
-    "No refunds";
-
-  const emptyDescription =
-    activeTab === "payouts" ? "Payouts from completed invoices will appear here." :
-    activeTab === "payments" ? "Completed payments from clients will appear here." :
-    "Any refunds issued will appear here.";
-
-  // ── Header ────────────────────────────────────────────────────────────────
-
-  const ListHeader = () => (
+  const SharedListHeader = () => (
     <View>
       {/* Revenue summary card */}
       <Animated.View entering={FadeInDown.delay(50).duration(400)}>
@@ -469,35 +462,126 @@ export default function FinancesScreen() {
     </View>
   );
 
-  const ListEmpty = () => {
-    if (isCurrentTabLoading) {
-      return (
-        <View style={styles.loadingRow}>
-          <ActivityIndicator size="large" color={Colors.accent} />
-        </View>
-      );
-    }
-    if (!isConnected) {
+  const contentStyle = {
+    paddingTop: headerHeight + Spacing.md,
+    paddingBottom: tabBarHeight + Spacing.xl,
+    paddingHorizontal: Spacing.screenPadding,
+  };
+
+  const scrollIndicatorInsets = { bottom: insets.bottom };
+
+  const refreshControl = (
+    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
+  );
+
+  const noStripeEmpty = (
+    <View style={styles.emptyContainer}>
+      <EmptyState
+        image={require("../../../assets/images/empty-bookings.png")}
+        title="Connect Stripe to see data"
+        description="Complete your Stripe setup to view payouts, payments, and refunds."
+        primaryAction={{
+          label: "Set Up Stripe",
+          onPress: () => navigation.navigate("StripeConnect"),
+        }}
+      />
+    </View>
+  );
+
+  // ── Per-tab skeleton lists ─────────────────────────────────────────────────
+
+  if (activeTab === "payouts") {
+    const PayoutEmpty = () => {
+      if (payoutsLoading) {
+        return (
+          <View>
+            {SKELETON_KEYS.map((k) => <SkeletonRow key={k} theme={theme} />)}
+          </View>
+        );
+      }
+      if (!isConnected) return noStripeEmpty;
       return (
         <View style={styles.emptyContainer}>
           <EmptyState
             image={require("../../../assets/images/empty-bookings.png")}
-            title="Connect Stripe to see data"
-            description="Complete your Stripe setup to view payouts, payments, and refunds."
-            primaryAction={{
-              label: "Set Up Stripe",
-              onPress: () => navigation.navigate("StripeConnect"),
-            }}
+            title="No payouts yet"
+            description="Payouts from completed invoices will appear here."
           />
         </View>
       );
+    };
+
+    return (
+      <ThemedView style={styles.container}>
+        <FlatList<StripePayout>
+          data={stripePayouts}
+          renderItem={renderPayout}
+          keyExtractor={(item) => item.id}
+          ListHeaderComponent={<SharedListHeader />}
+          ListEmptyComponent={<PayoutEmpty />}
+          contentContainerStyle={contentStyle}
+          scrollIndicatorInsets={scrollIndicatorInsets}
+          showsVerticalScrollIndicator={false}
+          refreshControl={refreshControl}
+        />
+      </ThemedView>
+    );
+  }
+
+  if (activeTab === "payments") {
+    const PaymentEmpty = () => {
+      if (paymentsLoading) {
+        return (
+          <View>
+            {SKELETON_KEYS.map((k) => <SkeletonRow key={k} theme={theme} />)}
+          </View>
+        );
+      }
+      if (!isConnected) return noStripeEmpty;
+      return (
+        <View style={styles.emptyContainer}>
+          <EmptyState
+            image={require("../../../assets/images/empty-bookings.png")}
+            title="No payments yet"
+            description="Completed payments from clients will appear here."
+          />
+        </View>
+      );
+    };
+
+    return (
+      <ThemedView style={styles.container}>
+        <FlatList<StripePayment>
+          data={stripePayments}
+          renderItem={renderPayment}
+          keyExtractor={(item) => item.chargeId}
+          ListHeaderComponent={<SharedListHeader />}
+          ListEmptyComponent={<PaymentEmpty />}
+          contentContainerStyle={contentStyle}
+          scrollIndicatorInsets={scrollIndicatorInsets}
+          showsVerticalScrollIndicator={false}
+          refreshControl={refreshControl}
+        />
+      </ThemedView>
+    );
+  }
+
+  // activeTab === "refunds"
+  const RefundEmpty = () => {
+    if (refundsLoading) {
+      return (
+        <View>
+          {SKELETON_KEYS.map((k) => <SkeletonRow key={k} theme={theme} />)}
+        </View>
+      );
     }
+    if (!isConnected) return noStripeEmpty;
     return (
       <View style={styles.emptyContainer}>
         <EmptyState
           image={require("../../../assets/images/empty-bookings.png")}
-          title={emptyTitle}
-          description={emptyDescription}
+          title="No refunds"
+          description="Any refunds issued will appear here."
         />
       </View>
     );
@@ -505,22 +589,16 @@ export default function FinancesScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <FlatList
-        data={currentData}
-        renderItem={renderItem as any}
-        keyExtractor={(item: any) => item.id ?? item.chargeId ?? item.refundId ?? Math.random().toString()}
-        ListHeaderComponent={<ListHeader />}
-        ListEmptyComponent={<ListEmpty />}
-        contentContainerStyle={{
-          paddingTop: headerHeight + Spacing.md,
-          paddingBottom: tabBarHeight + Spacing.xl,
-          paddingHorizontal: Spacing.screenPadding,
-        }}
-        scrollIndicatorInsets={{ bottom: insets.bottom }}
+      <FlatList<StripeRefund>
+        data={stripeRefunds}
+        renderItem={renderRefund}
+        keyExtractor={(item) => item.refundId}
+        ListHeaderComponent={<SharedListHeader />}
+        ListEmptyComponent={<RefundEmpty />}
+        contentContainerStyle={contentStyle}
+        scrollIndicatorInsets={scrollIndicatorInsets}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
-        }
+        refreshControl={refreshControl}
       />
     </ThemedView>
   );
@@ -609,19 +687,42 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   rowIcon: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     borderRadius: BorderRadius.md,
     alignItems: "center",
     justifyContent: "center",
   },
   rowInfo: { flex: 1 },
-  rowTitle: { ...Typography.callout, fontWeight: "600", marginBottom: 2 },
-  rowSub: { ...Typography.caption1 },
-  rowRight: { alignItems: "flex-end", gap: Spacing.xs },
+  rowTitle: { ...Typography.callout, fontWeight: "600" },
+  rowSub: { ...Typography.caption1, marginTop: 2 },
+  rowRight: { alignItems: "flex-end", gap: 4 },
   rowAmount: { ...Typography.callout, fontWeight: "700" },
 
-  // States
-  loadingRow: { paddingVertical: Spacing.xl * 2, alignItems: "center" },
-  emptyContainer: { paddingTop: Spacing.xl },
+  // Skeleton
+  skeletonIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.md,
+  },
+  skeletonLine: {
+    height: 12,
+    borderRadius: 6,
+  },
+  skeletonPill: {
+    height: 20,
+    width: 60,
+    borderRadius: 10,
+    marginTop: 4,
+  },
+
+  // Empty
+  emptyContainer: {
+    paddingTop: Spacing.xxl,
+    alignItems: "center",
+  },
+  loadingRow: {
+    paddingTop: Spacing.xxl,
+    alignItems: "center",
+  },
 });
