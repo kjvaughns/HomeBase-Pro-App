@@ -9,7 +9,7 @@ import { spawn } from "child_process";
 import { runMigrations } from 'stripe-replit-sync';
 import { getStripeSync } from "./stripeClient";
 import { WebhookHandlers } from "./webhookHandlers";
-import { db } from "./db";
+import { db, pool } from "./db";
 import cron from "node-cron";
 import { eq, and, gte, lte, lt } from "drizzle-orm";
 import { appointments, invoices, clients, providers, users } from "@shared/schema";
@@ -119,6 +119,36 @@ async function initStripe() {
 
   try {
     console.log('Initializing Stripe schema...');
+
+    // Pre-create stripe.invoice_status to avoid a name-collision bug in the
+    // stripe-replit-sync migration 0005_invoices.sql. That migration checks for
+    // invoice_status by typname only (no schema filter), finds the app's
+    // public.invoice_status enum, skips creation, then fails building
+    // stripe.invoices which references "stripe"."invoice_status". By creating
+    // it here first (schema-qualified) the migration table creation succeeds.
+    try {
+      const client = await pool.connect();
+      try {
+        await client.query(`CREATE SCHEMA IF NOT EXISTS stripe;`);
+        await client.query(`
+          DO $$
+          BEGIN
+            IF NOT EXISTS (
+              SELECT 1 FROM pg_type t
+              JOIN pg_namespace n ON t.typnamespace = n.oid
+              WHERE t.typname = 'invoice_status' AND n.nspname = 'stripe'
+            ) THEN
+              CREATE TYPE "stripe"."invoice_status" AS ENUM ('draft', 'open', 'paid', 'uncollectible', 'void');
+            END IF;
+          END$$;
+        `);
+      } finally {
+        client.release();
+      }
+    } catch (preFixError: any) {
+      console.log('Stripe pre-migration setup note:', preFixError.message?.slice(0, 100));
+    }
+
     try {
       await runMigrations({ databaseUrl });
       console.log('Stripe schema ready');
