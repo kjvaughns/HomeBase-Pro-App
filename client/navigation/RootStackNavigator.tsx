@@ -373,30 +373,21 @@ export default function RootStackNavigator() {
         name="Payment"
         component={PaymentScreen}
         options={{
-          presentation: "formSheet",
           headerTitle: "Pay Invoice",
-          sheetAllowedDetents: [0.75, 1.0],
-          sheetCornerRadius: 20,
         }}
       />
       <Stack.Screen
         name="Review"
         component={ReviewScreen}
         options={{
-          presentation: "formSheet",
           headerTitle: "Leave a Review",
-          sheetAllowedDetents: [0.7, 1.0],
-          sheetCornerRadius: 20,
         }}
       />
       <Stack.Screen
         name="ProfileEdit"
         component={ProfileEditScreen}
         options={{
-          presentation: "formSheet",
           headerTitle: "Edit Profile",
-          sheetAllowedDetents: [0.85, 1.0],
-          sheetCornerRadius: 20,
         }}
       />
       <Stack.Screen
