@@ -64,9 +64,11 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       isAuthenticated: true,
       user,
       sessionToken: token || null,
-      activeRole: hasApprovedProvider ? ("guest" as UserRole) : ("homeowner" as UserRole),
+      // Returning users go directly to their dashboard — providers to provider mode,
+      // everyone else to homeowner mode. Never show role selection on login.
+      activeRole: hasApprovedProvider ? ("provider" as UserRole) : ("homeowner" as UserRole),
       providerProfile: providerProfile || null,
-      needsRoleSelection: hasApprovedProvider,
+      needsRoleSelection: false,
     };
     set(newState);
     saveToStorage(get());
@@ -135,13 +137,25 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
       if (stored) {
         const data = JSON.parse(stored);
+        // If the user is authenticated, they've already picked a role — never
+        // show role selection on app resume. Only show it for truly new users
+        // (not authenticated yet).
+        const isAuthenticated = data.isAuthenticated || false;
+        const needsRoleSelection = isAuthenticated ? false : (data.needsRoleSelection ?? true);
+        // Ensure authenticated providers land in provider mode, not guest.
+        const providerProfile = data.providerProfile || null;
+        const isApprovedProvider = providerProfile?.status === "approved";
+        let activeRole: UserRole = data.activeRole || "guest";
+        if (isAuthenticated && activeRole === "guest") {
+          activeRole = isApprovedProvider ? "provider" : "homeowner";
+        }
         set({
-          isAuthenticated: data.isAuthenticated || false,
+          isAuthenticated,
           user: data.user || null,
           sessionToken: data.sessionToken || null,
-          activeRole: data.activeRole || "guest",
-          providerProfile: data.providerProfile || null,
-          needsRoleSelection: data.needsRoleSelection ?? true,
+          activeRole,
+          providerProfile,
+          needsRoleSelection,
           isHydrated: true,
         });
       } else {

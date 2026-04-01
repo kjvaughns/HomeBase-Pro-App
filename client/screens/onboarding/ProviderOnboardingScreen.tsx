@@ -214,7 +214,7 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
         );
         activateProviderMode();           // sets activeRole="provider"
         setHasCompletedProviderSetup(true); // persisted — isProviderMode stays true on restart
-        setNeedsRoleSelection(false);      // clears login()'s needsRoleSelection=true
+        setNeedsRoleSelection(false);      // ensure role selection is cleared
         // RootStackNavigator now sees isProviderMode=true → renders ProviderTabNavigator
       }
     } catch (error) {
