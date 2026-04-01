@@ -71,6 +71,7 @@ interface StripeRefund {
   refundId: string;
   chargeId: string | null;
   amountCents: number;
+  originalAmountCents: number | null;
   currency: string;
   reason: string | null;
   status: string;
@@ -337,6 +338,11 @@ export default function FinancesScreen() {
           <ThemedText style={[styles.rowSub, { color: theme.textSecondary }]}>
             {item.chargeId ? `Charge ${item.chargeId.slice(-8).toUpperCase()}` : "Refund"} · {formatDate(item.createdAt)}
           </ThemedText>
+          {item.originalAmountCents != null ? (
+            <ThemedText style={[styles.rowSub, { color: theme.textSecondary }]}>
+              Original: {formatCents(item.originalAmountCents)}
+            </ThemedText>
+          ) : null}
         </View>
         <View style={styles.rowRight}>
           <ThemedText style={[styles.rowAmount, { color: "#FF3B30" }]}>

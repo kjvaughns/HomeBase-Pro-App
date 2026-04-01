@@ -4042,21 +4042,27 @@ Respond with JSON only:
       }
       const stripe = getStripe();
       const stripePayouts = await stripe.payouts.list(
-        { limit: 50 },
+        { limit: 50, expand: ["data.destination"] },
         { stripeAccount: connectAccount.stripeAccountId }
       );
-      const result = stripePayouts.data.map((p) => ({
-        id: p.id,
-        amountCents: p.amount,
-        currency: p.currency,
-        status: p.status,
-        arrivalDate: p.arrival_date ? new Date(p.arrival_date * 1000).toISOString() : null,
-        description: p.description,
-        createdAt: new Date(p.created * 1000).toISOString(),
-        bankLast4: typeof p.destination === "object" && p.destination && "last4" in p.destination
-          ? (p.destination as { last4?: string }).last4
-          : null,
-      }));
+      const result = stripePayouts.data.map((p) => {
+        // destination is expanded — may be an ExternalAccount object with last4
+        const dest = p.destination;
+        let bankLast4: string | null = null;
+        if (dest && typeof dest === "object" && "last4" in dest) {
+          bankLast4 = (dest as { last4?: string | null }).last4 ?? null;
+        }
+        return {
+          id: p.id,
+          amountCents: p.amount,
+          currency: p.currency,
+          status: p.status,
+          arrivalDate: p.arrival_date ? new Date(p.arrival_date * 1000).toISOString() : null,
+          description: p.description,
+          createdAt: new Date(p.created * 1000).toISOString(),
+          bankLast4,
+        };
+      });
       res.json({ payouts: result });
     } catch (error: any) {
       console.error("Stripe payouts error:", error);
@@ -4104,24 +4110,31 @@ Respond with JSON only:
         .from(clients)
         .where(eq(clients.providerId, providerId));
 
-      const result = charges.data.map((charge) => {
-        const localPayment = localPayments.find(
-          (p) => p.stripeChargeId === charge.id || p.stripePaymentIntentId === charge.payment_intent?.toString()
-        );
-        const invoice = localPayment ? localInvoices.find((inv) => inv.id === localPayment.invoiceId) : null;
-        const client = invoice ? localClients.find((c) => c.id === invoice.clientId) : null;
-        return {
-          chargeId: charge.id,
-          amountCents: charge.amount,
-          currency: charge.currency,
-          status: charge.status,
-          invoiceId: invoice?.id ?? null,
-          invoiceNumber: invoice?.invoiceNumber ?? null,
-          clientName: client ? `${client.firstName} ${client.lastName}` : (charge.billing_details?.name ?? null),
-          createdAt: new Date(charge.created * 1000).toISOString(),
-          refunded: charge.refunded,
-        };
-      });
+      // Only include charges that are linked to a HomeBase invoice/payment record
+      const result = charges.data
+        .filter((charge) =>
+          localPayments.some(
+            (p) => p.stripeChargeId === charge.id || p.stripePaymentIntentId === charge.payment_intent?.toString()
+          )
+        )
+        .map((charge) => {
+          const localPayment = localPayments.find(
+            (p) => p.stripeChargeId === charge.id || p.stripePaymentIntentId === charge.payment_intent?.toString()
+          );
+          const invoice = localPayment ? localInvoices.find((inv) => inv.id === localPayment.invoiceId) : null;
+          const client = invoice ? localClients.find((c) => c.id === invoice.clientId) : null;
+          return {
+            chargeId: charge.id,
+            amountCents: charge.amount,
+            currency: charge.currency,
+            status: charge.status,
+            invoiceId: invoice?.id ?? null,
+            invoiceNumber: invoice?.invoiceNumber ?? null,
+            clientName: client ? `${client.firstName} ${client.lastName}` : (charge.billing_details?.name ?? null),
+            createdAt: new Date(charge.created * 1000).toISOString(),
+            refunded: charge.refunded,
+          };
+        });
       res.json({ payments: result });
     } catch (error: any) {
       console.error("Stripe payments error:", error);
@@ -4141,18 +4154,23 @@ Respond with JSON only:
       }
       const stripe = getStripe();
       const stripeRefunds = await stripe.refunds.list(
-        { limit: 50 },
+        { limit: 50, expand: ["data.charge"] },
         { stripeAccount: connectAccount.stripeAccountId }
       );
-      const result = stripeRefunds.data.map((r) => ({
-        refundId: r.id,
-        chargeId: r.charge?.toString() ?? null,
-        amountCents: r.amount,
-        currency: r.currency,
-        reason: r.reason,
-        status: r.status,
-        createdAt: new Date(r.created * 1000).toISOString(),
-      }));
+      const result = stripeRefunds.data.map((r) => {
+        // charge is expanded — may be a full Charge object with original amount
+        const expandedCharge = r.charge && typeof r.charge === "object" ? r.charge as import("stripe").Stripe.Charge : null;
+        return {
+          refundId: r.id,
+          chargeId: expandedCharge?.id ?? (r.charge?.toString() ?? null),
+          amountCents: r.amount,
+          originalAmountCents: expandedCharge?.amount ?? null,
+          currency: r.currency,
+          reason: r.reason,
+          status: r.status,
+          createdAt: new Date(r.created * 1000).toISOString(),
+        };
+      });
       res.json({ refunds: result });
     } catch (error: any) {
       console.error("Stripe refunds error:", error);
