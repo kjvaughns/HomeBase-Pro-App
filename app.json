@@ -3,6 +3,7 @@
     "name": "HomeBase",
     "slug": "homebase",
     "version": "1.0.0",
+    "privacyPolicyUrl": "https://homebaseproapp.com/privacy",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "homebase",
@@ -11,6 +12,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.homebasepro.app",
+      "buildNumber": "1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "HomeBase uses your camera to photograph your home, projects, and documents when submitting service requests or capturing job progress.",
