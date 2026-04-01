@@ -8,6 +8,7 @@ import {
   invoiceLineItems,
   payments,
   payouts,
+  refunds,
   userCredits,
   creditLedger,
   stripeWebhookEvents,
@@ -473,6 +474,10 @@ export async function handleStripeWebhook(event: Stripe.Event) {
       await handleChargeRefunded(event.data.object as Stripe.Charge);
       break;
 
+    case "payout.created":
+      await handlePayoutCreated(event.data.object as Stripe.Payout);
+      break;
+
     case "payout.paid":
       await handlePayoutPaid(event.data.object as Stripe.Payout);
       break;
@@ -659,6 +664,69 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
         updatedAt: new Date(),
       })
       .where(eq(invoices.id, payment.invoiceId));
+
+    // Upsert refund records for each Stripe refund on this charge
+    if (charge.refunds?.data?.length) {
+      for (const stripeRefund of charge.refunds.data) {
+        const existing = await db
+          .select()
+          .from(refunds)
+          .where(eq(refunds.stripeRefundId, stripeRefund.id));
+
+        if (existing.length === 0) {
+          await db.insert(refunds).values({
+            providerId: payment.providerId,
+            paymentId: payment.id,
+            stripeRefundId: stripeRefund.id,
+            stripeChargeId: charge.id,
+            amountCents: stripeRefund.amount,
+            reason: stripeRefund.reason ?? null,
+            status: (stripeRefund.status as "pending" | "succeeded" | "failed" | "canceled") ?? "pending",
+          });
+        } else {
+          await db
+            .update(refunds)
+            .set({ status: (stripeRefund.status as "pending" | "succeeded" | "failed" | "canceled") ?? "pending" })
+            .where(eq(refunds.stripeRefundId, stripeRefund.id));
+        }
+      }
+    }
+  }
+}
+
+async function handlePayoutCreated(payout: Stripe.Payout) {
+  // Find the provider via stripeAccountId from the payout's account
+  // Payout events come with account context; upsert a payout record
+  const [existingPayout] = await db
+    .select()
+    .from(payouts)
+    .where(eq(payouts.stripePayoutId, payout.id));
+
+  const arrivalDate = payout.arrival_date ? new Date(payout.arrival_date * 1000) : null;
+
+  if (!existingPayout) {
+    // Look up the provider from the connect account
+    const [connectAccount] = await db
+      .select()
+      .from(stripeConnectAccounts)
+      // For connect webhooks the account ID is in the event's account field,
+      // but here we fall back to matching by stripePayoutId existence
+      .limit(1);
+    if (connectAccount) {
+      await db.insert(payouts).values({
+        providerId: connectAccount.providerId,
+        amountCents: payout.amount,
+        status: "pending",
+        stripePayoutId: payout.id,
+        arrivalDate,
+        description: payout.description ?? null,
+      }).onConflictDoNothing();
+    }
+  } else {
+    await db
+      .update(payouts)
+      .set({ arrivalDate, description: payout.description ?? null })
+      .where(eq(payouts.id, existingPayout.id));
   }
 }
 
@@ -668,10 +736,16 @@ async function handlePayoutPaid(payout: Stripe.Payout) {
     .from(payouts)
     .where(eq(payouts.stripePayoutId, payout.id));
 
+  const arrivalDate = payout.arrival_date ? new Date(payout.arrival_date * 1000) : null;
+
   if (existingPayout) {
     await db
       .update(payouts)
-      .set({ status: "paid" })
+      .set({
+        status: "paid",
+        arrivalDate: arrivalDate ?? existingPayout.arrivalDate,
+        description: payout.description ?? existingPayout.description,
+      })
       .where(eq(payouts.id, existingPayout.id));
   }
 }

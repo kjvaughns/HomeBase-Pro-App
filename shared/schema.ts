@@ -341,11 +341,32 @@ export const payouts = pgTable("payouts", {
   status: payoutStatusEnum("status").default("pending"),
   stripeTransferId: text("stripe_transfer_id"),
   stripePayoutId: text("stripe_payout_id"),
+  arrivalDate: timestamp("arrival_date"),
+  description: text("description"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const payoutsRelations = relations(payouts, ({ one }) => ({
   provider: one(providers, { fields: [payouts.providerId], references: [providers.id] }),
+}));
+
+export const refundStatusEnum = pgEnum("refund_status", ["pending", "succeeded", "failed", "canceled"]);
+
+export const refunds = pgTable("refunds", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+  paymentId: varchar("payment_id").references(() => payments.id, { onDelete: "set null" }),
+  stripeRefundId: text("stripe_refund_id").unique(),
+  stripeChargeId: text("stripe_charge_id"),
+  amountCents: integer("amount_cents").notNull(),
+  reason: text("reason"),
+  status: refundStatusEnum("status").default("pending"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const refundsRelations = relations(refunds, ({ one }) => ({
+  provider: one(providers, { fields: [refunds.providerId], references: [providers.id] }),
+  payment: one(payments, { fields: [refunds.paymentId], references: [payments.id] }),
 }));
 
 // Stripe webhook events for idempotency

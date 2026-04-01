@@ -23,6 +23,7 @@ import {
   createConnectAccountLink,
   refreshConnectAccountLink,
   getConnectStatus,
+  getConnectAccount,
   createInvoicePaymentIntent,
   createStripeCheckoutSession,
   applyCreditsToInvoice,
@@ -4012,6 +4013,130 @@ Respond with JSON only:
     } catch (error: any) {
       console.error("Get payouts error:", error);
       res.status(500).json({ error: error.message || "Failed to get payouts" });
+    }
+  });
+
+  // GET /api/providers/:providerId/stripe-payouts — live Stripe payout list
+  app.get("/api/providers/:providerId/stripe-payouts", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
+    try {
+      const { providerId } = req.params;
+      const connectAccount = await getConnectAccount(providerId);
+      if (!connectAccount?.stripeAccountId) {
+        return res.status(404).json({ error: "stripe_not_connected" });
+      }
+      const stripe = getStripe();
+      const stripePayouts = await stripe.payouts.list(
+        { limit: 50 },
+        { stripeAccount: connectAccount.stripeAccountId }
+      );
+      const result = stripePayouts.data.map((p) => ({
+        id: p.id,
+        amountCents: p.amount,
+        currency: p.currency,
+        status: p.status,
+        arrivalDate: p.arrival_date ? new Date(p.arrival_date * 1000).toISOString() : null,
+        description: p.description,
+        createdAt: new Date(p.created * 1000).toISOString(),
+        bankLast4: typeof p.destination === "object" && p.destination && "last4" in p.destination
+          ? (p.destination as { last4?: string }).last4
+          : null,
+      }));
+      res.json({ payouts: result });
+    } catch (error: any) {
+      console.error("Stripe payouts error:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch Stripe payouts" });
+    }
+  });
+
+  // GET /api/providers/:providerId/stripe-payments — live Stripe charges list
+  app.get("/api/providers/:providerId/stripe-payments", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
+    try {
+      const { providerId } = req.params;
+      const connectAccount = await getConnectAccount(providerId);
+      if (!connectAccount?.stripeAccountId) {
+        return res.status(404).json({ error: "stripe_not_connected" });
+      }
+      const stripe = getStripe();
+      const charges = await stripe.charges.list(
+        { limit: 50 },
+        { stripeAccount: connectAccount.stripeAccountId }
+      );
+
+      // Enrich with local invoice/client data by matching stripeChargeId or paymentIntent
+      const localPayments = await db
+        .select({
+          stripeChargeId: payments.stripeChargeId,
+          stripePaymentIntentId: payments.stripePaymentIntentId,
+          invoiceId: payments.invoiceId,
+        })
+        .from(payments)
+        .where(eq(payments.providerId, providerId));
+
+      const localInvoices = await db
+        .select({
+          id: invoices.id,
+          invoiceNumber: invoices.invoiceNumber,
+          clientId: invoices.clientId,
+        })
+        .from(invoices)
+        .where(eq(invoices.providerId, providerId));
+
+      const localClients = await db
+        .select({ id: clients.id, firstName: clients.firstName, lastName: clients.lastName })
+        .from(clients)
+        .where(eq(clients.providerId, providerId));
+
+      const result = charges.data.map((charge) => {
+        const localPayment = localPayments.find(
+          (p) => p.stripeChargeId === charge.id || p.stripePaymentIntentId === charge.payment_intent?.toString()
+        );
+        const invoice = localPayment ? localInvoices.find((inv) => inv.id === localPayment.invoiceId) : null;
+        const client = invoice ? localClients.find((c) => c.id === invoice.clientId) : null;
+        return {
+          chargeId: charge.id,
+          amountCents: charge.amount,
+          currency: charge.currency,
+          status: charge.status,
+          invoiceId: invoice?.id ?? null,
+          invoiceNumber: invoice?.invoiceNumber ?? null,
+          clientName: client ? `${client.firstName} ${client.lastName}` : (charge.billing_details?.name ?? null),
+          createdAt: new Date(charge.created * 1000).toISOString(),
+          refunded: charge.refunded,
+        };
+      });
+      res.json({ payments: result });
+    } catch (error: any) {
+      console.error("Stripe payments error:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch Stripe payments" });
+    }
+  });
+
+  // GET /api/providers/:providerId/stripe-refunds — live Stripe refund list
+  app.get("/api/providers/:providerId/stripe-refunds", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
+    try {
+      const { providerId } = req.params;
+      const connectAccount = await getConnectAccount(providerId);
+      if (!connectAccount?.stripeAccountId) {
+        return res.status(404).json({ error: "stripe_not_connected" });
+      }
+      const stripe = getStripe();
+      const stripeRefunds = await stripe.refunds.list(
+        { limit: 50 },
+        { stripeAccount: connectAccount.stripeAccountId }
+      );
+      const result = stripeRefunds.data.map((r) => ({
+        refundId: r.id,
+        chargeId: r.charge?.toString() ?? null,
+        amountCents: r.amount,
+        currency: r.currency,
+        reason: r.reason,
+        status: r.status,
+        createdAt: new Date(r.created * 1000).toISOString(),
+      }));
+      res.json({ refunds: result });
+    } catch (error: any) {
+      console.error("Stripe refunds error:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch Stripe refunds" });
     }
   });
 

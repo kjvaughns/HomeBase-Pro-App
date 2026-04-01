@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useCallback } from "react";
 import {
   StyleSheet,
   View,
@@ -16,39 +16,19 @@ import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/query-client";
+import { apiRequest, getAuthHeaders, getApiUrl } from "@/lib/query-client";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
-import { StatusPill } from "@/components/StatusPill";
-import { FilterChips, FilterOption } from "@/components/FilterChips";
+import { StatusPill, StatusType } from "@/components/StatusPill";
 import { EmptyState } from "@/components/EmptyState";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
-interface Invoice {
-  id: string;
-  providerId: string;
-  clientId: string;
-  jobId?: string;
-  invoiceNumber?: string;
-  amount: string;
-  total?: string;
-  status: "draft" | "sent" | "paid" | "overdue" | "cancelled";
-  dueDate?: string;
-  paidAt?: string;
-  notes?: string;
-  createdAt: string;
-}
-
-interface Client {
-  id: string;
-  firstName: string;
-  lastName: string;
-}
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface ProviderStats {
   revenueMTD: number;
@@ -65,13 +45,109 @@ interface StripeStatus {
   detailsSubmitted: boolean;
 }
 
-type InvoiceFilter = "all" | "pending" | "paid";
+interface StripePayout {
+  id: string;
+  amountCents: number;
+  currency: string;
+  status: string;
+  arrivalDate: string | null;
+  description: string | null;
+  createdAt: string;
+  bankLast4: string | null;
+}
 
-const filterOptions: FilterOption<InvoiceFilter>[] = [
-  { key: "all", label: "All" },
-  { key: "pending", label: "Pending" },
-  { key: "paid", label: "Paid" },
-];
+interface StripePayment {
+  chargeId: string;
+  amountCents: number;
+  currency: string;
+  status: string;
+  invoiceId: string | null;
+  invoiceNumber: string | null;
+  clientName: string | null;
+  createdAt: string;
+  refunded: boolean;
+}
+
+interface StripeRefund {
+  refundId: string;
+  chargeId: string | null;
+  amountCents: number;
+  currency: string;
+  reason: string | null;
+  status: string;
+  createdAt: string;
+}
+
+type TabKey = "payouts" | "payments" | "refunds";
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatCents(cents: number): string {
+  return (cents / 100).toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+  });
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function formatArrivalDate(iso: string | null): string {
+  if (!iso) return "Pending";
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+
+function payoutStatusType(status: string): StatusType {
+  switch (status) {
+    case "paid": return "success";
+    case "in_transit": return "info";
+    case "pending": return "pending";
+    case "failed":
+    case "canceled":
+    case "cancelled": return "error";
+    default: return "neutral";
+  }
+}
+
+function payoutStatusLabel(status: string): string {
+  if (status === "in_transit") return "In Transit";
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function paymentStatusType(status: string, refunded: boolean): StatusType {
+  if (refunded) return "error";
+  switch (status) {
+    case "succeeded": return "success";
+    case "pending": return "pending";
+    case "failed": return "error";
+    default: return "neutral";
+  }
+}
+
+function paymentStatusLabel(status: string, refunded: boolean): string {
+  if (refunded) return "Refunded";
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function refundStatusType(status: string): StatusType {
+  switch (status) {
+    case "succeeded": return "success";
+    case "pending": return "pending";
+    case "failed": return "error";
+    case "canceled": return "neutral";
+    default: return "neutral";
+  }
+}
+
+function formatRefundReason(reason: string | null): string {
+  if (!reason) return "Refunded";
+  return reason.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// ─── Main Screen ─────────────────────────────────────────────────────────────
 
 export default function FinancesScreen() {
   const insets = useSafeAreaInsets();
@@ -81,19 +157,11 @@ export default function FinancesScreen() {
   const { theme } = useTheme();
   const { providerProfile } = useAuthStore();
 
-  const providerId = providerProfile?.id;
-  const [filter, setFilter] = useState<InvoiceFilter>("all");
+  const providerId = providerProfile?.id ?? "";
+  const [activeTab, setActiveTab] = useState<TabKey>("payouts");
   const [refreshing, setRefreshing] = useState(false);
 
-  const { data: invoicesData, isLoading, refetch } = useQuery<{ invoices: Invoice[] }>({
-    queryKey: ["/api/provider", providerId, "invoices"],
-    enabled: !!providerId,
-  });
-
-  const { data: clientsData } = useQuery<{ clients: Client[] }>({
-    queryKey: ["/api/provider", providerId, "clients"],
-    enabled: !!providerId,
-  });
+  // ── Stats & Stripe status ──────────────────────────────────────────────────
 
   const { data: statsData } = useQuery<{ stats: ProviderStats }>({
     queryKey: ["/api/provider", providerId, "stats"],
@@ -111,75 +179,125 @@ export default function FinancesScreen() {
     retry: false,
   });
 
-  const invoices = invoicesData?.invoices || [];
-  const clients = clientsData?.clients || [];
-  const stats = statsData?.stats || { revenueMTD: 0, jobsCompleted: 0, activeClients: 0, upcomingJobs: 0 };
-  const isConnected = stripeStatus?.chargesEnabled && stripeStatus?.payoutsEnabled;
+  const isConnected = !!(stripeStatus?.chargesEnabled && stripeStatus?.payoutsEnabled);
 
-  const getClientName = (clientId: string): string => {
-    const client = clients.find((c) => c.id === clientId);
-    return client ? `${client.firstName} ${client.lastName}` : "Unknown Client";
-  };
+  // ── Stripe live data queries ───────────────────────────────────────────────
 
-  const filteredInvoices = useMemo(() => {
-    let filtered = invoices;
-    if (filter === "pending") {
-      filtered = invoices.filter((inv) => inv.status === "sent" || inv.status === "draft" || inv.status === "overdue");
-    } else if (filter === "paid") {
-      filtered = invoices.filter((inv) => inv.status === "paid");
-    }
-    return filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [invoices, filter]);
+  const {
+    data: payoutsData,
+    isLoading: payoutsLoading,
+    refetch: refetchPayouts,
+  } = useQuery<{ payouts: StripePayout[] }>({
+    queryKey: ["/api/providers", providerId, "stripe-payouts"],
+    queryFn: async () => {
+      const url = new URL(`/api/providers/${providerId}/stripe-payouts`, getApiUrl());
+      const res = await fetch(url.toString(), { headers: getAuthHeaders() });
+      if (res.status === 404) return { payouts: [] };
+      if (!res.ok) throw new Error("Failed to fetch payouts");
+      return res.json();
+    },
+    enabled: !!providerId && isConnected,
+    staleTime: 60_000,
+  });
 
-  const pendingAmount = useMemo(() => {
-    return invoices
-      .filter((inv) => inv.status === "sent" || inv.status === "overdue")
-      .reduce((sum, inv) => sum + parseFloat(inv.total || inv.amount || "0"), 0);
-  }, [invoices]);
+  const {
+    data: paymentsData,
+    isLoading: paymentsLoading,
+    refetch: refetchPayments,
+  } = useQuery<{ payments: StripePayment[] }>({
+    queryKey: ["/api/providers", providerId, "stripe-payments"],
+    queryFn: async () => {
+      const url = new URL(`/api/providers/${providerId}/stripe-payments`, getApiUrl());
+      const res = await fetch(url.toString(), { headers: getAuthHeaders() });
+      if (res.status === 404) return { payments: [] };
+      if (!res.ok) throw new Error("Failed to fetch payments");
+      return res.json();
+    },
+    enabled: !!providerId && isConnected,
+    staleTime: 60_000,
+  });
 
-  const onRefresh = async () => {
+  const {
+    data: refundsData,
+    isLoading: refundsLoading,
+    refetch: refetchRefunds,
+  } = useQuery<{ refunds: StripeRefund[] }>({
+    queryKey: ["/api/providers", providerId, "stripe-refunds"],
+    queryFn: async () => {
+      const url = new URL(`/api/providers/${providerId}/stripe-refunds`, getApiUrl());
+      const res = await fetch(url.toString(), { headers: getAuthHeaders() });
+      if (res.status === 404) return { refunds: [] };
+      if (!res.ok) throw new Error("Failed to fetch refunds");
+      return res.json();
+    },
+    enabled: !!providerId && isConnected,
+    staleTime: 60_000,
+  });
+
+  const stats = statsData?.stats ?? { revenueMTD: 0, jobsCompleted: 0, activeClients: 0, upcomingJobs: 0 };
+  const stripePayouts = payoutsData?.payouts ?? [];
+  const stripePayments = paymentsData?.payments ?? [];
+  const stripeRefunds = refundsData?.refunds ?? [];
+
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refetch();
+    await Promise.all([refetchPayouts(), refetchPayments(), refetchRefunds()]);
     setRefreshing(false);
-  };
+  }, [refetchPayouts, refetchPayments, refetchRefunds]);
 
-  const getInvoiceStatusType = (status: Invoice["status"]): "success" | "warning" | "info" | "neutral" => {
-    switch (status) {
-      case "paid": return "success";
-      case "sent": return "info";
-      case "overdue": return "warning";
-      default: return "neutral";
-    }
-  };
+  // ── Renderers ─────────────────────────────────────────────────────────────
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  };
+  const renderPayout = ({ item, index }: { item: StripePayout; index: number }) => (
+    <Animated.View entering={FadeInDown.delay(index * 40).duration(300)}>
+      <View style={[styles.row, { backgroundColor: theme.cardBackground }]}>
+        <View style={[styles.rowIcon, { backgroundColor: Colors.accentLight }]}>
+          <Feather name="arrow-down-circle" size={16} color={Colors.accent} />
+        </View>
+        <View style={styles.rowInfo}>
+          <ThemedText style={styles.rowTitle}>
+            {item.bankLast4 ? `Bank ••••${item.bankLast4}` : "Bank Account"}
+          </ThemedText>
+          <ThemedText style={[styles.rowSub, { color: theme.textSecondary }]}>
+            {item.arrivalDate
+              ? `Arrives ${formatArrivalDate(item.arrivalDate)}`
+              : `Initiated ${formatDate(item.createdAt)}`}
+          </ThemedText>
+        </View>
+        <View style={styles.rowRight}>
+          <ThemedText style={styles.rowAmount}>{formatCents(item.amountCents)}</ThemedText>
+          <StatusPill
+            status={payoutStatusType(item.status)}
+            label={payoutStatusLabel(item.status)}
+            size="small"
+          />
+        </View>
+      </View>
+    </Animated.View>
+  );
 
-  const renderInvoice = ({ item, index }: { item: Invoice; index: number }) => (
+  const renderPayment = ({ item, index }: { item: StripePayment; index: number }) => (
     <Animated.View entering={FadeInDown.delay(index * 40).duration(300)}>
       <Pressable
-        style={[styles.invoiceRow, { backgroundColor: theme.cardBackground }]}
-        onPress={() => navigation.navigate("InvoiceDetail", { invoiceId: item.id })}
-        testID={`invoice-${item.id}`}
+        style={[styles.row, { backgroundColor: theme.cardBackground }]}
+        onPress={() => item.invoiceId ? navigation.navigate("InvoiceDetail", { invoiceId: item.invoiceId }) : null}
+        testID={`payment-${item.chargeId}`}
       >
-        <View style={[styles.invoiceIcon, { backgroundColor: Colors.accentLight }]}>
-          <Feather name="file-text" size={16} color={Colors.accent} />
+        <View style={[styles.rowIcon, { backgroundColor: Colors.accentLight }]}>
+          <Feather name="credit-card" size={16} color={Colors.accent} />
         </View>
-        <View style={styles.invoiceInfo}>
-          <ThemedText style={styles.invoiceClient}>{getClientName(item.clientId)}</ThemedText>
-          <ThemedText style={[styles.invoiceDate, { color: theme.textSecondary }]}>
-            {item.invoiceNumber || formatDate(item.createdAt)}
+        <View style={styles.rowInfo}>
+          <ThemedText style={styles.rowTitle}>
+            {item.clientName ?? "Unknown Client"}
+          </ThemedText>
+          <ThemedText style={[styles.rowSub, { color: theme.textSecondary }]}>
+            {item.invoiceNumber ? `Invoice ${item.invoiceNumber}` : item.chargeId.slice(-8).toUpperCase()} · {formatDate(item.createdAt)}
           </ThemedText>
         </View>
-        <View style={styles.invoiceRight}>
-          <ThemedText style={styles.invoiceAmount}>
-            ${parseFloat(item.total || item.amount || "0").toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </ThemedText>
+        <View style={styles.rowRight}>
+          <ThemedText style={styles.rowAmount}>{formatCents(item.amountCents)}</ThemedText>
           <StatusPill
-            status={getInvoiceStatusType(item.status)}
-            label={item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+            status={paymentStatusType(item.status, item.refunded)}
+            label={paymentStatusLabel(item.status, item.refunded)}
             size="small"
           />
         </View>
@@ -187,8 +305,65 @@ export default function FinancesScreen() {
     </Animated.View>
   );
 
+  const renderRefund = ({ item, index }: { item: StripeRefund; index: number }) => (
+    <Animated.View entering={FadeInDown.delay(index * 40).duration(300)}>
+      <View style={[styles.row, { backgroundColor: theme.cardBackground }]}>
+        <View style={[styles.rowIcon, { backgroundColor: "#FF3B3014" }]}>
+          <Feather name="rotate-ccw" size={16} color="#FF3B30" />
+        </View>
+        <View style={styles.rowInfo}>
+          <ThemedText style={styles.rowTitle}>{formatRefundReason(item.reason)}</ThemedText>
+          <ThemedText style={[styles.rowSub, { color: theme.textSecondary }]}>
+            {item.chargeId ? `Charge ${item.chargeId.slice(-8).toUpperCase()}` : "Refund"} · {formatDate(item.createdAt)}
+          </ThemedText>
+        </View>
+        <View style={styles.rowRight}>
+          <ThemedText style={[styles.rowAmount, { color: "#FF3B30" }]}>
+            -{formatCents(item.amountCents)}
+          </ThemedText>
+          <StatusPill
+            status={refundStatusType(item.status)}
+            label={item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+            size="small"
+          />
+        </View>
+      </View>
+    </Animated.View>
+  );
+
+  // ── Tab state ─────────────────────────────────────────────────────────────
+
+  const isCurrentTabLoading =
+    (activeTab === "payouts" && payoutsLoading) ||
+    (activeTab === "payments" && paymentsLoading) ||
+    (activeTab === "refunds" && refundsLoading);
+
+  const currentData: any[] =
+    activeTab === "payouts" ? stripePayouts :
+    activeTab === "payments" ? stripePayments :
+    stripeRefunds;
+
+  const renderItem = activeTab === "payouts"
+    ? renderPayout
+    : activeTab === "payments"
+    ? renderPayment
+    : renderRefund;
+
+  const emptyTitle =
+    activeTab === "payouts" ? "No payouts yet" :
+    activeTab === "payments" ? "No payments yet" :
+    "No refunds";
+
+  const emptyDescription =
+    activeTab === "payouts" ? "Payouts from completed invoices will appear here." :
+    activeTab === "payments" ? "Completed payments from clients will appear here." :
+    "Any refunds issued will appear here.";
+
+  // ── Header ────────────────────────────────────────────────────────────────
+
   const ListHeader = () => (
     <View>
+      {/* Revenue summary card */}
       <Animated.View entering={FadeInDown.delay(50).duration(400)}>
         <GlassCard style={styles.balanceCard}>
           <View style={styles.balanceHeader}>
@@ -218,21 +393,22 @@ export default function FinancesScreen() {
             <View style={[styles.miniDivider, { backgroundColor: theme.separator }]} />
             <View style={styles.miniStat}>
               <ThemedText style={[styles.miniStatValue, { color: theme.textSecondary }]}>
-                ${pendingAmount.toLocaleString()}
+                {stripePayouts.filter((p) => p.status === "in_transit").length}
               </ThemedText>
-              <ThemedText style={[styles.miniStatLabel, { color: theme.textSecondary }]}>pending</ThemedText>
+              <ThemedText style={[styles.miniStatLabel, { color: theme.textSecondary }]}>in transit</ThemedText>
             </View>
             <View style={[styles.miniDivider, { backgroundColor: theme.separator }]} />
             <View style={styles.miniStat}>
               <ThemedText style={[styles.miniStatValue, { color: theme.textSecondary }]}>
-                ${stats.jobsCompleted > 0 ? Math.round(stats.revenueMTD / stats.jobsCompleted).toLocaleString() : 0}
+                {stripeRefunds.length}
               </ThemedText>
-              <ThemedText style={[styles.miniStatLabel, { color: theme.textSecondary }]}>avg/job</ThemedText>
+              <ThemedText style={[styles.miniStatLabel, { color: theme.textSecondary }]}>refunds</ThemedText>
             </View>
           </View>
         </GlassCard>
       </Animated.View>
 
+      {/* Stripe connect CTA */}
       {!isConnected ? (
         <Animated.View entering={FadeInDown.delay(100).duration(400)}>
           <Pressable
@@ -259,47 +435,82 @@ export default function FinancesScreen() {
         </Animated.View>
       ) : null}
 
+      {/* Tab bar */}
       <Animated.View entering={FadeInDown.delay(isConnected ? 100 : 150).duration(400)}>
-        <View style={styles.invoicesHeader}>
-          <ThemedText style={styles.invoicesTitle}>Invoices</ThemedText>
+        <View style={[styles.tabBar, { borderBottomColor: theme.separator }]}>
+          {(["payouts", "payments", "refunds"] as TabKey[]).map((tab) => {
+            const isActive = activeTab === tab;
+            const label = tab.charAt(0).toUpperCase() + tab.slice(1);
+            return (
+              <Pressable
+                key={tab}
+                style={styles.tabItem}
+                onPress={() => { Haptics.selectionAsync(); setActiveTab(tab); }}
+                testID={`tab-${tab}`}
+              >
+                <ThemedText
+                  style={[
+                    styles.tabLabel,
+                    isActive
+                      ? { color: Colors.accent, fontWeight: "700" }
+                      : { color: theme.textSecondary },
+                  ]}
+                >
+                  {label}
+                </ThemedText>
+                {isActive ? (
+                  <View style={[styles.tabIndicator, { backgroundColor: Colors.accent }]} />
+                ) : null}
+              </Pressable>
+            );
+          })}
         </View>
-        <FilterChips
-          options={filterOptions}
-          selected={filter}
-          onSelect={(v) => { Haptics.selectionAsync(); setFilter(v); }}
-          scrollable={false}
-          style={styles.filterChips}
-        />
       </Animated.View>
     </View>
   );
 
+  const ListEmpty = () => {
+    if (isCurrentTabLoading) {
+      return (
+        <View style={styles.loadingRow}>
+          <ActivityIndicator size="large" color={Colors.accent} />
+        </View>
+      );
+    }
+    if (!isConnected) {
+      return (
+        <View style={styles.emptyContainer}>
+          <EmptyState
+            image={require("../../../assets/images/empty-bookings.png")}
+            title="Connect Stripe to see data"
+            description="Complete your Stripe setup to view payouts, payments, and refunds."
+            primaryAction={{
+              label: "Set Up Stripe",
+              onPress: () => navigation.navigate("StripeConnect"),
+            }}
+          />
+        </View>
+      );
+    }
+    return (
+      <View style={styles.emptyContainer}>
+        <EmptyState
+          image={require("../../../assets/images/empty-bookings.png")}
+          title={emptyTitle}
+          description={emptyDescription}
+        />
+      </View>
+    );
+  };
+
   return (
     <ThemedView style={styles.container}>
       <FlatList
-        data={filteredInvoices}
-        renderItem={renderInvoice}
-        keyExtractor={(item) => item.id}
+        data={currentData}
+        renderItem={renderItem as any}
+        keyExtractor={(item: any) => item.id ?? item.chargeId ?? item.refundId ?? Math.random().toString()}
         ListHeaderComponent={<ListHeader />}
-        ListEmptyComponent={
-          isLoading ? (
-            <View style={styles.loadingRow}>
-              <ActivityIndicator size="large" color={Colors.accent} />
-            </View>
-          ) : (
-            <View style={styles.emptyContainer}>
-              <EmptyState
-                image={require("../../../assets/images/empty-bookings.png")}
-                title="No invoices yet"
-                description="Create your first invoice to start tracking payments."
-                primaryAction={{
-                  label: "Create Invoice",
-                  onPress: () => navigation.navigate("AddInvoice"),
-                }}
-              />
-            </View>
-          )
-        }
+        ListEmptyComponent={<ListEmpty />}
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.md,
           paddingBottom: tabBarHeight + Spacing.xl,
@@ -315,54 +526,34 @@ export default function FinancesScreen() {
   );
 }
 
+// ─── Styles ──────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  balanceCard: {
-    marginBottom: Spacing.md,
-  },
+
+  // Summary card
+  balanceCard: { marginBottom: Spacing.md },
   balanceHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: Spacing.xs,
   },
-  balanceLabel: {
-    ...Typography.subhead,
-  },
-  newInvoiceBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  newInvoiceBtnText: {
-    ...Typography.subhead,
-    fontWeight: "600",
-  },
+  balanceLabel: { ...Typography.subhead },
+  newInvoiceBtn: { flexDirection: "row", alignItems: "center", gap: 4 },
+  newInvoiceBtnText: { ...Typography.subhead, fontWeight: "600" },
   balanceValue: {
     ...Typography.largeTitle,
     fontWeight: "700",
     marginBottom: Spacing.md,
   },
-  statsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  miniStat: {
-    flex: 1,
-    alignItems: "center",
-  },
-  miniStatValue: {
-    ...Typography.headline,
-    fontWeight: "600",
-  },
-  miniStatLabel: {
-    ...Typography.caption2,
-    marginTop: 2,
-  },
-  miniDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: 32,
-  },
+  statsRow: { flexDirection: "row", alignItems: "center" },
+  miniStat: { flex: 1, alignItems: "center" },
+  miniStatValue: { ...Typography.headline, fontWeight: "600" },
+  miniStatLabel: { ...Typography.caption2, marginTop: 2 },
+  miniDivider: { width: StyleSheet.hairlineWidth, height: 32 },
+
+  // Stripe CTA
   stripeCtaCard: {
     borderRadius: BorderRadius.card,
     borderWidth: 1,
@@ -382,29 +573,34 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  stripeCtaText: {
+  stripeCtaText: { flex: 1 },
+  stripeCtaTitle: { ...Typography.callout, fontWeight: "600", marginBottom: 2 },
+  stripeCtaSubtitle: { ...Typography.footnote, lineHeight: 18 },
+
+  // Tabs
+  tabBar: {
+    flexDirection: "row",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginBottom: Spacing.md,
+  },
+  tabItem: {
     flex: 1,
+    alignItems: "center",
+    paddingVertical: Spacing.sm,
+    position: "relative",
   },
-  stripeCtaTitle: {
-    ...Typography.callout,
-    fontWeight: "600",
-    marginBottom: 2,
+  tabLabel: { ...Typography.callout },
+  tabIndicator: {
+    position: "absolute",
+    bottom: 0,
+    left: "10%",
+    right: "10%",
+    height: 2,
+    borderRadius: 1,
   },
-  stripeCtaSubtitle: {
-    ...Typography.footnote,
-    lineHeight: 18,
-  },
-  invoicesHeader: {
-    marginBottom: Spacing.sm,
-  },
-  invoicesTitle: {
-    ...Typography.title3,
-    fontWeight: "600",
-  },
-  filterChips: {
-    marginBottom: Spacing.sm,
-  },
-  invoiceRow: {
+
+  // Row items
+  row: {
     flexDirection: "row",
     alignItems: "center",
     borderRadius: BorderRadius.card,
@@ -412,37 +608,20 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
     gap: Spacing.md,
   },
-  invoiceIcon: {
+  rowIcon: {
     width: 40,
     height: 40,
     borderRadius: BorderRadius.md,
     alignItems: "center",
     justifyContent: "center",
   },
-  invoiceInfo: {
-    flex: 1,
-  },
-  invoiceClient: {
-    ...Typography.callout,
-    fontWeight: "600",
-    marginBottom: 2,
-  },
-  invoiceDate: {
-    ...Typography.caption1,
-  },
-  invoiceRight: {
-    alignItems: "flex-end",
-    gap: Spacing.xs,
-  },
-  invoiceAmount: {
-    ...Typography.callout,
-    fontWeight: "700",
-  },
-  loadingRow: {
-    paddingVertical: Spacing.xl * 2,
-    alignItems: "center",
-  },
-  emptyContainer: {
-    paddingTop: Spacing.xl,
-  },
+  rowInfo: { flex: 1 },
+  rowTitle: { ...Typography.callout, fontWeight: "600", marginBottom: 2 },
+  rowSub: { ...Typography.caption1 },
+  rowRight: { alignItems: "flex-end", gap: Spacing.xs },
+  rowAmount: { ...Typography.callout, fontWeight: "700" },
+
+  // States
+  loadingRow: { paddingVertical: Spacing.xl * 2, alignItems: "center" },
+  emptyContainer: { paddingTop: Spacing.xl },
 });
