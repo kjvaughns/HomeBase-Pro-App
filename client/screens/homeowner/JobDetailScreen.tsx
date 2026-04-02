@@ -24,6 +24,7 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 interface AppointmentRecord {
   id: string;
+  providerId: string;
   serviceName: string;
   scheduledDate: string;
   scheduledTime: string;
@@ -309,6 +310,22 @@ export default function JobDetailScreen() {
                 <ThemedText type="caption" style={{ color: theme.textSecondary, marginTop: 4 }}>
                   {formatDate(appointment.completedAt)}
                 </ThemedText>
+              ) : null}
+              {appointment.providerId && provider ? (
+                <View style={{ marginTop: Spacing.md }}>
+                  <PrimaryButton
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      navigation.navigate("SimpleBooking", {
+                        providerId: appointment.providerId,
+                        providerName: provider.businessName,
+                      });
+                    }}
+                    testID="button-book-again"
+                  >
+                    Book Again
+                  </PrimaryButton>
+                </View>
               ) : null}
             </GlassCard>
           </Animated.View>

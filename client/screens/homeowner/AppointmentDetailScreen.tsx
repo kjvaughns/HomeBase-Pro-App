@@ -20,9 +20,11 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type AppointmentDetailParams = { appointmentId: string };
 type ScreenRouteProp = RouteProp<{ AppointmentDetail: AppointmentDetailParams }, "AppointmentDetail">;
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 type AppointmentStatus = "pending" | "confirmed" | "in_progress" | "completed" | "cancelled";
 
@@ -58,6 +60,8 @@ interface Appointment {
   providerDiagnosis?: string;
   statusHistory?: StatusUpdate[];
   status: AppointmentStatus;
+  isRecurring?: boolean;
+  recurringFrequency?: string;
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
@@ -82,7 +86,7 @@ export default function AppointmentDetailScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const route = useRoute<ScreenRouteProp>();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
   const { appointmentId } = route.params;
   const { user } = useAuthStore();
@@ -236,6 +240,14 @@ export default function AppointmentDetailScreen() {
                 <ThemedText style={[styles.providerName, { color: theme.textSecondary }]}>
                   {appointment.provider?.businessName || "Service Provider"}
                 </ThemedText>
+                {appointment.isRecurring && appointment.recurringFrequency ? (
+                  <View style={[styles.recurringBadge, { backgroundColor: Colors.accent + "20" }]}>
+                    <Feather name="repeat" size={11} color={Colors.accent} />
+                    <ThemedText style={[styles.recurringBadgeText, { color: Colors.accent }]}>
+                      {appointment.recurringFrequency.charAt(0).toUpperCase() + appointment.recurringFrequency.slice(1)}
+                    </ThemedText>
+                  </View>
+                ) : null}
               </View>
               <StatusPill
                 label={statusConfig.label}
@@ -349,6 +361,21 @@ export default function AppointmentDetailScreen() {
           <SecondaryButton onPress={handleMessage}>
             Message Provider
           </SecondaryButton>
+
+          {appointment.status === "completed" && appointment.provider ? (
+            <PrimaryButton
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                navigation.navigate("SimpleBooking", {
+                  providerId: appointment.providerId,
+                  providerName: appointment.provider!.businessName,
+                });
+              }}
+              style={styles.actionBtn}
+            >
+              Book Again
+            </PrimaryButton>
+          ) : null}
 
           {canModify ? (
             <>
@@ -573,6 +600,20 @@ const styles = StyleSheet.create({
   providerName: {
     ...Typography.subhead,
     marginTop: 2,
+  },
+  recurringBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 10,
+    alignSelf: "flex-start",
+    marginTop: 4,
+  },
+  recurringBadgeText: {
+    ...Typography.caption2,
+    fontWeight: "600",
   },
   summaryCard: {
     borderRadius: BorderRadius.md,

@@ -4,6 +4,7 @@ import {
   View,
   TextInput,
   Pressable,
+  Switch,
   ActivityIndicator,
   ViewStyle,
 } from "react-native";
@@ -178,6 +179,7 @@ export default function NewServiceScreen() {
   ]);
   const [duration, setDuration] = useState(60);
   const [description, setDescription] = useState("");
+  const [isAddon, setIsAddon] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isImprovingDescription, setIsImprovingDescription] = useState(false);
   const [priceSuggestion, setPriceSuggestion] = useState<PriceSuggestion | null>(null);
@@ -216,6 +218,7 @@ export default function NewServiceScreen() {
           }
         } catch {}
       }
+      if (svc.isAddon !== undefined) setIsAddon(Boolean(svc.isAddon));
     }
     if (isEditMode) {
       navigation.setOptions({ headerTitle: "Edit Service" });
@@ -356,6 +359,7 @@ export default function NewServiceScreen() {
       priceTiersJson: tiersJson,
       duration,
       isPublished: true,
+      isAddon,
     };
 
     try {
@@ -784,6 +788,28 @@ export default function NewServiceScreen() {
             </GlassCard>
           </Animated.View>
 
+          <Animated.View entering={FadeInDown.delay(450)}>
+            <GlassCard style={styles.section}>
+              <View style={styles.addonRow}>
+                <View style={{ flex: 1 }}>
+                  <ThemedText style={styles.addonLabel}>Add-on service</ThemedText>
+                  <ThemedText style={[styles.addonHint, { color: theme.textSecondary }]}>
+                    Add-ons appear as suggested upgrades when homeowners book your other services.
+                  </ThemedText>
+                </View>
+                <Switch
+                  value={isAddon}
+                  onValueChange={(v) => {
+                    Haptics.selectionAsync();
+                    setIsAddon(v);
+                  }}
+                  trackColor={{ false: theme.borderLight, true: Colors.accent + "80" }}
+                  thumbColor={isAddon ? Colors.accent : theme.textTertiary}
+                />
+              </View>
+            </GlassCard>
+          </Animated.View>
+
       </KeyboardAwareScrollViewCompat>
 
       <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + Spacing.md }]}>
@@ -1068,6 +1094,20 @@ const styles = StyleSheet.create({
   hintText: {
     ...Typography.caption2,
     flex: 1,
+    lineHeight: 16,
+  },
+  addonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  addonLabel: {
+    ...Typography.body,
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  addonHint: {
+    ...Typography.caption1,
     lineHeight: 16,
   },
   errorBanner: {

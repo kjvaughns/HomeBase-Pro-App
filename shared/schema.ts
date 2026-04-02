@@ -172,6 +172,7 @@ export const providerCustomServices = pgTable("provider_custom_services", {
   priceTiersJson: text("price_tiers_json"),
   duration: integer("duration").default(60),
   isPublished: boolean("is_published").default(true),
+  isAddon: boolean("is_addon").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -208,6 +209,8 @@ export const appointments = pgTable("appointments", {
   providerDiagnosis: text("provider_diagnosis"),
   statusHistory: text("status_history"),
   notes: text("notes"),
+  isRecurring: boolean("is_recurring").default(false),
+  recurringFrequency: text("recurring_frequency"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   completedAt: timestamp("completed_at"),

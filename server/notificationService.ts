@@ -17,6 +17,7 @@ import {
   sendStripeConnectedEmail,
   sendProviderBookingNotificationEmail,
   sendJobStatusChangedEmail,
+  sendRebookingNudgeEmail,
 } from './emailService';
 
 export type NotificationEvent =
@@ -35,6 +36,7 @@ export type NotificationEvent =
   | 'invoice.payment_failed'
   | 'job.status_changed'
   | 'review.request'
+  | 'rebook.prompt'
   | 'stripe.onboarding_needed'
   | 'stripe.connected';
 
@@ -75,6 +77,7 @@ export interface DispatchPayload {
   newStatus?: string;
   scheduledDate?: string;
   notes?: string;
+  rebookLink?: string;
   // Auth/onboarding fields
   onboardingUrl?: string;
   // Review fields
@@ -428,6 +431,21 @@ async function _dispatch(event: NotificationEvent, payload: DispatchPayload): Pr
         relatedRecordId: payload.relatedRecordId,
       });
       const result = await sendJobStatusChangedEmail({ clientEmail, clientName, providerName, serviceName, newStatus, scheduledDate, notes });
+      await updateDelivery(deliveryId, result.success ? 'sent' : 'failed', result.messageId, result.error);
+      break;
+    }
+
+    case 'rebook.prompt': {
+      const { clientEmail, clientName, providerName, serviceName, rebookLink } = payload;
+      if (!clientEmail || !clientName || !providerName || !serviceName) break;
+      const deliveryId = await logDelivery({
+        channel: 'email', status: 'queued', eventType: event,
+        recipientEmail: clientEmail,
+        recipientUserId: payload.recipientUserId,
+        relatedRecordType: payload.relatedRecordType,
+        relatedRecordId: payload.relatedRecordId,
+      });
+      const result = await sendRebookingNudgeEmail({ clientEmail, clientName, providerName, serviceName, rebookLink });
       await updateDelivery(deliveryId, result.success ? 'sent' : 'failed', result.messageId, result.error);
       break;
     }

@@ -591,6 +591,23 @@ interface ProviderClientMessageData {
   body: string;
 }
 
+export async function sendRebookingNudgeEmail(data: {
+  clientEmail: string;
+  clientName: string;
+  providerName: string;
+  serviceName: string;
+  rebookLink?: string;
+}): Promise<SendResult> {
+  const body = greeting(data.clientName) +
+    paragraph(`Great news — your ${data.serviceName} with ${data.providerName} is complete! Ready to schedule your next visit?`) +
+    paragraph(`Keeping up with regular maintenance can save you money in the long run. Book ${data.providerName} again in just a few taps.`);
+  return sendEmail(
+    data.clientEmail,
+    `Your service is complete — book ${data.providerName} again?`,
+    buildEmailBase('Service Complete', body, 'Book Again', data.rebookLink || 'https://homebaseproapp.com')
+  );
+}
+
 export async function sendProviderClientMessage(data: ProviderClientMessageData): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
     const { client, fromEmail } = await getResendClient();

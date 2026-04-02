@@ -2359,7 +2359,7 @@ Respond with JSON only:
         return res.status(403).json({ error: "Forbidden" });
       }
       // Allowlist mutable fields only — prevent mass-assignment of id/providerId/createdAt
-      const { name, category, description, pricingType, basePrice, priceFrom, priceTo, priceTiersJson, duration, isPublished } = req.body;
+      const { name, category, description, pricingType, basePrice, priceFrom, priceTo, priceTiersJson, duration, isPublished, isAddon } = req.body;
       const allowedUpdate: Partial<typeof providerCustomServices.$inferInsert> = {};
       if (name !== undefined) allowedUpdate.name = name;
       if (category !== undefined) allowedUpdate.category = category;
@@ -2371,6 +2371,7 @@ Respond with JSON only:
       if (priceTiersJson !== undefined) allowedUpdate.priceTiersJson = priceTiersJson;
       if (duration !== undefined) allowedUpdate.duration = duration;
       if (isPublished !== undefined) allowedUpdate.isPublished = isPublished;
+      if (isAddon !== undefined) allowedUpdate.isAddon = isAddon;
       const [svc] = await db.update(providerCustomServices)
         .set({ ...allowedUpdate, updatedAt: new Date() })
         .where(eq(providerCustomServices.id, req.params.id))
@@ -2663,7 +2664,20 @@ Respond with JSON only:
       if (!job) {
         return res.status(404).json({ error: "Job not found" });
       }
-      res.json({ job });
+      let isRecurring = false;
+      let recurringFrequency: string | null = null;
+      if (job.appointmentId) {
+        const [appt] = await db.select({ isRecurring: appointments.isRecurring, recurringFrequency: appointments.recurringFrequency })
+          .from(appointments)
+          .where(eq(appointments.id, job.appointmentId))
+          .limit(1)
+          .catch(() => [null]);
+        if (appt) {
+          isRecurring = appt.isRecurring ?? false;
+          recurringFrequency = appt.recurringFrequency ?? null;
+        }
+      }
+      res.json({ job: { ...job, isRecurring, recurringFrequency } });
     } catch (error) {
       console.error("Get job error:", error);
       res.status(500).json({ error: "Failed to get job" });
@@ -2775,6 +2789,27 @@ Respond with JSON only:
       }
       // Fire job status change email (fire-and-forget)
       dispatchJobStatusEmail(job, 'completed').catch((e: unknown) => console.error('job.status_changed dispatch error:', e));
+      // Fire rebooking nudge email to homeowner (fire-and-forget)
+      (async () => {
+        try {
+          if (!job.clientId || !job.providerId) return;
+          const [client] = await db.select().from(clients).where(eq(clients.id, job.clientId)).catch(() => [null]);
+          const [provider] = await db.select().from(providers).where(eq(providers.id, job.providerId)).catch(() => [null]);
+          if (!client?.email || !provider) return;
+          await dispatch('rebook.prompt', {
+            clientEmail: client.email,
+            clientName: `${client.firstName || ''} ${client.lastName || ''}`.trim() || client.email,
+            providerName: provider.businessName,
+            serviceName: job.title ?? 'your service',
+            rebookLink: 'https://homebaseproapp.com',
+            recipientUserId: client.homeownerUserId ?? undefined,
+            relatedRecordType: 'job',
+            relatedRecordId: job.id,
+          });
+        } catch (e) {
+          console.error('rebook.prompt dispatch error:', e);
+        }
+      })();
       res.json({ job });
     } catch (error) {
       console.error("Complete job error:", error);

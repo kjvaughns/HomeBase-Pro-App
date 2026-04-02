@@ -42,6 +42,8 @@ interface ApiJob {
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
+  isRecurring?: boolean;
+  recurringFrequency?: string | null;
 }
 
 interface ApiClient {
@@ -429,7 +431,19 @@ export default function ProviderJobDetailScreen() {
             <ThemedText type="label" style={{ color: theme.textSecondary, marginBottom: Spacing.sm }}>
               JOB DETAILS
             </ThemedText>
-            <ThemedText type="h3" style={{ marginBottom: Spacing.xs }}>{job.title}</ThemedText>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.xs, flexWrap: "wrap" }}>
+              <ThemedText type="h3">{job.title}</ThemedText>
+              {job.isRecurring ? (
+                <View style={[styles.recurringBadge, { backgroundColor: Colors.accent + "22" }]}>
+                  <Feather name="repeat" size={11} color={Colors.accent} />
+                  <ThemedText style={[styles.recurringBadgeText, { color: Colors.accent }]}>
+                    {job.recurringFrequency
+                      ? job.recurringFrequency.charAt(0).toUpperCase() + job.recurringFrequency.slice(1)
+                      : "Recurring"}
+                  </ThemedText>
+                </View>
+              ) : null}
+            </View>
             <View style={styles.detailRow}>
               <Feather name="calendar" size={16} color={theme.textSecondary} />
               <ThemedText type="body" style={{ marginLeft: Spacing.sm }}>
@@ -590,6 +604,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
   },
   detailRow: { flexDirection: "row", alignItems: "center", marginTop: Spacing.xs },
+  recurringBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 10,
+  },
+  recurringBadgeText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
   checklistItem: { flexDirection: "row", alignItems: "center", paddingVertical: Spacing.sm },
   checkbox: {
     width: 24,

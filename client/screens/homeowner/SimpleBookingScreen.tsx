@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { StyleSheet, View, ScrollView, Pressable, FlatList, Alert, ActivityIndicator } from "react-native";
+import { StyleSheet, View, ScrollView, Pressable, FlatList, Alert, ActivityIndicator, Switch } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
@@ -38,6 +38,12 @@ const TIME_SLOTS = [
   { startTime: "17:00", label: "5 PM" },
 ];
 
+const FREQUENCY_OPTIONS = [
+  { value: "biweekly", label: "Every 2 Weeks" },
+  { value: "monthly", label: "Monthly" },
+  { value: "quarterly", label: "Quarterly" },
+];
+
 interface DateItem {
   dateStr: string;
   dayName: string;
@@ -66,6 +72,35 @@ interface ProviderService {
   priceTo: string | null;
   priceTiersJson: string | null;
   duration: number | null;
+  isAddon: boolean;
+}
+
+function getPriceLabel(svc: ProviderService): string {
+  if (svc.pricingType === "quote") return "Quote required";
+  if (svc.priceTiersJson) {
+    try {
+      const tiers: Array<{ label: string; price: string }> = JSON.parse(svc.priceTiersJson);
+      const prices = tiers.map((t) => parseFloat(t.price)).filter((p) => !isNaN(p));
+      if (prices.length > 1) return `$${Math.min(...prices).toFixed(0)} – $${Math.max(...prices).toFixed(0)}`;
+      if (prices.length === 1) return `From $${prices[0].toFixed(0)}`;
+    } catch {}
+  }
+  if (svc.basePrice) return `$${parseFloat(svc.basePrice).toFixed(0)}`;
+  if (svc.priceFrom && svc.priceTo) return `$${parseFloat(svc.priceFrom).toFixed(0)} - $${parseFloat(svc.priceTo).toFixed(0)}`;
+  return "Contact for pricing";
+}
+
+function getBasePrice(svc: ProviderService): number {
+  if (svc.basePrice) return parseFloat(svc.basePrice);
+  if (svc.priceFrom && svc.priceTo) return (parseFloat(svc.priceFrom) + parseFloat(svc.priceTo)) / 2;
+  if (svc.priceTiersJson) {
+    try {
+      const tiers: Array<{ label: string; price: string }> = JSON.parse(svc.priceTiersJson);
+      const prices = tiers.map((t) => parseFloat(t.price)).filter((p) => !isNaN(p));
+      if (prices.length > 0) return prices[0];
+    } catch {}
+  }
+  return 0;
 }
 
 export default function SimpleBookingScreen() {
@@ -81,6 +116,9 @@ export default function SimpleBookingScreen() {
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [selectedTimeLabel, setSelectedTimeLabel] = useState<string | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
+  const [selectedAddonIds, setSelectedAddonIds] = useState<Set<string>>(new Set());
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringFrequency, setRecurringFrequency] = useState<string>("monthly");
 
   const { data: homesData, isLoading: homesLoading } = useQuery<{ homes: HomeRecord[] }>({
     queryKey: ["/api/homes", user?.id],
@@ -114,25 +152,28 @@ export default function SimpleBookingScreen() {
   const timeSlots = availabilityData?.slots || TIME_SLOTS;
   const workingDays = availabilityData?.workingDays ?? [1, 2, 3, 4, 5];
 
-  const providerServices = servicesData?.services || [];
+  const allServices = servicesData?.services || [];
+  const primaryServices = allServices.filter((s) => !s.isAddon);
+  const addonServices = allServices.filter((s) => s.isAddon);
 
   // Pre-select service matching intakeData recommendation if available
   useEffect(() => {
-    if (providerServices.length > 0 && !selectedServiceId) {
+    if (primaryServices.length > 0 && !selectedServiceId) {
       const recommended = params.intakeData?.recommendedService;
       if (recommended) {
-        const match = providerServices.find((s) =>
+        const match = primaryServices.find((s) =>
           s.name.toLowerCase().includes(recommended.toLowerCase()) ||
           recommended.toLowerCase().includes(s.name.toLowerCase())
         );
         if (match) setSelectedServiceId(match.id);
+        else setSelectedServiceId(primaryServices[0].id);
       } else {
-        setSelectedServiceId(providerServices[0].id);
+        setSelectedServiceId(primaryServices[0].id);
       }
     }
-  }, [providerServices, params.intakeData?.recommendedService]);
+  }, [allServices.length, params.intakeData?.recommendedService]);
 
-  const selectedService = providerServices.find((s) => s.id === selectedServiceId);
+  const selectedService = primaryServices.find((s) => s.id === selectedServiceId);
 
   const homes = homesData?.homes || [];
   const defaultHome = homes.find((h) => h.isDefault) || homes[0];
@@ -156,33 +197,53 @@ export default function SimpleBookingScreen() {
 
   const canBook = selectedDate && selectedTime && defaultHome && selectedServiceId;
 
+  const selectedAddons = addonServices.filter((s) => selectedAddonIds.has(s.id));
+
+  const totalEstimatedPrice = useMemo((): string | null => {
+    if (!selectedService) return null;
+    let total = getBasePrice(selectedService);
+    selectedAddons.forEach((a) => { total += getBasePrice(a); });
+    if (total > 0) return total.toFixed(2);
+    if (params.intakeData?.priceRange) {
+      return ((params.intakeData.priceRange.min + params.intakeData.priceRange.max) / 2).toFixed(2);
+    }
+    return null;
+  }, [selectedService, selectedAddons, params.intakeData?.priceRange]);
+
+  const toggleAddon = (id: string) => {
+    Haptics.selectionAsync();
+    setSelectedAddonIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const bookMutation = useMutation({
     mutationFn: async () => {
       if (!user?.id || !defaultHome || !selectedDate || !selectedTime || !selectedService) {
         throw new Error("Missing required booking data");
       }
 
-      // Compute estimated price from the selected service
-      let estimatedPrice: string | null = null;
-      if (selectedService.basePrice) {
-        estimatedPrice = selectedService.basePrice;
-      } else if (selectedService.priceFrom && selectedService.priceTo) {
-        estimatedPrice = ((parseFloat(selectedService.priceFrom) + parseFloat(selectedService.priceTo)) / 2).toString();
-      } else if (params.intakeData?.priceRange) {
-        estimatedPrice = ((params.intakeData.priceRange.min + params.intakeData.priceRange.max) / 2).toString();
-      }
+      const addonNames = selectedAddons.map((a) => a.name).join(", ");
+      const serviceNameFull = addonNames
+        ? `${selectedService.name} + ${addonNames}`
+        : selectedService.name;
 
       const url = new URL("/api/appointments", getApiUrl());
       const res = await apiRequest("POST", url.toString(), {
         userId: user.id,
         homeId: defaultHome.id,
         providerId: params.providerId,
-        serviceName: selectedService.name,
+        serviceName: serviceNameFull,
         description: params.intakeData?.problemDescription || params.intakeData?.issueSummary || selectedService.description || "",
         scheduledDate: new Date(selectedDate).toISOString(),
         scheduledTime: selectedTimeLabel || selectedTime,
-        estimatedPrice,
+        estimatedPrice: totalEstimatedPrice,
         urgency: params.intakeData?.urgency || "flexible",
+        isRecurring,
+        recurringFrequency: isRecurring ? recurringFrequency : null,
       });
       return res.json();
     },
@@ -299,32 +360,15 @@ export default function SimpleBookingScreen() {
           </GlassCard>
         </Animated.View>
 
-        {/* Service selector — loaded from provider's published services */}
+        {/* Service selector — loaded from provider's published non-addon services */}
         <Animated.View entering={FadeInDown.delay(250)}>
           <ThemedText style={styles.sectionTitle}>Select Service</ThemedText>
           {servicesLoading ? (
             <ActivityIndicator size="small" color={Colors.accent} style={{ marginBottom: Spacing.md }} />
-          ) : providerServices.length > 0 ? (
-            providerServices.map((svc) => {
+          ) : primaryServices.length > 0 ? (
+            primaryServices.map((svc) => {
               const isSelected = selectedServiceId === svc.id;
-              let priceLabel = "Contact for pricing";
-              if (svc.pricingType === "quote") {
-                priceLabel = "Quote required";
-              } else if (svc.priceTiersJson) {
-                try {
-                  const tiers: Array<{ label: string; price: string }> = JSON.parse(svc.priceTiersJson);
-                  const prices = tiers.map((t) => parseFloat(t.price)).filter((p) => !isNaN(p));
-                  if (prices.length > 1) {
-                    priceLabel = `$${Math.min(...prices).toFixed(0)} – $${Math.max(...prices).toFixed(0)}`;
-                  } else if (prices.length === 1) {
-                    priceLabel = `From $${prices[0].toFixed(0)}`;
-                  }
-                } catch {}
-              } else if (svc.basePrice) {
-                priceLabel = `$${parseFloat(svc.basePrice).toFixed(0)}`;
-              } else if (svc.priceFrom && svc.priceTo) {
-                priceLabel = `$${parseFloat(svc.priceFrom).toFixed(0)} - $${parseFloat(svc.priceTo).toFixed(0)}`;
-              }
+              const priceLabel = getPriceLabel(svc);
               return (
                 <Pressable
                   key={svc.id}
@@ -373,8 +417,55 @@ export default function SimpleBookingScreen() {
           )}
         </Animated.View>
 
+        {/* Add-on suggestions */}
+        {addonServices.length > 0 ? (
+          <Animated.View entering={FadeInDown.delay(280)}>
+            <ThemedText style={styles.sectionTitle}>Suggested Add-ons</ThemedText>
+            {addonServices.map((addon) => {
+              const isSelected = selectedAddonIds.has(addon.id);
+              const priceLabel = getPriceLabel(addon);
+              return (
+                <Pressable
+                  key={addon.id}
+                  onPress={() => toggleAddon(addon.id)}
+                  style={[
+                    styles.addonCard,
+                    {
+                      backgroundColor: isSelected ? Colors.accent + "12" : theme.cardBackground,
+                      borderColor: isSelected ? Colors.accent : theme.borderLight,
+                      borderWidth: isSelected ? 2 : 1,
+                    },
+                  ]}
+                >
+                  <View style={styles.addonCheckbox}>
+                    <View style={[
+                      styles.checkbox,
+                      { borderColor: isSelected ? Colors.accent : theme.borderLight, backgroundColor: isSelected ? Colors.accent : "transparent" },
+                    ]}>
+                      {isSelected ? <Feather name="check" size={12} color="#fff" /> : null}
+                    </View>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <ThemedText style={[styles.addonName, isSelected && { color: Colors.accent }]}>
+                      {addon.name}
+                    </ThemedText>
+                    {addon.description ? (
+                      <ThemedText style={[styles.addonDesc, { color: theme.textSecondary }]} numberOfLines={1}>
+                        {addon.description}
+                      </ThemedText>
+                    ) : null}
+                  </View>
+                  <ThemedText style={[styles.addonPrice, isSelected && { color: Colors.accent }]}>
+                    {priceLabel}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+          </Animated.View>
+        ) : null}
+
         {!defaultHome && !homesLoading ? (
-          <Animated.View entering={FadeInDown.delay(260)}>
+          <Animated.View entering={FadeInDown.delay(290)}>
             <GlassCard style={styles.alertCardWarning}>
               <View style={styles.alertRow}>
                 <Feather name="alert-circle" size={18} color="#F59E0B" />
@@ -439,6 +530,56 @@ export default function SimpleBookingScreen() {
             )}
           </Animated.View>
         ) : null}
+
+        {/* Repeat service toggle */}
+        <Animated.View entering={FadeInDown.delay(320)}>
+          <GlassCard style={styles.repeatCard}>
+            <View style={styles.repeatRow}>
+              <View style={{ flex: 1 }}>
+                <ThemedText style={styles.repeatLabel}>Repeat this service</ThemedText>
+                <ThemedText style={[styles.repeatHint, { color: theme.textSecondary }]}>
+                  Lock in regular visits on a schedule
+                </ThemedText>
+              </View>
+              <Switch
+                value={isRecurring}
+                onValueChange={(v) => {
+                  Haptics.selectionAsync();
+                  setIsRecurring(v);
+                }}
+                trackColor={{ false: theme.borderLight, true: Colors.accent + "80" }}
+                thumbColor={isRecurring ? Colors.accent : theme.textTertiary}
+              />
+            </View>
+            {isRecurring ? (
+              <View style={styles.frequencyRow}>
+                {FREQUENCY_OPTIONS.map((opt) => {
+                  const isActive = recurringFrequency === opt.value;
+                  return (
+                    <Pressable
+                      key={opt.value}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setRecurringFrequency(opt.value);
+                      }}
+                      style={[
+                        styles.freqChip,
+                        {
+                          backgroundColor: isActive ? Colors.accent : theme.backgroundElevated,
+                          borderColor: isActive ? Colors.accent : theme.borderLight,
+                        },
+                      ]}
+                    >
+                      <ThemedText style={[styles.freqLabel, isActive && { color: "#fff" }]}>
+                        {opt.label}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
+          </GlassCard>
+        </Animated.View>
       </ScrollView>
 
       <View
@@ -452,54 +593,17 @@ export default function SimpleBookingScreen() {
         ]}
       >
         <View style={styles.priceRow}>
-          {selectedService?.pricingType === "quote" ? (
+          {selectedService?.pricingType === "quote" && selectedAddonIds.size === 0 ? (
             <ThemedText style={[styles.priceLabel, { color: theme.textSecondary }]}>
               Quote will be provided
             </ThemedText>
-          ) : selectedService?.priceTiersJson ? (
-            (() => {
-              try {
-                const tiers: Array<{ label: string; price: string }> = JSON.parse(selectedService.priceTiersJson);
-                const prices = tiers.map((t) => parseFloat(t.price)).filter((p) => !isNaN(p));
-                if (prices.length > 1) {
-                  return (
-                    <>
-                      <ThemedText style={[styles.priceLabel, { color: theme.textSecondary }]}>Range</ThemedText>
-                      <ThemedText style={styles.priceValue}>
-                        ${Math.min(...prices).toFixed(0)} – ${Math.max(...prices).toFixed(0)}
-                      </ThemedText>
-                    </>
-                  );
-                } else if (prices.length === 1) {
-                  return (
-                    <>
-                      <ThemedText style={[styles.priceLabel, { color: theme.textSecondary }]}>From</ThemedText>
-                      <ThemedText style={styles.priceValue}>${prices[0].toFixed(0)}</ThemedText>
-                    </>
-                  );
-                }
-              } catch {}
-              return <ThemedText style={[styles.priceLabel, { color: theme.textSecondary }]}>Price to be confirmed</ThemedText>;
-            })()
-          ) : selectedService?.basePrice ? (
+          ) : totalEstimatedPrice ? (
             <>
-              <ThemedText style={[styles.priceLabel, { color: theme.textSecondary }]}>Price</ThemedText>
-              <ThemedText style={styles.priceValue}>
-                ${parseFloat(selectedService.basePrice).toFixed(0)}
+              <ThemedText style={[styles.priceLabel, { color: theme.textSecondary }]}>
+                {selectedAddonIds.size > 0 ? "Total est." : "Est. price"}
               </ThemedText>
-            </>
-          ) : selectedService?.priceFrom && selectedService?.priceTo ? (
-            <>
-              <ThemedText style={[styles.priceLabel, { color: theme.textSecondary }]}>Estimated</ThemedText>
               <ThemedText style={styles.priceValue}>
-                ${parseFloat(selectedService.priceFrom).toFixed(0)} - ${parseFloat(selectedService.priceTo).toFixed(0)}
-              </ThemedText>
-            </>
-          ) : params.intakeData?.priceRange ? (
-            <>
-              <ThemedText style={[styles.priceLabel, { color: theme.textSecondary }]}>Estimated</ThemedText>
-              <ThemedText style={styles.priceValue}>
-                ${params.intakeData.priceRange.min} - ${params.intakeData.priceRange.max}
+                ${parseFloat(totalEstimatedPrice).toFixed(0)}
               </ThemedText>
             </>
           ) : (
@@ -507,6 +611,14 @@ export default function SimpleBookingScreen() {
               Price to be confirmed
             </ThemedText>
           )}
+          {isRecurring ? (
+            <View style={[styles.recurringBadge, { backgroundColor: Colors.accent + "20" }]}>
+              <Feather name="repeat" size={11} color={Colors.accent} />
+              <ThemedText style={[styles.recurringBadgeText, { color: Colors.accent }]}>
+                {FREQUENCY_OPTIONS.find((f) => f.value === recurringFrequency)?.label || "Recurring"}
+              </ThemedText>
+            </View>
+          ) : null}
         </View>
         <PrimaryButton
           onPress={handleBook}
@@ -590,10 +702,6 @@ const styles = StyleSheet.create({
     ...Typography.subhead,
     textTransform: "capitalize",
   },
-  alertCard: {
-    marginBottom: Spacing.md,
-    borderWidth: 1,
-  },
   alertCardWarning: {
     marginBottom: Spacing.md,
     borderWidth: 1,
@@ -602,40 +710,103 @@ const styles = StyleSheet.create({
   alertRow: {
     flexDirection: "row",
     alignItems: "center",
-    padding: Spacing.md,
   },
   sectionTitle: {
-    ...Typography.headline,
-    marginBottom: Spacing.md,
+    ...Typography.subhead,
+    fontWeight: "600",
+    marginBottom: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  serviceCard: {
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  serviceCardRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.sm,
+  },
+  serviceName: {
+    ...Typography.body,
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  serviceDesc: {
+    ...Typography.caption1,
+    marginTop: 2,
+  },
+  servicePriceBox: {
+    alignItems: "flex-end",
+  },
+  servicePrice: {
+    ...Typography.subhead,
+    fontWeight: "600",
+  },
+  serviceDuration: {
+    ...Typography.caption2,
+    marginTop: 2,
+  },
+  addonCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  addonCheckbox: {
+    width: 24,
+    alignItems: "center",
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addonName: {
+    ...Typography.subhead,
+    fontWeight: "600",
+    marginBottom: 1,
+  },
+  addonDesc: {
+    ...Typography.caption1,
+  },
+  addonPrice: {
+    ...Typography.subhead,
+    fontWeight: "600",
   },
   dateList: {
-    paddingVertical: Spacing.xs,
+    paddingVertical: Spacing.sm,
+    gap: Spacing.sm,
   },
   dateCard: {
     width: 64,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.sm,
+    padding: Spacing.sm,
     borderRadius: BorderRadius.md,
-    borderWidth: 1,
     alignItems: "center",
-    marginRight: Spacing.sm,
+    borderWidth: 1,
   },
   dateDayName: {
     ...Typography.caption2,
     marginBottom: 2,
   },
   dateDayNum: {
-    ...Typography.title3,
-    marginBottom: 2,
+    ...Typography.title2,
+    fontWeight: "700",
   },
   dateMonth: {
     ...Typography.caption2,
+    marginTop: 2,
   },
   selectedText: {
     color: "#fff",
   },
   timeSlotsSection: {
-    marginTop: Spacing.lg,
+    marginTop: Spacing.sm,
   },
   slotsGrid: {
     flexDirection: "row",
@@ -647,11 +818,44 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
-    minWidth: 80,
-    alignItems: "center",
   },
   slotText: {
     ...Typography.subhead,
+    fontWeight: "500",
+  },
+  repeatCard: {
+    padding: Spacing.md,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  repeatRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  repeatLabel: {
+    ...Typography.body,
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  repeatHint: {
+    ...Typography.caption1,
+  },
+  frequencyRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+    flexWrap: "wrap",
+  },
+  freqChip: {
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  freqLabel: {
+    ...Typography.subhead,
+    fontWeight: "500",
   },
   bottomBar: {
     position: "absolute",
@@ -660,46 +864,34 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: "row",
     alignItems: "center",
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
     gap: Spacing.md,
-    padding: Spacing.md,
     borderTopWidth: 1,
   },
   priceRow: {
-    alignItems: "flex-start",
+    flex: 1,
+    gap: 4,
   },
   priceLabel: {
-    ...Typography.caption2,
+    ...Typography.caption1,
   },
   priceValue: {
-    ...Typography.headline,
+    ...Typography.title3,
+    fontWeight: "700",
     color: Colors.accent,
   },
-  serviceCard: {
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.sm,
-  },
-  serviceCardRow: {
+  recurringBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.md,
+    gap: 3,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: BorderRadius.full,
+    alignSelf: "flex-start",
   },
-  serviceName: {
-    ...Typography.headline,
-    marginBottom: 2,
-  },
-  serviceDesc: {
-    ...Typography.subhead,
-    marginTop: 2,
-  },
-  servicePriceBox: {
-    alignItems: "flex-end",
-  },
-  servicePrice: {
-    ...Typography.headline,
-  },
-  serviceDuration: {
+  recurringBadgeText: {
     ...Typography.caption2,
-    marginTop: 2,
+    fontWeight: "600",
   },
 });
