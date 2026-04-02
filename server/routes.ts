@@ -2650,8 +2650,24 @@ Respond with JSON only:
 
   app.get("/api/provider/:providerId/jobs", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
     try {
-      const jobs = await storage.getJobs(req.params.providerId);
-      res.json({ jobs });
+      const rawJobs = await storage.getJobs(req.params.providerId);
+      // Enrich with isRecurring/recurringFrequency from linked appointment
+      const enrichedJobs = await Promise.all(
+        rawJobs.map(async (job) => {
+          if (!job.appointmentId) return { ...job, isRecurring: false, recurringFrequency: null };
+          const [appt] = await db.select({ isRecurring: appointments.isRecurring, recurringFrequency: appointments.recurringFrequency })
+            .from(appointments)
+            .where(eq(appointments.id, job.appointmentId))
+            .limit(1)
+            .catch(() => [null]);
+          return {
+            ...job,
+            isRecurring: appt?.isRecurring ?? false,
+            recurringFrequency: appt?.recurringFrequency ?? null,
+          };
+        })
+      );
+      res.json({ jobs: enrichedJobs });
     } catch (error) {
       console.error("Get jobs error:", error);
       res.status(500).json({ error: "Failed to get jobs" });
@@ -2789,20 +2805,34 @@ Respond with JSON only:
       }
       // Fire job status change email (fire-and-forget)
       dispatchJobStatusEmail(job, 'completed').catch((e: unknown) => console.error('job.status_changed dispatch error:', e));
-      // Fire rebooking nudge email to homeowner (fire-and-forget)
+      // Fire rebooking nudge push + email to homeowner (fire-and-forget)
       (async () => {
         try {
           if (!job.clientId || !job.providerId) return;
           const [client] = await db.select().from(clients).where(eq(clients.id, job.clientId)).catch(() => [null]);
           const [provider] = await db.select().from(providers).where(eq(providers.id, job.providerId)).catch(() => [null]);
           if (!client?.email || !provider) return;
+          const homeownerUserId = client.homeownerUserId ?? undefined;
+          const encodedName = encodeURIComponent(provider.businessName);
+          const rebookLink = `homebase://SimpleBooking?providerId=${provider.id}&providerName=${encodedName}`;
+          // In-app push notification so homeowner sees it immediately
+          if (homeownerUserId) {
+            await dispatchNotification(
+              homeownerUserId,
+              'Time to rebook?',
+              `Your ${job.title ?? 'service'} with ${provider.businessName} is done. Ready to schedule again?`,
+              'rebook.prompt',
+              { providerId: provider.id, providerName: provider.businessName, screen: 'SimpleBooking' },
+              'bookings',
+            ).catch((e: unknown) => console.error('rebook push error:', e));
+          }
           await dispatch('rebook.prompt', {
             clientEmail: client.email,
             clientName: `${client.firstName || ''} ${client.lastName || ''}`.trim() || client.email,
             providerName: provider.businessName,
             serviceName: job.title ?? 'your service',
-            rebookLink: 'https://homebaseproapp.com',
-            recipientUserId: client.homeownerUserId ?? undefined,
+            rebookLink,
+            recipientUserId: homeownerUserId,
             relatedRecordType: 'job',
             relatedRecordId: job.id,
           });

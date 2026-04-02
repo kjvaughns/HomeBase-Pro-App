@@ -111,9 +111,21 @@ export function JobCard({ job, onPress, testID }: JobCardProps) {
         <View style={styles.header}>
           <Avatar uri={job.customerAvatar} name={job.customerName} size="small" />
           <View style={styles.headerInfo}>
-            <ThemedText type="h4" numberOfLines={1}>
-              {job.service}
-            </ThemedText>
+            <View style={styles.titleRow}>
+              <ThemedText type="h4" numberOfLines={1} style={{ flex: 1 }}>
+                {job.service}
+              </ThemedText>
+              {job.isRecurring ? (
+                <View style={[styles.recurringBadge, { backgroundColor: Colors.accent + "22" }]}>
+                  <Feather name="repeat" size={10} color={Colors.accent} />
+                  <ThemedText style={[styles.recurringText, { color: Colors.accent }]}>
+                    {job.recurringFrequency
+                      ? job.recurringFrequency.charAt(0).toUpperCase() + job.recurringFrequency.slice(1)
+                      : "Recurring"}
+                  </ThemedText>
+                </View>
+              ) : null}
+            </View>
             <ThemedText
               type="small"
               style={{ color: theme.textSecondary }}
@@ -176,6 +188,24 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: Spacing.md,
     marginRight: Spacing.sm,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexWrap: "wrap",
+  },
+  recurringBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    paddingVertical: 1,
+    paddingHorizontal: 5,
+    borderRadius: 8,
+  },
+  recurringText: {
+    fontSize: 10,
+    fontWeight: "600",
   },
   details: {
     marginTop: Spacing.md,

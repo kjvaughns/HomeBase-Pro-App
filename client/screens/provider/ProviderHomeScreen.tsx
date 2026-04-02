@@ -38,6 +38,8 @@ interface Job {
   status: "scheduled" | "in_progress" | "completed" | "cancelled";
   estimatedPrice?: string;
   address?: string;
+  isRecurring?: boolean;
+  recurringFrequency?: string | null;
 }
 
 interface Client {
@@ -197,6 +199,8 @@ export default function ProviderHomeScreen() {
     status: job.status,
     price: parseFloat(job.estimatedPrice || "0"),
     description: job.description,
+    isRecurring: job.isRecurring ?? false,
+    recurringFrequency: job.recurringFrequency ?? null,
   });
 
   const isLoading = statsLoading || jobsLoading;

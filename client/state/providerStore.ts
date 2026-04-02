@@ -61,6 +61,8 @@ export interface Job {
   invoiceId?: string;
   paymentStatus?: "unpaid" | "partial" | "paid";
   amountPaid?: number;
+  isRecurring?: boolean;
+  recurringFrequency?: string | null;
 }
 
 export interface Quote {

@@ -15,12 +15,21 @@ import { useThemeStore } from "@/state/themeStore";
 import { useOnboardingStore } from "@/state/onboardingStore";
 import { useTheme } from "@/hooks/useTheme";
 
+const linking = {
+  prefixes: ["homebase://", "exp+homebase://"],
+  config: {
+    screens: {
+      SimpleBooking: "SimpleBooking",
+    },
+  },
+};
+
 function AppContent() {
   const { isDark } = useTheme();
   
   return (
     <>
-      <NavigationContainer>
+      <NavigationContainer linking={linking}>
         <RootStackNavigator />
       </NavigationContainer>
       <StatusBar style={isDark ? "light" : "dark"} />
