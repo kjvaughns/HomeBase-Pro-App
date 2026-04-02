@@ -120,6 +120,11 @@ export function handleNotificationNavigation(
       navigation.navigate("InvoiceDetail", { invoiceId: params.invoiceId });
     } else if (screen === "ClientDetail" && params?.clientId) {
       navigation.navigate("ClientDetail", { clientId: params.clientId });
+    } else if (screen === "SimpleBooking" && data?.providerId) {
+      navigation.navigate("SimpleBooking", {
+        providerId: data.providerId as string,
+        providerName: (data.providerName as string | undefined) ?? undefined,
+      });
     } else if (screen === "Notifications") {
       navigation.navigate("Notifications");
     }

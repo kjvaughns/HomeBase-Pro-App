@@ -8,6 +8,13 @@
       "when": 1774974129413,
       "tag": "0000_young_magneto",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1743570000000,
+      "tag": "0001_task33_addon_recurring",
+      "breakpoints": true
     }
   ]
 }
