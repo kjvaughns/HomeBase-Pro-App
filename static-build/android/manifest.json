@@ -1,0 +1,144 @@
+{
+  "id": "9c396d54-578a-4a8f-9f96-dda3e40dfffb",
+  "createdAt": "2026-04-02T04:45:24.081Z",
+  "runtimeVersion": "exposdk:55.0.0",
+  "launchAsset": {
+    "key": "bundle-1775105124081-8801",
+    "contentType": "application/javascript",
+    "url": "https://71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo.spock.replit.dev/1775105124081-8801/_expo/static/js/android/bundle.js"
+  },
+  "assets": [],
+  "metadata": {},
+  "extra": {
+    "eas": {
+      "projectId": "16db0e26-c342-42df-934c-b619f917e881"
+    },
+    "expoClient": {
+      "name": "HomeBase",
+      "slug": "homebase",
+      "version": "1.0.0",
+      "privacyPolicyUrl": "https://homebaseproapp.com/privacy",
+      "orientation": "portrait",
+      "icon": "./assets/images/icon.png",
+      "scheme": "homebase",
+      "userInterfaceStyle": "automatic",
+      "newArchEnabled": true,
+      "ios": {
+        "supportsTablet": true,
+        "bundleIdentifier": "com.homebasepro.app",
+        "buildNumber": "1",
+        "infoPlist": {
+          "ITSAppUsesNonExemptEncryption": false,
+          "NSCameraUsageDescription": "HomeBase uses your camera to photograph your home, projects, and documents when submitting service requests or capturing job progress.",
+          "NSPhotoLibraryUsageDescription": "HomeBase accesses your photo library so you can attach photos of your home, projects, or documents to service requests and job records.",
+          "NSPhotoLibraryAddUsageDescription": "HomeBase saves photos related to your home projects and service records to your photo library.",
+          "NSMicrophoneUsageDescription": "HomeBase uses the microphone when recording video walkthroughs of your home or project areas to share with service providers.",
+          "NSLocationWhenInUseUsageDescription": "HomeBase uses your location to find nearby service providers and verify service addresses.",
+          "NSContactsUsageDescription": "HomeBase accesses your contacts so you can quickly add clients or invite service providers without retyping their information."
+        }
+      },
+      "android": {
+        "adaptiveIcon": {
+          "backgroundColor": "#38AE5F",
+          "foregroundImage": "./assets/images/icon.png",
+          "foregroundImageUrl": "http://71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo.spock.replit.dev/assets/./assets/images/icon.png"
+        },
+        "edgeToEdgeEnabled": true,
+        "predictiveBackGestureEnabled": false,
+        "package": "com.homebase.app"
+      },
+      "web": {
+        "output": "single",
+        "favicon": "./assets/images/icon.png"
+      },
+      "plugins": [
+        [
+          "expo-splash-screen",
+          {
+            "image": "./assets/images/splash-icon.png",
+            "imageWidth": 200,
+            "resizeMode": "contain",
+            "backgroundColor": "#ffffff",
+            "dark": {
+              "backgroundColor": "#0F1419"
+            }
+          }
+        ],
+        "expo-web-browser",
+        "expo-font",
+        "expo-image",
+        [
+          "expo-build-properties",
+          {
+            "ios": {
+              "deploymentTarget": "15.1"
+            }
+          }
+        ],
+        [
+          "@stripe/stripe-react-native",
+          {
+            "merchantIdentifier": "merchant.com.homebasepro.app"
+          }
+        ]
+      ],
+      "experiments": {
+        "reactCompiler": true
+      },
+      "extra": {
+        "eas": {
+          "projectId": "16db0e26-c342-42df-934c-b619f917e881"
+        }
+      },
+      "_internal": {
+        "isDebug": false,
+        "projectRoot": "/home/runner/workspace",
+        "dynamicConfigPath": {},
+        "staticConfigPath": "/home/runner/workspace/app.json",
+        "packageJsonPath": "/home/runner/workspace/package.json",
+        "pluginHistory": {
+          "expo-splash-screen": {
+            "name": "expo-splash-screen",
+            "version": "55.0.13"
+          },
+          "expo-web-browser": {
+            "name": "expo-web-browser",
+            "version": "55.0.10"
+          },
+          "expo-font": {
+            "name": "expo-font",
+            "version": "55.0.4"
+          },
+          "expo-image": {
+            "name": "expo-image",
+            "version": "55.0.6"
+          },
+          "@stripe/stripe-react-native": {
+            "name": "@stripe/stripe-react-native",
+            "version": "0.38.6"
+          }
+        }
+      },
+      "sdkVersion": "55.0.0",
+      "platforms": [
+        "ios",
+        "android",
+        "web"
+      ],
+      "iconUrl": "http://71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo.spock.replit.dev/assets/./assets/images/icon.png",
+      "hostUri": "71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo.spock.replit.dev/android"
+    },
+    "expoGo": {
+      "debuggerHost": "71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo.spock.replit.dev/android",
+      "developer": {
+        "tool": "expo-cli",
+        "projectRoot": "/home/runner/workspace"
+      },
+      "packagerOpts": {
+        "dev": false
+      },
+      "mainModuleName": "client/index"
+    },
+    "scopeKey": "@anonymous/homebase-5c7d3a4a-90ae-49a2-bc82-709dc3efff21"
+  }
+}
