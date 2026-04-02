@@ -785,6 +785,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
       }
+      const VALID_FREQUENCIES = ["biweekly", "monthly", "quarterly"];
+      if (parsed.data.recurringFrequency && !VALID_FREQUENCIES.includes(parsed.data.recurringFrequency)) {
+        return res.status(400).json({ error: "Invalid recurringFrequency", allowed: VALID_FREQUENCIES });
+      }
       const appointment = await storage.createAppointment(parsed.data);
 
       // Find or create a client record in the provider's client list
