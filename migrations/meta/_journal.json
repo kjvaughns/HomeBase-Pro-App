@@ -15,6 +15,13 @@
       "when": 1743570000000,
       "tag": "0001_task33_addon_recurring",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1743710000000,
+      "tag": "0002_task34_housefax_entries",
+      "breakpoints": true
     }
   ]
 }

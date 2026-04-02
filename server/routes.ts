@@ -1,5 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
+import * as fs from "fs";
+import * as path from "path";
 import { openai, HOMEBASE_SYSTEM_PROMPT, PROVIDER_ASSISTANT_PROMPT } from "./openai";
 import { storage } from "./storage";
 import { seedDatabase } from "./seed";
@@ -7,7 +9,7 @@ import { insertUserSchema, loginSchema, insertHomeSchema, insertAppointmentSchem
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
 import { db } from "./db";
-import { sql, eq, and, desc } from "drizzle-orm";
+import { sql, eq, and, desc, inArray } from "drizzle-orm";
 import { appointments, maintenanceReminders, homes, reviews } from "@shared/schema";
 import { sendInvoiceEmail, sendProviderClientMessage } from "./emailService";
 import { dispatch, dispatchWithResult, dispatchNotification, sendPush } from "./notificationService";
@@ -59,6 +61,7 @@ import {
   type Job,
   pushTokens,
   notificationPreferences,
+  housefaxEntries,
 } from "@shared/schema";
 
 interface IdParams { id: string; }
@@ -241,6 +244,158 @@ async function convertIntakeToClientJob(
     .where(eq(intakeSubmissions.id, submissionId));
 
   return { clientId, job: newJob };
+}
+
+// ─── HouseFax Category Mapper ────────────────────────────────────────────────
+function detectServiceCategory(title: string): string {
+  const t = (title || "").toLowerCase();
+  if (t.includes("hvac") || t.includes("heat") || t.includes("air") || t.includes("furnace") || t.includes("ac ") || t.includes("cooling")) return "HVAC";
+  if (t.includes("plumb") || t.includes("pipe") || t.includes("water") || t.includes("drain") || t.includes("toilet") || t.includes("faucet")) return "Plumbing";
+  if (t.includes("electr") || t.includes("wiring") || t.includes("outlet") || t.includes("circuit")) return "Electrical";
+  if (t.includes("roof") || t.includes("gutter") || t.includes("shingle")) return "Roof";
+  if (t.includes("pest") || t.includes("termite") || t.includes("rodent") || t.includes("insect")) return "Pest Control";
+  if (t.includes("lawn") || t.includes("garden") || t.includes("landscap") || t.includes("grass") || t.includes("mow")) return "Lawn";
+  if (t.includes("paint") || t.includes("coat")) return "Painting";
+  if (t.includes("clean")) return "Cleaning";
+  if (t.includes("appliance") || t.includes("washer") || t.includes("dryer") || t.includes("dishwash") || t.includes("refriger")) return "Appliances";
+  return "General";
+}
+
+// Auto-log a HouseFax entry when a job completes
+async function autoLogHouseFaxEntry(job: Job): Promise<void> {
+  try {
+    // Find the homeId via the appointment linked to this job, or via client's home
+    let homeId: string | null = null;
+
+    // Try job's appointmentId first
+    if (job.appointmentId) {
+      const [appt] = await db.select({ homeId: appointments.homeId }).from(appointments).where(eq(appointments.id, job.appointmentId));
+      if (appt) homeId = appt.homeId;
+    }
+
+    // Fall back: find homeId via the job's linked invoice (homeownerUserId -> homes)
+    if (!homeId && job.id) {
+      const [inv] = await db
+        .select({ homeownerUserId: invoices.homeownerUserId })
+        .from(invoices)
+        .where(eq(invoices.jobId, job.id));
+      if (inv?.homeownerUserId) {
+        const [defaultHome] = await db.select({ id: homes.id })
+          .from(homes)
+          .where(and(eq(homes.userId, inv.homeownerUserId), eq(homes.isDefault, true)));
+        if (defaultHome) homeId = defaultHome.id;
+        else {
+          const [anyHome] = await db.select({ id: homes.id })
+            .from(homes)
+            .where(eq(homes.userId, inv.homeownerUserId));
+          if (anyHome) homeId = anyHome.id;
+        }
+      }
+    }
+
+    if (!homeId) {
+      console.log(`[HouseFax] No home found for job ${job.id}, skipping auto-log`);
+      return;
+    }
+
+    // Check if entry already exists for this job
+    const [existing] = await db.select({ id: housefaxEntries.id }).from(housefaxEntries).where(eq(housefaxEntries.jobId, job.id));
+    if (existing) {
+      console.log(`[HouseFax] Entry already exists for job ${job.id}`);
+      return;
+    }
+
+    // Get provider info
+    const [provider] = job.providerId ? await db.select({ businessName: providers.businessName }).from(providers).where(eq(providers.id, job.providerId)) : [null];
+
+    const serviceCategory = detectServiceCategory(job.title);
+    const costCents = job.finalPrice ? Math.round(parseFloat(job.finalPrice) * 100) : 0;
+
+    // Generate AI summary
+    let aiSummary: string | null = null;
+    try {
+      const prompt = `Write a 1-2 sentence plain-English summary of this home service job for a homeowner's records:
+
+Service: ${job.title}
+Category: ${serviceCategory}
+Description: ${job.description || "No additional details"}
+Notes: ${job.notes || "None"}
+Provider: ${provider?.businessName || "Unknown provider"}
+Cost: ${costCents > 0 ? "$" + (costCents / 100).toFixed(2) : "Not specified"}
+
+Be concise and factual. No bullet points. Just 1-2 sentences.`;
+
+      const aiResponse = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 100,
+      });
+      aiSummary = aiResponse.choices[0]?.message?.content?.trim() || null;
+    } catch (e) {
+      console.error("[HouseFax] AI summary generation failed:", e);
+    }
+
+    await db.insert(housefaxEntries).values({
+      homeId,
+      jobId: job.id,
+      appointmentId: job.appointmentId || null,
+      serviceCategory,
+      serviceName: job.title,
+      providerId: job.providerId || null,
+      providerName: provider?.businessName || null,
+      completedAt: job.completedAt || new Date(),
+      costCents,
+      aiSummary,
+      photos: [],
+      systemAffected: serviceCategory,
+      notes: job.notes || null,
+    });
+
+    console.log(`[HouseFax] Auto-logged entry for job ${job.id} (${job.title}) -> home ${homeId}`);
+
+    // Persist the updated score on write (not just on read)
+    calculateAndPersistHouseFaxScore(homeId).catch((e: unknown) =>
+      console.error("[HouseFax] Score persistence failed:", e)
+    );
+  } catch (error) {
+    console.error("[HouseFax] Auto-log failed:", error);
+    throw error;
+  }
+}
+
+// Calculates health score from all housefax entries for a home and persists it
+async function calculateAndPersistHouseFaxScore(homeId: string): Promise<number> {
+  const KEY_SYSTEMS = ["HVAC", "Plumbing", "Electrical", "Roof", "Pest Control", "Lawn"];
+  const allEntries = await db
+    .select()
+    .from(housefaxEntries)
+    .where(eq(housefaxEntries.homeId, homeId));
+
+  const now = new Date();
+  const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+  const twoYearsAgo = new Date(now.getTime() - 2 * 365 * 24 * 60 * 60 * 1000);
+  let score = 50;
+
+  for (const sys of KEY_SYSTEMS) {
+    const sysEntries = allEntries.filter(e => {
+      const s = (e.systemAffected || e.serviceCategory || "").toLowerCase();
+      return s.includes(sys.toLowerCase().split(" ")[0]);
+    });
+    if (sysEntries.length > 0) {
+      score += sysEntries.find(e => e.completedAt >= oneYearAgo) ? 6 : 2;
+    }
+    if (sysEntries.length === 0) score -= 3;
+    else if (!sysEntries.find(e => e.completedAt >= twoYearsAgo)) score -= 2;
+  }
+
+  const withPhotos = allEntries.filter(e => Array.isArray(e.photos) && (e.photos as string[]).length > 0).length;
+  const withSummaries = allEntries.filter(e => e.aiSummary).length;
+  score += Math.min(withPhotos * 2, 10);
+  score += Math.min(withSummaries, 10);
+  score = Math.max(0, Math.min(100, score));
+
+  await storage.updateHome(homeId, { housefaxScore: score });
+  return score;
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -670,6 +825,384 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Get HouseFax context error:", error);
       res.status(500).json({ error: "Failed to get HouseFax context" });
+    }
+  });
+
+  // GET /api/housefax/:homeId - full HouseFax data for a home
+  app.get("/api/housefax/:homeId", requireAuth, async (req: Request<{ homeId: string }>, res: Response) => {
+    try {
+      const { homeId } = req.params;
+      const authUserId = req.authenticatedUserId!;
+
+      const home = await storage.getHome(homeId);
+      if (!home) return res.status(404).json({ error: "Home not found" });
+      if (home.userId !== authUserId) return res.status(403).json({ error: "Access denied" });
+
+      const entries = await db
+        .select()
+        .from(housefaxEntries)
+        .where(eq(housefaxEntries.homeId, homeId))
+        .orderBy(desc(housefaxEntries.completedAt));
+
+      // Derive assets from service history (one per unique systemAffected)
+      const systemMap = new Map<string, { lastServiced: Date; count: number; entries: typeof entries }>();
+      for (const entry of entries) {
+        const sys = entry.systemAffected || entry.serviceCategory || "General";
+        if (!systemMap.has(sys)) systemMap.set(sys, { lastServiced: entry.completedAt, count: 0, entries: [] });
+        const data = systemMap.get(sys)!;
+        data.count += 1;
+        data.entries.push(entry);
+        if (entry.completedAt > data.lastServiced) data.lastServiced = entry.completedAt;
+      }
+
+      const KEY_SYSTEMS = ["HVAC", "Plumbing", "Electrical", "Roof", "Pest Control", "Lawn"];
+
+      // Recommended service intervals in months per system
+      const SERVICE_INTERVALS: Record<string, number> = {
+        HVAC: 12,
+        Plumbing: 24,
+        Electrical: 36,
+        Roof: 60,
+        "Pest Control": 12,
+        Lawn: 3,
+        Painting: 84,
+        Cleaning: 3,
+        Appliances: 24,
+        General: 12,
+      };
+
+      const assets = Array.from(systemMap.entries()).map(([system, data]) => {
+        const sortedEntries = data.entries.sort((a, b) => b.completedAt.getTime() - a.completedAt.getTime());
+        const lastEntry = sortedEntries[0];
+        const intervalMonths = SERVICE_INTERVALS[system] || 12;
+        const nextDueDate = new Date(data.lastServiced.getTime() + intervalMonths * 30 * 24 * 60 * 60 * 1000);
+        return {
+          system,
+          lastServiced: data.lastServiced.toISOString(),
+          serviceCount: data.count,
+          lastServiceName: lastEntry?.serviceName || system,
+          lastProviderName: lastEntry?.providerName || null,
+          nextDue: nextDueDate.toISOString(),
+          recommendedIntervalMonths: intervalMonths,
+        };
+      });
+
+      // Calculate and persist health score (using shared helper for consistency)
+      const score = await calculateAndPersistHouseFaxScore(homeId);
+
+      // Build documents list from real paid invoice records tied to this home's jobs only
+      // Scope strictly to jobIds from this home's HouseFax entries to avoid cross-home leakage
+      const jobIds = entries.map(e => e.jobId).filter(Boolean) as string[];
+      const allInvoices = jobIds.length > 0
+        ? await db
+            .select()
+            .from(invoices)
+            .where(and(
+              inArray(invoices.jobId, jobIds),
+              inArray(invoices.status, ["paid", "partially_paid"])
+            ))
+        : [];
+
+      // Map invoices to document records; fall back to HouseFax entries for jobs without invoices
+      const invoiceJobIds = new Set(allInvoices.map(i => i.jobId).filter(Boolean));
+      const documentsFromInvoices = allInvoices.map(inv => {
+        const matchingEntry = entries.find(e => e.jobId === inv.jobId);
+        const totalAmt = inv.totalCents
+          ? inv.totalCents / 100
+          : parseFloat(inv.total as string || "0");
+        return {
+          id: inv.id,
+          name: matchingEntry
+            ? `${matchingEntry.serviceName} - ${new Date(matchingEntry.completedAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}`
+            : `Invoice #${inv.invoiceNumber}`,
+          type: "invoice" as const,
+          date: inv.paidAt
+            ? new Date(inv.paidAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })
+            : new Date(inv.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" }),
+          amount: totalAmt,
+          providerId: matchingEntry?.providerId || null,
+          providerName: matchingEntry?.providerName || null,
+          hasPhotos: Array.isArray(matchingEntry?.photos) && (matchingEntry?.photos as string[]).length > 0,
+          invoiceId: inv.id,
+        };
+      });
+
+      // For entries without a real invoice (e.g., free jobs, or no invoice yet), add as receipt
+      const documentsFromFreeJobs = entries
+        .filter(e => !e.jobId || !invoiceJobIds.has(e.jobId))
+        .filter(e => (e.costCents || 0) === 0) // Only include free services as receipts
+        .map(e => ({
+          id: e.id,
+          name: `${e.serviceName} - ${new Date(e.completedAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}`,
+          type: "receipt" as const,
+          date: new Date(e.completedAt).toLocaleDateString("en-US", { month: "short", year: "numeric" }),
+          amount: 0,
+          providerId: e.providerId,
+          providerName: e.providerName,
+          hasPhotos: Array.isArray(e.photos) && (e.photos as string[]).length > 0,
+          invoiceId: null,
+        }));
+
+      const documents = [...documentsFromInvoices, ...documentsFromFreeJobs]
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      // Calculate total spent
+      const totalSpentCents = entries.reduce((sum, e) => sum + (e.costCents || 0), 0);
+
+      // Generate AI insights if there are entries
+      let insights: string[] = [];
+      if (entries.length > 0) {
+        try {
+          const systemsServiced = [...systemMap.keys()].join(", ");
+          const missingKey = KEY_SYSTEMS.filter(sys => {
+            return !entries.some(e => {
+              const s = (e.systemAffected || e.serviceCategory || "").toLowerCase();
+              return s.includes(sys.toLowerCase().split(" ")[0]);
+            });
+          });
+          const prompt = `You are a home maintenance advisor. Based on this homeowner's service history, provide exactly 3 concise bullet point recommendations (no bullet symbols, just text, one per line).
+
+Systems serviced: ${systemsServiced || "none yet"}
+Key systems not yet documented: ${missingKey.join(", ") || "all covered"}
+Total jobs documented: ${entries.length}
+Home age: ${home.yearBuilt ? new Date().getFullYear() - home.yearBuilt + " years" : "unknown"}
+
+Give actionable, specific recommendations. Be brief (1 sentence each).`;
+          const aiResponse = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [{ role: "user", content: prompt }],
+            max_tokens: 200,
+          });
+          const content = aiResponse.choices[0]?.message?.content || "";
+          insights = content.split("\n").filter(l => l.trim()).slice(0, 3);
+        } catch (e) {
+          console.error("Insights generation error:", e);
+          insights = [];
+        }
+      }
+
+      res.json({
+        entries,
+        assets,
+        score,
+        totalSpentCents,
+        documents,
+        insights,
+      });
+    } catch (error) {
+      console.error("HouseFax get error:", error);
+      res.status(500).json({ error: "Failed to get HouseFax data" });
+    }
+  });
+
+  // POST /api/housefax/:homeId/score - recalculate and persist health score
+  app.post("/api/housefax/:homeId/score", requireAuth, async (req: Request<{ homeId: string }>, res: Response) => {
+    try {
+      const { homeId } = req.params;
+      const home = await storage.getHome(homeId);
+      if (!home) return res.status(404).json({ error: "Home not found" });
+      if (home.userId !== req.authenticatedUserId) return res.status(403).json({ error: "Access denied" });
+
+      const score = await calculateAndPersistHouseFaxScore(homeId);
+      res.json({ score });
+    } catch (error) {
+      console.error("HouseFax score error:", error);
+      res.status(500).json({ error: "Failed to calculate score" });
+    }
+  });
+
+  // POST /api/jobs/:id/photos - add photos to a job's housefax entry (provider only)
+  // Accepts base64-encoded images, saves to /uploads/photos/, stores HTTPS URLs in DB
+  app.post("/api/jobs/:id/photos", requireAuth, async (req: Request<IdParams>, res: Response) => {
+    const MAX_PHOTOS_PER_JOB = 10;
+    const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB per image
+    const ALLOWED_MIME_PREFIXES = ["data:image/jpeg;base64,", "data:image/png;base64,", "data:image/webp;base64,"];
+
+    try {
+      const authUserId = req.authenticatedUserId!;
+      const job = await storage.getJob(req.params.id);
+      if (!job) return res.status(404).json({ error: "Job not found" });
+
+      // Only allow the assigned provider to upload photos
+      const providerProfile = await storage.getProviderByUserId(authUserId);
+      if (!providerProfile || job.providerId !== providerProfile.id) {
+        return res.status(403).json({ error: "Only the assigned provider can upload photos for this job" });
+      }
+
+      const { photos } = req.body as { photos: string[] };
+      if (!Array.isArray(photos) || photos.length === 0) {
+        return res.status(400).json({ error: "photos array is required" });
+      }
+      if (photos.length > MAX_PHOTOS_PER_JOB) {
+        return res.status(400).json({ error: `Maximum ${MAX_PHOTOS_PER_JOB} photos per upload` });
+      }
+
+      // Validate each image: MIME type and size
+      for (const photo of photos) {
+        const validPrefix = ALLOWED_MIME_PREFIXES.find(p => photo.startsWith(p));
+        if (!validPrefix) {
+          return res.status(400).json({ error: "Only JPEG, PNG, and WebP images are allowed" });
+        }
+        const base64Data = photo.slice(validPrefix.length);
+        const sizeBytes = Math.ceil((base64Data.length * 3) / 4);
+        if (sizeBytes > MAX_PHOTO_BYTES) {
+          return res.status(400).json({ error: "Each photo must be smaller than 5 MB" });
+        }
+      }
+
+      // Find or create the housefax entry for this job (durable: may not exist yet if auto-log is still processing)
+      let [entry] = await db
+        .select()
+        .from(housefaxEntries)
+        .where(eq(housefaxEntries.jobId, job.id));
+
+      if (!entry) {
+        // Auto-log entry may not be created yet (fire-and-forget race), create it now synchronously
+        await autoLogHouseFaxEntry(job);
+        const [newEntry] = await db
+          .select()
+          .from(housefaxEntries)
+          .where(eq(housefaxEntries.jobId, job.id));
+        if (!newEntry) {
+          return res.status(404).json({ error: "Could not create HouseFax entry for this job. No home found for client." });
+        }
+        entry = newEntry;
+      }
+
+      // Enforce total photo limit per job
+      const existingPhotos = Array.isArray(entry.photos) ? (entry.photos as string[]) : [];
+      if (existingPhotos.length + photos.length > MAX_PHOTOS_PER_JOB) {
+        return res.status(400).json({ error: `This job already has ${existingPhotos.length} photos. Maximum is ${MAX_PHOTOS_PER_JOB} total.` });
+      }
+
+      // Save each base64 image to disk and collect HTTPS URLs
+      const uploadDir = path.resolve(process.cwd(), "uploads", "photos");
+      if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+      const protocol = req.protocol;
+      const host = req.get("host") || "";
+      const savedUrls: string[] = [];
+
+      for (const photo of photos) {
+        const prefix = ALLOWED_MIME_PREFIXES.find(p => photo.startsWith(p))!;
+        const ext = prefix.includes("jpeg") ? "jpg" : prefix.includes("png") ? "png" : "webp";
+        const base64Data = photo.slice(prefix.length);
+        const buffer = Buffer.from(base64Data, "base64");
+        const filename = `${job.id}-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const filePath = path.join(uploadDir, filename);
+        fs.writeFileSync(filePath, buffer);
+        savedUrls.push(`${protocol}://${host}/uploads/photos/${filename}`);
+      }
+
+      const updatedPhotos = [...existingPhotos, ...savedUrls];
+      await db
+        .update(housefaxEntries)
+        .set({ photos: updatedPhotos })
+        .where(eq(housefaxEntries.id, entry.id));
+
+      res.json({ success: true, photosCount: updatedPhotos.length, urls: savedUrls });
+    } catch (error) {
+      console.error("Job photos upload error:", error);
+      res.status(500).json({ error: "Failed to upload photos" });
+    }
+  });
+
+  // POST /api/appointments/:id/complete - complete an appointment and trigger HouseFax auto-log
+  app.post("/api/appointments/:id/complete", requireAuth, async (req: Request<IdParams>, res: Response) => {
+    try {
+      const authUserId = req.authenticatedUserId!;
+      const appointment = await storage.getAppointment(req.params.id);
+      if (!appointment) return res.status(404).json({ error: "Appointment not found" });
+
+      // Only provider or homeowner can complete
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      const isProvider = providerRecord && appointment.providerId === providerRecord.id;
+      const isOwner = appointment.userId === authUserId;
+      if (!isProvider && !isOwner) return res.status(403).json({ error: "Access denied" });
+
+      // Update appointment to completed
+      const updatedAppointment = await storage.updateAppointment(req.params.id, {
+        status: "completed",
+      });
+
+      if (!updatedAppointment) return res.status(500).json({ error: "Failed to update appointment" });
+
+      // If a job exists for this appointment, complete it too (to trigger HouseFax via job path)
+      const [linkedJob] = await db
+        .select()
+        .from(jobs)
+        .where(eq(jobs.appointmentId, req.params.id));
+
+      if (linkedJob && linkedJob.status !== "completed") {
+        const { finalPrice } = req.body as { finalPrice?: string };
+        const completedJob = await storage.updateJob(linkedJob.id, {
+          status: "completed",
+          completedAt: new Date(),
+          finalPrice: finalPrice || linkedJob.estimatedPrice,
+        });
+        if (completedJob) {
+          // Trigger HouseFax auto-log via job completion path (idempotent)
+          autoLogHouseFaxEntry(completedJob).catch((e: unknown) => console.error("housefax auto-log error:", e));
+        }
+      } else {
+        // No linked job - auto-log from appointment directly
+        const { finalPrice } = req.body as { finalPrice?: string };
+        const [provider] = appointment.providerId
+          ? await db.select({ businessName: providers.businessName }).from(providers).where(eq(providers.id, appointment.providerId))
+          : [null];
+
+        const serviceCategory = detectServiceCategory(appointment.serviceName || "General Service");
+        const costCents = finalPrice ? Math.round(parseFloat(finalPrice) * 100) : 0;
+
+        // Check idempotency - if appointment already logged, skip
+        const [existingByAppt] = await db
+          .select({ id: housefaxEntries.id })
+          .from(housefaxEntries)
+          .where(eq(housefaxEntries.appointmentId, req.params.id));
+
+        if (!existingByAppt) {
+          let aiSummary: string | null = null;
+          try {
+            const aiResponse = await openai.chat.completions.create({
+              model: "gpt-4o-mini",
+              messages: [{
+                role: "user",
+                content: `Write a 1-2 sentence summary for a homeowner's records: Service: ${appointment.serviceName}, Provider: ${provider?.businessName || "Unknown"}. Be concise and factual.`,
+              }],
+              max_tokens: 80,
+            });
+            aiSummary = aiResponse.choices[0]?.message?.content?.trim() || null;
+          } catch (e) {
+            console.error("[HouseFax] AI summary error:", e);
+          }
+
+          await db.insert(housefaxEntries).values({
+            homeId: appointment.homeId,
+            jobId: null,
+            appointmentId: req.params.id,
+            serviceCategory,
+            serviceName: appointment.serviceName || "Service",
+            providerId: appointment.providerId || null,
+            providerName: provider?.businessName || null,
+            completedAt: new Date(),
+            costCents,
+            aiSummary,
+            photos: [],
+            systemAffected: serviceCategory,
+            notes: null,
+          }).onConflictDoNothing();
+
+          // Persist score after appointment-only entry creation (same as job path)
+          calculateAndPersistHouseFaxScore(appointment.homeId).catch((e: unknown) =>
+            console.error("[HouseFax] Score persistence failed (appointment path):", e)
+          );
+        }
+      }
+
+      res.json({ appointment: updatedAppointment });
+    } catch (error) {
+      console.error("Complete appointment error:", error);
+      res.status(500).json({ error: "Failed to complete appointment" });
     }
   });
 
@@ -2844,6 +3377,8 @@ Respond with JSON only:
           console.error('rebook.prompt dispatch error:', e);
         }
       })();
+      // HouseFax auto-log pipeline (fire-and-forget)
+      autoLogHouseFaxEntry(job).catch((e: unknown) => console.error('housefax auto-log error:', e));
       res.json({ job });
     } catch (error) {
       console.error("Complete job error:", error);

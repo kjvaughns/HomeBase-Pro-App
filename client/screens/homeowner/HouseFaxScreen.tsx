@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { StyleSheet, View, ScrollView, Pressable, Image, ActivityIndicator } from "react-native";
+import React, { useState, useCallback } from "react";
+import { StyleSheet, View, ScrollView, Pressable, ActivityIndicator, RefreshControl, Image, Modal } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
@@ -32,27 +32,35 @@ interface Home {
   yearBuilt?: number;
   estimatedValue?: string;
   isDefault?: boolean;
+  housefaxScore?: number;
+}
+
+interface HousefaxEntry {
+  id: string;
+  homeId: string;
+  jobId: string | null;
+  appointmentId: string | null;
+  serviceCategory: string;
+  serviceName: string;
+  providerId: string | null;
+  providerName: string | null;
+  completedAt: string;
+  costCents: number;
+  aiSummary: string | null;
+  photos: string[];
+  systemAffected: string | null;
+  notes: string | null;
+  createdAt: string;
 }
 
 interface Asset {
-  id: string;
-  name: string;
-  category: string;
-  installDate: string;
-  age: number;
-  model?: string;
-  warrantyExpires?: string;
-  icon: keyof typeof Feather.glyphMap;
-  nextService?: string;
-}
-
-interface HistoryEvent {
-  id: string;
-  date: string;
-  type: "job" | "invoice" | "assessment" | "update" | "document";
-  title: string;
-  description: string;
-  amount?: number;
+  system: string;
+  lastServiced: string;
+  serviceCount: number;
+  lastServiceName: string;
+  lastProviderName: string | null;
+  nextDue: string | null;
+  recommendedIntervalMonths: number | null;
 }
 
 interface Document {
@@ -60,43 +68,33 @@ interface Document {
   name: string;
   type: "invoice" | "receipt" | "manual" | "warranty" | "inspection";
   date: string;
-  assetId?: string;
+  amount: number;
+  providerId: string | null;
+  providerName: string | null;
+  hasPhotos?: boolean;
 }
 
-const MOCK_ASSETS: Asset[] = [
-  { id: "a1", name: "Central AC System", category: "HVAC", installDate: "Jun 2018", age: 7, model: "Carrier 24ACC636", warrantyExpires: "Jun 2028", icon: "wind", nextService: "Apr 2026" },
-  { id: "a2", name: "Water Heater", category: "Plumbing", installDate: "Mar 2020", age: 5, model: "Rheem 50 Gal", warrantyExpires: "Mar 2026", icon: "droplet", nextService: "Mar 2026" },
-  { id: "a3", name: "Roof", category: "Exterior", installDate: "Aug 2015", age: 10, model: "Asphalt Shingles", icon: "home", nextService: "Aug 2026" },
-  { id: "a4", name: "Electrical Panel", category: "Electrical", installDate: "Jan 2019", age: 6, model: "Square D 200A", icon: "zap" },
-  { id: "a5", name: "Dishwasher", category: "Appliances", installDate: "Nov 2021", age: 3, model: "Bosch 500 Series", warrantyExpires: "Nov 2024", icon: "box" },
-  { id: "a6", name: "Sprinkler System", category: "Lawn", installDate: "Apr 2017", age: 8, model: "Rain Bird ESP-Me", icon: "cloud-rain", nextService: "Mar 2026" },
-];
+interface HouseFaxData {
+  entries: HousefaxEntry[];
+  assets: Asset[];
+  score: number;
+  totalSpentCents: number;
+  documents: Document[];
+  insights: string[];
+}
 
-const MOCK_HISTORY: HistoryEvent[] = [
-  { id: "h1", date: "Jan 2026", type: "job", title: "HVAC Tune-up", description: "Annual maintenance completed", amount: 285 },
-  { id: "h2", date: "Dec 2025", type: "document", title: "Home Inspection Report", description: "Annual inspection uploaded" },
-  { id: "h3", date: "Nov 2025", type: "update", title: "Roof Age Updated", description: "Changed from 9 to 10 years" },
-  { id: "h4", date: "Oct 2025", type: "invoice", title: "Gutter Cleaning", description: "Fall cleaning service", amount: 175 },
-  { id: "h5", date: "Aug 2025", type: "job", title: "Pest Control Treatment", description: "Quarterly treatment", amount: 125 },
-  { id: "h6", date: "Jun 2025", type: "assessment", title: "Survival Kit Assessment", description: "Annual maintenance plan updated" },
-  { id: "h7", date: "May 2025", type: "job", title: "Water Heater Flush", description: "Annual maintenance", amount: 145 },
-  { id: "h8", date: "Mar 2025", type: "invoice", title: "Lawn Care Service", description: "Spring fertilization", amount: 95 },
-];
-
-const MOCK_DOCUMENTS: Document[] = [
-  { id: "d1", name: "HVAC Invoice - Jan 2026", type: "invoice", date: "Jan 2026", assetId: "a1" },
-  { id: "d2", name: "Home Inspection Report 2025", type: "inspection", date: "Dec 2025" },
-  { id: "d3", name: "Water Heater Warranty", type: "warranty", date: "Mar 2020", assetId: "a2" },
-  { id: "d4", name: "AC Unit Manual", type: "manual", date: "Jun 2018", assetId: "a1" },
-  { id: "d5", name: "Gutter Cleaning Receipt", type: "receipt", date: "Oct 2025" },
-  { id: "d6", name: "Pest Control Invoice", type: "invoice", date: "Aug 2025" },
-  { id: "d7", name: "Roof Warranty Certificate", type: "warranty", date: "Aug 2015", assetId: "a3" },
-  { id: "d8", name: "Electrical Panel Permit", type: "inspection", date: "Jan 2019", assetId: "a4" },
-];
-
-const TOTAL_SPENT = 12450;
-const TOTAL_SAVED = 4525;
-const UPCOMING_TASKS = 4;
+const SYSTEM_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
+  HVAC: "wind",
+  Plumbing: "droplet",
+  Electrical: "zap",
+  Roof: "home",
+  "Pest Control": "shield",
+  Lawn: "cloud-rain",
+  Painting: "edit-3",
+  Cleaning: "star",
+  Appliances: "box",
+  General: "tool",
+};
 
 export default function HouseFaxScreen() {
   const insets = useSafeAreaInsets();
@@ -110,8 +108,12 @@ export default function HouseFaxScreen() {
   const [isLoadingHomes, setIsLoadingHomes] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [showHomeSelector, setShowHomeSelector] = useState(false);
-  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
-  const [historyFilter, setHistoryFilter] = useState<HistoryEvent["type"] | "all">("all");
+  const [housefaxData, setHousefaxData] = useState<HouseFaxData | null>(null);
+  const [isLoadingFax, setIsLoadingFax] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedAssetSystem, setSelectedAssetSystem] = useState<string | null>(null);
+  const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
+  const [historyFilter, setHistoryFilter] = useState<string>("all");
 
   const fetchHomes = useCallback(async () => {
     if (!user?.id) {
@@ -139,10 +141,36 @@ export default function HouseFaxScreen() {
     }
   }, [user?.id]);
 
+  const fetchHouseFaxData = useCallback(async (homeId: string, isRefresh = false) => {
+    if (isRefresh) setIsRefreshing(true);
+    else setIsLoadingFax(true);
+    try {
+      const url = new URL(`/api/housefax/${homeId}`, getApiUrl());
+      const response = await apiRequest("GET", url.toString());
+      if (response.ok) {
+        const data = await response.json();
+        setHousefaxData(data);
+      }
+    } catch (error) {
+      console.error("Error fetching HouseFax data:", error);
+    } finally {
+      setIsLoadingFax(false);
+      setIsRefreshing(false);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       fetchHomes();
     }, [fetchHomes])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (selectedHome?.id) {
+        fetchHouseFaxData(selectedHome.id);
+      }
+    }, [selectedHome?.id, fetchHouseFaxData])
   );
 
   const formatCurrency = (value: number) => {
@@ -153,39 +181,13 @@ export default function HouseFaxScreen() {
     }).format(value);
   };
 
-  const getEventIcon = (type: HistoryEvent["type"]): keyof typeof Feather.glyphMap => {
-    switch (type) {
-      case "job": return "tool";
-      case "invoice": return "file-text";
-      case "assessment": return "clipboard";
-      case "update": return "edit-3";
-      case "document": return "file";
-    }
+  const formatDate = (iso: string) => {
+    return new Date(iso).toLocaleDateString("en-US", { month: "short", year: "numeric" });
   };
 
-  const getEventColor = (type: HistoryEvent["type"]) => {
-    switch (type) {
-      case "job": return Colors.accent;
-      case "invoice": return "#3B82F6";
-      case "assessment": return "#8B5CF6";
-      case "update": return "#F59E0B";
-      case "document": return "#6B7280";
-    }
+  const getSystemIcon = (system: string): keyof typeof Feather.glyphMap => {
+    return SYSTEM_ICONS[system] || "tool";
   };
-
-  const getDocIcon = (type: Document["type"]): keyof typeof Feather.glyphMap => {
-    switch (type) {
-      case "invoice": return "file-text";
-      case "receipt": return "credit-card";
-      case "manual": return "book";
-      case "warranty": return "shield";
-      case "inspection": return "search";
-    }
-  };
-
-  const filteredHistory = historyFilter === "all" 
-    ? MOCK_HISTORY 
-    : MOCK_HISTORY.filter((h) => h.type === historyFilter);
 
   const getHomeDisplayAddress = (home: Home) => {
     return home.label || home.street || home.formattedAddress?.split(",")[0] || "My Home";
@@ -200,9 +202,16 @@ export default function HouseFaxScreen() {
     return "";
   };
 
+  const filteredEntries = housefaxData?.entries
+    ? (historyFilter === "all" ? housefaxData.entries : housefaxData.entries.filter(e => e.serviceCategory === historyFilter))
+    : [];
+
+  const healthScore = selectedHome?.housefaxScore ?? housefaxData?.score ?? 0;
+  const totalSpent = (housefaxData?.totalSpentCents ?? 0) / 100;
+
   const renderHomeSelector = () => {
     if (!selectedHome) return null;
-    
+
     return (
       <Pressable
         onPress={() => setShowHomeSelector(!showHomeSelector)}
@@ -222,44 +231,26 @@ export default function HouseFaxScreen() {
     );
   };
 
-  const renderSummaryCards = () => (
-    <View style={styles.summaryGrid}>
-      <Pressable 
-        style={[styles.summaryCard, { backgroundColor: theme.cardBackground }]}
-        onPress={() => navigation.navigate("SavingsSpend")}
-      >
-        <Feather name="credit-card" size={20} color={theme.textSecondary} />
-        <ThemedText style={[styles.summaryLabel, { color: theme.textSecondary }]}>Total Spent</ThemedText>
-        <ThemedText style={styles.summaryValue}>{formatCurrency(TOTAL_SPENT)}</ThemedText>
-      </Pressable>
-      
-      <Pressable 
-        style={[styles.summaryCard, { backgroundColor: theme.cardBackground }]}
-        onPress={() => navigation.navigate("SavingsSpend")}
-      >
-        <Feather name="trending-up" size={20} color={Colors.accent} />
-        <ThemedText style={[styles.summaryLabel, { color: theme.textSecondary }]}>Total Saved</ThemedText>
-        <ThemedText style={[styles.summaryValue, { color: Colors.accent }]}>{formatCurrency(TOTAL_SAVED)}</ThemedText>
-      </Pressable>
-      
-      <Pressable 
-        style={[styles.summaryCard, { backgroundColor: theme.cardBackground }]}
-        onPress={() => navigation.navigate("SurvivalKit")}
-      >
-        <Feather name="calendar" size={20} color="#F59E0B" />
-        <ThemedText style={[styles.summaryLabel, { color: theme.textSecondary }]}>Upcoming</ThemedText>
-        <ThemedText style={styles.summaryValue}>{UPCOMING_TASKS}</ThemedText>
-      </Pressable>
-      
-      <View style={[styles.summaryCard, { backgroundColor: theme.cardBackground }]}>
-        <Feather name="activity" size={20} color="#3B82F6" />
-        <ThemedText style={[styles.summaryLabel, { color: theme.textSecondary }]}>Health Trend</ThemedText>
-        <View style={styles.sparkline}>
-          <View style={[styles.sparklineBar, { height: 12, backgroundColor: Colors.accent }]} />
-          <View style={[styles.sparklineBar, { height: 16, backgroundColor: Colors.accent }]} />
-          <View style={[styles.sparklineBar, { height: 14, backgroundColor: Colors.accent }]} />
-          <View style={[styles.sparklineBar, { height: 20, backgroundColor: Colors.accent }]} />
-          <View style={[styles.sparklineBar, { height: 18, backgroundColor: Colors.accent }]} />
+  const renderHealthScoreCard = () => (
+    <View style={[styles.scoreCard, { backgroundColor: theme.cardBackground }]}>
+      <View style={styles.scoreCircleContainer}>
+        <View style={[styles.scoreCircle, { borderColor: healthScore >= 70 ? Colors.accent : healthScore >= 40 ? "#F59E0B" : "#EF4444" }]}>
+          <ThemedText style={styles.scoreNumber}>{healthScore}</ThemedText>
+          <ThemedText style={[styles.scoreLabel, { color: theme.textSecondary }]}>/ 100</ThemedText>
+        </View>
+      </View>
+      <View style={styles.scoreInfo}>
+        <ThemedText style={styles.scoreTitle}>Home Health Score</ThemedText>
+        <ThemedText style={[styles.scoreSubtitle, { color: theme.textSecondary }]}>
+          {healthScore >= 70 ? "Well maintained" : healthScore >= 40 ? "Needs attention" : "Maintenance overdue"}
+        </ThemedText>
+        <View style={styles.scoreMeta}>
+          <ThemedText style={[styles.scoreMetaItem, { color: theme.textSecondary }]}>
+            {housefaxData?.entries.length ?? 0} jobs logged
+          </ThemedText>
+          <ThemedText style={[styles.scoreMetaItem, { color: Colors.accent }]}>
+            {formatCurrency(totalSpent)} spent
+          </ThemedText>
         </View>
       </View>
     </View>
@@ -294,139 +285,186 @@ export default function HouseFaxScreen() {
     </View>
   );
 
-  const renderOverviewTab = () => (
-    <>
-      <GlassCard style={styles.forecastCard}>
-        <View style={styles.forecastHeader}>
-          <ThemedText style={styles.sectionTitle}>This Month Forecast</ThemedText>
-          <ThemedText style={[styles.forecastRange, { color: Colors.accent }]}>$180 - $250</ThemedText>
-        </View>
-        <View style={styles.forecastTasks}>
-          <View style={styles.forecastTask}>
-            <Feather name="wind" size={16} color={theme.textSecondary} />
-            <ThemedText style={styles.forecastTaskText}>HVAC Filter Change</ThemedText>
-            <Pressable onPress={() => navigation.navigate("SmartIntake", { prefillCategory: "HVAC" })}>
-              <ThemedText style={[styles.bookLink, { color: Colors.accent }]}>Book</ThemedText>
-            </Pressable>
-          </View>
-          <View style={styles.forecastTask}>
-            <Feather name="droplet" size={16} color={theme.textSecondary} />
-            <ThemedText style={styles.forecastTaskText}>Plumbing Check</ThemedText>
-            <Pressable>
-              <ThemedText style={[styles.bookLink, { color: Colors.accent }]}>Add to Plan</ThemedText>
-            </Pressable>
-          </View>
-        </View>
-      </GlassCard>
+  const renderOverviewTab = () => {
+    const recentEntries = housefaxData?.entries.slice(0, 4) || [];
+    const hasData = recentEntries.length > 0;
 
-      <GlassCard style={styles.timelineCard}>
-        <ThemedText style={styles.sectionTitle}>Recent Activity</ThemedText>
-        {MOCK_HISTORY.slice(0, 4).map((event, index) => (
-          <View key={event.id} style={styles.timelineEvent}>
-            <View style={[styles.timelineDot, { backgroundColor: getEventColor(event.type) }]}>
-              <Feather name={getEventIcon(event.type)} size={12} color="#FFFFFF" />
+    return (
+      <>
+        {hasData ? (
+          <GlassCard style={styles.timelineCard}>
+            <ThemedText style={styles.sectionTitle}>Recent Activity</ThemedText>
+            {recentEntries.map((entry) => (
+              <View key={entry.id} style={styles.timelineEvent}>
+                <View style={[styles.timelineDot, { backgroundColor: Colors.accent }]}>
+                  <Feather name={getSystemIcon(entry.systemAffected || entry.serviceCategory)} size={12} color="#FFFFFF" />
+                </View>
+                <View style={styles.timelineContent}>
+                  <ThemedText style={styles.timelineTitle}>{entry.serviceName}</ThemedText>
+                  <ThemedText style={[styles.timelineDate, { color: theme.textSecondary }]}>
+                    {formatDate(entry.completedAt)}
+                  </ThemedText>
+                </View>
+                {entry.costCents > 0 ? (
+                  <ThemedText style={styles.timelineAmount}>{formatCurrency(entry.costCents / 100)}</ThemedText>
+                ) : null}
+              </View>
+            ))}
+            <Pressable onPress={() => setActiveTab("history")} style={styles.viewAllButton}>
+              <ThemedText style={[styles.viewAllText, { color: Colors.accent }]}>View All History</ThemedText>
+            </Pressable>
+          </GlassCard>
+        ) : (
+          <GlassCard style={styles.emptyCard}>
+            <View style={[styles.emptyCardIcon, { backgroundColor: Colors.accentLight }]}>
+              <Feather name="file-text" size={32} color={Colors.accent} />
             </View>
-            <View style={styles.timelineContent}>
-              <ThemedText style={styles.timelineTitle}>{event.title}</ThemedText>
-              <ThemedText style={[styles.timelineDate, { color: theme.textSecondary }]}>
-                {event.date}
+            <ThemedText style={styles.emptyCardTitle}>Your HouseFax Builds Automatically</ThemedText>
+            <ThemedText style={[styles.emptyCardText, { color: theme.textSecondary }]}>
+              As jobs are completed, they are automatically logged here with an AI-generated summary and service history.
+            </ThemedText>
+            <PrimaryButton
+              onPress={() => navigation.navigate("SmartIntake")}
+              style={styles.emptyCardButton}
+            >
+              Book a Service
+            </PrimaryButton>
+          </GlassCard>
+        )}
+
+        {housefaxData?.insights && housefaxData.insights.length > 0 ? (
+          <GlassCard style={styles.insightsPreviewCard}>
+            <View style={[styles.insightIcon, { backgroundColor: Colors.accentLight }]}>
+              <Feather name="zap" size={20} color={Colors.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <ThemedText style={styles.insightTitle}>Top Recommendation</ThemedText>
+              <ThemedText style={[styles.insightText, { color: theme.textSecondary }]}>
+                {housefaxData.insights[0]}
               </ThemedText>
             </View>
-            {event.amount ? (
-              <ThemedText style={styles.timelineAmount}>{formatCurrency(event.amount)}</ThemedText>
-            ) : null}
-          </View>
-        ))}
-        <Pressable 
-          onPress={() => setActiveTab("history")}
-          style={styles.viewAllButton}
-        >
-          <ThemedText style={[styles.viewAllText, { color: Colors.accent }]}>View All History</ThemedText>
-        </Pressable>
-      </GlassCard>
+          </GlassCard>
+        ) : null}
+      </>
+    );
+  };
 
-      <GlassCard style={styles.insightsPreview}>
-        <View style={[styles.insightIcon, { backgroundColor: Colors.accentLight }]}>
-          <Feather name="zap" size={20} color={Colors.accent} />
-        </View>
-        <ThemedText style={styles.insightTitle}>Top Cost Drivers</ThemedText>
-        <ThemedText style={[styles.insightText, { color: theme.textSecondary }]}>
-          HVAC and roof maintenance are your biggest expenses. Schedule preventive care to reduce costs.
-        </ThemedText>
-      </GlassCard>
-    </>
-  );
+  const renderHistoryTab = () => {
+    const categories = ["all", ...Array.from(new Set((housefaxData?.entries || []).map(e => e.serviceCategory)))];
 
-  const renderHistoryTab = () => (
-    <>
-      <View style={styles.filterRow}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {(["all", "job", "invoice", "assessment", "update", "document"] as const).map((filter) => (
-            <Pressable
-              key={filter}
-              onPress={() => setHistoryFilter(filter)}
-              style={[
-                styles.filterChip,
-                {
-                  backgroundColor: historyFilter === filter ? Colors.accentLight : theme.cardBackground,
-                  borderColor: historyFilter === filter ? Colors.accent : theme.separator,
-                },
-              ]}
-            >
-              <ThemedText
+    return (
+      <>
+        <View style={styles.filterRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {categories.map((cat) => (
+              <Pressable
+                key={cat}
+                onPress={() => setHistoryFilter(cat)}
                 style={[
-                  styles.filterChipText,
-                  { color: historyFilter === filter ? Colors.accent : theme.textSecondary },
+                  styles.filterChip,
+                  {
+                    backgroundColor: historyFilter === cat ? Colors.accentLight : theme.cardBackground,
+                    borderColor: historyFilter === cat ? Colors.accent : theme.separator,
+                  },
                 ]}
               >
-                {filter === "all" ? "All" : filter.charAt(0).toUpperCase() + filter.slice(1) + "s"}
-              </ThemedText>
-            </Pressable>
-          ))}
-        </ScrollView>
-      </View>
+                <ThemedText
+                  style={[
+                    styles.filterChipText,
+                    { color: historyFilter === cat ? Colors.accent : theme.textSecondary },
+                  ]}
+                >
+                  {cat === "all" ? "All" : cat}
+                </ThemedText>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
 
-      <View style={styles.historyTimeline}>
-        {filteredHistory.map((event, index) => (
-          <View key={event.id} style={styles.historyItem}>
-            <View style={styles.historyLine}>
-              <View style={[styles.historyDot, { backgroundColor: getEventColor(event.type) }]}>
-                <Feather name={getEventIcon(event.type)} size={12} color="#FFFFFF" />
-              </View>
-              {index < filteredHistory.length - 1 ? (
-                <View style={[styles.historyConnector, { backgroundColor: theme.separator }]} />
-              ) : null}
+        {filteredEntries.length === 0 ? (
+          <GlassCard style={styles.emptyCard}>
+            <View style={[styles.emptyCardIcon, { backgroundColor: Colors.accentLight }]}>
+              <Feather name="clock" size={32} color={Colors.accent} />
             </View>
-            <GlassCard style={styles.historyCard}>
-              <View style={styles.historyHeader}>
-                <ThemedText style={styles.historyTitle}>{event.title}</ThemedText>
-                <ThemedText style={[styles.historyDate, { color: theme.textSecondary }]}>
-                  {event.date}
-                </ThemedText>
+            <ThemedText style={styles.emptyCardTitle}>No Service History Yet</ThemedText>
+            <ThemedText style={[styles.emptyCardText, { color: theme.textSecondary }]}>
+              Your HouseFax builds automatically as jobs are completed. Book a service to get started.
+            </ThemedText>
+          </GlassCard>
+        ) : (
+          <View style={styles.historyTimeline}>
+            {filteredEntries.map((entry, index) => (
+              <View key={entry.id} style={styles.historyItem}>
+                <View style={styles.historyLine}>
+                  <View style={[styles.historyDot, { backgroundColor: Colors.accent }]}>
+                    <Feather name={getSystemIcon(entry.systemAffected || entry.serviceCategory)} size={12} color="#FFFFFF" />
+                  </View>
+                  {index < filteredEntries.length - 1 ? (
+                    <View style={[styles.historyConnector, { backgroundColor: theme.separator }]} />
+                  ) : null}
+                </View>
+                <GlassCard style={styles.historyCard}>
+                  <View style={styles.historyHeader}>
+                    <ThemedText style={styles.historyTitle}>{entry.serviceName}</ThemedText>
+                    <ThemedText style={[styles.historyDate, { color: theme.textSecondary }]}>
+                      {formatDate(entry.completedAt)}
+                    </ThemedText>
+                  </View>
+                  {entry.aiSummary ? (
+                    <ThemedText style={[styles.historyDescription, { color: theme.textSecondary }]}>
+                      {entry.aiSummary}
+                    </ThemedText>
+                  ) : null}
+                  <View style={styles.historyMeta}>
+                    {entry.providerName ? (
+                      <View style={styles.historyMetaItem}>
+                        <Feather name="user" size={12} color={theme.textTertiary} />
+                        <ThemedText style={[styles.historyMetaText, { color: theme.textTertiary }]}>
+                          {entry.providerName}
+                        </ThemedText>
+                      </View>
+                    ) : null}
+                    {entry.costCents > 0 ? (
+                      <ThemedText style={[styles.historyAmount, { color: Colors.accent }]}>
+                        {formatCurrency(entry.costCents / 100)}
+                      </ThemedText>
+                    ) : null}
+                  </View>
+                  {Array.isArray(entry.photos) && entry.photos.length > 0 ? (
+                    <View style={styles.photosRow}>
+                      {entry.photos.slice(0, 4).map((uri: string, idx: number) => (
+                        <Pressable key={idx} onPress={() => setLightboxPhoto(uri)} testID={`photo-thumb-${entry.id}-${idx}`}>
+                          <Image source={{ uri }} style={styles.photoThumb} resizeMode="cover" />
+                        </Pressable>
+                      ))}
+                      {entry.photos.length > 4 ? (
+                        <View style={[styles.photoThumb, styles.photoMoreOverlay]}>
+                          <ThemedText style={styles.photoMoreText}>+{entry.photos.length - 4}</ThemedText>
+                        </View>
+                      ) : null}
+                    </View>
+                  ) : null}
+                </GlassCard>
               </View>
-              <ThemedText style={[styles.historyDescription, { color: theme.textSecondary }]}>
-                {event.description}
-              </ThemedText>
-              {event.amount ? (
-                <ThemedText style={[styles.historyAmount, { color: Colors.accent }]}>
-                  {formatCurrency(event.amount)}
-                </ThemedText>
-              ) : null}
-            </GlassCard>
+            ))}
           </View>
-        ))}
-      </View>
-    </>
-  );
+        )}
+      </>
+    );
+  };
 
   const renderAssetsTab = () => {
-    if (selectedAsset) {
+    if (selectedAssetSystem) {
+      const asset = housefaxData?.assets.find(a => a.system === selectedAssetSystem);
+      const assetEntries = housefaxData?.entries.filter(e =>
+        (e.systemAffected || e.serviceCategory) === selectedAssetSystem
+      ) || [];
+
+      if (!asset) return null;
+
       return (
         <Animated.View entering={FadeInDown.duration(300)}>
-          <Pressable 
-            onPress={() => setSelectedAsset(null)} 
-            style={styles.backButton}
-          >
+          <Pressable onPress={() => setSelectedAssetSystem(null)} style={styles.backButton}>
             <Feather name="arrow-left" size={20} color={theme.textSecondary} />
             <ThemedText style={[styles.backButtonText, { color: theme.textSecondary }]}>
               Back to Assets
@@ -435,95 +473,124 @@ export default function HouseFaxScreen() {
 
           <GlassCard style={styles.assetDetailCard}>
             <View style={[styles.assetDetailIcon, { backgroundColor: Colors.accentLight }]}>
-              <Feather name={selectedAsset.icon} size={32} color={Colors.accent} />
+              <Feather name={getSystemIcon(asset.system)} size={32} color={Colors.accent} />
             </View>
-            <ThemedText style={styles.assetDetailName}>{selectedAsset.name}</ThemedText>
+            <ThemedText style={styles.assetDetailName}>{asset.system}</ThemedText>
             <ThemedText style={[styles.assetDetailCategory, { color: theme.textSecondary }]}>
-              {selectedAsset.category}
+              {asset.serviceCount} service{asset.serviceCount !== 1 ? "s" : ""} logged
             </ThemedText>
-
             <View style={styles.assetDetailGrid}>
               <View style={styles.assetDetailItem}>
-                <ThemedText style={[styles.assetDetailLabel, { color: theme.textSecondary }]}>
-                  Installed
-                </ThemedText>
-                <ThemedText style={styles.assetDetailValue}>{selectedAsset.installDate}</ThemedText>
+                <ThemedText style={[styles.assetDetailLabel, { color: theme.textSecondary }]}>Last Serviced</ThemedText>
+                <ThemedText style={styles.assetDetailValue}>{formatDate(asset.lastServiced)}</ThemedText>
               </View>
-              <View style={styles.assetDetailItem}>
-                <ThemedText style={[styles.assetDetailLabel, { color: theme.textSecondary }]}>
-                  Age
-                </ThemedText>
-                <ThemedText style={styles.assetDetailValue}>{selectedAsset.age} years</ThemedText>
-              </View>
-              {selectedAsset.model ? (
+              {asset.nextDue ? (
                 <View style={styles.assetDetailItem}>
-                  <ThemedText style={[styles.assetDetailLabel, { color: theme.textSecondary }]}>
-                    Model
+                  <ThemedText style={[styles.assetDetailLabel, { color: theme.textSecondary }]}>Next Due</ThemedText>
+                  <ThemedText style={[
+                    styles.assetDetailValue,
+                    new Date(asset.nextDue) < new Date() ? { color: "#EF4444" } : { color: Colors.accent }
+                  ]}>
+                    {formatDate(asset.nextDue)}
                   </ThemedText>
-                  <ThemedText style={styles.assetDetailValue}>{selectedAsset.model}</ThemedText>
                 </View>
               ) : null}
-              {selectedAsset.warrantyExpires ? (
+              {asset.lastProviderName ? (
                 <View style={styles.assetDetailItem}>
-                  <ThemedText style={[styles.assetDetailLabel, { color: theme.textSecondary }]}>
-                    Warranty
+                  <ThemedText style={[styles.assetDetailLabel, { color: theme.textSecondary }]}>Provider</ThemedText>
+                  <ThemedText style={styles.assetDetailValue}>{asset.lastProviderName}</ThemedText>
+                </View>
+              ) : null}
+              {asset.recommendedIntervalMonths ? (
+                <View style={styles.assetDetailItem}>
+                  <ThemedText style={[styles.assetDetailLabel, { color: theme.textSecondary }]}>Service Every</ThemedText>
+                  <ThemedText style={styles.assetDetailValue}>
+                    {asset.recommendedIntervalMonths >= 12
+                      ? `${Math.round(asset.recommendedIntervalMonths / 12)} yr`
+                      : `${asset.recommendedIntervalMonths} mo`}
                   </ThemedText>
-                  <ThemedText style={styles.assetDetailValue}>{selectedAsset.warrantyExpires}</ThemedText>
                 </View>
               ) : null}
             </View>
           </GlassCard>
 
-          {selectedAsset.nextService ? (
+          {assetEntries.length > 0 ? (
             <GlassCard style={styles.serviceCard}>
-              <View style={styles.serviceHeader}>
-                <Feather name="calendar" size={20} color={Colors.accent} />
-                <ThemedText style={styles.serviceTitle}>Recommended Service</ThemedText>
-              </View>
-              <ThemedText style={[styles.serviceDate, { color: theme.textSecondary }]}>
-                Next service due: {selectedAsset.nextService}
-              </ThemedText>
-              <View style={styles.serviceActions}>
-                <PrimaryButton
-                  onPress={() => navigation.navigate("SmartIntake", { prefillCategory: selectedAsset.category })}
-                  style={styles.serviceButton}
-                >
-                  Book Service
-                </PrimaryButton>
-                <Pressable style={[styles.reminderButton, { borderColor: theme.separator }]}>
-                  <Feather name="bell" size={18} color={Colors.accent} />
-                  <ThemedText style={[styles.reminderText, { color: Colors.accent }]}>
-                    Add Reminder
-                  </ThemedText>
-                </Pressable>
-              </View>
+              <ThemedText style={styles.sectionTitle}>Service History</ThemedText>
+              {assetEntries.map(entry => (
+                <View key={entry.id} style={styles.assetHistoryItem}>
+                  <ThemedText style={styles.assetHistoryDate}>{formatDate(entry.completedAt)}</ThemedText>
+                  <ThemedText style={styles.assetHistoryName}>{entry.serviceName}</ThemedText>
+                  {entry.aiSummary ? (
+                    <ThemedText style={[styles.assetHistorySummary, { color: theme.textSecondary }]}>
+                      {entry.aiSummary}
+                    </ThemedText>
+                  ) : null}
+                </View>
+              ))}
             </GlassCard>
           ) : null}
+
+          <GlassCard style={styles.serviceCard}>
+            <View style={styles.serviceHeader}>
+              <Feather name="calendar" size={20} color={Colors.accent} />
+              <ThemedText style={styles.serviceTitle}>Book Next Service</ThemedText>
+            </View>
+            <PrimaryButton
+              onPress={() => navigation.navigate("SmartIntake", { prefillCategory: asset.system })}
+              style={styles.serviceButton}
+            >
+              Book Service
+            </PrimaryButton>
+          </GlassCard>
         </Animated.View>
+      );
+    }
+
+    if (!housefaxData || housefaxData.assets.length === 0) {
+      return (
+        <GlassCard style={styles.emptyCard}>
+          <View style={[styles.emptyCardIcon, { backgroundColor: Colors.accentLight }]}>
+            <Feather name="layers" size={32} color={Colors.accent} />
+          </View>
+          <ThemedText style={styles.emptyCardTitle}>No Assets Tracked Yet</ThemedText>
+          <ThemedText style={[styles.emptyCardText, { color: theme.textSecondary }]}>
+            Assets are derived from your service history. Complete jobs to start tracking your home systems.
+          </ThemedText>
+        </GlassCard>
       );
     }
 
     return (
       <View style={styles.assetsGrid}>
-        {MOCK_ASSETS.map((asset) => (
+        {housefaxData.assets.map((asset) => (
           <Pressable
-            key={asset.id}
+            key={asset.system}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setSelectedAsset(asset);
+              setSelectedAssetSystem(asset.system);
             }}
           >
             <GlassCard style={styles.assetCard}>
               <View style={[styles.assetIcon, { backgroundColor: Colors.accentLight }]}>
-                <Feather name={asset.icon} size={20} color={Colors.accent} />
+                <Feather name={getSystemIcon(asset.system)} size={20} color={Colors.accent} />
               </View>
-              <ThemedText style={styles.assetName}>{asset.name}</ThemedText>
+              <ThemedText style={styles.assetName}>{asset.system}</ThemedText>
               <ThemedText style={[styles.assetCategory, { color: theme.textSecondary }]}>
-                {asset.category}
+                Last: {formatDate(asset.lastServiced)}
               </ThemedText>
-              <ThemedText style={[styles.assetAge, { color: theme.textTertiary }]}>
-                {asset.age} years old
-              </ThemedText>
+              {asset.nextDue ? (
+                <ThemedText style={[
+                  styles.assetAge,
+                  new Date(asset.nextDue) < new Date() ? { color: "#EF4444" } : { color: theme.textTertiary }
+                ]}>
+                  {new Date(asset.nextDue) < new Date() ? "Due now" : `Due ${formatDate(asset.nextDue)}`}
+                </ThemedText>
+              ) : (
+                <ThemedText style={[styles.assetAge, { color: theme.textTertiary }]}>
+                  {asset.serviceCount} service{asset.serviceCount !== 1 ? "s" : ""}
+                </ThemedText>
+              )}
             </GlassCard>
           </Pressable>
         ))}
@@ -531,111 +598,89 @@ export default function HouseFaxScreen() {
     );
   };
 
-  const renderDocumentsTab = () => (
-    <>
-      <Pressable style={[styles.uploadButton, { borderColor: theme.separator }]}>
-        <Feather name="upload" size={20} color={Colors.accent} />
-        <ThemedText style={[styles.uploadText, { color: Colors.accent }]}>Upload Document</ThemedText>
-      </Pressable>
+  const renderDocumentsTab = () => {
+    if (!housefaxData || housefaxData.documents.length === 0) {
+      return (
+        <GlassCard style={styles.emptyCard}>
+          <View style={[styles.emptyCardIcon, { backgroundColor: Colors.accentLight }]}>
+            <Feather name="file" size={32} color={Colors.accent} />
+          </View>
+          <ThemedText style={styles.emptyCardTitle}>No Documents Yet</ThemedText>
+          <ThemedText style={[styles.emptyCardText, { color: theme.textSecondary }]}>
+            Invoices and receipts from completed jobs will appear here automatically.
+          </ThemedText>
+        </GlassCard>
+      );
+    }
 
+    return (
       <View style={styles.documentsGrid}>
-        {MOCK_DOCUMENTS.map((doc) => (
-          <Pressable key={doc.id}>
-            <GlassCard style={styles.documentCard}>
-              <View style={[styles.docIcon, { backgroundColor: theme.backgroundTertiary }]}>
-                <Feather name={getDocIcon(doc.type)} size={20} color={theme.textSecondary} />
-              </View>
-              <ThemedText style={styles.docName} numberOfLines={2}>{doc.name}</ThemedText>
-              <ThemedText style={[styles.docDate, { color: theme.textTertiary }]}>{doc.date}</ThemedText>
-            </GlassCard>
-          </Pressable>
+        {housefaxData.documents.map((doc) => (
+          <GlassCard key={doc.id} style={styles.documentCard}>
+            <View style={[styles.docIcon, { backgroundColor: theme.backgroundTertiary }]}>
+              <Feather name="file-text" size={20} color={theme.textSecondary} />
+            </View>
+            <ThemedText style={styles.docName} numberOfLines={2}>{doc.name}</ThemedText>
+            <ThemedText style={[styles.docDate, { color: theme.textTertiary }]}>{doc.date}</ThemedText>
+            {doc.amount > 0 ? (
+              <ThemedText style={[styles.docAmount, { color: Colors.accent }]}>
+                {formatCurrency(doc.amount)}
+              </ThemedText>
+            ) : null}
+          </GlassCard>
         ))}
       </View>
-    </>
-  );
+    );
+  };
 
-  const renderInsightsTab = () => (
-    <>
-      <GlassCard style={styles.predictiveCard}>
-        <View style={styles.predictiveHeader}>
-          <Feather name="trending-up" size={20} color={Colors.accent} />
-          <ThemedText style={styles.predictiveTitle}>Next 12 Months Forecast</ThemedText>
-        </View>
-        <ThemedText style={styles.predictiveValue}>
-          {formatCurrency(2800)} - {formatCurrency(3500)}
-        </ThemedText>
-        <ThemedText style={[styles.predictiveSubtext, { color: theme.textSecondary }]}>
-          Based on your home profile and maintenance history
-        </ThemedText>
-      </GlassCard>
+  const renderInsightsTab = () => {
+    if (!housefaxData || housefaxData.insights.length === 0) {
+      return (
+        <GlassCard style={styles.emptyCard}>
+          <View style={[styles.emptyCardIcon, { backgroundColor: Colors.accentLight }]}>
+            <Feather name="trending-up" size={32} color={Colors.accent} />
+          </View>
+          <ThemedText style={styles.emptyCardTitle}>Insights Coming Soon</ThemedText>
+          <ThemedText style={[styles.emptyCardText, { color: theme.textSecondary }]}>
+            As you build your service history, personalized recommendations will appear here.
+          </ThemedText>
+        </GlassCard>
+      );
+    }
 
-      <GlassCard style={styles.risksCard}>
-        <ThemedText style={styles.sectionTitle}>Upcoming Risks</ThemedText>
-        <View style={styles.risksList}>
-          <View style={styles.riskItem}>
-            <View style={[styles.riskIcon, { backgroundColor: Colors.warningLight }]}>
-              <Feather name="alert-triangle" size={16} color={Colors.warning} />
-            </View>
-            <View style={styles.riskContent}>
-              <ThemedText style={styles.riskTitle}>Water Heater Warranty Expiring</ThemedText>
-              <ThemedText style={[styles.riskDate, { color: theme.textSecondary }]}>
-                Mar 2026
-              </ThemedText>
-            </View>
+    return (
+      <>
+        <GlassCard style={styles.risksCard}>
+          <ThemedText style={styles.sectionTitle}>Personalized Recommendations</ThemedText>
+          <View style={styles.suggestionsList}>
+            {housefaxData.insights.map((insight, index) => (
+              <View key={index} style={styles.suggestionItem}>
+                <Feather name="check-circle" size={18} color={Colors.accent} />
+                <ThemedText style={[styles.suggestionText, { flex: 1 }]}>{insight}</ThemedText>
+              </View>
+            ))}
           </View>
-          <View style={styles.riskItem}>
-            <View style={[styles.riskIcon, { backgroundColor: Colors.errorLight }]}>
-              <Feather name="home" size={16} color={Colors.error} />
-            </View>
-            <View style={styles.riskContent}>
-              <ThemedText style={styles.riskTitle}>Roof Approaching End of Life</ThemedText>
-              <ThemedText style={[styles.riskDate, { color: theme.textSecondary }]}>
-                ~5 years remaining
-              </ThemedText>
-            </View>
-          </View>
-        </View>
-      </GlassCard>
+        </GlassCard>
 
-      <GlassCard style={styles.suggestionsCard}>
-        <ThemedText style={styles.sectionTitle}>Suggested Actions</ThemedText>
-        <View style={styles.suggestionsList}>
-          <View style={styles.suggestionItem}>
-            <Feather name="check-circle" size={18} color={Colors.accent} />
-            <ThemedText style={styles.suggestionText}>
-              Schedule HVAC tune-up before summer to avoid peak pricing
-            </ThemedText>
+        <GlassCard style={styles.compareCard}>
+          <View style={styles.predictiveHeader}>
+            <Feather name="activity" size={20} color={Colors.accent} />
+            <ThemedText style={styles.predictiveTitle}>Health Score Breakdown</ThemedText>
           </View>
-          <View style={styles.suggestionItem}>
-            <Feather name="check-circle" size={18} color={Colors.accent} />
-            <ThemedText style={styles.suggestionText}>
-              Get roof inspection to plan for replacement
-            </ThemedText>
+          <ThemedText style={[styles.compareText, { color: theme.textSecondary }]}>
+            Your home health score of {healthScore} is calculated based on service coverage, recency, and documentation.
+          </ThemedText>
+          <View style={styles.compareBar}>
+            <View style={[styles.compareBarFill, { width: `${healthScore}%`, backgroundColor: healthScore >= 70 ? Colors.accent : healthScore >= 40 ? "#F59E0B" : "#EF4444" }]} />
           </View>
-          <View style={styles.suggestionItem}>
-            <Feather name="check-circle" size={18} color={Colors.accent} />
-            <ThemedText style={styles.suggestionText}>
-              Extend water heater warranty before it expires
-            </ThemedText>
+          <View style={styles.compareLabels}>
+            <ThemedText style={[styles.compareLabel, { color: theme.textSecondary }]}>0</ThemedText>
+            <ThemedText style={[styles.compareLabel, { color: theme.textSecondary }]}>100</ThemedText>
           </View>
-        </View>
-      </GlassCard>
-
-      <GlassCard style={styles.compareCard}>
-        <ThemedText style={styles.sectionTitle}>Compare to Similar Homes</ThemedText>
-        <ThemedText style={[styles.compareText, { color: theme.textSecondary }]}>
-          Your maintenance costs are 12% lower than similar homes in your area.
-        </ThemedText>
-        <View style={styles.compareBar}>
-          <View style={[styles.compareBarFill, { width: "88%", backgroundColor: Colors.accent }]} />
-        </View>
-        <View style={styles.compareLabels}>
-          <ThemedText style={[styles.compareLabel, { color: theme.textSecondary }]}>You</ThemedText>
-          <ThemedText style={[styles.compareLabel, { color: theme.textSecondary }]}>Average</ThemedText>
-        </View>
-      </GlassCard>
-    </>
-  );
+        </GlassCard>
+      </>
+    );
+  };
 
   if (isLoadingHomes) {
     return (
@@ -680,9 +725,16 @@ export default function HouseFaxScreen() {
           },
         ]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => selectedHome?.id && fetchHouseFaxData(selectedHome.id, true)}
+            tintColor={Colors.accent}
+          />
+        }
       >
         {renderHomeSelector()}
-        
+
         {showHomeSelector && homes.length > 0 ? (
           <Animated.View entering={FadeInDown.duration(200)} style={styles.homeSelectorDropdown}>
             {homes.map((home) => (
@@ -691,16 +743,18 @@ export default function HouseFaxScreen() {
                 onPress={() => {
                   setSelectedHome(home);
                   setShowHomeSelector(false);
+                  setHousefaxData(null);
+                  fetchHouseFaxData(home.id);
                 }}
                 style={[
                   styles.homeOption,
                   selectedHome?.id === home.id && { backgroundColor: Colors.accentLight },
                 ]}
               >
-                <Feather 
-                  name="home" 
-                  size={18} 
-                  color={selectedHome?.id === home.id ? Colors.accent : theme.textSecondary} 
+                <Feather
+                  name="home"
+                  size={18}
+                  color={selectedHome?.id === home.id ? Colors.accent : theme.textSecondary}
                 />
                 <View style={styles.homeOptionInfo}>
                   <ThemedText style={styles.homeOptionAddress}>{getHomeDisplayAddress(home)}</ThemedText>
@@ -716,7 +770,16 @@ export default function HouseFaxScreen() {
           </Animated.View>
         ) : null}
 
-        {renderSummaryCards()}
+        {isLoadingFax ? (
+          <View style={styles.faxLoading}>
+            <ActivityIndicator size="small" color={Colors.accent} />
+            <ThemedText style={[styles.faxLoadingText, { color: theme.textSecondary }]}>
+              Loading HouseFax data...
+            </ThemedText>
+          </View>
+        ) : null}
+
+        {!isLoadingFax ? renderHealthScoreCard() : null}
         {renderTabs()}
 
         {activeTab === "overview" ? renderOverviewTab() : null}
@@ -725,14 +788,33 @@ export default function HouseFaxScreen() {
         {activeTab === "documents" ? renderDocumentsTab() : null}
         {activeTab === "insights" ? renderInsightsTab() : null}
       </ScrollView>
+
+      {lightboxPhoto ? (
+        <Modal
+          visible={true}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setLightboxPhoto(null)}
+        >
+          <Pressable
+            style={styles.lightboxOverlay}
+            onPress={() => setLightboxPhoto(null)}
+            testID="lightbox-close"
+          >
+            <Image
+              source={{ uri: lightboxPhoto }}
+              style={styles.lightboxImage}
+              resizeMode="contain"
+            />
+          </Pressable>
+        </Modal>
+      ) : null}
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   content: {
     paddingHorizontal: Spacing.screenPadding,
   },
@@ -745,6 +827,16 @@ const styles = StyleSheet.create({
   loadingText: {
     ...Typography.body,
     marginTop: Spacing.md,
+  },
+  faxLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: Spacing.lg,
+    gap: Spacing.sm,
+  },
+  faxLoadingText: {
+    ...Typography.body,
   },
   emptyContainer: {
     flex: 1,
@@ -815,35 +907,53 @@ const styles = StyleSheet.create({
   homeOptionCity: {
     ...Typography.caption1,
   },
-  summaryGrid: {
+  scoreCard: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.sm,
-    marginBottom: Spacing.lg,
-  },
-  summaryCard: {
-    width: "48%",
+    alignItems: "center",
     padding: Spacing.md,
     borderRadius: BorderRadius.md,
+    marginBottom: Spacing.lg,
+    gap: Spacing.md,
+  },
+  scoreCircleContainer: {
     alignItems: "center",
-    gap: Spacing.xs,
+    justifyContent: "center",
   },
-  summaryLabel: {
+  scoreCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 4,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  scoreNumber: {
+    fontSize: 26,
+    fontWeight: "800",
+    lineHeight: 30,
+  },
+  scoreLabel: {
+    fontSize: 10,
+    fontWeight: "500",
+  },
+  scoreInfo: {
+    flex: 1,
+  },
+  scoreTitle: {
+    ...Typography.headline,
+    marginBottom: 2,
+  },
+  scoreSubtitle: {
     ...Typography.caption1,
+    marginBottom: Spacing.sm,
   },
-  summaryValue: {
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  sparkline: {
+  scoreMeta: {
     flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 3,
-    height: 24,
+    gap: Spacing.md,
   },
-  sparklineBar: {
-    width: 6,
-    borderRadius: 2,
+  scoreMetaItem: {
+    ...Typography.caption1,
+    fontWeight: "500",
   },
   tabsContainer: {
     marginBottom: Spacing.lg,
@@ -861,34 +971,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...Typography.headline,
     marginBottom: Spacing.md,
-  },
-  forecastCard: {
-    marginBottom: Spacing.md,
-  },
-  forecastHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: Spacing.sm,
-  },
-  forecastRange: {
-    ...Typography.headline,
-  },
-  forecastTasks: {
-    gap: Spacing.sm,
-  },
-  forecastTask: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-  },
-  forecastTaskText: {
-    ...Typography.body,
-    flex: 1,
-  },
-  bookLink: {
-    ...Typography.subhead,
-    fontWeight: "600",
   },
   timelineCard: {
     marginBottom: Spacing.md,
@@ -927,9 +1009,35 @@ const styles = StyleSheet.create({
     ...Typography.subhead,
     fontWeight: "600",
   },
-  insightsPreview: {
-    flexDirection: "row",
+  emptyCard: {
     alignItems: "center",
+    padding: Spacing.xl,
+    marginBottom: Spacing.md,
+  },
+  emptyCardIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.md,
+  },
+  emptyCardTitle: {
+    ...Typography.headline,
+    textAlign: "center",
+    marginBottom: Spacing.sm,
+  },
+  emptyCardText: {
+    ...Typography.body,
+    textAlign: "center",
+    marginBottom: Spacing.lg,
+  },
+  emptyCardButton: {
+    minWidth: 160,
+  },
+  insightsPreviewCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
     gap: Spacing.md,
     marginBottom: Spacing.md,
   },
@@ -943,11 +1051,10 @@ const styles = StyleSheet.create({
   insightTitle: {
     ...Typography.subhead,
     fontWeight: "600",
-    flex: 1,
+    marginBottom: Spacing.xs,
   },
   insightText: {
     ...Typography.caption1,
-    flex: 2,
   },
   filterRow: {
     marginBottom: Spacing.md,
@@ -1008,11 +1115,56 @@ const styles = StyleSheet.create({
   },
   historyDescription: {
     ...Typography.caption1,
+    marginBottom: Spacing.xs,
+  },
+  historyMeta: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: Spacing.xs,
+  },
+  historyMetaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  historyMetaText: {
+    ...Typography.caption2,
   },
   historyAmount: {
     ...Typography.subhead,
     fontWeight: "600",
-    marginTop: Spacing.xs,
+  },
+  photosRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.xs,
+    marginTop: Spacing.sm,
+  },
+  photoThumb: {
+    width: 64,
+    height: 64,
+    borderRadius: BorderRadius.sm,
+  },
+  photoMoreOverlay: {
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  photoMoreText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  lightboxOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.9)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  lightboxImage: {
+    width: "100%",
+    height: "80%",
   },
   assetsGrid: {
     gap: Spacing.sm,
@@ -1088,6 +1240,22 @@ const styles = StyleSheet.create({
     ...Typography.body,
     fontWeight: "600",
   },
+  assetHistoryItem: {
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0,0,0,0.05)",
+  },
+  assetHistoryDate: {
+    ...Typography.caption1,
+    fontWeight: "600",
+  },
+  assetHistoryName: {
+    ...Typography.body,
+  },
+  assetHistorySummary: {
+    ...Typography.caption1,
+    marginTop: 2,
+  },
   serviceCard: {
     marginBottom: Spacing.md,
   },
@@ -1095,50 +1263,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.sm,
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   serviceTitle: {
     ...Typography.headline,
   },
-  serviceDate: {
-    ...Typography.body,
-    marginBottom: Spacing.lg,
-  },
-  serviceActions: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-  },
   serviceButton: {
-    flex: 1,
-  },
-  reminderButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.xs,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-  },
-  reminderText: {
-    ...Typography.subhead,
-    fontWeight: "600",
-  },
-  uploadButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.sm,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    borderStyle: "dashed",
-    marginBottom: Spacing.lg,
-  },
-  uploadText: {
-    ...Typography.subhead,
-    fontWeight: "600",
+    marginTop: Spacing.sm,
   },
   documentsGrid: {
     flexDirection: "row",
@@ -1166,54 +1297,12 @@ const styles = StyleSheet.create({
   docDate: {
     ...Typography.caption2,
   },
-  predictiveCard: {
-    marginBottom: Spacing.md,
-  },
-  predictiveHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    marginBottom: Spacing.sm,
-  },
-  predictiveTitle: {
-    ...Typography.headline,
-  },
-  predictiveValue: {
-    fontSize: 28,
-    fontWeight: "700",
-    marginBottom: Spacing.xs,
-  },
-  predictiveSubtext: {
+  docAmount: {
     ...Typography.caption1,
+    fontWeight: "600",
+    marginTop: 2,
   },
   risksCard: {
-    marginBottom: Spacing.md,
-  },
-  risksList: {
-    gap: Spacing.sm,
-  },
-  riskItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-  },
-  riskIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  riskContent: {
-    flex: 1,
-  },
-  riskTitle: {
-    ...Typography.body,
-  },
-  riskDate: {
-    ...Typography.caption1,
-  },
-  suggestionsCard: {
     marginBottom: Spacing.md,
   },
   suggestionsList: {
@@ -1226,24 +1315,33 @@ const styles = StyleSheet.create({
   },
   suggestionText: {
     ...Typography.body,
-    flex: 1,
   },
   compareCard: {
     marginBottom: Spacing.md,
+  },
+  predictiveHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  predictiveTitle: {
+    ...Typography.headline,
   },
   compareText: {
     ...Typography.body,
     marginBottom: Spacing.md,
   },
   compareBar: {
-    height: 8,
-    borderRadius: 4,
+    height: 12,
+    borderRadius: 6,
     backgroundColor: "rgba(0,0,0,0.1)",
     marginBottom: Spacing.xs,
+    overflow: "hidden",
   },
   compareBarFill: {
     height: "100%",
-    borderRadius: 4,
+    borderRadius: 6,
   },
   compareLabels: {
     flexDirection: "row",

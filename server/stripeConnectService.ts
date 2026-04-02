@@ -15,6 +15,10 @@ import {
   providers,
   clients,
   users,
+  jobs,
+  housefaxEntries,
+  homes,
+  appointments,
 } from "../shared/schema";
 import { dispatch } from "./notificationService";
 
@@ -582,6 +586,88 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
           relatedRecordId: invoiceId,
         }).catch((e: unknown) => console.error('invoice.paid dispatch error (webhook):', e));
       }
+
+      // HouseFax: update costCents on the housefax entry for the invoice's linked job (if any)
+      // Uses invoice.jobId for deterministic association (no guessing)
+      (async () => {
+        try {
+          const jobId = updatedInvoice.jobId;
+          if (!jobId) return; // Only enrich when invoice is directly linked to a job
+
+          const costCents = updatedInvoice.total
+            ? Math.round((typeof updatedInvoice.total === 'string' ? parseFloat(updatedInvoice.total) : updatedInvoice.total) * 100)
+            : 0;
+          if (costCents <= 0) return;
+
+          const [entry] = await db
+            .select({ id: housefaxEntries.id, costCents: housefaxEntries.costCents })
+            .from(housefaxEntries)
+            .where(eq(housefaxEntries.jobId, jobId));
+
+          if (entry) {
+            // Update cost on existing entry
+            await db.update(housefaxEntries)
+              .set({ costCents })
+              .where(eq(housefaxEntries.id, entry.id));
+            console.log(`[HouseFax] Updated cost for job ${jobId} to ${costCents} cents via payment webhook`);
+          } else {
+            // No entry yet - create HouseFax entry inline using job data + confirmed payment cost
+            const [job] = await db.select().from(jobs).where(eq(jobs.id, jobId));
+            if (job && job.status === 'completed') {
+              // Find homeId from the client
+              let homeId: string | null = null;
+              if (job.appointmentId) {
+                const [appt] = await db.select({ homeId: appointments.homeId })
+                  .from(appointments)
+                  .where(eq(appointments.id, job.appointmentId));
+                if (appt) homeId = appt.homeId;
+              }
+              // Fall back: find homeId via the job's linked invoice (homeownerUserId -> homes)
+              if (!homeId) {
+                const [inv] = await db
+                  .select({ homeownerUserId: invoices.homeownerUserId })
+                  .from(invoices)
+                  .where(eq(invoices.jobId, job.id));
+                if (inv?.homeownerUserId) {
+                  const [home] = await db.select({ id: homes.id })
+                    .from(homes)
+                    .where(eq(homes.userId, inv.homeownerUserId));
+                  if (home) homeId = home.id;
+                }
+              }
+              if (homeId) {
+                // Double-check no entry was created concurrently
+                const [existing] = await db.select({ id: housefaxEntries.id })
+                  .from(housefaxEntries)
+                  .where(eq(housefaxEntries.jobId, job.id));
+                if (!existing) {
+                  const [provider] = job.providerId
+                    ? await db.select({ businessName: providers.businessName }).from(providers).where(eq(providers.id, job.providerId))
+                    : [null];
+                  await db.insert(housefaxEntries).values({
+                    homeId,
+                    jobId: job.id,
+                    appointmentId: job.appointmentId || null,
+                    serviceCategory: 'General',
+                    serviceName: job.title,
+                    providerId: job.providerId || null,
+                    providerName: provider?.businessName || null,
+                    completedAt: job.completedAt || new Date(),
+                    costCents,
+                    aiSummary: null,
+                    photos: [],
+                    systemAffected: 'General',
+                    notes: job.notes || null,
+                  });
+                  console.log(`[HouseFax] Created entry for job ${jobId} with cost ${costCents} cents via payment webhook`);
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.error('[HouseFax] Payment webhook cost update error:', e);
+        }
+      })();
     } catch (err) {
       console.error('Failed to dispatch invoice.paid from webhook:', err);
     }

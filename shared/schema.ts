@@ -77,6 +77,7 @@ export const homes = pgTable("homes", {
 export const homesRelations = relations(homes, ({ one, many }) => ({
   user: one(users, { fields: [homes.userId], references: [users.id] }),
   appointments: many(appointments),
+  housefaxEntries: many(housefaxEntries),
 }));
 
 export const serviceCategories = pgTable("service_categories", {
@@ -911,3 +912,38 @@ export const insertNotificationPreferenceSchema = createInsertSchema(notificatio
   updatedAt: true,
 });
 export type InsertNotificationPreference = z.infer<typeof insertNotificationPreferenceSchema>;
+
+// ─── HouseFax Entries ─────────────────────────────────────────────────────────
+
+export const housefaxEntries = pgTable("housefax_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  homeId: varchar("home_id").notNull().references(() => homes.id, { onDelete: "cascade" }),
+  appointmentId: varchar("appointment_id").references(() => appointments.id, { onDelete: "set null" }),
+  jobId: varchar("job_id").references(() => jobs.id, { onDelete: "set null" }),
+  serviceCategory: text("service_category").notNull().default("General"),
+  serviceName: text("service_name").notNull(),
+  providerId: varchar("provider_id").references(() => providers.id, { onDelete: "set null" }),
+  providerName: text("provider_name"),
+  completedAt: timestamp("completed_at").notNull(),
+  costCents: integer("cost_cents").default(0),
+  aiSummary: text("ai_summary"),
+  photos: json("photos").$type<string[]>().default([]),
+  systemAffected: text("system_affected"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const housefaxEntriesRelations = relations(housefaxEntries, ({ one }) => ({
+  home: one(homes, { fields: [housefaxEntries.homeId], references: [homes.id] }),
+  appointment: one(appointments, { fields: [housefaxEntries.appointmentId], references: [appointments.id] }),
+  job: one(jobs, { fields: [housefaxEntries.jobId], references: [jobs.id] }),
+  provider: one(providers, { fields: [housefaxEntries.providerId], references: [providers.id] }),
+}));
+
+export const insertHousefaxEntrySchema = createInsertSchema(housefaxEntries).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type HousefaxEntry = typeof housefaxEntries.$inferSelect;
+export type InsertHousefaxEntry = z.infer<typeof insertHousefaxEntrySchema>;

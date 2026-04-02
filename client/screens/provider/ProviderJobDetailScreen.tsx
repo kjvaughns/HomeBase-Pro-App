@@ -1,12 +1,13 @@
 import React, { useState, useMemo, useCallback } from "react";
-import { StyleSheet, View, ScrollView, Pressable, Linking, Alert, ActivityIndicator } from "react-native";
+import { StyleSheet, View, ScrollView, Pressable, Linking, Alert, ActivityIndicator, Image, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, RouteProp, useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import Animated, { FadeInDown, FadeInRight } from "react-native-reanimated";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
@@ -223,6 +224,8 @@ export default function ProviderJobDetailScreen() {
   const queryClient = useQueryClient();
 
   const [displayStatus, setDisplayStatus] = useState<DisplayStatus | null>(null);
+  const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
+  const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
 
   const { data: jobData, isLoading } = useQuery<{ job: ApiJob }>({
     queryKey: ["/api/jobs", jobId],
@@ -339,6 +342,54 @@ export default function ProviderJobDetailScreen() {
       navigation.navigate("AddInvoice", { clientId: job.clientId });
     }
   }, [job, navigation]);
+
+  const handleUploadPhotos = useCallback(async () => {
+    if (Platform.OS === "web") {
+      Alert.alert("Not Available", "Photo upload is available on mobile devices via Expo Go.");
+      return;
+    }
+
+    const permResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permResult.granted) {
+      Alert.alert("Permission Required", "Please allow access to your photo library to upload job photos.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsMultipleSelection: true,
+      quality: 0.7,
+      base64: true,
+    });
+
+    if (result.canceled || !result.assets) return;
+
+    setIsUploadingPhotos(true);
+    try {
+      const photoUris = result.assets
+        .filter(a => a.base64)
+        .map(a => `data:image/jpeg;base64,${a.base64}`);
+
+      if (photoUris.length === 0) {
+        Alert.alert("Error", "Could not process selected photos");
+        return;
+      }
+
+      const url = new URL(`/api/jobs/${jobId}/photos`, getApiUrl());
+      const response = await apiRequest("POST", url.toString(), { photos: photoUris });
+      if (response.ok) {
+        setUploadedPhotos(prev => [...prev, ...photoUris]);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+        Alert.alert("Upload Failed", errorData.error || "Failed to save photos to HouseFax. Please try again.");
+      }
+    } catch (e) {
+      Alert.alert("Error", "Failed to upload photos");
+    } finally {
+      setIsUploadingPhotos(false);
+    }
+  }, [jobId]);
 
   if (isLoading) {
     return (
@@ -497,6 +548,53 @@ export default function ProviderJobDetailScreen() {
             </GlassCard>
           </Animated.View>
         ) : null}
+
+        {resolvedDisplayStatus === "completed" ? (
+          <Animated.View entering={FadeInDown.delay(700).duration(400)}>
+            <GlassCard style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <ThemedText type="label" style={{ color: theme.textSecondary }}>
+                  JOB PHOTOS
+                </ThemedText>
+                <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+                  {uploadedPhotos.length} added
+                </ThemedText>
+              </View>
+              <ThemedText type="caption" style={{ color: theme.textSecondary, marginBottom: Spacing.sm }}>
+                Photos are saved to the homeowner's HouseFax record
+              </ThemedText>
+              {uploadedPhotos.length > 0 ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: Spacing.sm }}>
+                  <View style={styles.photosRow}>
+                    {uploadedPhotos.map((uri, index) => (
+                      <Image
+                        key={index}
+                        source={{ uri }}
+                        style={styles.photoThumb}
+                        resizeMode="cover"
+                      />
+                    ))}
+                  </View>
+                </ScrollView>
+              ) : null}
+              <Pressable
+                testID="button-upload-job-photos"
+                style={[styles.photoUploadButton, { borderColor: Colors.accent }]}
+                onPress={handleUploadPhotos}
+                disabled={isUploadingPhotos}
+              >
+                {isUploadingPhotos ? (
+                  <ActivityIndicator size="small" color={Colors.accent} />
+                ) : (
+                  <Feather name="camera" size={18} color={Colors.accent} />
+                )}
+                <ThemedText type="caption" style={{ color: Colors.accent, marginLeft: Spacing.xs }}>
+                  {isUploadingPhotos ? "Uploading..." : "Add Photos"}
+                </ThemedText>
+              </Pressable>
+            </GlassCard>
+          </Animated.View>
+        ) : null}
       </ScrollView>
 
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing.md, backgroundColor: theme.backgroundRoot }]}>
@@ -648,5 +746,24 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     borderWidth: 1,
     borderRadius: BorderRadius.md,
+  },
+  photosRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+  },
+  photoThumb: {
+    width: 80,
+    height: 80,
+    borderRadius: BorderRadius.sm,
+  },
+  photoUploadButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: Spacing.sm,
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+    borderStyle: "dashed",
+    gap: Spacing.xs,
   },
 });
