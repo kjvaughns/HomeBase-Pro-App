@@ -34,9 +34,12 @@ __export(schema_exports, {
   insertInvoiceSchema: () => insertInvoiceSchema,
   insertJobSchema: () => insertJobSchema,
   insertLeadSchema: () => insertLeadSchema,
+  insertMessageTemplateSchema: () => insertMessageTemplateSchema,
+  insertNotificationPreferenceSchema: () => insertNotificationPreferenceSchema,
   insertPaymentSchema: () => insertPaymentSchema,
   insertPayoutSchema: () => insertPayoutSchema,
   insertProviderCustomServiceSchema: () => insertProviderCustomServiceSchema,
+  insertProviderMessageSchema: () => insertProviderMessageSchema,
   insertProviderPlanSchema: () => insertProviderPlanSchema,
   insertProviderSchema: () => insertProviderSchema,
   insertStripeConnectAccountSchema: () => insertStripeConnectAccountSchema,
@@ -59,6 +62,14 @@ __export(schema_exports, {
   maintenanceReminderFrequencyEnum: () => maintenanceReminderFrequencyEnum,
   maintenanceReminders: () => maintenanceReminders,
   maintenanceRemindersRelations: () => maintenanceRemindersRelations,
+  messageChannelEnum: () => messageChannelEnum,
+  messageStatusEnum: () => messageStatusEnum,
+  messageTemplates: () => messageTemplates,
+  messageTemplatesRelations: () => messageTemplatesRelations,
+  notificationChannelEnum: () => notificationChannelEnum,
+  notificationDeliveries: () => notificationDeliveries,
+  notificationDeliveryStatusEnum: () => notificationDeliveryStatusEnum,
+  notificationPreferences: () => notificationPreferences,
   notifications: () => notifications,
   notificationsRelations: () => notificationsRelations,
   paymentMethodEnum: () => paymentMethodEnum,
@@ -72,6 +83,9 @@ __export(schema_exports, {
   propertyTypeEnum: () => propertyTypeEnum,
   providerCustomServices: () => providerCustomServices,
   providerCustomServicesRelations: () => providerCustomServicesRelations,
+  providerMessageTemplates: () => providerMessageTemplates,
+  providerMessages: () => providerMessages,
+  providerMessagesRelations: () => providerMessagesRelations,
   providerPlanTierEnum: () => providerPlanTierEnum,
   providerPlans: () => providerPlans,
   providerPlansRelations: () => providerPlansRelations,
@@ -79,7 +93,11 @@ __export(schema_exports, {
   providerServicesRelations: () => providerServicesRelations,
   providers: () => providers,
   providersRelations: () => providersRelations,
+  pushTokens: () => pushTokens,
   quoteModeEnum: () => quoteModeEnum,
+  refundStatusEnum: () => refundStatusEnum,
+  refunds: () => refunds,
+  refundsRelations: () => refundsRelations,
   reviews: () => reviews,
   reviewsRelations: () => reviewsRelations,
   serviceCategories: () => serviceCategories,
@@ -96,10 +114,10 @@ __export(schema_exports, {
   usersRelations: () => usersRelations
 });
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, boolean, decimal, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, boolean, decimal, pgEnum, json } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-var propertyTypeEnum, appointmentStatusEnum, urgencyEnum, jobSizeEnum, jobStatusEnum, invoiceStatusEnum, paymentMethodEnum, paymentStatusEnum, payoutStatusEnum, connectOnboardingStatusEnum, providerPlanTierEnum, users, usersRelations, homes, homesRelations, serviceCategories, serviceCategoriesRelations, services, servicesRelations, providers, providersRelations, providerServices, providerServicesRelations, pricingTypeEnum, providerCustomServices, providerCustomServicesRelations, insertProviderCustomServiceSchema, appointments, appointmentsRelations, reviews, reviewsRelations, notifications, notificationsRelations, maintenanceReminderFrequencyEnum, maintenanceReminders, maintenanceRemindersRelations, providerPlans, providerPlansRelations, stripeConnectAccounts, stripeConnectAccountsRelations, userCredits, userCreditsRelations, creditLedger, creditLedgerRelations, payouts, payoutsRelations, stripeWebhookEvents, invoiceLineItems, invoiceLineItemsRelations, clients, clientsRelations, jobs, jobsRelations, invoices, invoicesRelations, payments, paymentsRelations, bookingLinkStatusEnum, quoteModeEnum, intakeStatusEnum, bookingLinks, bookingLinksRelations, intakeSubmissions, intakeSubmissionsRelations, insertUserSchema, loginSchema, insertHomeSchema, insertAppointmentSchema, insertClientSchema, insertJobSchema, insertInvoiceSchema, insertPaymentSchema, insertProviderSchema, insertProviderPlanSchema, insertStripeConnectAccountSchema, insertInvoiceLineItemSchema, insertPayoutSchema, insertUserCreditsSchema, insertCreditLedgerSchema, insertBookingLinkSchema, insertIntakeSubmissionSchema, leads, insertLeadSchema;
+var propertyTypeEnum, appointmentStatusEnum, urgencyEnum, jobSizeEnum, jobStatusEnum, invoiceStatusEnum, paymentMethodEnum, paymentStatusEnum, payoutStatusEnum, connectOnboardingStatusEnum, providerPlanTierEnum, users, usersRelations, homes, homesRelations, serviceCategories, serviceCategoriesRelations, services, servicesRelations, providers, providersRelations, providerServices, providerServicesRelations, pricingTypeEnum, providerCustomServices, providerCustomServicesRelations, insertProviderCustomServiceSchema, appointments, appointmentsRelations, reviews, reviewsRelations, notifications, notificationsRelations, maintenanceReminderFrequencyEnum, maintenanceReminders, maintenanceRemindersRelations, providerPlans, providerPlansRelations, stripeConnectAccounts, stripeConnectAccountsRelations, userCredits, userCreditsRelations, creditLedger, creditLedgerRelations, payouts, payoutsRelations, refundStatusEnum, refunds, refundsRelations, stripeWebhookEvents, invoiceLineItems, invoiceLineItemsRelations, clients, clientsRelations, jobs, jobsRelations, invoices, invoicesRelations, payments, paymentsRelations, bookingLinkStatusEnum, quoteModeEnum, intakeStatusEnum, bookingLinks, bookingLinksRelations, intakeSubmissions, intakeSubmissionsRelations, insertUserSchema, loginSchema, insertHomeSchema, insertAppointmentSchema, insertClientSchema, insertJobSchema, insertInvoiceSchema, insertPaymentSchema, insertProviderSchema, insertProviderPlanSchema, insertStripeConnectAccountSchema, insertInvoiceLineItemSchema, insertPayoutSchema, insertUserCreditsSchema, insertCreditLedgerSchema, insertBookingLinkSchema, insertIntakeSubmissionSchema, notificationChannelEnum, notificationDeliveryStatusEnum, pushTokens, notificationPreferences, providerMessageTemplates, notificationDeliveries, messageChannelEnum, messageStatusEnum, providerMessages, providerMessagesRelations, insertProviderMessageSchema, messageTemplates, messageTemplatesRelations, insertMessageTemplateSchema, leads, insertLeadSchema, insertNotificationPreferenceSchema;
 var init_schema = __esm({
   "shared/schema.ts"() {
     "use strict";
@@ -213,13 +231,12 @@ var init_schema = __esm({
       serviceArea: text("service_area"),
       yearsExperience: integer("years_experience").default(0),
       capabilityTags: text("capability_tags").array().default(sql`ARRAY[]::text[]`),
-      businessHours: text("business_hours"),
-      bookingPolicies: text("booking_policies"),
+      businessHours: json("business_hours"),
+      bookingPolicies: json("booking_policies"),
       serviceRadius: integer("service_radius"),
-      serviceZipCodes: text("service_zip_codes"),
-      serviceCities: text("service_cities"),
-      isPublicProfile: boolean("is_public_profile").default(false),
-      isPublic: boolean("is_public").default(true),
+      serviceZipCodes: text("service_zip_codes").array(),
+      serviceCities: text("service_cities").array(),
+      isPublic: boolean("is_public").default(false),
       slug: text("slug").unique(),
       createdAt: timestamp("created_at").defaultNow().notNull()
     });
@@ -258,6 +275,7 @@ var init_schema = __esm({
       priceTiersJson: text("price_tiers_json"),
       duration: integer("duration").default(60),
       isPublished: boolean("is_published").default(true),
+      isAddon: boolean("is_addon").default(false),
       createdAt: timestamp("created_at").defaultNow().notNull(),
       updatedAt: timestamp("updated_at").defaultNow().notNull()
     });
@@ -288,6 +306,8 @@ var init_schema = __esm({
       providerDiagnosis: text("provider_diagnosis"),
       statusHistory: text("status_history"),
       notes: text("notes"),
+      isRecurring: boolean("is_recurring").default(false),
+      recurringFrequency: text("recurring_frequency"),
       createdAt: timestamp("created_at").defaultNow().notNull(),
       updatedAt: timestamp("updated_at").defaultNow().notNull(),
       completedAt: timestamp("completed_at"),
@@ -403,10 +423,28 @@ var init_schema = __esm({
       status: payoutStatusEnum("status").default("pending"),
       stripeTransferId: text("stripe_transfer_id"),
       stripePayoutId: text("stripe_payout_id"),
+      arrivalDate: timestamp("arrival_date"),
+      description: text("description"),
       createdAt: timestamp("created_at").defaultNow().notNull()
     });
     payoutsRelations = relations(payouts, ({ one }) => ({
       provider: one(providers, { fields: [payouts.providerId], references: [providers.id] })
+    }));
+    refundStatusEnum = pgEnum("refund_status", ["pending", "succeeded", "failed", "canceled"]);
+    refunds = pgTable("refunds", {
+      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+      providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+      paymentId: varchar("payment_id").references(() => payments.id, { onDelete: "set null" }),
+      stripeRefundId: text("stripe_refund_id").unique(),
+      stripeChargeId: text("stripe_charge_id"),
+      amountCents: integer("amount_cents").notNull(),
+      reason: text("reason"),
+      status: refundStatusEnum("status").default("pending"),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    refundsRelations = relations(refunds, ({ one }) => ({
+      provider: one(providers, { fields: [refunds.providerId], references: [providers.id] }),
+      payment: one(payments, { fields: [refunds.paymentId], references: [payments.id] })
     }));
     stripeWebhookEvents = pgTable("stripe_webhook_events", {
       id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -709,6 +747,106 @@ var init_schema = __esm({
       createdAt: true,
       updatedAt: true
     });
+    notificationChannelEnum = pgEnum("notification_channel", ["email", "push", "in_app", "sms"]);
+    notificationDeliveryStatusEnum = pgEnum("notification_delivery_status", ["queued", "sent", "delivered", "failed", "pending_sms"]);
+    pushTokens = pgTable("push_tokens", {
+      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+      userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+      token: text("token").notNull(),
+      platform: text("platform").notNull(),
+      // ios | android
+      isActive: boolean("is_active").default(true),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      updatedAt: timestamp("updated_at").defaultNow().notNull()
+    });
+    notificationPreferences = pgTable("notification_preferences", {
+      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+      userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }).unique(),
+      emailBookingConfirmation: boolean("email_booking_confirmation").default(true),
+      emailBookingReminder: boolean("email_booking_reminder").default(true),
+      emailBookingCancelled: boolean("email_booking_cancelled").default(true),
+      emailInvoiceCreated: boolean("email_invoice_created").default(true),
+      emailInvoiceReminder: boolean("email_invoice_reminder").default(true),
+      emailInvoicePaid: boolean("email_invoice_paid").default(true),
+      emailPaymentFailed: boolean("email_payment_failed").default(true),
+      emailReviewRequest: boolean("email_review_request").default(true),
+      pushEnabled: boolean("push_enabled").default(true),
+      inAppEnabled: boolean("in_app_enabled").default(true),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      updatedAt: timestamp("updated_at").defaultNow().notNull()
+    });
+    providerMessageTemplates = pgTable("provider_message_templates", {
+      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+      providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+      name: text("name").notNull(),
+      subject: text("subject"),
+      body: text("body").notNull(),
+      eventType: text("event_type"),
+      // booking_confirmation, invoice_sent, etc.
+      isDefault: boolean("is_default").default(false),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      updatedAt: timestamp("updated_at").defaultNow().notNull()
+    });
+    notificationDeliveries = pgTable("notification_deliveries", {
+      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+      channel: notificationChannelEnum("channel").notNull(),
+      status: notificationDeliveryStatusEnum("status").default("queued"),
+      eventType: text("event_type").notNull(),
+      recipientUserId: varchar("recipient_user_id").references(() => users.id, { onDelete: "set null" }),
+      recipientEmail: text("recipient_email"),
+      relatedRecordType: text("related_record_type"),
+      // invoice | job | appointment | user
+      relatedRecordId: varchar("related_record_id"),
+      externalMessageId: text("external_message_id"),
+      error: text("error"),
+      metadata: text("metadata"),
+      // JSON
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      updatedAt: timestamp("updated_at").defaultNow().notNull()
+    });
+    messageChannelEnum = pgEnum("message_channel", ["email", "sms"]);
+    messageStatusEnum = pgEnum("message_status", ["sent", "failed", "pending_sms"]);
+    providerMessages = pgTable("provider_messages", {
+      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+      providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+      clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+      jobId: varchar("job_id").references(() => jobs.id, { onDelete: "set null" }),
+      invoiceId: varchar("invoice_id").references(() => invoices.id, { onDelete: "set null" }),
+      channel: messageChannelEnum("channel").notNull().default("email"),
+      subject: text("subject"),
+      body: text("body").notNull(),
+      status: messageStatusEnum("status").notNull().default("sent"),
+      resendMessageId: text("resend_message_id"),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    providerMessagesRelations = relations(providerMessages, ({ one }) => ({
+      provider: one(providers, { fields: [providerMessages.providerId], references: [providers.id] }),
+      client: one(clients, { fields: [providerMessages.clientId], references: [clients.id] }),
+      job: one(jobs, { fields: [providerMessages.jobId], references: [jobs.id] }),
+      invoice: one(invoices, { fields: [providerMessages.invoiceId], references: [invoices.id] })
+    }));
+    insertProviderMessageSchema = createInsertSchema(providerMessages).omit({
+      id: true,
+      createdAt: true
+    });
+    messageTemplates = pgTable("message_templates", {
+      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+      providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+      name: text("name").notNull(),
+      channel: messageChannelEnum("channel").notNull().default("email"),
+      subject: text("subject"),
+      body: text("body").notNull(),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      updatedAt: timestamp("updated_at").defaultNow().notNull()
+    });
+    messageTemplatesRelations = relations(messageTemplates, ({ one }) => ({
+      provider: one(providers, { fields: [messageTemplates.providerId], references: [providers.id] })
+    }));
+    insertMessageTemplateSchema = createInsertSchema(messageTemplates).omit({
+      id: true,
+      createdAt: true,
+      updatedAt: true
+    });
     leads = pgTable("leads", {
       id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
       providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
@@ -723,6 +861,11 @@ var init_schema = __esm({
       updatedAt: timestamp("updated_at").defaultNow()
     });
     insertLeadSchema = createInsertSchema(leads).omit({ id: true, createdAt: true, updatedAt: true });
+    insertNotificationPreferenceSchema = createInsertSchema(notificationPreferences).omit({
+      id: true,
+      createdAt: true,
+      updatedAt: true
+    });
   }
 });
 
@@ -731,7 +874,7 @@ var bookingPage_exports = {};
 __export(bookingPage_exports, {
   renderBookingPage: () => renderBookingPage
 });
-import { eq as eq4, and as and4, desc as desc3 } from "drizzle-orm";
+import { eq as eq5, and as and5, desc as desc3 } from "drizzle-orm";
 function escapeHtml(str) {
   if (!str) return "";
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -800,21 +943,21 @@ function errorPage(status, title, message) {
   return { html, status };
 }
 async function renderBookingPage(slug, db2) {
-  const [link] = await db2.select().from(bookingLinks).where(eq4(bookingLinks.slug, slug)).limit(1);
+  const [link] = await db2.select().from(bookingLinks).where(eq5(bookingLinks.slug, slug)).limit(1);
   if (!link) {
     return errorPage(404, "Provider not found", "This booking page does not exist. Please check the link and try again.");
   }
   if (link.isActive === false || link.status !== "active") {
     return errorPage(404, "Booking page unavailable", "This booking page is currently unavailable. Please contact the provider directly.");
   }
-  const [provider] = await db2.select().from(providers).where(eq4(providers.id, link.providerId)).limit(1);
+  const [provider] = await db2.select().from(providers).where(eq5(providers.id, link.providerId)).limit(1);
   if (!provider || provider.isPublic === false) {
     return errorPage(404, "Provider not found", "The provider associated with this booking page could not be found.");
   }
   const customServices = await db2.select().from(providerCustomServices).where(
-    and4(
-      eq4(providerCustomServices.providerId, provider.id),
-      eq4(providerCustomServices.isPublished, true)
+    and5(
+      eq5(providerCustomServices.providerId, provider.id),
+      eq5(providerCustomServices.isPublished, true)
     )
   );
   const catalogServices = await db2.select({
@@ -824,10 +967,10 @@ async function renderBookingPage(slug, db2) {
     basePrice: services.basePrice,
     price: providerServices.price,
     providerServiceId: providerServices.id
-  }).from(providerServices).innerJoin(services, eq4(providerServices.serviceId, services.id)).where(
-    and4(
-      eq4(providerServices.providerId, provider.id),
-      eq4(services.isPublic, true)
+  }).from(providerServices).innerJoin(services, eq5(providerServices.serviceId, services.id)).where(
+    and5(
+      eq5(providerServices.providerId, provider.id),
+      eq5(services.isPublic, true)
     )
   );
   const recentReviews = await db2.select({
@@ -836,7 +979,7 @@ async function renderBookingPage(slug, db2) {
     comment: reviews.comment,
     createdAt: reviews.createdAt,
     reviewerFirstName: users.firstName
-  }).from(reviews).leftJoin(users, eq4(reviews.userId, users.id)).where(eq4(reviews.providerId, provider.id)).orderBy(desc3(reviews.createdAt)).limit(5);
+  }).from(reviews).leftJoin(users, eq5(reviews.userId, users.id)).where(eq5(reviews.providerId, provider.id)).orderBy(desc3(reviews.createdAt)).limit(5);
   const showPricing = link.showPricing !== false;
   const businessName = escapeHtml(provider.businessName ?? "Your Provider");
   const pageTitle = link.customTitle ? escapeHtml(link.customTitle) : `Book with ${businessName}`;
@@ -1957,6 +2100,19 @@ var DatabaseStorage = class {
     const [submission] = await db.update(intakeSubmissions).set({ ...data, updatedAt: /* @__PURE__ */ new Date() }).where(eq(intakeSubmissions.id, id)).returning();
     return submission || void 0;
   }
+  async getNotificationPreferences(userId) {
+    const [prefs] = await db.select().from(notificationPreferences).where(eq(notificationPreferences.userId, userId));
+    return prefs || void 0;
+  }
+  async upsertNotificationPreferences(userId, data) {
+    const existing = await this.getNotificationPreferences(userId);
+    if (existing) {
+      const [updated] = await db.update(notificationPreferences).set({ ...data, updatedAt: /* @__PURE__ */ new Date() }).where(eq(notificationPreferences.userId, userId)).returning();
+      return updated;
+    }
+    const [created] = await db.insert(notificationPreferences).values({ userId, ...data }).returning();
+    return created;
+  }
 };
 var storage = new DatabaseStorage();
 
@@ -2228,7 +2384,7 @@ var stripeService = new StripeService();
 
 // server/routes.ts
 init_schema();
-import { sql as sql3, eq as eq3, and as and3, desc as desc2 } from "drizzle-orm";
+import { sql as sql3, eq as eq4, and as and4, desc as desc2 } from "drizzle-orm";
 
 // server/emailService.ts
 import { Resend } from "resend";
@@ -2263,21 +2419,284 @@ async function getResendClient() {
     fromEmail
   };
 }
-async function sendInvoiceEmail(data) {
+function fmtUsd(amount) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
+}
+function buildEmailBase(title, body, ctaLabel, ctaUrl) {
+  const ctaHtml = ctaLabel && ctaUrl ? `<a href="${ctaUrl}" style="display:block;background:#38AE5F;color:#fff;text-align:center;padding:16px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;margin:24px 0;">${ctaLabel}</a>` : "";
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>${title}</title>
+</head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;margin:0;padding:0;background-color:#f3f4f6;">
+  <div style="max-width:600px;margin:0 auto;padding:40px 20px;">
+    <div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.08);">
+      <!-- Header -->
+      <div style="background:#38AE5F;padding:28px 32px;text-align:center;">
+        <div style="font-size:22px;font-weight:700;color:#fff;letter-spacing:-0.3px;">HomeBase</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:4px;">The smart way to manage home services</div>
+      </div>
+      <!-- Body -->
+      <div style="padding:32px;">
+        ${body}
+        ${ctaHtml}
+      </div>
+      <!-- Footer -->
+      <div style="background:#f9fafb;padding:20px 32px;text-align:center;border-top:1px solid #e5e7eb;">
+        <p style="color:#9ca3af;font-size:11px;margin:0 0 4px;">Sent via HomeBase &mdash; The smart way to manage home services</p>
+        <p style="color:#d1d5db;font-size:10px;margin:0;">You are receiving this because you have an account or transaction on HomeBase. <a href="#" style="color:#9ca3af;">Unsubscribe</a></p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+function infoRow(label, value) {
+  return `<div style="display:flex;justify-content:space-between;margin-bottom:10px;">
+    <span style="color:#6b7280;font-size:14px;">${label}</span>
+    <span style="color:#111827;font-weight:600;font-size:14px;">${value}</span>
+  </div>`;
+}
+function infoBox(rows) {
+  return `<div style="background:#f9fafb;border-radius:8px;padding:20px;margin-bottom:24px;">${rows}</div>`;
+}
+function greeting(name) {
+  return `<p style="color:#374151;font-size:16px;margin:0 0 20px;">Hi ${name},</p>`;
+}
+function paragraph(text2) {
+  return `<p style="color:#6b7280;font-size:14px;line-height:1.6;margin:0 0 20px;">${text2}</p>`;
+}
+function appDownloadSection() {
+  return `<div style="background:linear-gradient(135deg,#f0fdf4 0%,#dcfce7 100%);border-radius:8px;padding:20px;margin-top:24px;text-align:center;">
+    <p style="color:#166534;font-weight:600;margin:0 0 6px;font-size:14px;">Manage your home services with HomeBase</p>
+    <p style="color:#15803d;font-size:13px;margin:0 0 14px;">Track invoices, book services, and get instant quotes &mdash; all in one app.</p>
+    <div>
+      <a href="https://apps.apple.com/app/homebase" style="display:inline-block;background:#111827;color:#fff;padding:9px 18px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:500;margin:0 4px;">App Store</a>
+      <a href="https://play.google.com/store/apps/details?id=com.homebase" style="display:inline-block;background:#111827;color:#fff;padding:9px 18px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:500;margin:0 4px;">Google Play</a>
+    </div>
+  </div>`;
+}
+async function sendEmail(to, subject, html) {
   try {
     const { client, fromEmail } = await getResendClient();
-    const formattedAmount = new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD"
-    }).format(data.amount);
-    const lineItemsHtml = data.lineItems.map((item) => `
-      <tr>
-        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${item.description}</td>
-        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">${item.quantity}</td>
-        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: right;">$${item.unitPrice.toFixed(2)}</td>
-        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; text-align: right;">$${item.total.toFixed(2)}</td>
-      </tr>
-    `).join("");
+    const result = await client.emails.send({
+      from: fromEmail || "HomeBase <noreply@resend.dev>",
+      to,
+      subject,
+      html
+    });
+    if (result.error) {
+      console.error("Resend error:", result.error);
+      return { success: false, error: result.error.message };
+    }
+    return { success: true, messageId: result.data?.id };
+  } catch (err) {
+    console.error("sendEmail error:", err);
+    return { success: false, error: err.message || "Failed to send email" };
+  }
+}
+async function sendWelcomeEmail(to, name) {
+  const body = greeting(name) + paragraph("Welcome to HomeBase! We're thrilled to have you. HomeBase helps you manage your home services, track invoices, and connect with trusted providers &mdash; all in one place.") + `<h2 style="color:#111827;font-size:18px;margin:0 0 12px;">What you can do</h2><ul style="color:#6b7280;font-size:14px;line-height:1.8;padding-left:20px;margin:0 0 20px;">
+      <li>Book local service providers</li>
+      <li>Manage invoices and payments</li>
+      <li>Track your home maintenance history</li>
+      <li>Get smart reminders for recurring services</li>
+    </ul>` + appDownloadSection();
+  return sendEmail(to, "Welcome to HomeBase!", buildEmailBase("Welcome to HomeBase", body, "Open HomeBase", "https://homebaseproapp.com"));
+}
+async function sendBookingConfirmationEmail(data) {
+  const priceRow = data.estimatedPrice ? infoRow("Est. Price", fmtUsd(data.estimatedPrice)) : "";
+  const body = greeting(data.clientName) + paragraph("Great news! Your service appointment has been confirmed. Here are your booking details:") + infoBox(
+    (data.confirmationNumber ? infoRow("Confirmation #", data.confirmationNumber) : "") + infoRow("Service", data.serviceName) + infoRow("Provider", data.providerName) + infoRow("Date", data.appointmentDate) + infoRow("Time", data.appointmentTime) + (data.address ? infoRow("Location", data.address) : "") + priceRow
+  ) + `<div style="background:#fffbeb;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #f59e0b;">
+      <p style="color:#92400e;font-size:13px;margin:0;"><strong>Need to reschedule?</strong> Contact ${data.providerName} at least 24 hours before your appointment.</p>
+    </div>` + appDownloadSection();
+  return sendEmail(
+    data.clientEmail,
+    `Booking Confirmed: ${data.serviceName} with ${data.providerName}`,
+    buildEmailBase("Booking Confirmed", body)
+  );
+}
+async function sendBookingReminderEmail(data, hoursUntil) {
+  const label = hoursUntil <= 2 ? "in 2 hours" : "tomorrow";
+  const body = greeting(data.clientName) + paragraph(`This is a reminder that your appointment is coming up ${label}. Here are the details:`) + infoBox(
+    infoRow("Service", data.serviceName) + infoRow("Provider", data.providerName) + infoRow("Date", data.appointmentDate) + infoRow("Time", data.appointmentTime) + (data.address ? infoRow("Location", data.address) : "")
+  ) + appDownloadSection();
+  return sendEmail(
+    data.clientEmail,
+    `Reminder: ${data.serviceName} with ${data.providerName} ${label}`,
+    buildEmailBase("Appointment Reminder", body)
+  );
+}
+async function sendBookingCancelledEmail(data, reason) {
+  const body = greeting(data.clientName) + paragraph(`Your ${data.serviceName} appointment with ${data.providerName} has been cancelled.`) + infoBox(
+    infoRow("Service", data.serviceName) + infoRow("Provider", data.providerName) + infoRow("Date", data.appointmentDate) + infoRow("Time", data.appointmentTime) + (reason ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb;"><span style="color:#6b7280;font-size:14px;">Reason: </span><span style="color:#111827;font-size:14px;">${reason}</span></div>` : "")
+  ) + paragraph("If you would like to rebook, please contact the provider or visit HomeBase to schedule a new appointment.") + appDownloadSection();
+  return sendEmail(
+    data.clientEmail,
+    `Booking Cancelled: ${data.serviceName} with ${data.providerName}`,
+    buildEmailBase("Booking Cancelled", body)
+  );
+}
+async function sendBookingRescheduledEmail(data, oldDate, oldTime) {
+  const body = greeting(data.clientName) + paragraph(`Your ${data.serviceName} appointment with ${data.providerName} has been rescheduled.`) + `<p style="color:#6b7280;font-size:13px;text-decoration:line-through;margin:0 0 4px;">Previously: ${oldDate} at ${oldTime}</p>` + infoBox(
+    `<p style="color:#38AE5F;font-weight:600;font-size:13px;margin:0 0 12px;">New schedule</p>` + infoRow("Service", data.serviceName) + infoRow("Provider", data.providerName) + infoRow("Date", data.appointmentDate) + infoRow("Time", data.appointmentTime) + (data.address ? infoRow("Location", data.address) : "")
+  ) + appDownloadSection();
+  return sendEmail(
+    data.clientEmail,
+    `Rescheduled: ${data.serviceName} with ${data.providerName}`,
+    buildEmailBase("Appointment Rescheduled", body)
+  );
+}
+async function sendInvoiceEmail(data) {
+  const lineItemsHtml = data.lineItems.map((item) => `
+    <tr>
+      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;color:#374151;font-size:13px;">${item.description}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:center;color:#374151;font-size:13px;">${item.quantity}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;color:#374151;font-size:13px;">$${item.unitPrice.toFixed(2)}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;color:#374151;font-size:13px;">$${item.total.toFixed(2)}</td>
+    </tr>`).join("");
+  const body = greeting(data.clientName) + paragraph(`You have received a new invoice from <strong>${data.providerName}</strong>. Please find the details below.`) + infoBox(
+    infoRow("Invoice #", data.invoiceNumber) + infoRow("Due Date", data.dueDate) + `<div style="display:flex;justify-content:space-between;padding-top:12px;border-top:1px solid #e5e7eb;">
+        <span style="color:#6b7280;font-size:14px;">Total Amount</span>
+        <span style="color:#38AE5F;font-weight:700;font-size:20px;">${fmtUsd(data.amount)}</span>
+      </div>`
+  ) + `<table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+      <thead>
+        <tr style="background:#f3f4f6;">
+          <th style="padding:10px 12px;text-align:left;color:#374151;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Description</th>
+          <th style="padding:10px 12px;text-align:center;color:#374151;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Qty</th>
+          <th style="padding:10px 12px;text-align:right;color:#374151;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Price</th>
+          <th style="padding:10px 12px;text-align:right;color:#374151;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Total</th>
+        </tr>
+      </thead>
+      <tbody>${lineItemsHtml}</tbody>
+    </table>` + (data.paymentLink ? `<a href="${data.paymentLink}" style="display:block;background:#38AE5F;color:#fff;text-align:center;padding:16px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;margin-bottom:24px;">Pay Now</a>` : "") + appDownloadSection();
+  return sendEmail(
+    data.clientEmail,
+    `Invoice ${data.invoiceNumber} from ${data.providerName} &ndash; ${fmtUsd(data.amount)}`,
+    buildEmailBase(`Invoice from ${data.providerName}`, body)
+  );
+}
+async function sendInvoiceCreatedEmail(data) {
+  return sendInvoiceEmail(data);
+}
+async function sendInvoiceReminderEmail(data) {
+  const isOverdue = (data.daysOverdue ?? 0) > 0;
+  const urgencyText = isOverdue ? `Your invoice is <strong>${data.daysOverdue} day${data.daysOverdue === 1 ? "" : "s"} overdue</strong>. Please arrange payment as soon as possible to avoid any service interruptions.` : `Your invoice is due in <strong>${data.daysUntilDue} day${data.daysUntilDue === 1 ? "" : "s"}</strong>. Please arrange payment before the due date.`;
+  const body = greeting(data.clientName) + `<div style="background:${isOverdue ? "#fef2f2" : "#fffbeb"};border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid ${isOverdue ? "#ef4444" : "#f59e0b"};">
+      <p style="color:${isOverdue ? "#991b1b" : "#92400e"};font-size:14px;margin:0;">${urgencyText}</p>
+    </div>` + infoBox(
+    infoRow("Invoice #", data.invoiceNumber) + infoRow("Provider", data.providerName) + infoRow("Due Date", data.dueDate) + `<div style="display:flex;justify-content:space-between;padding-top:12px;border-top:1px solid #e5e7eb;">
+        <span style="color:#6b7280;font-size:14px;">Amount Due</span>
+        <span style="color:${isOverdue ? "#ef4444" : "#38AE5F"};font-weight:700;font-size:20px;">${fmtUsd(data.amount)}</span>
+      </div>`
+  ) + (data.paymentLink ? `<a href="${data.paymentLink}" style="display:block;background:#38AE5F;color:#fff;text-align:center;padding:16px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;margin-bottom:24px;">Pay Now</a>` : "") + appDownloadSection();
+  const subject = isOverdue ? `Overdue: Invoice ${data.invoiceNumber} from ${data.providerName}` : `Reminder: Invoice ${data.invoiceNumber} due in ${data.daysUntilDue} day${data.daysUntilDue === 1 ? "" : "s"}`;
+  return sendEmail(data.clientEmail, subject, buildEmailBase("Invoice Reminder", body));
+}
+async function sendPaymentReceiptEmail(data) {
+  const body = greeting(data.clientName) + `<div style="text-align:center;margin-bottom:24px;">
+      <div style="width:60px;height:60px;background:#f0fdf4;border-radius:50%;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;">
+        <div style="font-size:28px;color:#38AE5F;">&#10003;</div>
+      </div>
+      <p style="color:#166534;font-weight:600;margin:0;">Payment confirmed</p>
+    </div>` + paragraph("Thank you for your payment! This email confirms we've received your payment for the following:") + infoBox(
+    infoRow("Invoice #", data.invoiceNumber) + infoRow("Payment Date", data.paymentDate) + infoRow("Provider", data.providerName) + (data.paymentMethod ? infoRow("Payment Method", data.paymentMethod) : "") + `<div style="display:flex;justify-content:space-between;padding-top:12px;border-top:1px solid #e5e7eb;">
+        <span style="color:#6b7280;font-size:14px;">Amount Paid</span>
+        <span style="color:#38AE5F;font-weight:700;font-size:20px;">${fmtUsd(data.amount)}</span>
+      </div>`
+  ) + paragraph(`Keep this email as your receipt. If you have any questions about this payment, please contact ${data.providerName} directly.`) + appDownloadSection();
+  return sendEmail(
+    data.clientEmail,
+    `Payment Receipt &ndash; ${fmtUsd(data.amount)} to ${data.providerName}`,
+    buildEmailBase("Payment Receipt", body)
+  );
+}
+async function sendInvoicePaidEmail(data) {
+  return sendPaymentReceiptEmail(data);
+}
+async function sendPaymentFailedEmail(data) {
+  const body = greeting(data.clientName) + `<div style="background:#fef2f2;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #ef4444;">
+      <p style="color:#991b1b;font-size:14px;margin:0;"><strong>Payment failed.</strong> We were unable to process your payment for invoice ${data.invoiceNumber}.</p>
+    </div>` + infoBox(
+    infoRow("Invoice #", data.invoiceNumber) + infoRow("Provider", data.providerName) + `<div style="display:flex;justify-content:space-between;padding-top:12px;border-top:1px solid #e5e7eb;">
+        <span style="color:#6b7280;font-size:14px;">Amount Due</span>
+        <span style="color:#ef4444;font-weight:700;font-size:20px;">${fmtUsd(data.amount)}</span>
+      </div>`
+  ) + paragraph("Please update your payment method and try again. If you need assistance, contact your service provider directly.") + (data.paymentLink ? `<a href="${data.paymentLink}" style="display:block;background:#38AE5F;color:#fff;text-align:center;padding:16px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;margin-bottom:24px;">Retry Payment</a>` : "") + appDownloadSection();
+  return sendEmail(
+    data.clientEmail,
+    `Payment Failed: Invoice ${data.invoiceNumber} from ${data.providerName}`,
+    buildEmailBase("Payment Failed", body)
+  );
+}
+async function sendReviewRequestEmail(data) {
+  const body = greeting(data.clientName) + paragraph(`Thank you for choosing ${data.providerName} for your ${data.serviceName}! We hope everything went smoothly. Your feedback helps other homeowners find great service providers.`) + paragraph("Would you mind leaving a quick review? It only takes a minute and means a lot to your provider.") + appDownloadSection();
+  return sendEmail(
+    data.clientEmail,
+    `How did your ${data.serviceName} go? Leave a review for ${data.providerName}`,
+    buildEmailBase("Leave a Review", body, data.reviewUrl ? "Leave a Review" : void 0, data.reviewUrl)
+  );
+}
+async function sendStripeOnboardingNeededEmail(to, providerName, onboardingUrl) {
+  const body = greeting(providerName) + paragraph("To start accepting online payments through HomeBase, you need to complete your Stripe payout account setup. This takes about 5 minutes.") + `<ul style="color:#6b7280;font-size:14px;line-height:1.8;padding-left:20px;margin:0 0 20px;">
+      <li>Accept card payments from clients</li>
+      <li>Receive automatic payouts to your bank account</li>
+      <li>Issue refunds directly from HomeBase</li>
+    </ul>`;
+  return sendEmail(to, "Complete your payout setup to get paid faster", buildEmailBase("Set Up Payouts", body, "Set Up Stripe Payouts", onboardingUrl));
+}
+async function sendStripeConnectedEmail(to, providerName) {
+  const body = greeting(providerName) + paragraph("Your Stripe payout account has been successfully connected to HomeBase. You can now accept online payments from clients and receive payouts directly to your bank account.") + `<div style="background:#f0fdf4;border-radius:8px;padding:16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
+      <p style="color:#166534;font-weight:600;margin:0;">Payments are now active</p>
+      <p style="color:#15803d;font-size:13px;margin:6px 0 0;">Send invoices with &ldquo;Pay Now&rdquo; links and get paid faster.</p>
+    </div>` + appDownloadSection();
+  return sendEmail(to, "Your Stripe payout account is connected", buildEmailBase("Payouts Connected", body));
+}
+async function sendProviderBookingNotificationEmail(data) {
+  const body = greeting(data.providerName) + paragraph(`${data.clientName} has booked a ${data.serviceName} with you. Here are the details:`) + infoBox(
+    infoRow("Client", data.clientName) + infoRow("Service", data.serviceName) + infoRow("Date", data.appointmentDate) + infoRow("Time", data.appointmentTime) + (data.address ? infoRow("Location", data.address) : "")
+  );
+  return sendEmail(
+    data.providerEmail,
+    `New Booking: ${data.serviceName} with ${data.clientName}`,
+    buildEmailBase("New Booking", body, "View in HomeBase", "https://homebaseproapp.com")
+  );
+}
+async function sendJobStatusChangedEmail(data) {
+  const statusLabel = {
+    scheduled: "Scheduled",
+    in_progress: "In Progress",
+    completed: "Completed",
+    cancelled: "Cancelled",
+    on_hold: "On Hold"
+  };
+  const label = statusLabel[data.newStatus] ?? data.newStatus;
+  const body = greeting(data.clientName) + paragraph(`We wanted to let you know that the status of your ${data.serviceName} job with ${data.providerName} has been updated to <strong>${label}</strong>.`) + (data.scheduledDate || data.notes ? infoBox(
+    (data.scheduledDate ? infoRow("Scheduled Date", data.scheduledDate) : "") + (data.notes ? infoRow("Notes", data.notes) : "")
+  ) : "") + paragraph(`If you have any questions, please reach out through the HomeBase app.`);
+  return sendEmail(
+    data.clientEmail,
+    `Job Update: ${data.serviceName} is now ${label}`,
+    buildEmailBase("Job Status Update", body, "View in HomeBase", "https://homebaseproapp.com")
+  );
+}
+async function sendRebookingNudgeEmail(data) {
+  const body = greeting(data.clientName) + paragraph(`Great news \u2014 your ${data.serviceName} with ${data.providerName} is complete! Ready to schedule your next visit?`) + paragraph(`Keeping up with regular maintenance can save you money in the long run. Book ${data.providerName} again in just a few taps.`);
+  return sendEmail(
+    data.clientEmail,
+    `Your service is complete \u2014 book ${data.providerName} again?`,
+    buildEmailBase("Service Complete", body, "Book Again", data.rebookLink || "https://homebaseproapp.com")
+  );
+}
+async function sendProviderClientMessage(data) {
+  try {
+    const { client, fromEmail } = await getResendClient();
+    const bodyHtml = data.body.replace(/\n/g, "<br/>");
     const html = `
       <!DOCTYPE html>
       <html>
@@ -2289,75 +2708,29 @@ async function sendInvoiceEmail(data) {
         <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
           <div style="background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
             <div style="background: #38AE5F; padding: 32px; text-align: center;">
-              <h1 style="color: white; margin: 0; font-size: 24px;">Invoice from ${data.providerName}</h1>
+              <h1 style="color: white; margin: 0; font-size: 22px;">${data.providerName}</h1>
+              <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px;">Sent via HomeBase</p>
             </div>
-            
+
             <div style="padding: 32px;">
               <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">
                 Hi ${data.clientName},
               </p>
-              
-              <p style="color: #6b7280; font-size: 14px; margin-bottom: 24px;">
-                You have received a new invoice. Please find the details below:
-              </p>
-              
-              <div style="background: #f9fafb; border-radius: 8px; padding: 20px; margin-bottom: 24px;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
-                  <span style="color: #6b7280;">Invoice Number:</span>
-                  <span style="color: #111827; font-weight: 600;">${data.invoiceNumber}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
-                  <span style="color: #6b7280;">Due Date:</span>
-                  <span style="color: #111827; font-weight: 600;">${data.dueDate}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between;">
-                  <span style="color: #6b7280;">Total Amount:</span>
-                  <span style="color: #38AE5F; font-weight: 700; font-size: 20px;">${formattedAmount}</span>
-                </div>
+
+              <div style="color: #374151; font-size: 15px; line-height: 1.7; margin-bottom: 24px;">
+                ${bodyHtml}
               </div>
-              
-              <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
-                <thead>
-                  <tr style="background: #f3f4f6;">
-                    <th style="padding: 12px; text-align: left; color: #374151; font-size: 12px; text-transform: uppercase;">Description</th>
-                    <th style="padding: 12px; text-align: center; color: #374151; font-size: 12px; text-transform: uppercase;">Qty</th>
-                    <th style="padding: 12px; text-align: right; color: #374151; font-size: 12px; text-transform: uppercase;">Price</th>
-                    <th style="padding: 12px; text-align: right; color: #374151; font-size: 12px; text-transform: uppercase;">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${lineItemsHtml}
-                </tbody>
-              </table>
-              
-              ${data.paymentLink ? `
-                <a href="${data.paymentLink}" style="display: block; background: #38AE5F; color: white; text-align: center; padding: 16px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px; margin-bottom: 24px;">
-                  Pay Now
-                </a>
-              ` : ""}
-              
-              <div style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-radius: 8px; padding: 20px; margin-top: 24px; text-align: center;">
-                <p style="color: #166534; font-weight: 600; margin: 0 0 8px 0; font-size: 14px;">
-                  Manage your home services with HomeBase
+
+              <div style="border-top: 1px solid #e5e7eb; padding-top: 20px; margin-top: 24px;">
+                <p style="color: #6b7280; font-size: 13px; margin: 0;">
+                  This message was sent to you by <strong>${data.providerName}</strong> through HomeBase. To reply, simply respond to this email.
                 </p>
-                <p style="color: #15803d; font-size: 13px; margin: 0 0 16px 0;">
-                  Track invoices, book services, and get instant quotes - all in one app.
-                </p>
-                <div style="display: flex; justify-content: center; gap: 12px;">
-                  <a href="https://apps.apple.com/app/homebase" style="display: inline-block; background: #111827; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-size: 12px; font-weight: 500;">
-                    App Store
-                  </a>
-                  <a href="https://play.google.com/store/apps/details?id=com.homebase" style="display: inline-block; background: #111827; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-size: 12px; font-weight: 500;">
-                    Google Play
-                  </a>
-                </div>
               </div>
             </div>
-            
-            <div style="background: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;">
-              <img src="https://via.placeholder.com/120x30/38AE5F/FFFFFF?text=HomeBase" alt="HomeBase" style="height: 24px; margin-bottom: 8px;" />
+
+            <div style="background: #f9fafb; padding: 16px; text-align: center; border-top: 1px solid #e5e7eb;">
               <p style="color: #9ca3af; font-size: 11px; margin: 0;">
-                Sent via HomeBase - The smart way to manage home services
+                Powered by HomeBase &mdash; The smart way to manage home services
               </p>
             </div>
           </div>
@@ -2368,7 +2741,7 @@ async function sendInvoiceEmail(data) {
     const result = await client.emails.send({
       from: fromEmail || "HomeBase <noreply@resend.dev>",
       to: data.clientEmail,
-      subject: `Invoice ${data.invoiceNumber} from ${data.providerName} - ${formattedAmount}`,
+      subject: data.subject || `Message from ${data.providerName}`,
       html
     });
     if (result.error) {
@@ -2377,8 +2750,471 @@ async function sendInvoiceEmail(data) {
     }
     return { success: true, messageId: result.data?.id };
   } catch (error) {
-    console.error("Send invoice email error:", error);
-    return { success: false, error: error.message || "Failed to send email" };
+    console.error("Send provider client message error:", error);
+    return { success: false, error: error.message || "Failed to send message" };
+  }
+}
+
+// server/notificationService.ts
+init_schema();
+import { eq as eq2, and as and2 } from "drizzle-orm";
+async function logDelivery(opts) {
+  try {
+    const [row] = await db.insert(notificationDeliveries).values({
+      channel: opts.channel,
+      status: opts.status,
+      eventType: opts.eventType,
+      recipientUserId: opts.recipientUserId ?? null,
+      recipientEmail: opts.recipientEmail ?? null,
+      relatedRecordType: opts.relatedRecordType ?? null,
+      relatedRecordId: opts.relatedRecordId ?? null,
+      externalMessageId: opts.externalMessageId ?? null,
+      error: opts.error ?? null,
+      metadata: opts.metadata ? JSON.stringify(opts.metadata) : null
+    }).returning();
+    return row.id;
+  } catch (err) {
+    console.error("Failed to log notification delivery:", err);
+    return "";
+  }
+}
+async function updateDelivery(id, status, externalMessageId, error) {
+  if (!id) return;
+  try {
+    await db.update(notificationDeliveries).set({ status, externalMessageId: externalMessageId ?? null, error: error ?? null, updatedAt: /* @__PURE__ */ new Date() }).where(eq2(notificationDeliveries.id, id));
+  } catch (err) {
+    console.error("Failed to update notification delivery:", err);
+  }
+}
+var EVENT_PREF_FIELD = {
+  "booking.created": "emailBookingConfirmation",
+  "booking.updated": "emailBookingConfirmation",
+  "booking.cancelled": "emailBookingCancelled",
+  "booking.rescheduled": "emailBookingConfirmation",
+  "booking.reminder_24h": "emailBookingReminder",
+  "booking.reminder_2h": "emailBookingReminder",
+  "invoice.sent": "emailInvoiceCreated",
+  "invoice.reminder_3d": "emailInvoiceReminder",
+  "invoice.overdue_1d": "emailInvoiceReminder",
+  "invoice.paid": "emailInvoicePaid",
+  "invoice.payment_failed": "emailPaymentFailed",
+  "review.request": "emailReviewRequest"
+};
+async function isEmailAllowed(event, recipientUserId) {
+  const prefField = EVENT_PREF_FIELD[event];
+  if (!prefField || !recipientUserId) return true;
+  try {
+    const [prefs] = await db.select().from(notificationPreferences).where(eq2(notificationPreferences.userId, recipientUserId));
+    if (!prefs) return true;
+    const allowed = prefs[prefField];
+    return allowed !== false;
+  } catch {
+    return true;
+  }
+}
+async function dispatch(event, payload) {
+  try {
+    await _dispatch(event, payload);
+  } catch (err) {
+    console.error(`Notification dispatch failed for event ${event}:`, err);
+  }
+}
+async function dispatchWithResult(event, payload) {
+  try {
+    const result = await _dispatch(event, payload);
+    return result ?? { emailSent: false, emailError: "No email send attempted for this event" };
+  } catch (err) {
+    console.error(`Notification dispatch failed for event ${event}:`, err);
+    return { emailSent: false, emailError: err?.message || "Email send failed" };
+  }
+}
+async function _dispatch(event, payload) {
+  if (event !== "booking.created") {
+    const emailOk = await isEmailAllowed(event, payload.recipientUserId);
+    if (!emailOk) {
+      console.log(`[notification] Skipped ${event} for user ${payload.recipientUserId} (preference opt-out)`);
+      return { emailSent: false, emailError: "Opted out of this notification type" };
+    }
+  }
+  switch (event) {
+    case "user.signup": {
+      if (!payload.recipientEmail || !payload.clientName) break;
+      const deliveryId = await logDelivery({
+        channel: "email",
+        status: "queued",
+        eventType: event,
+        recipientUserId: payload.recipientUserId,
+        recipientEmail: payload.recipientEmail
+      });
+      const result = await sendWelcomeEmail(payload.recipientEmail, payload.clientName);
+      await updateDelivery(deliveryId, result.success ? "sent" : "failed", result.messageId, result.error);
+      break;
+    }
+    case "booking.updated": {
+      const { clientEmail, clientName, providerName, serviceName, appointmentDate, appointmentTime } = payload;
+      if (!clientEmail || !clientName) break;
+      const deliveryId = await logDelivery({
+        channel: "email",
+        status: "queued",
+        eventType: event,
+        recipientEmail: clientEmail,
+        relatedRecordType: payload.relatedRecordType,
+        relatedRecordId: payload.relatedRecordId
+      });
+      const result = await sendBookingConfirmationEmail({ clientEmail, clientName, providerName, serviceName, appointmentDate, appointmentTime, address: payload.address, estimatedPrice: payload.estimatedPrice, confirmationNumber: payload.relatedRecordId });
+      await updateDelivery(deliveryId, result.success ? "sent" : "failed", result.messageId, result.error);
+      break;
+    }
+    case "booking.created": {
+      const { clientEmail, clientName, providerEmail, providerName, serviceName, appointmentDate, appointmentTime, address, estimatedPrice, confirmationNumber } = payload;
+      if (clientEmail && clientName && providerName) {
+        const clientEmailOk = await isEmailAllowed(event, payload.recipientUserId);
+        if (clientEmailOk) {
+          const deliveryId = await logDelivery({
+            channel: "email",
+            status: "queued",
+            eventType: event,
+            recipientEmail: clientEmail,
+            recipientUserId: payload.recipientUserId,
+            relatedRecordType: payload.relatedRecordType,
+            relatedRecordId: payload.relatedRecordId
+          });
+          const result = await sendBookingConfirmationEmail({ clientEmail, clientName, providerName, serviceName, appointmentDate, appointmentTime, address, estimatedPrice, confirmationNumber });
+          await updateDelivery(deliveryId, result.success ? "sent" : "failed", result.messageId, result.error);
+        }
+      }
+      if (providerEmail && providerName && clientName) {
+        const providerEmailOk = await isEmailAllowed(event, payload.providerUserId);
+        if (providerEmailOk) {
+          const deliveryId = await logDelivery({
+            channel: "email",
+            status: "queued",
+            eventType: `${event}.provider`,
+            recipientEmail: providerEmail,
+            recipientUserId: payload.providerUserId,
+            relatedRecordType: payload.relatedRecordType,
+            relatedRecordId: payload.relatedRecordId
+          });
+          const result = await sendProviderBookingNotificationEmail({ providerEmail, providerName, clientName, serviceName, appointmentDate, appointmentTime, address });
+          await updateDelivery(deliveryId, result.success ? "sent" : "failed", result.messageId, result.error);
+        }
+      }
+      break;
+    }
+    case "booking.cancelled": {
+      const { clientEmail, clientName, providerName, serviceName, appointmentDate, appointmentTime, address, reason } = payload;
+      if (!clientEmail || !clientName) break;
+      const deliveryId = await logDelivery({
+        channel: "email",
+        status: "queued",
+        eventType: event,
+        recipientEmail: clientEmail,
+        relatedRecordType: payload.relatedRecordType,
+        relatedRecordId: payload.relatedRecordId
+      });
+      const result = await sendBookingCancelledEmail({ clientEmail, clientName, providerName, serviceName, appointmentDate, appointmentTime, address }, reason);
+      await updateDelivery(deliveryId, result.success ? "sent" : "failed", result.messageId, result.error);
+      break;
+    }
+    case "booking.rescheduled": {
+      const { clientEmail, clientName, providerName, serviceName, appointmentDate, appointmentTime, address, oldDate, oldTime } = payload;
+      if (!clientEmail || !clientName) break;
+      const deliveryId = await logDelivery({
+        channel: "email",
+        status: "queued",
+        eventType: event,
+        recipientEmail: clientEmail,
+        relatedRecordType: payload.relatedRecordType,
+        relatedRecordId: payload.relatedRecordId
+      });
+      const result = await sendBookingRescheduledEmail({ clientEmail, clientName, providerName, serviceName, appointmentDate, appointmentTime, address }, oldDate, oldTime);
+      await updateDelivery(deliveryId, result.success ? "sent" : "failed", result.messageId, result.error);
+      break;
+    }
+    case "booking.reminder_24h":
+    case "booking.reminder_2h": {
+      const { clientEmail, clientName, providerName, serviceName, appointmentDate, appointmentTime, address } = payload;
+      if (!clientEmail || !clientName) break;
+      const hours = event === "booking.reminder_2h" ? 2 : 24;
+      const deliveryId = await logDelivery({
+        channel: "email",
+        status: "queued",
+        eventType: event,
+        recipientEmail: clientEmail,
+        relatedRecordType: payload.relatedRecordType,
+        relatedRecordId: payload.relatedRecordId
+      });
+      const result = await sendBookingReminderEmail({ clientEmail, clientName, providerName, serviceName, appointmentDate, appointmentTime, address }, hours);
+      await updateDelivery(deliveryId, result.success ? "sent" : "failed", result.messageId, result.error);
+      break;
+    }
+    case "invoice.created": {
+      const { clientEmail, clientName, providerName, invoiceNumber, amount, dueDate } = payload;
+      if (!clientEmail || !clientName) break;
+      const deliveryId = await logDelivery({
+        channel: "email",
+        status: "queued",
+        eventType: event,
+        recipientEmail: clientEmail,
+        recipientUserId: payload.recipientUserId,
+        relatedRecordType: "invoice",
+        relatedRecordId: payload.relatedRecordId
+      });
+      const result = await sendInvoiceCreatedEmail({ clientEmail, clientName, providerName, invoiceNumber, amount, dueDate, lineItems: payload.lineItems || [] });
+      await updateDelivery(deliveryId, result.success ? "sent" : "failed", result.messageId, result.error);
+      break;
+    }
+    case "invoice.sent": {
+      const { clientEmail, clientName, providerName, invoiceNumber, amount, dueDate, lineItems, paymentLink } = payload;
+      if (!clientEmail || !clientName) {
+        return { emailSent: false, emailError: "Missing client email or name" };
+      }
+      const deliveryId = await logDelivery({
+        channel: "email",
+        status: "queued",
+        eventType: event,
+        recipientEmail: clientEmail,
+        relatedRecordType: "invoice",
+        relatedRecordId: payload.relatedRecordId
+      });
+      const result = await sendInvoiceEmail({ clientEmail, clientName, providerName, invoiceNumber, amount, dueDate, lineItems: lineItems || [], paymentLink });
+      await updateDelivery(deliveryId, result.success ? "sent" : "failed", result.messageId, result.error);
+      return { emailSent: result.success, emailError: result.error };
+    }
+    case "invoice.reminder_3d": {
+      const { clientEmail, clientName, providerName, invoiceNumber, amount, dueDate, paymentLink, daysUntilDue } = payload;
+      if (!clientEmail || !clientName) break;
+      const deliveryId = await logDelivery({
+        channel: "email",
+        status: "queued",
+        eventType: event,
+        recipientEmail: clientEmail,
+        relatedRecordType: "invoice",
+        relatedRecordId: payload.relatedRecordId
+      });
+      const result = await sendInvoiceReminderEmail({ clientEmail, clientName, providerName, invoiceNumber, amount, dueDate, paymentLink, daysUntilDue });
+      await updateDelivery(deliveryId, result.success ? "sent" : "failed", result.messageId, result.error);
+      break;
+    }
+    case "invoice.overdue_1d": {
+      const { clientEmail, clientName, providerName, invoiceNumber, amount, dueDate, paymentLink, daysOverdue } = payload;
+      if (!clientEmail || !clientName) break;
+      const deliveryId = await logDelivery({
+        channel: "email",
+        status: "queued",
+        eventType: event,
+        recipientEmail: clientEmail,
+        relatedRecordType: "invoice",
+        relatedRecordId: payload.relatedRecordId
+      });
+      const result = await sendInvoiceReminderEmail({ clientEmail, clientName, providerName, invoiceNumber, amount, dueDate, paymentLink, daysOverdue });
+      await updateDelivery(deliveryId, result.success ? "sent" : "failed", result.messageId, result.error);
+      break;
+    }
+    case "invoice.paid": {
+      const { clientEmail, clientName, providerName, invoiceNumber, amount, paymentDate, paymentMethod } = payload;
+      if (!clientEmail || !clientName) break;
+      const deliveryId = await logDelivery({
+        channel: "email",
+        status: "queued",
+        eventType: event,
+        recipientEmail: clientEmail,
+        relatedRecordType: "invoice",
+        relatedRecordId: payload.relatedRecordId
+      });
+      const result = await sendInvoicePaidEmail({ clientEmail, clientName, providerName, invoiceNumber, amount, paymentDate, paymentMethod });
+      await updateDelivery(deliveryId, result.success ? "sent" : "failed", result.messageId, result.error);
+      break;
+    }
+    case "invoice.payment_failed": {
+      const { clientEmail, clientName, providerName, invoiceNumber, amount, paymentLink } = payload;
+      if (!clientEmail || !clientName) break;
+      const deliveryId = await logDelivery({
+        channel: "email",
+        status: "queued",
+        eventType: event,
+        recipientEmail: clientEmail,
+        relatedRecordType: "invoice",
+        relatedRecordId: payload.relatedRecordId
+      });
+      const result = await sendPaymentFailedEmail({ clientEmail, clientName, providerName, invoiceNumber, amount, paymentLink });
+      await updateDelivery(deliveryId, result.success ? "sent" : "failed", result.messageId, result.error);
+      break;
+    }
+    case "review.request": {
+      const { clientEmail, clientName, providerName, serviceName, reviewUrl } = payload;
+      if (!clientEmail || !clientName) break;
+      const deliveryId = await logDelivery({
+        channel: "email",
+        status: "queued",
+        eventType: event,
+        recipientEmail: clientEmail,
+        relatedRecordType: payload.relatedRecordType,
+        relatedRecordId: payload.relatedRecordId
+      });
+      const result = await sendReviewRequestEmail({ clientEmail, clientName, providerName, serviceName, reviewUrl });
+      await updateDelivery(deliveryId, result.success ? "sent" : "failed", result.messageId, result.error);
+      break;
+    }
+    case "stripe.onboarding_needed": {
+      const { recipientEmail, providerName, onboardingUrl } = payload;
+      if (!recipientEmail || !providerName) break;
+      const deliveryId = await logDelivery({
+        channel: "email",
+        status: "queued",
+        eventType: event,
+        recipientEmail,
+        recipientUserId: payload.recipientUserId
+      });
+      const result = await sendStripeOnboardingNeededEmail(recipientEmail, providerName, onboardingUrl || "https://homebaseproapp.com");
+      await updateDelivery(deliveryId, result.success ? "sent" : "failed", result.messageId, result.error);
+      break;
+    }
+    case "stripe.connected": {
+      const { recipientEmail, providerName } = payload;
+      if (!recipientEmail || !providerName) break;
+      const deliveryId = await logDelivery({
+        channel: "email",
+        status: "queued",
+        eventType: event,
+        recipientEmail,
+        recipientUserId: payload.recipientUserId
+      });
+      const result = await sendStripeConnectedEmail(recipientEmail, providerName);
+      await updateDelivery(deliveryId, result.success ? "sent" : "failed", result.messageId, result.error);
+      break;
+    }
+    case "job.status_changed": {
+      const { clientEmail, clientName, providerName, serviceName, newStatus, scheduledDate, notes } = payload;
+      if (!clientEmail || !clientName || !providerName || !serviceName || !newStatus) break;
+      const deliveryId = await logDelivery({
+        channel: "email",
+        status: "queued",
+        eventType: event,
+        recipientEmail: clientEmail,
+        recipientUserId: payload.recipientUserId,
+        relatedRecordType: payload.relatedRecordType,
+        relatedRecordId: payload.relatedRecordId
+      });
+      const result = await sendJobStatusChangedEmail({ clientEmail, clientName, providerName, serviceName, newStatus, scheduledDate, notes });
+      await updateDelivery(deliveryId, result.success ? "sent" : "failed", result.messageId, result.error);
+      break;
+    }
+    case "rebook.prompt": {
+      const { clientEmail, clientName, providerName, serviceName, rebookLink } = payload;
+      if (!clientEmail || !clientName || !providerName || !serviceName) break;
+      const deliveryId = await logDelivery({
+        channel: "email",
+        status: "queued",
+        eventType: event,
+        recipientEmail: clientEmail,
+        recipientUserId: payload.recipientUserId,
+        relatedRecordType: payload.relatedRecordType,
+        relatedRecordId: payload.relatedRecordId
+      });
+      const result = await sendRebookingNudgeEmail({ clientEmail, clientName, providerName, serviceName, rebookLink });
+      await updateDelivery(deliveryId, result.success ? "sent" : "failed", result.messageId, result.error);
+      break;
+    }
+    default:
+      console.warn(`Unknown notification event: ${event}`);
+  }
+  const SMS_PLACEHOLDER_EVENTS = [
+    "booking.created",
+    "booking.cancelled",
+    "booking.reminder_24h",
+    "invoice.paid",
+    "job.status_changed"
+  ];
+  if (SMS_PLACEHOLDER_EVENTS.includes(event) && (payload.clientPhone || payload.recipientPhone)) {
+    await logDelivery({
+      channel: "sms",
+      status: "pending_sms",
+      eventType: event,
+      recipientUserId: payload.recipientUserId,
+      relatedRecordType: payload.relatedRecordType,
+      relatedRecordId: payload.relatedRecordId,
+      metadata: { phone: payload.clientPhone || payload.recipientPhone }
+    });
+  }
+  return null;
+}
+async function hasDeliveryForRecord(eventType, relatedRecordId, channel = "email") {
+  try {
+    const rows = await db.select({ id: notificationDeliveries.id }).from(notificationDeliveries).where(
+      and2(
+        eq2(notificationDeliveries.eventType, eventType),
+        eq2(notificationDeliveries.relatedRecordId, relatedRecordId),
+        eq2(notificationDeliveries.channel, channel),
+        eq2(notificationDeliveries.status, "sent")
+      )
+    ).limit(1);
+    return rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+async function sendExpoPushNotifications(messages) {
+  if (messages.length === 0) return;
+  try {
+    const response = await fetch("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json"
+      },
+      body: JSON.stringify(messages)
+    });
+    if (!response.ok) {
+      console.error("Expo push API error:", response.status, await response.text());
+      return;
+    }
+    const result = await response.json();
+    for (const ticket of result.data || []) {
+      if (ticket.status === "error") {
+        console.error("Push notification error:", ticket.message, ticket.details);
+        if (ticket.details?.error === "DeviceNotRegistered") {
+          console.log("Device not registered, token should be cleaned up");
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Failed to send push notifications:", err);
+  }
+}
+async function sendPush(userId, title, body, data = {}, _category = "bookings") {
+  try {
+    const [prefs] = await db.select().from(notificationPreferences).where(eq2(notificationPreferences.userId, userId));
+    if (prefs && prefs.pushEnabled === false) {
+      return;
+    }
+    const tokens = await db.select({ token: pushTokens.token }).from(pushTokens).where(and2(eq2(pushTokens.userId, userId), eq2(pushTokens.isActive, true)));
+    if (tokens.length === 0) return;
+    const messages = tokens.map((t) => ({
+      to: t.token,
+      title,
+      body,
+      data,
+      sound: "default"
+    }));
+    await sendExpoPushNotifications(messages);
+  } catch (err) {
+    console.error("sendPush error:", err);
+  }
+}
+async function dispatchNotification(userId, title, message, type, data = {}, category = "bookings") {
+  try {
+    await db.insert(notifications).values({
+      userId,
+      title,
+      message,
+      type,
+      isRead: false,
+      data: JSON.stringify(data)
+    });
+    await sendPush(userId, title, message, data, category);
+  } catch (err) {
+    console.error("dispatchNotification error:", err);
   }
 }
 
@@ -2673,7 +3509,7 @@ Recent Work: ${faxData.recentWork.join(", ")}
 // server/stripeConnectService.ts
 import Stripe2 from "stripe";
 init_schema();
-import { eq as eq2, and as and2 } from "drizzle-orm";
+import { eq as eq3, and as and3 } from "drizzle-orm";
 var stripe = null;
 function getStripe() {
   if (!stripe) {
@@ -2687,7 +3523,7 @@ function getStripe() {
 }
 var APP_URL = process.env.APP_URL || "https://homebase.replit.app";
 async function getProviderPlan(providerId) {
-  const [plan] = await db.select().from(providerPlans).where(eq2(providerPlans.providerId, providerId));
+  const [plan] = await db.select().from(providerPlans).where(eq3(providerPlans.providerId, providerId));
   if (!plan) {
     return {
       id: null,
@@ -2709,13 +3545,13 @@ function calculatePlatformFee(totalCents, feePercent, fixedCents = 0) {
   };
 }
 async function getConnectAccount(providerId) {
-  const [account] = await db.select().from(stripeConnectAccounts).where(eq2(stripeConnectAccounts.providerId, providerId));
+  const [account] = await db.select().from(stripeConnectAccounts).where(eq3(stripeConnectAccounts.providerId, providerId));
   return account;
 }
 async function createConnectAccountLink(providerId) {
   let connectAccount = await getConnectAccount(providerId);
   if (!connectAccount) {
-    const [provider] = await db.select().from(providers).where(eq2(providers.id, providerId));
+    const [provider] = await db.select().from(providers).where(eq3(providers.id, providerId));
     if (!provider) {
       throw new Error("Provider not found");
     }
@@ -2792,7 +3628,7 @@ async function getConnectStatus(providerId) {
     payoutsEnabled: account.payouts_enabled,
     detailsSubmitted: account.details_submitted || false,
     updatedAt: /* @__PURE__ */ new Date()
-  }).where(eq2(stripeConnectAccounts.id, connectAccount.id));
+  }).where(eq3(stripeConnectAccounts.id, connectAccount.id));
   return {
     exists: true,
     accountId: connectAccount.stripeAccountId,
@@ -2804,7 +3640,7 @@ async function getConnectStatus(providerId) {
   };
 }
 async function createInvoicePaymentIntent(invoiceId, payerUserId) {
-  const [invoice] = await db.select().from(invoices).where(eq2(invoices.id, invoiceId));
+  const [invoice] = await db.select().from(invoices).where(eq3(invoices.id, invoiceId));
   if (!invoice) {
     throw new Error("Invoice not found");
   }
@@ -2834,7 +3670,7 @@ async function createInvoicePaymentIntent(invoiceId, payerUserId) {
   await db.update(invoices).set({
     stripePaymentIntentId: paymentIntent.id,
     updatedAt: /* @__PURE__ */ new Date()
-  }).where(eq2(invoices.id, invoiceId));
+  }).where(eq3(invoices.id, invoiceId));
   await db.insert(payments).values({
     invoiceId: invoice.id,
     providerId: invoice.providerId,
@@ -2851,16 +3687,23 @@ async function createInvoicePaymentIntent(invoiceId, payerUserId) {
   };
 }
 async function createStripeCheckoutSession(invoiceId) {
-  const [invoice] = await db.select().from(invoices).where(eq2(invoices.id, invoiceId));
+  const [invoice] = await db.select().from(invoices).where(eq3(invoices.id, invoiceId));
   if (!invoice) {
     throw new Error("Invoice not found");
   }
   const connectAccount = await getConnectAccount(invoice.providerId);
   if (!connectAccount) {
-    throw new Error("Provider has not set up payment processing");
+    const err = new Error("stripe_not_ready");
+    err.code = "stripe_not_ready";
+    throw err;
   }
-  const [provider] = await db.select().from(providers).where(eq2(providers.id, invoice.providerId));
-  const lineItemsData = await db.select().from(invoiceLineItems).where(eq2(invoiceLineItems.invoiceId, invoiceId));
+  if (!connectAccount.chargesEnabled) {
+    const err = new Error("stripe_not_ready");
+    err.code = "stripe_not_ready";
+    throw err;
+  }
+  const [provider] = await db.select().from(providers).where(eq3(providers.id, invoice.providerId));
+  const lineItemsData = await db.select().from(invoiceLineItems).where(eq3(invoiceLineItems.invoiceId, invoiceId));
   const stripeLineItems = lineItemsData.map((item) => ({
     price_data: {
       currency: invoice.currency || "usd",
@@ -2909,14 +3752,14 @@ async function createStripeCheckoutSession(invoiceId) {
     stripeCheckoutSessionId: session.id,
     hostedInvoiceUrl: session.url,
     updatedAt: /* @__PURE__ */ new Date()
-  }).where(eq2(invoices.id, invoiceId));
+  }).where(eq3(invoices.id, invoiceId));
   return {
     sessionId: session.id,
     checkoutUrl: session.url
   };
 }
 async function applyCreditsToInvoice(invoiceId, userId, amountCents) {
-  const [invoice] = await db.select().from(invoices).where(eq2(invoices.id, invoiceId));
+  const [invoice] = await db.select().from(invoices).where(eq3(invoices.id, invoiceId));
   if (!invoice) {
     throw new Error("Invoice not found");
   }
@@ -2924,7 +3767,7 @@ async function applyCreditsToInvoice(invoiceId, userId, amountCents) {
   if (!allowedMethods.includes("credits")) {
     throw new Error("This invoice does not accept credit payments");
   }
-  const [userCredit] = await db.select().from(userCredits).where(eq2(userCredits.userId, userId));
+  const [userCredit] = await db.select().from(userCredits).where(eq3(userCredits.userId, userId));
   if (!userCredit || (userCredit.balanceCents || 0) < amountCents) {
     throw new Error("Insufficient credits");
   }
@@ -2936,7 +3779,7 @@ async function applyCreditsToInvoice(invoiceId, userId, amountCents) {
   await db.update(userCredits).set({
     balanceCents: (userCredit.balanceCents || 0) - actualAmount,
     updatedAt: /* @__PURE__ */ new Date()
-  }).where(eq2(userCredits.userId, userId));
+  }).where(eq3(userCredits.userId, userId));
   await db.insert(creditLedger).values({
     userId,
     deltaCents: -actualAmount,
@@ -2957,7 +3800,7 @@ async function applyCreditsToInvoice(invoiceId, userId, amountCents) {
     status: isFullyPaid ? "paid" : "partially_paid",
     paidAt: isFullyPaid ? /* @__PURE__ */ new Date() : void 0,
     updatedAt: /* @__PURE__ */ new Date()
-  }).where(eq2(invoices.id, invoiceId));
+  }).where(eq3(invoices.id, invoiceId));
   return {
     applied: actualAmount,
     remainingBalance: (userCredit.balanceCents || 0) - actualAmount,
@@ -2965,11 +3808,11 @@ async function applyCreditsToInvoice(invoiceId, userId, amountCents) {
   };
 }
 async function getPaidAmount(invoiceId) {
-  const allPayments = await db.select().from(payments).where(and2(eq2(payments.invoiceId, invoiceId), eq2(payments.status, "succeeded")));
+  const allPayments = await db.select().from(payments).where(and3(eq3(payments.invoiceId, invoiceId), eq3(payments.status, "succeeded")));
   return allPayments.reduce((sum, p) => sum + (p.amountCents || 0), 0);
 }
 async function handleStripeWebhook(event) {
-  const [existing] = await db.select().from(stripeWebhookEvents).where(eq2(stripeWebhookEvents.stripeEventId, event.id));
+  const [existing] = await db.select().from(stripeWebhookEvents).where(eq3(stripeWebhookEvents.stripeEventId, event.id));
   if (existing) {
     console.log(`Webhook event ${event.id} already processed, skipping`);
     return { processed: false, reason: "duplicate" };
@@ -2992,11 +3835,14 @@ async function handleStripeWebhook(event) {
     case "charge.refunded":
       await handleChargeRefunded(event.data.object);
       break;
+    case "payout.created":
+      await handlePayoutCreated(event.data.object, event.account ?? null);
+      break;
     case "payout.paid":
-      await handlePayoutPaid(event.data.object);
+      await handlePayoutPaid(event.data.object, event.account ?? null);
       break;
     case "payout.failed":
-      await handlePayoutFailed(event.data.object);
+      await handlePayoutFailed(event.data.object, event.account ?? null);
       break;
     case "checkout.session.completed":
       await handleCheckoutSessionCompleted(event.data.object);
@@ -3007,7 +3853,7 @@ async function handleStripeWebhook(event) {
   return { processed: true };
 }
 async function handleAccountUpdated(account) {
-  const [connectAccount] = await db.select().from(stripeConnectAccounts).where(eq2(stripeConnectAccounts.stripeAccountId, account.id));
+  const [connectAccount] = await db.select().from(stripeConnectAccounts).where(eq3(stripeConnectAccounts.stripeAccountId, account.id));
   if (!connectAccount) return;
   let onboardingStatus = "pending";
   if (account.charges_enabled && account.payouts_enabled && account.details_submitted) {
@@ -3019,52 +3865,193 @@ async function handleAccountUpdated(account) {
     payoutsEnabled: account.payouts_enabled,
     detailsSubmitted: account.details_submitted || false,
     updatedAt: /* @__PURE__ */ new Date()
-  }).where(eq2(stripeConnectAccounts.id, connectAccount.id));
+  }).where(eq3(stripeConnectAccounts.id, connectAccount.id));
 }
 async function handlePaymentIntentSucceeded(paymentIntent) {
   const invoiceId = paymentIntent.metadata?.invoiceId;
   if (!invoiceId) return;
-  const [payment] = await db.select().from(payments).where(eq2(payments.stripePaymentIntentId, paymentIntent.id));
+  const [payment] = await db.select().from(payments).where(eq3(payments.stripePaymentIntentId, paymentIntent.id));
   if (payment) {
     await db.update(payments).set({
       status: "succeeded",
       stripeChargeId: paymentIntent.latest_charge?.toString()
-    }).where(eq2(payments.id, payment.id));
+    }).where(eq3(payments.id, payment.id));
   }
-  await db.update(invoices).set({
+  const [updatedInvoice] = await db.update(invoices).set({
     status: "paid",
     paidAt: /* @__PURE__ */ new Date(),
     updatedAt: /* @__PURE__ */ new Date()
-  }).where(eq2(invoices.id, invoiceId));
+  }).where(eq3(invoices.id, invoiceId)).returning();
+  if (updatedInvoice) {
+    try {
+      const [provider] = await db.select().from(providers).where(eq3(providers.id, updatedInvoice.providerId));
+      let clientEmail;
+      let clientName;
+      if (updatedInvoice.homeownerUserId) {
+        const [homeowner] = await db.select().from(users).where(eq3(users.id, updatedInvoice.homeownerUserId));
+        if (homeowner) {
+          clientEmail = homeowner.email;
+          clientName = `${homeowner.firstName || ""} ${homeowner.lastName || ""}`.trim() || homeowner.email;
+        }
+      } else if (updatedInvoice.clientId) {
+        const [client] = await db.select().from(clients).where(eq3(clients.id, updatedInvoice.clientId));
+        if (client) {
+          clientEmail = client.email ?? void 0;
+          clientName = `${client.firstName || ""} ${client.lastName || ""}`.trim() || clientEmail;
+        }
+      }
+      if (clientEmail && provider) {
+        dispatch("invoice.paid", {
+          clientEmail,
+          clientName: clientName ?? clientEmail,
+          providerName: provider.businessName,
+          invoiceNumber: updatedInvoice.invoiceNumber,
+          amount: typeof updatedInvoice.total === "string" ? parseFloat(updatedInvoice.total) : updatedInvoice.total ?? 0,
+          paymentDate: (/* @__PURE__ */ new Date()).toLocaleDateString(),
+          relatedRecordType: "invoice",
+          relatedRecordId: invoiceId
+        }).catch((e) => console.error("invoice.paid dispatch error (webhook):", e));
+      }
+    } catch (err) {
+      console.error("Failed to dispatch invoice.paid from webhook:", err);
+    }
+  }
 }
 async function handlePaymentIntentFailed(paymentIntent) {
-  const [payment] = await db.select().from(payments).where(eq2(payments.stripePaymentIntentId, paymentIntent.id));
+  const invoiceId = paymentIntent.metadata?.invoiceId;
+  const [payment] = await db.select().from(payments).where(eq3(payments.stripePaymentIntentId, paymentIntent.id));
   if (payment) {
-    await db.update(payments).set({ status: "failed" }).where(eq2(payments.id, payment.id));
+    await db.update(payments).set({ status: "failed" }).where(eq3(payments.id, payment.id));
+  }
+  if (invoiceId) {
+    try {
+      const [failedInvoice] = await db.select().from(invoices).where(eq3(invoices.id, invoiceId));
+      if (failedInvoice) {
+        const [provider] = await db.select().from(providers).where(eq3(providers.id, failedInvoice.providerId));
+        let clientEmail;
+        let clientName;
+        if (failedInvoice.homeownerUserId) {
+          const [homeowner] = await db.select().from(users).where(eq3(users.id, failedInvoice.homeownerUserId));
+          if (homeowner) {
+            clientEmail = homeowner.email;
+            clientName = `${homeowner.firstName || ""} ${homeowner.lastName || ""}`.trim() || homeowner.email;
+          }
+        } else if (failedInvoice.clientId) {
+          const [client] = await db.select().from(clients).where(eq3(clients.id, failedInvoice.clientId));
+          if (client) {
+            clientEmail = client.email ?? void 0;
+            clientName = `${client.firstName || ""} ${client.lastName || ""}`.trim() || clientEmail;
+          }
+        }
+        if (clientEmail && provider) {
+          dispatch("invoice.payment_failed", {
+            clientEmail,
+            clientName: clientName ?? clientEmail,
+            providerName: provider.businessName,
+            invoiceNumber: failedInvoice.invoiceNumber,
+            amount: typeof failedInvoice.total === "string" ? parseFloat(failedInvoice.total) : failedInvoice.total ?? 0,
+            relatedRecordType: "invoice",
+            relatedRecordId: invoiceId
+          }).catch((e) => console.error("invoice.payment_failed dispatch error:", e));
+        }
+      }
+    } catch (err) {
+      console.error("Failed to dispatch invoice.payment_failed from webhook:", err);
+    }
   }
 }
 async function handleChargeRefunded(charge) {
-  const paymentIntentId = charge.payment_intent?.toString();
-  if (!paymentIntentId) return;
-  const [payment] = await db.select().from(payments).where(eq2(payments.stripePaymentIntentId, paymentIntentId));
+  const paymentIntentId = charge.payment_intent?.toString() ?? null;
+  const chargeId = charge.id;
+  let payment;
+  if (paymentIntentId) {
+    const [byIntent] = await db.select().from(payments).where(eq3(payments.stripePaymentIntentId, paymentIntentId));
+    payment = byIntent;
+  }
+  if (!payment) {
+    const [byCharge] = await db.select().from(payments).where(eq3(payments.stripeChargeId, chargeId));
+    payment = byCharge;
+  }
   if (payment) {
-    await db.update(payments).set({ status: "refunded" }).where(eq2(payments.id, payment.id));
+    await db.update(payments).set({ status: "refunded" }).where(eq3(payments.id, payment.id));
     await db.update(invoices).set({
       status: "refunded",
       updatedAt: /* @__PURE__ */ new Date()
-    }).where(eq2(invoices.id, payment.invoiceId));
+    }).where(eq3(invoices.id, payment.invoiceId));
+    if (charge.refunds?.data?.length) {
+      for (const stripeRefund of charge.refunds.data) {
+        const existing = await db.select().from(refunds).where(eq3(refunds.stripeRefundId, stripeRefund.id));
+        if (existing.length === 0) {
+          await db.insert(refunds).values({
+            providerId: payment.providerId,
+            paymentId: payment.id,
+            stripeRefundId: stripeRefund.id,
+            stripeChargeId: charge.id,
+            amountCents: stripeRefund.amount,
+            reason: stripeRefund.reason ?? null,
+            status: stripeRefund.status ?? "pending"
+          });
+        } else {
+          await db.update(refunds).set({ status: stripeRefund.status ?? "pending" }).where(eq3(refunds.stripeRefundId, stripeRefund.id));
+        }
+      }
+    }
   }
 }
-async function handlePayoutPaid(payout) {
-  const [existingPayout] = await db.select().from(payouts).where(eq2(payouts.stripePayoutId, payout.id));
-  if (existingPayout) {
-    await db.update(payouts).set({ status: "paid" }).where(eq2(payouts.id, existingPayout.id));
+async function resolveProviderFromConnectAccount(connectedAccountId) {
+  if (!connectedAccountId) return null;
+  const [connectAccount] = await db.select({ providerId: stripeConnectAccounts.providerId }).from(stripeConnectAccounts).where(eq3(stripeConnectAccounts.stripeAccountId, connectedAccountId));
+  return connectAccount?.providerId ?? null;
+}
+async function handlePayoutCreated(payout, connectedAccountId) {
+  const providerId = await resolveProviderFromConnectAccount(connectedAccountId);
+  if (!providerId) {
+    console.warn(`handlePayoutCreated: no provider found for account ${connectedAccountId}`);
+    return;
+  }
+  const arrivalDate = payout.arrival_date ? new Date(payout.arrival_date * 1e3) : null;
+  const [existingPayout] = await db.select().from(payouts).where(eq3(payouts.stripePayoutId, payout.id));
+  const stripeStatus = payout.status;
+  if (!existingPayout) {
+    await db.insert(payouts).values({
+      providerId,
+      amountCents: payout.amount,
+      status: stripeStatus,
+      stripePayoutId: payout.id,
+      arrivalDate,
+      description: payout.description ?? null
+    }).onConflictDoNothing();
+  } else {
+    await db.update(payouts).set({ status: stripeStatus, arrivalDate, description: payout.description ?? null }).where(eq3(payouts.id, existingPayout.id));
   }
 }
-async function handlePayoutFailed(payout) {
-  const [existingPayout] = await db.select().from(payouts).where(eq2(payouts.stripePayoutId, payout.id));
+async function handlePayoutPaid(payout, connectedAccountId) {
+  const arrivalDate = payout.arrival_date ? new Date(payout.arrival_date * 1e3) : null;
+  const [existingPayout] = await db.select().from(payouts).where(eq3(payouts.stripePayoutId, payout.id));
   if (existingPayout) {
-    await db.update(payouts).set({ status: "failed" }).where(eq2(payouts.id, existingPayout.id));
+    await db.update(payouts).set({
+      status: "paid",
+      arrivalDate: arrivalDate ?? existingPayout.arrivalDate,
+      description: payout.description ?? existingPayout.description
+    }).where(eq3(payouts.id, existingPayout.id));
+  } else {
+    const providerId = await resolveProviderFromConnectAccount(connectedAccountId);
+    if (providerId) {
+      await db.insert(payouts).values({
+        providerId,
+        amountCents: payout.amount,
+        status: "paid",
+        stripePayoutId: payout.id,
+        arrivalDate,
+        description: payout.description ?? null
+      }).onConflictDoNothing();
+    }
+  }
+}
+async function handlePayoutFailed(payout, _connectedAccountId) {
+  const [existingPayout] = await db.select().from(payouts).where(eq3(payouts.stripePayoutId, payout.id));
+  if (existingPayout) {
+    await db.update(payouts).set({ status: "failed" }).where(eq3(payouts.id, existingPayout.id));
   }
 }
 async function handleCheckoutSessionCompleted(session) {
@@ -3074,10 +4061,10 @@ async function handleCheckoutSessionCompleted(session) {
     status: "paid",
     paidAt: /* @__PURE__ */ new Date(),
     updatedAt: /* @__PURE__ */ new Date()
-  }).where(eq2(invoices.id, invoiceId));
+  }).where(eq3(invoices.id, invoiceId));
   const paymentIntentId = session.payment_intent?.toString();
   if (paymentIntentId) {
-    const [invoice] = await db.select().from(invoices).where(eq2(invoices.id, invoiceId));
+    const [invoice] = await db.select().from(invoices).where(eq3(invoices.id, invoiceId));
     if (invoice) {
       await db.insert(payments).values({
         invoiceId,
@@ -3211,8 +4198,59 @@ function formatHomeResponse(home) {
     zipCode: zip
   };
 }
+async function convertIntakeToClientJob(tx, params) {
+  const {
+    submissionId,
+    providerId,
+    clientName,
+    clientEmail,
+    clientPhone,
+    address,
+    problemDescription,
+    scheduledDate,
+    scheduledTime,
+    estimatedPrice,
+    notes,
+    targetStatus = "converted"
+  } = params;
+  const nameParts = (clientName || "").trim().split(" ");
+  const firstName = nameParts[0] || "Unknown";
+  const lastName = nameParts.slice(1).join(" ") || "";
+  let clientId;
+  if (clientEmail) {
+    const [found] = await tx.select({ id: clients.id }).from(clients).where(and4(eq4(clients.providerId, providerId), eq4(clients.email, clientEmail)));
+    if (found) {
+      clientId = found.id;
+    } else {
+      const [newC] = await tx.insert(clients).values({ providerId, firstName, lastName: lastName || null, email: clientEmail, phone: clientPhone || null, address: address || null }).returning({ id: clients.id });
+      clientId = newC.id;
+    }
+  } else {
+    const [newC] = await tx.insert(clients).values({ providerId, firstName, lastName: lastName || null, email: null, phone: clientPhone || null, address: address || null }).returning({ id: clients.id });
+    clientId = newC.id;
+  }
+  const jobDate = scheduledDate ?? /* @__PURE__ */ new Date();
+  const [newJob] = await tx.insert(jobs).values({
+    providerId,
+    clientId,
+    title: problemDescription?.slice(0, 100) || "Service Request",
+    description: problemDescription || null,
+    scheduledDate: jobDate,
+    scheduledTime: scheduledTime || null,
+    status: "scheduled",
+    address: address || null,
+    estimatedPrice: estimatedPrice || null,
+    notes: notes || null
+  }).returning();
+  const now = /* @__PURE__ */ new Date();
+  await tx.update(intakeSubmissions).set({ status: targetStatus, convertedClientId: clientId, convertedJobId: newJob.id, convertedAt: now, updatedAt: now }).where(eq4(intakeSubmissions.id, submissionId));
+  return { clientId, job: newJob };
+}
 async function registerRoutes(app2) {
   await seedDatabase();
+  app2.get("/api/health", (_req, res) => {
+    res.json({ status: "ok", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
+  });
   app2.post("/api/auth/signup", async (req, res) => {
     try {
       const { name, ...restBody } = req.body;
@@ -3234,6 +4272,8 @@ async function registerRoutes(app2) {
         maxAge: 30 * 24 * 60 * 60 * 1e3
       });
       res.status(201).json({ user: formatUserResponse(user), token });
+      const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "there";
+      dispatch("user.signup", { recipientUserId: user.id, recipientEmail: user.email, clientName: fullName });
     } catch (error) {
       console.error("Signup error:", error);
       res.status(500).json({ error: "Failed to create account" });
@@ -3678,12 +4718,16 @@ async function registerRoutes(app2) {
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
       }
+      const VALID_FREQUENCIES = ["biweekly", "monthly", "quarterly"];
+      if (parsed.data.recurringFrequency && !VALID_FREQUENCIES.includes(parsed.data.recurringFrequency)) {
+        return res.status(400).json({ error: "Invalid recurringFrequency", allowed: VALID_FREQUENCIES });
+      }
       const appointment = await storage.createAppointment(parsed.data);
       let clientId = null;
       try {
-        const [user] = await db.select().from(users).where(eq3(users.id, parsed.data.userId));
+        const [user] = await db.select().from(users).where(eq4(users.id, parsed.data.userId));
         if (user) {
-          const existingClients = await db.select().from(clients).where(eq3(clients.providerId, parsed.data.providerId));
+          const existingClients = await db.select().from(clients).where(eq4(clients.providerId, parsed.data.providerId));
           const matchingClient = existingClients.find(
             (c) => c.email === user.email || c.firstName === (user.firstName || "") && c.phone === user.phone
           );
@@ -3730,6 +4774,24 @@ async function registerRoutes(app2) {
         "booking_confirmed",
         JSON.stringify({ appointmentId: appointment.id })
       );
+      const [bookedUser] = await db.select().from(users).where(eq4(users.id, parsed.data.userId)).catch(() => [null]);
+      const [bookedProvider] = await db.select().from(providers).where(eq4(providers.id, parsed.data.providerId)).catch(() => [null]);
+      if (bookedUser && bookedProvider) {
+        dispatch("booking.created", {
+          clientEmail: bookedUser.email,
+          clientName: `${bookedUser.firstName || ""} ${bookedUser.lastName || ""}`.trim() || bookedUser.email,
+          providerEmail: bookedProvider.email ?? void 0,
+          providerName: bookedProvider.businessName,
+          serviceName: parsed.data.serviceName,
+          appointmentDate: parsed.data.scheduledDate,
+          appointmentTime: parsed.data.scheduledTime,
+          estimatedPrice: parsed.data.estimatedPrice ?? void 0,
+          confirmationNumber: appointment.id,
+          relatedRecordType: "appointment",
+          relatedRecordId: appointment.id,
+          recipientUserId: bookedUser.id
+        }).catch((e) => console.error("booking.created dispatch error:", e));
+      }
       res.status(201).json({ appointment });
     } catch (error) {
       console.error("Create appointment error:", error);
@@ -3748,6 +4810,21 @@ async function registerRoutes(app2) {
       const appointment = await storage.updateAppointment(req.params.id, req.body);
       if (!appointment) {
         return res.status(404).json({ error: "Appointment not found" });
+      }
+      const [updatedApptUser] = await db.select().from(users).where(eq4(users.id, appointment.userId)).catch(() => [null]);
+      const [updatedApptProvider] = await db.select().from(providers).where(eq4(providers.id, appointment.providerId)).catch(() => [null]);
+      if (updatedApptUser && updatedApptProvider) {
+        dispatch("booking.updated", {
+          clientEmail: updatedApptUser.email,
+          clientName: `${updatedApptUser.firstName || ""} ${updatedApptUser.lastName || ""}`.trim() || updatedApptUser.email,
+          providerName: updatedApptProvider.businessName,
+          serviceName: appointment.serviceName,
+          appointmentDate: appointment.scheduledDate,
+          appointmentTime: appointment.scheduledTime,
+          relatedRecordType: "appointment",
+          relatedRecordId: appointment.id,
+          recipientUserId: updatedApptUser.id
+        }).catch((e) => console.error("booking.updated dispatch error:", e));
       }
       res.json({ appointment });
     } catch (error) {
@@ -3775,6 +4852,21 @@ async function registerRoutes(app2) {
         "booking_cancelled",
         JSON.stringify({ appointmentId: appointment.id })
       );
+      const [cancelledUser] = await db.select().from(users).where(eq4(users.id, appointment.userId)).catch(() => [null]);
+      const [cancelledProvider] = await db.select().from(providers).where(eq4(providers.id, appointment.providerId)).catch(() => [null]);
+      if (cancelledUser && cancelledProvider) {
+        dispatch("booking.cancelled", {
+          clientEmail: cancelledUser.email,
+          clientName: `${cancelledUser.firstName || ""} ${cancelledUser.lastName || ""}`.trim() || cancelledUser.email,
+          providerName: cancelledProvider.businessName,
+          serviceName: appointment.serviceName,
+          appointmentDate: appointment.scheduledDate,
+          appointmentTime: appointment.scheduledTime,
+          relatedRecordType: "appointment",
+          relatedRecordId: appointment.id,
+          recipientUserId: cancelledUser.id
+        }).catch((e) => console.error("booking.cancelled dispatch error:", e));
+      }
       res.json({ appointment });
     } catch (error) {
       console.error("Cancel appointment error:", error);
@@ -3810,6 +4902,23 @@ async function registerRoutes(app2) {
         "booking_update",
         JSON.stringify({ appointmentId: appointment.id })
       );
+      const [rescheduledUser] = await db.select().from(users).where(eq4(users.id, appointment.userId)).catch(() => [null]);
+      const [rescheduledProvider] = await db.select().from(providers).where(eq4(providers.id, appointment.providerId)).catch(() => [null]);
+      if (rescheduledUser && rescheduledProvider) {
+        dispatch("booking.rescheduled", {
+          clientEmail: rescheduledUser.email,
+          clientName: `${rescheduledUser.firstName || ""} ${rescheduledUser.lastName || ""}`.trim() || rescheduledUser.email,
+          providerName: rescheduledProvider.businessName,
+          serviceName: appointment.serviceName,
+          appointmentDate: scheduledDate,
+          appointmentTime: scheduledTime,
+          oldDate: existing.scheduledDate,
+          oldTime: existing.scheduledTime,
+          relatedRecordType: "appointment",
+          relatedRecordId: appointment.id,
+          recipientUserId: rescheduledUser.id
+        }).catch((e) => console.error("booking.rescheduled dispatch error:", e));
+      }
       res.json({ appointment });
     } catch (error) {
       console.error("Reschedule appointment error:", error);
@@ -3860,6 +4969,133 @@ async function registerRoutes(app2) {
     } catch (error) {
       console.error("Mark notification read error:", error);
       res.status(500).json({ error: "Failed to mark notification as read" });
+    }
+  });
+  app2.post("/api/notifications/:userId/read-all", requireAuth, async (req, res) => {
+    try {
+      const authUserId = req.authenticatedUserId;
+      if (req.params.userId !== authUserId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      await db.update(notifications).set({ isRead: true }).where(
+        and4(eq4(notifications.userId, authUserId), eq4(notifications.isRead, false))
+      );
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Mark all notifications read error:", error);
+      res.status(500).json({ error: "Failed to mark all notifications as read" });
+    }
+  });
+  app2.get("/api/notifications/:userId/unread-count", requireAuth, async (req, res) => {
+    try {
+      const authUserId = req.authenticatedUserId;
+      if (req.params.userId !== authUserId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const result = await db.select({ count: sql3`count(*)::int` }).from(notifications).where(and4(eq4(notifications.userId, authUserId), eq4(notifications.isRead, false)));
+      const count = result[0]?.count || 0;
+      res.json({ count });
+    } catch (error) {
+      console.error("Get unread count error:", error);
+      res.status(500).json({ error: "Failed to get unread count" });
+    }
+  });
+  app2.post("/api/push-tokens", requireAuth, async (req, res) => {
+    try {
+      const userId = req.authenticatedUserId;
+      const { token, platform } = req.body;
+      if (!token) {
+        return res.status(400).json({ error: "token is required" });
+      }
+      await db.insert(pushTokens).values({ userId, token, platform: platform || "expo", isActive: true }).onConflictDoNothing();
+      await db.update(pushTokens).set({ isActive: true, updatedAt: /* @__PURE__ */ new Date() }).where(
+        and4(eq4(pushTokens.userId, userId), eq4(pushTokens.token, token))
+      );
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Register push token error:", error);
+      res.status(500).json({ error: "Failed to register push token" });
+    }
+  });
+  app2.delete("/api/push-tokens", requireAuth, async (req, res) => {
+    try {
+      const userId = req.authenticatedUserId;
+      const { token } = req.body;
+      if (token) {
+        await db.update(pushTokens).set({ isActive: false, updatedAt: /* @__PURE__ */ new Date() }).where(
+          and4(eq4(pushTokens.userId, userId), eq4(pushTokens.token, token))
+        );
+      } else {
+        await db.update(pushTokens).set({ isActive: false, updatedAt: /* @__PURE__ */ new Date() }).where(
+          eq4(pushTokens.userId, userId)
+        );
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete push token error:", error);
+      res.status(500).json({ error: "Failed to delete push token" });
+    }
+  });
+  app2.get("/api/notification-preferences/:userId", requireAuth, async (req, res) => {
+    try {
+      const authUserId = req.authenticatedUserId;
+      if (req.params.userId !== authUserId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const [prefs] = await db.select().from(notificationPreferences).where(eq4(notificationPreferences.userId, authUserId));
+      if (!prefs) {
+        const defaults = {
+          emailBookingConfirmation: true,
+          emailBookingReminder: true,
+          emailBookingCancelled: true,
+          emailInvoiceCreated: true,
+          emailInvoiceReminder: true,
+          emailInvoicePaid: true,
+          emailPaymentFailed: true,
+          emailReviewRequest: true,
+          pushEnabled: true,
+          inAppEnabled: true
+        };
+        res.json({ preferences: { userId: authUserId, ...defaults } });
+      } else {
+        res.json({ preferences: prefs });
+      }
+    } catch (error) {
+      console.error("Get notification preferences error:", error);
+      res.status(500).json({ error: "Failed to get notification preferences" });
+    }
+  });
+  app2.post("/api/notification-preferences", requireAuth, async (req, res) => {
+    try {
+      const userId = req.authenticatedUserId;
+      const updates = req.body;
+      const allowed = [
+        "emailBookingConfirmation",
+        "emailBookingReminder",
+        "emailBookingCancelled",
+        "emailInvoiceCreated",
+        "emailInvoiceReminder",
+        "emailInvoicePaid",
+        "emailPaymentFailed",
+        "emailReviewRequest",
+        "pushEnabled",
+        "inAppEnabled"
+      ];
+      const safeUpdates = { userId, updatedAt: /* @__PURE__ */ new Date() };
+      for (const key of allowed) {
+        if (updates[key] !== void 0) safeUpdates[key] = updates[key];
+      }
+      const [existing] = await db.select().from(notificationPreferences).where(eq4(notificationPreferences.userId, userId));
+      if (existing) {
+        const [updated] = await db.update(notificationPreferences).set(safeUpdates).where(eq4(notificationPreferences.userId, userId)).returning();
+        res.json({ preferences: updated });
+      } else {
+        const [created] = await db.insert(notificationPreferences).values(safeUpdates).returning();
+        res.json({ preferences: created });
+      }
+    } catch (error) {
+      console.error("Update notification preferences error:", error);
+      res.status(500).json({ error: "Failed to update notification preferences" });
     }
   });
   app2.post("/api/chat", requireAuth, aiRateLimit, async (req, res) => {
@@ -4660,7 +5896,7 @@ Respond with JSON only:
   app2.get("/api/homes/:homeId/service-history", requireAuth, async (req, res) => {
     try {
       const { homeId } = req.params;
-      const serviceHistory = await db.select().from(appointments).where(eq3(appointments.homeId, homeId)).orderBy(sql3`${appointments.completedAt} DESC NULLS LAST, ${appointments.scheduledDate} DESC`);
+      const serviceHistory = await db.select().from(appointments).where(eq4(appointments.homeId, homeId)).orderBy(sql3`${appointments.completedAt} DESC NULLS LAST, ${appointments.scheduledDate} DESC`);
       res.json({ serviceHistory });
     } catch (error) {
       console.error("Error fetching service history:", error);
@@ -4670,7 +5906,7 @@ Respond with JSON only:
   app2.get("/api/homes/:homeId/reminders", requireAuth, async (req, res) => {
     try {
       const { homeId } = req.params;
-      const reminders = await db.select().from(maintenanceReminders).where(eq3(maintenanceReminders.homeId, homeId)).orderBy(maintenanceReminders.nextDueAt);
+      const reminders = await db.select().from(maintenanceReminders).where(eq4(maintenanceReminders.homeId, homeId)).orderBy(maintenanceReminders.nextDueAt);
       res.json({ reminders });
     } catch (error) {
       console.error("Error fetching reminders:", error);
@@ -4699,7 +5935,7 @@ Respond with JSON only:
   app2.put("/api/reminders/:id/complete", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
-      const [existing] = await db.select().from(maintenanceReminders).where(eq3(maintenanceReminders.id, id));
+      const [existing] = await db.select().from(maintenanceReminders).where(eq4(maintenanceReminders.id, id));
       if (!existing) {
         return res.status(404).json({ error: "Reminder not found" });
       }
@@ -4716,7 +5952,7 @@ Respond with JSON only:
       const [updated] = await db.update(maintenanceReminders).set({
         lastCompletedAt: /* @__PURE__ */ new Date(),
         nextDueAt: nextDue
-      }).where(eq3(maintenanceReminders.id, id)).returning();
+      }).where(eq4(maintenanceReminders.id, id)).returning();
       res.json({ reminder: updated });
     } catch (error) {
       console.error("Error completing reminder:", error);
@@ -4726,7 +5962,7 @@ Respond with JSON only:
   app2.get("/api/provider/:providerId/availability", requireAuth, async (req, res) => {
     try {
       const { date } = req.query;
-      const [link] = await db.select().from(bookingLinks).where(eq3(bookingLinks.providerId, req.params.providerId)).limit(1);
+      const [link] = await db.select().from(bookingLinks).where(eq4(bookingLinks.providerId, req.params.providerId)).limit(1);
       let rules = {};
       if (link?.availabilityRules) {
         try {
@@ -4768,7 +6004,7 @@ Respond with JSON only:
   app2.get("/api/provider/:providerId/custom-services", requireAuth, async (req, res) => {
     try {
       const publishedOnly = req.query.publishedOnly === "true";
-      const conditions = publishedOnly ? and3(eq3(providerCustomServices.providerId, req.params.providerId), eq3(providerCustomServices.isPublished, true)) : eq3(providerCustomServices.providerId, req.params.providerId);
+      const conditions = publishedOnly ? and4(eq4(providerCustomServices.providerId, req.params.providerId), eq4(providerCustomServices.isPublished, true)) : eq4(providerCustomServices.providerId, req.params.providerId);
       const svcList = await db.select().from(providerCustomServices).where(conditions).orderBy(providerCustomServices.createdAt);
       res.json({ services: svcList });
     } catch (error) {
@@ -4795,12 +6031,12 @@ Respond with JSON only:
   });
   app2.put("/api/provider/:providerId/custom-services/:id", requireAuth, async (req, res) => {
     try {
-      const [existing] = await db.select().from(providerCustomServices).where(eq3(providerCustomServices.id, req.params.id));
+      const [existing] = await db.select().from(providerCustomServices).where(eq4(providerCustomServices.id, req.params.id));
       if (!existing) return res.status(404).json({ error: "Service not found" });
       if (existing.providerId !== req.params.providerId) {
         return res.status(403).json({ error: "Forbidden" });
       }
-      const { name, category, description, pricingType, basePrice, priceFrom, priceTo, priceTiersJson, duration, isPublished } = req.body;
+      const { name, category, description, pricingType, basePrice, priceFrom, priceTo, priceTiersJson, duration, isPublished, isAddon } = req.body;
       const allowedUpdate = {};
       if (name !== void 0) allowedUpdate.name = name;
       if (category !== void 0) allowedUpdate.category = category;
@@ -4812,7 +6048,8 @@ Respond with JSON only:
       if (priceTiersJson !== void 0) allowedUpdate.priceTiersJson = priceTiersJson;
       if (duration !== void 0) allowedUpdate.duration = duration;
       if (isPublished !== void 0) allowedUpdate.isPublished = isPublished;
-      const [svc] = await db.update(providerCustomServices).set({ ...allowedUpdate, updatedAt: /* @__PURE__ */ new Date() }).where(eq3(providerCustomServices.id, req.params.id)).returning();
+      if (isAddon !== void 0) allowedUpdate.isAddon = isAddon;
+      const [svc] = await db.update(providerCustomServices).set({ ...allowedUpdate, updatedAt: /* @__PURE__ */ new Date() }).where(eq4(providerCustomServices.id, req.params.id)).returning();
       res.json({ service: svc });
     } catch (error) {
       console.error("Update custom service error:", error);
@@ -4821,12 +6058,12 @@ Respond with JSON only:
   });
   app2.delete("/api/provider/:providerId/custom-services/:id", requireAuth, async (req, res) => {
     try {
-      const [existing] = await db.select().from(providerCustomServices).where(eq3(providerCustomServices.id, req.params.id));
+      const [existing] = await db.select().from(providerCustomServices).where(eq4(providerCustomServices.id, req.params.id));
       if (!existing) return res.status(404).json({ error: "Service not found" });
       if (existing.providerId !== req.params.providerId) {
         return res.status(403).json({ error: "Forbidden" });
       }
-      await db.delete(providerCustomServices).where(eq3(providerCustomServices.id, req.params.id));
+      await db.delete(providerCustomServices).where(eq4(providerCustomServices.id, req.params.id));
       res.json({ success: true });
     } catch (error) {
       console.error("Delete custom service error:", error);
@@ -4862,13 +6099,13 @@ Respond with JSON only:
         return res.status(404).json({ error: "Provider not found" });
       }
       const parsed = { ...provider };
-      if (parsed.bookingPolicies) {
+      if (parsed.bookingPolicies && typeof parsed.bookingPolicies === "string") {
         try {
           parsed.bookingPolicies = JSON.parse(parsed.bookingPolicies);
         } catch {
         }
       }
-      if (parsed.businessHours) {
+      if (parsed.businessHours && typeof parsed.businessHours === "string") {
         try {
           parsed.businessHours = JSON.parse(parsed.businessHours);
         } catch {
@@ -4909,7 +6146,7 @@ Respond with JSON only:
         "serviceRadius",
         "serviceZipCodes",
         "serviceCities",
-        "isPublicProfile",
+        "isPublic",
         "instantBooking",
         "advanceBookingDays"
       ];
@@ -4917,22 +6154,19 @@ Respond with JSON only:
         if (body[field] !== void 0) update[field] = body[field];
       }
       if (body.bookingPolicies !== void 0) {
-        update.bookingPolicies = typeof body.bookingPolicies === "string" ? body.bookingPolicies : JSON.stringify(body.bookingPolicies);
+        update.bookingPolicies = typeof body.bookingPolicies === "string" ? JSON.parse(body.bookingPolicies) : body.bookingPolicies;
       }
       if (body.businessHours !== void 0) {
-        update.businessHours = typeof body.businessHours === "string" ? body.businessHours : JSON.stringify(body.businessHours);
+        update.businessHours = typeof body.businessHours === "string" ? JSON.parse(body.businessHours) : body.businessHours;
       }
       if (body.availability !== void 0) {
         const existing = await storage.getProvider(id);
         let existingPolicies = {};
         if (existing?.bookingPolicies) {
-          try {
-            existingPolicies = JSON.parse(existing.bookingPolicies);
-          } catch {
-          }
+          existingPolicies = typeof existing.bookingPolicies === "string" ? JSON.parse(existing.bookingPolicies) : existing.bookingPolicies || {};
         }
         const availability = typeof body.availability === "string" ? JSON.parse(body.availability) : body.availability;
-        update.bookingPolicies = JSON.stringify({ ...existingPolicies, availability });
+        update.bookingPolicies = { ...existingPolicies, availability };
       }
       if (Object.keys(update).length === 0) {
         return res.status(400).json({ error: "No valid fields to update" });
@@ -4971,7 +6205,7 @@ Respond with JSON only:
         comment: reviews.comment,
         createdAt: reviews.createdAt,
         reviewerName: sql3`TRIM(CONCAT(COALESCE(${users.firstName}, ''), ' ', COALESCE(${users.lastName}, '')))`
-      }).from(reviews).innerJoin(users, eq3(reviews.userId, users.id)).where(eq3(reviews.providerId, req.params.id)).orderBy(desc2(reviews.createdAt));
+      }).from(reviews).innerJoin(users, eq4(reviews.userId, users.id)).where(eq4(reviews.providerId, req.params.id)).orderBy(desc2(reviews.createdAt));
       res.json({ reviews: reviewRows });
     } catch (error) {
       console.error("Get provider reviews error:", error);
@@ -5047,8 +6281,19 @@ Respond with JSON only:
   });
   app2.get("/api/provider/:providerId/jobs", requireAuth, async (req, res) => {
     try {
-      const jobs2 = await storage.getJobs(req.params.providerId);
-      res.json({ jobs: jobs2 });
+      const rawJobs = await storage.getJobs(req.params.providerId);
+      const enrichedJobs = await Promise.all(
+        rawJobs.map(async (job) => {
+          if (!job.appointmentId) return { ...job, isRecurring: false, recurringFrequency: null };
+          const [appt] = await db.select({ isRecurring: appointments.isRecurring, recurringFrequency: appointments.recurringFrequency }).from(appointments).where(eq4(appointments.id, job.appointmentId)).limit(1).catch(() => [null]);
+          return {
+            ...job,
+            isRecurring: appt?.isRecurring ?? false,
+            recurringFrequency: appt?.recurringFrequency ?? null
+          };
+        })
+      );
+      res.json({ jobs: enrichedJobs });
     } catch (error) {
       console.error("Get jobs error:", error);
       res.status(500).json({ error: "Failed to get jobs" });
@@ -5060,7 +6305,16 @@ Respond with JSON only:
       if (!job) {
         return res.status(404).json({ error: "Job not found" });
       }
-      res.json({ job });
+      let isRecurring = false;
+      let recurringFrequency = null;
+      if (job.appointmentId) {
+        const [appt] = await db.select({ isRecurring: appointments.isRecurring, recurringFrequency: appointments.recurringFrequency }).from(appointments).where(eq4(appointments.id, job.appointmentId)).limit(1).catch(() => [null]);
+        if (appt) {
+          isRecurring = appt.isRecurring ?? false;
+          recurringFrequency = appt.recurringFrequency ?? null;
+        }
+      }
+      res.json({ job: { ...job, isRecurring, recurringFrequency } });
     } catch (error) {
       console.error("Get job error:", error);
       res.status(500).json({ error: "Failed to get job" });
@@ -5075,7 +6329,7 @@ Respond with JSON only:
       const isOwner = appointment.userId === authUserId;
       const isProvider = providerRecord && appointment.providerId === providerRecord.id;
       if (!isOwner && !isProvider) return res.status(403).json({ error: "Access denied" });
-      const [job] = await db.select().from(jobs).where(eq3(jobs.appointmentId, req.params.id)).limit(1);
+      const [job] = await db.select().from(jobs).where(eq4(jobs.appointmentId, req.params.id)).limit(1);
       if (!job) return res.json({ job: null });
       res.json({ job });
     } catch (error) {
@@ -5087,7 +6341,7 @@ Respond with JSON only:
     try {
       const authUserId = req.authenticatedUserId;
       const providerRecord = await storage.getProviderByUserId(authUserId);
-      const [invoice] = await db.select().from(invoices).where(eq3(invoices.jobId, req.params.id)).limit(1);
+      const [invoice] = await db.select().from(invoices).where(eq4(invoices.jobId, req.params.id)).limit(1);
       if (!invoice) return res.json({ invoice: null });
       const isHomeowner = invoice.homeownerUserId === authUserId;
       const isProvider = providerRecord && invoice.providerId === providerRecord.id;
@@ -5098,6 +6352,24 @@ Respond with JSON only:
       res.status(500).json({ error: "Failed to get invoice" });
     }
   });
+  async function dispatchJobStatusEmail(job, newStatus) {
+    if (!job.clientId || !job.providerId) return;
+    const [client] = await db.select().from(clients).where(eq4(clients.id, job.clientId)).catch(() => [null]);
+    const [provider] = await db.select().from(providers).where(eq4(providers.id, job.providerId)).catch(() => [null]);
+    if (!client || !provider || !client.email) return;
+    await dispatch("job.status_changed", {
+      clientEmail: client.email,
+      clientName: `${client.firstName || ""} ${client.lastName || ""}`.trim() || client.email,
+      providerName: provider.businessName,
+      serviceName: job.title ?? "your job",
+      newStatus,
+      scheduledDate: job.scheduledDate ? String(job.scheduledDate) : void 0,
+      notes: job.notes ?? void 0,
+      relatedRecordType: "job",
+      relatedRecordId: job.id,
+      recipientUserId: client.homeownerUserId ?? void 0
+    });
+  }
   app2.post("/api/jobs", requireAuth, async (req, res) => {
     try {
       const jobData = {
@@ -5117,9 +6389,13 @@ Respond with JSON only:
   });
   app2.put("/api/jobs/:id", requireAuth, async (req, res) => {
     try {
+      const existing = await storage.getJob(req.params.id);
       const job = await storage.updateJob(req.params.id, req.body);
       if (!job) {
         return res.status(404).json({ error: "Job not found" });
+      }
+      if (req.body.status && existing && req.body.status !== existing.status) {
+        dispatchJobStatusEmail(job, req.body.status).catch((e) => console.error("job.status_changed dispatch error:", e));
       }
       res.json({ job });
     } catch (error) {
@@ -5134,6 +6410,40 @@ Respond with JSON only:
       if (!job) {
         return res.status(404).json({ error: "Job not found" });
       }
+      dispatchJobStatusEmail(job, "completed").catch((e) => console.error("job.status_changed dispatch error:", e));
+      (async () => {
+        try {
+          if (!job.clientId || !job.providerId) return;
+          const [client] = await db.select().from(clients).where(eq4(clients.id, job.clientId)).catch(() => [null]);
+          const [provider] = await db.select().from(providers).where(eq4(providers.id, job.providerId)).catch(() => [null]);
+          if (!client?.email || !provider) return;
+          const homeownerUserId = client.homeownerUserId ?? void 0;
+          const encodedName = encodeURIComponent(provider.businessName);
+          const rebookLink = `homebase://SimpleBooking?providerId=${provider.id}&providerName=${encodedName}`;
+          if (homeownerUserId) {
+            await dispatchNotification(
+              homeownerUserId,
+              "Time to rebook?",
+              `Your ${job.title ?? "service"} with ${provider.businessName} is done. Ready to schedule again?`,
+              "rebook.prompt",
+              { providerId: provider.id, providerName: provider.businessName, screen: "SimpleBooking" },
+              "bookings"
+            ).catch((e) => console.error("rebook push error:", e));
+          }
+          await dispatch("rebook.prompt", {
+            clientEmail: client.email,
+            clientName: `${client.firstName || ""} ${client.lastName || ""}`.trim() || client.email,
+            providerName: provider.businessName,
+            serviceName: job.title ?? "your service",
+            rebookLink,
+            recipientUserId: homeownerUserId,
+            relatedRecordType: "job",
+            relatedRecordId: job.id
+          });
+        } catch (e) {
+          console.error("rebook.prompt dispatch error:", e);
+        }
+      })();
       res.json({ job });
     } catch (error) {
       console.error("Complete job error:", error);
@@ -5146,6 +6456,7 @@ Respond with JSON only:
       if (!job) {
         return res.status(404).json({ error: "Job not found" });
       }
+      dispatchJobStatusEmail(job, "in_progress").catch((e) => console.error("job.status_changed dispatch error:", e));
       res.json({ job });
     } catch (error) {
       console.error("Start job error:", error);
@@ -5186,8 +6497,8 @@ Respond with JSON only:
       if (!isProvider && !isHomeowner) {
         return res.status(403).json({ error: "Access denied" });
       }
-      const payments3 = await storage.getPaymentsByInvoice(req.params.id);
-      res.json({ invoice, payments: payments3 });
+      const payments2 = await storage.getPaymentsByInvoice(req.params.id);
+      res.json({ invoice, payments: payments2 });
     } catch (error) {
       console.error("Get invoice error:", error);
       res.status(500).json({ error: "Failed to get invoice" });
@@ -5205,9 +6516,23 @@ Respond with JSON only:
   app2.post("/api/invoices", requireAuth, async (req, res) => {
     try {
       const invoiceNumber = req.body.invoiceNumber || `INV-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+      const lineItemsInput = Array.isArray(req.body.lineItems) ? req.body.lineItems : [];
+      let total = parseFloat(req.body.amount || "0");
+      if (lineItemsInput.length > 0) {
+        total = lineItemsInput.reduce((sum, item) => {
+          return sum + (parseFloat(item.unitPrice) || 0) * (parseFloat(item.quantity) || 1);
+        }, 0);
+      }
+      const lineItemsJson = lineItemsInput.length > 0 ? JSON.stringify(lineItemsInput) : req.body.amount ? JSON.stringify([{ description: req.body.notes || "Service", quantity: 1, unitPrice: parseFloat(req.body.amount), total: parseFloat(req.body.amount) }]) : void 0;
       const invoiceData = {
-        ...req.body,
+        providerId: req.body.providerId,
+        clientId: req.body.clientId,
+        jobId: req.body.jobId || null,
         invoiceNumber,
+        total: total.toFixed(2),
+        status: "draft",
+        notes: req.body.notes || null,
+        lineItems: lineItemsJson,
         dueDate: req.body.dueDate ? new Date(req.body.dueDate) : void 0
       };
       const parsed = insertInvoiceSchema.safeParse(invoiceData);
@@ -5215,6 +6540,23 @@ Respond with JSON only:
         return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
       }
       const invoice = await storage.createInvoice(parsed.data);
+      if (invoice.clientId) {
+        const [draftClient] = await db.select().from(clients).where(eq4(clients.id, invoice.clientId)).catch(() => [null]);
+        const [draftProvider] = await db.select().from(providers).where(eq4(providers.id, invoice.providerId)).catch(() => [null]);
+        if (draftClient?.email && draftProvider) {
+          dispatch("invoice.created", {
+            clientEmail: draftClient.email,
+            clientName: [draftClient.firstName, draftClient.lastName].filter(Boolean).join(" ") || "Client",
+            providerName: draftProvider.businessName,
+            invoiceNumber: invoice.invoiceNumber,
+            amount: parseFloat(invoice.total?.toString() || "0"),
+            dueDate: invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : "Due on receipt",
+            relatedRecordType: "invoice",
+            relatedRecordId: invoice.id,
+            recipientUserId: draftClient.homeownerUserId ?? void 0
+          }).catch((e) => console.error("invoice.created dispatch error:", e));
+        }
+      }
       res.status(201).json({ invoice });
     } catch (error) {
       console.error("Create invoice error:", error);
@@ -5224,23 +6566,36 @@ Respond with JSON only:
   app2.post("/api/invoices/create-and-send", requireAuth, async (req, res) => {
     try {
       const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-      const amount = parseFloat(req.body.amount);
-      const lineItems = [{
-        description: req.body.notes || "Service",
-        quantity: 1,
-        unitPrice: amount,
-        total: amount
-      }];
+      const lineItemsInput = Array.isArray(req.body.lineItems) ? req.body.lineItems : [];
+      let amount;
+      let lineItems;
+      if (lineItemsInput.length > 0) {
+        lineItems = lineItemsInput.map((item) => ({
+          description: item.description || "Service",
+          quantity: parseFloat(item.quantity) || 1,
+          unitPrice: parseFloat(item.unitPrice) || 0,
+          total: (parseFloat(item.quantity) || 1) * (parseFloat(item.unitPrice) || 0)
+        }));
+        amount = lineItems.reduce((sum, item) => sum + item.total, 0);
+      } else {
+        amount = parseFloat(req.body.amount) || 0;
+        lineItems = [{
+          description: req.body.notes || "Service",
+          quantity: 1,
+          unitPrice: amount,
+          total: amount
+        }];
+      }
       const invoiceData = {
         providerId: req.body.providerId,
         clientId: req.body.clientId,
         jobId: req.body.jobId || null,
         invoiceNumber,
-        total: amount.toString(),
-        lineItems,
+        total: amount.toFixed(2),
+        lineItems: JSON.stringify(lineItems),
+        notes: req.body.notes || null,
         status: "sent",
         dueDate: req.body.dueDate ? new Date(req.body.dueDate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1e3)
-        // 30 days default
       };
       const parsed = insertInvoiceSchema.safeParse(invoiceData);
       if (!parsed.success) {
@@ -5254,27 +6609,29 @@ Respond with JSON only:
         const provider = await storage.getProvider(invoice.providerId);
         if (client?.email && provider) {
           const clientName = [client.firstName, client.lastName].filter(Boolean).join(" ") || "Client";
-          const emailResult = await sendInvoiceEmail({
+          const sendResult = await dispatchWithResult("invoice.sent", {
             clientEmail: client.email,
             clientName,
             providerName: provider.businessName || provider.userId || "Service Provider",
             invoiceNumber: invoice.invoiceNumber || invoiceNumber,
             amount,
             dueDate: invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : "Due on receipt",
-            lineItems
+            lineItems: lineItems.map((item) => ({
+              description: item.description,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              total: item.total
+            })),
+            relatedRecordType: "invoice",
+            relatedRecordId: invoice.id
           });
-          emailSent = emailResult.success;
-          emailError = emailResult.error;
-          console.log("Invoice email result:", emailResult);
+          emailSent = sendResult.emailSent;
+          emailError = sendResult.emailError;
         } else if (!client?.email) {
           emailError = "Client has no email address on file.";
         }
       }
-      res.status(201).json({
-        invoice,
-        emailSent,
-        emailError
-      });
+      res.status(201).json({ invoice, emailSent, emailError });
     } catch (error) {
       console.error("Create and send invoice error:", error);
       res.status(500).json({ error: "Failed to create invoice" });
@@ -5317,7 +6674,7 @@ Respond with JSON only:
           const rawLineItems = invoice.lineItems;
           const lineItems = Array.isArray(rawLineItems) ? rawLineItems : typeof rawLineItems === "string" ? JSON.parse(rawLineItems) : [];
           const clientName = [client.firstName, client.lastName].filter(Boolean).join(" ") || "Client";
-          const emailResult = await sendInvoiceEmail({
+          const sendResult = await dispatchWithResult("invoice.sent", {
             clientEmail: client.email,
             clientName,
             providerName: provider.businessName || provider.userId || "Service Provider",
@@ -5329,11 +6686,12 @@ Respond with JSON only:
               quantity: item.quantity || 1,
               unitPrice: parseFloat(item.unitPrice?.toString() || item.price?.toString() || "0"),
               total: parseFloat(item.total?.toString() || "0")
-            }))
+            })),
+            relatedRecordType: "invoice",
+            relatedRecordId: invoice.id
           });
-          emailSent = emailResult.success;
-          emailError = emailResult.error;
-          console.log("Invoice email result:", emailResult);
+          emailSent = sendResult.emailSent;
+          emailError = sendResult.emailError;
         }
       }
       const updatedInvoice = await storage.sendInvoice(invoiceId);
@@ -5365,6 +6723,29 @@ Respond with JSON only:
       }
       const invoice = await storage.markInvoicePaid(req.params.id);
       res.json({ invoice });
+      if (invoice && invoice.clientId) {
+        try {
+          const [paidClient, paidProvider] = await Promise.all([
+            storage.getClient(invoice.clientId),
+            storage.getProvider(invoice.providerId)
+          ]);
+          if (paidClient?.email && paidProvider) {
+            const clientName = [paidClient.firstName, paidClient.lastName].filter(Boolean).join(" ") || "Client";
+            dispatch("invoice.paid", {
+              clientEmail: paidClient.email,
+              clientName,
+              providerName: paidProvider.businessName || "Service Provider",
+              invoiceNumber: invoice.invoiceNumber || `INV-${invoice.id.slice(0, 8)}`,
+              amount: parseFloat(invoice.total?.toString() || "0"),
+              paymentDate: (/* @__PURE__ */ new Date()).toLocaleDateString(),
+              relatedRecordType: "invoice",
+              relatedRecordId: invoice.id,
+              recipientUserId: paidClient.homeownerUserId ?? void 0
+            });
+          }
+        } catch (_) {
+        }
+      }
     } catch (error) {
       console.error("Mark invoice paid error:", error);
       res.status(500).json({ error: "Failed to mark invoice as paid" });
@@ -5384,8 +6765,8 @@ Respond with JSON only:
   });
   app2.get("/api/provider/:providerId/payments", requireAuth, async (req, res) => {
     try {
-      const payments3 = await storage.getPayments(req.params.providerId);
-      res.json({ payments: payments3 });
+      const payments2 = await storage.getPayments(req.params.providerId);
+      res.json({ payments: payments2 });
     } catch (error) {
       console.error("Get payments error:", error);
       res.status(500).json({ error: "Failed to get payments" });
@@ -5660,7 +7041,7 @@ Respond with JSON only:
       if (!providerId) {
         return res.status(400).json({ error: "providerId is required" });
       }
-      const providerInvoices = await db.select().from(invoices).where(eq3(invoices.providerId, providerId)).orderBy(invoices.createdAt);
+      const providerInvoices = await db.select().from(invoices).where(eq4(invoices.providerId, providerId)).orderBy(invoices.createdAt);
       res.json({ invoices: providerInvoices });
     } catch (error) {
       console.error("Get invoices error:", error);
@@ -5674,7 +7055,7 @@ Respond with JSON only:
         status: "sent",
         sentAt: /* @__PURE__ */ new Date(),
         updatedAt: /* @__PURE__ */ new Date()
-      }).where(eq3(invoices.id, invoiceId)).returning();
+      }).where(eq4(invoices.id, invoiceId)).returning();
       res.json({ invoice: updated });
     } catch (error) {
       console.error("Send invoice error:", error);
@@ -5684,10 +7065,20 @@ Respond with JSON only:
   app2.post("/api/stripe/invoices/:invoiceId/checkout", requireAuth, async (req, res) => {
     try {
       const { invoiceId } = req.params;
+      const [inv] = await db.select({ providerId: invoices.providerId }).from(invoices).where(eq4(invoices.id, invoiceId));
+      if (inv) {
+        const [connectAcct] = await db.select({ chargesEnabled: stripeConnectAccounts.chargesEnabled }).from(stripeConnectAccounts).where(eq4(stripeConnectAccounts.providerId, inv.providerId));
+        if (!connectAcct || !connectAcct.chargesEnabled) {
+          return res.status(402).json({ error: "stripe_not_ready", message: "Provider has not completed Stripe onboarding" });
+        }
+      }
       const result = await createStripeCheckoutSession(invoiceId);
       res.json({ url: result.checkoutUrl, sessionId: result.sessionId });
     } catch (error) {
       console.error("Create checkout session error:", error);
+      if (error.code === "stripe_not_ready" || error.message === "stripe_not_ready") {
+        return res.status(402).json({ error: "stripe_not_ready", message: "Provider has not completed Stripe onboarding" });
+      }
       res.status(500).json({ error: error.message || "Failed to create checkout session" });
     }
   });
@@ -5745,14 +7136,14 @@ Respond with JSON only:
     try {
       const { providerId } = req.params;
       const { planTier, platformFeePercent, platformFeeFixedCents } = req.body;
-      const [existing] = await db.select().from(providerPlans).where(eq3(providerPlans.providerId, providerId));
+      const [existing] = await db.select().from(providerPlans).where(eq4(providerPlans.providerId, providerId));
       if (existing) {
         const [updated] = await db.update(providerPlans).set({
           planTier: planTier || existing.planTier,
           platformFeePercent: platformFeePercent || existing.platformFeePercent,
           platformFeeFixedCents: platformFeeFixedCents ?? existing.platformFeeFixedCents,
           updatedAt: /* @__PURE__ */ new Date()
-        }).where(eq3(providerPlans.id, existing.id)).returning();
+        }).where(eq4(providerPlans.id, existing.id)).returning();
         res.json({ plan: updated });
       } else {
         const [created] = await db.insert(providerPlans).values({
@@ -5859,7 +7250,7 @@ Respond with JSON only:
           }))
         );
       }
-      const createdLineItems = await db.select().from(invoiceLineItems).where(eq3(invoiceLineItems.invoiceId, invoice.id));
+      const createdLineItems = await db.select().from(invoiceLineItems).where(eq4(invoiceLineItems.invoiceId, invoice.id));
       res.status(201).json({
         invoice,
         lineItems: createdLineItems,
@@ -5900,7 +7291,7 @@ Respond with JSON only:
         const rawLineItems = invoice.lineItems;
         const lineItems = Array.isArray(rawLineItems) ? rawLineItems : typeof rawLineItems === "string" ? JSON.parse(rawLineItems) : [];
         const clientName = [client.firstName, client.lastName].filter(Boolean).join(" ") || "Client";
-        const emailResult = await sendInvoiceEmail({
+        const sendResult = await dispatchWithResult("invoice.sent", {
           clientEmail: client.email,
           clientName,
           providerName: provider.businessName || provider.userId || "Service Provider",
@@ -5913,20 +7304,19 @@ Respond with JSON only:
             unitPrice: parseFloat(item.unitPrice?.toString() || item.price?.toString() || "0"),
             total: parseFloat(item.total?.toString() || "0")
           })),
-          paymentLink: hostedUrl || void 0
+          paymentLink: hostedUrl || void 0,
+          relatedRecordType: "invoice",
+          relatedRecordId: invoice.id
         });
-        emailSent = emailResult.success;
-        emailError = emailResult.error;
-        if (!emailResult.success) {
-          console.error("Failed to send invoice email:", emailResult.error);
-        }
+        emailSent = sendResult.emailSent;
+        emailError = sendResult.emailError;
       }
       const [updated] = await db.update(invoices).set({
         status: "sent",
         sentAt: /* @__PURE__ */ new Date(),
         hostedInvoiceUrl: hostedUrl || void 0,
         updatedAt: /* @__PURE__ */ new Date()
-      }).where(eq3(invoices.id, invoiceId)).returning();
+      }).where(eq4(invoices.id, invoiceId)).returning();
       res.json({
         invoice: updated,
         paymentUrl: hostedUrl,
@@ -5953,10 +7343,20 @@ Respond with JSON only:
   app2.post("/api/invoices/:invoiceId/checkout", requireAuth, async (req, res) => {
     try {
       const { invoiceId } = req.params;
+      const [inv] = await db.select({ providerId: invoices.providerId }).from(invoices).where(eq4(invoices.id, invoiceId));
+      if (inv) {
+        const [connectAcct] = await db.select({ chargesEnabled: stripeConnectAccounts.chargesEnabled }).from(stripeConnectAccounts).where(eq4(stripeConnectAccounts.providerId, inv.providerId));
+        if (!connectAcct || !connectAcct.chargesEnabled) {
+          return res.status(402).json({ error: "stripe_not_ready", message: "Provider has not completed Stripe onboarding" });
+        }
+      }
       const result = await createStripeCheckoutSession(invoiceId);
       res.json(result);
     } catch (error) {
       console.error("Create checkout session error:", error);
+      if (error.code === "stripe_not_ready" || error.message === "stripe_not_ready") {
+        return res.status(402).json({ error: "stripe_not_ready", message: "Provider has not completed Stripe onboarding" });
+      }
       res.status(500).json({ error: error.message || "Failed to create checkout session" });
     }
   });
@@ -5980,7 +7380,7 @@ Respond with JSON only:
       if (userId !== req.authenticatedUserId) {
         return res.status(403).json({ error: "Access denied" });
       }
-      const [credits] = await db.select().from(userCredits).where(eq3(userCredits.userId, userId));
+      const [credits] = await db.select().from(userCredits).where(eq4(userCredits.userId, userId));
       res.json({
         balanceCents: credits?.balanceCents || 0,
         balance: ((credits?.balanceCents || 0) / 100).toFixed(2)
@@ -6000,11 +7400,11 @@ Respond with JSON only:
       if (!amountCents || amountCents <= 0) {
         return res.status(400).json({ error: "amountCents must be a positive number" });
       }
-      const [existing] = await db.select().from(userCredits).where(eq3(userCredits.userId, userId));
+      const [existing] = await db.select().from(userCredits).where(eq4(userCredits.userId, userId));
       let newBalance;
       if (existing) {
         newBalance = (existing.balanceCents || 0) + amountCents;
-        await db.update(userCredits).set({ balanceCents: newBalance, updatedAt: /* @__PURE__ */ new Date() }).where(eq3(userCredits.userId, userId));
+        await db.update(userCredits).set({ balanceCents: newBalance, updatedAt: /* @__PURE__ */ new Date() }).where(eq4(userCredits.userId, userId));
       } else {
         newBalance = amountCents;
         await db.insert(userCredits).values({
@@ -6055,11 +7455,140 @@ Respond with JSON only:
   app2.get("/api/providers/:providerId/payouts", requireAuth, async (req, res) => {
     try {
       const { providerId } = req.params;
-      const providerPayouts = await db.select().from(payouts).where(eq3(payouts.providerId, providerId));
+      const providerPayouts = await db.select().from(payouts).where(eq4(payouts.providerId, providerId));
       res.json({ payouts: providerPayouts });
     } catch (error) {
       console.error("Get payouts error:", error);
       res.status(500).json({ error: error.message || "Failed to get payouts" });
+    }
+  });
+  async function assertProviderOwnership(req, providerId, res) {
+    const authUserId = req.authenticatedUserId;
+    const [provider] = await db.select({ userId: providers.userId }).from(providers).where(eq4(providers.id, providerId));
+    if (!provider || provider.userId !== authUserId) {
+      res.status(403).json({ error: "Forbidden" });
+      return false;
+    }
+    return true;
+  }
+  app2.get("/api/providers/:providerId/stripe-payouts", requireAuth, async (req, res) => {
+    try {
+      const { providerId } = req.params;
+      if (!await assertProviderOwnership(req, providerId, res)) return;
+      const connectAccount = await getConnectAccount(providerId);
+      if (!connectAccount?.stripeAccountId) {
+        return res.status(404).json({ error: "stripe_not_connected" });
+      }
+      const stripe2 = getStripe();
+      const stripePayouts = await stripe2.payouts.list(
+        { limit: 50, expand: ["data.destination"] },
+        { stripeAccount: connectAccount.stripeAccountId }
+      );
+      const result = stripePayouts.data.map((p) => {
+        const dest = p.destination;
+        let bankLast4 = null;
+        if (dest && typeof dest === "object" && "last4" in dest) {
+          bankLast4 = dest.last4 ?? null;
+        }
+        return {
+          id: p.id,
+          amountCents: p.amount,
+          currency: p.currency,
+          status: p.status,
+          arrivalDate: p.arrival_date ? new Date(p.arrival_date * 1e3).toISOString() : null,
+          description: p.description,
+          createdAt: new Date(p.created * 1e3).toISOString(),
+          bankLast4
+        };
+      });
+      res.json({ payouts: result });
+    } catch (error) {
+      console.error("Stripe payouts error:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch Stripe payouts" });
+    }
+  });
+  app2.get("/api/providers/:providerId/stripe-payments", requireAuth, async (req, res) => {
+    try {
+      const { providerId } = req.params;
+      if (!await assertProviderOwnership(req, providerId, res)) return;
+      const connectAccount = await getConnectAccount(providerId);
+      if (!connectAccount?.stripeAccountId) {
+        return res.status(404).json({ error: "stripe_not_connected" });
+      }
+      const stripe2 = getStripe();
+      const charges = await stripe2.charges.list(
+        { limit: 50 },
+        { stripeAccount: connectAccount.stripeAccountId }
+      );
+      const localPayments = await db.select({
+        stripeChargeId: payments.stripeChargeId,
+        stripePaymentIntentId: payments.stripePaymentIntentId,
+        invoiceId: payments.invoiceId
+      }).from(payments).where(eq4(payments.providerId, providerId));
+      const localInvoices = await db.select({
+        id: invoices.id,
+        invoiceNumber: invoices.invoiceNumber,
+        clientId: invoices.clientId
+      }).from(invoices).where(eq4(invoices.providerId, providerId));
+      const localClients = await db.select({ id: clients.id, firstName: clients.firstName, lastName: clients.lastName }).from(clients).where(eq4(clients.providerId, providerId));
+      const result = charges.data.filter(
+        (charge) => localPayments.some(
+          (p) => p.stripeChargeId === charge.id || p.stripePaymentIntentId === charge.payment_intent?.toString()
+        )
+      ).map((charge) => {
+        const localPayment = localPayments.find(
+          (p) => p.stripeChargeId === charge.id || p.stripePaymentIntentId === charge.payment_intent?.toString()
+        );
+        const invoice = localPayment ? localInvoices.find((inv) => inv.id === localPayment.invoiceId) : null;
+        const client = invoice ? localClients.find((c) => c.id === invoice.clientId) : null;
+        return {
+          chargeId: charge.id,
+          amountCents: charge.amount,
+          currency: charge.currency,
+          status: charge.status,
+          invoiceId: invoice?.id ?? null,
+          invoiceNumber: invoice?.invoiceNumber ?? null,
+          clientName: client ? `${client.firstName} ${client.lastName}` : charge.billing_details?.name ?? null,
+          createdAt: new Date(charge.created * 1e3).toISOString(),
+          refunded: charge.refunded
+        };
+      });
+      res.json({ payments: result });
+    } catch (error) {
+      console.error("Stripe payments error:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch Stripe payments" });
+    }
+  });
+  app2.get("/api/providers/:providerId/stripe-refunds", requireAuth, async (req, res) => {
+    try {
+      const { providerId } = req.params;
+      if (!await assertProviderOwnership(req, providerId, res)) return;
+      const connectAccount = await getConnectAccount(providerId);
+      if (!connectAccount?.stripeAccountId) {
+        return res.status(404).json({ error: "stripe_not_connected" });
+      }
+      const stripe2 = getStripe();
+      const stripeRefunds = await stripe2.refunds.list(
+        { limit: 50, expand: ["data.charge"] },
+        { stripeAccount: connectAccount.stripeAccountId }
+      );
+      const result = stripeRefunds.data.map((r) => {
+        const expandedCharge = r.charge && typeof r.charge === "object" ? r.charge : null;
+        return {
+          refundId: r.id,
+          chargeId: expandedCharge?.id ?? (r.charge?.toString() ?? null),
+          amountCents: r.amount,
+          originalAmountCents: expandedCharge?.amount ?? null,
+          currency: r.currency,
+          reason: r.reason,
+          status: r.status,
+          createdAt: new Date(r.created * 1e3).toISOString()
+        };
+      });
+      res.json({ refunds: result });
+    } catch (error) {
+      console.error("Stripe refunds error:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch Stripe refunds" });
     }
   });
   app2.get("/api/providers/:providerId/booking-links", requireAuth, async (req, res) => {
@@ -6197,9 +7726,9 @@ Respond with JSON only:
         preferredTimesJson: preferredTimesJson ? JSON.stringify(preferredTimesJson) : null
       });
       try {
-        const existingLeads = clientEmail ? await db.select().from(leads).where(and3(
-          eq3(leads.providerId, link.providerId),
-          eq3(leads.email, clientEmail)
+        const existingLeads = clientEmail ? await db.select().from(leads).where(and4(
+          eq4(leads.providerId, link.providerId),
+          eq4(leads.email, clientEmail)
         )).limit(1) : [];
         if (existingLeads.length === 0) {
           await db.insert(leads).values({
@@ -6225,18 +7754,18 @@ Respond with JSON only:
   app2.get("/api/booking/:slug", async (req, res) => {
     try {
       const { slug } = req.params;
-      const [link] = await db.select().from(bookingLinks).where(eq3(bookingLinks.slug, slug)).limit(1);
+      const [link] = await db.select().from(bookingLinks).where(eq4(bookingLinks.slug, slug)).limit(1);
       if (!link || link.isActive === false || link.status !== "active") {
         return res.status(404).json({ error: "Booking page not found" });
       }
-      const [provider] = await db.select().from(providers).where(eq3(providers.id, link.providerId)).limit(1);
+      const [provider] = await db.select().from(providers).where(eq4(providers.id, link.providerId)).limit(1);
       if (!provider || provider.isPublic === false) {
         return res.status(404).json({ error: "Provider not found" });
       }
       const customServices = await db.select().from(providerCustomServices).where(
-        and3(
-          eq3(providerCustomServices.providerId, provider.id),
-          eq3(providerCustomServices.isPublished, true)
+        and4(
+          eq4(providerCustomServices.providerId, provider.id),
+          eq4(providerCustomServices.isPublished, true)
         )
       );
       const catalogServices = await db.select({
@@ -6247,10 +7776,10 @@ Respond with JSON only:
         categoryId: services.categoryId,
         price: providerServices.price,
         providerServiceId: providerServices.id
-      }).from(providerServices).innerJoin(services, eq3(providerServices.serviceId, services.id)).where(
-        and3(
-          eq3(providerServices.providerId, provider.id),
-          eq3(services.isPublic, true)
+      }).from(providerServices).innerJoin(services, eq4(providerServices.serviceId, services.id)).where(
+        and4(
+          eq4(providerServices.providerId, provider.id),
+          eq4(services.isPublic, true)
         )
       );
       const recentReviews = await db.select({
@@ -6258,7 +7787,7 @@ Respond with JSON only:
         rating: reviews.rating,
         comment: reviews.comment,
         createdAt: reviews.createdAt
-      }).from(reviews).where(eq3(reviews.providerId, provider.id)).orderBy(desc2(reviews.createdAt)).limit(5);
+      }).from(reviews).where(eq4(reviews.providerId, provider.id)).orderBy(desc2(reviews.createdAt)).limit(5);
       res.json({
         provider: {
           id: provider.id,
@@ -6322,27 +7851,65 @@ Respond with JSON only:
       if (!clientName || !problemDescription) {
         return res.status(400).json({ error: "clientName and problemDescription are required" });
       }
-      const [link] = await db.select().from(bookingLinks).where(eq3(bookingLinks.slug, slug)).limit(1);
+      const [link] = await db.select().from(bookingLinks).where(eq4(bookingLinks.slug, slug)).limit(1);
       if (!link || link.isActive === false || link.status !== "active") {
         return res.status(404).json({ error: "Booking page not found" });
       }
-      const submissionStatus = link.instantBooking ? "confirmed" : "submitted";
-      const [submission] = await db.insert(intakeSubmissions).values({
-        bookingLinkId: link.id,
-        providerId: link.providerId,
-        homeownerUserId: null,
-        clientName,
-        clientPhone: clientPhone || null,
-        clientEmail: clientEmail || null,
-        address: address || null,
-        problemDescription,
-        categoryId: categoryId || null,
-        answersJson: answersJson ? JSON.stringify(answersJson) : null,
-        preferredTimesJson: preferredTimesJson ? JSON.stringify(preferredTimesJson) : null,
-        status: submissionStatus
-      }).returning();
+      let submission;
+      let instantClientId;
+      let instantJob;
+      if (link.instantBooking) {
+        const txResult = await db.transaction(async (tx) => {
+          const [sub] = await tx.insert(intakeSubmissions).values({
+            bookingLinkId: link.id,
+            providerId: link.providerId,
+            homeownerUserId: null,
+            clientName,
+            clientPhone: clientPhone || null,
+            clientEmail: clientEmail || null,
+            address: address || null,
+            problemDescription,
+            categoryId: categoryId || null,
+            answersJson: answersJson ? JSON.stringify(answersJson) : null,
+            preferredTimesJson: preferredTimesJson ? JSON.stringify(preferredTimesJson) : null,
+            status: "confirmed"
+          }).returning();
+          const preferredDate = preferredTimesJson?.[0] ? new Date(preferredTimesJson[0]) : void 0;
+          const converted = await convertIntakeToClientJob(tx, {
+            submissionId: sub.id,
+            providerId: link.providerId,
+            clientName,
+            clientEmail,
+            clientPhone,
+            address,
+            problemDescription,
+            scheduledDate: preferredDate,
+            targetStatus: "confirmed"
+          });
+          return { sub, clientId: converted.clientId, job: converted.job };
+        });
+        submission = txResult.sub;
+        instantClientId = txResult.clientId;
+        instantJob = txResult.job;
+      } else {
+        const [sub] = await db.insert(intakeSubmissions).values({
+          bookingLinkId: link.id,
+          providerId: link.providerId,
+          homeownerUserId: null,
+          clientName,
+          clientPhone: clientPhone || null,
+          clientEmail: clientEmail || null,
+          address: address || null,
+          problemDescription,
+          categoryId: categoryId || null,
+          answersJson: answersJson ? JSON.stringify(answersJson) : null,
+          preferredTimesJson: preferredTimesJson ? JSON.stringify(preferredTimesJson) : null,
+          status: "submitted"
+        }).returning();
+        submission = sub;
+      }
       try {
-        const [providerRow] = await db.select({ userId: providers.userId }).from(providers).where(eq3(providers.id, link.providerId)).limit(1);
+        const [providerRow] = await db.select({ userId: providers.userId, businessName: providers.businessName, email: providers.email }).from(providers).where(eq4(providers.id, link.providerId)).limit(1);
         if (providerRow?.userId) {
           const notificationTitle = link.instantBooking ? "New Booking Confirmed" : "New Booking Request";
           const notificationMessage = link.instantBooking ? `${clientName} has booked an appointment. Check your intake submissions for details.` : `${clientName} submitted a new booking request. Review it in your intake submissions.`;
@@ -6354,12 +7921,29 @@ Respond with JSON only:
             isRead: false,
             data: JSON.stringify({ intakeSubmissionId: submission.id, clientName })
           });
+          if (link.instantBooking && clientEmail) {
+            const preferredDateStr = preferredTimesJson?.[0] ? new Date(preferredTimesJson[0]).toLocaleDateString() : "To be confirmed";
+            dispatch("booking.created", {
+              clientEmail,
+              clientName,
+              providerEmail: providerRow.email ?? void 0,
+              providerName: providerRow.businessName ?? link.title ?? "Your Provider",
+              serviceName: link.title ?? "Home Service",
+              appointmentDate: preferredDateStr,
+              appointmentTime: preferredTimesJson?.[0] ? new Date(preferredTimesJson[0]).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : void 0,
+              confirmationNumber: submission.id,
+              relatedRecordType: "intake_submission",
+              relatedRecordId: submission.id
+            }).catch((e) => console.error("Instant booking email dispatch error:", e));
+          }
         }
       } catch (notifyErr) {
         console.error("Notification create error (non-fatal):", notifyErr);
       }
       res.status(201).json({
         submission,
+        ...instantClientId ? { clientId: instantClientId } : {},
+        ...instantJob ? { job: instantJob } : {},
         message: link.instantBooking ? "Your booking has been confirmed!" : "Your request has been submitted!"
       });
     } catch (error) {
@@ -6370,6 +7954,11 @@ Respond with JSON only:
   app2.get("/api/providers/:providerId/intake-submissions", requireAuth, async (req, res) => {
     try {
       const { providerId } = req.params;
+      const authUserId = req.authenticatedUserId;
+      const [providerRow] = await db.select({ userId: providers.userId }).from(providers).where(eq4(providers.id, providerId)).limit(1);
+      if (!providerRow || providerRow.userId !== authUserId) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
       const submissions = await storage.getIntakeSubmissionsByProvider(providerId);
       res.json({ submissions });
     } catch (error) {
@@ -6381,6 +7970,15 @@ Respond with JSON only:
     try {
       const { id } = req.params;
       const updates = req.body;
+      const authUserId = req.authenticatedUserId;
+      const existing = await storage.getIntakeSubmission(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Submission not found" });
+      }
+      const [providerRow] = await db.select({ userId: providers.userId }).from(providers).where(eq4(providers.id, existing.providerId)).limit(1);
+      if (!providerRow || providerRow.userId !== authUserId) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
       const submission = await storage.updateIntakeSubmission(id, updates);
       if (!submission) {
         return res.status(404).json({ error: "Submission not found" });
@@ -6391,10 +7989,77 @@ Respond with JSON only:
       res.status(500).json({ error: error.message || "Failed to update submission" });
     }
   });
+  app2.post("/api/intake-submissions/:id/accept", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { scheduledDate, scheduledTime, estimatedPrice, notes } = req.body;
+      const authUserId = req.authenticatedUserId;
+      const submission = await storage.getIntakeSubmission(id);
+      if (!submission) {
+        return res.status(404).json({ error: "Submission not found" });
+      }
+      const [providerOwner] = await db.select({ userId: providers.userId }).from(providers).where(eq4(providers.id, submission.providerId));
+      if (!providerOwner || providerOwner.userId !== authUserId) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      if (submission.status === "converted" || submission.status === "confirmed") {
+        return res.status(400).json({ error: "Submission has already been accepted" });
+      }
+      let resolvedScheduledDate;
+      if (scheduledDate) {
+        const parsed = new Date(scheduledDate);
+        if (!isNaN(parsed.getTime())) resolvedScheduledDate = parsed;
+      }
+      if (!resolvedScheduledDate && submission.preferredTimesJson) {
+        try {
+          const preferred = JSON.parse(submission.preferredTimesJson);
+          if (preferred.length > 0) {
+            const parsed = new Date(preferred[0]);
+            if (!isNaN(parsed.getTime())) resolvedScheduledDate = parsed;
+          }
+        } catch {
+        }
+      }
+      const result = await db.transaction(async (tx) => {
+        const converted = await convertIntakeToClientJob(tx, {
+          submissionId: id,
+          providerId: submission.providerId,
+          clientName: submission.clientName || "Unknown",
+          clientEmail: submission.clientEmail,
+          clientPhone: submission.clientPhone,
+          address: submission.address,
+          problemDescription: submission.problemDescription,
+          scheduledDate: resolvedScheduledDate,
+          scheduledTime: scheduledTime || null,
+          estimatedPrice: estimatedPrice ? String(estimatedPrice) : null,
+          notes: notes || null,
+          targetStatus: "converted"
+        });
+        if (submission.clientEmail) {
+          const now = /* @__PURE__ */ new Date();
+          await tx.update(leads).set({ status: "won", updatedAt: now }).where(
+            and4(
+              eq4(leads.providerId, submission.providerId),
+              eq4(leads.email, submission.clientEmail)
+            )
+          );
+        }
+        return converted;
+      });
+      res.status(201).json({
+        message: "Booking accepted",
+        clientId: result.clientId,
+        job: result.job
+      });
+    } catch (error) {
+      console.error("Accept intake submission error:", error);
+      res.status(500).json({ error: error.message || "Failed to accept submission" });
+    }
+  });
   app2.get("/api/providers/:providerId/leads", requireAuth, async (req, res) => {
     try {
       const { providerId } = req.params;
-      const rows = await db.select().from(leads).where(eq3(leads.providerId, providerId)).orderBy(desc2(leads.createdAt));
+      const rows = await db.select().from(leads).where(eq4(leads.providerId, providerId)).orderBy(desc2(leads.createdAt));
       res.json({ leads: rows });
     } catch (error) {
       console.error("Get leads error:", error);
@@ -6431,7 +8096,7 @@ Respond with JSON only:
         if (req.body[key] !== void 0) updates[key] = req.body[key];
       }
       updates.updatedAt = /* @__PURE__ */ new Date();
-      const [lead] = await db.update(leads).set(updates).where(eq3(leads.id, id)).returning();
+      const [lead] = await db.update(leads).set(updates).where(eq4(leads.id, id)).returning();
       if (!lead) return res.status(404).json({ error: "Lead not found" });
       res.json({ lead });
     } catch (error) {
@@ -6439,15 +8104,275 @@ Respond with JSON only:
       res.status(500).json({ error: error.message || "Failed to update lead" });
     }
   });
+  app2.post("/api/leads/:id/accept", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { scheduledDate, scheduledTime, estimatedPrice, notes } = req.body;
+      const authUserId = req.authenticatedUserId;
+      const [lead] = await db.select().from(leads).where(eq4(leads.id, id)).limit(1);
+      if (!lead) return res.status(404).json({ error: "Lead not found" });
+      const [providerRow] = await db.select({ userId: providers.userId }).from(providers).where(eq4(providers.id, lead.providerId)).limit(1);
+      if (!providerRow || providerRow.userId !== authUserId) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      if (lead.status === "won") {
+        return res.status(400).json({ error: "Lead has already been accepted" });
+      }
+      const resolvedDate = scheduledDate ? new Date(scheduledDate) : /* @__PURE__ */ new Date();
+      const result = await db.transaction(async (tx) => {
+        const nameParts = (lead.name || "").trim().split(" ");
+        const firstName = nameParts[0] || "Unknown";
+        const lastName = nameParts.slice(1).join(" ") || null;
+        let clientId;
+        if (lead.email) {
+          const [found] = await tx.select({ id: clients.id }).from(clients).where(and4(eq4(clients.providerId, lead.providerId), eq4(clients.email, lead.email)));
+          if (found) {
+            clientId = found.id;
+          } else {
+            const [newC] = await tx.insert(clients).values({ providerId: lead.providerId, firstName, lastName, email: lead.email, phone: lead.phone || null }).returning({ id: clients.id });
+            clientId = newC.id;
+          }
+        } else {
+          const [newC] = await tx.insert(clients).values({ providerId: lead.providerId, firstName, lastName, email: null, phone: lead.phone || null }).returning({ id: clients.id });
+          clientId = newC.id;
+        }
+        const [newJob] = await tx.insert(jobs).values({
+          providerId: lead.providerId,
+          clientId,
+          title: lead.service || lead.message?.slice(0, 100) || "Service Request",
+          description: lead.message || null,
+          scheduledDate: resolvedDate,
+          scheduledTime: scheduledTime || null,
+          status: "scheduled",
+          estimatedPrice: estimatedPrice ? String(estimatedPrice) : null,
+          notes: notes || null
+        }).returning();
+        const now = /* @__PURE__ */ new Date();
+        await tx.update(leads).set({ status: "won", updatedAt: now }).where(eq4(leads.id, id));
+        return { clientId, job: newJob };
+      });
+      res.status(201).json({ message: "Lead accepted", clientId: result.clientId, job: result.job });
+    } catch (error) {
+      console.error("Accept lead error:", error);
+      res.status(500).json({ error: error.message || "Failed to accept lead" });
+    }
+  });
   app2.delete("/api/leads/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
-      const [deleted] = await db.delete(leads).where(eq3(leads.id, id)).returning();
+      const [deleted] = await db.delete(leads).where(eq4(leads.id, id)).returning();
       if (!deleted) return res.status(404).json({ error: "Lead not found" });
       res.json({ success: true });
     } catch (error) {
       console.error("Delete lead error:", error);
       res.status(500).json({ error: error.message || "Failed to delete lead" });
+    }
+  });
+  const messageLimitMap = /* @__PURE__ */ new Map();
+  function checkMessageRateLimit(providerId, clientId) {
+    const key = `${providerId}:${clientId}`;
+    const now = Date.now();
+    const window = 24 * 60 * 60 * 1e3;
+    const limit = 10;
+    const entry = messageLimitMap.get(key);
+    if (!entry || entry.resetAt < now) {
+      messageLimitMap.set(key, { count: 1, resetAt: now + window });
+      return true;
+    }
+    if (entry.count >= limit) return false;
+    entry.count += 1;
+    return true;
+  }
+  app2.post("/api/providers/:providerId/messages", requireAuth, async (req, res) => {
+    try {
+      const authUserId = req.authenticatedUserId;
+      const { providerId } = req.params;
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      if (!providerRecord || providerRecord.id !== providerId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const { clientId, channel, subject, body, jobId, invoiceId } = req.body;
+      if (!clientId || !body) {
+        return res.status(400).json({ error: "clientId and body are required" });
+      }
+      const [client] = await db.select().from(clients).where(
+        and4(eq4(clients.id, clientId), eq4(clients.providerId, providerId))
+      );
+      if (!client) {
+        return res.status(403).json({ error: "Client does not belong to this provider" });
+      }
+      if (!checkMessageRateLimit(providerId, clientId)) {
+        return res.status(429).json({ error: "Rate limit exceeded: max 10 messages per client per 24 hours" });
+      }
+      const clientName = [client.firstName, client.lastName].filter(Boolean).join(" ");
+      let processedBody = body.replace(/\{\{client_name\}\}/g, clientName).replace(/\{\{provider_name\}\}/g, providerRecord.businessName);
+      let processedSubject = (subject || `Message from ${providerRecord.businessName}`).replace(/\{\{client_name\}\}/g, clientName).replace(/\{\{provider_name\}\}/g, providerRecord.businessName);
+      if (jobId) {
+        const [jobRecord] = await db.select().from(jobs).where(eq4(jobs.id, jobId));
+        if (jobRecord) {
+          processedBody = processedBody.replace(/\{\{service\}\}/g, jobRecord.title || "").replace(/\{\{booking_date\}\}/g, jobRecord.scheduledDate ? new Date(jobRecord.scheduledDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "");
+          processedSubject = processedSubject.replace(/\{\{service\}\}/g, jobRecord.title || "").replace(/\{\{booking_date\}\}/g, jobRecord.scheduledDate ? new Date(jobRecord.scheduledDate).toLocaleDateString() : "");
+        }
+      }
+      if (invoiceId) {
+        const [invoiceRecord] = await db.select().from(invoices).where(eq4(invoices.id, invoiceId));
+        if (invoiceRecord) {
+          const amount = invoiceRecord.total || invoiceRecord.amount || "0";
+          processedBody = processedBody.replace(/\{\{amount_due\}\}/g, `$${parseFloat(amount).toFixed(2)}`);
+          processedSubject = processedSubject.replace(/\{\{amount_due\}\}/g, `$${parseFloat(amount).toFixed(2)}`);
+        }
+      }
+      let status = "sent";
+      let resendMessageId;
+      if (channel === "email") {
+        if (!client.email) {
+          return res.status(400).json({ error: "Client does not have an email address" });
+        }
+        const emailResult = await sendProviderClientMessage({
+          clientEmail: client.email,
+          clientName,
+          providerName: providerRecord.businessName,
+          subject: processedSubject,
+          body: processedBody
+        });
+        status = emailResult.success ? "sent" : "failed";
+        resendMessageId = emailResult.messageId;
+      } else if (channel === "sms") {
+        status = "pending_sms";
+      }
+      const [message] = await db.insert(providerMessages).values({
+        providerId,
+        clientId,
+        jobId: jobId || null,
+        invoiceId: invoiceId || null,
+        channel: channel || "email",
+        subject: processedSubject,
+        body: processedBody,
+        status,
+        resendMessageId: resendMessageId || null
+      }).returning();
+      res.status(201).json({ message });
+    } catch (error) {
+      console.error("Send provider message error:", error);
+      res.status(500).json({ error: error.message || "Failed to send message" });
+    }
+  });
+  app2.get("/api/providers/:providerId/clients/:clientId/messages", requireAuth, async (req, res) => {
+    try {
+      const authUserId = req.authenticatedUserId;
+      const { providerId, clientId } = req.params;
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      if (!providerRecord || providerRecord.id !== providerId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const messages = await db.select().from(providerMessages).where(and4(eq4(providerMessages.providerId, providerId), eq4(providerMessages.clientId, clientId))).orderBy(desc2(providerMessages.createdAt));
+      res.json({ messages });
+    } catch (error) {
+      console.error("Get provider messages error:", error);
+      res.status(500).json({ error: "Failed to get messages" });
+    }
+  });
+  app2.get("/api/providers/:providerId/message-templates", requireAuth, async (req, res) => {
+    try {
+      const authUserId = req.authenticatedUserId;
+      const { providerId } = req.params;
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      if (!providerRecord || providerRecord.id !== providerId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const templates = await db.select().from(messageTemplates).where(eq4(messageTemplates.providerId, providerId)).orderBy(desc2(messageTemplates.createdAt));
+      res.json({ templates });
+    } catch (error) {
+      console.error("Get message templates error:", error);
+      res.status(500).json({ error: "Failed to get templates" });
+    }
+  });
+  app2.post("/api/providers/:providerId/message-templates", requireAuth, async (req, res) => {
+    try {
+      const authUserId = req.authenticatedUserId;
+      const { providerId } = req.params;
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      if (!providerRecord || providerRecord.id !== providerId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const { name, channel, subject, body } = req.body;
+      if (!name || !body) {
+        return res.status(400).json({ error: "name and body are required" });
+      }
+      const [template] = await db.insert(messageTemplates).values({
+        providerId,
+        name,
+        channel: channel || "email",
+        subject: subject || null,
+        body
+      }).returning();
+      res.status(201).json({ template });
+    } catch (error) {
+      console.error("Create message template error:", error);
+      res.status(500).json({ error: "Failed to create template" });
+    }
+  });
+  app2.patch("/api/providers/:providerId/message-templates/:templateId", requireAuth, async (req, res) => {
+    try {
+      const authUserId = req.authenticatedUserId;
+      const { providerId, templateId } = req.params;
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      if (!providerRecord || providerRecord.id !== providerId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const { name, channel, subject, body } = req.body;
+      const updates = { updatedAt: /* @__PURE__ */ new Date() };
+      if (name !== void 0) updates.name = name;
+      if (channel !== void 0) updates.channel = channel;
+      if (subject !== void 0) updates.subject = subject;
+      if (body !== void 0) updates.body = body;
+      const [template] = await db.update(messageTemplates).set(updates).where(and4(eq4(messageTemplates.id, templateId), eq4(messageTemplates.providerId, providerId))).returning();
+      if (!template) return res.status(404).json({ error: "Template not found" });
+      res.json({ template });
+    } catch (error) {
+      console.error("Update message template error:", error);
+      res.status(500).json({ error: "Failed to update template" });
+    }
+  });
+  app2.delete("/api/providers/:providerId/message-templates/:templateId", requireAuth, async (req, res) => {
+    try {
+      const authUserId = req.authenticatedUserId;
+      const { providerId, templateId } = req.params;
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      if (!providerRecord || providerRecord.id !== providerId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const [deleted] = await db.delete(messageTemplates).where(and4(eq4(messageTemplates.id, templateId), eq4(messageTemplates.providerId, providerId))).returning();
+      if (!deleted) return res.status(404).json({ error: "Template not found" });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete message template error:", error);
+      res.status(500).json({ error: "Failed to delete template" });
+    }
+  });
+  app2.get("/api/providers/:providerId/clients/last-messages", requireAuth, async (req, res) => {
+    try {
+      const authUserId = req.authenticatedUserId;
+      const { providerId } = req.params;
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      if (!providerRecord || providerRecord.id !== providerId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const lastMessages = await db.execute(sql3`
+        SELECT DISTINCT ON (client_id) 
+          client_id as "clientId",
+          body,
+          created_at as "createdAt",
+          channel,
+          status
+        FROM provider_messages
+        WHERE provider_id = ${providerId}
+        ORDER BY client_id, created_at DESC
+      `);
+      res.json({ lastMessages: lastMessages.rows });
+    } catch (error) {
+      console.error("Get last messages error:", error);
+      res.status(500).json({ error: "Failed to get last messages" });
     }
   });
   const httpServer = createServer(app2);
@@ -6457,6 +8382,7 @@ Respond with JSON only:
 // server/index.ts
 import * as fs from "fs";
 import * as path from "path";
+import { spawn } from "child_process";
 import { runMigrations } from "stripe-replit-sync";
 
 // server/webhookHandlers.ts
@@ -6473,6 +8399,9 @@ var WebhookHandlers = class {
 };
 
 // server/index.ts
+init_schema();
+import cron from "node-cron";
+import { eq as eq6, and as and6, gte as gte2, lte as lte2, lt } from "drizzle-orm";
 var app = express();
 var log = console.log;
 function setupCors(app2) {
@@ -6548,6 +8477,28 @@ async function initStripe() {
   }
   try {
     console.log("Initializing Stripe schema...");
+    try {
+      const client = await pool.connect();
+      try {
+        await client.query(`CREATE SCHEMA IF NOT EXISTS stripe;`);
+        await client.query(`
+          DO $$
+          BEGIN
+            IF NOT EXISTS (
+              SELECT 1 FROM pg_type t
+              JOIN pg_namespace n ON t.typnamespace = n.oid
+              WHERE t.typname = 'invoice_status' AND n.nspname = 'stripe'
+            ) THEN
+              CREATE TYPE "stripe"."invoice_status" AS ENUM ('draft', 'open', 'paid', 'uncollectible', 'void');
+            END IF;
+          END$$;
+        `);
+      } finally {
+        client.release();
+      }
+    } catch (preFixError) {
+      console.log("Stripe pre-migration setup note:", preFixError.message?.slice(0, 100));
+    }
     try {
       await runMigrations({ databaseUrl: databaseUrl2 });
       console.log("Stripe schema ready");
@@ -6955,6 +8906,273 @@ function configureExpoAndLanding(app2) {
   app2.use(express.static(path.resolve(process.cwd(), "static-build")));
   log("Expo routing: Checking expo-platform header on / and /manifest");
 }
+function maybeStartMetro() {
+  if (process.env.NODE_ENV !== "production") return;
+  const manifestPath = path.resolve(process.cwd(), "static-build", "ios", "manifest.json");
+  if (fs.existsSync(manifestPath)) {
+    log("Static Expo bundle found \u2014 skipping dynamic Metro startup.");
+    return;
+  }
+  log("No static Expo bundle found \u2014 starting Metro dynamically for production...");
+  const devToolsCandidates = [
+    path.resolve(
+      process.cwd(),
+      "node_modules/expo/node_modules/@react-native/debugger-shell/bin/react-native-devtools"
+    ),
+    path.resolve(
+      process.cwd(),
+      "node_modules/@react-native/debugger-shell/bin/react-native-devtools"
+    )
+  ];
+  for (const bin of devToolsCandidates) {
+    if (fs.existsSync(bin)) {
+      try {
+        fs.writeFileSync(bin, "#!/bin/sh\nexit 0\n", { mode: 493 });
+        log(`Stubbed DevTools binary: ${bin}`);
+      } catch (_) {
+      }
+    }
+  }
+  const domain = (process.env.REPLIT_INTERNAL_APP_DOMAIN || process.env.REPLIT_DEV_DOMAIN || process.env.EXPO_PUBLIC_DOMAIN || "localhost").replace(/^https?:\/\//i, "");
+  const metro = spawn(
+    "npx",
+    ["expo", "start", "--no-dev", "--minify", "--localhost"],
+    {
+      stdio: "inherit",
+      detached: false,
+      env: {
+        ...process.env,
+        EXPO_PUBLIC_DOMAIN: domain,
+        CI: "1",
+        REACT_NATIVE_DEBUGGER_OPEN: "0",
+        EXPO_NO_INSPECTOR_PROXY: "1",
+        NODE_OPTIONS: "--max-old-space-size=4096"
+      }
+    }
+  );
+  metro.on("error", (err) => {
+    log(`Metro spawn error (non-fatal): ${err.message}`);
+  });
+  metro.on("exit", (code) => {
+    log(`Metro process exited with code ${code}`);
+  });
+  const cleanup = () => {
+    try {
+      metro.kill("SIGTERM");
+    } catch (_) {
+    }
+  };
+  process.on("SIGTERM", cleanup);
+  process.on("SIGINT", cleanup);
+  process.on("exit", cleanup);
+  log(`Metro started (PID ${metro.pid}) \u2014 proxy will route Expo Go requests.`);
+}
+function parseAppointmentDatetime(scheduledDate, scheduledTime) {
+  if (!scheduledTime) return scheduledDate;
+  const base = new Date(scheduledDate);
+  const match12 = scheduledTime.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  const match24 = scheduledTime.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (match12) {
+    let hours = parseInt(match12[1], 10);
+    const minutes = parseInt(match12[2], 10);
+    const period = match12[3].toUpperCase();
+    if (period === "AM" && hours === 12) hours = 0;
+    if (period === "PM" && hours !== 12) hours += 12;
+    base.setHours(hours, minutes, 0, 0);
+  } else if (match24) {
+    base.setHours(parseInt(match24[1], 10), parseInt(match24[2], 10), 0, 0);
+  }
+  return base;
+}
+async function runBookingReminder24h() {
+  try {
+    const now = /* @__PURE__ */ new Date();
+    const broadFrom = new Date(now.getTime() + 22 * 60 * 60 * 1e3);
+    const broadTo = new Date(now.getTime() + 26 * 60 * 60 * 1e3);
+    const upcoming = await db.select().from(appointments).where(
+      and6(gte2(appointments.scheduledDate, broadFrom), lte2(appointments.scheduledDate, broadTo), eq6(appointments.status, "confirmed"))
+    );
+    const windowFrom = new Date(now.getTime() + 23 * 60 * 60 * 1e3);
+    const windowTo = new Date(now.getTime() + 25 * 60 * 60 * 1e3);
+    for (const appt of upcoming) {
+      const apptDatetime = parseAppointmentDatetime(appt.scheduledDate, appt.scheduledTime);
+      if (apptDatetime < windowFrom || apptDatetime > windowTo) continue;
+      const alreadySent = await hasDeliveryForRecord("booking.reminder_24h", appt.id);
+      if (alreadySent) continue;
+      const [user, provider] = await Promise.all([
+        db.select().from(users).where(eq6(users.id, appt.userId)).then((r) => r[0]),
+        db.select().from(providers).where(eq6(providers.id, appt.providerId)).then((r) => r[0])
+      ]);
+      if (!user?.email) continue;
+      const name = [user.firstName, user.lastName].filter(Boolean).join(" ") || "there";
+      dispatch("booking.reminder_24h", {
+        recipientUserId: user.id,
+        clientEmail: user.email,
+        clientName: name,
+        providerName: provider?.businessName || "Your provider",
+        serviceName: appt.serviceName,
+        appointmentDate: apptDatetime.toLocaleDateString(),
+        appointmentTime: appt.scheduledTime,
+        relatedRecordType: "appointment",
+        relatedRecordId: appt.id
+      });
+    }
+    console.log(`[cron:24h-reminder] checked ${upcoming.length} upcoming appointments`);
+  } catch (err) {
+    console.error("[cron:24h-reminder] error:", err);
+  }
+}
+async function runBookingReminder2h() {
+  try {
+    const now = /* @__PURE__ */ new Date();
+    const broadFrom = new Date(now.getTime() + 60 * 60 * 1e3);
+    const broadTo = new Date(now.getTime() + 3 * 60 * 60 * 1e3);
+    const upcoming = await db.select().from(appointments).where(
+      and6(gte2(appointments.scheduledDate, broadFrom), lte2(appointments.scheduledDate, broadTo), eq6(appointments.status, "confirmed"))
+    );
+    const windowFrom = new Date(now.getTime() + 90 * 60 * 1e3);
+    const windowTo = new Date(now.getTime() + 150 * 60 * 1e3);
+    for (const appt of upcoming) {
+      const apptDatetime = parseAppointmentDatetime(appt.scheduledDate, appt.scheduledTime);
+      if (apptDatetime < windowFrom || apptDatetime > windowTo) continue;
+      const alreadySent = await hasDeliveryForRecord("booking.reminder_2h", appt.id);
+      if (alreadySent) continue;
+      const [user, provider] = await Promise.all([
+        db.select().from(users).where(eq6(users.id, appt.userId)).then((r) => r[0]),
+        db.select().from(providers).where(eq6(providers.id, appt.providerId)).then((r) => r[0])
+      ]);
+      if (!user?.email) continue;
+      const name = [user.firstName, user.lastName].filter(Boolean).join(" ") || "there";
+      dispatch("booking.reminder_2h", {
+        recipientUserId: user.id,
+        clientEmail: user.email,
+        clientName: name,
+        providerName: provider?.businessName || "Your provider",
+        serviceName: appt.serviceName,
+        appointmentDate: apptDatetime.toLocaleDateString(),
+        appointmentTime: appt.scheduledTime,
+        relatedRecordType: "appointment",
+        relatedRecordId: appt.id
+      });
+    }
+    console.log(`[cron:2h-reminder] checked ${upcoming.length} upcoming appointments`);
+  } catch (err) {
+    console.error("[cron:2h-reminder] error:", err);
+  }
+}
+async function runInvoiceDueReminder() {
+  try {
+    const now = /* @__PURE__ */ new Date();
+    const from = new Date(now.getTime() + 2.5 * 24 * 60 * 60 * 1e3);
+    const to = new Date(now.getTime() + 3.5 * 24 * 60 * 60 * 1e3);
+    const dueInvoices = await db.select().from(invoices).where(
+      and6(
+        gte2(invoices.dueDate, from),
+        lte2(invoices.dueDate, to),
+        eq6(invoices.status, "sent")
+      )
+    );
+    for (const invoice of dueInvoices) {
+      if (!invoice.clientId && !invoice.homeownerUserId) continue;
+      const alreadySent = await hasDeliveryForRecord("invoice.reminder_3d", invoice.id);
+      if (alreadySent) continue;
+      const [client, provider] = await Promise.all([
+        invoice.clientId ? db.select().from(clients).where(eq6(clients.id, invoice.clientId)).then((r) => r[0]) : Promise.resolve(void 0),
+        db.select().from(providers).where(eq6(providers.id, invoice.providerId)).then((r) => r[0])
+      ]);
+      let recipientEmail = client?.email;
+      let recipientName = [client?.firstName, client?.lastName].filter(Boolean).join(" ") || "Client";
+      let recipientUserId;
+      if (invoice.homeownerUserId) {
+        const homeowner = await db.select().from(users).where(eq6(users.id, invoice.homeownerUserId)).then((r) => r[0]);
+        if (homeowner?.email) {
+          recipientEmail = homeowner.email;
+          recipientName = [homeowner.firstName, homeowner.lastName].filter(Boolean).join(" ") || "Client";
+          recipientUserId = homeowner.id;
+        }
+      }
+      if (!recipientEmail) continue;
+      const msUntilDue = invoice.dueDate ? invoice.dueDate.getTime() - now.getTime() : 0;
+      const daysUntilDue = Math.ceil(msUntilDue / (1e3 * 60 * 60 * 24));
+      dispatch("invoice.reminder_3d", {
+        recipientUserId,
+        clientEmail: recipientEmail,
+        clientName: recipientName,
+        providerName: provider?.businessName || "Service Provider",
+        invoiceNumber: invoice.invoiceNumber || `INV-${invoice.id.slice(0, 8)}`,
+        amount: parseFloat(invoice.total?.toString() || "0"),
+        dueDate: invoice.dueDate ? invoice.dueDate.toLocaleDateString() : "Soon",
+        daysUntilDue,
+        paymentLink: invoice.hostedInvoiceUrl || void 0,
+        relatedRecordType: "invoice",
+        relatedRecordId: invoice.id
+      });
+    }
+    console.log(`[cron:invoice-due-reminder] checked ${dueInvoices.length} invoices`);
+  } catch (err) {
+    console.error("[cron:invoice-due-reminder] error:", err);
+  }
+}
+async function runInvoiceOverdueReminder() {
+  try {
+    const now = /* @__PURE__ */ new Date();
+    const from = new Date(now.getTime() - 1.5 * 24 * 60 * 60 * 1e3);
+    const to = new Date(now.getTime() - 0.5 * 24 * 60 * 60 * 1e3);
+    const overdueInvoices = await db.select().from(invoices).where(
+      and6(
+        gte2(invoices.dueDate, from),
+        lt(invoices.dueDate, to),
+        eq6(invoices.status, "sent")
+      )
+    );
+    for (const invoice of overdueInvoices) {
+      if (!invoice.clientId && !invoice.homeownerUserId) continue;
+      const alreadySent = await hasDeliveryForRecord("invoice.overdue_1d", invoice.id);
+      if (alreadySent) continue;
+      const [client, provider] = await Promise.all([
+        invoice.clientId ? db.select().from(clients).where(eq6(clients.id, invoice.clientId)).then((r) => r[0]) : Promise.resolve(void 0),
+        db.select().from(providers).where(eq6(providers.id, invoice.providerId)).then((r) => r[0])
+      ]);
+      let recipientEmail = client?.email;
+      let recipientName = [client?.firstName, client?.lastName].filter(Boolean).join(" ") || "Client";
+      let recipientUserId;
+      if (invoice.homeownerUserId) {
+        const homeowner = await db.select().from(users).where(eq6(users.id, invoice.homeownerUserId)).then((r) => r[0]);
+        if (homeowner?.email) {
+          recipientEmail = homeowner.email;
+          recipientName = [homeowner.firstName, homeowner.lastName].filter(Boolean).join(" ") || "Client";
+          recipientUserId = homeowner.id;
+        }
+      }
+      if (!recipientEmail) continue;
+      const msOverdue = now.getTime() - (invoice.dueDate ? invoice.dueDate.getTime() : now.getTime());
+      const daysOverdue = Math.ceil(msOverdue / (1e3 * 60 * 60 * 24));
+      dispatch("invoice.overdue_1d", {
+        recipientUserId,
+        clientEmail: recipientEmail,
+        clientName: recipientName,
+        providerName: provider?.businessName || "Service Provider",
+        invoiceNumber: invoice.invoiceNumber || `INV-${invoice.id.slice(0, 8)}`,
+        amount: parseFloat(invoice.total?.toString() || "0"),
+        dueDate: invoice.dueDate ? invoice.dueDate.toLocaleDateString() : "Past due",
+        daysOverdue,
+        paymentLink: invoice.hostedInvoiceUrl || void 0,
+        relatedRecordType: "invoice",
+        relatedRecordId: invoice.id
+      });
+    }
+    console.log(`[cron:invoice-overdue-reminder] checked ${overdueInvoices.length} invoices`);
+  } catch (err) {
+    console.error("[cron:invoice-overdue-reminder] error:", err);
+  }
+}
+function setupReminderJobs() {
+  cron.schedule("0 * * * *", runBookingReminder24h);
+  cron.schedule("*/30 * * * *", runBookingReminder2h);
+  cron.schedule("0 9 * * *", runInvoiceDueReminder);
+  cron.schedule("0 10 * * *", runInvoiceOverdueReminder);
+  console.log("[cron] reminder jobs scheduled: 24h/2h booking reminders, 3d/1d invoice reminders");
+}
 function setupErrorHandler(app2) {
   app2.use((err, _req, res, next) => {
     const error = err;
@@ -6977,6 +9195,8 @@ function setupErrorHandler(app2) {
   const server = await registerRoutes(app);
   setupErrorHandler(app);
   await initStripe();
+  setupReminderJobs();
+  maybeStartMetro();
   const port = parseInt(process.env.PORT || "5000", 10);
   server.listen(
     {
