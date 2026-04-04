@@ -1,0 +1,135 @@
+Do a full product, data, and bug fix audit on HomeBase across both the provider portal and homeowner portal. This is not a UI only cleanup. Audit the actual logic, data flow, database bindings, feature completeness, and page level UX for the screenshots and issues described below.
+
+Main goal:
+Identify and fix all broken or incomplete MVP flows page by page, section by section, and feature by feature. I need truth, not optimism. If a screen exists but the real feature is incomplete, say so clearly and explain what must be built or fixed.
+
+Critical issues to audit and fix:
+
+1. Provider onboarding is broken architecturally
+Current issue:
+Provider onboarding does not create a full provider account up front. It sends the user into the homeowner portal and has them set business info there, which should already have been created during provider onboarding. Provider info is not being pushed over correctly.
+
+Required fix:
+Create a true provider account during onboarding that includes:
+1. auth user
+2. provider profile
+3. business profile
+4. booking settings
+5. services created during onboarding
+Provider should land directly in provider portal after onboarding, not homeowner flow.
+Audit all data writes, profile creation logic, and redirect behavior.
+
+2. Services created during onboarding are not attached correctly
+Current issue:
+Onboarding services do not appear correctly in the provider account. Random services are showing instead.
+
+Required fix:
+Audit the full services data flow.
+Ensure onboarding created services are saved with the correct provider ID and displayed correctly in the provider portal.
+Remove any mock, seed, fallback, or global services from production queries.
+
+3. Stripe Connect and invoice features are incomplete
+Current issue:
+Stripe Connect visually exists but the test invoice features do not work. There is also an error: column currency of relation invoices does not exist.
+
+Required fix:
+Audit and repair invoicing end to end.
+Fix database schema mismatch immediately.
+Ensure invoice create, read, and payment related logic matches actual schema.
+If currency is required by product logic, add the column and migrate safely.
+Block payment flows when Stripe Connect is not completed.
+
+4. Emails are not working
+Current issue:
+New users do not receive branded HomeBase welcome emails. Transactional emails are not functioning as expected.
+
+Required fix:
+Implement HomeBase branded welcome email on first account creation.
+Audit Resend integration, event triggers, templates, and send logic.
+Also identify what is required for booking, invoice, and status emails to work.
+
+5. Business hub has major bugs
+Current issue:
+Providers cannot edit business info. Booking links do not work. Business profile data appears disconnected.
+
+Required fix:
+Audit business hub forms, save logic, data fetching, and data persistence.
+Fix all business info editing.
+Fix booking link generation and public booking page routing.
+Ensure business profile is the source of truth for public provider data.
+
+6. Service creation hub is flawed
+Current issue:
+The service creation experience is awkward and recurring services are missing.
+
+Required fix:
+Redesign and fix the provider services CRUD flow.
+Ensure providers can create, edit, delete, and manage services properly.
+Add recurring service support with proper fields and logic.
+
+7. Email and SMS blast feature is broken
+Current issue:
+It throws a 400 bad request HTML head error.
+
+Required fix:
+Audit the API route, payload, auth, response type, and provider communication logic.
+Fix the route so it returns proper JSON and sends correctly.
+Add real error handling and communication logs.
+
+8. Homeowner AI Find a Pro UI issues
+Current issue:
+The header is white while the message area is gray and the overall design feels off.
+
+Required fix:
+Redesign this screen to feel visually consistent, polished, and aligned with the rest of the HomeBase experience.
+
+9. Quote results and service level screen need design and logic cleanup
+Current issue:
+After filling out the form and getting quotes, the choose your service level step has design issues and data consistency issues.
+
+Required fix:
+Fix the UI and also make sure the data shown there is consistent with provider service data and booking logic.
+
+10. Booking parity is broken between homeowner and provider flows
+Current issue:
+How a homeowner books and how a provider manually adds someone to their schedule should create the same kind of structured record, but they currently feel disconnected.
+
+Required fix:
+Create one unified booking and scheduling data model.
+Whether booking comes from homeowner flow, booking link, or provider manual entry, it should produce the same normalized records and sync correctly into clients, jobs, schedule, and invoices.
+
+11. Clients feature is incomplete
+Current issue:
+Clicking a client says client not found, which indicates the provider portal does not have a working client profile detail screen.
+
+Required fix:
+Create or fix the client detail page.
+Ensure clients can be viewed with profile info, jobs, invoices, notes, and communication history.
+Fix all route params, queries, and data relationships needed.
+
+12. Upload photos feature is broken
+Current issue:
+Uploading photos fails.
+
+Required fix:
+Audit storage bucket config, policies, upload paths, file handling, signed URLs if needed, and DB persistence.
+Fix upload flow end to end.
+
+What I want as output:
+1. A page by page audit
+2. A section by section audit
+3. A feature by feature audit
+4. A list of fully working features
+5. A list of partially working features
+6. A list of broken or fake features
+7. Root cause analysis for each major issue
+8. Exact database, API, frontend, and state management fixes needed
+9. A must fix before MVP list
+10. A should fix after MVP list
+11. A final verdict on whether the app is a prototype or a real MVP
+
+Important:
+Do not assume a feature works because a screen exists.
+Trace the full logic and data path behind each feature.
+Call out mock data, placeholder behavior, broken routes, missing migrations, and incorrect cross portal sync.
+Truth over optimism.
