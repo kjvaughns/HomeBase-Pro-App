@@ -34,7 +34,7 @@ import {
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
-const TEST_EMAIL = "Kjvaughns1@gmail.com";
+const TEST_EMAIL = "kjvaughns1@gmail.com";
 
 // Dashboard stat targets
 const TARGET_CLIENTS = 212;
