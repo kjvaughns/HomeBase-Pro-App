@@ -27,6 +27,15 @@ interface ProviderStats {
   upcomingJobs: number;
 }
 
+interface ProviderInsights {
+  allTimeRevenue: number;
+  clientCountThisQuarter: number;
+  clientCountLastQuarter: number;
+  clientGrowthPct: number;
+  rating: string;
+  reviewCount: number;
+}
+
 interface Job {
   id: string;
   providerId: string;
@@ -110,6 +119,11 @@ export default function ProviderHomeScreen() {
 
   const { data: statsData, isLoading: statsLoading, refetch: refetchStats } = useQuery<{ stats: ProviderStats }>({
     queryKey: ["/api/provider", providerId, "stats"],
+    enabled: !!providerId,
+  });
+
+  const { data: insightsData } = useQuery<{ insights: ProviderInsights }>({
+    queryKey: ["/api/provider", providerId, "insights"],
     enabled: !!providerId,
   });
 
@@ -422,6 +436,50 @@ export default function ProviderHomeScreen() {
           </Animated.View>
         ) : null}
 
+        {insightsData?.insights ? (
+          <Animated.View entering={FadeInDown.delay(inProgressJobs.length > 0 ? 450 : 350).duration(400)}>
+            <SectionHeader title="Business Insights" />
+            <GlassCard style={styles.insightsCard}>
+              <View style={styles.insightRow}>
+                <View style={[styles.insightIcon, { backgroundColor: Colors.accentLight }]}>
+                  <Feather name="trending-up" size={16} color={Colors.accent} />
+                </View>
+                <View style={styles.insightContent}>
+                  <ThemedText style={styles.insightTitle}>Revenue Milestone</ThemedText>
+                  <ThemedText style={[styles.insightValue, { color: theme.textSecondary }]}>
+                    ${(insightsData.insights.allTimeRevenue / 1000).toFixed(0)}K total earnings
+                  </ThemedText>
+                </View>
+              </View>
+              <View style={[styles.insightDivider, { backgroundColor: theme.separator }]} />
+              <View style={styles.insightRow}>
+                <View style={[styles.insightIcon, { backgroundColor: Colors.accentLight }]}>
+                  <Feather name="users" size={16} color={Colors.accent} />
+                </View>
+                <View style={styles.insightContent}>
+                  <ThemedText style={styles.insightTitle}>Client Growth</ThemedText>
+                  <ThemedText style={[styles.insightValue, { color: theme.textSecondary }]}>
+                    {insightsData.insights.clientGrowthPct > 0 ? "+" : ""}
+                    {insightsData.insights.clientGrowthPct}% this quarter
+                  </ThemedText>
+                </View>
+              </View>
+              <View style={[styles.insightDivider, { backgroundColor: theme.separator }]} />
+              <View style={styles.insightRow}>
+                <View style={[styles.insightIcon, { backgroundColor: Colors.accentLight }]}>
+                  <Feather name="star" size={16} color={Colors.accent} />
+                </View>
+                <View style={styles.insightContent}>
+                  <ThemedText style={styles.insightTitle}>Top Rated</ThemedText>
+                  <ThemedText style={[styles.insightValue, { color: theme.textSecondary }]}>
+                    {insightsData.insights.rating} stars from {insightsData.insights.reviewCount}+ reviews
+                  </ThemedText>
+                </View>
+              </View>
+            </GlassCard>
+          </Animated.View>
+        ) : null}
+
         <Animated.View
           entering={FadeInDown.delay(inProgressJobs.length > 0 ? 500 : 400).duration(400)}
         >
@@ -614,5 +672,38 @@ const styles = StyleSheet.create({
   doneLabel: {
     ...Typography.footnote,
     fontWeight: "600",
+  },
+  insightsCard: {
+    padding: 0,
+    overflow: "hidden",
+  },
+  insightRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    gap: Spacing.sm,
+  },
+  insightIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  insightContent: {
+    flex: 1,
+  },
+  insightTitle: {
+    ...Typography.callout,
+    fontWeight: "600",
+  },
+  insightValue: {
+    ...Typography.caption1,
+    marginTop: 1,
+  },
+  insightDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: Spacing.md + 32 + Spacing.sm,
   },
 });

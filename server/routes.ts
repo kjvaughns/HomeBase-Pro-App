@@ -3269,6 +3269,22 @@ Respond with JSON only:
     }
   });
 
+  // Provider business insights — authenticated user must own this provider record
+  app.get("/api/provider/:id/insights", requireAuth, async (req: Request<IdParams>, res: Response) => {
+    try {
+      const providerRow = await storage.getProviderByUserId(req.authenticatedUserId!);
+      if (!providerRow || providerRow.id !== req.params.id) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+      const insights = await storage.getProviderInsights(req.params.id);
+      res.json({ insights });
+    } catch (error) {
+      console.error("Get provider insights error:", error);
+      res.status(500).json({ error: "Failed to get provider insights" });
+    }
+  });
+
   // Provider reviews
   app.get("/api/provider/:id/reviews", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {

@@ -478,6 +478,70 @@ export class DatabaseStorage implements IStorage {
     return { revenueMTD, jobsCompleted, activeClients, upcomingJobs };
   }
 
+  // Provider business insights (for dashboard Business Insights section)
+  async getProviderInsights(providerId: string): Promise<{
+    allTimeRevenue: number;
+    clientCountThisQuarter: number;
+    clientCountLastQuarter: number;
+    clientGrowthPct: number;
+    rating: string;
+    reviewCount: number;
+  }> {
+    const now = new Date();
+
+    // All-time revenue from completed jobs' final prices (source of truth for total earnings)
+    const completedJobRows = await db
+      .select({ finalPrice: jobs.finalPrice })
+      .from(jobs)
+      .where(and(eq(jobs.providerId, providerId), eq(jobs.status, "completed")));
+    const allTimeRevenue = completedJobRows.reduce((sum, j) => sum + parseFloat(j.finalPrice || "0"), 0);
+
+    // Quarter boundaries
+    const quarterMonth = Math.floor(now.getMonth() / 3) * 3;
+    const startOfThisQuarter = new Date(now.getFullYear(), quarterMonth, 1, 0, 0, 0, 0);
+    const startOfLastQuarter = new Date(now.getFullYear(), quarterMonth - 3, 1, 0, 0, 0, 0);
+    const endOfLastQuarter = new Date(startOfThisQuarter.getTime() - 1);
+
+    const clientsThisQuarter = await db
+      .select({ id: clients.id })
+      .from(clients)
+      .where(and(eq(clients.providerId, providerId), gte(clients.createdAt, startOfThisQuarter)));
+
+    const clientsLastQuarter = await db
+      .select({ id: clients.id })
+      .from(clients)
+      .where(
+        and(
+          eq(clients.providerId, providerId),
+          gte(clients.createdAt, startOfLastQuarter),
+          lte(clients.createdAt, endOfLastQuarter)
+        )
+      );
+
+    const clientCountThisQuarter = clientsThisQuarter.length;
+    const clientCountLastQuarter = clientsLastQuarter.length;
+    const clientGrowthPct =
+      clientCountLastQuarter > 0
+        ? Math.round(((clientCountThisQuarter - clientCountLastQuarter) / clientCountLastQuarter) * 100)
+        : clientCountThisQuarter > 0
+        ? 100
+        : 0;
+
+    const [providerRow] = await db
+      .select({ rating: providers.rating, reviewCount: providers.reviewCount })
+      .from(providers)
+      .where(eq(providers.id, providerId));
+
+    return {
+      allTimeRevenue,
+      clientCountThisQuarter,
+      clientCountLastQuarter,
+      clientGrowthPct,
+      rating: providerRow?.rating ?? "0",
+      reviewCount: providerRow?.reviewCount ?? 0,
+    };
+  }
+
   // Get next invoice number
   async getNextInvoiceNumber(providerId: string): Promise<string> {
     const existingInvoices = await db
