@@ -53,7 +53,8 @@ export default function BusinessProfileScreen() {
     enabled: !!userId,
     queryFn: async () => {
       const url = new URL(`/api/provider/user/${userId}`, getApiUrl());
-      const res = await fetch(url.toString());
+      const { getAuthHeaders } = await import("@/lib/query-client");
+      const res = await fetch(url.toString(), { headers: getAuthHeaders(), credentials: "include" });
       if (!res.ok) throw new Error("Failed to load provider");
       return res.json();
     },

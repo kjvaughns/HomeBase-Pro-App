@@ -146,9 +146,9 @@ export default function AIChatScreen() {
               isUser
                 ? { backgroundColor: Colors.accent }
                 : { 
-                    backgroundColor: isDark ? "#1C1C1E" : "#F2F2F7",
+                    backgroundColor: theme.backgroundSecondary,
                     borderWidth: 1,
-                    borderColor: isDark ? "#2C2C2E" : "#E5E5EA",
+                    borderColor: theme.borderLight,
                   },
             ]}
           >

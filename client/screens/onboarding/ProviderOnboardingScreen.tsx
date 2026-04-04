@@ -27,7 +27,7 @@ import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useOnboardingStore } from "@/state/onboardingStore";
 import { useAuthStore } from "@/state/authStore";
 import { useProviderStore } from "@/state/providerStore";
-import { apiRequest } from "@/lib/query-client";
+import { apiRequest, getApiUrl } from "@/lib/query-client";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ProviderOnboarding">;
 
@@ -181,42 +181,77 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
     if (!validateSignup()) return;
     setLoading(true);
     try {
-      const response = await apiRequest("POST", "/api/auth/signup", {
+      // Single atomic call: creates user + provider profile + initial service in one transaction.
+      // If any step fails the entire registration rolls back — no broken partial accounts.
+      const response = await apiRequest("POST", "/api/provider/onboard-complete", {
         name: accountName.trim(),
         email: email.trim().toLowerCase(),
         phone: phone.trim() || undefined,
         password,
+        businessName: businessName.trim(),
+        description: bio.trim() || undefined,
+        serviceArea: serviceArea.trim() || undefined,
+        capabilityTags: category ? [category] : [],
+        businessHours: { activeDays, startTime, endTime },
+        initialService: serviceName.trim() ? {
+          name: serviceName.trim(),
+          category: category || "General",
+          description: serviceDescription.trim() || undefined,
+          quoteRequired,
+          price: quoteRequired ? undefined : (parseFloat(servicePrice) || undefined),
+          duration: serviceDuration,
+        } : undefined,
       });
       const data = await response.json();
-      if (data.user) {
-        // Save all collected onboarding data locally before auth state changes
-        addOnboardingService({
-          id: `svc-${Date.now()}`,
-          name: serviceName.trim(),
-          price: quoteRequired ? null : parseFloat(servicePrice) || null,
-          quoteRequired,
-          durationMinutes: serviceDuration,
-        });
-        setProviderAvailability({ activeDays, startTime, endTime });
-        setProviderBusinessProfile({
-          businessName: businessName.trim(),
-          category,
-          serviceArea: serviceArea.trim(),
-        });
-        setProviderPreSignupData({ businessName: businessName.trim(), category, serviceArea: serviceArea.trim() });
-        setHasCompletedFirstLaunch(true);
-
-        // Auth state — all 4 calls are batched in one React render
-        login(
-          { id: data.user.id, name: data.user.name, email: data.user.email, phone: data.user.phone, avatarUrl: data.user.avatarUrl },
-          null,
-          data.token ?? null,
-        );
-        activateProviderMode();           // sets activeRole="provider"
-        setHasCompletedProviderSetup(true); // persisted — isProviderMode stays true on restart
-        setNeedsRoleSelection(false);      // ensure role selection is cleared
-        // RootStackNavigator now sees isProviderMode=true → renders ProviderTabNavigator
+      if (!data.user || !data.provider) {
+        if (response.status === 409) {
+          setSignupErrors({ email: "An account with this email already exists" });
+          return;
+        }
+        throw new Error(data.error || "Account creation failed");
       }
+
+      const token = data.token ?? null;
+      const providerId = data.provider.id;
+
+      // Step 4: Store all onboarding data locally
+      addOnboardingService({
+        id: `svc-${Date.now()}`,
+        name: serviceName.trim(),
+        price: quoteRequired ? null : parseFloat(servicePrice) || null,
+        quoteRequired,
+        durationMinutes: serviceDuration,
+      });
+      setProviderAvailability({ activeDays, startTime, endTime });
+      setProviderBusinessProfile({
+        businessName: businessName.trim(),
+        category,
+        serviceArea: serviceArea.trim(),
+      });
+      setProviderPreSignupData({ businessName: businessName.trim(), category, serviceArea: serviceArea.trim() });
+      setHasCompletedFirstLaunch(true);
+
+      // Step 5: Update auth state with real provider profile
+      const providerProfile = {
+        id: providerId,
+        userId: data.user.id,
+        businessName: businessName.trim(),
+        services: serviceName.trim() ? [serviceName.trim()] : [],
+        status: "approved" as const,
+        rating: 0,
+        reviewCount: 0,
+        completedJobs: 0,
+        serviceArea: serviceArea.trim() || undefined,
+      };
+
+      login(
+        { id: data.user.id, name: data.user.name, email: data.user.email, phone: data.user.phone, avatarUrl: data.user.avatarUrl },
+        providerProfile,
+        token,
+      );
+      activateProviderMode();
+      setHasCompletedProviderSetup(true);
+      setNeedsRoleSelection(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       if (message.includes("409") || message.includes("exists")) {

@@ -174,6 +174,9 @@ export const providerCustomServices = pgTable("provider_custom_services", {
   duration: integer("duration").default(60),
   isPublished: boolean("is_published").default(true),
   isAddon: boolean("is_addon").default(false),
+  isRecurring: boolean("is_recurring").default(false),
+  recurringFrequency: text("recurring_frequency"),
+  recurringPrice: decimal("recurring_price", { precision: 10, scale: 2 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -193,8 +196,8 @@ export type InsertProviderCustomService = z.infer<typeof insertProviderCustomSer
 
 export const appointments = pgTable("appointments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  homeId: varchar("home_id").notNull().references(() => homes.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }),
+  homeId: varchar("home_id").references(() => homes.id, { onDelete: "cascade" }),
   providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
   serviceId: varchar("service_id").references(() => services.id, { onDelete: "set null" }),
   serviceName: text("service_name").notNull(),
@@ -203,7 +206,7 @@ export const appointments = pgTable("appointments", {
   urgency: urgencyEnum("urgency").default("flexible"),
   jobSize: jobSizeEnum("job_size").default("small"),
   scheduledDate: timestamp("scheduled_date").notNull(),
-  scheduledTime: text("scheduled_time").notNull(),
+  scheduledTime: text("scheduled_time"),
   status: appointmentStatusEnum("status").default("pending"),
   estimatedPrice: decimal("estimated_price", { precision: 10, scale: 2 }),
   finalPrice: decimal("final_price", { precision: 10, scale: 2 }),
@@ -426,7 +429,7 @@ export const clientsRelations = relations(clients, ({ one, many }) => ({
 export const jobs = pgTable("jobs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
-  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  clientId: varchar("client_id").references(() => clients.id, { onDelete: "set null" }),
   appointmentId: varchar("appointment_id").references(() => appointments.id, { onDelete: "set null" }),
   serviceId: varchar("service_id").references(() => services.id, { onDelete: "set null" }),
   title: text("title").notNull(),
@@ -653,6 +656,8 @@ export const insertClientSchema = createInsertSchema(clients).omit({
 
 export const insertJobSchema = createInsertSchema(jobs, {
   scheduledDate: z.coerce.date(),
+  // clientId is optional for provider-initiated jobs (no homeowner link yet)
+  clientId: z.string().optional(),
 }).omit({
   id: true,
   createdAt: true,

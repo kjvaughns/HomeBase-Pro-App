@@ -218,6 +218,8 @@ export default function ClientDetailScreen() {
   const { providerProfile } = useAuthStore();
   const providerId = providerProfile?.id;
 
+  const [activeTab, setActiveTab] = useState<TabType>("overview");
+
   const { data: clientDetailData, isLoading } = useQuery<{
     client: ClientRecord;
     jobs: JobRecord[];
@@ -227,7 +229,10 @@ export default function ClientDetailScreen() {
     enabled: !!clientId,
     queryFn: async () => {
       const url = new URL(`/api/clients/${clientId}`, getApiUrl());
-      const res = await fetch(url.toString());
+      const res = await fetch(url.toString(), {
+        headers: { Authorization: `Bearer ${useAuthStore.getState().sessionToken}` },
+        credentials: "include",
+      });
       if (!res.ok) throw new Error("Failed to load client");
       return res.json();
     },
@@ -239,7 +244,8 @@ export default function ClientDetailScreen() {
     queryFn: async () => {
       const url = new URL(`/api/providers/${providerId}/clients/${clientId}/messages`, getApiUrl());
       const res = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${useAuthStore.getState().token}` },
+        headers: { Authorization: `Bearer ${useAuthStore.getState().sessionToken}` },
+        credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to load messages");
       return res.json();
@@ -251,8 +257,6 @@ export default function ClientDetailScreen() {
   const invoices: InvoiceRecord[] = clientDetailData?.invoices || [];
   const activities: { id: string; description: string; timestamp: string }[] = [];
   const notes: { id: string; content: string; createdAt: string; isInternal?: boolean; createdBy?: string }[] = [];
-
-  const [activeTab, setActiveTab] = useState<TabType>("overview");
 
   if (isLoading) {
     return (
@@ -1207,11 +1211,6 @@ const styles = StyleSheet.create({
   channelBadge: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.full,
-  },
-  statusBadge: {
     paddingHorizontal: Spacing.sm,
     paddingVertical: 2,
     borderRadius: BorderRadius.full,

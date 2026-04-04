@@ -8,6 +8,7 @@ import {
   reviews,
   notifications,
   providerServices,
+  providerCustomServices,
   clients,
   jobs,
   invoices,
@@ -158,15 +159,35 @@ export class DatabaseStorage implements IStorage {
 
   async getProviders(categoryId?: string): Promise<Provider[]> {
     if (categoryId) {
-      const providerIds = await db
+      // Path A: global catalog linkage (provider_services → service_categories)
+      const catalogIds = await db
         .select({ providerId: providerServices.providerId })
         .from(providerServices)
         .where(eq(providerServices.categoryId, categoryId));
-      
-      if (providerIds.length === 0) return [];
-      
-      // Deduplicate provider IDs
-      const uniqueIds = [...new Set(providerIds.map(p => p.providerId))];
+
+      // Path B: onboarding-created services (provider_custom_services.category text)
+      // Look up the human-readable category name so we can match against the text field.
+      const [catRow] = await db
+        .select({ name: serviceCategories.name })
+        .from(serviceCategories)
+        .where(eq(serviceCategories.id, categoryId));
+
+      // Case-insensitive match: onboarding stores slug ("plumbing"), DB name is title-case ("Plumbing")
+      const customIds: { providerId: string }[] = catRow
+        ? await db
+            .select({ providerId: providerCustomServices.providerId })
+            .from(providerCustomServices)
+            .where(sql`lower(${providerCustomServices.category}) = lower(${catRow.name})`)
+        : [];
+
+      // Union both sets of provider IDs
+      const allProviderIds = [
+        ...catalogIds.map(r => r.providerId),
+        ...customIds.map(r => r.providerId),
+      ];
+      if (allProviderIds.length === 0) return [];
+
+      const uniqueIds = [...new Set(allProviderIds)];
       const results: Provider[] = [];
       for (const id of uniqueIds) {
         const [provider] = await db.select().from(providers).where(eq(providers.id, id));
@@ -176,6 +197,7 @@ export class DatabaseStorage implements IStorage {
       }
       return results;
     }
+    // No filter — return all active providers (both catalog and custom-service providers)
     return db.select().from(providers).where(eq(providers.isActive, true));
   }
 

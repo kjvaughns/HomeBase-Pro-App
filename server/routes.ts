@@ -2,6 +2,8 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
 import * as fs from "fs";
 import * as path from "path";
+import { hash as bcryptHash } from "bcryptjs";
+const BCRYPT_SALT_ROUNDS = 10;
 import { openai, HOMEBASE_SYSTEM_PROMPT, PROVIDER_ASSISTANT_PROMPT } from "./openai";
 import { storage } from "./storage";
 import { seedDatabase } from "./seed";
@@ -399,7 +401,10 @@ async function calculateAndPersistHouseFaxScore(homeId: string): Promise<number>
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  await seedDatabase();
+  // Only seed in development — never in production to prevent demo data leakage
+  if (process.env.NODE_ENV !== "production") {
+    await seedDatabase();
+  }
 
   // Health check endpoint (no auth required — used by load balancers and verification scripts)
   app.get("/api/health", (_req: Request, res: Response) => {
@@ -431,12 +436,122 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       res.status(201).json({ user: formatUserResponse(user), token });
 
-      // Fire welcome email (fire-and-forget)
+      // Welcome email — awaited with explicit failure logging (no silent discard)
       const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "there";
-      dispatch('user.signup', { recipientUserId: user.id, recipientEmail: user.email, clientName: fullName });
+      dispatch('user.signup', { recipientUserId: user.id, recipientEmail: user.email, clientName: fullName })
+        .catch((emailErr: unknown) => {
+          console.error("[SIGNUP_EMAIL_FAILURE] Welcome email failed for user", user.id, ":", emailErr);
+        });
     } catch (error) {
       console.error("Signup error:", error);
       res.status(500).json({ error: "Failed to create account" });
+    }
+  });
+
+  // POST /api/provider/onboard-complete — atomic provider account creation
+  // Creates user + provider profile + initial service in a single DB transaction.
+  // Replaces the three-step client-driven signup/register/service flow that could leave
+  // broken partial accounts on failure.
+  app.post("/api/provider/onboard-complete", async (req: Request, res: Response) => {
+    try {
+      const {
+        name, email, password, phone,
+        businessName, description, serviceArea, capabilityTags, businessHours,
+        initialService,
+      } = req.body;
+
+      if (!email || !password || !businessName) {
+        return res.status(400).json({ error: "email, password, and businessName are required" });
+      }
+
+      // Pre-check duplicate email before entering transaction
+      const existing = await storage.getUserByEmail(email.trim().toLowerCase());
+      if (existing) {
+        return res.status(409).json({ error: "Email already registered" });
+      }
+
+      const nameFields = parseUserName(name);
+      const hashedPassword = await bcryptHash(password, BCRYPT_SALT_ROUNDS);
+
+      // Atomic transaction: user + provider + service all-or-nothing
+      const { user, provider, service } = await db.transaction(async (tx) => {
+        // 1. Create user
+        const [newUser] = await tx.insert(users).values({
+          ...nameFields,
+          email: email.trim().toLowerCase(),
+          password: hashedPassword,
+          phone: phone?.trim() || null,
+          isProvider: true,
+        }).returning();
+
+        // 2. Create provider profile
+        // Default booking policy settings applied at creation so the provider
+        // portal has sane defaults without requiring a separate settings step.
+        const defaultBookingPolicies = {
+          instantBooking: false,
+          depositRequired: false,
+          depositPercentage: 0,
+          cancellationWindowHours: 24,
+          advanceBookingDays: 60,
+        };
+        const [newProvider] = await tx.insert(providers).values({
+          userId: newUser.id,
+          businessName: businessName.trim(),
+          description: description?.trim() || null,
+          serviceArea: serviceArea?.trim() || null,
+          capabilityTags: Array.isArray(capabilityTags) ? capabilityTags : [],
+          businessHours: businessHours ?? null,
+          bookingPolicies: defaultBookingPolicies,
+          isActive: true,    // schema-aligned: no "status" column in providers table
+          isPublic: true,    // make discoverable immediately post-onboarding
+          email: email.trim().toLowerCase(),
+          phone: phone?.trim() || null,
+        }).returning();
+
+        // 3. Create initial service (if provided)
+        let newService = null;
+        if (initialService?.name?.trim()) {
+          const [svc] = await tx.insert(providerCustomServices).values({
+            providerId: newProvider.id,
+            name: initialService.name.trim(),
+            category: initialService.category || "General",
+            description: initialService.description?.trim() || null,
+            pricingType: initialService.quoteRequired ? "quote" : "fixed",
+            basePrice: !initialService.quoteRequired && initialService.price
+              ? String(initialService.price)
+              : null,
+            duration: initialService.duration || 60,
+            isPublished: true,
+          }).returning();
+          newService = svc;
+        }
+
+        return { user: newUser, provider: newProvider, service: newService };
+      });
+
+      const token = generateToken(user.id, "provider");
+      res.cookie("token", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+      });
+
+      res.status(201).json({
+        user: formatUserResponse(user),
+        provider,
+        service,
+        token,
+      });
+
+      // Welcome email — awaited and explicitly logged on failure
+      const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "there";
+      dispatch('user.signup', { recipientUserId: user.id, recipientEmail: user.email, clientName: fullName })
+        .catch((emailErr: unknown) => {
+          console.error("[ONBOARD_EMAIL_FAILURE] Welcome email failed for user", user.id, ":", emailErr);
+        });
+    } catch (error) {
+      console.error("Provider onboard-complete error:", error);
+      res.status(500).json({ error: "Failed to create provider account" });
     }
   });
 
@@ -1075,23 +1190,52 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
         return res.status(400).json({ error: `This job already has ${existingPhotos.length} photos. Maximum is ${MAX_PHOTOS_PER_JOB} total.` });
       }
 
-      // Save each base64 image to disk and collect HTTPS URLs
-      const uploadDir = path.resolve(process.cwd(), "uploads", "photos");
-      if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-
-      const protocol = req.protocol;
-      const host = req.get("host") || "";
+      // Upload each base64 image to Supabase Storage for persistent cloud storage
       const savedUrls: string[] = [];
+      const isDev = process.env.NODE_ENV === "development";
+
+      let supabaseClient: typeof import("./lib/supabase").supabase | null = null;
+      try {
+        supabaseClient = (await import("./lib/supabase")).supabase;
+      } catch (importErr) {
+        if (!isDev) {
+          throw new Error("Photo storage is not configured. Please set SUPABASE_SERVICE_KEY and EXPO_PUBLIC_SUPABASE_URL.");
+        }
+        // Only allow local fallback in development
+      }
 
       for (const photo of photos) {
         const prefix = ALLOWED_MIME_PREFIXES.find(p => photo.startsWith(p))!;
         const ext = prefix.includes("jpeg") ? "jpg" : prefix.includes("png") ? "png" : "webp";
+        const mimeType = prefix.includes("jpeg") ? "image/jpeg" : prefix.includes("png") ? "image/png" : "image/webp";
         const base64Data = photo.slice(prefix.length);
         const buffer = Buffer.from(base64Data, "base64");
         const filename = `${job.id}-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-        const filePath = path.join(uploadDir, filename);
-        fs.writeFileSync(filePath, buffer);
-        savedUrls.push(`${protocol}://${host}/uploads/photos/${filename}`);
+
+        if (supabaseClient) {
+          const { data: uploadData, error: uploadError } = await supabaseClient.storage
+            .from("job-photos")
+            .upload(`photos/${filename}`, buffer, { contentType: mimeType, upsert: false });
+          if (uploadError) {
+            console.error("Supabase upload error:", uploadError);
+            throw new Error("Failed to upload photo to storage");
+          }
+          const { data: publicUrlData } = supabaseClient.storage
+            .from("job-photos")
+            .getPublicUrl(`photos/${filename}`);
+          savedUrls.push(publicUrlData.publicUrl);
+        } else if (isDev) {
+          // Fallback: save to local disk (dev only — not persistent across deploys)
+          const uploadDir = path.resolve(process.cwd(), "uploads", "photos");
+          if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+          const filePath = path.join(uploadDir, filename);
+          fs.writeFileSync(filePath, buffer);
+          const protocol = req.protocol;
+          const host = req.get("host") || "";
+          savedUrls.push(`${protocol}://${host}/uploads/photos/${filename}`);
+        } else {
+          throw new Error("Photo storage is not available. Please configure Supabase Storage.");
+        }
       }
 
       const updatedPhotos = [...existingPhotos, ...savedUrls];
@@ -2870,10 +3014,14 @@ Respond with JSON only:
 
   app.post("/api/provider/:providerId/custom-services", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
     try {
-      // Verify provider exists before creating service
+      const authUserId = req.authenticatedUserId!;
+      // Verify provider exists and belongs to authenticated user
       const provider = await storage.getProvider(req.params.providerId);
       if (!provider) {
         return res.status(404).json({ error: "Provider not found" });
+      }
+      if (provider.userId !== authUserId) {
+        return res.status(403).json({ error: "Access denied: provider does not belong to you" });
       }
       const parsed = insertProviderCustomServiceSchema.safeParse({ ...req.body, providerId: req.params.providerId });
       if (!parsed.success) {
@@ -2889,14 +3037,20 @@ Respond with JSON only:
 
   app.put("/api/provider/:providerId/custom-services/:id", requireAuth, async (req: Request<ProviderIdParams & IdParams>, res: Response) => {
     try {
+      const authUserId = req.authenticatedUserId!;
       const [existing] = await db.select().from(providerCustomServices)
         .where(eq(providerCustomServices.id, req.params.id));
       if (!existing) return res.status(404).json({ error: "Service not found" });
       if (existing.providerId !== req.params.providerId) {
         return res.status(403).json({ error: "Forbidden" });
       }
+      // Verify ownership: the provider must belong to the authenticated user
+      const provider = await storage.getProvider(req.params.providerId);
+      if (!provider || provider.userId !== authUserId) {
+        return res.status(403).json({ error: "Access denied: provider does not belong to you" });
+      }
       // Allowlist mutable fields only — prevent mass-assignment of id/providerId/createdAt
-      const { name, category, description, pricingType, basePrice, priceFrom, priceTo, priceTiersJson, duration, isPublished, isAddon } = req.body;
+      const { name, category, description, pricingType, basePrice, priceFrom, priceTo, priceTiersJson, duration, isPublished, isAddon, isRecurring, recurringFrequency, recurringPrice } = req.body;
       const allowedUpdate: Partial<typeof providerCustomServices.$inferInsert> = {};
       if (name !== undefined) allowedUpdate.name = name;
       if (category !== undefined) allowedUpdate.category = category;
@@ -2909,6 +3063,9 @@ Respond with JSON only:
       if (duration !== undefined) allowedUpdate.duration = duration;
       if (isPublished !== undefined) allowedUpdate.isPublished = isPublished;
       if (isAddon !== undefined) allowedUpdate.isAddon = isAddon;
+      if (isRecurring !== undefined) allowedUpdate.isRecurring = isRecurring;
+      if (recurringFrequency !== undefined) allowedUpdate.recurringFrequency = recurringFrequency;
+      if (recurringPrice !== undefined) allowedUpdate.recurringPrice = recurringPrice;
       const [svc] = await db.update(providerCustomServices)
         .set({ ...allowedUpdate, updatedAt: new Date() })
         .where(eq(providerCustomServices.id, req.params.id))
@@ -2922,11 +3079,17 @@ Respond with JSON only:
 
   app.delete("/api/provider/:providerId/custom-services/:id", requireAuth, async (req: Request<ProviderIdParams & IdParams>, res: Response) => {
     try {
+      const authUserId = req.authenticatedUserId!;
       const [existing] = await db.select().from(providerCustomServices)
         .where(eq(providerCustomServices.id, req.params.id));
       if (!existing) return res.status(404).json({ error: "Service not found" });
       if (existing.providerId !== req.params.providerId) {
         return res.status(403).json({ error: "Forbidden" });
+      }
+      // Verify ownership: the provider must belong to the authenticated user
+      const provider = await storage.getProvider(req.params.providerId);
+      if (!provider || provider.userId !== authUserId) {
+        return res.status(403).json({ error: "Access denied: provider does not belong to you" });
       }
       await db.delete(providerCustomServices)
         .where(eq(providerCustomServices.id, req.params.id));
@@ -2942,25 +3105,30 @@ Respond with JSON only:
   // Provider registration/onboarding
   app.post("/api/provider/register", requireAuth, async (req: Request, res: Response) => {
     try {
+      const authUserId = req.authenticatedUserId!;
       const parsed = insertProviderSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
       }
 
-      // Check if user already has a provider profile
-      if (parsed.data.userId) {
-        const existing = await storage.getProviderByUserId(parsed.data.userId);
-        if (existing) {
-          return res.status(409).json({ error: "User already has a provider profile" });
-        }
+      // Enforce that the caller can only register a provider profile for themselves
+      if (parsed.data.userId && parsed.data.userId !== authUserId) {
+        return res.status(403).json({ error: "Cannot register provider profile for another user" });
       }
 
-      const provider = await storage.createProvider(parsed.data);
+      // Ensure userId is always the authenticated user (even if not in body)
+      const providerData = { ...parsed.data, userId: authUserId };
+
+      // Check if user already has a provider profile
+      const existing = await storage.getProviderByUserId(authUserId);
+      if (existing) {
+        return res.status(409).json({ error: "User already has a provider profile" });
+      }
+
+      const provider = await storage.createProvider(providerData);
       
       // Mark user as provider
-      if (parsed.data.userId) {
-        await storage.updateUser(parsed.data.userId, { isProvider: true });
-      }
+      await storage.updateUser(authUserId, { isProvider: true });
 
       res.status(201).json({ provider });
     } catch (error) {
@@ -2993,6 +3161,14 @@ Respond with JSON only:
   // Update provider profile (PUT - full update)
   app.put("/api/provider/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
+      // Ownership check: only the provider's own user account may update this profile
+      const existing = await storage.getProvider(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ error: "Provider not found" });
+      }
+      if (existing.userId !== req.authenticatedUserId) {
+        return res.status(403).json({ error: "Forbidden: you do not own this provider profile" });
+      }
       const provider = await storage.updateProvider(req.params.id, req.body);
       if (!provider) {
         return res.status(404).json({ error: "Provider not found" });
@@ -3008,6 +3184,16 @@ Respond with JSON only:
   app.patch("/api/provider/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
       const { id } = req.params;
+
+      // Ownership check: only the provider's own user account may update this profile
+      const ownerCheck = await storage.getProvider(id);
+      if (!ownerCheck) {
+        return res.status(404).json({ error: "Provider not found" });
+      }
+      if (ownerCheck.userId !== req.authenticatedUserId) {
+        return res.status(403).json({ error: "Forbidden: you do not own this provider profile" });
+      }
+
       const body = req.body;
       const update: Record<string, any> = {};
 
@@ -3307,8 +3493,36 @@ Respond with JSON only:
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
       }
-      const job = await storage.createJob(parsed.data);
-      res.status(201).json({ job });
+
+      // Atomic transaction: create job and appointment together so booking data model is
+      // always consistent. If appointment creation fails the job is rolled back too.
+      const { job: newJob, appointment } = await db.transaction(async (tx) => {
+        const [job] = await tx.insert(jobs).values(parsed.data).returning();
+
+        // Create a linked appointment row for every provider-added job so all booking
+        // paths produce the same normalized structure (appointments → jobs → clients → invoices).
+        // userId and homeId are optional because this is a provider-initiated entry.
+        const [apptRow] = await tx.insert(appointments).values({
+          providerId: job.providerId,
+          serviceName: job.title,
+          description: job.description || undefined,
+          scheduledDate: job.scheduledDate!,
+          scheduledTime: job.scheduledTime || undefined,
+          estimatedPrice: job.estimatedPrice || undefined,
+          status: "confirmed" as const,
+          notes: job.notes || undefined,
+        }).returning();
+
+        // Back-link appointment ID on the job row
+        const [linkedJob] = await tx.update(jobs)
+          .set({ appointmentId: apptRow.id })
+          .where(eq(jobs.id, job.id))
+          .returning();
+
+        return { job: linkedJob, appointment: apptRow };
+      });
+
+      return res.status(201).json({ job: newJob, appointment });
     } catch (error) {
       console.error("Create job error:", error);
       res.status(500).json({ error: "Failed to create job" });
@@ -4387,6 +4601,13 @@ Respond with JSON only:
       let hostedUrl: string | null = null;
 
       if (generatePaymentLink) {
+        // Gate: verify Stripe Connect is active before generating payment link
+        const [connectAcct] = await db.select({ chargesEnabled: stripeConnectAccounts.chargesEnabled })
+          .from(stripeConnectAccounts)
+          .where(eq(stripeConnectAccounts.providerId, invoice.providerId));
+        if (!connectAcct || !connectAcct.chargesEnabled) {
+          return res.status(402).json({ error: "stripe_not_ready", message: "Provider must complete Stripe Connect setup before generating payment links" });
+        }
         const checkoutResult = await createStripeCheckoutSession(invoiceId);
         hostedUrl = checkoutResult.checkoutUrl;
       }
@@ -5661,6 +5882,103 @@ Respond with JSON only:
     } catch (error: any) {
       console.error("Send provider message error:", error);
       res.status(500).json({ error: error.message || "Failed to send message" });
+    }
+  });
+
+  // POST /api/providers/:providerId/messages/blast — send a message to multiple clients
+  app.post("/api/providers/:providerId/messages/blast", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
+    try {
+      const authUserId = req.authenticatedUserId!;
+      const { providerId } = req.params;
+
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      if (!providerRecord || providerRecord.id !== providerId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const { clientIds, channel, subject, body } = req.body;
+
+      if (!Array.isArray(clientIds) || clientIds.length === 0) {
+        return res.status(400).json({ error: "clientIds (array) is required" });
+      }
+      if (!body) {
+        return res.status(400).json({ error: "body is required" });
+      }
+      if (clientIds.length > 100) {
+        return res.status(400).json({ error: "Cannot blast more than 100 clients at once" });
+      }
+
+      const results: { clientId: string; status: string; error?: string }[] = [];
+
+      for (const clientId of clientIds) {
+        try {
+          // Verify client belongs to this provider
+          const [client] = await db.select().from(clients).where(
+            and(eq(clients.id, clientId), eq(clients.providerId, providerId))
+          );
+          if (!client) {
+            results.push({ clientId, status: "skipped", error: "Client not found" });
+            continue;
+          }
+
+          if (!checkMessageRateLimit(providerId, clientId)) {
+            results.push({ clientId, status: "skipped", error: "Rate limit exceeded" });
+            continue;
+          }
+
+          const clientName = [client.firstName, client.lastName].filter(Boolean).join(" ");
+          const processedBody = body
+            .replace(/\{\{client_name\}\}/g, clientName)
+            .replace(/\{\{provider_name\}\}/g, providerRecord.businessName);
+          const processedSubject = (subject || `Message from ${providerRecord.businessName}`)
+            .replace(/\{\{client_name\}\}/g, clientName)
+            .replace(/\{\{provider_name\}\}/g, providerRecord.businessName);
+
+          let status: "sent" | "failed" | "pending_sms" = "sent";
+          let resendMessageId: string | undefined;
+
+          if (channel === "email") {
+            if (!client.email) {
+              results.push({ clientId, status: "skipped", error: "No email on file" });
+              continue;
+            }
+            const emailResult = await sendProviderClientMessage({
+              clientEmail: client.email,
+              clientName,
+              providerName: providerRecord.businessName,
+              subject: processedSubject,
+              body: processedBody,
+            });
+            status = emailResult.success ? "sent" : "failed";
+            resendMessageId = emailResult.messageId;
+          } else if (channel === "sms") {
+            status = "pending_sms";
+          }
+
+          await db.insert(providerMessages).values({
+            providerId,
+            clientId,
+            channel: channel || "email",
+            subject: processedSubject,
+            body: processedBody,
+            status,
+            resendMessageId: resendMessageId || null,
+          });
+
+          results.push({ clientId, status });
+        } catch (clientErr: any) {
+          results.push({ clientId, status: "failed", error: clientErr.message || "Unknown error" });
+        }
+      }
+
+      const sent = results.filter(r => r.status === "sent" || r.status === "pending_sms").length;
+      const failed = results.filter(r => r.status === "failed").length;
+      const skipped = results.filter(r => r.status === "skipped").length;
+
+      res.status(201).json({ results, summary: { sent, failed, skipped, total: clientIds.length } });
+    } catch (error: any) {
+      console.error("Blast message error:", error);
+      res.status(500).json({ error: error.message || "Failed to send blast" });
     }
   });
 

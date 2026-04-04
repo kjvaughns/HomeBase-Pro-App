@@ -156,6 +156,8 @@ export type RootStackParamList = {
     clientEmail?: string | null;
     jobId?: string;
     invoiceId?: string;
+    clientIds?: string[];
+    isBlast?: boolean;
   };
   MessageTemplates: undefined;
 };

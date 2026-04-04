@@ -70,7 +70,8 @@ export default function MessageTemplatesScreen() {
     queryFn: async () => {
       const url = new URL(`/api/providers/${providerId}/message-templates`, getApiUrl());
       const res = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${useAuthStore.getState().token}` },
+        headers: { Authorization: `Bearer ${useAuthStore.getState().sessionToken}` },
+        credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to load templates");
       return res.json();
@@ -81,11 +82,7 @@ export default function MessageTemplatesScreen() {
 
   const createMutation = useMutation({
     mutationFn: async (payload: { name: string; channel: Channel; subject?: string; body: string }) => {
-      const url = new URL(`/api/providers/${providerId}/message-templates`, getApiUrl());
-      return apiRequest(url.toString(), {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+      return apiRequest("POST", `/api/providers/${providerId}/message-templates`, payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/providers", providerId, "message-templates"] });
@@ -97,10 +94,8 @@ export default function MessageTemplatesScreen() {
 
   const updateMutation = useMutation({
     mutationFn: async (payload: { id: string; name: string; channel: Channel; subject?: string; body: string }) => {
-      const url = new URL(`/api/providers/${providerId}/message-templates/${payload.id}`, getApiUrl());
-      return apiRequest(url.toString(), {
-        method: "PATCH",
-        body: JSON.stringify({ name: payload.name, channel: payload.channel, subject: payload.subject, body: payload.body }),
+      return apiRequest("PATCH", `/api/providers/${providerId}/message-templates/${payload.id}`, {
+        name: payload.name, channel: payload.channel, subject: payload.subject, body: payload.body,
       });
     },
     onSuccess: () => {
@@ -113,8 +108,7 @@ export default function MessageTemplatesScreen() {
 
   const deleteMutation = useMutation({
     mutationFn: async (templateId: string) => {
-      const url = new URL(`/api/providers/${providerId}/message-templates/${templateId}`, getApiUrl());
-      return apiRequest(url.toString(), { method: "DELETE" });
+      return apiRequest("DELETE", `/api/providers/${providerId}/message-templates/${templateId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/providers", providerId, "message-templates"] });
@@ -420,18 +414,17 @@ export default function MessageTemplatesScreen() {
               </View>
 
               <PrimaryButton
-                label={
-                  createMutation.isPending || updateMutation.isPending
-                    ? "Saving..."
-                    : editingTemplate
-                    ? "Save Changes"
-                    : "Create Template"
-                }
                 onPress={handleSave}
                 disabled={createMutation.isPending || updateMutation.isPending}
                 style={{ marginTop: Spacing.xl }}
                 testID="save-template-button"
-              />
+              >
+                {createMutation.isPending || updateMutation.isPending
+                  ? "Saving..."
+                  : editingTemplate
+                  ? "Save Changes"
+                  : "Create Template"}
+              </PrimaryButton>
             </ScrollView>
           </KeyboardAvoidingView>
         </ThemedView>

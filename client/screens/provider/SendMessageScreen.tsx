@@ -50,16 +50,19 @@ export default function SendMessageScreen() {
   const { theme } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, "SendMessage">>();
-  const { clientId, clientName, clientEmail, jobId, invoiceId } = route.params;
+  const { clientId, clientName, clientEmail, jobId, invoiceId, clientIds, isBlast } = route.params;
   const { providerProfile } = useAuthStore();
   const providerId = providerProfile?.id;
   const queryClient = useQueryClient();
+
+  const blastRecipientCount = isBlast && clientIds ? clientIds.length : 0;
 
   const [channel, setChannel] = useState<Channel>(clientEmail ? "email" : "sms");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [showTemplates, setShowTemplates] = useState(false);
   const [bodySelection, setBodySelection] = useState({ start: 0, end: 0 });
+  const [blastSummary, setBlastSummary] = useState<{ sent: number; failed: number; skipped: number } | null>(null);
 
   const { data: templatesData } = useQuery<{ templates: Template[] }>({
     queryKey: ["/api/providers", providerId, "message-templates"],
@@ -67,7 +70,8 @@ export default function SendMessageScreen() {
     queryFn: async () => {
       const url = new URL(`/api/providers/${providerId}/message-templates`, getApiUrl());
       const res = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${useAuthStore.getState().token}` },
+        headers: { Authorization: `Bearer ${useAuthStore.getState().sessionToken}` },
+        credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to load templates");
       return res.json();
@@ -78,14 +82,24 @@ export default function SendMessageScreen() {
 
   const sendMutation = useMutation({
     mutationFn: async () => {
-      const url = new URL(`/api/providers/${providerId}/messages`, getApiUrl());
-      return apiRequest(url.toString(), {
-        method: "POST",
-        body: JSON.stringify({ clientId, channel, subject, body, jobId, invoiceId }),
+      if (isBlast && clientIds && clientIds.length > 0) {
+        return apiRequest("POST", `/api/providers/${providerId}/messages/blast`, {
+          clientIds, channel, subject, body,
+        });
+      }
+      return apiRequest("POST", `/api/providers/${providerId}/messages`, {
+        clientId, channel, subject, body, jobId, invoiceId,
       });
     },
-    onSuccess: () => {
+    onSuccess: async (res: any) => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (isBlast) {
+        const data = await res.json().catch(() => null);
+        if (data?.summary) {
+          setBlastSummary(data.summary);
+          return;
+        }
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/providers", providerId, "clients", clientId, "messages"] });
       queryClient.invalidateQueries({ queryKey: ["/api/providers", providerId, "clients", "last-messages"] });
       navigation.goBack();
@@ -100,7 +114,7 @@ export default function SendMessageScreen() {
       Alert.alert("Error", "Please enter a message body");
       return;
     }
-    if (channel === "email" && !clientEmail) {
+    if (!isBlast && channel === "email" && !clientEmail) {
       Alert.alert("No Email", "This client does not have an email address on file.");
       return;
     }
@@ -141,16 +155,42 @@ export default function SendMessageScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {blastSummary ? (
+            <GlassCard style={[styles.recipientCard, { borderColor: Colors.accent + "40", borderWidth: 1 }]}>
+              <ThemedText type="caption" style={{ color: Colors.accent, fontWeight: "700", marginBottom: Spacing.sm }}>
+                BLAST SENT
+              </ThemedText>
+              <ThemedText type="body" style={{ fontWeight: "600" }}>
+                {blastSummary.sent} sent, {blastSummary.failed} failed, {blastSummary.skipped} skipped
+              </ThemedText>
+              <Pressable
+                style={{ marginTop: Spacing.md }}
+                onPress={() => navigation.goBack()}
+                testID="button-blast-done"
+              >
+                <ThemedText style={{ color: Colors.accent, fontWeight: "600" }}>Done</ThemedText>
+              </Pressable>
+            </GlassCard>
+          ) : null}
+
           <GlassCard style={styles.recipientCard}>
             <ThemedText type="caption" style={{ color: theme.textSecondary }}>TO</ThemedText>
-            <ThemedText type="body" style={{ fontWeight: "600", marginTop: 2 }}>
-              {clientName}
-            </ThemedText>
-            {clientEmail ? (
-              <ThemedText type="caption" style={{ color: theme.textSecondary, marginTop: 2 }}>
-                {clientEmail}
+            {isBlast && blastRecipientCount > 0 ? (
+              <ThemedText type="body" style={{ fontWeight: "600", marginTop: 2 }}>
+                {blastRecipientCount} clients selected
               </ThemedText>
-            ) : null}
+            ) : (
+              <>
+                <ThemedText type="body" style={{ fontWeight: "600", marginTop: 2 }}>
+                  {clientName}
+                </ThemedText>
+                {clientEmail ? (
+                  <ThemedText type="caption" style={{ color: theme.textSecondary, marginTop: 2 }}>
+                    {clientEmail}
+                  </ThemedText>
+                ) : null}
+              </>
+            )}
           </GlassCard>
 
           <GlassCard style={styles.channelCard}>
@@ -300,11 +340,12 @@ export default function SendMessageScreen() {
           </GlassCard>
 
           <PrimaryButton
-            label={sendMutation.isPending ? "Sending..." : `Send via ${channel === "email" ? "Email" : "SMS"}`}
             onPress={handleSend}
             disabled={sendMutation.isPending || !body.trim()}
             testID="send-button"
-          />
+          >
+            {sendMutation.isPending ? "Sending..." : `Send via ${channel === "email" ? "Email" : "SMS"}`}
+          </PrimaryButton>
         </ScrollView>
       </KeyboardAvoidingView>
     </ThemedView>

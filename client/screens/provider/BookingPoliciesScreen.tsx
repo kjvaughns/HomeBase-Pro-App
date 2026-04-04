@@ -54,7 +54,8 @@ export default function BookingPoliciesScreen() {
     (async () => {
       try {
         const url = new URL(`/api/provider/user/${userId}`, getApiUrl());
-        const res = await fetch(url.toString(), { credentials: "include" });
+        const { getAuthHeaders } = await import("@/lib/query-client");
+        const res = await fetch(url.toString(), { headers: getAuthHeaders(), credentials: "include" });
         if (!res.ok) return;
         const data = await res.json();
         const serverPolicies = data?.provider?.bookingPolicies;

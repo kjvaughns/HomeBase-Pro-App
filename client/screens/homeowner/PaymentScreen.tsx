@@ -55,7 +55,7 @@ export default function PaymentScreen() {
     queryKey: ["/api/invoices", invoiceId],
     queryFn: async () => {
       const url = new URL(`/api/invoices/${invoiceId}`, getApiUrl());
-      const res = await fetch(url.toString());
+      const res = await fetch(url.toString(), { headers: getAuthHeaders(), credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch invoice");
       return res.json();
     },

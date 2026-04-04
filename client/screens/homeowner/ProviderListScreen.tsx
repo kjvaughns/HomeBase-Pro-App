@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { StyleSheet, View, FlatList, Pressable, Modal, ScrollView, Switch } from "react-native";
+import { StyleSheet, View, FlatList, Pressable, Modal, ScrollView, Switch, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
@@ -8,6 +8,7 @@ import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
+import { useQuery } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -16,9 +17,9 @@ import { ProviderCard } from "@/components/ProviderCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
-import { useHomeownerStore } from "@/state/homeownerStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { Provider } from "@/state/types";
+import { getApiUrl } from "@/lib/query-client";
 
 type ScreenRouteProp = RouteProp<RootStackParamList, "ProviderList">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -58,11 +59,39 @@ export default function ProviderListScreen() {
   const { theme, isDark } = useTheme();
   const { categoryId } = route.params;
 
-  const allProviders = useHomeownerStore((s) => s.providers);
-  
-  const categoryProviders = useMemo(() => {
-    return allProviders.filter((p) => p.categoryIds.includes(categoryId));
-  }, [allProviders, categoryId]);
+  const { data: apiData, isLoading: providersLoading } = useQuery<{ providers: any[] }>({
+    queryKey: ["/api/providers", categoryId],
+    queryFn: async () => {
+      const url = new URL("/api/providers", getApiUrl());
+      if (categoryId) url.searchParams.set("categoryId", categoryId);
+      const res = await fetch(url.toString());
+      if (!res.ok) throw new Error("Failed to fetch providers");
+      return res.json();
+    },
+  });
+
+  const categoryProviders: Provider[] = useMemo(() => {
+    if (!apiData?.providers) return [];
+    return apiData.providers.map((p: any): Provider => ({
+      id: p.id,
+      name: p.businessName ?? p.name ?? "",
+      businessName: p.businessName ?? "",
+      avatarUrl: p.avatarUrl ?? p.profilePhotoUrl ?? undefined,
+      rating: parseFloat(p.averageRating ?? p.rating ?? "0"),
+      reviewCount: p.reviewCount ?? 0,
+      services: Array.isArray(p.services) ? p.services.map((s: any) => typeof s === "string" ? s : s.name ?? "") : [],
+      categoryIds: Array.isArray(p.categoryIds) ? p.categoryIds : (categoryId ? [categoryId] : []),
+      hourlyRate: parseFloat(p.hourlyRate ?? "0"),
+      verified: p.isVerified ?? p.verified ?? false,
+      description: p.description ?? "",
+      yearsExperience: p.yearsExperience ?? p.yearsInBusiness ?? 0,
+      completedJobs: p.completedJobs ?? 0,
+      responseTime: p.responseTime ?? "< 1 hour",
+      distance: p.distance ?? undefined,
+      gallery: Array.isArray(p.gallery) ? p.gallery : [],
+      phone: p.phone ?? undefined,
+    }));
+  }, [apiData, categoryId]);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("rating");
@@ -459,17 +488,29 @@ export default function ProviderListScreen() {
     </Animated.View>
   );
 
-  const renderEmpty = () => (
-    <View style={styles.emptyContainer}>
-      <Feather name="search" size={48} color={theme.textTertiary} />
-      <ThemedText style={[styles.emptyTitle, { color: theme.textSecondary }]}>
-        No providers found
-      </ThemedText>
-      <ThemedText style={[styles.emptyText, { color: theme.textTertiary }]}>
-        Try adjusting your search or filters
-      </ThemedText>
-    </View>
-  );
+  const renderEmpty = () => {
+    if (providersLoading) {
+      return (
+        <View style={styles.emptyContainer}>
+          <ActivityIndicator size="large" color={Colors.accent} />
+          <ThemedText style={[styles.emptyText, { color: theme.textTertiary, marginTop: Spacing.md }]}>
+            Loading providers...
+          </ThemedText>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.emptyContainer}>
+        <Feather name="search" size={48} color={theme.textTertiary} />
+        <ThemedText style={[styles.emptyTitle, { color: theme.textSecondary }]}>
+          No providers found
+        </ThemedText>
+        <ThemedText style={[styles.emptyText, { color: theme.textTertiary }]}>
+          Try adjusting your search or filters
+        </ThemedText>
+      </View>
+    );
+  };
 
   return (
     <ThemedView style={styles.container}>

@@ -15,7 +15,7 @@ import { SecondaryButton } from "@/components/SecondaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
-import { getApiUrl } from "@/lib/query-client";
+import { getApiUrl, getAuthHeaders } from "@/lib/query-client";
 
 type ScreenRouteProp = RouteProp<RootStackParamList, "BookingSuccess">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -42,7 +42,7 @@ export default function BookingSuccessScreen() {
     enabled: !!jobId && jobId !== "booking",
     queryFn: async () => {
       const url = new URL(`/api/appointments/${jobId}`, getApiUrl());
-      const res = await fetch(url.toString());
+      const res = await fetch(url.toString(), { headers: getAuthHeaders(), credentials: "include" });
       if (!res.ok) throw new Error("Failed to load appointment");
       return res.json();
     },

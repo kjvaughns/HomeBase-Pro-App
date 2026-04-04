@@ -724,11 +724,11 @@ const styles = StyleSheet.create({
 
   // Empty
   emptyContainer: {
-    paddingTop: Spacing.xxl,
+    paddingTop: Spacing["2xl"],
     alignItems: "center",
   },
   loadingRow: {
-    paddingTop: Spacing.xxl,
+    paddingTop: Spacing["2xl"],
     alignItems: "center",
   },
 });

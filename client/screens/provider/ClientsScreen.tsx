@@ -267,7 +267,8 @@ export default function ClientsScreen() {
       const { useAuthStore } = await import("@/state/authStore");
       const url = new URL(`/api/providers/${providerId}/clients/last-messages`, getApiUrl());
       const res = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${useAuthStore.getState().token}` },
+        headers: { Authorization: `Bearer ${useAuthStore.getState().sessionToken}` },
+        credentials: "include",
       });
       if (!res.ok) return { lastMessages: [] };
       return res.json();

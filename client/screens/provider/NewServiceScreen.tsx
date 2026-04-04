@@ -180,6 +180,9 @@ export default function NewServiceScreen() {
   const [duration, setDuration] = useState(60);
   const [description, setDescription] = useState("");
   const [isAddon, setIsAddon] = useState(false);
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringFrequency, setRecurringFrequency] = useState<"weekly" | "biweekly" | "monthly" | "quarterly" | "">("monthly");
+  const [recurringPrice, setRecurringPrice] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isImprovingDescription, setIsImprovingDescription] = useState(false);
   const [priceSuggestion, setPriceSuggestion] = useState<PriceSuggestion | null>(null);
@@ -219,6 +222,14 @@ export default function NewServiceScreen() {
         } catch {}
       }
       if (svc.isAddon !== undefined) setIsAddon(Boolean(svc.isAddon));
+      if (svc.isRecurring !== undefined) setIsRecurring(Boolean(svc.isRecurring));
+      if (svc.recurringFrequency) {
+        const freq = String(svc.recurringFrequency);
+        if (freq === "weekly" || freq === "biweekly" || freq === "monthly" || freq === "quarterly") {
+          setRecurringFrequency(freq);
+        }
+      }
+      if (svc.recurringPrice) setRecurringPrice(String(svc.recurringPrice));
     }
     if (isEditMode) {
       navigation.setOptions({ headerTitle: "Edit Service" });
@@ -360,14 +371,17 @@ export default function NewServiceScreen() {
       duration,
       isPublished: true,
       isAddon,
+      isRecurring,
+      recurringFrequency: isRecurring ? recurringFrequency || "monthly" : null,
+      recurringPrice: isRecurring && recurringPrice.trim() ? recurringPrice.trim() : null,
     };
 
     try {
-      const url = isEditMode
-        ? new URL(`/api/provider/${providerId}/custom-services/${editServiceId}`, getApiUrl())
-        : new URL(`/api/provider/${providerId}/custom-services`, getApiUrl());
+      const route = isEditMode
+        ? `/api/provider/${providerId}/custom-services/${editServiceId}`
+        : `/api/provider/${providerId}/custom-services`;
       const method = isEditMode ? "PUT" : "POST";
-      const response = await apiRequest(method, url.toString(), payload);
+      const response = await apiRequest(method, route, payload);
       if (!response.ok) {
         const err = await response.json().catch(() => ({ error: "Unknown error" }));
         setSaveError(err.error || "Failed to save service");
@@ -810,6 +824,66 @@ export default function NewServiceScreen() {
             </GlassCard>
           </Animated.View>
 
+          <Animated.View entering={FadeInDown.delay(480)}>
+            <GlassCard style={styles.section}>
+              <View style={styles.addonRow}>
+                <View style={{ flex: 1 }}>
+                  <ThemedText style={styles.addonLabel}>Recurring service</ThemedText>
+                  <ThemedText style={[styles.addonHint, { color: theme.textSecondary }]}>
+                    Offer a discounted recurring rate for repeat bookings.
+                  </ThemedText>
+                </View>
+                <Switch
+                  value={isRecurring}
+                  onValueChange={(v) => {
+                    Haptics.selectionAsync();
+                    setIsRecurring(v);
+                  }}
+                  trackColor={{ false: theme.borderLight, true: Colors.accent + "80" }}
+                  thumbColor={isRecurring ? Colors.accent : theme.textTertiary}
+                />
+              </View>
+              {isRecurring ? (
+                <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
+                  <ThemedText style={{ ...Typography.caption1, color: theme.textSecondary, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5 }}>Frequency</ThemedText>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: Spacing.xs }}>
+                    {(["weekly", "biweekly", "monthly", "quarterly"] as const).map((freq) => (
+                      <Pressable
+                        key={freq}
+                        style={{
+                          paddingHorizontal: Spacing.md,
+                          paddingVertical: Spacing.sm,
+                          borderRadius: BorderRadius.full,
+                          borderWidth: 1,
+                          borderColor: recurringFrequency === freq ? Colors.accent : theme.border,
+                          backgroundColor: recurringFrequency === freq ? Colors.accent + "15" : "transparent",
+                        }}
+                        onPress={() => {
+                          Haptics.selectionAsync();
+                          setRecurringFrequency(freq);
+                        }}
+                      >
+                        <ThemedText style={{ ...Typography.caption1, fontWeight: "600", color: recurringFrequency === freq ? Colors.accent : theme.textSecondary }}>
+                          {freq === "weekly" ? "Weekly" : freq === "biweekly" ? "Every 2 weeks" : freq === "monthly" ? "Monthly" : "Quarterly"}
+                        </ThemedText>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <ThemedText style={{ ...Typography.caption1, color: theme.textSecondary, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5, marginTop: Spacing.xs }}>Recurring price ($)</ThemedText>
+                  <TextInput
+                    style={[styles.input, { borderColor: theme.border, color: theme.text, backgroundColor: theme.cardBackground }]}
+                    value={recurringPrice}
+                    onChangeText={setRecurringPrice}
+                    placeholder="e.g. 89.00"
+                    placeholderTextColor={theme.textTertiary}
+                    keyboardType="decimal-pad"
+                    testID="input-recurring-price"
+                  />
+                </View>
+              ) : null}
+            </GlassCard>
+          </Animated.View>
+
       </KeyboardAwareScrollViewCompat>
 
       <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + Spacing.md }]}>
@@ -1109,6 +1183,12 @@ const styles = StyleSheet.create({
   addonHint: {
     ...Typography.caption1,
     lineHeight: 16,
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    ...Typography.body,
   },
   errorBanner: {
     flexDirection: "row",

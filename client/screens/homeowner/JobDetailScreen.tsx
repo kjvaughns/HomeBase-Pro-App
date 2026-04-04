@@ -17,7 +17,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
-import { getApiUrl } from "@/lib/query-client";
+import { getApiUrl, getAuthHeaders } from "@/lib/query-client";
 
 type ScreenRouteProp = RouteProp<RootStackParamList, "JobDetail">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -99,7 +99,7 @@ export default function JobDetailScreen() {
     enabled: !!jobId,
     queryFn: async () => {
       const url = new URL(`/api/appointments/${jobId}`, getApiUrl());
-      const res = await fetch(url.toString());
+      const res = await fetch(url.toString(), { headers: getAuthHeaders(), credentials: "include" });
       if (!res.ok) throw new Error("Failed to load appointment");
       return res.json();
     },
@@ -110,7 +110,7 @@ export default function JobDetailScreen() {
     enabled: !!jobId,
     queryFn: async () => {
       const url = new URL(`/api/appointments/${jobId}/job`, getApiUrl());
-      const res = await fetch(url.toString());
+      const res = await fetch(url.toString(), { headers: getAuthHeaders(), credentials: "include" });
       if (!res.ok) return { job: null };
       return res.json();
     },
@@ -123,7 +123,7 @@ export default function JobDetailScreen() {
     enabled: !!linkedJob?.id,
     queryFn: async () => {
       const url = new URL(`/api/jobs/${linkedJob!.id}/invoice`, getApiUrl());
-      const res = await fetch(url.toString());
+      const res = await fetch(url.toString(), { headers: getAuthHeaders(), credentials: "include" });
       if (!res.ok) return { invoice: null };
       return res.json();
     },
