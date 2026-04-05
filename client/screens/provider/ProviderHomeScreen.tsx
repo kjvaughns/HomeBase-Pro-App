@@ -122,9 +122,10 @@ export default function ProviderHomeScreen() {
     enabled: !!providerId,
   });
 
-  const { data: insightsData } = useQuery<{ insights: ProviderInsights }>({
+  const { data: insightsData, isLoading: insightsLoading, isError: insightsError } = useQuery<{ insights: ProviderInsights }>({
     queryKey: ["/api/provider", providerId, "insights"],
     enabled: !!providerId,
+    retry: 1,
   });
 
   const { data: jobsData, isLoading: jobsLoading, refetch: refetchJobs } = useQuery<{ jobs: Job[] }>({
@@ -436,49 +437,55 @@ export default function ProviderHomeScreen() {
           </Animated.View>
         ) : null}
 
-        {insightsData?.insights ? (
-          <Animated.View entering={FadeInDown.delay(inProgressJobs.length > 0 ? 450 : 350).duration(400)}>
-            <SectionHeader title="Business Insights" />
-            <GlassCard style={styles.insightsCard}>
-              <View style={styles.insightRow}>
-                <View style={[styles.insightIcon, { backgroundColor: Colors.accentLight }]}>
-                  <Feather name="trending-up" size={16} color={Colors.accent} />
-                </View>
-                <View style={styles.insightContent}>
-                  <ThemedText style={styles.insightTitle}>Revenue Milestone</ThemedText>
-                  <ThemedText style={[styles.insightValue, { color: theme.textSecondary }]}>
-                    ${(insightsData.insights.allTimeRevenue / 1000).toFixed(0)}K total earnings
-                  </ThemedText>
+        <Animated.View entering={FadeInDown.delay(inProgressJobs.length > 0 ? 450 : 350).duration(400)}>
+          <SectionHeader title="Business Insights" />
+          <GlassCard style={styles.insightsCard}>
+            {[
+              {
+                icon: "trending-up" as const,
+                title: "Revenue Milestone",
+                value: insightsLoading
+                  ? "Loading..."
+                  : insightsError || !insightsData?.insights
+                  ? "No data yet"
+                  : `$${(insightsData.insights.allTimeRevenue / 1000).toFixed(0)}K total earnings`,
+              },
+              {
+                icon: "users" as const,
+                title: "Client Growth",
+                value: insightsLoading
+                  ? "Loading..."
+                  : insightsError || !insightsData?.insights
+                  ? "No data yet"
+                  : `${insightsData.insights.clientGrowthPct > 0 ? "+" : ""}${insightsData.insights.clientGrowthPct}% this quarter`,
+              },
+              {
+                icon: "star" as const,
+                title: "Top Rated",
+                value: insightsLoading
+                  ? "Loading..."
+                  : insightsError || !insightsData?.insights
+                  ? "No reviews yet"
+                  : `${insightsData.insights.rating} stars from ${insightsData.insights.reviewCount}+ reviews`,
+              },
+            ].map((row, i) => (
+              <View key={row.title}>
+                {i > 0 && <View style={[styles.insightDivider, { backgroundColor: theme.separator }]} />}
+                <View style={styles.insightRow}>
+                  <View style={[styles.insightIcon, { backgroundColor: Colors.accentLight }]}>
+                    <Feather name={row.icon} size={16} color={Colors.accent} />
+                  </View>
+                  <View style={styles.insightContent}>
+                    <ThemedText style={styles.insightTitle}>{row.title}</ThemedText>
+                    <ThemedText style={[styles.insightValue, { color: insightsLoading ? theme.separator : theme.textSecondary }]}>
+                      {row.value}
+                    </ThemedText>
+                  </View>
                 </View>
               </View>
-              <View style={[styles.insightDivider, { backgroundColor: theme.separator }]} />
-              <View style={styles.insightRow}>
-                <View style={[styles.insightIcon, { backgroundColor: Colors.accentLight }]}>
-                  <Feather name="users" size={16} color={Colors.accent} />
-                </View>
-                <View style={styles.insightContent}>
-                  <ThemedText style={styles.insightTitle}>Client Growth</ThemedText>
-                  <ThemedText style={[styles.insightValue, { color: theme.textSecondary }]}>
-                    {insightsData.insights.clientGrowthPct > 0 ? "+" : ""}
-                    {insightsData.insights.clientGrowthPct}% this quarter
-                  </ThemedText>
-                </View>
-              </View>
-              <View style={[styles.insightDivider, { backgroundColor: theme.separator }]} />
-              <View style={styles.insightRow}>
-                <View style={[styles.insightIcon, { backgroundColor: Colors.accentLight }]}>
-                  <Feather name="star" size={16} color={Colors.accent} />
-                </View>
-                <View style={styles.insightContent}>
-                  <ThemedText style={styles.insightTitle}>Top Rated</ThemedText>
-                  <ThemedText style={[styles.insightValue, { color: theme.textSecondary }]}>
-                    {insightsData.insights.rating} stars from {insightsData.insights.reviewCount}+ reviews
-                  </ThemedText>
-                </View>
-              </View>
-            </GlassCard>
-          </Animated.View>
-        ) : null}
+            ))}
+          </GlassCard>
+        </Animated.View>
 
         <Animated.View
           entering={FadeInDown.delay(inProgressJobs.length > 0 ? 500 : 400).duration(400)}
