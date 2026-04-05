@@ -11,7 +11,7 @@ import { insertUserSchema, loginSchema, insertHomeSchema, insertAppointmentSchem
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
 import { db } from "./db";
-import { sql, eq, and, desc, inArray } from "drizzle-orm";
+import { sql, eq, and, desc, inArray, gte } from "drizzle-orm";
 import { appointments, maintenanceReminders, homes, reviews } from "@shared/schema";
 import { sendInvoiceEmail, sendProviderClientMessage } from "./emailService";
 import { dispatch, dispatchWithResult, dispatchNotification, sendPush } from "./notificationService";
@@ -87,6 +87,57 @@ declare module "express-serve-static-core" {
 const requireAuth: RequestHandler = authenticateJWT;
 
 const aiRateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+const insightsAiCache = new Map<string, {
+  revenue: string; growth: string; rating: string; expiresAt: number;
+}>();
+
+const REVENUE_MILESTONES = [10000, 25000, 50000, 100000, 150000, 200000, 300000, 500000];
+
+async function fireInsightNotifications(
+  userId: string,
+  insights: { allTimeRevenue: number; clientGrowthPct: number; rating: string; reviewCount: number }
+) {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const topMilestone = REVENUE_MILESTONES.slice().reverse().find(m => insights.allTimeRevenue >= m);
+  if (topMilestone) {
+    const milestoneType = `revenue_milestone_${topMilestone}`;
+    const [existing] = await db.select({ id: notifications.id }).from(notifications)
+      .where(and(eq(notifications.userId, userId), eq(notifications.type, milestoneType),
+        gte(notifications.createdAt, thirtyDaysAgo))).limit(1);
+    if (!existing) {
+      await dispatchNotification(userId,
+        "Revenue Milestone Reached",
+        `You've earned $${(topMilestone / 1000).toFixed(0)}K all-time — incredible work!`,
+        milestoneType, {}, "updates" as any);
+    }
+  }
+
+  if (insights.clientGrowthPct >= 10) {
+    const [existing] = await db.select({ id: notifications.id }).from(notifications)
+      .where(and(eq(notifications.userId, userId), eq(notifications.type, "quarterly_client_growth"),
+        gte(notifications.createdAt, thirtyDaysAgo))).limit(1);
+    if (!existing) {
+      await dispatchNotification(userId,
+        "Client Growth Surge",
+        `Your client base grew ${insights.clientGrowthPct}% this quarter — great momentum!`,
+        "quarterly_client_growth", {}, "updates" as any);
+    }
+  }
+
+  if (parseFloat(insights.rating) >= 4.8 && insights.reviewCount >= 10) {
+    const [existing] = await db.select({ id: notifications.id }).from(notifications)
+      .where(and(eq(notifications.userId, userId), eq(notifications.type, "top_rated_achievement"),
+        gte(notifications.createdAt, thirtyDaysAgo))).limit(1);
+    if (!existing) {
+      await dispatchNotification(userId,
+        "Top Rated Provider",
+        `${insights.rating} stars from ${insights.reviewCount} reviews — you're among the best!`,
+        "top_rated_achievement", {}, "updates" as any);
+    }
+  }
+}
 
 const aiRateLimit: RequestHandler = (req, res, next) => {
   const userId = req.authenticatedUserId!;
@@ -3278,7 +3329,63 @@ Respond with JSON only:
         return;
       }
       const insights = await storage.getProviderInsights(req.params.id);
-      res.json({ insights });
+      const businessName = providerRow.businessName || "your business";
+
+      // Generate AI messages (cached per provider for 1 hour)
+      let aiMessages: { revenue: string; growth: string; rating: string };
+      const cached = insightsAiCache.get(req.params.id);
+      if (cached && cached.expiresAt > Date.now()) {
+        aiMessages = { revenue: cached.revenue, growth: cached.growth, rating: cached.rating };
+      } else {
+        try {
+          const aiResp = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [
+              {
+                role: "system",
+                content:
+                  "You are a business coach for home service providers. Write short, specific, motivating insight captions (max 10 words each). Celebrate real numbers. No emojis. No bullet points. No numbering.",
+              },
+              {
+                role: "user",
+                content:
+                  `Business: ${businessName}\n` +
+                  `All-time revenue: $${Math.round(insights.allTimeRevenue).toLocaleString()}\n` +
+                  `New clients this quarter: ${insights.clientCountThisQuarter} (${insights.clientGrowthPct > 0 ? "+" : ""}${insights.clientGrowthPct}% vs last quarter)\n` +
+                  `Rating: ${insights.rating} stars from ${insights.reviewCount} reviews\n\n` +
+                  `Write exactly 3 lines:\n` +
+                  `Line 1: revenue caption celebrating $${Math.round(insights.allTimeRevenue / 1000)}K milestone\n` +
+                  `Line 2: client growth caption for ${insights.clientGrowthPct > 0 ? "+" : ""}${insights.clientGrowthPct}% growth\n` +
+                  `Line 3: rating caption for ${insights.rating} stars`,
+              },
+            ],
+            max_tokens: 120,
+            temperature: 0.75,
+          });
+          const lines = (aiResp.choices[0]?.message?.content || "")
+            .split("\n")
+            .map((l) => l.replace(/^[\d\.\-\*\s]+/, "").trim())
+            .filter(Boolean);
+          aiMessages = {
+            revenue: lines[0] || `$${Math.round(insights.allTimeRevenue / 1000)}K earned all-time`,
+            growth: lines[1] || `${insights.clientGrowthPct > 0 ? "+" : ""}${insights.clientGrowthPct}% client growth this quarter`,
+            rating: lines[2] || `${insights.rating} stars from ${insights.reviewCount} reviews`,
+          };
+          insightsAiCache.set(req.params.id, { ...aiMessages, expiresAt: Date.now() + 60 * 60 * 1000 });
+        } catch (aiErr) {
+          console.error("Insights AI generation error:", aiErr);
+          aiMessages = {
+            revenue: `$${Math.round(insights.allTimeRevenue / 1000)}K earned all-time`,
+            growth: `${insights.clientGrowthPct > 0 ? "+" : ""}${insights.clientGrowthPct}% client growth this quarter`,
+            rating: `${insights.rating} stars from ${insights.reviewCount} reviews`,
+          };
+        }
+      }
+
+      // Fire milestone notifications fire-and-forget
+      fireInsightNotifications(req.authenticatedUserId!, insights).catch(console.error);
+
+      res.json({ insights: { ...insights, aiMessages } });
     } catch (error) {
       console.error("Get provider insights error:", error);
       res.status(500).json({ error: "Failed to get provider insights" });

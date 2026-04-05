@@ -34,6 +34,11 @@ interface ProviderInsights {
   clientGrowthPct: number;
   rating: string;
   reviewCount: number;
+  aiMessages?: {
+    revenue: string;
+    growth: string;
+    rating: string;
+  };
 }
 
 interface Job {
@@ -445,28 +450,31 @@ export default function ProviderHomeScreen() {
                 icon: "trending-up" as const,
                 title: "Revenue Milestone",
                 value: insightsLoading
-                  ? "Loading..."
+                  ? "Analyzing your earnings..."
                   : insightsError || !insightsData?.insights
                   ? "No data yet"
-                  : `$${(insightsData.insights.allTimeRevenue / 1000).toFixed(0)}K total earnings`,
+                  : insightsData.insights.aiMessages?.revenue
+                  || `$${(insightsData.insights.allTimeRevenue / 1000).toFixed(0)}K earned all-time`,
               },
               {
                 icon: "users" as const,
                 title: "Client Growth",
                 value: insightsLoading
-                  ? "Loading..."
+                  ? "Calculating growth..."
                   : insightsError || !insightsData?.insights
                   ? "No data yet"
-                  : `${insightsData.insights.clientGrowthPct > 0 ? "+" : ""}${insightsData.insights.clientGrowthPct}% this quarter`,
+                  : insightsData.insights.aiMessages?.growth
+                  || `${insightsData.insights.clientGrowthPct > 0 ? "+" : ""}${insightsData.insights.clientGrowthPct}% this quarter`,
               },
               {
                 icon: "star" as const,
                 title: "Top Rated",
                 value: insightsLoading
-                  ? "Loading..."
+                  ? "Reviewing your ratings..."
                   : insightsError || !insightsData?.insights
                   ? "No reviews yet"
-                  : `${insightsData.insights.rating} stars from ${insightsData.insights.reviewCount}+ reviews`,
+                  : insightsData.insights.aiMessages?.rating
+                  || `${insightsData.insights.rating} stars from ${insightsData.insights.reviewCount}+ reviews`,
               },
             ].map((row, i) => (
               <View key={row.title}>
