@@ -3209,21 +3209,25 @@ Respond with JSON only:
     }
   });
 
-  // Get provider by provider ID
+  // Get provider by provider ID (owner-only)
   app.get("/api/provider/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
       const provider = await storage.getProvider(req.params.id);
       if (!provider) {
         return res.status(404).json({ error: "Provider not found" });
       }
-      const parsed = { ...provider } as any;
-      if (parsed.bookingPolicies && typeof parsed.bookingPolicies === "string") {
-        try { parsed.bookingPolicies = JSON.parse(parsed.bookingPolicies); } catch {}
+      if (provider.userId !== req.authenticatedUserId) {
+        return res.status(403).json({ error: "Forbidden: you do not own this provider profile" });
       }
-      if (parsed.businessHours && typeof parsed.businessHours === "string") {
-        try { parsed.businessHours = JSON.parse(parsed.businessHours); } catch {}
-      }
-      res.json({ provider: parsed });
+      const bookingPolicies =
+        provider.bookingPolicies && typeof provider.bookingPolicies === "string"
+          ? (() => { try { return JSON.parse(provider.bookingPolicies as string); } catch { return provider.bookingPolicies; } })()
+          : provider.bookingPolicies;
+      const businessHours =
+        provider.businessHours && typeof provider.businessHours === "string"
+          ? (() => { try { return JSON.parse(provider.businessHours as string); } catch { return provider.businessHours; } })()
+          : provider.businessHours;
+      res.json({ provider: { ...provider, bookingPolicies, businessHours } });
     } catch (error) {
       console.error("Get provider by ID error:", error);
       res.status(500).json({ error: "Failed to get provider" });

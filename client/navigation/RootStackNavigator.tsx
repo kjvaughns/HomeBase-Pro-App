@@ -46,7 +46,6 @@ import ServicesScreen from "@/screens/provider/ServicesScreen";
 import NewServiceScreen from "@/screens/provider/NewServiceScreen";
 import PublicProfileScreen from "@/screens/provider/PublicProfileScreen";
 import ServicePreviewScreen from "@/screens/provider/ServicePreviewScreen";
-import BookingPoliciesScreen from "@/screens/provider/BookingPoliciesScreen";
 import ProviderJobDetailScreen from "@/screens/provider/ProviderJobDetailScreen";
 import BusinessDetailsScreen from "@/screens/provider/BusinessDetailsScreen";
 import ReviewsScreen from "@/screens/provider/ReviewsScreen";
@@ -141,7 +140,6 @@ export type RootStackParamList = {
   SavedProviders: undefined;
   HelpCenter: undefined;
   ContactUs: undefined;
-  BookingPolicies: undefined;
   ProviderJobDetail: { jobId: string };
   BusinessDetails: undefined;
   Reviews: undefined;
@@ -503,13 +501,6 @@ export default function RootStackNavigator() {
         component={ContactUsScreen}
         options={{
           headerTitle: "Contact Us",
-        }}
-      />
-      <Stack.Screen
-        name="BookingPolicies"
-        component={BookingPoliciesScreen}
-        options={{
-          headerTitle: "Booking Policies",
         }}
       />
       <Stack.Screen

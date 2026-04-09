@@ -108,6 +108,25 @@ interface BookingLink {
   status: "active" | "paused" | "disabled";
 }
 
+interface ProviderRecord {
+  id: string;
+  userId: string;
+  businessName: string | null;
+  description: string | null;
+  phone: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+  serviceRadius: number | null;
+  serviceZipCodes: string[] | null;
+  serviceCities: string[] | null;
+  businessHours: Record<DayKey, BusinessHoursDay> | null;
+  bookingPolicies: BookingPoliciesData | null;
+  isPublic: boolean | null;
+  licenseNumber: string | null;
+  rating: string | null;
+  reviewCount: number | null;
+}
+
 function getPricingLabel(type: string): string {
   switch (type) {
     case "fixed": return "Fixed";
@@ -133,7 +152,7 @@ export default function BusinessHubScreen() {
   const providerId = providerProfile?.id;
 
   // Load provider data from API (for profile + policies)
-  const { data: providerData, isLoading: providerLoading } = useQuery<{ provider: any }>({
+  const { data: providerData, isLoading: providerLoading } = useQuery<{ provider: ProviderRecord }>({
     queryKey: ["/api/provider", providerId],
     enabled: !!providerId,
   });
@@ -177,19 +196,14 @@ export default function BusinessHubScreen() {
     setBusinessName(provider.businessName || user?.name || "");
     if (provider.avatarUrl) setAvatarUri(provider.avatarUrl);
     if (provider.serviceRadius) setServiceRadius(String(provider.serviceRadius));
-    if (provider.serviceZipCodes) {
-      setZipCodes(Array.isArray(provider.serviceZipCodes) ? provider.serviceZipCodes.join(", ") : provider.serviceZipCodes);
+    if (provider.serviceZipCodes?.length) {
+      setZipCodes(provider.serviceZipCodes.join(", "));
     }
-    if (provider.serviceCities) {
-      setCities(Array.isArray(provider.serviceCities) ? provider.serviceCities.join(", ") : provider.serviceCities);
+    if (provider.serviceCities?.length) {
+      setCities(provider.serviceCities.join(", "));
     }
     if (provider.businessHours) {
-      try {
-        const parsed = typeof provider.businessHours === "string"
-          ? JSON.parse(provider.businessHours)
-          : provider.businessHours;
-        setHours({ ...DEFAULT_HOURS, ...parsed });
-      } catch {}
+      setHours({ ...DEFAULT_HOURS, ...provider.businessHours });
     }
   }, [provider, user]);
 
@@ -197,16 +211,9 @@ export default function BusinessHubScreen() {
   useEffect(() => {
     if (!provider || policiesLoaded) return;
     if (provider.bookingPolicies) {
-      try {
-        const parsed = typeof provider.bookingPolicies === "string"
-          ? JSON.parse(provider.bookingPolicies)
-          : provider.bookingPolicies;
-        setPolicies({ ...DEFAULT_POLICIES, ...parsed });
-        setPoliciesLoaded(true);
-      } catch {}
-    } else {
-      setPoliciesLoaded(true);
+      setPolicies({ ...DEFAULT_POLICIES, ...provider.bookingPolicies });
     }
+    setPoliciesLoaded(true);
   }, [provider, policiesLoaded]);
 
   const handleTabPress = (tab: HubTab) => {
@@ -276,19 +283,27 @@ export default function BusinessHubScreen() {
     setProfileSaving(true);
     setProfileError("");
     try {
+      const parsedRadius = parseInt(serviceRadius, 10);
+      const parsedZipCodes = zipCodes.trim()
+        ? zipCodes.split(",").map((s) => s.trim()).filter(Boolean)
+        : null;
+      const parsedCities = cities.trim()
+        ? cities.split(",").map((s) => s.trim()).filter(Boolean)
+        : null;
       await apiRequest("PATCH", `/api/provider/${providerId}`, {
         businessName: businessName.trim() || undefined,
         businessHours: JSON.stringify(hours),
-        serviceRadius: parseInt(serviceRadius) || null,
-        serviceZipCodes: zipCodes.trim() || null,
-        serviceCities: cities.trim() || null,
+        serviceRadius: Number.isFinite(parsedRadius) ? parsedRadius : null,
+        serviceZipCodes: parsedZipCodes,
+        serviceCities: parsedCities,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setProfileSaved(true);
       setTimeout(() => setProfileSaved(false), 3000);
-    } catch (err: any) {
-      setProfileError(err?.message || "Failed to save. Please try again.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to save. Please try again.";
+      setProfileError(message);
     } finally {
       setProfileSaving(false);
     }
@@ -306,8 +321,9 @@ export default function BusinessHubScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setPoliciesSaved(true);
       setTimeout(() => setPoliciesSaved(false), 3000);
-    } catch (err: any) {
-      setPoliciesError(err?.message || "Failed to save policies. Please try again.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to save policies. Please try again.";
+      setPoliciesError(message);
     } finally {
       setPoliciesSaving(false);
     }
