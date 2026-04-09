@@ -183,6 +183,10 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
     try {
       // Single atomic call: creates user + provider profile + initial service in one transaction.
       // If any step fails the entire registration rolls back — no broken partial accounts.
+      const trimmedServiceArea = serviceArea.trim();
+      const parsedServiceZipCodes = trimmedServiceArea
+        ? trimmedServiceArea.split(",").map((s) => s.trim()).filter(Boolean)
+        : undefined;
       const response = await apiRequest("POST", "/api/provider/onboard-complete", {
         name: accountName.trim(),
         email: email.trim().toLowerCase(),
@@ -190,7 +194,8 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
         password,
         businessName: businessName.trim(),
         description: bio.trim() || undefined,
-        serviceArea: serviceArea.trim() || undefined,
+        serviceArea: trimmedServiceArea || undefined,
+        serviceZipCodes: parsedServiceZipCodes,
         capabilityTags: category ? [category] : [],
         businessHours: { activeDays, startTime, endTime },
         initialService: serviceName.trim() ? {

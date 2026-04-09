@@ -507,7 +507,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const {
         name, email, password, phone,
-        businessName, description, serviceArea, capabilityTags, businessHours,
+        businessName, description, serviceArea, serviceZipCodes, serviceCities, serviceRadius,
+        capabilityTags, businessHours,
         initialService,
       } = req.body;
 
@@ -545,11 +546,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           cancellationWindowHours: 24,
           advanceBookingDays: 60,
         };
+        const parsedServiceZipCodes = Array.isArray(serviceZipCodes)
+          ? serviceZipCodes
+          : (serviceZipCodes ? String(serviceZipCodes).split(",").map((s: string) => s.trim()).filter(Boolean) : null);
+        const parsedServiceCities = Array.isArray(serviceCities)
+          ? serviceCities
+          : (serviceCities ? String(serviceCities).split(",").map((s: string) => s.trim()).filter(Boolean) : null);
         const [newProvider] = await tx.insert(providers).values({
           userId: newUser.id,
           businessName: businessName.trim(),
           description: description?.trim() || null,
           serviceArea: serviceArea?.trim() || null,
+          serviceZipCodes: parsedServiceZipCodes,
+          serviceCities: parsedServiceCities,
+          serviceRadius: serviceRadius ? Number(serviceRadius) : null,
           capabilityTags: Array.isArray(capabilityTags) ? capabilityTags : [],
           businessHours: businessHours ?? null,
           bookingPolicies: defaultBookingPolicies,

@@ -1255,6 +1255,22 @@ export default function ProviderSetupFlow({ navigation }: Props) {
             duration: service.durationMinutes,
           });
           addOnboardingService(service);
+          // Persist structured service area fields alongside legacy serviceArea
+          const trimmedServiceArea = data.serviceArea.trim();
+          if (trimmedServiceArea) {
+            const parsedZipCodes = trimmedServiceArea
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean);
+            try {
+              await apiRequest("PATCH", `/api/provider/${providerProfile.id}`, {
+                serviceArea: trimmedServiceArea,
+                serviceZipCodes: parsedZipCodes,
+              });
+            } catch {
+              // non-fatal — provider can update via Business Hub
+            }
+          }
         } catch {
           setSavingService(false);
           setServiceError("Could not save your service. Check your connection and try again.");

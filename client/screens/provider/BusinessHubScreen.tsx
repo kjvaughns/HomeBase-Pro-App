@@ -122,6 +122,7 @@ interface ProviderRecord {
   businessHours: Record<DayKey, BusinessHoursDay> | null;
   bookingPolicies: BookingPoliciesData | null;
   isPublic: boolean | null;
+  instantBooking: boolean | null;
   licenseNumber: string | null;
   rating: string | null;
   reviewCount: number | null;
@@ -171,6 +172,7 @@ export default function BusinessHubScreen() {
   const [logoUploading, setLogoUploading] = useState(false);
 
   // Policies tab state
+  const [instantBooking, setInstantBooking] = useState(false);
   const [policies, setPolicies] = useState<BookingPoliciesData>(DEFAULT_POLICIES);
   const [policiesSaved, setPoliciesSaved] = useState(false);
   const [policiesSaving, setPoliciesSaving] = useState(false);
@@ -213,6 +215,7 @@ export default function BusinessHubScreen() {
     if (provider.bookingPolicies) {
       setPolicies({ ...DEFAULT_POLICIES, ...provider.bookingPolicies });
     }
+    setInstantBooking(provider.instantBooking ?? false);
     setPoliciesLoaded(true);
   }, [provider, policiesLoaded]);
 
@@ -316,6 +319,7 @@ export default function BusinessHubScreen() {
     try {
       await apiRequest("PATCH", `/api/provider/${providerId}`, {
         bookingPolicies: policies,
+        instantBooking,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -702,6 +706,29 @@ export default function BusinessHubScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Animated.View entering={FadeInDown.duration(300)}>
+          {/* Instant Booking */}
+          <GlassCard style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Feather name="zap" size={16} color={Colors.accent} />
+              <ThemedText style={styles.cardTitle}>Instant Booking</ThemedText>
+            </View>
+            <View style={styles.switchRow}>
+              <View style={{ flex: 1 }}>
+                <ThemedText style={styles.infoValue}>Allow Instant Booking</ThemedText>
+                <ThemedText style={[styles.infoLabel, { color: theme.textSecondary }]}>
+                  Clients book without manual approval
+                </ThemedText>
+              </View>
+              <Switch
+                value={instantBooking}
+                onValueChange={setInstantBooking}
+                trackColor={{ false: theme.backgroundTertiary, true: Colors.accent }}
+                thumbColor="#FFFFFF"
+                testID="switch-instant-booking"
+              />
+            </View>
+          </GlassCard>
+
           {/* Deposit */}
           <GlassCard style={styles.card}>
             <View style={styles.cardHeader}>
