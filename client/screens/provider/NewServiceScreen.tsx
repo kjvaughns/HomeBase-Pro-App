@@ -9,6 +9,7 @@ import {
   ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
@@ -25,7 +26,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useAuthStore } from "@/state/authStore";
-import { apiRequest, getApiUrl } from "@/lib/query-client";
+import { apiRequest, getApiUrl, getAuthHeaders } from "@/lib/query-client";
 import { useQueryClient } from "@tanstack/react-query";
 
 type FeatherIconName = ComponentProps<typeof Feather>["name"];
@@ -153,6 +154,7 @@ function suggestCategory(name: string): string | null {
 
 export default function NewServiceScreen() {
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
   const { theme } = useTheme();
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute();
@@ -261,7 +263,7 @@ export default function NewServiceScreen() {
       const url = new URL("/api/ai/suggest-price", getApiUrl());
       const response = await fetch(url.toString(), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({
           serviceName: svcName,
           category: cat,
@@ -302,7 +304,7 @@ export default function NewServiceScreen() {
       const url = new URL("/api/ai/suggest-description", getApiUrl());
       const response = await fetch(url.toString(), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ serviceName: name.trim(), category }),
       });
       if (response.ok) {
@@ -381,12 +383,7 @@ export default function NewServiceScreen() {
         ? `/api/provider/${providerId}/custom-services/${editServiceId}`
         : `/api/provider/${providerId}/custom-services`;
       const method = isEditMode ? "PUT" : "POST";
-      const response = await apiRequest(method, route, payload);
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({ error: "Unknown error" }));
-        setSaveError(err.error || "Failed to save service");
-        return;
-      }
+      await apiRequest(method, route, payload);
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "custom-services"] });
       if (!isEditMode) {
         setShowSavedTip(true);
@@ -407,7 +404,7 @@ export default function NewServiceScreen() {
     <ThemedView style={styles.container}>
       <KeyboardAwareScrollViewCompat
         style={styles.flex}
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[styles.content, { paddingTop: headerHeight + Spacing.md, paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
       >
           {showSavedTip ? (

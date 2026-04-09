@@ -60,7 +60,7 @@ export default function ProviderMoreScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Animated.View entering={FadeInDown.delay(100).duration(400)}>
-          <GlassCard style={styles.profileCard} onPress={() => navigation.navigate("BusinessProfile")}>
+          <GlassCard style={styles.profileCard} onPress={() => navigation.navigate("BusinessHub")}>
             <View style={styles.profileContent}>
               <Avatar uri={user?.avatarUrl} name={user?.name} size="large" showBadge />
               <View style={styles.profileInfo}>

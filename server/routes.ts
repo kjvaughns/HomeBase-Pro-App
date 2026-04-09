@@ -3209,6 +3209,27 @@ Respond with JSON only:
     }
   });
 
+  // Get provider by provider ID
+  app.get("/api/provider/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
+    try {
+      const provider = await storage.getProvider(req.params.id);
+      if (!provider) {
+        return res.status(404).json({ error: "Provider not found" });
+      }
+      const parsed = { ...provider } as any;
+      if (parsed.bookingPolicies && typeof parsed.bookingPolicies === "string") {
+        try { parsed.bookingPolicies = JSON.parse(parsed.bookingPolicies); } catch {}
+      }
+      if (parsed.businessHours && typeof parsed.businessHours === "string") {
+        try { parsed.businessHours = JSON.parse(parsed.businessHours); } catch {}
+      }
+      res.json({ provider: parsed });
+    } catch (error) {
+      console.error("Get provider by ID error:", error);
+      res.status(500).json({ error: "Failed to get provider" });
+    }
+  });
+
   // Update provider profile (PUT - full update)
   app.put("/api/provider/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
@@ -3306,6 +3327,78 @@ Respond with JSON only:
     } catch (error: any) {
       console.error("Patch provider error:", error);
       res.status(500).json({ error: error.message || "Failed to update provider" });
+    }
+  });
+
+  // Upload provider logo/avatar — accepts base64 data URL, saves to Supabase Storage
+  app.post("/api/provider/:id/logo", requireAuth, async (req: Request<IdParams>, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { base64 } = req.body as { base64?: string };
+
+      if (!base64) {
+        return res.status(400).json({ error: "base64 image data required" });
+      }
+
+      // Ownership check
+      const existing = await storage.getProvider(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Provider not found" });
+      }
+      if (existing.userId !== req.authenticatedUserId) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+
+      const ALLOWED_MIME_PREFIXES_LOGO = [
+        "data:image/jpeg;base64,",
+        "data:image/jpg;base64,",
+        "data:image/png;base64,",
+        "data:image/webp;base64,",
+      ];
+      const prefix = ALLOWED_MIME_PREFIXES_LOGO.find((p) => base64.startsWith(p));
+      if (!prefix) {
+        return res.status(400).json({ error: "Invalid image format. Use JPEG, PNG, or WebP." });
+      }
+
+      const ext = prefix.includes("jpeg") || prefix.includes("jpg") ? "jpg" : prefix.includes("png") ? "png" : "webp";
+      const mimeType = ext === "jpg" ? "image/jpeg" : ext === "png" ? "image/png" : "image/webp";
+      const base64Data = base64.slice(prefix.length);
+      const buffer = Buffer.from(base64Data, "base64");
+      const filename = `provider-${id}-logo-${Date.now()}.${ext}`;
+
+      let logoUrl: string;
+
+      const isDev = process.env.NODE_ENV === "development";
+      let supabaseClient: typeof import("./lib/supabase").supabase | null = null;
+      try {
+        supabaseClient = (await import("./lib/supabase")).supabase;
+      } catch {}
+
+      if (supabaseClient) {
+        const { error: uploadError } = await supabaseClient.storage
+          .from("job-photos")
+          .upload(`logos/${filename}`, buffer, { contentType: mimeType, upsert: true });
+        if (uploadError) throw new Error("Failed to upload logo to storage");
+        const { data: publicUrlData } = supabaseClient.storage
+          .from("job-photos")
+          .getPublicUrl(`logos/${filename}`);
+        logoUrl = publicUrlData.publicUrl;
+      } else if (isDev) {
+        const uploadDir = path.resolve(process.cwd(), "uploads", "logos");
+        if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+        fs.writeFileSync(path.join(uploadDir, filename), buffer);
+        const protocol = req.protocol;
+        const host = req.get("host") || "";
+        logoUrl = `${protocol}://${host}/uploads/logos/${filename}`;
+      } else {
+        return res.status(503).json({ error: "Storage not configured" });
+      }
+
+      const updated = await storage.updateProvider(id, { avatarUrl: logoUrl });
+      res.json({ avatarUrl: logoUrl, provider: updated });
+    } catch (error: any) {
+      console.error("Provider logo upload error:", error);
+      res.status(500).json({ error: error.message || "Failed to upload logo" });
     }
   });
 

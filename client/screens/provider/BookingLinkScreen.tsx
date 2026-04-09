@@ -45,8 +45,7 @@ interface BookingLink {
 }
 
 function getPublicUrl(slug: string): string {
-  const domain = process.env.EXPO_PUBLIC_DOMAIN || "homebase.app";
-  return `https://${domain}/book/${slug}`;
+  return `https://homebaseproapp.com/book/${slug}`;
 }
 
 export default function BookingLinkScreen() {
