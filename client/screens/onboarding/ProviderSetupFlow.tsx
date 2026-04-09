@@ -1258,14 +1258,14 @@ export default function ProviderSetupFlow({ navigation }: Props) {
           // Persist structured service area fields alongside legacy serviceArea
           const trimmedServiceArea = data.serviceArea.trim();
           if (trimmedServiceArea) {
-            const parsedZipCodes = trimmedServiceArea
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean);
+            const tokens = trimmedServiceArea.split(",").map((s) => s.trim()).filter(Boolean);
+            const parsedZipCodes = tokens.filter((t) => /^\d{5}(-\d{4})?$/.test(t));
+            const parsedCities = tokens.filter((t) => !/^\d{5}(-\d{4})?$/.test(t));
             try {
               await apiRequest("PATCH", `/api/provider/${providerProfile.id}`, {
                 serviceArea: trimmedServiceArea,
-                serviceZipCodes: parsedZipCodes,
+                serviceZipCodes: parsedZipCodes.length ? parsedZipCodes : undefined,
+                serviceCities: parsedCities.length ? parsedCities : undefined,
               });
             } catch {
               // non-fatal — provider can update via Business Hub

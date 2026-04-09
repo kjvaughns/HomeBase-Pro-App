@@ -184,8 +184,14 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
       // Single atomic call: creates user + provider profile + initial service in one transaction.
       // If any step fails the entire registration rolls back — no broken partial accounts.
       const trimmedServiceArea = serviceArea.trim();
-      const parsedServiceZipCodes = trimmedServiceArea
+      const serviceAreaTokens = trimmedServiceArea
         ? trimmedServiceArea.split(",").map((s) => s.trim()).filter(Boolean)
+        : [];
+      const parsedServiceZipCodes = serviceAreaTokens.length
+        ? serviceAreaTokens.filter((t) => /^\d{5}(-\d{4})?$/.test(t))
+        : undefined;
+      const parsedServiceCities = serviceAreaTokens.length
+        ? serviceAreaTokens.filter((t) => !/^\d{5}(-\d{4})?$/.test(t))
         : undefined;
       const response = await apiRequest("POST", "/api/provider/onboard-complete", {
         name: accountName.trim(),
@@ -195,7 +201,8 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
         businessName: businessName.trim(),
         description: bio.trim() || undefined,
         serviceArea: trimmedServiceArea || undefined,
-        serviceZipCodes: parsedServiceZipCodes,
+        serviceZipCodes: parsedServiceZipCodes?.length ? parsedServiceZipCodes : undefined,
+        serviceCities: parsedServiceCities?.length ? parsedServiceCities : undefined,
         capabilityTags: category ? [category] : [],
         businessHours: { activeDays, startTime, endTime },
         initialService: serviceName.trim() ? {
