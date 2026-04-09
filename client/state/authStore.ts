@@ -64,11 +64,11 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       isAuthenticated: true,
       user,
       sessionToken: token || null,
-      // Returning users go directly to their dashboard — providers to provider mode,
-      // everyone else to homeowner mode. Never show role selection on login.
-      activeRole: hasApprovedProvider ? ("provider" as UserRole) : ("homeowner" as UserRole),
+      // Non-providers (or unapproved) go straight to homeowner mode.
+      // Approved providers see the RoleGateway so they can pick their mode.
+      activeRole: "homeowner" as UserRole,
       providerProfile: providerProfile || null,
-      needsRoleSelection: false,
+      needsRoleSelection: hasApprovedProvider,
     };
     set(newState);
     saveToStorage(get());

@@ -79,18 +79,19 @@ export default function LoginScreen({ navigation }: Props) {
         }, providerProfile, data.token ?? null);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Login failed";
+      const isNetworkError =
+        error instanceof TypeError ||
+        (error instanceof Error && (
+          error.message.includes("Network request failed") ||
+          error.message.toLowerCase().includes("failed to fetch")
+        ));
+      const message = error instanceof Error ? error.message : "";
       if (message.includes("401") || message.includes("Invalid")) {
         setErrors({ password: "Invalid email or password" });
-      } else if (
-        message.toLowerCase().includes("network") ||
-        message.toLowerCase().includes("failed to fetch") ||
-        message.toLowerCase().includes("timeout") ||
-        message.toLowerCase().includes("connection")
-      ) {
-        setErrors({ email: "Can't reach HomeBase. Check your internet connection and try again." });
+      } else if (isNetworkError) {
+        setErrors({ email: "Can't connect to HomeBase. Check your internet connection." });
       } else {
-        setErrors({ email: "Something went wrong. Please try again." });
+        setErrors({ email: "Something went wrong on our end. Please try again." });
       }
     } finally {
       setLoading(false);
