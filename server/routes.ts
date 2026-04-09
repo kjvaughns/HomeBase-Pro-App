@@ -13,7 +13,7 @@ import { getStripePublishableKey } from "./stripeClient";
 import { db } from "./db";
 import { sql, eq, and, desc, inArray, gte } from "drizzle-orm";
 import { appointments, maintenanceReminders, homes, reviews } from "@shared/schema";
-import { sendInvoiceEmail, sendProviderClientMessage } from "./emailService";
+import { sendInvoiceEmail, sendProviderClientMessage, sendSupportTicketEmail } from "./emailService";
 import { dispatch, dispatchWithResult, dispatchNotification, sendPush } from "./notificationService";
 import { 
   searchPlaces, 
@@ -64,6 +64,7 @@ import {
   pushTokens,
   notificationPreferences,
   housefaxEntries,
+  supportTickets,
 } from "@shared/schema";
 
 interface IdParams { id: string; }
@@ -6369,6 +6370,61 @@ Respond with JSON only:
     } catch (error: any) {
       console.error("Get last messages error:", error);
       res.status(500).json({ error: "Failed to get last messages" });
+    }
+  });
+
+  // ─── Support Ticket endpoint ─────────────────────────────────────────────────
+
+  app.post("/api/support/ticket", async (req: Request, res: Response) => {
+    try {
+      const { name, email, category, subject, message } = req.body;
+
+      if (!name || !email || !category || !subject || !message) {
+        return res.status(400).json({ error: "All fields are required" });
+      }
+
+      // Optionally read userId from auth token (non-fatal if absent)
+      let userId: string | null = null;
+      try {
+        const authHeader = req.headers.authorization;
+        if (authHeader?.startsWith("Bearer ")) {
+          const { verifyToken } = await import("./auth");
+          const payload = verifyToken(authHeader.slice(7));
+          if (payload?.userId) userId = payload.userId;
+        }
+      } catch {
+        // Non-authenticated requests are allowed
+      }
+
+      const [ticket] = await db
+        .insert(supportTickets)
+        .values({
+          userId: userId || null,
+          name: name.trim(),
+          email: email.trim(),
+          category: category.trim(),
+          subject: subject.trim(),
+          message: message.trim(),
+          status: "open",
+        })
+        .returning();
+
+      // Send email non-fatally
+      sendSupportTicketEmail({
+        ticketId: ticket.id,
+        name: ticket.name,
+        email: ticket.email,
+        category: ticket.category,
+        subject: ticket.subject,
+        message: ticket.message,
+      }).catch((err: unknown) => {
+        console.error("[SUPPORT_EMAIL] Failed to send support ticket email:", err);
+      });
+
+      res.status(201).json({ success: true, ticketId: ticket.id });
+    } catch (error: any) {
+      console.error("Support ticket error:", error);
+      res.status(500).json({ error: "Failed to submit support ticket" });
     }
   });
 

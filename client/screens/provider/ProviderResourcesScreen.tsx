@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
+import { useNavigation } from "@react-navigation/native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 
@@ -23,79 +24,120 @@ interface Resource {
   title: string;
   description: string;
   type: "article" | "video" | "guide" | "tool";
-  url?: string;
+  url: string;
 }
 
 const RESOURCES: Resource[] = [
   {
     id: "1",
     icon: "book-open",
-    title: "Getting Started Guide",
-    description: "Learn how to set up your profile, create services, and start accepting bookings.",
+    title: "Getting Started on HomeBase",
+    description:
+      "Complete your Business Hub profile, add services with clear pricing, create a public booking link, and connect Stripe to accept payments. A complete profile receives 3x more client inquiries.",
     type: "guide",
+    url: "https://homebaseproapp.com/faqpage",
   },
   {
     id: "2",
-    icon: "trending-up",
-    title: "Maximize Your Earnings",
-    description: "Tips and strategies to increase your revenue and grow your client base.",
+    icon: "dollar-sign",
+    title: "Setting Your Rates",
+    description:
+      "Research local market rates and factor in labor, materials, overhead, and a 15-20% profit margin. Update your pricing quarterly as material costs change to stay competitive and profitable.",
     type: "article",
+    url: "https://homebaseproapp.com/faqpage",
   },
   {
     id: "3",
     icon: "star",
-    title: "Getting 5-Star Reviews",
-    description: "Best practices for delivering exceptional service and earning great reviews.",
+    title: "Winning 5-Star Reviews",
+    description:
+      "Send a reminder message 24 hours before arrival, arrive on time, take before-and-after photos of your work, and follow up the next day. Satisfied clients become long-term repeat clients.",
     type: "article",
+    url: "https://homebaseproapp.com/faqpage",
   },
   {
     id: "4",
     icon: "camera",
-    title: "Portfolio Photography Tips",
-    description: "How to take professional photos of your work to attract more clients.",
-    type: "video",
+    title: "Photographing Your Work",
+    description:
+      "Use natural lighting and capture wide shots plus close-up detail of finished work. Before-and-after photos can increase booking rates by up to 40%. Keep your phone steady — a small tripod helps.",
+    type: "guide",
+    url: "https://homebaseproapp.com/faqpage",
   },
   {
     id: "5",
-    icon: "dollar-sign",
-    title: "Pricing Your Services",
-    description: "Guidelines for competitive pricing that reflects your value and expertise.",
+    icon: "shield",
+    title: "Business Insurance Guide",
+    description:
+      "Maintain at least $1M general liability coverage. Add workers' comp if you have employees, and a tools-and-equipment policy for high-value gear. Upload proof of insurance in your Business Hub to build trust.",
     type: "guide",
+    url: "https://homebaseproapp.com/faqpage",
   },
   {
     id: "6",
-    icon: "users",
-    title: "Client Communication",
-    description: "Templates and tips for professional communication with clients.",
+    icon: "bar-chart-2",
+    title: "Understanding Your Stats",
+    description:
+      "Your HomeBase dashboard tracks conversion rate, average job value, repeat-client rate, and total revenue. Review your stats weekly to spot trends and find opportunities to grow your business.",
     type: "tool",
+    url: "https://homebaseproapp.com/faqpage",
   },
   {
     id: "7",
     icon: "calendar",
-    title: "Scheduling Best Practices",
-    description: "Optimize your schedule for maximum efficiency and work-life balance.",
+    title: "Managing Your Schedule",
+    description:
+      "Set your business hours to control when clients can book. Use minimum advance booking windows to avoid last-minute rushes, and block personal time to maintain work-life balance.",
     type: "article",
+    url: "https://homebaseproapp.com/faqpage",
   },
   {
     id: "8",
-    icon: "shield",
-    title: "Insurance & Liability",
-    description: "Understanding insurance requirements and protecting your business.",
+    icon: "zap",
+    title: "Getting Paid Faster",
+    description:
+      "Connect Stripe in your Business Hub to enable online payments. Require a deposit on booking links for larger jobs. Send invoices within 1 hour of job completion — faster invoicing means faster payment.",
     type: "guide",
+    url: "https://homebaseproapp.com/faqpage",
   },
 ];
 
-const QUICK_LINKS = [
-  { icon: "file-text", label: "Terms of Service", url: "#" },
-  { icon: "lock", label: "Privacy Policy", url: "#" },
-  { icon: "help-circle", label: "FAQ", url: "#" },
-  { icon: "mail", label: "Contact Support", url: "#" },
+type QuickLink =
+  | { icon: keyof typeof Feather.glyphMap; label: string; type: "url"; url: string }
+  | { icon: keyof typeof Feather.glyphMap; label: string; type: "navigate"; screen: string };
+
+const QUICK_LINKS: QuickLink[] = [
+  {
+    icon: "file-text",
+    label: "Terms of Service",
+    type: "url",
+    url: "https://homebaseproapp.com/termsofservice",
+  },
+  {
+    icon: "lock",
+    label: "Privacy Policy",
+    type: "url",
+    url: "https://homebaseproapp.com/privacy",
+  },
+  {
+    icon: "help-circle",
+    label: "FAQ",
+    type: "url",
+    url: "https://homebaseproapp.com/faqpage",
+  },
+  {
+    icon: "headphones",
+    label: "Contact Support",
+    type: "navigate",
+    screen: "ContactUs",
+  },
 ];
 
 export default function ProviderResourcesScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { theme } = useTheme();
+  const navigation = useNavigation<any>();
 
   const getTypeColor = (type: Resource["type"]) => {
     switch (type) {
@@ -124,8 +166,14 @@ export default function ProviderResourcesScreen() {
   };
 
   const handleResourcePress = (resource: Resource) => {
-    if (resource.url) {
-      Linking.openURL(resource.url);
+    Linking.openURL(resource.url);
+  };
+
+  const handleQuickLink = (link: QuickLink) => {
+    if (link.type === "url") {
+      Linking.openURL(link.url);
+    } else {
+      navigation.navigate(link.screen);
     }
   };
 
@@ -147,7 +195,7 @@ export default function ProviderResourcesScreen() {
             </View>
             <ThemedText style={styles.heroTitle}>Provider Resources</ThemedText>
             <ThemedText style={[styles.heroSubtitle, { color: theme.textSecondary }]}>
-              Everything you need to succeed on HomeBase. From getting started guides to advanced growth strategies.
+              Everything you need to succeed on HomeBase — from getting started to growing a thriving business.
             </ThemedText>
           </GlassCard>
         </Animated.View>
@@ -163,6 +211,7 @@ export default function ProviderResourcesScreen() {
                 entering={FadeInDown.delay(100 + index * 30).duration(300)}
               >
                 <Pressable
+                  testID={`resource-${resource.id}`}
                   style={[styles.resourceCard, { backgroundColor: theme.cardBackground }]}
                   onPress={() => handleResourcePress(resource)}
                 >
@@ -207,6 +256,7 @@ export default function ProviderResourcesScreen() {
             {QUICK_LINKS.map((link, index) => (
               <Pressable
                 key={link.label}
+                testID={`quicklink-${link.label}`}
                 style={[
                   styles.quickLinkRow,
                   index < QUICK_LINKS.length - 1 && {
@@ -214,9 +264,10 @@ export default function ProviderResourcesScreen() {
                     borderBottomColor: theme.borderLight,
                   },
                 ]}
+                onPress={() => handleQuickLink(link)}
               >
                 <View style={styles.quickLinkLeft}>
-                  <Feather name={link.icon as any} size={18} color={theme.textSecondary} />
+                  <Feather name={link.icon} size={18} color={theme.textSecondary} />
                   <ThemedText style={styles.quickLinkText}>{link.label}</ThemedText>
                 </View>
                 <Feather name="chevron-right" size={18} color={theme.textTertiary} />
@@ -226,18 +277,22 @@ export default function ProviderResourcesScreen() {
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(350).duration(300)}>
-          <View style={[styles.supportCard, { backgroundColor: Colors.accent + "10" }]}>
+          <Pressable
+            testID="button-contact-support"
+            style={[styles.supportCard, { backgroundColor: Colors.accent + "10" }]}
+            onPress={() => navigation.navigate("ContactUs")}
+          >
             <Feather name="headphones" size={24} color={Colors.accent} />
             <View style={styles.supportInfo}>
               <ThemedText style={styles.supportTitle}>Need Help?</ThemedText>
               <ThemedText style={[styles.supportText, { color: theme.textSecondary }]}>
-                Our provider support team is available Mon-Fri, 9AM-6PM PST
+                Our support team typically responds within 24 hours
               </ThemedText>
             </View>
-            <Pressable style={[styles.supportButton, { backgroundColor: Colors.accent }]}>
-              <ThemedText style={{ color: "#FFFFFF", fontWeight: "600" }}>Chat</ThemedText>
-            </Pressable>
-          </View>
+            <View style={[styles.supportButton, { backgroundColor: Colors.accent }]}>
+              <ThemedText style={{ color: "#FFFFFF", fontWeight: "600", fontSize: 14 }}>Contact</ThemedText>
+            </View>
+          </Pressable>
         </Animated.View>
       </ScrollView>
     </ThemedView>
@@ -363,7 +418,7 @@ const styles = StyleSheet.create({
     ...Typography.caption1,
   },
   supportButton: {
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.md,
   },

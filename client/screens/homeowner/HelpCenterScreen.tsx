@@ -5,12 +5,12 @@ import {
   StyleSheet,
   Pressable,
   Platform,
-  Linking,
 } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
+import { useNavigation } from "@react-navigation/native";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -212,9 +212,10 @@ export default function HelpCenterScreen() {
   const { theme, isDark } = useTheme();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
 
   const handleContactSupport = () => {
-    Linking.openURL("mailto:support@homebase.app");
+    navigation.navigate("ContactUs");
   };
 
   return (
@@ -245,10 +246,11 @@ export default function HelpCenterScreen() {
             Can't find what you're looking for?
           </ThemedText>
           <Pressable
+            testID="button-contact-support"
             style={[styles.contactButton, { backgroundColor: Colors.accent }]}
             onPress={handleContactSupport}
           >
-            <Feather name="mail" size={18} color="#FFF" />
+            <Feather name="message-square" size={18} color="#FFF" />
             <ThemedText style={styles.contactButtonText}>Contact Support</ThemedText>
           </Pressable>
         </View>

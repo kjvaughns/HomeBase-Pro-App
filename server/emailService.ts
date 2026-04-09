@@ -608,6 +608,57 @@ export async function sendRebookingNudgeEmail(data: {
   );
 }
 
+// ─── Support Ticket template ────────────────────────────────────────────────
+
+export async function sendSupportTicketEmail(data: {
+  ticketId: string;
+  name: string;
+  email: string;
+  category: string;
+  subject: string;
+  message: string;
+}): Promise<SendResult> {
+  try {
+    const { client, fromEmail } = await getResendClient();
+
+    const body = greeting(data.name) +
+      paragraph(`Thank you for reaching out to HomeBase support. We've received your message and will respond within 24 hours. Here's a copy of your submission:`) +
+      infoBox(
+        infoRow('Ticket ID', data.ticketId.slice(0, 8).toUpperCase()) +
+        infoRow('Category', data.category) +
+        infoRow('Subject', data.subject) +
+        `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb;">
+          <span style="color:#6b7280;font-size:14px;">Message</span>
+          <p style="color:#111827;font-size:14px;line-height:1.6;margin:6px 0 0;">${data.message.replace(/\n/g, '<br/>')}</p>
+        </div>`
+      ) +
+      paragraph('Our support team will review your request and reply to this email address. If your issue is urgent, please include "URGENT" in any follow-up replies.') +
+      `<div style="background:#f0fdf4;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
+        <p style="color:#166534;font-size:13px;margin:0;"><strong>Support email:</strong> support@homebaseproapp.com</p>
+      </div>`;
+
+    const html = buildEmailBase('Support Request Received', body);
+
+    const result = await client.emails.send({
+      from: fromEmail || 'HomeBase <noreply@resend.dev>',
+      to: 'support@homebaseproapp.com',
+      cc: data.email,
+      subject: `[Support #${data.ticketId.slice(0, 8).toUpperCase()}] ${data.category}: ${data.subject}`,
+      html,
+    });
+
+    if (result.error) {
+      console.error('Resend error:', result.error);
+      return { success: false, error: result.error.message };
+    }
+
+    return { success: true, messageId: result.data?.id };
+  } catch (err: any) {
+    console.error('sendSupportTicketEmail error:', err);
+    return { success: false, error: err.message || 'Failed to send support email' };
+  }
+}
+
 export async function sendProviderClientMessage(data: ProviderClientMessageData): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
     const { client, fromEmail } = await getResendClient();

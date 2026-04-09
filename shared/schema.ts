@@ -952,3 +952,29 @@ export const insertHousefaxEntrySchema = createInsertSchema(housefaxEntries).omi
 
 export type HousefaxEntry = typeof housefaxEntries.$inferSelect;
 export type InsertHousefaxEntry = z.infer<typeof insertHousefaxEntrySchema>;
+
+// ─── Support Tickets ──────────────────────────────────────────────────────────
+
+export const supportTickets = pgTable("support_tickets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  category: text("category").notNull(),
+  subject: text("subject").notNull(),
+  message: text("message").notNull(),
+  status: text("status").notNull().default("open"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const supportTicketsRelations = relations(supportTickets, ({ one }) => ({
+  user: one(users, { fields: [supportTickets.userId], references: [users.id] }),
+}));
+
+export const insertSupportTicketSchema = createInsertSchema(supportTickets).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type SupportTicket = typeof supportTickets.$inferSelect;
+export type InsertSupportTicket = z.infer<typeof insertSupportTicketSchema>;
