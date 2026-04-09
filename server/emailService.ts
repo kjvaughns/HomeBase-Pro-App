@@ -625,6 +625,8 @@ export async function sendSupportTicketEmail(data: {
       paragraph(`Thank you for reaching out to HomeBase support. We've received your message and will respond within 24 hours. Here's a copy of your submission:`) +
       infoBox(
         infoRow('Ticket ID', data.ticketId.slice(0, 8).toUpperCase()) +
+        infoRow('Name', data.name) +
+        infoRow('Email', data.email) +
         infoRow('Category', data.category) +
         infoRow('Subject', data.subject) +
         `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb;">
