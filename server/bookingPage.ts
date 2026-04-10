@@ -23,6 +23,17 @@ function escapeHtml(str: string | null | undefined): string {
     .replace(/'/g, "&#39;");
 }
 
+function stripEmoji(str: string | null | undefined): string {
+  if (!str) return "";
+  return str
+    .replace(/[\u{1F300}-\u{1F9FF}]/gu, "")
+    .replace(/[\u{2600}-\u{26FF}]/gu, "")
+    .replace(/[\u{2700}-\u{27BF}]/gu, "")
+    .replace(/[\u{FE00}-\u{FE0F}]/gu, "")
+    .replace(/[\u{1F000}-\u{1FFFF}]/gu, "")
+    .trim();
+}
+
 /** Serialize a value to JSON and escape </script> to prevent XSS breakout in script blocks */
 function safeJsonInScript(value: unknown): string {
   return JSON.stringify(value).replace(/<\/script/gi, "<\\/script");

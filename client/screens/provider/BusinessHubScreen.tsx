@@ -116,6 +116,7 @@ interface ProviderRecord {
   phone: string | null;
   email: string | null;
   avatarUrl: string | null;
+  hourlyRate: string | null;
   serviceRadius: number | null;
   serviceZipCodes: string[] | null;
   serviceCities: string[] | null;
@@ -143,7 +144,7 @@ export default function BusinessHubScreen() {
   const tabBarHeight = useFloatingTabBarHeight();
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
-  const { user, providerProfile } = useAuthStore();
+  const { user, providerProfile, createProviderProfile } = useAuthStore();
   const queryClient = useQueryClient();
   const availableForWork = useProviderStore((s) => s.availableForWork);
   const setAvailableForWork = useProviderStore((s) => s.setAvailableForWork);
@@ -151,6 +152,30 @@ export default function BusinessHubScreen() {
   const [activeTab, setActiveTab] = useState<HubTab>("profile");
 
   const providerId = providerProfile?.id;
+
+  // Auto-recover: if providerProfile is missing from the store, fetch by userId
+  const { data: recoveredProviderData } = useQuery<{ provider: any }>({
+    queryKey: ["/api/provider/user", user?.id],
+    enabled: !providerId && !!user?.id,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (recoveredProviderData?.provider && !providerId) {
+      const p = recoveredProviderData.provider;
+      createProviderProfile({
+        id: p.id,
+        userId: p.userId,
+        businessName: p.businessName || "",
+        services: p.capabilityTags || p.services || [],
+        status: p.isActive ? "approved" : "pending",
+        rating: parseFloat(p.rating) || 0,
+        reviewCount: p.reviewCount || 0,
+        completedJobs: 0,
+        serviceArea: p.serviceArea,
+      });
+    }
+  }, [recoveredProviderData, providerId]);
 
   // Load provider data from API (for profile + policies)
   const { data: providerData, isLoading: providerLoading } = useQuery<{ provider: ProviderRecord }>({
@@ -161,6 +186,10 @@ export default function BusinessHubScreen() {
 
   // Profile tab state
   const [businessName, setBusinessName] = useState("");
+  const [description, setDescription] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [hourlyRate, setHourlyRate] = useState("");
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [serviceRadius, setServiceRadius] = useState("25");
   const [zipCodes, setZipCodes] = useState("");
@@ -196,6 +225,10 @@ export default function BusinessHubScreen() {
   useEffect(() => {
     if (!provider) return;
     setBusinessName(provider.businessName || user?.name || "");
+    setDescription(provider.description || "");
+    setPhone(provider.phone || "");
+    setEmail(provider.email || "");
+    setHourlyRate(provider.hourlyRate ? String(provider.hourlyRate) : "");
     if (provider.avatarUrl) setAvatarUri(provider.avatarUrl);
     if (provider.serviceRadius) setServiceRadius(String(provider.serviceRadius));
     if (provider.serviceZipCodes?.length) {
@@ -295,6 +328,10 @@ export default function BusinessHubScreen() {
         : null;
       await apiRequest("PATCH", `/api/provider/${providerId}`, {
         businessName: businessName.trim() || undefined,
+        description: description.trim() || undefined,
+        phone: phone.trim() || undefined,
+        email: email.trim() || undefined,
+        hourlyRate: hourlyRate.trim() ? parseFloat(hourlyRate) : undefined,
         businessHours: JSON.stringify(hours),
         serviceRadius: Number.isFinite(parsedRadius) ? parsedRadius : null,
         serviceZipCodes: parsedZipCodes,
@@ -387,6 +424,68 @@ export default function BusinessHubScreen() {
               placeholderTextColor={theme.textTertiary}
               returnKeyType="done"
               testID="input-business-name"
+            />
+          </View>
+
+          <View style={[styles.fieldCol, { marginTop: Spacing.sm }]}>
+            <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+              Description
+            </ThemedText>
+            <TextInput
+              style={[styles.textArea, { color: theme.text, backgroundColor: theme.backgroundElevated }]}
+              value={description}
+              onChangeText={setDescription}
+              placeholder="Describe your business and services..."
+              placeholderTextColor={theme.textTertiary}
+              multiline
+              numberOfLines={3}
+              testID="input-description"
+            />
+          </View>
+
+          <View style={styles.fieldRow}>
+            <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+              Phone
+            </ThemedText>
+            <TextInput
+              style={[styles.fieldInput, { color: theme.text, backgroundColor: theme.backgroundElevated }]}
+              value={phone}
+              onChangeText={setPhone}
+              placeholder="(555) 000-0000"
+              placeholderTextColor={theme.textTertiary}
+              keyboardType="phone-pad"
+              testID="input-phone"
+            />
+          </View>
+
+          <View style={styles.fieldRow}>
+            <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+              Business Email
+            </ThemedText>
+            <TextInput
+              style={[styles.fieldInput, { color: theme.text, backgroundColor: theme.backgroundElevated }]}
+              value={email}
+              onChangeText={setEmail}
+              placeholder="contact@yourbusiness.com"
+              placeholderTextColor={theme.textTertiary}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              testID="input-business-email"
+            />
+          </View>
+
+          <View style={styles.fieldRow}>
+            <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+              Hourly Rate ($)
+            </ThemedText>
+            <TextInput
+              style={[styles.fieldInputSmall, { color: theme.text, backgroundColor: theme.backgroundElevated }]}
+              value={hourlyRate}
+              onChangeText={setHourlyRate}
+              placeholder="95"
+              placeholderTextColor={theme.textTertiary}
+              keyboardType="decimal-pad"
+              testID="input-hourly-rate"
             />
           </View>
 
