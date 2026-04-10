@@ -349,6 +349,11 @@ function configureExpoAndLanding(app: express.Application) {
   const landingPageTemplate = fs.readFileSync(templatePath, "utf-8");
   const appName = getAppName();
 
+  // Backward-compatible redirect: old /book/:slug → /providers/:slug
+  app.get("/book/:slug", (req: Request<{ slug: string }>, res: Response) => {
+    res.redirect(301, `/providers/${req.params.slug}`);
+  });
+
   // Public booking page — served at /providers/:slug (SSR)
   app.get("/providers/:slug", async (req: Request<{ slug: string }>, res: Response) => {
     try {

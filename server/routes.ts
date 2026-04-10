@@ -5292,6 +5292,14 @@ Respond with JSON only:
     }
   });
 
+  // Backward-compatible aliases: old /api/book/ routes redirect to /api/providers/
+  app.get("/api/book/:slug", (req: Request<{ slug: string }>, res: Response) => {
+    res.redirect(301, `/api/providers/${req.params.slug}`);
+  });
+  app.post("/api/book/:slug/submit", (req: Request<{ slug: string }>, res: Response) => {
+    res.redirect(308, `/api/providers/${req.params.slug}/submit`);
+  });
+
   // Get public booking link by slug (no auth required)
   app.get("/api/providers/:slug", async (req: Request<{ slug: string }>, res: Response) => {
     try {
