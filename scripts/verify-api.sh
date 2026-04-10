@@ -1,9 +1,9 @@
 #!/bin/bash
 # HomeBase API verification script
 # Usage: ./scripts/verify-api.sh [API_URL] [TEST_EMAIL] [TEST_PASSWORD]
-# Example: ./scripts/verify-api.sh https://api.homebaseproapp.com test@example.com password123
+# Example: ./scripts/verify-api.sh https://homebaseproapp.com test@example.com password123
 
-API_URL="${1:-https://api.homebaseproapp.com}"
+API_URL="${1:-https://homebaseproapp.com}"
 TEST_EMAIL="${2:-}"
 TEST_PASSWORD="${3:-}"
 

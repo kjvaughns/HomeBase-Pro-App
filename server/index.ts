@@ -38,8 +38,8 @@ function setupCors(app: express.Application) {
       });
     }
 
-    origins.add("https://api.homebaseproapp.com");
     origins.add("https://homebaseproapp.com");
+    origins.add("https://api.homebaseproapp.com");
 
     const origin = req.header("origin");
 

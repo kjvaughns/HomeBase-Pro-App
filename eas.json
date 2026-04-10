@@ -15,7 +15,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "api.homebaseproapp.com",
+        "EXPO_PUBLIC_DOMAIN": "homebaseproapp.com",
         "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51SGSjDIPJg4hfhnF7O1wPHht6zWQEHY9SVbaR89Bas9ID7BWzIvMpYu",
         "EXPO_PUBLIC_REVENUECAT_API_KEY": "test_zZYZBXWbDqGeSvZkzZudxxaoCwj",
         "EXPO_PUBLIC_SUPABASE_URL": "https://yvedkmtjynhgsuxukxjj.supabase.co",
@@ -29,7 +29,7 @@
         "simulator": true
       },
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "api.homebaseproapp.com",
+        "EXPO_PUBLIC_DOMAIN": "homebaseproapp.com",
         "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51SGSjDIPJg4hfhnF7O1wPHht6zWQEHY9SVbaR89Bas9ID7BWzIvMpYu",
         "EXPO_PUBLIC_REVENUECAT_API_KEY": "test_zZYZBXWbDqGeSvZkzZudxxaoCwj",
         "EXPO_PUBLIC_SUPABASE_URL": "https://yvedkmtjynhgsuxukxjj.supabase.co",
@@ -45,7 +45,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "api.homebaseproapp.com",
+        "EXPO_PUBLIC_DOMAIN": "homebaseproapp.com",
         "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51SGSjDIPJg4hfhnF7O1wPHht6zWQEHY9SVbaR89Bas9ID7BWzIvMpYu",
         "EXPO_PUBLIC_REVENUECAT_API_KEY": "test_zZYZBXWbDqGeSvZkzZudxxaoCwj",
         "EXPO_PUBLIC_SUPABASE_URL": "https://yvedkmtjynhgsuxukxjj.supabase.co",
@@ -58,7 +58,7 @@
         "resourceClass": "m-medium"
       },
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "api.homebaseproapp.com",
+        "EXPO_PUBLIC_DOMAIN": "homebaseproapp.com",
         "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_live_51SGSj3IZlahBsqwMIt34Va0MVlpwqFOl31aY9fFgVH4pVPJVHFMIFcT6Y8n0xS7C2V0vczk57QKiKMH3BZoOxLjJ007zs9BRx4",
         "EXPO_PUBLIC_REVENUECAT_API_KEY": "test_zZYZBXWbDqGeSvZkzZudxxaoCwj",
         "EXPO_PUBLIC_SUPABASE_URL": "https://yvedkmtjynhgsuxukxjj.supabase.co",

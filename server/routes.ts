@@ -5454,7 +5454,7 @@ Respond with JSON only:
         .where(eq(providers.id, link.providerId))
         .limit(1);
 
-      if (!provider || provider.isPublic === false) {
+      if (!provider) {
         return res.status(404).json({ error: "Provider not found" });
       }
 

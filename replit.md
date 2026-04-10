@@ -63,10 +63,10 @@ The application comprises a client-side React Native Expo app (SDK 55, React Nat
 - **Express.js**: Backend web application framework.
 
 ## Production API Configuration
-- **Backend API domain**: `api.homebaseproapp.com` (set as `EXPO_PUBLIC_DOMAIN` in the mobile app build)
+- **Backend API domain**: `homebaseproapp.com` (set as `EXPO_PUBLIC_DOMAIN` in the mobile app build)
 - **`getApiUrl()`**: Helper in `client/lib/query-client.ts` strips any protocol prefix from `EXPO_PUBLIC_DOMAIN` before constructing `https://` URLs — prevents double-protocol malformed URLs
-- **EAS build profiles**: All four profiles (`development`, `development-simulator`, `preview`, `production`) use bare `api.homebaseproapp.com` (no protocol) as `EXPO_PUBLIC_DOMAIN`
-- **Custom domain setup**: After publishing on Replit, add `api.homebaseproapp.com` as a custom domain in Replit deployment settings pointing to the Express backend. Until mapped, the Replit autoscale URL (`*.replit.app`) serves as fallback.
+- **EAS build profiles**: All four profiles (`development`, `development-simulator`, `preview`, `production`) use bare `homebaseproapp.com` (no protocol) as `EXPO_PUBLIC_DOMAIN`
+- **Custom domain setup**: After publishing on Replit, add `homebaseproapp.com` as a custom domain in Replit deployment settings pointing to the Express backend (port 5000). This serves both API (`/api/*`) and public booking pages (`/book/:slug`). Until mapped, the Replit autoscale URL (`*.replit.app`) serves as fallback.
 - **Verification script**: `./scripts/verify-api.sh [API_URL]` — checks `/api/health` (200) and `/api/auth/me` unauth (401)
 
 ## Verified API Endpoints (2026-03-31, Express + Supabase)
@@ -76,10 +76,10 @@ Verified against dev backend `https://71129757-19ee-4d00-8a43-9880a08ca0af-00-12
 - `POST /api/auth/login` with valid credentials → HTTP 200 + `{"token":"...","user":{...}}`
 - `GET /api/auth/me` (authenticated Bearer token) → HTTP 200 + user email and profile
 
-To verify against production: `./scripts/verify-api.sh https://api.homebaseproapp.com TEST_EMAIL TEST_PASSWORD`
+To verify against production: `./scripts/verify-api.sh https://homebaseproapp.com TEST_EMAIL TEST_PASSWORD`
 Test account credentials are stored in the Replit Secrets (do not commit to code)
 
-**Deployment status**: App published to Replit autoscale. Custom domain `api.homebaseproapp.com` requires manual DNS + Replit domain configuration (add as custom domain in Replit deployment settings pointing to port 5000). Until domain is mapped, EAS builds pointing to `api.homebaseproapp.com` will not connect — temporarily switch `EXPO_PUBLIC_DOMAIN` in `eas.json` to the Replit autoscale URL if needed.
+**Deployment status**: App published to Replit autoscale. Custom domain `homebaseproapp.com` should be added in Replit deployment settings pointing to port 5000 (Express backend). This single domain serves both the API and public booking pages (`/book/:slug`). Until mapped, use the Replit autoscale URL as `EXPO_PUBLIC_DOMAIN` in `eas.json`.
 
 ## Invoice System
 - **Line items**: `AddInvoiceScreen` supports multiple line items (description, qty, unit price) with auto-calculated totals

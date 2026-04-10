@@ -114,7 +114,7 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
     .where(eq(providers.id, link.providerId))
     .limit(1);
 
-  if (!provider || provider.isPublic === false) {
+  if (!provider) {
     return errorPage(404, "Provider not found", "The provider associated with this booking page could not be found.");
   }
 
