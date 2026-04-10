@@ -204,7 +204,16 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
         serviceZipCodes: parsedServiceZipCodes?.length ? parsedServiceZipCodes : undefined,
         serviceCities: parsedServiceCities?.length ? parsedServiceCities : undefined,
         capabilityTags: category ? [category] : [],
-        businessHours: { activeDays, startTime, endTime },
+        businessHours: Object.fromEntries(
+          ["mon","tue","wed","thu","fri","sat","sun"].map((day) => [
+            day,
+            {
+              enabled: activeDays.includes(day),
+              open: activeDays.includes(day) ? startTime : "Closed",
+              close: activeDays.includes(day) ? endTime : "Closed",
+            },
+          ])
+        ),
         initialService: serviceName.trim() ? {
           name: serviceName.trim(),
           category: category || "General",

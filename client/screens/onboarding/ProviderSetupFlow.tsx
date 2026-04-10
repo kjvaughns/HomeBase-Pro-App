@@ -1287,6 +1287,31 @@ export default function ProviderSetupFlow({ navigation }: Props) {
         startTime: data.startTime,
         endTime: data.endTime,
       });
+      if (providerProfile?.id) {
+        const dayKeyedHours = Object.fromEntries(
+          ["mon","tue","wed","thu","fri","sat","sun"].map((day) => [
+            day,
+            {
+              enabled: data.activeDays.includes(day),
+              open: data.activeDays.includes(day) ? data.startTime : "Closed",
+              close: data.activeDays.includes(day) ? data.endTime : "Closed",
+            },
+          ])
+        );
+        apiRequest("PATCH", `/api/provider/${providerProfile.id}`, {
+          businessHours: dayKeyedHours,
+        }).catch((err) => {
+          console.warn("[ProviderSetupFlow] Failed to persist business hours:", err);
+        });
+      }
+    } else if (step === 3) {
+      if (providerProfile?.id && data.bio.trim()) {
+        apiRequest("PATCH", `/api/provider/${providerProfile.id}`, {
+          description: data.bio.trim(),
+        }).catch((err) => {
+          console.warn("[ProviderSetupFlow] Failed to persist bio:", err);
+        });
+      }
     }
 
     advanceStep();

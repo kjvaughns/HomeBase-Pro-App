@@ -220,6 +220,9 @@ async function seedTestAccount() {
   const [existingProvider] = await db.select().from(providers).where(eq(providers.userId, userId));
 
   let providerId: string;
+  // rating / reviewCount / averageRating are NOT set here — they are computed
+  // and written after reviews are seeded in section 7, ensuring they always
+  // reflect the actual seeded review data rather than hardcoded placeholders.
   const providerFields = {
     businessName: "Vaughn Home Services",
     description:
@@ -227,9 +230,6 @@ async function seedTestAccount() {
       "From HVAC to plumbing, electrical to landscaping — we handle it all with a trusted, professional touch.",
     phone: "(512) 555-0199",
     email: TEST_EMAIL,
-    rating: "4.9",
-    reviewCount: TARGET_REVIEWS,
-    averageRating: "4.9",
     hourlyRate: "95.00",
     isVerified: true,
     isActive: true,
@@ -244,12 +244,55 @@ async function seedTestAccount() {
   if (existingProvider) {
     console.log("Provider exists, id:", existingProvider.id);
     providerId = existingProvider.id;
-    await db.update(providers).set(providerFields).where(eq(providers.id, providerId));
+    // Non-destructive update: only set fields that are missing/empty on the existing record.
+    // User-entered values (businessName, description, serviceArea, etc.) are preserved.
+    const nonDestructiveUpdate: Partial<typeof providerFields> = {};
+    for (const [key, value] of Object.entries(providerFields) as [keyof typeof providerFields, unknown][]) {
+      const existing = (existingProvider as Record<string, unknown>)[key];
+      if (existing === null || existing === undefined || existing === "" ||
+          (Array.isArray(existing) && existing.length === 0)) {
+        (nonDestructiveUpdate as Record<string, unknown>)[key] = value;
+      }
+    }
+    if (Object.keys(nonDestructiveUpdate).length > 0) {
+      await db.update(providers).set(nonDestructiveUpdate).where(eq(providers.id, providerId));
+      console.log("Updated missing provider fields:", Object.keys(nonDestructiveUpdate).join(", "));
+    } else {
+      console.log("Provider fields already set; skipping update.");
+    }
   } else {
     console.log("Creating provider...");
     const [newProvider] = await db.insert(providers).values({ userId, ...providerFields }).returning();
     providerId = newProvider.id;
     console.log("Created provider:", providerId);
+  }
+
+  // ── 2b. Reset any synthetic rating/reviewCount that was hardcoded on a prior run ────
+  // Ensures provider rating/reviewCount always reflect actual seeded reviews (computed
+  // in section 7), never a placeholder value written without backing review rows.
+  {
+    const actualReviewCountResult = await pool.query<{ count: string }>(
+      `SELECT COUNT(*) AS count FROM reviews WHERE provider_id = $1`, [providerId]
+    );
+    const actualCount = parseInt(actualReviewCountResult.rows[0].count);
+    const [existingMeta] = await db.select({ rating: providers.rating, reviewCount: providers.reviewCount })
+      .from(providers).where(eq(providers.id, providerId));
+    const storedCount = existingMeta?.reviewCount ?? 0;
+    if (actualCount === 0 && storedCount > 0) {
+      // Hardcoded rating exists but no actual review rows — reset to zero
+      await db.update(providers).set({ rating: "0", reviewCount: 0, averageRating: "0" })
+        .where(eq(providers.id, providerId));
+      console.log("Cleared synthetic rating metadata (no backing review rows found).");
+    } else if (actualCount > 0 && storedCount !== actualCount) {
+      // Review rows exist but count is out of sync — recalculate
+      const avgResult = await pool.query<{ avg: string | null }>(
+        `SELECT AVG(rating)::numeric(3,1) AS avg FROM reviews WHERE provider_id = $1`, [providerId]
+      );
+      const avg = avgResult.rows[0].avg ?? "0";
+      await db.update(providers).set({ rating: avg, reviewCount: actualCount, averageRating: avg })
+        .where(eq(providers.id, providerId));
+      console.log(`Recalculated provider rating from ${actualCount} review rows: ${avg}`);
+    }
   }
 
   // ── 3. Ensure clients — guarantee exactly TARGET_CLIENTS including named specials ──

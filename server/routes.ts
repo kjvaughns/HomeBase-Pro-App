@@ -1453,7 +1453,13 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
         return res.status(404).json({ error: "Provider not found" });
       }
       const providerServices = await storage.getProviderServices(req.params.id);
-      res.json({ provider, services: providerServices });
+      const bookingPolicies = provider.bookingPolicies && typeof provider.bookingPolicies === "string"
+        ? (() => { try { return JSON.parse(provider.bookingPolicies as string); } catch { return provider.bookingPolicies; } })()
+        : provider.bookingPolicies;
+      const businessHours = provider.businessHours && typeof provider.businessHours === "string"
+        ? (() => { try { return JSON.parse(provider.businessHours as string); } catch { return provider.businessHours; } })()
+        : provider.businessHours;
+      res.json({ provider: { ...provider, bookingPolicies, businessHours }, services: providerServices });
     } catch (error) {
       console.error("Get provider error:", error);
       res.status(500).json({ error: "Failed to get provider" });
@@ -3288,18 +3294,28 @@ Respond with JSON only:
         "businessName", "description", "phone", "email", "serviceArea",
         "avatarUrl", "hourlyRate", "yearsExperience", "serviceRadius",
         "serviceZipCodes", "serviceCities", "isPublic",
-        "instantBooking", "advanceBookingDays",
       ];
       for (const field of directFields) {
         if (body[field] !== undefined) update[field] = body[field];
       }
 
       // Store JSON object fields as objects (Supabase jsonb columns)
-      if (body.bookingPolicies !== undefined) {
-        update.bookingPolicies =
-          typeof body.bookingPolicies === "string"
-            ? JSON.parse(body.bookingPolicies)
-            : body.bookingPolicies;
+      // instantBooking and advanceBookingDays are stored inside bookingPolicies JSON (not top-level columns)
+      if (body.bookingPolicies !== undefined || body.instantBooking !== undefined || body.advanceBookingDays !== undefined) {
+        const existingProvider = await storage.getProvider(id);
+        let currentPolicies: Record<string, any> = {};
+        if (existingProvider?.bookingPolicies) {
+          currentPolicies = typeof existingProvider.bookingPolicies === "string"
+            ? (() => { try { return JSON.parse(existingProvider.bookingPolicies as string); } catch { return {}; } })()
+            : (existingProvider.bookingPolicies as Record<string, any>) || {};
+        }
+        const incomingPolicies = body.bookingPolicies !== undefined
+          ? (typeof body.bookingPolicies === "string" ? JSON.parse(body.bookingPolicies) : body.bookingPolicies)
+          : {};
+        const merged: Record<string, any> = { ...currentPolicies, ...incomingPolicies };
+        if (body.instantBooking !== undefined) merged.instantBooking = body.instantBooking;
+        if (body.advanceBookingDays !== undefined) merged.advanceBookingDays = body.advanceBookingDays;
+        update.bookingPolicies = merged;
       }
       if (body.businessHours !== undefined) {
         update.businessHours =
@@ -3332,10 +3348,13 @@ Respond with JSON only:
         return res.status(404).json({ error: "Provider not found" });
       }
 
-      // Parse bookingPolicies back to object for the response
+      // Parse JSON fields back to objects for the response
       const parsed = { ...provider } as any;
-      if (parsed.bookingPolicies) {
+      if (parsed.bookingPolicies && typeof parsed.bookingPolicies === "string") {
         try { parsed.bookingPolicies = JSON.parse(parsed.bookingPolicies); } catch {}
+      }
+      if (parsed.businessHours && typeof parsed.businessHours === "string") {
+        try { parsed.businessHours = JSON.parse(parsed.businessHours); } catch {}
       }
 
       res.json({ provider: parsed });
@@ -5517,8 +5536,12 @@ Respond with JSON only:
           description: provider.description,
           avatarUrl: provider.avatarUrl,
           serviceArea: provider.serviceArea,
-          businessHours: provider.businessHours ? (() => { try { return JSON.parse(provider.businessHours!); } catch { return provider.businessHours; } })() : null,
-          bookingPolicies: provider.bookingPolicies,
+          businessHours: provider.businessHours
+            ? (() => { try { return JSON.parse(provider.businessHours!); } catch { return provider.businessHours; } })()
+            : null,
+          bookingPolicies: provider.bookingPolicies
+            ? (() => { try { return JSON.parse(provider.bookingPolicies as string); } catch { return provider.bookingPolicies; } })()
+            : null,
           averageRating: provider.averageRating ?? provider.rating,
           reviewCount: provider.reviewCount,
         },

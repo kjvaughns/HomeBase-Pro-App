@@ -53,6 +53,11 @@ interface BookingPoliciesData {
   cancellationFeePercent: number;
   rescheduleHours: number;
   maxReschedules: number;
+  instantBooking?: boolean;
+  depositRequired?: boolean;
+  depositPercentage?: number;
+  advanceBookingDays?: number;
+  cancellationWindowHours?: number;
 }
 
 const TABS: { key: HubTab; label: string; icon: FeatherName }[] = [
@@ -246,9 +251,12 @@ export default function BusinessHubScreen() {
   useEffect(() => {
     if (!provider || policiesLoaded) return;
     if (provider.bookingPolicies) {
-      setPolicies({ ...DEFAULT_POLICIES, ...provider.bookingPolicies });
+      const bp: BookingPoliciesData = provider.bookingPolicies;
+      setPolicies({ ...DEFAULT_POLICIES, ...bp });
+      if (bp.instantBooking !== undefined) {
+        setInstantBooking(bp.instantBooking);
+      }
     }
-    setInstantBooking(provider.instantBooking ?? false);
     setPoliciesLoaded(true);
   }, [provider, policiesLoaded]);
 
@@ -332,7 +340,7 @@ export default function BusinessHubScreen() {
         phone: phone.trim() || undefined,
         email: email.trim() || undefined,
         hourlyRate: hourlyRate.trim() ? parseFloat(hourlyRate) : undefined,
-        businessHours: JSON.stringify(hours),
+        businessHours: hours,
         serviceRadius: Number.isFinite(parsedRadius) ? parsedRadius : null,
         serviceZipCodes: parsedZipCodes,
         serviceCities: parsedCities,
@@ -355,8 +363,7 @@ export default function BusinessHubScreen() {
     setPoliciesError("");
     try {
       await apiRequest("PATCH", `/api/provider/${providerId}`, {
-        bookingPolicies: policies,
-        instantBooking,
+        bookingPolicies: { ...policies, instantBooking },
       });
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
