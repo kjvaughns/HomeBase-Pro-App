@@ -884,7 +884,7 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
           preferredTimesJson: JSON.stringify([{ date: date, time: time }]),
         };
 
-        fetch('/api/book/' + slug + '/submit', {
+        fetch('/api/providers/' + slug + '/submit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),

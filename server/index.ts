@@ -349,8 +349,8 @@ function configureExpoAndLanding(app: express.Application) {
   const landingPageTemplate = fs.readFileSync(templatePath, "utf-8");
   const appName = getAppName();
 
-  // Public booking page — served at /book/:slug (SSR)
-  app.get("/book/:slug", async (req: Request<{ slug: string }>, res: Response) => {
+  // Public booking page — served at /providers/:slug (SSR)
+  app.get("/providers/:slug", async (req: Request<{ slug: string }>, res: Response) => {
     try {
       const { renderBookingPage } = await import("./bookingPage");
       const { html, status } = await renderBookingPage(req.params.slug, db);

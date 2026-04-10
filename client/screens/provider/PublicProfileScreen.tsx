@@ -75,7 +75,7 @@ export default function PublicProfileScreen() {
   const activeLink = bookingLinksData?.bookingLinks?.find((l) => l.status === "active");
   const slug = activeLink?.slug;
   const domain = process.env.EXPO_PUBLIC_DOMAIN || "localhost:5000";
-  const profileUrl = slug ? `https://homebaseproapp.com/book/${slug}` : null;
+  const profileUrl = slug ? `https://homebaseproapp.com/providers/${slug}` : null;
   const services = servicesData?.services || [];
   const reviews = reviewsData?.reviews || [];
 

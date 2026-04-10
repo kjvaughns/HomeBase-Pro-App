@@ -5293,7 +5293,7 @@ Respond with JSON only:
   });
 
   // Get public booking link by slug (no auth required)
-  app.get("/api/book/:slug", async (req: Request<{ slug: string }>, res: Response) => {
+  app.get("/api/providers/:slug", async (req: Request<{ slug: string }>, res: Response) => {
     try {
       const { slug } = req.params;
       const link = await storage.getBookingLinkBySlug(slug);
@@ -5370,7 +5370,7 @@ Respond with JSON only:
   });
 
   // Submit intake form (public - creates intake submission)
-  app.post("/api/book/:slug/submit", async (req: Request<{ slug: string }>, res: Response) => {
+  app.post("/api/providers/:slug/submit", async (req: Request<{ slug: string }>, res: Response) => {
     try {
       const { slug } = req.params;
       const { clientName, clientPhone, clientEmail, address, problemDescription, answersJson, photosJson, preferredTimesJson, homeownerUserId } = req.body;

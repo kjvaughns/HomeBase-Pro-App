@@ -432,7 +432,7 @@
   async function load() {
     try {
       const apiBase = location.origin;
-      const res = await fetch(`${apiBase}/api/book/${slug}`);
+      const res = await fetch(`${apiBase}/api/providers/${slug}`);
       if (!res.ok) { showError(); return; }
       const { bookingLink, provider } = await res.json();
 
@@ -562,7 +562,7 @@
         $('btn-submit').textContent = 'Sending...';
 
         try {
-          const submitRes = await fetch(`${apiBase}/api/book/${slug}/submit`, {
+          const submitRes = await fetch(`${apiBase}/api/providers/${slug}/submit`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
