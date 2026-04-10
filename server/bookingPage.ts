@@ -185,6 +185,7 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
   const avatarUrl = escapeHtml(provider.avatarUrl ?? "");
   const rating = provider.averageRating ?? provider.rating ?? 0;
   const reviewCount = provider.reviewCount ?? 0;
+  const serviceAreaText = provider.serviceArea ? escapeHtml(stripEmoji(provider.serviceArea)) : "";
 
   // Build service options for dropdown (injected into inline script safely)
   type ServiceOption = { id: string; name: string; price: string | null };
@@ -279,14 +280,14 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg: #0a0f1e;
-      --accent: #6C63FF;
-      --accent-hover: #5a52e0;
-      --glass-bg: rgba(255,255,255,0.06);
-      --glass-border: rgba(255,255,255,0.12);
-      --text: #ffffff;
-      --text-muted: rgba(255,255,255,0.6);
-      --text-dim: rgba(255,255,255,0.35);
+      --bg: #F2F2F7;
+      --accent: #38AE5F;
+      --accent-hover: #2d9151;
+      --glass-bg: #FFFFFF;
+      --glass-border: rgba(0,0,0,0.08);
+      --text: #111111;
+      --text-muted: #6B6B6B;
+      --text-dim: #ADADAD;
       --radius: 16px;
       --radius-sm: 10px;
     }
@@ -326,7 +327,7 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
       overflow: hidden;
       margin: 0 auto 16px;
       border: 3px solid var(--accent);
-      background: rgba(108,99,255,0.2);
+      background: rgba(56,174,95,0.1);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -455,7 +456,7 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
     }
 
     input, select, textarea {
-      background: rgba(255,255,255,0.07);
+      background: rgba(0,0,0,0.04);
       border: 1px solid var(--glass-border);
       border-radius: var(--radius-sm);
       color: var(--text);
@@ -470,13 +471,13 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
     }
 
     select {
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23ffffff80' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C%2Fsvg%3E");
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b6b6b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C%2Fsvg%3E");
       background-repeat: no-repeat;
       background-position: right 14px center;
       padding-right: 36px;
     }
 
-    select option { background: #1a2040; color: #fff; }
+    select option { background: #ffffff; color: #111111; }
 
     textarea { resize: vertical; min-height: 90px; }
 
@@ -542,7 +543,7 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
       width: 64px;
       height: 64px;
       border-radius: 50%;
-      background: rgba(108,99,255,0.2);
+      background: rgba(56,174,95,0.12);
       border: 2px solid var(--accent);
       display: flex;
       align-items: center;
@@ -563,7 +564,7 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
     }
 
     .summary-box {
-      background: rgba(255,255,255,0.04);
+      background: rgba(0,0,0,0.03);
       border: 1px solid var(--glass-border);
       border-radius: var(--radius-sm);
       padding: 16px;
@@ -584,8 +585,8 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
     .app-cta {
       margin-top: 24px;
       padding: 14px 20px;
-      background: rgba(108,99,255,0.15);
-      border: 1px solid rgba(108,99,255,0.3);
+      background: rgba(56,174,95,0.07);
+      border: 1px solid rgba(56,174,95,0.2);
       border-radius: var(--radius-sm);
     }
 
@@ -656,6 +657,15 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
     }
 
     .footer a:hover { text-decoration: underline; }
+
+    .service-area {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 8px;
+    }
   </style>
 </head>
 <body>
@@ -678,6 +688,7 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
         <span class="rating-score">${Number(rating).toFixed(1)}</span>
         <span class="rating-count">(${reviewCount} review${reviewCount !== 1 ? "s" : ""})</span>
       </div>` : ""}
+      ${serviceAreaText ? `<div class="service-area">Serving ${serviceAreaText}</div>` : ""}
     </div>
 
     <!-- Services Section -->

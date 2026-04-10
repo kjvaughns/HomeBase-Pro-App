@@ -450,7 +450,8 @@
       $('provider-name').textContent = provider.businessName || 'Your Provider';
 
       if (provider.serviceArea) {
-        $('provider-location').textContent = 'Serving ' + provider.serviceArea;
+        var cleanArea = provider.serviceArea.replace(/\p{Emoji}/gu, '').replace(/\s+/g, ' ').trim();
+        $('provider-location').textContent = 'Serving ' + cleanArea;
       }
 
       // Trust row
