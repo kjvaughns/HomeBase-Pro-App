@@ -187,6 +187,7 @@ export default function NewServiceScreen() {
   const [recurringPrice, setRecurringPrice] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isImprovingDescription, setIsImprovingDescription] = useState(false);
+  const [descriptionAiError, setDescriptionAiError] = useState<string | null>(null);
   const [priceSuggestion, setPriceSuggestion] = useState<PriceSuggestion | null>(null);
   const [priceSuggestionDismissed, setPriceSuggestionDismissed] = useState(false);
   const [showSavedTip, setShowSavedTip] = useState(false);
@@ -300,6 +301,7 @@ export default function NewServiceScreen() {
     if (!name.trim() || !category) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsImprovingDescription(true);
+    setDescriptionAiError(null);
     try {
       const url = new URL("/api/ai/suggest-description", getApiUrl());
       const response = await fetch(url.toString(), {
@@ -309,9 +311,17 @@ export default function NewServiceScreen() {
       });
       if (response.ok) {
         const data = await response.json();
-        if (data.description) setDescription(data.description);
+        if (data.description) {
+          setDescription(data.description);
+        } else {
+          setDescriptionAiError("AI could not generate a description. Try writing one or try again.");
+        }
+      } else {
+        setDescriptionAiError("AI description failed. Check your connection and try again.");
       }
-    } catch {}
+    } catch {
+      setDescriptionAiError("Could not reach AI. Check your connection and try again.");
+    }
     setIsImprovingDescription(false);
   };
 
@@ -785,9 +795,17 @@ export default function NewServiceScreen() {
                   <Feather name="zap" size={14} color={Colors.accent} style={{ marginRight: 6 }} />
                 )}
                 <ThemedText style={[styles.improveBtnText, { color: Colors.accent }]}>
-                  {isImprovingDescription ? "Improving..." : "Improve description with AI"}
+                  {isImprovingDescription ? "Generating..." : "Generate description with AI"}
                 </ThemedText>
               </Pressable>
+              {descriptionAiError ? (
+                <Animated.View entering={FadeIn.duration(200)} style={[styles.aiErrorBanner, { backgroundColor: "#FF453A10", borderColor: "#FF453A30" }]}>
+                  <Feather name="alert-circle" size={14} color="#FF453A" style={{ marginRight: 6 }} />
+                  <ThemedText style={[styles.aiErrorText, { color: "#FF453A" }]}>
+                    {descriptionAiError}
+                  </ThemedText>
+                </Animated.View>
+              ) : null}
               {priceSuggestion?.hint && !priceSuggestionDismissed && name.trim().length > 0 && category.length > 0 ? (
                 <Animated.View entering={FadeIn.duration(250)} style={[styles.hintRow, { backgroundColor: theme.backgroundElevated }]}>
                   <Feather name="info" size={13} color={theme.textTertiary} style={{ marginRight: 5 }} />
@@ -1237,5 +1255,17 @@ const styles = StyleSheet.create({
   tipActionText: {
     ...Typography.body,
     fontWeight: "600",
+  },
+  aiErrorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    marginTop: Spacing.sm,
+  },
+  aiErrorText: {
+    ...Typography.caption1,
+    flex: 1,
   },
 });

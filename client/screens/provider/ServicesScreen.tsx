@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, type ComponentProps } from "react";
 import {
   StyleSheet,
   FlatList,
@@ -20,13 +20,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
-import { EmptyState } from "@/components/EmptyState";
 import { GlassCard } from "@/components/GlassCard";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
+
+type FeatherIconName = ComponentProps<typeof Feather>["name"];
 
 type PricingType = "fixed" | "variable" | "service_call" | "quote";
 
@@ -47,12 +48,40 @@ interface ProviderService {
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
+const CATEGORY_ICON_MAP: Record<string, FeatherIconName> = {
+  cleaning: "home",
+  hvac: "thermometer",
+  plumbing: "droplet",
+  electrical: "zap",
+  landscaping: "sun",
+  handyman: "tool",
+  painting: "edit-3",
+  roofing: "triangle",
+  pest: "shield",
+  "pest control": "shield",
+  other: "more-horizontal",
+};
+
+function getCategoryIcon(category: string): FeatherIconName {
+  const key = category.toLowerCase().trim();
+  return CATEGORY_ICON_MAP[key] || "package";
+}
+
 function getPricingLabel(type: PricingType): string {
   switch (type) {
-    case "fixed": return "FIXED";
+    case "fixed": return "FLAT";
     case "variable": return "VARIABLE";
     case "service_call": return "SERVICE CALL";
     case "quote": return "QUOTE";
+  }
+}
+
+function getPricingColor(type: PricingType): string {
+  switch (type) {
+    case "fixed": return Colors.accent;
+    case "variable": return "#FF9500";
+    case "service_call": return "#5AC8FA";
+    case "quote": return "#AF52DE";
   }
 }
 
@@ -74,12 +103,20 @@ function getPriceDisplay(service: ProviderService): string {
         } catch {}
       }
       return (service.priceFrom && service.priceTo)
-        ? `$${parseFloat(service.priceFrom).toFixed(0)} - $${parseFloat(service.priceTo).toFixed(0)}`
+        ? `$${parseFloat(service.priceFrom).toFixed(0)} – $${parseFloat(service.priceTo).toFixed(0)}`
         : service.basePrice ? `From $${parseFloat(service.basePrice).toFixed(0)}` : "Tiered";
     }
-    case "service_call": return service.basePrice ? `$${parseFloat(service.basePrice).toFixed(0)} + hourly` : "Call for price";
-    case "quote": return "Ask for Price";
+    case "service_call": return service.basePrice ? `$${parseFloat(service.basePrice).toFixed(0)} + labor` : "Call for price";
+    case "quote": return "Request Quote";
   }
+}
+
+function getDurationLabel(minutes: number | null): string | null {
+  if (!minutes) return null;
+  if (minutes < 60) return `${minutes} min`;
+  if (minutes === 60) return "1 hr";
+  if (minutes % 60 === 0) return `${minutes / 60} hrs`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
 interface ServiceCardProps {
@@ -90,6 +127,9 @@ interface ServiceCardProps {
 
 function ServiceCard({ service, onPress, onTogglePublish }: ServiceCardProps) {
   const { theme } = useTheme();
+  const categoryIcon = getCategoryIcon(service.category);
+  const pricingColor = getPricingColor(service.pricingType);
+  const durationLabel = getDurationLabel(service.duration);
 
   const handleToggle = (value: boolean) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -97,20 +137,60 @@ function ServiceCard({ service, onPress, onTogglePublish }: ServiceCardProps) {
   };
 
   return (
-    <Pressable onPress={onPress}>
+    <Pressable onPress={onPress} testID={`card-service-${service.id}`}>
       <GlassCard style={styles.serviceCard}>
         <View style={styles.serviceHeader}>
-          <View style={styles.serviceIconContainer}>
-            <Feather name="star" size={18} color={Colors.accent} />
+          <View style={[styles.serviceIconContainer, { backgroundColor: Colors.accent + "18" }]}>
+            <Feather name={categoryIcon} size={20} color={Colors.accent} />
           </View>
           <View style={styles.serviceInfo}>
-            <ThemedText type="body" style={styles.serviceName}>
+            <ThemedText type="body" style={styles.serviceName} numberOfLines={1}>
               {service.name}
             </ThemedText>
-            <ThemedText type="caption" style={{ color: Colors.accent }}>
+            <ThemedText type="caption" style={{ color: theme.textSecondary, marginTop: 1 }}>
               {service.category}
             </ThemedText>
           </View>
+          <View style={[
+            styles.statusPill,
+            {
+              backgroundColor: service.isPublished ? Colors.accent + "18" : theme.backgroundElevated,
+              borderColor: service.isPublished ? Colors.accent + "50" : theme.borderLight,
+            },
+          ]}>
+            <View style={[
+              styles.statusDot,
+              { backgroundColor: service.isPublished ? Colors.accent : theme.textTertiary },
+            ]} />
+            <ThemedText style={[
+              styles.statusText,
+              { color: service.isPublished ? Colors.accent : theme.textTertiary },
+            ]}>
+              {service.isPublished ? "Live" : "Draft"}
+            </ThemedText>
+          </View>
+        </View>
+
+        <View style={[styles.serviceDivider, { backgroundColor: theme.borderLight }]} />
+
+        <View style={styles.serviceFooter}>
+          <View style={[styles.pricingBadge, { backgroundColor: pricingColor + "15", borderColor: pricingColor + "30" }]}>
+            <ThemedText style={[styles.pricingLabel, { color: pricingColor }]}>
+              {getPricingLabel(service.pricingType)}
+            </ThemedText>
+          </View>
+          <ThemedText type="body" style={[styles.priceText, { color: theme.text }]}>
+            {getPriceDisplay(service)}
+          </ThemedText>
+          <View style={styles.footerSpacer} />
+          {durationLabel ? (
+            <View style={[styles.durationChip, { backgroundColor: theme.backgroundElevated, borderColor: theme.borderLight }]}>
+              <Feather name="clock" size={11} color={theme.textSecondary} />
+              <ThemedText style={[styles.durationText, { color: theme.textSecondary }]}>
+                {durationLabel}
+              </ThemedText>
+            </View>
+          ) : null}
           <Switch
             value={service.isPublished}
             onValueChange={handleToggle}
@@ -118,16 +198,6 @@ function ServiceCard({ service, onPress, onTogglePublish }: ServiceCardProps) {
             thumbColor="#fff"
             ios_backgroundColor={theme.borderLight}
           />
-        </View>
-        <View style={styles.serviceFooter}>
-          <View style={[styles.pricingBadge, { backgroundColor: theme.backgroundElevated }]}>
-            <ThemedText style={[styles.pricingLabel, { color: theme.textSecondary }]}>
-              {getPricingLabel(service.pricingType)}
-            </ThemedText>
-          </View>
-          <ThemedText type="body" style={styles.priceText}>
-            {getPriceDisplay(service)}
-          </ThemedText>
         </View>
       </GlassCard>
     </Pressable>
@@ -281,12 +351,43 @@ export default function ServicesScreen() {
         </View>
       );
     }
+    if (searchQuery.trim() || selectedCategory !== "All") {
+      return (
+        <View style={styles.noResultsContainer}>
+          <View style={[styles.noResultsIcon, { backgroundColor: theme.backgroundElevated }]}>
+            <Feather name="search" size={28} color={theme.textTertiary} />
+          </View>
+          <ThemedText type="h3" style={[styles.noResultsTitle, { color: theme.textSecondary }]}>
+            No matching services
+          </ThemedText>
+          <ThemedText type="caption" style={{ color: theme.textTertiary, textAlign: "center" }}>
+            Try a different search or category filter.
+          </ThemedText>
+        </View>
+      );
+    }
     return (
-      <EmptyState
-        image={require("../../../assets/images/empty-leads.png")}
-        title="No services yet"
-        description="Add your first service to start getting bookings."
-      />
+      <GlassCard style={[styles.emptyCard, { borderStyle: "dashed", borderColor: Colors.accent + "40", borderWidth: 1.5 }]}>
+        <View style={[styles.emptyIconCircle, { backgroundColor: Colors.accent + "15" }]}>
+          <Feather name="package" size={32} color={Colors.accent} />
+        </View>
+        <ThemedText type="h3" style={{ fontWeight: "700", marginBottom: Spacing.xs, textAlign: "center" }}>
+          No services yet
+        </ThemedText>
+        <ThemedText type="body" style={{ color: theme.textSecondary, textAlign: "center", lineHeight: 22 }}>
+          Add your first service to start receiving bookings. Each service you create will appear here.
+        </ThemedText>
+        <Pressable
+          style={[styles.emptyAddBtn, { backgroundColor: Colors.accent }]}
+          onPress={handleAddService}
+          testID="button-empty-add-service"
+        >
+          <Feather name="plus" size={16} color="#fff" />
+          <ThemedText style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>
+            Add Your First Service
+          </ThemedText>
+        </Pressable>
+      </GlassCard>
     );
   };
 
@@ -379,32 +480,68 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   serviceIconContainer: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: BorderRadius.md,
-    backgroundColor: Colors.accent + "15",
     alignItems: "center",
     justifyContent: "center",
     marginRight: Spacing.md,
   },
   serviceInfo: { flex: 1 },
-  serviceName: { fontWeight: "600", marginBottom: 2 },
+  serviceName: { fontWeight: "700", marginBottom: 2 },
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusText: {
+    ...Typography.caption2,
+    fontWeight: "600",
+  },
+  serviceDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginBottom: Spacing.md,
+  },
   serviceFooter: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    gap: Spacing.sm,
   },
+  footerSpacer: { flex: 1 },
   pricingBadge: {
     paddingHorizontal: Spacing.sm,
     paddingVertical: 4,
     borderRadius: BorderRadius.sm,
+    borderWidth: 1,
   },
   pricingLabel: {
     ...Typography.caption2,
-    fontWeight: "600",
+    fontWeight: "700",
     letterSpacing: 0.5,
   },
-  priceText: { fontWeight: "600" },
+  priceText: { fontWeight: "600", fontSize: 15 },
+  durationChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+  },
+  durationText: {
+    ...Typography.caption2,
+    fontWeight: "500",
+  },
   emptyContainer: {
     flexGrow: 1,
     justifyContent: "center",
@@ -413,5 +550,45 @@ const styles = StyleSheet.create({
   loadingContainer: {
     padding: Spacing["2xl"],
     alignItems: "center",
+  },
+  emptyCard: {
+    marginHorizontal: Spacing.screenPadding,
+    padding: Spacing.xl,
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  emptyIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.xs,
+  },
+  emptyAddBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.full,
+    marginTop: Spacing.xs,
+  },
+  noResultsContainer: {
+    alignItems: "center",
+    paddingVertical: Spacing["2xl"],
+    paddingHorizontal: Spacing.xl,
+    gap: Spacing.sm,
+  },
+  noResultsIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.xs,
+  },
+  noResultsTitle: {
+    fontWeight: "600",
   },
 });
