@@ -3,6 +3,15 @@ import { Resend } from 'resend';
 let connectionSettings: any;
 
 async function getCredentials() {
+  // Try env var first (fastest path, works in all environments)
+  const envApiKey = process.env.RESEND_API_KEY;
+  const envFromEmail = process.env.RESEND_FROM_EMAIL || 'HomeBase <noreply@homebaseproapp.com>';
+
+  if (envApiKey) {
+    return { apiKey: envApiKey, fromEmail: envFromEmail };
+  }
+
+  // Try Replit connectors API
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
   const xReplitToken = process.env.REPL_IDENTITY 
     ? 'repl ' + process.env.REPL_IDENTITY 
@@ -10,27 +19,30 @@ async function getCredentials() {
     ? 'depl ' + process.env.WEB_REPL_RENEWAL 
     : null;
 
-  if (!xReplitToken) {
-    throw new Error('Resend authentication token not found');
-  }
+  if (hostname && xReplitToken) {
+    try {
+      connectionSettings = await fetch(
+        'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=resend',
+        {
+          headers: {
+            'Accept': 'application/json',
+            'X_REPLIT_TOKEN': xReplitToken
+          }
+        }
+      ).then(res => res.json()).then(data => data.items?.[0]);
 
-  connectionSettings = await fetch(
-    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=resend',
-    {
-      headers: {
-        'Accept': 'application/json',
-        'X_REPLIT_TOKEN': xReplitToken
+      if (connectionSettings?.settings?.api_key) {
+        return {
+          apiKey: connectionSettings.settings.api_key,
+          fromEmail: connectionSettings.settings.from_email || envFromEmail
+        };
       }
+    } catch (e) {
+      // Fall through to error
     }
-  ).then(res => res.json()).then(data => data.items?.[0]);
-
-  if (!connectionSettings || (!connectionSettings.settings.api_key)) {
-    throw new Error('Resend not connected - please set up the Resend integration');
   }
-  return {
-    apiKey: connectionSettings.settings.api_key, 
-    fromEmail: connectionSettings.settings.from_email
-  };
+
+  throw new Error('Resend not configured - set RESEND_API_KEY secret or connect the Resend integration');
 }
 
 async function getResendClient() {
