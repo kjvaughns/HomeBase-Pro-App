@@ -648,6 +648,7 @@ function ServiceStep({
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [priceSuggestion, setPriceSuggestion] = useState<{ minPrice: number; maxPrice: number; hint: string } | null>(null);
   const [loadingPrice, setLoadingPrice] = useState(false);
+  const [descriptionError, setDescriptionError] = useState<string | null>(null);
   const priceDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const descDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -663,13 +664,20 @@ function ServiceStep({
 
   useEffect(() => {
     if (descDebounceRef.current) clearTimeout(descDebounceRef.current);
-    if (!serviceName.trim() || !category) { setServiceDescription(""); return; }
+    if (!serviceName.trim() || !category) { setServiceDescription(""); setDescriptionError(null); return; }
     descDebounceRef.current = setTimeout(async () => {
+      setDescriptionError(null);
       try {
         const res = await apiRequest("POST", "/api/ai/onboarding/suggest-description", { serviceName: serviceName.trim(), category });
         const json = await res.json();
-        if (json.description) setServiceDescription(json.description);
-      } catch { /* silently fail */ }
+        if (json.description) {
+          setServiceDescription(json.description);
+        } else {
+          setDescriptionError("Could not generate description. You can write one manually.");
+        }
+      } catch {
+        setDescriptionError("Could not reach AI. Check your connection and try again.");
+      }
     }, 1200);
     return () => { if (descDebounceRef.current) clearTimeout(descDebounceRef.current); };
   }, [serviceName, category]);
@@ -754,54 +762,80 @@ function ServiceStep({
           </View>
         ) : null}
 
-        {serviceDescription ? (
-          <View style={[styles.descriptionPreview, { backgroundColor: Colors.accent + "08", borderColor: Colors.accent + "30" }]}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: Spacing.xs }}>
-              <Feather name="zap" size={11} color={Colors.accent} />
-              <ThemedText style={[styles.captionText, { color: Colors.accent, fontWeight: "600" }]}>AI Description</ThemedText>
-            </View>
-            <ThemedText style={[styles.captionText, { color: theme.textSecondary, lineHeight: 18 }]}>{serviceDescription}</ThemedText>
+        {(serviceDescription || descriptionError) ? (
+          <View style={[
+            styles.descriptionPreview,
+            {
+              backgroundColor: descriptionError ? "#FF453A08" : Colors.accent + "08",
+              borderColor: descriptionError ? "#FF453A30" : Colors.accent + "30",
+            },
+          ]}>
+            {descriptionError ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.xs }}>
+                <Feather name="alert-circle" size={12} color="#FF453A" />
+                <ThemedText style={[styles.captionText, { color: "#FF453A", flex: 1 }]}>{descriptionError}</ThemedText>
+              </View>
+            ) : (
+              <>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: Spacing.xs }}>
+                  <Feather name="zap" size={11} color={Colors.accent} />
+                  <ThemedText style={[styles.captionText, { color: Colors.accent, fontWeight: "600" }]}>AI Description</ThemedText>
+                </View>
+                <ThemedText style={[styles.captionText, { color: theme.textSecondary, lineHeight: 18 }]}>{serviceDescription}</ThemedText>
+              </>
+            )}
           </View>
         ) : null}
 
         <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary, marginTop: Spacing.lg }]}>Pricing</ThemedText>
-        <View style={styles.pricingRow}>
-          <View style={styles.priceInputWrapper}>
-            <ThemedText style={[styles.currencySymbol, { color: quoteRequired ? theme.textTertiary : theme.textSecondary }]}>$</ThemedText>
-            <TextInput
-              style={[
-                styles.priceInput,
-                {
-                  backgroundColor: theme.backgroundElevated,
-                  color: quoteRequired ? theme.textTertiary : theme.text,
-                  borderColor: theme.border,
-                },
-              ]}
-              placeholder="0.00"
-              placeholderTextColor={theme.textSecondary}
-              value={servicePrice}
-              onChangeText={setServicePrice}
-              keyboardType="decimal-pad"
-              editable={!quoteRequired}
-              testID="input-service-price"
-            />
-          </View>
+        <View style={[styles.pricingSegmented, { backgroundColor: theme.backgroundElevated, borderColor: theme.border }]}>
           <Pressable
-            onPress={() => { Haptics.selectionAsync(); setQuoteRequired(!quoteRequired); setServicePrice(""); }}
+            onPress={() => { Haptics.selectionAsync(); setQuoteRequired(false); }}
             style={[
-              styles.quoteToggle,
-              {
-                backgroundColor: quoteRequired ? Colors.accent + "15" : theme.backgroundElevated,
-                borderColor: quoteRequired ? Colors.accent : theme.border,
-              },
+              styles.pricingSegmentBtn,
+              !quoteRequired && { backgroundColor: Colors.accent, shadowColor: Colors.accent, shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+            ]}
+            testID="segment-fixed-price"
+          >
+            <Feather name="dollar-sign" size={13} color={!quoteRequired ? "#fff" : theme.textSecondary} />
+            <ThemedText style={{ color: !quoteRequired ? "#fff" : theme.textSecondary, fontWeight: "600", fontSize: 13 }}>Fixed Price</ThemedText>
+          </Pressable>
+          <Pressable
+            onPress={() => { Haptics.selectionAsync(); setQuoteRequired(true); setServicePrice(""); }}
+            style={[
+              styles.pricingSegmentBtn,
+              quoteRequired && { backgroundColor: Colors.accent, shadowColor: Colors.accent, shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
             ]}
             testID="toggle-quote-required"
           >
-            <ThemedText style={{ color: quoteRequired ? Colors.accent : theme.textSecondary, fontWeight: quoteRequired ? "600" : "400", fontSize: 13 }}>
-              Quote Only
-            </ThemedText>
+            <Feather name="file-text" size={13} color={quoteRequired ? "#fff" : theme.textSecondary} />
+            <ThemedText style={{ color: quoteRequired ? "#fff" : theme.textSecondary, fontWeight: "600", fontSize: 13 }}>Quote Only</ThemedText>
           </Pressable>
         </View>
+
+        {!quoteRequired ? (
+          <View style={styles.pricingRow}>
+            <View style={styles.priceInputWrapper}>
+              <ThemedText style={[styles.currencySymbol, { color: theme.textSecondary }]}>$</ThemedText>
+              <TextInput
+                style={[styles.priceInput, { backgroundColor: theme.backgroundElevated, color: theme.text, borderColor: theme.border }]}
+                placeholder="0.00"
+                placeholderTextColor={theme.textSecondary}
+                value={servicePrice}
+                onChangeText={setServicePrice}
+                keyboardType="decimal-pad"
+                testID="input-service-price"
+              />
+            </View>
+          </View>
+        ) : (
+          <View style={[styles.quoteInfoRow, { backgroundColor: Colors.accent + "10", borderColor: Colors.accent + "25" }]}>
+            <Feather name="info" size={13} color={Colors.accent} />
+            <ThemedText style={[styles.captionText, { color: Colors.accent, flex: 1 }]}>
+              No price shown to customers — they request a quote and you respond directly.
+            </ThemedText>
+          </View>
+        )}
 
         {!quoteRequired && (loadingPrice || priceSuggestion) ? (
           <View style={[styles.priceHint, { backgroundColor: Colors.accent + "10" }]}>
@@ -1426,6 +1460,32 @@ const styles = StyleSheet.create({
     padding: Spacing.sm,
   },
 
+  pricingSegmented: {
+    flexDirection: "row",
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    padding: 3,
+    gap: 3,
+    marginBottom: Spacing.sm,
+  },
+  pricingSegmentBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
+    paddingVertical: Spacing.sm + 2,
+    borderRadius: BorderRadius.sm,
+  },
+  quoteInfoRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.xs,
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    marginBottom: Spacing.sm,
+  },
   pricingRow: { flexDirection: "row", gap: Spacing.sm },
   priceInputWrapper: {
     flex: 1,
@@ -1437,13 +1497,6 @@ const styles = StyleSheet.create({
   },
   currencySymbol: { paddingLeft: Spacing.md, fontSize: 15, fontWeight: "500" },
   priceInput: { flex: 1, padding: Spacing.md, fontSize: 15 },
-  quoteToggle: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    justifyContent: "center",
-  },
   priceHint: {
     flexDirection: "row",
     alignItems: "center",
