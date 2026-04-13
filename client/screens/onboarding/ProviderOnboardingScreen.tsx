@@ -673,10 +673,12 @@ function ServiceStep({
         if (json.description) {
           setServiceDescription(json.description);
         } else {
+          setServiceDescription("");
           setDescriptionError("Could not generate description. You can write one manually.");
         }
       } catch {
-        setDescriptionError("Could not reach AI. Check your connection and try again.");
+        setServiceDescription("");
+        setDescriptionError("Could not generate description. You can write one manually.");
       }
     }, 1200);
     return () => { if (descDebounceRef.current) clearTimeout(descDebounceRef.current); };
