@@ -5,7 +5,7 @@ let connectionSettings: any;
 async function getCredentials() {
   // Try env var first (fastest path, works in all environments)
   const envApiKey = process.env.RESEND_API_KEY;
-  const envFromEmail = process.env.RESEND_FROM_EMAIL || 'HomeBase <noreply@homebaseproapp.com>';
+  const envFromEmail = process.env.RESEND_FROM_EMAIL || 'HomeBase <noreply@updates.homebaseproapp.com>';
 
   if (envApiKey) {
     return { apiKey: envApiKey, fromEmail: envFromEmail };
