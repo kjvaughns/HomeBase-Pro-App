@@ -87,10 +87,10 @@ export default function CommunicationsScreen() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const { data: clientsData } = useQuery<{ clients: Client[] }>({
-    queryKey: ["/api/providers", providerId, "clients"],
+    queryKey: ["/api/provider", providerId, "clients"],
     enabled: !!providerId,
     queryFn: async () => {
-      const url = new URL(`/api/providers/${providerId}/clients`, getApiUrl());
+      const url = new URL(`/api/provider/${providerId}/clients`, getApiUrl());
       const res = await fetch(url.toString(), {
         headers: { Authorization: `Bearer ${useAuthStore.getState().sessionToken}` },
         credentials: "include",
