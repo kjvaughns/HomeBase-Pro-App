@@ -2,70 +2,77 @@ import pg from "pg";
 
 const { Client } = pg;
 
+/**
+ * Additive-only schema sync script for Supabase.
+ * 
+ * This script adds missing columns and tables to bring Supabase in sync
+ * with shared/schema.ts. It is safe to re-run — all operations use
+ * IF NOT EXISTS / IF NOT EXISTS semantics and never drop anything.
+ *
+ * Run: npx tsx scripts/migrate-supabase.ts
+ */
+
 const url = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
-if (!url) throw new Error("No database URL");
+if (!url) throw new Error("SUPABASE_DATABASE_URL or DATABASE_URL must be set");
 
-const client = new Client({ connectionString: url, connectionTimeoutMillis: 15000, query_timeout: 30000 });
+const client = new Client({
+  connectionString: url,
+  connectionTimeoutMillis: 15000,
+  query_timeout: 30000,
+});
 
-async function run() {
-  await client.connect();
-  console.log("Connected to Supabase");
-
-  // ─── 1. Add missing columns to invoices ────────────────────────────────────
-  const invoiceColumns = [
-    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS currency TEXT DEFAULT 'usd'`,
-    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS subtotal_cents INTEGER NOT NULL DEFAULT 0`,
-    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS tax_cents INTEGER DEFAULT 0`,
-    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS discount_cents INTEGER DEFAULT 0`,
-    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS platform_fee_cents INTEGER DEFAULT 0`,
-    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS total_cents INTEGER NOT NULL DEFAULT 0`,
-    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_methods_allowed TEXT DEFAULT 'stripe,credits'`,
-    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT`,
-    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_checkout_session_id TEXT`,
-    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_payment_link_id TEXT`,
-    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS hosted_invoice_url TEXT`,
-    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS sent_at TIMESTAMP`,
-    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS viewed_at TIMESTAMP`,
-    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP`,
-  ];
-
-  for (const sql of invoiceColumns) {
-    try {
-      await client.query(sql);
-      console.log("OK:", sql.substring(0, 60));
-    } catch (e: any) {
-      if (!e.message.includes("already exists")) {
-        console.log("WARN:", e.message.substring(0, 80));
-      }
-    }
-  }
-
-  // ─── 2. Create enums (idempotent) ───────────────────────────────────────────
-  const enums = [
-    `DO $$ BEGIN CREATE TYPE notification_channel AS ENUM ('email','push','in_app','sms'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
-    `DO $$ BEGIN CREATE TYPE notification_delivery_status AS ENUM ('queued','sent','delivered','failed','pending_sms'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
-    `DO $$ BEGIN CREATE TYPE message_channel AS ENUM ('email','sms'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
-    `DO $$ BEGIN CREATE TYPE message_status AS ENUM ('sent','failed','pending_sms'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
-  ];
-  for (const sql of enums) {
+async function safeAlter(sql: string): Promise<void> {
+  try {
     await client.query(sql);
-  }
-  console.log("OK: enums ensured");
-
-  // ─── 3. Drop incorrectly structured tables from first migration ─────────────
-  // These were created with wrong schemas; drop so we can recreate correctly
-  // Only drop if they exist AND have the wrong schema (we check by column presence)
-  // Safe to drop since they have no data yet
-  for (const tbl of ["push_tokens", "notification_preferences", "notification_deliveries", "provider_messages", "message_templates"]) {
-    try {
-      await client.query(`DROP TABLE IF EXISTS ${tbl} CASCADE`);
-      console.log("Dropped:", tbl);
-    } catch (e: any) {
-      console.log("Drop skip:", tbl, e.message.substring(0, 60));
+    console.log("  ok:", sql.substring(0, 70));
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (!message.includes("already exists") && !message.includes("duplicate column")) {
+      console.warn("  warn:", message.substring(0, 100));
     }
   }
+}
 
-  // ─── 4. push_tokens ─────────────────────────────────────────────────────────
+async function run(): Promise<void> {
+  await client.connect();
+  console.log("Connected to Supabase\n");
+
+  // ─── 1. Add missing columns to invoices ───────────────────────────────────
+  console.log("Step 1: Adding missing invoice columns…");
+  await safeAlter(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS currency TEXT DEFAULT 'usd'`);
+  await safeAlter(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS subtotal_cents INTEGER NOT NULL DEFAULT 0`);
+  await safeAlter(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS tax_cents INTEGER DEFAULT 0`);
+  await safeAlter(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS discount_cents INTEGER DEFAULT 0`);
+  await safeAlter(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS platform_fee_cents INTEGER DEFAULT 0`);
+  await safeAlter(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS total_cents INTEGER NOT NULL DEFAULT 0`);
+  await safeAlter(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_methods_allowed TEXT DEFAULT 'stripe,credits'`);
+  await safeAlter(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT`);
+  await safeAlter(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_checkout_session_id TEXT`);
+  await safeAlter(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_payment_link_id TEXT`);
+  await safeAlter(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS hosted_invoice_url TEXT`);
+  await safeAlter(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS sent_at TIMESTAMP`);
+  await safeAlter(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS viewed_at TIMESTAMP`);
+  await safeAlter(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP`);
+  await safeAlter(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW() NOT NULL`);
+
+  // ─── 2. Create PostgreSQL enums (idempotent) ───────────────────────────────
+  console.log("\nStep 2: Ensuring enums exist…");
+  const enumDefs: Array<[string, string]> = [
+    ["notification_channel", "'email','push','in_app','sms'"],
+    ["notification_delivery_status", "'queued','sent','delivered','failed','pending_sms'"],
+    ["message_channel", "'email','sms'"],
+    ["message_status", "'sent','failed','pending_sms'"],
+  ];
+  for (const [name, values] of enumDefs) {
+    await client.query(
+      `DO $$ BEGIN CREATE TYPE ${name} AS ENUM (${values}); EXCEPTION WHEN duplicate_object THEN null; END $$`
+    );
+    console.log(`  ok: ${name}`);
+  }
+
+  // ─── 3. Create missing tables (additive only) ─────────────────────────────
+  console.log("\nStep 3: Creating missing tables…");
+
   await client.query(`
     CREATE TABLE IF NOT EXISTS push_tokens (
       id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
@@ -77,9 +84,8 @@ async function run() {
       updated_at TIMESTAMP DEFAULT NOW() NOT NULL
     )
   `);
-  console.log("OK: push_tokens");
+  console.log("  ok: push_tokens");
 
-  // ─── 5. notification_preferences ────────────────────────────────────────────
   await client.query(`
     CREATE TABLE IF NOT EXISTS notification_preferences (
       id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
@@ -98,9 +104,8 @@ async function run() {
       updated_at TIMESTAMP DEFAULT NOW() NOT NULL
     )
   `);
-  console.log("OK: notification_preferences");
+  console.log("  ok: notification_preferences");
 
-  // ─── 6. notification_deliveries ─────────────────────────────────────────────
   await client.query(`
     CREATE TABLE IF NOT EXISTS notification_deliveries (
       id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
@@ -118,9 +123,8 @@ async function run() {
       updated_at TIMESTAMP DEFAULT NOW() NOT NULL
     )
   `);
-  console.log("OK: notification_deliveries");
+  console.log("  ok: notification_deliveries");
 
-  // ─── 7. provider_message_templates ─────────────────────────────────────────
   await client.query(`
     CREATE TABLE IF NOT EXISTS provider_message_templates (
       id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
@@ -134,9 +138,8 @@ async function run() {
       updated_at TIMESTAMP DEFAULT NOW() NOT NULL
     )
   `);
-  console.log("OK: provider_message_templates");
+  console.log("  ok: provider_message_templates");
 
-  // ─── 8. provider_messages ───────────────────────────────────────────────────
   await client.query(`
     CREATE TABLE IF NOT EXISTS provider_messages (
       id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
@@ -152,9 +155,8 @@ async function run() {
       created_at TIMESTAMP DEFAULT NOW() NOT NULL
     )
   `);
-  console.log("OK: provider_messages");
+  console.log("  ok: provider_messages");
 
-  // ─── 9. message_templates ───────────────────────────────────────────────────
   await client.query(`
     CREATE TABLE IF NOT EXISTS message_templates (
       id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
@@ -167,33 +169,35 @@ async function run() {
       updated_at TIMESTAMP DEFAULT NOW() NOT NULL
     )
   `);
-  console.log("OK: message_templates");
+  console.log("  ok: message_templates");
 
-  // ─── Verify ─────────────────────────────────────────────────────────────────
-  const tables = await client.query(`
-    SELECT table_name FROM information_schema.tables 
+  // ─── Verify ────────────────────────────────────────────────────────────────
+  console.log("\nVerification:");
+  const tablesRes = await client.query<{ table_name: string }>(`
+    SELECT table_name FROM information_schema.tables
     WHERE table_schema = 'public'
     AND table_name IN (
-      'provider_messages', 'message_templates', 'push_tokens',
-      'notification_preferences', 'notification_deliveries', 'provider_message_templates'
+      'provider_messages','message_templates','push_tokens',
+      'notification_preferences','notification_deliveries','provider_message_templates'
     )
     ORDER BY table_name
   `);
-  console.log("\nVerified tables:", tables.rows.map((r: any) => r.table_name).join(", "));
+  console.log("  tables:", tablesRes.rows.map(r => r.table_name).join(", "));
 
-  const invoiceCols = await client.query(`
-    SELECT column_name FROM information_schema.columns 
-    WHERE table_schema = 'public' AND table_name = 'invoices' 
-    AND column_name IN ('currency', 'subtotal_cents', 'total_cents', 'paid_at')
+  const colsRes = await client.query<{ column_name: string }>(`
+    SELECT column_name FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'invoices'
+    AND column_name IN ('currency','updated_at','subtotal_cents','total_cents','paid_at')
     ORDER BY column_name
   `);
-  console.log("Verified invoices columns:", invoiceCols.rows.map((r: any) => r.column_name).join(", "));
+  console.log("  invoices cols:", colsRes.rows.map(r => r.column_name).join(", "));
 
   await client.end();
   console.log("\nMigration complete!");
 }
 
 run().catch(err => {
-  console.error("Migration failed:", err.message);
+  const message = err instanceof Error ? err.message : String(err);
+  console.error("Migration failed:", message);
   process.exit(1);
 });
