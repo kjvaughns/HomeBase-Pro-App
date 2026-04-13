@@ -162,6 +162,21 @@ export async function runBootMigrations(): Promise<void> {
       )
     `);
 
+    // ── support_tickets ───────────────────────────────────────────────────
+    await runSql("table.support_tickets", `
+      CREATE TABLE IF NOT EXISTS support_tickets (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+        user_id VARCHAR REFERENCES users(id) ON DELETE SET NULL,
+        name TEXT NOT NULL,
+        email TEXT NOT NULL,
+        category TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        message TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'open',
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+
     // ── Post-migration verification ───────────────────────────────────────
     // Verify that the critical tables and columns required for app functionality exist.
     const verifications: Array<[string, string]> = [
@@ -170,6 +185,7 @@ export async function runBootMigrations(): Promise<void> {
       ["provider_messages table",        `SELECT id FROM provider_messages LIMIT 0`],
       ["message_templates table",        `SELECT id FROM message_templates LIMIT 0`],
       ["notification_preferences table", `SELECT id FROM notification_preferences LIMIT 0`],
+      ["support_tickets table",          `SELECT id FROM support_tickets LIMIT 0`],
     ];
 
     const verificationErrors: string[] = [];
