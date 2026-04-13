@@ -7,6 +7,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { spawn } from "child_process";
 import { runMigrations } from 'stripe-replit-sync';
+import { runBootMigrations } from "./dbMigrations";
 import { getStripeSync } from "./stripeClient";
 import { WebhookHandlers } from "./webhookHandlers";
 import { db, pool } from "./db";
@@ -958,6 +959,8 @@ function setupErrorHandler(app: express.Application) {
 }
 
 (async () => {
+  await runBootMigrations();
+
   setupCors(app);
   setupMetroProxy(app);
   setupStripeWebhook(app);
