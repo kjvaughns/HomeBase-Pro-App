@@ -1,55 +1,71 @@
 import { pool } from "./db";
 
+const IS_DEV = process.env.NODE_ENV !== "production";
+
 /**
  * Boot-time additive schema migration.
  *
  * Adds columns and tables that exist in shared/schema.ts but may be missing
  * from the Supabase database. All statements use IF NOT EXISTS semantics —
- * this is safe to run on every startup and makes no destructive changes.
+ * safe to run on every startup with no destructive changes.
  *
- * drizzle-kit push requires an interactive TTY and hangs on Supabase's
- * session-mode pooler, so this script handles the additive sync in-process.
+ * drizzle-kit push hangs on Supabase's session-mode pooler (pg_catalog
+ * introspection queries time out), so this handles the additive sync in-process.
+ *
+ * Failure mode:
+ *  - Development: logs a warning and continues (preserves dev DX)
+ *  - Production: throws after logging so the process exits with a clear error
  */
 export async function runBootMigrations(): Promise<void> {
   const client = await pool.connect();
+  const errors: string[] = [];
+
+  async function runSql(label: string, sql: string): Promise<void> {
+    try {
+      await client.query(sql);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      errors.push(`[${label}] ${msg}`);
+      console.warn(`Boot migration skipped (${label}):`, msg);
+    }
+  }
+
   try {
     // ── invoices: columns added after initial schema creation ─────────────
-    const invoiceAlters = [
-      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS currency TEXT DEFAULT 'usd'`,
-      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS subtotal_cents INTEGER NOT NULL DEFAULT 0`,
-      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS tax_cents INTEGER DEFAULT 0`,
-      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS discount_cents INTEGER DEFAULT 0`,
-      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS platform_fee_cents INTEGER DEFAULT 0`,
-      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS total_cents INTEGER NOT NULL DEFAULT 0`,
-      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_methods_allowed TEXT DEFAULT 'stripe,credits'`,
-      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT`,
-      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_checkout_session_id TEXT`,
-      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_payment_link_id TEXT`,
-      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS hosted_invoice_url TEXT`,
-      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS sent_at TIMESTAMP`,
-      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS viewed_at TIMESTAMP`,
-      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP`,
-      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW() NOT NULL`,
+    const invoiceAlters: Array<[string, string]> = [
+      ["invoices.currency",                   `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS currency TEXT DEFAULT 'usd'`],
+      ["invoices.subtotal_cents",             `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS subtotal_cents INTEGER NOT NULL DEFAULT 0`],
+      ["invoices.tax_cents",                  `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS tax_cents INTEGER DEFAULT 0`],
+      ["invoices.discount_cents",             `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS discount_cents INTEGER DEFAULT 0`],
+      ["invoices.platform_fee_cents",         `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS platform_fee_cents INTEGER DEFAULT 0`],
+      ["invoices.total_cents",               `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS total_cents INTEGER NOT NULL DEFAULT 0`],
+      ["invoices.payment_methods_allowed",    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_methods_allowed TEXT DEFAULT 'stripe,credits'`],
+      ["invoices.stripe_payment_intent_id",   `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT`],
+      ["invoices.stripe_checkout_session_id", `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_checkout_session_id TEXT`],
+      ["invoices.stripe_payment_link_id",     `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_payment_link_id TEXT`],
+      ["invoices.hosted_invoice_url",         `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS hosted_invoice_url TEXT`],
+      ["invoices.sent_at",                    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS sent_at TIMESTAMP`],
+      ["invoices.viewed_at",                  `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS viewed_at TIMESTAMP`],
+      ["invoices.paid_at",                    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP`],
+      ["invoices.updated_at",                 `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW() NOT NULL`],
     ];
-    for (const sql of invoiceAlters) {
-      await client.query(sql);
+    for (const [label, sql] of invoiceAlters) {
+      await runSql(label, sql);
     }
 
-    // ── enums required by messaging tables ────────────────────────────────
+    // ── enums required by messaging/notification tables ────────────────────
     const enumDefs: Array<[string, string]> = [
-      ["notification_channel", "'email','push','in_app','sms'"],
-      ["notification_delivery_status", "'queued','sent','delivered','failed','pending_sms'"],
-      ["message_channel", "'email','sms'"],
-      ["message_status", "'sent','failed','pending_sms'"],
+      ["enum.notification_channel",        `DO $$ BEGIN CREATE TYPE notification_channel AS ENUM ('email','push','in_app','sms'); EXCEPTION WHEN duplicate_object THEN null; END $$`],
+      ["enum.notification_delivery_status", `DO $$ BEGIN CREATE TYPE notification_delivery_status AS ENUM ('queued','sent','delivered','failed','pending_sms'); EXCEPTION WHEN duplicate_object THEN null; END $$`],
+      ["enum.message_channel",             `DO $$ BEGIN CREATE TYPE message_channel AS ENUM ('email','sms'); EXCEPTION WHEN duplicate_object THEN null; END $$`],
+      ["enum.message_status",              `DO $$ BEGIN CREATE TYPE message_status AS ENUM ('sent','failed','pending_sms'); EXCEPTION WHEN duplicate_object THEN null; END $$`],
     ];
-    for (const [name, values] of enumDefs) {
-      await client.query(
-        `DO $$ BEGIN CREATE TYPE ${name} AS ENUM (${values}); EXCEPTION WHEN duplicate_object THEN null; END $$`
-      );
+    for (const [label, sql] of enumDefs) {
+      await runSql(label, sql);
     }
 
     // ── push_tokens ───────────────────────────────────────────────────────
-    await client.query(`
+    await runSql("table.push_tokens", `
       CREATE TABLE IF NOT EXISTS push_tokens (
         id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
         user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -62,7 +78,7 @@ export async function runBootMigrations(): Promise<void> {
     `);
 
     // ── notification_preferences ──────────────────────────────────────────
-    await client.query(`
+    await runSql("table.notification_preferences", `
       CREATE TABLE IF NOT EXISTS notification_preferences (
         id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
         user_id VARCHAR NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
@@ -82,7 +98,7 @@ export async function runBootMigrations(): Promise<void> {
     `);
 
     // ── notification_deliveries ───────────────────────────────────────────
-    await client.query(`
+    await runSql("table.notification_deliveries", `
       CREATE TABLE IF NOT EXISTS notification_deliveries (
         id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
         channel notification_channel NOT NULL,
@@ -101,7 +117,7 @@ export async function runBootMigrations(): Promise<void> {
     `);
 
     // ── provider_message_templates ────────────────────────────────────────
-    await client.query(`
+    await runSql("table.provider_message_templates", `
       CREATE TABLE IF NOT EXISTS provider_message_templates (
         id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
         provider_id VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
@@ -116,7 +132,7 @@ export async function runBootMigrations(): Promise<void> {
     `);
 
     // ── provider_messages ─────────────────────────────────────────────────
-    await client.query(`
+    await runSql("table.provider_messages", `
       CREATE TABLE IF NOT EXISTS provider_messages (
         id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
         provider_id VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
@@ -133,7 +149,7 @@ export async function runBootMigrations(): Promise<void> {
     `);
 
     // ── message_templates ─────────────────────────────────────────────────
-    await client.query(`
+    await runSql("table.message_templates", `
       CREATE TABLE IF NOT EXISTS message_templates (
         id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
         provider_id VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
@@ -146,11 +162,35 @@ export async function runBootMigrations(): Promise<void> {
       )
     `);
 
-    console.log("Boot migrations applied successfully");
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    // Log but don't crash — server can still run if migrations partially fail
-    console.warn("Boot migration warning:", message);
+    // ── Post-migration verification ───────────────────────────────────────
+    // Verify that the critical tables and columns required for app functionality exist.
+    const verifications: Array<[string, string]> = [
+      ["invoices.currency column",       `SELECT currency FROM invoices LIMIT 0`],
+      ["invoices.paid_at column",        `SELECT paid_at FROM invoices LIMIT 0`],
+      ["provider_messages table",        `SELECT id FROM provider_messages LIMIT 0`],
+      ["message_templates table",        `SELECT id FROM message_templates LIMIT 0`],
+      ["notification_preferences table", `SELECT id FROM notification_preferences LIMIT 0`],
+    ];
+
+    const verificationErrors: string[] = [];
+    for (const [label, sql] of verifications) {
+      try {
+        await client.query(sql);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        verificationErrors.push(`MISSING ${label}: ${msg}`);
+      }
+    }
+
+    if (verificationErrors.length > 0) {
+      const summary = verificationErrors.join("; ");
+      if (!IS_DEV) {
+        throw new Error(`Boot migration verification failed — schema is incomplete in production: ${summary}`);
+      }
+      console.error("Boot migration verification — schema gaps detected:", summary);
+    } else {
+      console.log("Boot migrations applied and verified successfully");
+    }
   } finally {
     client.release();
   }
