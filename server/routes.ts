@@ -6404,6 +6404,150 @@ Respond with JSON only:
     }
   });
 
+  // ─── Provider Communications endpoints ──────────────────────────────────────
+
+  // POST /api/providers/:providerId/communicate/individual — send to one client by userId
+  app.post("/api/providers/:providerId/communicate/individual", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
+    try {
+      const authUserId = req.authenticatedUserId!;
+      const { providerId } = req.params;
+
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      if (!providerRecord || providerRecord.id !== providerId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const { clientId, subject, body, channels } = req.body;
+      const VALID_CHANNELS = ["push", "email"];
+      if (!clientId || !body || !channels || !Array.isArray(channels) || channels.length === 0) {
+        return res.status(400).json({ error: "clientId, body, and channels are required" });
+      }
+      const validatedChannels = channels.filter((ch: string) => VALID_CHANNELS.includes(ch));
+      if (validatedChannels.length === 0) {
+        return res.status(400).json({ error: "channels must include at least one of: push, email" });
+      }
+
+      const [client] = await db.select().from(clients).where(and(eq(clients.id, clientId), eq(clients.providerId, providerId)));
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+
+      const providerName = providerRecord.businessName;
+      const clientName = [client.firstName, client.lastName].filter(Boolean).join(" ");
+      const results: { channel: string; success: boolean; error?: string }[] = [];
+
+      if (validatedChannels.includes("email") && client.email) {
+        const result = await sendProviderClientMessage({
+          clientEmail: client.email,
+          clientName,
+          providerName,
+          subject: subject || `Message from ${providerName}`,
+          body,
+        });
+        results.push({ channel: "email", success: result.success, error: result.error });
+      }
+
+      if (validatedChannels.includes("push")) {
+        // Only send push to users who have a confirmed appointment with this provider,
+        // establishing a platform-verified provider-client relationship.
+        if (client.email) {
+          const [verifiedUser] = await db
+            .select({ id: users.id })
+            .from(users)
+            .innerJoin(appointments, and(eq(appointments.userId, users.id), eq(appointments.providerId, providerId)))
+            .where(eq(users.email, client.email))
+            .limit(1);
+          if (verifiedUser) {
+            await sendPush(verifiedUser.id, subject || providerName, body, { type: "provider_message", providerId }, "messages");
+            results.push({ channel: "push", success: true });
+          } else {
+            results.push({ channel: "push", success: false, error: "Client has no verified app account with this provider" });
+          }
+        } else {
+          results.push({ channel: "push", success: false, error: "Client has no email on file" });
+        }
+      }
+
+      res.json({ success: true, results });
+    } catch (error: any) {
+      console.error("Communicate individual error:", error);
+      res.status(500).json({ error: "Failed to send message" });
+    }
+  });
+
+  // POST /api/providers/:providerId/communicate/broadcast — send to all clients
+  app.post("/api/providers/:providerId/communicate/broadcast", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
+    try {
+      const authUserId = req.authenticatedUserId!;
+      const { providerId } = req.params;
+
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      if (!providerRecord || providerRecord.id !== providerId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const { subject, body, channels } = req.body;
+      const VALID_CHANNELS_BROADCAST = ["push", "email"];
+      if (!body || !channels || !Array.isArray(channels) || channels.length === 0) {
+        return res.status(400).json({ error: "body and channels are required" });
+      }
+      const validatedChannels = channels.filter((ch: string) => VALID_CHANNELS_BROADCAST.includes(ch));
+      if (validatedChannels.length === 0) {
+        return res.status(400).json({ error: "channels must include at least one of: push, email" });
+      }
+
+      const allClients = await db.select().from(clients).where(eq(clients.providerId, providerId));
+      const providerName = providerRecord.businessName;
+
+      let emailSent = 0;
+      let pushSent = 0;
+      let emailFailed = 0;
+      let pushFailed = 0;
+
+      for (const client of allClients) {
+        const clientName = [client.firstName, client.lastName].filter(Boolean).join(" ");
+
+        if (validatedChannels.includes("email") && client.email) {
+          const result = await sendProviderClientMessage({
+            clientEmail: client.email,
+            clientName,
+            providerName,
+            subject: subject || `Message from ${providerName}`,
+            body,
+          });
+          if (result.success) emailSent++; else emailFailed++;
+        }
+
+        if (validatedChannels.includes("push") && client.email) {
+          const [verifiedUser] = await db
+            .select({ id: users.id })
+            .from(users)
+            .innerJoin(appointments, and(eq(appointments.userId, users.id), eq(appointments.providerId, providerId)))
+            .where(eq(users.email, client.email))
+            .limit(1);
+          if (verifiedUser) {
+            await sendPush(verifiedUser.id, subject || providerName, body, { type: "provider_broadcast", providerId }, "messages");
+            pushSent++;
+          } else {
+            pushFailed++;
+          }
+        }
+      }
+
+      res.json({
+        success: true,
+        totalClients: allClients.length,
+        emailSent,
+        emailFailed,
+        pushSent,
+        pushFailed,
+      });
+    } catch (error: any) {
+      console.error("Communicate broadcast error:", error);
+      res.status(500).json({ error: "Failed to send broadcast" });
+    }
+  });
+
   // ─── Support Ticket endpoint ─────────────────────────────────────────────────
 
   app.post("/api/support/ticket", async (req: Request, res: Response) => {

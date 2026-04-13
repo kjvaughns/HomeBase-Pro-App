@@ -114,10 +114,10 @@ export default function ProviderMoreScreen() {
               onPress={() => navigation.navigate("BusinessHub")}
             />
             <ListRow
-              title="Message Templates"
-              subtitle="Reusable email & SMS templates for clients"
-              leftIcon="mail"
-              onPress={() => navigation.navigate("MessageTemplates")}
+              title="Communications"
+              subtitle="Send messages and push notifications to clients"
+              leftIcon="send"
+              onPress={() => navigation.navigate("Communications")}
               isLast
             />
           </View>

@@ -55,7 +55,7 @@ import StripeConnectScreen from "@/screens/provider/StripeConnectScreen";
 import BusinessHubScreen from "@/screens/provider/BusinessHubScreen";
 import BookingLinkScreen from "@/screens/provider/BookingLinkScreen";
 import SendMessageScreen from "@/screens/provider/SendMessageScreen";
-import MessageTemplatesScreen from "@/screens/provider/MessageTemplatesScreen";
+import CommunicationsScreen from "@/screens/provider/CommunicationsScreen";
 import SavedProvidersScreen from "@/screens/homeowner/SavedProvidersScreen";
 import HelpCenterScreen from "@/screens/homeowner/HelpCenterScreen";
 import ContactUsScreen from "@/screens/homeowner/ContactUsScreen";
@@ -157,7 +157,7 @@ export type RootStackParamList = {
     clientIds?: string[];
     isBlast?: boolean;
   };
-  MessageTemplates: undefined;
+  Communications: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -567,10 +567,10 @@ export default function RootStackNavigator() {
         }}
       />
       <Stack.Screen
-        name="MessageTemplates"
-        component={MessageTemplatesScreen}
+        name="Communications"
+        component={CommunicationsScreen}
         options={{
-          headerTitle: "Message Templates",
+          headerTitle: "Communications",
         }}
       />
     </Stack.Navigator>
