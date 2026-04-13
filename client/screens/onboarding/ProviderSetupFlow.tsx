@@ -7,14 +7,13 @@ import {
   Pressable,
   ActivityIndicator,
   Share,
+  Keyboard,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import Animated, {
   FadeInRight,
-  FadeOutLeft,
   FadeInLeft,
-  FadeOutRight,
   FadeInDown,
   useAnimatedStyle,
   useSharedValue,
@@ -620,10 +619,12 @@ function Step3ProfilePolish({
   const { theme } = useTheme();
   const [improving, setImproving] = useState(false);
   const [originalBio, setOriginalBio] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   const handleImproveWithAI = async () => {
     if (!data.bio.trim()) return;
     setImproving(true);
+    setAiError(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setOriginalBio(data.bio);
     try {
@@ -636,8 +637,12 @@ function Step3ProfilePolish({
       if (json.improvedBio) {
         onChange({ bio: json.improvedBio });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        setAiError(json.error || "Couldn't generate bio. Try again.");
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
     } catch {
+      setAiError("Couldn't generate bio. Check your connection and try again.");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setImproving(false);
@@ -693,6 +698,7 @@ function Step3ProfilePolish({
           value={data.bio}
           onChangeText={(t) => {
             setOriginalBio(null);
+            setAiError(null);
             onChange({ bio: t.slice(0, 300) });
           }}
           multiline
@@ -727,6 +733,16 @@ function Step3ProfilePolish({
             {improving ? "Improving..." : "Improve with AI"}
           </ThemedText>
         </Pressable>
+
+        {aiError ? (
+          <ThemedText
+            type="caption"
+            style={{ color: "#E53E3E", marginTop: Spacing.xs }}
+            testID="text-ai-error"
+          >
+            {aiError}
+          </ThemedText>
+        ) : null}
 
         <ThemedText type="caption" style={[styles.bioHint, { color: theme.textTertiary }]}>
           AI will keep your voice and specific details while making it sound more professional.
@@ -1314,6 +1330,7 @@ export default function ProviderSetupFlow({ navigation }: Props) {
       }
     }
 
+    Keyboard.dismiss();
     advanceStep();
   };
 
@@ -1337,7 +1354,6 @@ export default function ProviderSetupFlow({ navigation }: Props) {
   };
 
   const enterAnim = goingBack ? FadeInLeft.duration(280) : FadeInRight.duration(280);
-  const exitAnim = goingBack ? FadeOutRight.duration(200) : FadeOutLeft.duration(200);
 
   const renderStep = () => {
     switch (step) {
@@ -1383,7 +1399,6 @@ export default function ProviderSetupFlow({ navigation }: Props) {
         <Animated.View
           key={`step-${step}`}
           entering={enterAnim}
-          exiting={exitAnim}
           style={styles.stepContainer}
         >
           {renderStep()}
