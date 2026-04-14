@@ -4500,7 +4500,7 @@ Respond with JSON only:
       const plan = await getProviderPlan(providerId);
       const fee = calculatePlatformFee(
         subtotalCents,
-        plan.platformFeePercent || "10.00",
+        plan.platformFeePercent || "3.00",
         plan.platformFeeFixedCents || 0
       );
 
@@ -4704,7 +4704,7 @@ Respond with JSON only:
           .values({
             providerId,
             planTier: planTier || "free",
-            platformFeePercent: platformFeePercent || "10.00",
+            platformFeePercent: platformFeePercent || "3.00",
             platformFeeFixedCents: platformFeeFixedCents || 0,
           })
           .returning();
@@ -4780,7 +4780,7 @@ Respond with JSON only:
       const plan = await getProviderPlan(providerId);
       const fee = calculatePlatformFee(
         subtotalCents,
-        plan.platformFeePercent || "10.00",
+        plan.platformFeePercent || "3.00",
         plan.platformFeeFixedCents || 0
       );
 

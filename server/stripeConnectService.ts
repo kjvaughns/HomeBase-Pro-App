@@ -54,7 +54,7 @@ export async function getProviderPlan(providerId: string) {
       id: null,
       providerId,
       planTier: "free" as const,
-      platformFeePercent: "10.00",
+      platformFeePercent: "3.00",
       platformFeeFixedCents: 0,
     };
   }
@@ -1149,7 +1149,7 @@ export async function calculateFeePreview(providerId: string, totalCents: number
   const plan = await getProviderPlan(providerId);
   const fee = calculatePlatformFee(
     totalCents,
-    plan.platformFeePercent || "10.00",
+    plan.platformFeePercent || "3.00",
     plan.platformFeeFixedCents || 0
   );
 
