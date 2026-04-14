@@ -203,24 +203,26 @@ export default function HomeScreen() {
           </Pressable>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(200).duration(400)}>
-          <View style={styles.statsRow}>
-            <View style={styles.statCard}>
-              <StatCard
-                title="Upcoming"
-                value={upcomingAppointments.length}
-                icon="calendar"
-              />
+        {appointments.length > 0 ? (
+          <Animated.View entering={FadeInDown.delay(200).duration(400)}>
+            <View style={styles.statsRow}>
+              <View style={styles.statCard}>
+                <StatCard
+                  title="Upcoming"
+                  value={upcomingAppointments.length}
+                  icon="calendar"
+                />
+              </View>
+              <View style={styles.statCard}>
+                <StatCard
+                  title="In Progress"
+                  value={activeAppointments.length}
+                  icon="tool"
+                />
+              </View>
             </View>
-            <View style={styles.statCard}>
-              <StatCard
-                title="In Progress"
-                value={activeAppointments.length}
-                icon="tool"
-              />
-            </View>
-          </View>
-        </Animated.View>
+          </Animated.View>
+        ) : null}
 
         <Animated.View entering={FadeInDown.delay(300).duration(400)}>
           {recentAppointments.length > 0 ? (
@@ -261,13 +263,21 @@ export default function HomeScreen() {
               ))}
             </>
           ) : (
-            <GlassCard style={styles.emptyCard}>
-              <Feather name="inbox" size={40} color={theme.textSecondary} />
-              <ThemedText style={styles.emptyText}>No bookings yet</ThemedText>
-              <ThemedText style={[styles.emptySubtext, { color: theme.textSecondary }]}>
-                Book your first service to get started
-              </ThemedText>
-            </GlassCard>
+            <Pressable onPress={() => navigation.navigate("FindTab")}>
+              <GlassCard style={styles.firstBookingCard}>
+                <View style={[styles.firstBookingIconRing, { backgroundColor: Colors.accentLight }]}>
+                  <Feather name="search" size={28} color={Colors.accent} />
+                </View>
+                <ThemedText style={styles.firstBookingTitle}>Find your first pro</ThemedText>
+                <ThemedText style={[styles.firstBookingSubtext, { color: theme.textSecondary }]}>
+                  Trusted, background-checked professionals in your area — ready to help today.
+                </ThemedText>
+                <View style={[styles.firstBookingCTA, { backgroundColor: Colors.accent }]}>
+                  <ThemedText style={styles.firstBookingCTAText}>Browse Pros</ThemedText>
+                  <Feather name="arrow-right" size={16} color="#FFFFFF" />
+                </View>
+              </GlassCard>
+            </Pressable>
           )}
         </Animated.View>
 
@@ -448,6 +458,44 @@ const styles = StyleSheet.create({
   emptySubtext: {
     ...Typography.subhead,
     marginTop: Spacing.xs,
+  },
+  firstBookingCard: {
+    alignItems: "center",
+    paddingVertical: Spacing["2xl"],
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.xl,
+  },
+  firstBookingIconRing: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.md,
+  },
+  firstBookingTitle: {
+    ...Typography.title3,
+    textAlign: "center",
+    marginBottom: Spacing.sm,
+  },
+  firstBookingSubtext: {
+    ...Typography.subhead,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: Spacing.lg,
+  },
+  firstBookingCTA: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.button,
+  },
+  firstBookingCTAText: {
+    ...Typography.callout,
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
   categoriesGrid: {
     flexDirection: "row",

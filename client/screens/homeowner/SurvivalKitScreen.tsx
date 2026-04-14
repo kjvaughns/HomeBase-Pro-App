@@ -165,14 +165,109 @@ const BUDGET_GOALS = [
   { id: "protect", label: "Protect Investment", description: "Maximize resale value" },
 ];
 
-const MOCK_TASKS: MaintenanceTask[] = [
-  { id: "1", name: "HVAC Filter Change", category: "HVAC", frequency: "Monthly", costRange: "$15-30", dueMonth: "Feb", severity: "low" },
-  { id: "2", name: "Gutter Cleaning", category: "Exterior", frequency: "Twice yearly", costRange: "$100-200", dueMonth: "Mar", severity: "medium" },
-  { id: "3", name: "HVAC Tune-up", category: "HVAC", frequency: "Annually", costRange: "$150-300", dueMonth: "Apr", severity: "high" },
-  { id: "4", name: "Water Heater Flush", category: "Plumbing", frequency: "Annually", costRange: "$100-150", dueMonth: "May", severity: "medium" },
-  { id: "5", name: "Roof Inspection", category: "Roofing", frequency: "Annually", costRange: "$200-400", dueMonth: "Jun", severity: "high" },
-  { id: "6", name: "Pest Control", category: "Pest", frequency: "Quarterly", costRange: "$80-150", dueMonth: "Jul", severity: "medium" },
-];
+function generateTasksFromWizardData(data: WizardData): MaintenanceTask[] {
+  const tasks: MaintenanceTask[] = [];
+  let id = 1;
+
+  const isCold = data.climate === "cold" || data.localRisks.includes("freezing");
+  const isHot = data.climate === "hot";
+  const isProactive = data.serviceLevel === "proactive";
+  const isLean = data.serviceLevel === "lean";
+
+  const hvacOld = data.hvacAge === "10-15 years" || data.hvacAge === "15+ years";
+  const hvacVeryOld = data.hvacAge === "15+ years";
+  const roofOld = data.roofAge === "10-20 years" || data.roofAge === "20+ years";
+  const roofVeryOld = data.roofAge === "20+ years";
+  const waterHeaterOld = data.waterHeaterType === "tank_gas" || data.waterHeaterType === "tank_electric";
+  const hasYard = data.yardSize !== "none" && data.yardSize !== "";
+  const hasPool = data.exteriorFeatures.includes("pool");
+  const hasDeck = data.exteriorFeatures.includes("deck_patio");
+  const hasTreesNearRoof = data.exteriorFeatures.includes("trees_near_roof");
+  const hasGarage = data.exteriorFeatures.includes("garage");
+  const hasSprinklers = data.exteriorFeatures.includes("sprinklers");
+  const hasBasement = data.exteriorFeatures.includes("basement");
+
+  if (data.hvacType !== "none" && data.hvacType !== "") {
+    tasks.push({ id: String(id++), name: "HVAC Filter Replacement", category: "HVAC", frequency: "Every 1-3 months", costRange: "$15-40", dueMonth: isCold ? "Oct" : "Apr", severity: "low" });
+    if (!isLean) {
+      tasks.push({ id: String(id++), name: "HVAC System Tune-Up", category: "HVAC", frequency: "Annually", costRange: "$100-300", dueMonth: isCold ? "Sep" : "Apr", severity: hvacOld ? "high" : "medium" });
+    }
+    if (hvacVeryOld && isProactive) {
+      tasks.push({ id: String(id++), name: "HVAC System Evaluation & Replacement Planning", category: "HVAC", frequency: "One-time", costRange: "$150-500", dueMonth: "Mar", severity: "high" });
+    }
+  }
+
+  if (data.roofAge !== "") {
+    tasks.push({ id: String(id++), name: "Roof Inspection", category: "Roofing", frequency: "Annually", costRange: "$150-400", dueMonth: "May", severity: roofVeryOld ? "high" : roofOld ? "medium" : "low" });
+    if (roofVeryOld) {
+      tasks.push({ id: String(id++), name: "Roof Replacement Assessment", category: "Roofing", frequency: "One-time", costRange: "$5,000-15,000", dueMonth: "Apr", severity: "high" });
+    }
+  }
+
+  if (waterHeaterOld) {
+    tasks.push({ id: String(id++), name: "Water Heater Flush & Inspection", category: "Plumbing", frequency: "Annually", costRange: "$100-200", dueMonth: "Jun", severity: "medium" });
+  }
+
+  tasks.push({ id: String(id++), name: "Smoke & Carbon Monoxide Detector Test", category: "Safety", frequency: "Every 6 months", costRange: "$0-30", dueMonth: "Mar", severity: "high" });
+
+  if (!isLean) {
+    tasks.push({ id: String(id++), name: "Gutter Cleaning", category: "Exterior", frequency: "Twice yearly", costRange: "$100-250", dueMonth: hasTreesNearRoof ? "Nov" : "Mar", severity: hasTreesNearRoof ? "medium" : "low" });
+  }
+
+  if (data.yearBuilt === "1960-1980" || data.yearBuilt === "Before 1960") {
+    if (isProactive) {
+      tasks.push({ id: String(id++), name: "Electrical Panel Inspection", category: "Electrical", frequency: "Every 3-5 years", costRange: "$200-400", dueMonth: "Feb", severity: "high" });
+    }
+  }
+
+  if (hasPool) {
+    tasks.push({ id: String(id++), name: "Pool Opening & Chemical Balance", category: "Pool", frequency: "Seasonally", costRange: "$200-500", dueMonth: isHot ? "Mar" : "May", severity: "medium" });
+    if (!isLean) {
+      tasks.push({ id: String(id++), name: "Pool Filter Cleaning", category: "Pool", frequency: "Monthly", costRange: "$50-150", dueMonth: "Jun", severity: "low" });
+    }
+  }
+
+  if (hasDeck) {
+    tasks.push({ id: String(id++), name: "Deck Inspection & Sealing", category: "Exterior", frequency: "Every 2-3 years", costRange: "$200-600", dueMonth: "Apr", severity: "medium" });
+  }
+
+  if (hasYard) {
+    if (!isLean) {
+      tasks.push({ id: String(id++), name: "Lawn Aeration & Fertilization", category: "Landscaping", frequency: "Annually", costRange: "$100-300", dueMonth: "Apr", severity: "low" });
+    }
+    if (hasSprinklers) {
+      tasks.push({ id: String(id++), name: "Irrigation System Check & Winterization", category: "Plumbing", frequency: "Seasonally", costRange: "$75-200", dueMonth: isCold ? "Oct" : "Mar", severity: "low" });
+    }
+  }
+
+  if (data.localRisks.includes("flooding") || hasBasement) {
+    tasks.push({ id: String(id++), name: "Sump Pump Test & Maintenance", category: "Plumbing", frequency: "Annually", costRange: "$75-200", dueMonth: "Mar", severity: "high" });
+  }
+
+  if (isProactive) {
+    tasks.push({ id: String(id++), name: "Pest & Termite Inspection", category: "Pest Control", frequency: "Annually", costRange: "$100-250", dueMonth: "Apr", severity: "medium" });
+    tasks.push({ id: String(id++), name: "Caulking & Weather Stripping Check", category: "Exterior", frequency: "Annually", costRange: "$50-150", dueMonth: "Sep", severity: "low" });
+  }
+
+  if (isCold) {
+    tasks.push({ id: String(id++), name: "Pipe Insulation & Freeze Prevention", category: "Plumbing", frequency: "Before winter", costRange: "$50-200", dueMonth: "Oct", severity: "high" });
+  }
+
+  if (hasGarage) {
+    if (isProactive) {
+      tasks.push({ id: String(id++), name: "Garage Door Spring & Safety Check", category: "General", frequency: "Annually", costRange: "$50-150", dueMonth: "Apr", severity: "low" });
+    }
+  }
+
+  if (tasks.length === 0) {
+    tasks.push(
+      { id: String(id++), name: "Smoke & CO Detector Test", category: "Safety", frequency: "Every 6 months", costRange: "$0-30", dueMonth: "Mar", severity: "high" },
+      { id: String(id++), name: "Annual Home Walkthrough", category: "General", frequency: "Annually", costRange: "$0", dueMonth: "Jan", severity: "low" },
+    );
+  }
+
+  return tasks;
+}
 
 const MOCK_TIPS = [
   {
@@ -235,6 +330,8 @@ export default function SurvivalKitScreen() {
   const progressPercent = currentStep === "entry" || currentStep === "results" 
     ? 0 
     : Math.round(((currentStepIndex - 1) / (totalSteps - 1)) * 100);
+
+  const generatedTasks = useMemo(() => generateTasksFromWizardData(wizardData), [wizardData]);
 
   const goToNextStep = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -932,7 +1029,7 @@ export default function SurvivalKitScreen() {
 
         {resultsTab === "plan" ? (
           <ScrollView showsVerticalScrollIndicator={false}>
-            {MOCK_TASKS.map((task) => (
+            {generatedTasks.map((task) => (
               <GlassCard key={task.id} style={styles.taskCard}>
                 <View style={styles.taskHeader}>
                   <View style={styles.taskInfo}>

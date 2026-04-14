@@ -1,75 +1,34 @@
-import React, { useState } from "react";
-import { StyleSheet, View, ScrollView, Pressable } from "react-native";
+import React from "react";
+import { StyleSheet, View, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
-import * as Haptics from "expo-haptics";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
-interface BudgetCategory {
-  id: string;
-  name: string;
-  icon: keyof typeof Feather.glyphMap;
-  budgeted: number;
-  spent: number;
-  color: string;
-}
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-interface Transaction {
-  id: string;
-  categoryId: string;
-  description: string;
-  amount: number;
-  date: string;
-}
-
-const BUDGET_CATEGORIES: BudgetCategory[] = [
-  { id: "repairs", name: "Repairs", icon: "tool", budgeted: 500, spent: 350, color: Colors.accent },
-  { id: "utilities", name: "Utilities", icon: "zap", budgeted: 400, spent: 380, color: "#3B82F6" },
-  { id: "landscaping", name: "Landscaping", icon: "sun", budgeted: 200, spent: 150, color: "#10B981" },
-  { id: "cleaning", name: "Cleaning", icon: "home", budgeted: 300, spent: 180, color: "#8B5CF6" },
-  { id: "upgrades", name: "Upgrades", icon: "trending-up", budgeted: 600, spent: 0, color: "#F59E0B" },
-  { id: "emergency", name: "Emergency Fund", icon: "shield", budgeted: 500, spent: 0, color: "#EF4444" },
-];
-
-const RECENT_TRANSACTIONS: Transaction[] = [
-  { id: "t1", categoryId: "repairs", description: "Plumber - faucet repair", amount: 150, date: "Jan 25" },
-  { id: "t2", categoryId: "utilities", description: "Electric bill", amount: 185, date: "Jan 22" },
-  { id: "t3", categoryId: "repairs", description: "Door lock replacement", amount: 85, date: "Jan 20" },
-  { id: "t4", categoryId: "landscaping", description: "Lawn service", amount: 75, date: "Jan 18" },
-  { id: "t5", categoryId: "cleaning", description: "Deep cleaning service", amount: 180, date: "Jan 15" },
-  { id: "t6", categoryId: "utilities", description: "Water bill", amount: 95, date: "Jan 12" },
-  { id: "t7", categoryId: "repairs", description: "HVAC filter replacement", amount: 45, date: "Jan 10" },
-  { id: "t8", categoryId: "utilities", description: "Gas bill", amount: 100, date: "Jan 8" },
+const UPCOMING_FEATURES = [
+  { icon: "trending-up" as const, label: "Budget by Category", desc: "Set monthly limits for HVAC, plumbing, landscaping, and more" },
+  { icon: "list" as const, label: "Auto-tracked Transactions", desc: "Completed bookings are automatically logged to the right category" },
+  { icon: "alert-circle" as const, label: "Overspend Alerts", desc: "Get notified before you exceed any budget category" },
+  { icon: "bar-chart-2" as const, label: "Annual Spending Reports", desc: "See how your home costs change year over year" },
 ];
 
 export default function BudgeterScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { theme } = useTheme();
-
-  const totalBudgeted = BUDGET_CATEGORIES.reduce((acc, cat) => acc + cat.budgeted, 0);
-  const totalSpent = BUDGET_CATEGORIES.reduce((acc, cat) => acc + cat.spent, 0);
-  const remaining = totalBudgeted - totalSpent;
-  const spentPercent = Math.round((totalSpent / totalBudgeted) * 100);
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
-
-  const getCategoryById = (id: string) => {
-    return BUDGET_CATEGORIES.find((cat) => cat.id === id);
-  };
+  const navigation = useNavigation<NavigationProp>();
 
   return (
     <ThemedView style={styles.container}>
@@ -77,155 +36,55 @@ export default function BudgeterScreen() {
         contentContainerStyle={[
           styles.content,
           {
-            paddingTop: headerHeight + Spacing.lg,
+            paddingTop: headerHeight + Spacing.xl,
             paddingBottom: insets.bottom + Spacing.xl + 88,
           },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View entering={FadeInDown.delay(100).duration(400)}>
-          <GlassCard style={styles.summaryCard}>
-            <View style={styles.summaryHeader}>
-              <ThemedText style={styles.summaryTitle}>Monthly Budget</ThemedText>
-              <ThemedText style={[styles.monthLabel, { color: theme.textSecondary }]}>
-                January 2026
-              </ThemedText>
+        <Animated.View entering={FadeInDown.delay(100).duration(400)} style={styles.heroSection}>
+          <View style={[styles.badgeRow]}>
+            <View style={[styles.badge, { backgroundColor: Colors.accentLight }]}>
+              <Feather name="clock" size={13} color={Colors.accent} />
+              <ThemedText style={[styles.badgeText, { color: Colors.accent }]}>Coming Soon</ThemedText>
             </View>
+          </View>
 
-            <View style={styles.summaryRow}>
-              <View style={styles.summaryItem}>
-                <ThemedText style={[styles.summaryLabel, { color: theme.textSecondary }]}>
-                  Budgeted
-                </ThemedText>
-                <ThemedText style={styles.summaryValue}>{formatCurrency(totalBudgeted)}</ThemedText>
-              </View>
-              <View style={styles.summaryItem}>
-                <ThemedText style={[styles.summaryLabel, { color: theme.textSecondary }]}>
-                  Spent
-                </ThemedText>
-                <ThemedText style={styles.summaryValue}>{formatCurrency(totalSpent)}</ThemedText>
-              </View>
-              <View style={styles.summaryItem}>
-                <ThemedText style={[styles.summaryLabel, { color: theme.textSecondary }]}>
-                  Remaining
-                </ThemedText>
-                <ThemedText style={[styles.summaryValue, { color: Colors.accent }]}>
-                  {formatCurrency(remaining)}
-                </ThemedText>
-              </View>
-            </View>
+          <View style={[styles.iconCircle, { backgroundColor: Colors.accentLight }]}>
+            <Feather name="dollar-sign" size={36} color={Colors.accent} />
+          </View>
 
-            <View style={[styles.progressBar, { backgroundColor: theme.backgroundTertiary }]}>
-              <View
-                style={[
-                  styles.progressFill,
-                  {
-                    width: `${Math.min(spentPercent, 100)}%`,
-                    backgroundColor: spentPercent > 90 ? Colors.error : Colors.accent,
-                  },
-                ]}
-              />
-            </View>
-            <ThemedText style={[styles.progressLabel, { color: theme.textSecondary }]}>
-              {spentPercent}% of budget used
-            </ThemedText>
-          </GlassCard>
+          <ThemedText style={styles.heroTitle}>Home Budget Tracker</ThemedText>
+          <ThemedText style={[styles.heroSubtitle, { color: theme.textSecondary }]}>
+            Track every home expense, set budgets by category, and see exactly where your money goes — automatically.
+          </ThemedText>
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(200).duration(400)}>
-          <ThemedText style={styles.sectionTitle}>Categories</ThemedText>
-        </Animated.View>
-
-        <View style={styles.categoriesGrid}>
-          {BUDGET_CATEGORIES.map((category, index) => {
-            const percent = Math.round((category.spent / category.budgeted) * 100);
-            return (
-              <Animated.View
-                key={category.id}
-                entering={FadeInDown.delay(300 + index * 50).duration(400)}
-                style={styles.categoryWrapper}
-              >
-                <GlassCard style={styles.categoryCard}>
-                  <View style={styles.categoryHeader}>
-                    <View
-                      style={[styles.categoryIcon, { backgroundColor: `${category.color}20` }]}
-                    >
-                      <Feather name={category.icon} size={18} color={category.color} />
-                    </View>
-                    <ThemedText style={styles.categoryName}>{category.name}</ThemedText>
-                  </View>
-                  <View style={styles.categoryAmounts}>
-                    <ThemedText style={styles.categorySpent}>
-                      {formatCurrency(category.spent)}
-                    </ThemedText>
-                    <ThemedText style={[styles.categoryBudgeted, { color: theme.textSecondary }]}>
-                      / {formatCurrency(category.budgeted)}
-                    </ThemedText>
-                  </View>
-                  <View
-                    style={[styles.categoryProgress, { backgroundColor: theme.backgroundTertiary }]}
-                  >
-                    <View
-                      style={[
-                        styles.categoryProgressFill,
-                        {
-                          width: `${Math.min(percent, 100)}%`,
-                          backgroundColor: percent > 90 ? Colors.error : category.color,
-                        },
-                      ]}
-                    />
-                  </View>
-                </GlassCard>
-              </Animated.View>
-            );
-          })}
-        </View>
-
-        <Animated.View entering={FadeInDown.delay(600).duration(400)}>
-          <ThemedText style={styles.sectionTitle}>Recent Transactions</ThemedText>
-        </Animated.View>
-
-        <Animated.View entering={FadeInDown.delay(700).duration(400)}>
-          <GlassCard style={styles.transactionsCard}>
-            {RECENT_TRANSACTIONS.map((transaction, index) => {
-              const category = getCategoryById(transaction.categoryId);
-              return (
-                <View
-                  key={transaction.id}
-                  style={[
-                    styles.transactionRow,
-                    index < RECENT_TRANSACTIONS.length - 1 && {
-                      borderBottomWidth: StyleSheet.hairlineWidth,
-                      borderBottomColor: theme.separator,
-                    },
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.transactionIcon,
-                      { backgroundColor: category ? `${category.color}20` : Colors.accentLight },
-                    ]}
-                  >
-                    <Feather
-                      name={category?.icon || "dollar-sign"}
-                      size={16}
-                      color={category?.color || Colors.accent}
-                    />
-                  </View>
-                  <View style={styles.transactionInfo}>
-                    <ThemedText style={styles.transactionDesc}>
-                      {transaction.description}
-                    </ThemedText>
-                    <ThemedText style={[styles.transactionDate, { color: theme.textSecondary }]}>
-                      {transaction.date}
-                    </ThemedText>
-                  </View>
-                  <ThemedText style={styles.transactionAmount}>
-                    -{formatCurrency(transaction.amount)}
-                  </ThemedText>
+          <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>What you'll get</ThemedText>
+          <View style={styles.featureGrid}>
+            {UPCOMING_FEATURES.map((feature, idx) => (
+              <GlassCard key={idx} style={styles.featureCard}>
+                <View style={[styles.featureIconContainer, { backgroundColor: Colors.accentLight }]}>
+                  <Feather name={feature.icon} size={18} color={Colors.accent} />
                 </View>
-              );
-            })}
+                <ThemedText style={styles.featureLabel}>{feature.label}</ThemedText>
+                <ThemedText style={[styles.featureDesc, { color: theme.textSecondary }]}>{feature.desc}</ThemedText>
+              </GlassCard>
+            ))}
+          </View>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(300).duration(400)}>
+          <GlassCard style={styles.ctaCard}>
+            <Feather name="home" size={22} color={Colors.accent} />
+            <ThemedText style={styles.ctaTitle}>Start building your history</ThemedText>
+            <ThemedText style={[styles.ctaSubtitle, { color: theme.textSecondary }]}>
+              Book your first service and your spending will start tracking automatically when Budgeter launches.
+            </ThemedText>
+            <PrimaryButton onPress={() => navigation.navigate("SmartIntake")}>
+              Find a Pro
+            </PrimaryButton>
           </GlassCard>
         </Animated.View>
       </ScrollView>
@@ -239,135 +98,91 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: Spacing.screenPadding,
+    gap: Spacing.xl,
   },
-  summaryCard: {
-    marginBottom: Spacing.sectionGap,
-  },
-  summaryHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  heroSection: {
     alignItems: "center",
-    marginBottom: Spacing.md,
-  },
-  summaryTitle: {
-    ...Typography.headline,
-  },
-  monthLabel: {
-    ...Typography.subhead,
-  },
-  summaryRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: Spacing.md,
-  },
-  summaryItem: {
-    flex: 1,
-    alignItems: "center",
-  },
-  summaryLabel: {
-    ...Typography.caption1,
-    marginBottom: 2,
-  },
-  summaryValue: {
-    ...Typography.headline,
-  },
-  progressBar: {
-    height: 8,
-    borderRadius: 4,
-    overflow: "hidden",
-    marginBottom: Spacing.xs,
-  },
-  progressFill: {
-    height: "100%",
-    borderRadius: 4,
-  },
-  progressLabel: {
-    ...Typography.caption1,
-    textAlign: "center",
-  },
-  sectionTitle: {
-    ...Typography.headline,
-    marginBottom: Spacing.md,
-  },
-  categoriesGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
     gap: Spacing.md,
-    marginBottom: Spacing.sectionGap,
   },
-  categoryWrapper: {
-    width: "47%",
+  badgeRow: {
+    alignItems: "center",
   },
-  categoryCard: {
-    padding: Spacing.md,
-  },
-  categoryHeader: {
+  badge: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: Spacing.sm,
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.full,
   },
-  categoryIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+  badgeText: {
+    ...Typography.caption1,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  iconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: Spacing.sm,
   },
-  categoryName: {
-    ...Typography.subhead,
-    fontWeight: "500",
+  heroTitle: {
+    ...Typography.title2,
+    textAlign: "center",
   },
-  categoryAmounts: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    marginBottom: Spacing.xs,
+  heroSubtitle: {
+    ...Typography.body,
+    textAlign: "center",
+    lineHeight: 24,
   },
-  categorySpent: {
-    ...Typography.headline,
-  },
-  categoryBudgeted: {
+  sectionTitle: {
     ...Typography.footnote,
-    marginLeft: 2,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: Spacing.sm,
   },
-  categoryProgress: {
-    height: 4,
-    borderRadius: 2,
-    overflow: "hidden",
+  featureGrid: {
+    gap: Spacing.sm,
   },
-  categoryProgressFill: {
-    height: "100%",
-    borderRadius: 2,
-  },
-  transactionsCard: {
-    padding: 0,
-    overflow: "hidden",
-  },
-  transactionRow: {
+  featureCard: {
     flexDirection: "row",
-    alignItems: "center",
-    padding: Spacing.md,
+    alignItems: "flex-start",
+    gap: Spacing.md,
   },
-  transactionIcon: {
+  featureIconContainer: {
     width: 36,
     height: 36,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: Spacing.md,
+    flexShrink: 0,
   },
-  transactionInfo: {
+  featureLabel: {
+    ...Typography.headline,
     flex: 1,
+    marginTop: 2,
   },
-  transactionDesc: {
-    ...Typography.subhead,
-    marginBottom: 2,
+  featureDesc: {
+    ...Typography.footnote,
+    flex: 1,
+    marginTop: 2,
+    lineHeight: 18,
   },
-  transactionDate: {
-    ...Typography.caption1,
+  ctaCard: {
+    alignItems: "center",
+    gap: Spacing.md,
+    paddingVertical: Spacing.xl,
   },
-  transactionAmount: {
-    ...Typography.subhead,
-    fontWeight: "600",
+  ctaTitle: {
+    ...Typography.title3,
+    textAlign: "center",
+  },
+  ctaSubtitle: {
+    ...Typography.body,
+    textAlign: "center",
+    lineHeight: 24,
   },
 });

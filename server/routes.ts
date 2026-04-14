@@ -739,7 +739,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           RESET_SECRET,
           { expiresIn: "1h" }
         );
-        const resetUrl = `https://homebaseproapp.com/reset-password?token=${resetToken}`;
+        const host = (req.headers["x-forwarded-host"] || req.get("host") || "homebaseproapp.com") as string;
+        const protocol = (req.headers["x-forwarded-proto"] as string | undefined)?.split(",")[0]?.trim() || req.protocol || "https";
+        const resetUrl = `${protocol}://${host}/reset-password?token=${resetToken}`;
         const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "there";
         const { sendPasswordResetEmail } = await import("./emailService");
         sendPasswordResetEmail(user.email, fullName, resetUrl).catch((err: unknown) => {
@@ -751,6 +753,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Forgot password error:", error);
       res.status(500).json({ error: "Failed to process request" });
+    }
+  });
+
+  app.post("/api/auth/reset-password", async (req: Request, res: Response) => {
+    try {
+      const { token, password } = req.body;
+      if (!token || typeof token !== "string") {
+        return res.status(400).json({ error: "Reset token is required" });
+      }
+      if (!password || typeof password !== "string" || password.length < 8) {
+        return res.status(400).json({ error: "Password must be at least 8 characters" });
+      }
+      const { JWT_SECRET } = await import("./auth");
+      const jwt = await import("jsonwebtoken");
+      const RESET_SECRET = `${JWT_SECRET}:password-reset`;
+      let decoded: any;
+      try {
+        decoded = jwt.default.verify(token, RESET_SECRET);
+      } catch {
+        return res.status(400).json({ error: "Invalid or expired reset link. Please request a new one." });
+      }
+      if (decoded.purpose !== "password_reset" || !decoded.userId) {
+        return res.status(400).json({ error: "Invalid reset token" });
+      }
+      const hashed = await bcryptHash(password, 10);
+      await db.update(users).set({ password: hashed, updatedAt: new Date() }).where(eq(users.id, decoded.userId));
+      res.json({ success: true, message: "Password updated successfully" });
+    } catch (error) {
+      console.error("Reset password error:", error);
+      res.status(500).json({ error: "Failed to reset password" });
     }
   });
 
@@ -1919,6 +1951,24 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
     } catch (error) {
       console.error("Reschedule appointment error:", error);
       res.status(500).json({ error: "Failed to reschedule appointment" });
+    }
+  });
+
+  app.post("/api/appointments/:id/update-condition", requireAuth, async (req: Request<IdParams>, res: Response) => {
+    try {
+      const authUserId = req.authenticatedUserId!;
+      const { description } = req.body;
+      if (!description || typeof description !== "string" || !description.trim()) {
+        return res.status(400).json({ error: "Description is required" });
+      }
+      const existing = await storage.getAppointment(req.params.id);
+      if (!existing) return res.status(404).json({ error: "Appointment not found" });
+      if (existing.userId !== authUserId) return res.status(403).json({ error: "Access denied" });
+      const updated = await storage.updateAppointment(req.params.id, { notes: description.trim() });
+      res.json({ appointment: updated, success: true });
+    } catch (error) {
+      console.error("Update condition error:", error);
+      res.status(500).json({ error: "Failed to update condition" });
     }
   });
 
@@ -3271,11 +3321,29 @@ Respond with JSON only:
   app.get("/api/homes/:homeId/service-history", requireAuth, async (req: Request<{ homeId: string }>, res: Response) => {
     try {
       const { homeId } = req.params;
-      const serviceHistory = await db.select()
+      const serviceHistory = await db
+        .select({
+          id: appointments.id,
+          homeId: appointments.homeId,
+          providerId: appointments.providerId,
+          serviceName: appointments.serviceName,
+          description: appointments.description,
+          status: appointments.status,
+          estimatedPrice: appointments.estimatedPrice,
+          finalPrice: appointments.finalPrice,
+          notes: appointments.notes,
+          scheduledDate: appointments.scheduledDate,
+          completedAt: appointments.completedAt,
+          cancelledAt: appointments.cancelledAt,
+          isRecurring: appointments.isRecurring,
+          createdAt: appointments.createdAt,
+          providerName: providers.businessName,
+        })
         .from(appointments)
+        .leftJoin(providers, eq(appointments.providerId, providers.id))
         .where(eq(appointments.homeId, homeId))
         .orderBy(sql`${appointments.completedAt} DESC NULLS LAST, ${appointments.scheduledDate} DESC`);
-      
+
       res.json({ serviceHistory });
     } catch (error) {
       console.error("Error fetching service history:", error);
@@ -3945,6 +4013,84 @@ Respond with JSON only:
     } catch (error) {
       console.error("Get provider reviews error:", error);
       res.status(500).json({ error: "Failed to fetch reviews" });
+    }
+  });
+
+  // Submit a review for an appointment
+  app.post("/api/appointments/:id/review", requireAuth, async (req: Request<IdParams>, res: Response) => {
+    try {
+      const authUserId = req.authenticatedUserId!;
+      const appointmentId = req.params.id;
+      const { rating, comment } = req.body;
+
+      if (!rating || typeof rating !== "number" || rating < 1 || rating > 5) {
+        return res.status(400).json({ error: "Rating must be a number between 1 and 5" });
+      }
+
+      const [appointment] = await db
+        .select()
+        .from(appointments)
+        .where(eq(appointments.id, appointmentId))
+        .limit(1);
+
+      if (!appointment) {
+        return res.status(404).json({ error: "Appointment not found" });
+      }
+
+      if (appointment.userId !== authUserId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const reviewableStatuses = ["completed", "paid", "closed", "awaiting_payment"];
+      if (!reviewableStatuses.includes(appointment.status || "")) {
+        return res.status(400).json({ error: "Reviews can only be submitted for completed appointments" });
+      }
+
+      const [existingReview] = await db
+        .select({ id: reviews.id })
+        .from(reviews)
+        .where(eq(reviews.appointmentId, appointmentId))
+        .limit(1);
+
+      if (existingReview) {
+        return res.status(409).json({ error: "Review already submitted for this appointment" });
+      }
+
+      const [review] = await db
+        .insert(reviews)
+        .values({
+          appointmentId,
+          userId: authUserId,
+          providerId: appointment.providerId,
+          rating,
+          comment: comment?.trim() || null,
+        })
+        .returning();
+
+      // Recalculate provider's average rating and review count
+      const providerReviews = await db
+        .select({ rating: reviews.rating })
+        .from(reviews)
+        .where(eq(reviews.providerId, appointment.providerId));
+
+      const totalReviews = providerReviews.length;
+      const avgRating = totalReviews > 0
+        ? providerReviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews
+        : 0;
+
+      await db
+        .update(providers)
+        .set({
+          reviewCount: totalReviews,
+          rating: avgRating.toFixed(1),
+          averageRating: avgRating.toFixed(2),
+        })
+        .where(eq(providers.id, appointment.providerId));
+
+      res.status(201).json({ review });
+    } catch (error) {
+      console.error("Submit review error:", error);
+      res.status(500).json({ error: "Failed to submit review" });
     }
   });
 

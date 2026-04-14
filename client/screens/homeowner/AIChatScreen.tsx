@@ -19,8 +19,10 @@ import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
+import { AccountGateModal } from "@/components/AccountGateModal";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
+import { useAuthStore } from "@/state/authStore";
 import { getApiUrl, apiRequest } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -47,11 +49,13 @@ export default function AIChatScreen() {
   const headerHeight = useHeaderHeight();
   const navigation = useNavigation<NavigationProp>();
   const { theme, isDark } = useTheme();
+  const { isAuthenticated } = useAuthStore();
   const flatListRef = useRef<FlatList>(null);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showAccountGate, setShowAccountGate] = useState(false);
   const [pendingServiceRequest, setPendingServiceRequest] = useState<{
     category: string;
     problemSummary: string;
@@ -59,6 +63,10 @@ export default function AIChatScreen() {
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isLoading) return;
+    if (!isAuthenticated) {
+      setShowAccountGate(true);
+      return;
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -294,6 +302,12 @@ export default function AIChatScreen() {
           </View>
         </View>
       </KeyboardAvoidingView>
+      <AccountGateModal
+        visible={showAccountGate}
+        onClose={() => setShowAccountGate(false)}
+        onSignIn={() => { setShowAccountGate(false); navigation.navigate("Login"); }}
+        onSignUp={() => { setShowAccountGate(false); navigation.navigate("SignUp"); }}
+      />
     </ThemedView>
   );
 }

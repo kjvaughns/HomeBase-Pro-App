@@ -150,16 +150,19 @@ export default function SmartIntakeScreen() {
   }, []);
   
   useEffect(() => {
-    if (prefillProblem && !hasAutoAnalyzed) {
+    if (prefillProblem && !hasAutoAnalyzed && isAuthenticated) {
       setHasAutoAnalyzed(true);
       analyzeProblem(prefillProblem);
     }
-  }, [prefillProblem, hasAutoAnalyzed, analyzeProblem]);
+  }, [prefillProblem, hasAutoAnalyzed, analyzeProblem, isAuthenticated]);
 
   const handleDescribeSubmit = () => {
-    if (problemText.trim()) {
-      analyzeProblem(problemText);
+    if (!problemText.trim()) return;
+    if (!isAuthenticated) {
+      setShowAccountGate(true);
+      return;
     }
+    analyzeProblem(problemText);
   };
 
   const handleAnswerChange = (questionId: string, value: string | string[]) => {

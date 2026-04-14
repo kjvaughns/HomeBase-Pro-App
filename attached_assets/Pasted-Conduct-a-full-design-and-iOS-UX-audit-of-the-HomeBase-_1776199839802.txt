@@ -1,0 +1,89 @@
+Conduct a full design and iOS UX audit of the HomeBase homeowner app.
+
+Goal:
+Make sure the homeowner app is visually polished, trustworthy, intuitive, consistent, and beautiful on iPhone. Audit both design quality and usability. Focus on whether this feels like a real premium consumer app, not a rough prototype.
+
+Context:
+HomeBase is an AI powered home services app for homeowners. The homeowner side should feel clean, modern, premium, simple, and emotionally reassuring. It should reduce stress, create trust, and make booking home services feel easy and safe.
+
+Audit the app screen by screen and evaluate:
+- visual hierarchy
+- typography
+- spacing
+- alignment
+- padding
+- margins
+- icon consistency
+- color usage
+- accessibility
+- button sizing
+- tap targets
+- card design
+- form design
+- input usability
+- modal design
+- bottom sheet behavior
+- navigation clarity
+- tab bar quality
+- page transitions
+- animation quality
+- empty states
+- loading states
+- skeleton states
+- error states
+- confirmation states
+- trust signals
+- polish level
+- visual consistency
+- whether it feels native to iOS
+- whether it feels consumer grade and premium
+
+Specifically review:
+- splash and entry screens
+- login and signup
+- onboarding
+- homeowner dashboard
+- search and service discovery
+- provider cards
+- provider detail pages
+- booking flow
+- AI intake flow
+- calendar or date selection
+- payment screens
+- settings
+- profile
+- notifications
+- inbox or messaging
+- job history
+- review flow
+- post booking success states
+
+For each screen or system, identify:
+1. what looks great
+2. what looks messy or unfinished
+3. what feels off brand
+4. what feels too cluttered
+5. what feels too empty
+6. what does not feel iOS native
+7. what needs redesign
+8. what is already strong enough to keep
+
+Output format:
+1. Overall design score out of 10
+2. Overall iOS quality score out of 10
+3. Trust and polish score out of 10
+4. Biggest design problems
+5. Highest impact design improvements
+6. Screen by screen design audit
+7. UX friction points
+8. Visual consistency issues
+9. iOS specific issues
+10. Final verdict on whether the design feels launch ready
+
+Important:
+- do not just describe the screens
+- critique them like a top tier product designer
+- optimize for clean premium consumer trust
+- if something feels cheap, say it clearly
+- if something is too complex, simplify it
+- if something should be redesigned, explain why

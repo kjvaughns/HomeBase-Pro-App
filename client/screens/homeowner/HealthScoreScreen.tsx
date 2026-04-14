@@ -30,6 +30,7 @@ import { HomeSelector, Home } from "@/components/HomeSelector";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
+import { apiRequest, getApiUrl, getAuthHeaders } from "@/lib/query-client";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -49,24 +50,129 @@ interface HealthScoreRun {
 }
 
 
-const MOCK_SCORE_RUNS: HealthScoreRun[] = [
-  {
-    id: "run-1",
-    date: "2026-01-15",
-    score: 78,
-    breakdown: { safety: 85, water: 72, energy: 80, comfort: 75, exterior: 68 },
-    confidence: "high",
-    topRisks: ["Roof inspection overdue", "Water heater aging", "Gutters need cleaning"],
-  },
-  {
-    id: "run-2",
-    date: "2025-10-20",
-    score: 72,
-    breakdown: { safety: 80, water: 68, energy: 75, comfort: 70, exterior: 65 },
-    confidence: "medium",
-    topRisks: ["HVAC filter replacement", "Exterior paint fading", "Smoke detector batteries"],
-  },
-];
+function computeScoreFromAnswers(answers: Record<string, any>): {
+  score: number;
+  breakdown: { safety: number; water: number; energy: number; comfort: number; exterior: number };
+  topRisks: string[];
+} {
+  let safety = 100, water = 100, energy = 100, comfort = 100, exterior = 100;
+  const risks: string[] = [];
+
+  // Home age
+  if (answers["home-age"] === "30+ years") { comfort -= 15; exterior -= 10; }
+  else if (answers["home-age"] === "15-30 years") { comfort -= 5; }
+
+  // Roof age
+  if (answers["roof-age"] === "20+ years") { exterior -= 30; risks.push("Roof replacement overdue"); }
+  else if (answers["roof-age"] === "10-20 years") { exterior -= 15; risks.push("Schedule roof inspection"); }
+  else if (answers["roof-age"] === "Unknown") { exterior -= 10; }
+
+  // HVAC age
+  if (answers["hvac-age"] === "15+ years") { energy -= 25; comfort -= 20; risks.push("HVAC system nearing end of life"); }
+  else if (answers["hvac-age"] === "10-15 years") { energy -= 15; comfort -= 10; }
+  else if (answers["hvac-age"] === "Unknown") { energy -= 5; }
+
+  // Water heater
+  if (answers["water-heater"] === "15+ years") { water -= 30; risks.push("Water heater replacement recommended"); }
+  else if (answers["water-heater"] === "10-15 years") { water -= 15; risks.push("Water heater aging — inspect soon"); }
+  else if (answers["water-heater"] === "Unknown") { water -= 5; }
+
+  // Visible symptoms (each symptom -5 to most relevant category)
+  const symptoms = answers["symptoms"] || [];
+  if (symptoms.includes("Leaks or water stains")) { water -= 20; risks.push("Active leaks or water stains detected"); }
+  if (symptoms.includes("Uneven temperatures")) { comfort -= 15; energy -= 10; }
+  if (symptoms.includes("High energy bills")) { energy -= 15; risks.push("High energy bills — check insulation and HVAC"); }
+  if (symptoms.includes("Slow drains")) { water -= 10; }
+  if (symptoms.includes("Roof stains or damage")) { exterior -= 20; risks.push("Roof stains or visible damage"); }
+  if (symptoms.includes("Mold or musty smell")) { water -= 20; safety -= 15; risks.push("Mold or moisture — investigate immediately"); }
+  if (symptoms.includes("Gutter overflow")) { exterior -= 10; risks.push("Gutters need cleaning"); }
+  if (symptoms.includes("Wall or foundation cracks")) { safety -= 20; risks.push("Foundation or wall cracks — inspect structurally"); }
+  if (symptoms.includes("Pest activity")) { safety -= 10; }
+
+  // Safety checks
+  if (answers["smoke-co"] === false) { safety -= 20; risks.push("Test smoke and CO detectors"); }
+  if (answers["gfci"] === "No" || answers["gfci"] === "Not sure") { safety -= 15; risks.push("Install GFCI outlets in wet areas"); }
+  if (answers["water-shutoff"] === false) { safety -= 10; risks.push("Locate main water shutoff valve"); }
+
+  // Maintenance habits
+  if (answers["filter-cadence"] === "Rarely/Never") { energy -= 15; comfort -= 10; risks.push("HVAC filter replacement overdue"); }
+  else if (answers["filter-cadence"] === "Every 6 months") { energy -= 5; }
+  if (answers["gutter-cleaning"] === "Never") { exterior -= 15; risks.push("Gutters need cleaning"); }
+  else if (answers["gutter-cleaning"] === "Less than yearly") { exterior -= 8; }
+  if (answers["hvac-service"] === false) { energy -= 10; comfort -= 5; }
+  if (answers["pest-control"] === "Never") { safety -= 5; }
+
+  // Clamp all values between 0 and 100
+  const clamp = (v: number) => Math.max(0, Math.min(100, v));
+  const breakdown = {
+    safety: clamp(safety),
+    water: clamp(water),
+    energy: clamp(energy),
+    comfort: clamp(comfort),
+    exterior: clamp(exterior),
+  };
+
+  // Overall score is weighted average
+  const score = Math.round(
+    (breakdown.safety * 0.25 + breakdown.water * 0.25 + breakdown.energy * 0.2 + breakdown.comfort * 0.15 + breakdown.exterior * 0.15)
+  );
+
+  return { score, breakdown, topRisks: risks.slice(0, 5) };
+}
+
+interface ActionPlanItem {
+  title: string;
+  due: string;
+  cost: string;
+  category: string;
+}
+
+const RISK_ACTION_MAP: Record<string, ActionPlanItem> = {
+  "Roof replacement overdue":            { title: "Replace roof", due: "ASAP", cost: "$5,000-15,000", category: "Roof" },
+  "Schedule roof inspection":            { title: "Schedule roof inspection", due: "This month", cost: "$200-400", category: "Roof" },
+  "HVAC system nearing end of life":     { title: "HVAC replacement/tune-up", due: "This season", cost: "$3,000-8,000", category: "HVAC" },
+  "Water heater replacement recommended":{ title: "Replace water heater", due: "This month", cost: "$800-2,000", category: "Plumbing" },
+  "Water heater aging — inspect soon":   { title: "Water heater inspection", due: "Next month", cost: "$100-150", category: "Plumbing" },
+  "Active leaks or water stains detected":{ title: "Fix leaks / water damage", due: "This week", cost: "$200-2,000", category: "Plumbing" },
+  "High energy bills — check insulation and HVAC": { title: "Energy audit + insulation check", due: "This month", cost: "$200-600", category: "Energy" },
+  "Roof stains or visible damage":       { title: "Roof repair assessment", due: "This month", cost: "$300-800", category: "Roof" },
+  "Mold or moisture — investigate immediately": { title: "Mold remediation assessment", due: "ASAP", cost: "$500-3,000", category: "Safety" },
+  "Gutters need cleaning":               { title: "Gutter cleaning", due: "This month", cost: "$150-250", category: "Exterior" },
+  "Foundation or wall cracks — inspect structurally": { title: "Structural inspection", due: "ASAP", cost: "$300-600", category: "Safety" },
+  "Test smoke and CO detectors":         { title: "Test + replace smoke/CO detectors", due: "This week", cost: "$20-60", category: "Safety" },
+  "Install GFCI outlets in wet areas":   { title: "Install GFCI outlets", due: "This month", cost: "$150-400", category: "Electrical" },
+  "Locate main water shutoff valve":     { title: "Locate water shutoff valve", due: "This week", cost: "Free", category: "Safety" },
+  "HVAC filter replacement overdue":     { title: "Replace HVAC filters", due: "This week", cost: "$20-40", category: "HVAC" },
+};
+
+function buildActionPlan(topRisks: string[]): ActionPlanItem[] {
+  const items: ActionPlanItem[] = topRisks
+    .map(risk => RISK_ACTION_MAP[risk])
+    .filter((item): item is ActionPlanItem => !!item);
+
+  if (items.length === 0) {
+    items.push({ title: "Schedule HVAC tune-up", due: "This season", cost: "$100-200", category: "HVAC" });
+    items.push({ title: "Clean gutters", due: "This month", cost: "$150-250", category: "Exterior" });
+  }
+  return items;
+}
+
+function estimateCostIfIgnored(topRisks: string[]): string {
+  const highCostRisks = ["Roof replacement overdue", "HVAC system nearing end of life", "Active leaks or water stains detected", "Mold or moisture — investigate immediately", "Foundation or wall cracks — inspect structurally"];
+  const hasHighCost = topRisks.some(r => highCostRisks.includes(r));
+  if (topRisks.length === 0) return "$500 - $1,500";
+  if (hasHighCost) return "$5,000 - $15,000";
+  return "$1,500 - $5,000";
+}
+
+function estimateQuickWinSavings(breakdown: { energy: number; water: number }): string {
+  const energyGap = 100 - breakdown.energy;
+  const waterGap = 100 - breakdown.water;
+  const total = energyGap + waterGap;
+  if (total >= 40) return "$400 - $800/yr";
+  if (total >= 20) return "$200 - $400/yr";
+  return "$100 - $200/yr";
+}
 
 interface WizardStep {
   id: string;
@@ -151,13 +257,54 @@ export default function HealthScoreScreen() {
   const [currentResult, setCurrentResult] = useState<HealthScoreRun | null>(null);
   const [showScoringDrawer, setShowScoringDrawer] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "risks" | "plan" | "history">("overview");
+  const [scoreRuns, setScoreRuns] = useState<HealthScoreRun[]>([]);
+  const [isFetchingScore, setIsFetchingScore] = useState(false);
+
+  const loadHouseFaxScore = async (homeId: string) => {
+    setIsFetchingScore(true);
+    try {
+      const url = new URL(`/api/housefax/${homeId}`, getApiUrl());
+      const res = await fetch(url.toString(), { headers: getAuthHeaders(), credentials: "include" });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.score != null && data.score > 0) {
+        // Approximate breakdown from overall score — each category estimated proportionally.
+        // Per-category breakdown is only available after completing the wizard.
+        const s = data.score as number;
+        const approxBreakdown = {
+          safety: Math.min(100, Math.round(s * 1.05)),
+          water: Math.min(100, Math.round(s * 1.0)),
+          energy: Math.min(100, Math.round(s * 0.98)),
+          comfort: Math.min(100, Math.round(s * 0.95)),
+          exterior: Math.min(100, Math.round(s * 0.93)),
+        };
+        const run: HealthScoreRun = {
+          id: `housefax-${homeId}`,
+          date: new Date().toISOString().split("T")[0],
+          score: s,
+          breakdown: approxBreakdown,
+          confidence: data.entries?.length >= 3 ? "high" : data.entries?.length >= 1 ? "medium" : "low",
+          topRisks: (data.insights || []).slice(0, 5),
+        };
+        setScoreRuns([run]);
+      } else {
+        setScoreRuns([]);
+      }
+    } catch {
+      setScoreRuns([]);
+    } finally {
+      setIsFetchingScore(false);
+    }
+  };
 
   const handleSelectHome = (home: Home) => {
     setSelectedHome(home);
+    setScoreRuns([]);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    loadHouseFaxScore(home.id);
   };
-  const lastRun = MOCK_SCORE_RUNS[0];
-  const previousRun = MOCK_SCORE_RUNS[1];
+  const lastRun = scoreRuns[0] ?? null;
+  const previousRun = scoreRuns[1] ?? null;
   const trendDiff = lastRun && previousRun ? lastRun.score - previousRun.score : 0;
 
   const handleStartAssessment = () => {
@@ -173,20 +320,34 @@ export default function HealthScoreScreen() {
     setShowResults(true);
   };
 
-  const handleWizardNext = () => {
+  const handleWizardNext = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (wizardStep < WIZARD_STEPS.length - 1) {
       setWizardStep(wizardStep + 1);
     } else {
+      const answeredCount = Object.keys(answers).length;
+      const { score, breakdown, topRisks } = computeScoreFromAnswers(answers);
+      const confidence: "low" | "medium" | "high" = answeredCount > 10 ? "high" : answeredCount > 6 ? "medium" : "low";
       const newResult: HealthScoreRun = {
         id: `run-${Date.now()}`,
         date: new Date().toISOString().split("T")[0],
-        score: 82,
-        breakdown: { safety: 88, water: 78, energy: 85, comfort: 80, exterior: 75 },
-        confidence: Object.keys(answers).length > 10 ? "high" : Object.keys(answers).length > 6 ? "medium" : "low",
-        topRisks: ["Water heater approaching end of life", "Gutter cleaning overdue"],
+        score,
+        breakdown,
+        confidence,
+        topRisks: topRisks.length > 0 ? topRisks : ["Regular maintenance keeps your home healthy"],
       };
+
+      // Persist the computed score to the backend
+      if (selectedHome?.id) {
+        try {
+          await apiRequest("PUT", `/api/homes/${selectedHome.id}`, { housefaxScore: score });
+        } catch {
+          // Non-blocking — score is still shown locally
+        }
+      }
+
       setCurrentResult(newResult);
+      setScoreRuns((prev) => [newResult, ...prev].slice(0, 10));
       setShowWizard(false);
       setShowResults(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -490,12 +651,12 @@ export default function HealthScoreScreen() {
                   <GlassCard style={styles.highlightCard}>
                     <Feather name="dollar-sign" size={24} color={Colors.error} />
                     <ThemedText style={styles.highlightLabel}>Cost if Ignored</ThemedText>
-                    <ThemedText style={styles.highlightValue}>$2,500 - $5,000</ThemedText>
+                    <ThemedText style={styles.highlightValue}>{estimateCostIfIgnored(currentResult.topRisks)}</ThemedText>
                   </GlassCard>
                   <GlassCard style={styles.highlightCard}>
                     <Feather name="trending-up" size={24} color={Colors.accent} />
                     <ThemedText style={styles.highlightLabel}>Quick Win Savings</ThemedText>
-                    <ThemedText style={styles.highlightValue}>$300 - $600/yr</ThemedText>
+                    <ThemedText style={styles.highlightValue}>{estimateQuickWinSavings(currentResult.breakdown)}</ThemedText>
                   </GlassCard>
                 </View>
 
@@ -553,12 +714,7 @@ export default function HealthScoreScreen() {
             {activeTab === "plan" && (
               <Animated.View entering={FadeIn.duration(300)}>
                 <ThemedText style={styles.resultSectionTitle}>Recommended Actions</ThemedText>
-                {[
-                  { title: "Replace HVAC filters", due: "This week", cost: "$20-40", category: "HVAC" },
-                  { title: "Schedule gutter cleaning", due: "This month", cost: "$150-250", category: "Exterior" },
-                  { title: "Water heater inspection", due: "Next month", cost: "$100-150", category: "Plumbing" },
-                  { title: "Roof inspection", due: "Spring 2026", cost: "$200-400", category: "Roof" },
-                ].map((task, index) => (
+                {buildActionPlan(currentResult.topRisks).map((task, index) => (
                   <GlassCard key={index} style={styles.actionCard}>
                     <View style={styles.actionHeader}>
                       <ThemedText style={styles.actionTitle}>{task.title}</ThemedText>
@@ -595,7 +751,7 @@ export default function HealthScoreScreen() {
             {activeTab === "history" && (
               <Animated.View entering={FadeIn.duration(300)}>
                 <ThemedText style={styles.resultSectionTitle}>Past Assessments</ThemedText>
-                {MOCK_SCORE_RUNS.map((run, index) => (
+                {scoreRuns.map((run, index) => (
                   <GlassCard key={run.id} style={styles.historyCard}>
                     <View style={styles.historyHeader}>
                       <ScoreRing score={run.score} size={60} strokeWidth={6} />

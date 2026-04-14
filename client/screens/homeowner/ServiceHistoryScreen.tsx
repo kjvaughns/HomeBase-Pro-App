@@ -68,28 +68,29 @@ interface PastProvider {
   lastService: string;
 }
 
-const MOCK_SERVICE_ENTRIES: ServiceEntry[] = [
-  { id: "se-1", homeId: "home-1", title: "HVAC Maintenance", provider: { id: "p-1", name: "Bay Area HVAC Pros" }, date: "2026-01-20", status: "completed", amount: 185, category: "HVAC", type: "service", notes: "Annual maintenance, replaced filter, cleaned coils" },
-  { id: "se-2", homeId: "home-1", title: "Leak Repair - Kitchen", provider: { id: "p-2", name: "Quick Fix Plumbing" }, date: "2026-01-10", status: "completed", amount: 320, category: "Plumbing", type: "service", notes: "Fixed leak under kitchen sink, replaced P-trap" },
-  { id: "se-3", homeId: "home-1", title: "Gutter Cleaning", provider: { id: "p-3", name: "CleanPro Services" }, date: "2025-12-15", status: "completed", amount: 175, category: "Exterior", type: "service" },
-  { id: "se-4", homeId: "home-1", title: "Smoke Detector Battery Replacement", provider: { id: "self", name: "DIY" }, date: "2025-12-01", status: "completed", amount: 25, category: "Safety", type: "diy" },
-  { id: "se-5", homeId: "home-1", title: "AC Tune-Up", provider: { id: "p-1", name: "Bay Area HVAC Pros" }, date: "2025-11-15", status: "completed", amount: 150, category: "HVAC", type: "service", warranty: { expiresAt: "2026-11-15", notes: "Parts and labor warranty" } },
-  { id: "se-6", homeId: "home-1", title: "Deep Cleaning", provider: { id: "p-4", name: "Sparkle Clean" }, date: "2025-10-20", status: "completed", amount: 280, category: "Cleaning", type: "service" },
-  { id: "se-7", homeId: "home-2", title: "Window Cleaning", provider: { id: "p-3", name: "CleanPro Services" }, date: "2026-01-18", status: "completed", amount: 120, category: "Exterior", type: "service" },
-  { id: "se-8", homeId: "home-2", title: "Deck Staining", provider: { id: "p-5", name: "Coastal Contractors" }, date: "2025-11-25", status: "completed", amount: 850, category: "Exterior", type: "service", warranty: { expiresAt: "2027-11-25", notes: "2-year warranty on materials" } },
-  { id: "se-9", homeId: "home-2", title: "Pest Control", provider: { id: "p-6", name: "Bug Busters" }, date: "2025-10-10", status: "completed", amount: 95, category: "Pest Control", type: "service" },
-  { id: "se-10", homeId: "home-1", title: "Electrical Panel Inspection", provider: { id: "p-7", name: "Volt Electric" }, date: "2026-02-15", status: "upcoming", amount: 200, category: "Electrical", type: "service" },
-  { id: "se-11", homeId: "home-2", title: "Roof Inspection", provider: { id: "p-8", name: "Top Notch Roofing" }, date: "2026-02-20", status: "upcoming", amount: 150, category: "Roof", type: "service" },
-  { id: "se-12", homeId: "home-2", title: "HVAC Filter Replacement", provider: { id: "self", name: "DIY" }, date: "2025-09-15", status: "completed", amount: 40, category: "HVAC", type: "diy" },
-];
+function mapApiStatus(status: string): "completed" | "upcoming" | "in_progress" | "cancelled" {
+  switch (status) {
+    case "completed": return "completed";
+    case "in_progress": return "in_progress";
+    case "cancelled": return "cancelled";
+    default: return "upcoming";
+  }
+}
 
-const MOCK_PAST_PROVIDERS: PastProvider[] = [
-  { id: "p-1", name: "Bay Area HVAC Pros", category: "HVAC", totalSpent: 335, jobsCompleted: 2, rating: 4.9, lastService: "2026-01-20" },
-  { id: "p-2", name: "Quick Fix Plumbing", category: "Plumbing", totalSpent: 320, jobsCompleted: 1, rating: 4.7, lastService: "2026-01-10" },
-  { id: "p-3", name: "CleanPro Services", category: "Cleaning", totalSpent: 295, jobsCompleted: 2, rating: 4.8, lastService: "2026-01-18" },
-  { id: "p-4", name: "Sparkle Clean", category: "Cleaning", totalSpent: 280, jobsCompleted: 1, rating: 4.6, lastService: "2025-10-20" },
-  { id: "p-5", name: "Coastal Contractors", category: "General", totalSpent: 850, jobsCompleted: 1, rating: 4.9, lastService: "2025-11-25" },
-];
+function guessCategoryFromService(serviceName: string): string {
+  const lower = serviceName.toLowerCase();
+  if (lower.includes("hvac") || lower.includes("air condition") || lower.includes("heating") || lower.includes("furnace") || lower.includes("ac ")) return "HVAC";
+  if (lower.includes("plumb") || lower.includes("leak") || lower.includes("pipe") || lower.includes("faucet") || lower.includes("drain")) return "Plumbing";
+  if (lower.includes("electric") || lower.includes("wiring") || lower.includes("outlet") || lower.includes("panel")) return "Electrical";
+  if (lower.includes("clean")) return "Cleaning";
+  if (lower.includes("roof")) return "Roof";
+  if (lower.includes("pest") || lower.includes("bug") || lower.includes("exterminator")) return "Pest Control";
+  if (lower.includes("gutter") || lower.includes("deck") || lower.includes("fence") || lower.includes("exterior") || lower.includes("window")) return "Exterior";
+  if (lower.includes("paint")) return "Painting";
+  if (lower.includes("landscape") || lower.includes("lawn") || lower.includes("yard") || lower.includes("tree")) return "Landscaping";
+  if (lower.includes("safety") || lower.includes("smoke") || lower.includes("detector") || lower.includes("security")) return "Safety";
+  return "General";
+}
 
 const FILTER_OPTIONS = ["All", "Completed", "Upcoming", "Invoices", "DIY", "Warranties"];
 
@@ -125,6 +126,8 @@ export default function ServiceHistoryScreen() {
   const [homes, setHomes] = useState<Home[]>([]);
   const [selectedHome, setSelectedHome] = useState<Home | null>(null);
   const [isLoadingHomes, setIsLoadingHomes] = useState(true);
+  const [serviceEntries, setServiceEntries] = useState<ServiceEntry[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [showHomeSelector, setShowHomeSelector] = useState(false);
   const [activeTab, setActiveTab] = useState<"timeline" | "providers">("timeline");
   const [activeFilter, setActiveFilter] = useState("All");
@@ -169,24 +172,60 @@ export default function ServiceHistoryScreen() {
     }
   }, [user?.id]);
 
+  const fetchServiceHistory = useCallback(async (homeId: string) => {
+    setIsLoadingHistory(true);
+    try {
+      const response = await apiRequest("GET", `/api/homes/${homeId}/service-history`);
+      if (response.ok) {
+        const data = await response.json();
+        const raw: any[] = Array.isArray(data?.serviceHistory) ? data.serviceHistory : [];
+        const mapped: ServiceEntry[] = raw.map((appt) => ({
+          id: appt.id,
+          homeId: appt.homeId,
+          title: appt.serviceName,
+          provider: { id: appt.providerId, name: appt.providerName || "Provider" },
+          date: appt.completedAt || appt.scheduledDate,
+          status: mapApiStatus(appt.status),
+          amount: appt.finalPrice ? parseFloat(appt.finalPrice) : appt.estimatedPrice ? parseFloat(appt.estimatedPrice) : null,
+          category: guessCategoryFromService(appt.serviceName),
+          notes: appt.notes || appt.description || undefined,
+          type: "service" as const,
+        }));
+        setServiceEntries(mapped);
+      } else {
+        setServiceEntries([]);
+      }
+    } catch (error) {
+      console.error("Error fetching service history:", error);
+      setServiceEntries([]);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       fetchHomes();
     }, [fetchHomes])
   );
 
-  const filteredEntries = MOCK_SERVICE_ENTRIES
-    .filter((e) => selectedHome ? e.homeId === selectedHome.id : true)
-    .filter((e) => {
-      if (activeFilter === "All") return true;
-      if (activeFilter === "Completed") return e.status === "completed";
-      if (activeFilter === "Upcoming") return e.status === "upcoming";
-      if (activeFilter === "Invoices") return e.amount !== null;
-      if (activeFilter === "DIY") return e.type === "diy";
-      if (activeFilter === "Warranties") return e.warranty !== undefined;
-      return true;
-    })
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  useEffect(() => {
+    if (selectedHome?.id) {
+      fetchServiceHistory(selectedHome.id);
+    } else {
+      setServiceEntries([]);
+    }
+  }, [selectedHome?.id, fetchServiceHistory]);
+
+  const filteredEntries: ServiceEntry[] = serviceEntries.filter((entry) => {
+    if (activeFilter === "All") return true;
+    if (activeFilter === "Completed") return entry.status === "completed";
+    if (activeFilter === "Upcoming") return entry.status === "upcoming";
+    if (activeFilter === "DIY") return entry.type === "diy";
+    if (activeFilter === "Warranties") return !!entry.warranty;
+    if (activeFilter === "Invoices") return !!entry.invoiceId;
+    return true;
+  });
 
   const groupedByMonth = filteredEntries.reduce((acc, entry) => {
     const month = new Date(entry.date).toLocaleDateString("en-US", { month: "long", year: "numeric" });
@@ -197,7 +236,10 @@ export default function ServiceHistoryScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await new Promise((r) => setTimeout(r, 1000));
+    await fetchHomes();
+    if (selectedHome?.id) {
+      await fetchServiceHistory(selectedHome.id);
+    }
     setRefreshing(false);
   };
 
@@ -488,7 +530,11 @@ export default function ServiceHistoryScreen() {
             ))}
           </ScrollView>
 
-          {filteredEntries.length > 0 ? (
+          {isLoadingHistory ? (
+            <View style={styles.emptyState}>
+              <ActivityIndicator size="large" color={Colors.accent} />
+            </View>
+          ) : filteredEntries.length > 0 ? (
             <ScrollView
               contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + Spacing["2xl"] }]}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />}
@@ -512,15 +558,12 @@ export default function ServiceHistoryScreen() {
           showsVerticalScrollIndicator={false}
         >
           <ThemedText style={styles.sectionTitle}>Providers Who've Worked Here</ThemedText>
-          {MOCK_PAST_PROVIDERS.length > 0 ? (
-            MOCK_PAST_PROVIDERS.map((provider, index) => renderProviderCard(provider, index))
-          ) : (
-            <View style={styles.emptyProviders}>
-              <ThemedText style={[styles.emptyProvidersText, { color: theme.textSecondary }]}>
-                No providers have worked on this home yet
-              </ThemedText>
-            </View>
-          )}
+          <View style={styles.emptyProviders}>
+            <Feather name="users" size={40} color={theme.textSecondary} />
+            <ThemedText style={[styles.emptyProvidersText, { color: theme.textSecondary, marginTop: Spacing.md, textAlign: "center" }]}>
+              Providers from completed bookings will appear here
+            </ThemedText>
+          </View>
         </ScrollView>
       )}
 

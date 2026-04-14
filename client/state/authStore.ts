@@ -48,6 +48,7 @@ interface AuthState {
   setActiveRole: (role: UserRole) => void;
   activateProviderMode: () => void;
   setNeedsRoleSelection: (needs: boolean) => void;
+  updateUser: (updates: Partial<User>) => void;
   createProviderProfile: (profile: ProviderProfile) => void;
   updateProviderStatus: (status: ProviderStatus) => void;
   hasProviderProfile: () => boolean;
@@ -132,6 +133,15 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   setNeedsRoleSelection: (needs: boolean) => {
     set({ needsRoleSelection: needs });
     saveToStorage(get());
+  },
+
+  updateUser: (updates: Partial<User>) => {
+    const { user } = get();
+    if (user) {
+      const updated = { ...user, ...updates };
+      set({ user: updated });
+      saveToStorage(get());
+    }
   },
 
   createProviderProfile: (profile: ProviderProfile) => {

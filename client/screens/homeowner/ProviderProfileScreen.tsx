@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useLayoutEffect } from "react";
 import { StyleSheet, View, ScrollView, Pressable, Linking, Alert, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useHeaderHeight } from "@react-navigation/elements";
+import { useHeaderHeight, HeaderButton } from "@react-navigation/elements";
 import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
@@ -209,6 +209,23 @@ export default function ProviderProfileScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     toggleSavedProvider(providerId);
   };
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <HeaderButton
+          onPress={handleToggleSave}
+          accessibilityLabel={isSaved ? "Remove from saved" : "Save provider"}
+        >
+          <Feather
+            name="heart"
+            size={22}
+            color={isSaved ? Colors.accent : undefined}
+          />
+        </HeaderButton>
+      ),
+    });
+  }, [navigation, isSaved, handleToggleSave]);
 
   const handleCall = async () => {
     const phoneNumber = provider.phone || "5551234567";
@@ -551,24 +568,6 @@ export default function ProviderProfileScreen() {
                   </ThemedText>
                 </View>
               </View>
-              <Pressable
-                style={[
-                  styles.saveButton,
-                  {
-                    backgroundColor: isSaved ? Colors.accent : theme.backgroundElevated,
-                    borderColor: isSaved ? Colors.accent : theme.borderLight,
-                    borderWidth: 1,
-                  },
-                ]}
-                onPress={handleToggleSave}
-                hitSlop={8}
-              >
-                <Feather
-                  name="heart"
-                  size={20}
-                  color={isSaved ? "#FFF" : theme.textSecondary}
-                />
-              </Pressable>
             </View>
             <View style={styles.profileActions}>
               {provider.verified ? (
@@ -672,14 +671,6 @@ const styles = StyleSheet.create({
   profileInfo: {
     flex: 1,
     marginLeft: Spacing.md,
-  },
-  saveButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: Spacing.sm,
   },
   profileActions: {
     flexDirection: "row",

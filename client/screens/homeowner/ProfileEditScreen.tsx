@@ -14,6 +14,8 @@ import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollV
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Typography } from "@/constants/theme";
 import { useHomeownerStore } from "@/state/homeownerStore";
+import { useAuthStore } from "@/state/authStore";
+import { apiRequest } from "@/lib/query-client";
 
 export default function ProfileEditScreen() {
   const insets = useSafeAreaInsets();
@@ -23,22 +25,43 @@ export default function ProfileEditScreen() {
 
   const profile = useHomeownerStore((s) => s.profile);
   const updateProfile = useHomeownerStore((s) => s.updateProfile);
+  const { user, updateUser } = useAuthStore();
 
-  const [name, setName] = useState(profile?.name || "");
-  const [email, setEmail] = useState(profile?.email || "");
-  const [phone, setPhone] = useState(profile?.phone || "");
+  const [name, setName] = useState(profile?.name || user?.name || "");
+  const [phone, setPhone] = useState(profile?.phone || user?.phone || "");
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const handleSave = async () => {
+    if (!user?.id) return;
     setIsSaving(true);
+    setSaveError(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      updateProfile({ name, email, phone });
+      const response = await apiRequest("PUT", `/api/user/${user.id}`, {
+        name: name.trim(),
+        phone: phone.trim() || undefined,
+      });
+
+      const data = await response.json();
+      const updatedUser = data.user;
+
+      updateUser({
+        name: updatedUser.name || name.trim(),
+        phone: updatedUser.phone || phone.trim() || undefined,
+      });
+
+      updateProfile({
+        name: updatedUser.name || name.trim(),
+        phone: updatedUser.phone || phone.trim() || undefined,
+      });
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       navigation.goBack();
-    } catch (error) {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Something went wrong. Please try again.";
+      setSaveError(message);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setIsSaving(false);
@@ -56,9 +79,6 @@ export default function ProfileEditScreen() {
       >
         <View style={styles.avatarSection}>
           <Avatar name={name} size="large" />
-          <ThemedText style={[styles.avatarHint, { color: theme.textTertiary }]}>
-            Tap to change photo
-          </ThemedText>
         </View>
 
         <View style={styles.form}>
@@ -69,18 +89,7 @@ export default function ProfileEditScreen() {
               value={name}
               onChangeText={setName}
               leftIcon="user"
-            />
-          </View>
-
-          <View style={styles.field}>
-            <ThemedText style={styles.label}>Email</ThemedText>
-            <TextField
-              placeholder="Enter your email"
-              value={email}
-              onChangeText={setEmail}
-              leftIcon="mail"
-              keyboardType="email-address"
-              autoCapitalize="none"
+              testID="input-name"
             />
           </View>
 
@@ -92,8 +101,15 @@ export default function ProfileEditScreen() {
               onChangeText={setPhone}
               leftIcon="phone"
               keyboardType="phone-pad"
+              testID="input-phone"
             />
           </View>
+
+          {saveError ? (
+            <ThemedText style={[styles.errorText, { color: theme.textSecondary }]}>
+              {saveError}
+            </ThemedText>
+          ) : null}
         </View>
       </KeyboardAwareScrollViewCompat>
 
@@ -105,8 +121,9 @@ export default function ProfileEditScreen() {
       >
         <PrimaryButton
           onPress={handleSave}
-          disabled={!name.trim() || !email.trim() || isSaving}
+          disabled={!name.trim() || isSaving}
           loading={isSaving}
+          testID="button-save-profile"
         >
           Save Changes
         </PrimaryButton>
@@ -136,6 +153,10 @@ const styles = StyleSheet.create({
   label: {
     ...Typography.subhead,
     fontWeight: "600",
+  },
+  errorText: {
+    ...Typography.subhead,
+    textAlign: "center",
   },
   bottomBar: {
     position: "absolute",

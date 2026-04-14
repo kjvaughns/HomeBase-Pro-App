@@ -262,6 +262,27 @@ export async function runBootMigrations(): Promise<void> {
       await runSql(label, sql);
     }
 
+    // ── housefax_entries: service history log for each home ──────────────
+    await runSql("table.housefax_entries", `
+      CREATE TABLE IF NOT EXISTS housefax_entries (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+        home_id VARCHAR NOT NULL REFERENCES homes(id) ON DELETE CASCADE,
+        appointment_id VARCHAR REFERENCES appointments(id) ON DELETE SET NULL,
+        job_id VARCHAR REFERENCES jobs(id) ON DELETE SET NULL,
+        service_category TEXT NOT NULL DEFAULT 'General',
+        service_name TEXT NOT NULL,
+        provider_id VARCHAR REFERENCES providers(id) ON DELETE SET NULL,
+        provider_name TEXT,
+        completed_at TIMESTAMP NOT NULL,
+        cost_cents INTEGER DEFAULT 0,
+        ai_summary TEXT,
+        photos JSON DEFAULT '[]',
+        system_affected TEXT,
+        notes TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+
     // ── homes: HouseFax enrichment columns ────────────────────────────────
     const homeAlters: Array<[string, string]> = [
       ["homes.lot_size",            `ALTER TABLE homes ADD COLUMN IF NOT EXISTS lot_size INTEGER`],
@@ -297,6 +318,7 @@ export async function runBootMigrations(): Promise<void> {
       ["homes.last_sold_date column",        `SELECT last_sold_date FROM homes LIMIT 0`],
       ["homes.estimated_value column",       `SELECT estimated_value FROM homes LIMIT 0`],
       ["homes.housefax_data column",         `SELECT housefax_data FROM homes LIMIT 0`],
+      ["housefax_entries table",             `SELECT id FROM housefax_entries LIMIT 0`],
       ["users.stripe_customer_id column",    `SELECT stripe_customer_id FROM users LIMIT 0`],
       ["users.default_payment_method_id",    `SELECT default_payment_method_id FROM users LIMIT 0`],
       ["users.token_version column",         `SELECT token_version FROM users LIMIT 0`],

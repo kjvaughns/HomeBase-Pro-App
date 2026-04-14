@@ -1,90 +1,101 @@
 import React from "react";
 import { StyleSheet, View, Image, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
-const AppLogo = require("../../../assets/images/icon.png");
-
 import { ThemedText } from "@/components/ThemedText";
-import { ThemedView } from "@/components/ThemedView";
 import { PrimaryButton } from "@/components/PrimaryButton";
-import { SecondaryButton } from "@/components/SecondaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, Colors, Typography } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
+const AppLogo = require("../../../assets/images/icon.png");
+
 type Props = NativeStackScreenProps<RootStackParamList, "Welcome">;
 
 export default function WelcomeScreen({ navigation }: Props) {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
+  const gradientColors = isDark
+    ? (["#0D1F15", "#0A1A10", "#000000"] as const)
+    : (["#F0FBF4", "#E6F7EC", "#FFFFFF"] as const);
+
   return (
-    <ThemedView style={styles.container}>
-      <View style={[styles.content, { paddingTop: insets.top + Spacing["3xl"] }]}>
-        <View style={styles.logoContainer}>
-          <Image
-            source={AppLogo}
-            style={styles.logoImage}
-            resizeMode="contain"
-          />
-          <ThemedText type="h1" style={styles.appName}>
-            HomeBase
-          </ThemedText>
-          <ThemedText type="body" style={[styles.tagline, { color: theme.textSecondary }]}>
-            Your home, simplified
+    <LinearGradient colors={gradientColors} style={styles.container}>
+      <View style={[styles.content, { paddingTop: insets.top + Spacing["2xl"] }]}>
+        <View style={styles.logoSection}>
+          <Image source={AppLogo} style={styles.logo} resizeMode="contain" />
+          <ThemedText style={styles.appName}>HomeBase</ThemedText>
+          <ThemedText style={[styles.tagline, { color: theme.textSecondary }]}>
+            Trusted pros. Peace of mind.
           </ThemedText>
         </View>
 
-        <View style={styles.features}>
-          <FeatureRow icon="search" text="Find trusted home service providers" />
-          <FeatureRow icon="calendar" text="Book and manage appointments" />
-          <FeatureRow icon="message-circle" text="Chat directly with providers" />
-          <FeatureRow icon="star" text="Access home management tools" />
+        <View style={styles.trustRow}>
+          <TrustBadge value="10k+" label="Homeowners" />
+          <View style={[styles.divider, { backgroundColor: theme.border }]} />
+          <TrustBadge value="500+" label="Verified Pros" />
+          <View style={[styles.divider, { backgroundColor: theme.border }]} />
+          <TrustBadge value="4.9" label="Avg Rating" />
+        </View>
+
+        <View style={[styles.card, { backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)", borderColor: theme.borderLight }]}>
+          <ProofRow icon="shield" text="Background-checked, licensed professionals" />
+          <ProofRow icon="dollar-sign" text="Upfront pricing — no hidden fees" />
+          <ProofRow icon="clock" text="Book in under 2 minutes" />
         </View>
       </View>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.lg }]}>
-        <PrimaryButton
-          onPress={() => navigation.navigate("SignUp")}
-          testID="button-signup"
-        >
-          Create Account
+        <PrimaryButton onPress={() => navigation.navigate("SignUp")} testID="button-signup">
+          Get Started
         </PrimaryButton>
 
-        <SecondaryButton
+        <Pressable
           onPress={() => navigation.navigate("Login")}
+          style={[styles.signInButton, { borderColor: theme.border }]}
           testID="button-login"
         >
-          Sign In
-        </SecondaryButton>
+          <ThemedText style={[styles.signInText, { color: theme.text }]}>
+            I already have an account
+          </ThemedText>
+        </Pressable>
 
         <Pressable
           onPress={() => navigation.navigate("Main")}
-          style={styles.skipButton}
+          style={styles.guestButton}
           testID="button-skip"
         >
-          <ThemedText style={[styles.skipText, { color: theme.textSecondary }]}>
-            Continue as Guest
+          <ThemedText style={[styles.guestText, { color: theme.textSecondary }]}>
+            Browse as guest
           </ThemedText>
         </Pressable>
       </View>
-    </ThemedView>
+    </LinearGradient>
   );
 }
 
-function FeatureRow({ icon, text }: { icon: keyof typeof Feather.glyphMap; text: string }) {
+function TrustBadge({ value, label }: { value: string; label: string }) {
   const { theme } = useTheme();
-
   return (
-    <View style={styles.featureRow}>
-      <View style={[styles.featureIcon, { backgroundColor: theme.backgroundSecondary }]}>
-        <Feather name={icon} size={20} color={Colors.accent} />
+    <View style={styles.trustBadge}>
+      <ThemedText style={[styles.trustValue, { color: Colors.accent }]}>{value}</ThemedText>
+      <ThemedText style={[styles.trustLabel, { color: theme.textSecondary }]}>{label}</ThemedText>
+    </View>
+  );
+}
+
+function ProofRow({ icon, text }: { icon: string; text: string }) {
+  const { theme } = useTheme();
+  const { Feather } = require("@expo/vector-icons");
+  return (
+    <View style={styles.proofRow}>
+      <View style={[styles.proofIcon, { backgroundColor: Colors.accentLight }]}>
+        <Feather name={icon} size={16} color={Colors.accent} />
       </View>
-      <ThemedText type="body" style={styles.featureText}>
-        {text}
-      </ThemedText>
+      <ThemedText style={[styles.proofText, { color: theme.textSecondary }]}>{text}</ThemedText>
     </View>
   );
 }
@@ -96,55 +107,97 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: Spacing.screenPadding,
+    justifyContent: "center",
+    gap: Spacing.xl,
   },
-  logoContainer: {
+  logoSection: {
     alignItems: "center",
-    marginTop: Spacing["2xl"],
-    marginBottom: Spacing.xl,
+    gap: Spacing.sm,
   },
-  logoImage: {
-    width: 96,
-    height: 96,
-    borderRadius: 20,
-    marginBottom: Spacing.lg,
-  },
-  appName: {
-    fontSize: 32,
-    fontWeight: "700",
+  logo: {
+    width: 80,
+    height: 80,
+    borderRadius: BorderRadius.xl,
     marginBottom: Spacing.xs,
   },
+  appName: {
+    ...Typography.title1,
+    fontWeight: "700",
+    letterSpacing: -0.5,
+  },
   tagline: {
-    fontSize: 16,
+    ...Typography.title3,
+    fontWeight: "400",
+    textAlign: "center",
   },
-  features: {
+  trustRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: Spacing.lg,
+  },
+  trustBadge: {
+    alignItems: "center",
+    gap: 2,
+  },
+  trustValue: {
+    ...Typography.title2,
+    fontWeight: "700",
+  },
+  trustLabel: {
+    ...Typography.caption1,
+    fontWeight: "500",
+  },
+  divider: {
+    width: 1,
+    height: 28,
+    opacity: 0.4,
+  },
+  card: {
+    borderRadius: BorderRadius["2xl"],
+    borderWidth: 1,
+    padding: Spacing.lg,
     gap: Spacing.md,
-    marginTop: Spacing.xl,
   },
-  featureRow: {
+  proofRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.md,
   },
-  featureIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  proofIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
   },
-  featureText: {
+  proofText: {
+    ...Typography.subhead,
     flex: 1,
   },
   footer: {
     paddingHorizontal: Spacing.screenPadding,
     gap: Spacing.md,
   },
-  skipButton: {
+  signInButton: {
+    height: 50,
+    borderRadius: BorderRadius.button,
+    borderWidth: 1,
     alignItems: "center",
-    paddingVertical: Spacing.md,
+    justifyContent: "center",
   },
-  skipText: {
+  signInText: {
     ...Typography.callout,
     fontWeight: "500",
+  },
+  guestButton: {
+    alignItems: "center",
+    paddingVertical: Spacing.md,
+    minHeight: 44,
+    justifyContent: "center",
+  },
+  guestText: {
+    ...Typography.callout,
+    textDecorationLine: "underline",
   },
 });

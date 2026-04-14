@@ -397,6 +397,15 @@ function configureExpoAndLanding(app: express.Application) {
   const landingPageTemplate = fs.readFileSync(templatePath, "utf-8");
   const appName = getAppName();
 
+  // Password reset page
+  const resetPasswordTemplatePath = path.resolve(process.cwd(), "server", "templates", "reset-password.html");
+  const resetPasswordHtml = fs.readFileSync(resetPasswordTemplatePath, "utf-8");
+  app.get("/reset-password", (_req: Request, res: Response) => {
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.send(resetPasswordHtml);
+  });
+
   // Backward-compatible redirect: old /book/:slug → /providers/:slug
   app.get("/book/:slug", (req: Request<{ slug: string }>, res: Response) => {
     res.redirect(301, `/providers/${req.params.slug}`);
