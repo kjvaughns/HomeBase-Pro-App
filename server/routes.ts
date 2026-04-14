@@ -3991,6 +3991,13 @@ Respond with JSON only:
   // Create and immediately send invoice (one-step flow)
   app.post("/api/invoices/create-and-send", requireAuth, async (req: Request, res: Response) => {
     try {
+      const authUserId = req.authenticatedUserId!;
+      const authProviderRecord = await storage.getProviderByUserId(authUserId);
+      if (!authProviderRecord) return res.status(403).json({ error: "Provider profile not found" });
+      if (req.body.providerId && req.body.providerId !== authProviderRecord.id) {
+        return res.status(403).json({ error: "Access denied: you can only send invoices for your own provider account" });
+      }
+
       const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
 
       // Accept line items from frontend or fall back to single amount
@@ -4132,11 +4139,18 @@ Respond with JSON only:
   app.post("/api/invoices/:id/send", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
       const invoiceId = req.params.id;
+      const authUserId = req.authenticatedUserId!;
       
       // Get the invoice first
       const invoice = await storage.getInvoice(invoiceId);
       if (!invoice) {
         return res.status(404).json({ error: "Invoice not found" });
+      }
+
+      // Verify the authenticated user owns this invoice's provider account
+      const authProviderRecord = await storage.getProviderByUserId(authUserId);
+      if (!authProviderRecord || invoice.providerId !== authProviderRecord.id) {
+        return res.status(403).json({ error: "Access denied: you can only send invoices for your own provider account" });
       }
       
       // Create, finalize, and send the Stripe invoice (non-fatal — Stripe Connect may not be set up)
@@ -4620,10 +4634,17 @@ Respond with JSON only:
   app.post("/api/stripe/invoices/:invoiceId/send", requireAuth, async (req: Request<{ invoiceId: string }>, res: Response) => {
     try {
       const { invoiceId } = req.params;
+      const authUserId = req.authenticatedUserId!;
 
       // Load invoice
       const invoice = await storage.getInvoice(invoiceId);
       if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+
+      // Verify the authenticated user owns this invoice's provider account
+      const authProviderRecord = await storage.getProviderByUserId(authUserId);
+      if (!authProviderRecord || invoice.providerId !== authProviderRecord.id) {
+        return res.status(403).json({ error: "Access denied: you can only send invoices for your own provider account" });
+      }
 
       // Create, finalize, and send via Stripe (non-fatal)
       let hostedUrl: string | undefined;
