@@ -19,10 +19,12 @@
 | `server/routes.ts` | All `generateToken` calls pass `user.tokenVersion ?? 0` | High |
 | `server/routes.ts` | `POST /api/auth/logout-all` — increments `token_version`, clears cookie | High |
 | `server/routes.ts` | `POST /api/auth/refresh` — re-issues token with fresh 7d TTL | Medium |
-| `server/index.ts` | `setupStripeConnectWebhook()` registered before JSON parsing using `express.raw()` — raw Buffer preserved for signature verification | Critical |
+| `server/index.ts` | `setupStripeConnectWebhook()` using `express.raw()` before JSON parsing — raw Buffer + unconditional HMAC verification; no fallback in any environment | Critical |
 | `server/index.ts` | Production startup fail-fast: `process.exit(1)` if `STRIPE_CONNECT_WEBHOOK_SECRET` unset in `NODE_ENV=production` | Critical |
-| `server/routes.ts` | `/api/webhooks/stripe-connect` duplicate handler removed; moved to `server/index.ts` | Critical |
+| `server/routes.ts` | `/api/webhooks/stripe-connect` duplicate handler removed; `handleStripeWebhook` import removed | Critical |
 | `server/routes.ts` | `GET /api/providers/:id/payouts` — added `assertProviderOwnership()` ownership check | High |
+| `server/routes.ts` | `POST /api/auth/refresh` — role derived from providers DB record, not stale `isProvider` flag; returns `{ token, role }` | Medium |
+| `REQUIRED_ENV.md` | Environment variables documentation with production checklist and startup fail-fast inventory | Low |
 | `server/dbMigrations.ts` | `users.token_version INTEGER NOT NULL DEFAULT 0` | High |
 | `server/dbMigrations.ts` | `clients(provider_id, email)` unique partial index | Medium |
 | `server/dbMigrations.ts` | `provider_services(provider_id, service_id)` unique index | Medium |
@@ -49,11 +51,10 @@
 
 **Fix applied** (`server/index.ts`):
 - Handler moved to `setupStripeConnectWebhook()` called **before** `setupBodyParsing()` in startup sequence.
-- Uses `express.raw({ type: "application/json" })` inline — `req.body` is a raw `Buffer` when the handler runs, exactly as Stripe requires.
+- Uses `express.raw({ type: "application/json" })` inline — `req.body` is a raw `Buffer` when the handler runs, exactly as Stripe requires for HMAC verification.
 - `stripe-signature` header now required unconditionally (returns 400 if absent).
-- If `STRIPE_CONNECT_WEBHOOK_SECRET` is set: `stripe.webhooks.constructEvent(req.body, sig, endpointSecret)` — cryptographic HMAC verified against raw body.
-- If secret is unset in **production**: returns 400 — no events processed (startup also fails-fast with `process.exit(1)`).
-- If secret is unset in **development**: logs a warning and skips verification.
+- **No fallback in any environment**: if `STRIPE_CONNECT_WEBHOOK_SECRET` is missing, ALL requests are rejected with 400. No JSON parse bypass path.
+- `stripe.webhooks.constructEvent(req.body, sig, endpointSecret)` — cryptographic HMAC verified against raw body.
 - Startup fail-fast: `process.exit(1)` at boot when `NODE_ENV=production` and `STRIPE_CONNECT_WEBHOOK_SECRET` is missing.
 - Duplicate handler removed from `routes.ts`; `handleStripeWebhook` import removed from `routes.ts`.
 
@@ -101,11 +102,13 @@ Production with a missing `JWT_SECRET` now refuses to start entirely.
 
 ### 2d. Token Refresh — IMPLEMENTED
 
-`POST /api/auth/refresh` (requires valid current token): re-issues a new JWT with a fresh 7-day TTL and updated cookie. Useful for mobile clients to silently renew before expiry.
+`POST /api/auth/refresh` (requires valid current token): re-issues a new JWT with a fresh 7-day TTL and updated cookie. Returns `{ token, role }`.
 
-### 2e. Role Derivation — NOTED (not changed)
+### 2e. Role Derivation — FIXED (authoritative at refresh)
 
-Role is stored as `isProvider ? "provider" : "homeowner"` in JWT at login. The login flow cross-checks and auto-syncs `isProvider` from the providers table, mitigating stale role issues.
+**Gap found**: `POST /api/auth/refresh` derived role from `user.isProvider` flag — a stale DB field that could lag behind the authoritative provider record.
+
+**Fix**: Refresh endpoint now queries `providers` table by `userId` to compute role at token issuance time. If a provider record exists, role = `"provider"`; otherwise `"homeowner"`. The `isProvider` flag is auto-synced if out of date.
 
 ---
 

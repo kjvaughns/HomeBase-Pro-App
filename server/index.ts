@@ -99,7 +99,8 @@ function setupStripeWebhook(app: express.Application) {
 
 function setupStripeConnectWebhook(app: express.Application) {
   // MUST be registered before express.json() so req.body is the raw Buffer
-  // required by Stripe's signature verification
+  // required by Stripe's cryptographic signature verification.
+  // Signature verification is UNCONDITIONAL — no fallback in any environment.
   app.post(
     "/api/webhooks/stripe-connect",
     express.raw({ type: "application/json" }),
@@ -112,25 +113,17 @@ function setupStripeConnectWebhook(app: express.Application) {
       }
 
       if (!endpointSecret) {
-        if (process.env.NODE_ENV === "production") {
-          console.error("[webhook] STRIPE_CONNECT_WEBHOOK_SECRET not set — rejecting Connect webhook");
-          return res.status(400).json({ error: "Webhook secret not configured" });
-        }
-        // Development: skip verification when Stripe CLI not configured locally
-        console.warn("[webhook] STRIPE_CONNECT_WEBHOOK_SECRET not set — signature check skipped (development only)");
+        console.error("[webhook] STRIPE_CONNECT_WEBHOOK_SECRET is not set — Connect webhook rejected");
+        return res.status(400).json({ error: "Webhook secret not configured" });
       }
 
+      const stripe = (await import("./stripeClient")).getStripe();
       let event: any;
-      if (endpointSecret) {
-        const stripe = (await import("./stripeClient")).getStripe();
-        try {
-          event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
-        } catch (err: any) {
-          console.error("[webhook] Stripe Connect signature verification failed:", err.message);
-          return res.status(400).json({ error: `Webhook Error: ${err.message}` });
-        }
-      } else {
-        event = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+      try {
+        event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+      } catch (err: any) {
+        console.error("[webhook] Stripe Connect signature verification failed:", err.message);
+        return res.status(400).json({ error: `Webhook Error: ${err.message}` });
       }
 
       try {

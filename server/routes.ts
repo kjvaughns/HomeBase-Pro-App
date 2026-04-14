@@ -695,13 +695,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user) {
         return res.status(401).json({ error: "User not found" });
       }
-      const token = generateToken(user.id, user.isProvider ? "provider" : "homeowner", user.tokenVersion ?? 0);
+      // Derive role from provider record (authoritative source), not stale flag
+      const providerRecord = await db
+        .select({ id: providers.id })
+        .from(providers)
+        .where(eq(providers.userId, userId))
+        .limit(1);
+      const hasProviderRecord = providerRecord.length > 0;
+      // Keep isProvider flag in sync
+      if (hasProviderRecord && !user.isProvider) {
+        await storage.updateUser(userId, { isProvider: true });
+      }
+      const role = hasProviderRecord ? "provider" : "homeowner";
+      const token = generateToken(user.id, role, user.tokenVersion ?? 0);
       res.cookie("token", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         maxAge: 7 * 24 * 60 * 60 * 1000,
       });
-      res.json({ token });
+      res.json({ token, role });
     } catch (error) {
       console.error("Token refresh error:", error);
       res.status(500).json({ error: "Failed to refresh token" });
