@@ -35,7 +35,6 @@ import {
   sendPlatformStripeInvoice,
   createDirectCheckoutSession,
   applyCreditsToInvoice,
-  handleStripeWebhook,
   calculateFeePreview,
   getProviderPlan,
   calculatePlatformFee,
@@ -5818,44 +5817,8 @@ Respond with JSON only:
     }
   });
 
-  // Stripe Connect webhook handler
-  app.post("/api/webhooks/stripe-connect", async (req: Request, res: Response) => {
-    try {
-      const sig = req.headers["stripe-signature"];
-      const endpointSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
-      const IS_PROD = process.env.NODE_ENV === "production";
-
-      if (!sig) {
-        return res.status(400).json({ error: "Missing stripe-signature header" });
-      }
-
-      let event: any;
-
-      if (!endpointSecret) {
-        if (IS_PROD) {
-          console.error("[webhook] FATAL: STRIPE_CONNECT_WEBHOOK_SECRET not set in production — rejecting Connect webhook request");
-          return res.status(400).json({ error: "Webhook secret not configured" });
-        }
-        // Development only: skip verification when Stripe CLI is not configured locally
-        console.warn("[webhook] STRIPE_CONNECT_WEBHOOK_SECRET not set — signature check skipped (development only)");
-        event = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-      } else {
-        // Always verify signature when secret is available
-        try {
-          event = getStripe().webhooks.constructEvent(req.body, sig, endpointSecret);
-        } catch (err: any) {
-          console.error("Webhook signature verification failed:", err.message);
-          return res.status(400).json({ error: `Webhook Error: ${err.message}` });
-        }
-      }
-
-      const result = await handleStripeWebhook(event);
-      res.json(result);
-    } catch (error: any) {
-      console.error("Stripe webhook error:", error);
-      res.status(500).json({ error: error.message || "Webhook processing failed" });
-    }
-  });
+  // NOTE: /api/webhooks/stripe-connect is registered in server/index.ts BEFORE
+  // express.json() middleware so req.body is the raw Buffer needed for signature verification.
 
   // Get payouts for provider
   app.get("/api/providers/:providerId/payouts", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {

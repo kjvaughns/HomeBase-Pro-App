@@ -19,7 +19,9 @@
 | `server/routes.ts` | All `generateToken` calls pass `user.tokenVersion ?? 0` | High |
 | `server/routes.ts` | `POST /api/auth/logout-all` — increments `token_version`, clears cookie | High |
 | `server/routes.ts` | `POST /api/auth/refresh` — re-issues token with fresh 7d TTL | Medium |
-| `server/routes.ts` | `/api/webhooks/stripe-connect` — removed insecure body-parse fallback; production rejects without `STRIPE_CONNECT_WEBHOOK_SECRET` | Critical |
+| `server/index.ts` | `setupStripeConnectWebhook()` registered before JSON parsing using `express.raw()` — raw Buffer preserved for signature verification | Critical |
+| `server/index.ts` | Production startup fail-fast: `process.exit(1)` if `STRIPE_CONNECT_WEBHOOK_SECRET` unset in `NODE_ENV=production` | Critical |
+| `server/routes.ts` | `/api/webhooks/stripe-connect` duplicate handler removed; moved to `server/index.ts` | Critical |
 | `server/routes.ts` | `GET /api/providers/:id/payouts` — added `assertProviderOwnership()` ownership check | High |
 | `server/dbMigrations.ts` | `users.token_version INTEGER NOT NULL DEFAULT 0` | High |
 | `server/dbMigrations.ts` | `clients(provider_id, email)` unique partial index | Medium |
@@ -43,13 +45,17 @@
 
 ### 1b. Stripe Connect webhook (`/api/webhooks/stripe-connect`) — FIXED (Critical)
 
-**Vulnerability found**: When `STRIPE_CONNECT_WEBHOOK_SECRET` was unset, the handler parsed `req.body` directly without signature verification — allowing anyone to forge payment events.
+**Vulnerability found**: Handler was registered in `routes.ts` after global `express.json()` — so `req.body` was already parsed JSON, making `stripe.webhooks.constructEvent()` always fail signature verification. Additionally the fallback parsed the body without any signature check.
 
-**Fix applied**:
+**Fix applied** (`server/index.ts`):
+- Handler moved to `setupStripeConnectWebhook()` called **before** `setupBodyParsing()` in startup sequence.
+- Uses `express.raw({ type: "application/json" })` inline — `req.body` is a raw `Buffer` when the handler runs, exactly as Stripe requires.
 - `stripe-signature` header now required unconditionally (returns 400 if absent).
-- If `STRIPE_CONNECT_WEBHOOK_SECRET` is set: always calls `constructEvent()` — cryptographic verification.
-- If secret is unset in **production**: returns 400 and logs a FATAL error — no forged events processed.
-- If secret is unset in **development**: logs a warning and skips verification (for local testing without Stripe CLI).
+- If `STRIPE_CONNECT_WEBHOOK_SECRET` is set: `stripe.webhooks.constructEvent(req.body, sig, endpointSecret)` — cryptographic HMAC verified against raw body.
+- If secret is unset in **production**: returns 400 — no events processed (startup also fails-fast with `process.exit(1)`).
+- If secret is unset in **development**: logs a warning and skips verification.
+- Startup fail-fast: `process.exit(1)` at boot when `NODE_ENV=production` and `STRIPE_CONNECT_WEBHOOK_SECRET` is missing.
+- Duplicate handler removed from `routes.ts`; `handleStripeWebhook` import removed from `routes.ts`.
 
 ---
 

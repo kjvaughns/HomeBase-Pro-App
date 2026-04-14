@@ -10,6 +10,7 @@ import { runMigrations } from 'stripe-replit-sync';
 import { runBootMigrations } from "./dbMigrations";
 import { getStripeSync } from "./stripeClient";
 import { WebhookHandlers } from "./webhookHandlers";
+import { handleStripeWebhook } from "./stripeConnectService";
 import { db, pool } from "./db";
 import cron from "node-cron";
 import { eq, and, gte, lte, lt } from "drizzle-orm";
@@ -91,6 +92,53 @@ function setupStripeWebhook(app: express.Application) {
       } catch (error: any) {
         console.error('Webhook error:', error.message);
         res.status(400).json({ error: 'Webhook processing error' });
+      }
+    }
+  );
+}
+
+function setupStripeConnectWebhook(app: express.Application) {
+  // MUST be registered before express.json() so req.body is the raw Buffer
+  // required by Stripe's signature verification
+  app.post(
+    "/api/webhooks/stripe-connect",
+    express.raw({ type: "application/json" }),
+    async (req: Request, res: Response) => {
+      const sig = req.headers["stripe-signature"];
+      const endpointSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
+
+      if (!sig) {
+        return res.status(400).json({ error: "Missing stripe-signature header" });
+      }
+
+      if (!endpointSecret) {
+        if (process.env.NODE_ENV === "production") {
+          console.error("[webhook] STRIPE_CONNECT_WEBHOOK_SECRET not set — rejecting Connect webhook");
+          return res.status(400).json({ error: "Webhook secret not configured" });
+        }
+        // Development: skip verification when Stripe CLI not configured locally
+        console.warn("[webhook] STRIPE_CONNECT_WEBHOOK_SECRET not set — signature check skipped (development only)");
+      }
+
+      let event: any;
+      if (endpointSecret) {
+        const stripe = (await import("./stripeClient")).getStripe();
+        try {
+          event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+        } catch (err: any) {
+          console.error("[webhook] Stripe Connect signature verification failed:", err.message);
+          return res.status(400).json({ error: `Webhook Error: ${err.message}` });
+        }
+      } else {
+        event = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+      }
+
+      try {
+        const result = await handleStripeWebhook(event);
+        res.json(result);
+      } catch (error: any) {
+        console.error("[webhook] Stripe Connect processing error:", error);
+        res.status(500).json({ error: error.message || "Webhook processing failed" });
       }
     }
   );
@@ -967,9 +1015,18 @@ function setupErrorHandler(app: express.Application) {
 (async () => {
   await runBootMigrations();
 
+  // Production env hard-fail guards — must run before anything else
+  if (process.env.NODE_ENV === "production") {
+    if (!process.env.STRIPE_CONNECT_WEBHOOK_SECRET) {
+      console.error("[startup] FATAL: STRIPE_CONNECT_WEBHOOK_SECRET must be set in production");
+      process.exit(1);
+    }
+  }
+
   setupCors(app);
   setupMetroProxy(app);
-  setupStripeWebhook(app);
+  setupStripeWebhook(app);          // raw-body — must precede JSON parsing
+  setupStripeConnectWebhook(app);   // raw-body — must precede JSON parsing
   setupBodyParsing(app);
   setupRequestLogging(app);
 
