@@ -17,6 +17,7 @@ import { FilterChips, FilterOption } from "@/components/FilterChips";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
+import { getApiUrl, getAuthHeaders } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 export interface Client {
@@ -263,11 +264,9 @@ export default function ClientsScreen() {
     queryKey: ["/api/providers", providerId, "clients", "last-messages"],
     enabled: !!providerId,
     queryFn: async () => {
-      const { getApiUrl } = await import("@/lib/query-client");
-      const { useAuthStore } = await import("@/state/authStore");
       const url = new URL(`/api/providers/${providerId}/clients/last-messages`, getApiUrl());
       const res = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${useAuthStore.getState().sessionToken}` },
+        headers: getAuthHeaders(),
         credentials: "include",
       });
       if (!res.ok) return { lastMessages: [] };

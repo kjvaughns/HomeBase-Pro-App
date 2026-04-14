@@ -155,12 +155,7 @@ export default function ProviderHomeScreen() {
   });
 
   const { data: bookingLinksData } = useQuery<{ bookingLinks: { id: string }[] }>({
-    queryKey: ["/api/provider", providerId, "booking-links"],
-    queryFn: async () => {
-      const response = await apiRequest("GET", `/api/booking-links?providerId=${providerId}`);
-      if (!response.ok) throw new Error("Failed to fetch booking links");
-      return response.json();
-    },
+    queryKey: ["/api/providers", providerId, "booking-links"],
     enabled: !!providerId,
     retry: false,
   });
