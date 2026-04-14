@@ -182,10 +182,24 @@ export class DatabaseStorage implements IStorage {
             .where(sql`lower(${providerCustomServices.category}) = lower(${catRow.name})`)
         : [];
 
-      // Union both sets of provider IDs
+      // Path C: business name keyword match — catches e.g. "Vaughns Plumbing" when no services exist
+      const nameIds: { providerId: string }[] = catRow
+        ? await db
+            .select({ providerId: providers.id })
+            .from(providers)
+            .where(
+              and(
+                sql`lower(${providers.businessName}) like ${'%' + catRow.name.toLowerCase() + '%'}`,
+                eq(providers.isActive, true)
+              )
+            )
+        : [];
+
+      // Union all three sets of provider IDs
       const allProviderIds = [
         ...catalogIds.map(r => r.providerId),
         ...customIds.map(r => r.providerId),
+        ...nameIds.map(r => r.providerId),
       ];
       if (allProviderIds.length === 0) return [];
 
