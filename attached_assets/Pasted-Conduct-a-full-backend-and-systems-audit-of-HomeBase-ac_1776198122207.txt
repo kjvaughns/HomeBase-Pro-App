@@ -1,0 +1,84 @@
+Conduct a full backend and systems audit of HomeBase across both the homeowner and provider apps.
+
+Goal:
+Make sure the backend is stable, production ready, secure, and correctly supports every critical workflow in the app. Audit architecture, integrations, database design, auth, APIs, automations, and data consistency.
+
+Context:
+HomeBase is a two sided home services platform with a homeowner side and provider side. It uses shared backend infrastructure and likely includes auth, database, bookings, payments, public booking links, notifications, email, SMS, and provider business data. The backend must support real usage and cannot rely on fake frontend behavior.
+
+Audit these backend areas:
+- auth flow
+- role based access control
+- homeowner account creation
+- provider account creation
+- session handling
+- onboarding persistence
+- profile creation and updates
+- business profile storage
+- service storage
+- booking flow backend
+- lead creation
+- quote records
+- job records
+- scheduling logic
+- recurring service logic if supported
+- payment intent creation
+- invoice records
+- Stripe integration
+- Stripe Connect integration
+- webhook handling
+- payout related state
+- notification triggers
+- email triggers
+- SMS triggers
+- review storage
+- chat or messaging backend if included
+- public booking page data fetching
+- API endpoint stability
+- environment variable usage
+- production vs development config
+- data validation
+- duplicate prevention
+- error handling
+- retry handling
+- logging
+- analytics events if present
+- file upload handling
+- database schema quality
+- relational integrity
+- access control and permissions
+- secrets handling
+- performance bottlenecks
+- rate limits if needed
+- security concerns
+
+For each area determine:
+- does the backend exist
+- does it support the frontend correctly
+- does it persist correct data
+- does it handle edge cases
+- does it fail safely
+- is it secure enough
+- is it production ready
+- what exact risk it creates if left unfixed
+
+Output format:
+1. Executive summary
+2. Backend readiness score out of 10
+3. Architecture strengths
+4. Critical backend blockers
+5. Security risks
+6. Data integrity risks
+7. Payment and auth risks
+8. Integration issues
+9. Missing infrastructure
+10. Recommended fixes in priority order
+11. Final verdict on production readiness
+
+Important:
+- be brutally honest
+- identify fake or incomplete backend flows
+- prioritize auth, bookings, payments, and notifications
+- call out anything that would break user trust or cause real business damage
+- do not suggest unnecessary complexity
+- optimize for a clean, stable MVP backend first

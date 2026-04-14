@@ -1,0 +1,78 @@
+Conduct a full design and iOS UX audit of the HomeBase provider app.
+
+Goal:
+Make sure the provider app looks polished, efficient, premium, easy to understand, and credible enough for real business owners. The provider side should feel powerful and clean, but not overwhelming. Audit both aesthetics and usability with a strong iOS lens.
+
+Context:
+This app is for home service providers like cleaners, lawn care companies, pest control companies, and other local service businesses. The design should communicate professionalism, simplicity, speed, control, and growth.
+
+Audit these design areas:
+- typography
+- spacing
+- hierarchy
+- color consistency
+- layout consistency
+- card design
+- dashboard readability
+- forms and input clarity
+- service builder usability
+- pricing setup UI
+- navigation structure
+- settings organization
+- modal and sheet behavior
+- action clarity
+- button styles
+- trust signals
+- data presentation
+- empty states
+- loading states
+- charts if included
+- onboarding quality
+- how premium and trustworthy it feels
+- whether it feels native to iOS
+- whether it respects the mental model of busy business owners
+
+Focus especially on:
+- provider onboarding
+- dashboard
+- business profile
+- service management
+- booking links
+- public page controls
+- lead inbox
+- calendar
+- clients
+- invoices
+- payments
+- analytics
+- notifications
+- reviews
+- settings
+
+For each screen or area, identify:
+- what looks polished
+- what looks unfinished
+- what is confusing
+- what is cluttered
+- what is too empty
+- what feels too consumer focused instead of provider focused
+- what feels too AI heavy
+- what should be redesigned for clarity, control, or trust
+
+Output format:
+1. Overall design score out of 10
+2. Provider trust score out of 10
+3. iOS quality score out of 10
+4. Biggest design flaws
+5. Best design strengths
+6. Screen by screen audit
+7. UX friction points
+8. Consistency issues
+9. iOS specific design issues
+10. Final verdict on launch polish
+
+Important:
+- optimize for provider confidence and ease of use
+- do not overdesign
+- if something looks amateur or confusing, say it directly
+- if a provider would not trust this with their business, call it out
