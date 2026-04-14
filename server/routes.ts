@@ -488,7 +488,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.cookie("token", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        maxAge: 30 * 24 * 60 * 60 * 1000,
+        maxAge: 7 * 24 * 60 * 60 * 1000,
       });
       res.status(201).json({ user: formatUserResponse(user), token });
 
@@ -599,7 +599,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.cookie("token", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        maxAge: 30 * 24 * 60 * 60 * 1000,
+        maxAge: 7 * 24 * 60 * 60 * 1000,
       });
 
       res.status(201).json({
@@ -646,7 +646,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.cookie("token", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        maxAge: 30 * 24 * 60 * 60 * 1000,
+        maxAge: 7 * 24 * 60 * 60 * 1000,
       });
       res.json({ user: formatUserResponse(user), providerProfile, token });
     } catch (error) {

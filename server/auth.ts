@@ -1,11 +1,27 @@
 import jwt from "jsonwebtoken";
 import type { Request, Response, NextFunction, RequestHandler } from "express";
 
+const FALLBACK_SECRET = "homebase-jwt-secret-change-in-production";
+
 export const JWT_SECRET =
-  process.env.JWT_SECRET || "homebase-jwt-secret-change-in-production";
+  process.env.JWT_SECRET || FALLBACK_SECRET;
+
+if (!process.env.JWT_SECRET) {
+  if (process.env.NODE_ENV === "production") {
+    console.error(
+      "SECURITY ERROR: JWT_SECRET environment variable is not set. " +
+      "Using insecure fallback secret in production. " +
+      "Set JWT_SECRET immediately to prevent token forgery attacks."
+    );
+  } else {
+    console.warn(
+      "[auth] JWT_SECRET not set — using dev fallback. Set JWT_SECRET in production."
+    );
+  }
+}
 
 export function generateToken(userId: string, role: string): string {
-  return jwt.sign({ userId, role }, JWT_SECRET, { expiresIn: "30d" });
+  return jwt.sign({ userId, role }, JWT_SECRET, { expiresIn: "7d" });
 }
 
 export function verifyToken(token: string): { userId: string; role: string } | null {

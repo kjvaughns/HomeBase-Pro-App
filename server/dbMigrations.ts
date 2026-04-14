@@ -68,6 +68,9 @@ export async function runBootMigrations(): Promise<void> {
     // ── refunds: Stripe charge ID (for matching refunds to charges) ───────
     await runSql("refunds.stripe_charge_id", `ALTER TABLE refunds ADD COLUMN IF NOT EXISTS stripe_charge_id TEXT`);
 
+    // ── payouts: arrival_date column (missing from initial schema deployment) ──
+    await runSql("payouts.arrival_date", `ALTER TABLE payouts ADD COLUMN IF NOT EXISTS arrival_date TIMESTAMP`);
+
     // ── enums required by messaging/notification tables ────────────────────
     const enumDefs: Array<[string, string]> = [
       ["enum.notification_channel",        `DO $$ BEGIN CREATE TYPE notification_channel AS ENUM ('email','push','in_app','sms'); EXCEPTION WHEN duplicate_object THEN null; END $$`],
@@ -249,6 +252,7 @@ export async function runBootMigrations(): Promise<void> {
       ["homes.housefax_data column",         `SELECT housefax_data FROM homes LIMIT 0`],
       ["users.stripe_customer_id column",    `SELECT stripe_customer_id FROM users LIMIT 0`],
       ["users.default_payment_method_id",    `SELECT default_payment_method_id FROM users LIMIT 0`],
+      ["payouts.arrival_date column",        `SELECT arrival_date FROM payouts LIMIT 0`],
     ];
 
     const verificationErrors: string[] = [];
