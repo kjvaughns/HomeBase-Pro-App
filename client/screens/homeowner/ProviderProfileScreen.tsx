@@ -21,7 +21,7 @@ import { useHomeownerStore } from "@/state/homeownerStore";
 import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { AccountGateModal } from "@/components/AccountGateModal";
-import { getApiUrl } from "@/lib/query-client";
+import { getApiUrl, getAuthHeaders } from "@/lib/query-client";
 import { Provider } from "@/state/types";
 
 type ScreenRouteProp = RouteProp<RootStackParamList, "ProviderProfile">;
@@ -29,38 +29,65 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 type TabType = "about" | "services" | "reviews";
 
+interface ApiServiceItem {
+  id: string;
+  name: string;
+}
+
+interface ApiProviderResponse {
+  provider: {
+    id: string;
+    businessName: string;
+    description?: string | null;
+    avatarUrl?: string | null;
+    phone?: string | null;
+    rating?: string | null;
+    reviewCount?: number | null;
+    averageRating?: string | null;
+    hourlyRate?: string | null;
+    isVerified?: boolean | null;
+    serviceArea?: string | null;
+    yearsExperience?: number | null;
+    completedJobs?: number | null;
+    responseTime?: string | null;
+    distance?: number | null;
+  };
+  services: ApiServiceItem[];
+}
+
 interface CustomService {
   id: string;
   name: string;
-  description?: string;
-  basePrice?: string | number;
-  price?: string | number;
-  duration?: number;
-  isPublished?: boolean;
+  description?: string | null;
+  basePrice?: string | null;
+  priceFrom?: string | null;
+  priceTo?: string | null;
+  pricingType?: string | null;
+  isPublished?: boolean | null;
 }
 
-function mapApiProvider(p: any, serviceList: any[] = []): Provider {
+interface CustomServicesResponse {
+  services: CustomService[];
+}
+
+function mapApiProvider(p: ApiProviderResponse["provider"], serviceList: ApiServiceItem[]): Provider {
   return {
     id: p.id,
-    name: p.businessName ?? p.name ?? "",
+    name: p.businessName ?? "",
     businessName: p.businessName ?? "",
-    avatarUrl: p.avatarUrl ?? p.profilePhotoUrl ?? undefined,
+    avatarUrl: p.avatarUrl ?? undefined,
     rating: parseFloat(p.averageRating ?? p.rating ?? "0") || 0,
     reviewCount: p.reviewCount ?? 0,
-    services: serviceList.length > 0
-      ? serviceList.map((s: any) => typeof s === "string" ? s : s.name ?? "")
-      : (Array.isArray(p.services)
-          ? p.services.map((s: any) => typeof s === "string" ? s : s.name ?? "")
-          : []),
-    categoryIds: Array.isArray(p.categoryIds) ? p.categoryIds : [],
+    services: serviceList.map((s) => s.name ?? ""),
+    categoryIds: [],
     hourlyRate: parseFloat(p.hourlyRate ?? "0") || 0,
-    verified: p.isVerified ?? p.verified ?? false,
+    verified: p.isVerified ?? false,
     description: p.description ?? "",
-    yearsExperience: p.yearsExperience ?? p.yearsInBusiness ?? 0,
+    yearsExperience: p.yearsExperience ?? 0,
     completedJobs: p.completedJobs ?? 0,
     responseTime: p.responseTime ?? "< 1 hour",
     distance: p.distance ?? undefined,
-    gallery: Array.isArray(p.gallery) ? p.gallery : [],
+    gallery: [],
     phone: p.phone ?? undefined,
   };
 }
@@ -82,7 +109,7 @@ export default function ProviderProfileScreen() {
 
   const needsFetch = !passedProvider;
 
-  const { data: apiData, isLoading: isApiLoading } = useQuery<{ provider: any; services: any[] }>({
+  const { data: apiData, isLoading: isApiLoading } = useQuery<ApiProviderResponse>({
     queryKey: ["/api/providers", providerId],
     queryFn: async () => {
       const response = await fetch(new URL(`/api/providers/${providerId}`, getApiUrl()).toString());
@@ -98,21 +125,22 @@ export default function ProviderProfileScreen() {
     return mapApiProvider(apiData.provider, apiData.services ?? []);
   }, [passedProvider, apiData]);
 
-  const { data: customServicesData } = useQuery<{ services: CustomService[] }>({
-    queryKey: ["/api/provider", providerId, "custom-services"],
+  const { data: customServicesData } = useQuery<CustomServicesResponse>({
+    queryKey: ["/api/provider", providerId, "custom-services", "published"],
     queryFn: async () => {
-      const response = await fetch(
-        new URL(`/api/provider/${providerId}/custom-services`, getApiUrl()).toString()
-      );
+      const url = new URL(`/api/provider/${providerId}/custom-services`, getApiUrl());
+      url.searchParams.set("publishedOnly", "true");
+      const response = await fetch(url.toString(), {
+        headers: getAuthHeaders(),
+        credentials: "include",
+      });
       if (!response.ok) return { services: [] };
       return response.json();
     },
+    enabled: isAuthenticated,
   });
 
-  const customServices = useMemo((): CustomService[] => {
-    const list = customServicesData?.services ?? [];
-    return list.filter((s) => s.isPublished !== false);
-  }, [customServicesData]);
+  const customServices: CustomService[] = customServicesData?.services ?? [];
 
   const reviews = useMemo(() => {
     return allReviews.filter((r) => r.providerId === providerId);
@@ -145,7 +173,9 @@ export default function ProviderProfileScreen() {
     );
   }
 
-  const safeRating = typeof provider.rating === "number" && !isNaN(provider.rating) ? provider.rating : 0;
+  const safeRating = typeof provider.rating === "number" && !isNaN(provider.rating)
+    ? provider.rating
+    : 0;
 
   const handleBookPress = () => {
     if (!isAuthenticated) {
@@ -271,45 +301,56 @@ export default function ProviderProfileScreen() {
     </Animated.View>
   );
 
+  const handleBookService = () => {
+    if (!isAuthenticated) {
+      setShowAccountGate(true);
+      return;
+    }
+    navigation.navigate("SimpleBooking", {
+      providerId: provider.id,
+      providerName: provider.businessName,
+    });
+  };
+
   const renderServicesTab = () => {
     if (customServices.length > 0) {
       return (
         <Animated.View entering={FadeInDown.duration(300)}>
           <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Services Offered</ThemedText>
-          {customServices.map((service) => (
-            <Pressable
-              key={service.id}
-              style={[styles.serviceRow, { borderColor: theme.borderLight }]}
-              onPress={() => {
-                if (isAuthenticated) {
-                  navigation.navigate("SimpleBooking", {
-                    providerId: provider.id,
-                    providerName: provider.businessName,
-                  });
-                } else {
-                  setShowAccountGate(true);
-                }
-              }}
-            >
-              <View style={[styles.serviceIcon, { backgroundColor: Colors.accentLight }]}>
-                <Feather name="check" size={16} color={Colors.accent} />
-              </View>
-              <View style={styles.serviceInfo}>
-                <ThemedText style={styles.serviceName}>{service.name}</ThemedText>
-                {service.description ? (
-                  <ThemedText style={[styles.serviceDesc, { color: theme.textTertiary }]} numberOfLines={1}>
-                    {service.description}
+          {customServices.map((service) => {
+            const displayPrice = service.basePrice ?? service.priceFrom;
+            const priceNum = displayPrice ? parseFloat(displayPrice) : null;
+            return (
+              <Pressable
+                key={service.id}
+                style={[styles.serviceRow, { borderColor: theme.borderLight }]}
+                onPress={handleBookService}
+              >
+                <View style={[styles.serviceIcon, { backgroundColor: Colors.accentLight }]}>
+                  <Feather name="check" size={16} color={Colors.accent} />
+                </View>
+                <View style={styles.serviceInfo}>
+                  <ThemedText style={styles.serviceName}>{service.name}</ThemedText>
+                  {service.description ? (
+                    <ThemedText
+                      style={[styles.serviceDesc, { color: theme.textTertiary }]}
+                      numberOfLines={1}
+                    >
+                      {service.description}
+                    </ThemedText>
+                  ) : null}
+                </View>
+                {priceNum != null ? (
+                  <ThemedText style={[styles.servicePrice, { color: Colors.accent }]}>
+                    {service.pricingType === "range" && service.priceFrom && service.priceTo
+                      ? `$${parseFloat(service.priceFrom).toFixed(0)}–$${parseFloat(service.priceTo).toFixed(0)}`
+                      : `$${priceNum.toFixed(0)}`}
                   </ThemedText>
                 ) : null}
-              </View>
-              {(service.basePrice ?? service.price) != null ? (
-                <ThemedText style={[styles.servicePrice, { color: Colors.accent }]}>
-                  ${parseFloat(String(service.basePrice ?? service.price ?? 0)).toFixed(0)}
-                </ThemedText>
-              ) : null}
-              <Feather name="chevron-right" size={18} color={theme.textTertiary} style={{ marginLeft: Spacing.xs }} />
-            </Pressable>
-          ))}
+                <Feather name="chevron-right" size={18} color={theme.textTertiary} style={{ marginLeft: Spacing.xs }} />
+              </Pressable>
+            );
+          })}
         </Animated.View>
       );
     }
@@ -323,16 +364,7 @@ export default function ProviderProfileScreen() {
             <Pressable
               key={`${service}-${index}`}
               style={[styles.serviceRow, { borderColor: theme.borderLight }]}
-              onPress={() => {
-                if (isAuthenticated) {
-                  navigation.navigate("SimpleBooking", {
-                    providerId: provider.id,
-                    providerName: provider.businessName,
-                  });
-                } else {
-                  setShowAccountGate(true);
-                }
-              }}
+              onPress={handleBookService}
             >
               <View style={[styles.serviceIcon, { backgroundColor: Colors.accentLight }]}>
                 <Feather name="check" size={16} color={Colors.accent} />
