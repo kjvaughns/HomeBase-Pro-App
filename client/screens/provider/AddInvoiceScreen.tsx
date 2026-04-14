@@ -13,7 +13,7 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
-import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import { NativeDatePickerSheet } from "@/components/NativeDatePickerSheet";
 
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
@@ -548,18 +548,18 @@ export default function AddInvoiceScreen() {
         </View>
       </KeyboardAwareScrollViewCompat>
 
-      {showDatePicker ? (
-        <DateTimePicker
-          value={dueDate ?? new Date()}
-          mode="date"
-          display="spinner"
-          minimumDate={new Date()}
-          onChange={(event: DateTimePickerEvent, date?: Date) => {
-            setShowDatePicker(false);
-            if (date) setDueDate(date);
-          }}
-        />
-      ) : null}
+      <NativeDatePickerSheet
+        visible={showDatePicker}
+        value={dueDate ?? new Date()}
+        mode="date"
+        minimumDate={new Date()}
+        title="Select Due Date"
+        onConfirm={(date) => {
+          setDueDate(date);
+          setShowDatePicker(false);
+        }}
+        onCancel={() => setShowDatePicker(false)}
+      />
 
       {/* Client Picker Modal */}
       <Modal

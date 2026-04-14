@@ -13,7 +13,7 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
-import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import { NativeDatePickerSheet } from "@/components/NativeDatePickerSheet";
 
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
@@ -380,35 +380,33 @@ export default function AddJobScreen() {
         </View>
       </KeyboardAwareScrollViewCompat>
 
-      {showDatePicker ? (
-        <DateTimePicker
-          value={scheduledDate}
-          mode="date"
-          display="spinner"
-          minimumDate={new Date()}
-          onChange={(event: DateTimePickerEvent, date?: Date) => {
-            setShowDatePicker(false);
-            if (date) setScheduledDate(date);
-          }}
-        />
-      ) : null}
+      <NativeDatePickerSheet
+        visible={showDatePicker}
+        value={scheduledDate}
+        mode="date"
+        minimumDate={new Date()}
+        title="Select Date"
+        onConfirm={(date) => {
+          setScheduledDate(date);
+          setShowDatePicker(false);
+        }}
+        onCancel={() => setShowDatePicker(false)}
+      />
 
-      {showTimePicker ? (
-        <DateTimePicker
-          value={new Date(`2000-01-01T${scheduledTime}`)}
-          mode="time"
-          display="spinner"
-          minuteInterval={15}
-          onChange={(event: DateTimePickerEvent, date?: Date) => {
-            setShowTimePicker(false);
-            if (date) {
-              const hours = date.getHours().toString().padStart(2, "0");
-              const mins = date.getMinutes().toString().padStart(2, "0");
-              setScheduledTime(`${hours}:${mins}`);
-            }
-          }}
-        />
-      ) : null}
+      <NativeDatePickerSheet
+        visible={showTimePicker}
+        value={new Date(`2000-01-01T${scheduledTime}`)}
+        mode="time"
+        minuteInterval={15}
+        title="Select Time"
+        onConfirm={(date) => {
+          const hours = date.getHours().toString().padStart(2, "0");
+          const mins = date.getMinutes().toString().padStart(2, "0");
+          setScheduledTime(`${hours}:${mins}`);
+          setShowTimePicker(false);
+        }}
+        onCancel={() => setShowTimePicker(false)}
+      />
 
       {/* Service Picker Modal */}
       <Modal
