@@ -8,6 +8,7 @@ import {
   Modal,
   ScrollView,
   TextInput,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -18,6 +19,7 @@ import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { useQuery } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -32,7 +34,8 @@ import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useHomeownerStore } from "@/state/homeownerStore";
-import { ServiceCategory } from "@/state/types";
+import { Provider, ServiceCategory } from "@/state/types";
+import { getApiUrl } from "@/lib/query-client";
 
 type SortOption = "rating" | "price_low" | "price_high" | "reviews";
 
@@ -118,13 +121,47 @@ export default function FindScreen() {
   const { isAuthenticated } = useAuthStore();
 
   const categories = useHomeownerStore((s) => s.categories);
-  const providers = useHomeownerStore((s) => s.providers);
   const getSavedProviders = useHomeownerStore((s) => s.getSavedProviders);
 
   const savedProviders = useMemo(() => {
     if (!isAuthenticated) return [];
     return getSavedProviders();
   }, [isAuthenticated, getSavedProviders]);
+
+  const { data: apiData, isLoading: providersLoading, refetch: refetchProviders } = useQuery<{ providers: any[] }>({
+    queryKey: ["/api/providers"],
+    queryFn: async () => {
+      const url = new URL("/api/providers", getApiUrl());
+      const res = await fetch(url.toString());
+      if (!res.ok) throw new Error("Failed to fetch providers");
+      return res.json();
+    },
+  });
+
+  const providers: Provider[] = useMemo(() => {
+    if (!apiData?.providers) return [];
+    return apiData.providers.map((p: any): Provider => ({
+      id: p.id,
+      name: p.businessName ?? p.name ?? "",
+      businessName: p.businessName ?? "",
+      avatarUrl: p.avatarUrl ?? p.profilePhotoUrl ?? undefined,
+      rating: parseFloat(p.averageRating ?? p.rating ?? "0") || 0,
+      reviewCount: p.reviewCount ?? 0,
+      services: Array.isArray(p.services)
+        ? p.services.map((s: any) => (typeof s === "string" ? s : s.name ?? ""))
+        : [],
+      categoryIds: Array.isArray(p.categoryIds) ? p.categoryIds : [],
+      hourlyRate: parseFloat(p.hourlyRate ?? "0") || 0,
+      verified: p.isVerified ?? p.verified ?? false,
+      description: p.description ?? "",
+      yearsExperience: p.yearsExperience ?? p.yearsInBusiness ?? 0,
+      completedJobs: p.completedJobs ?? 0,
+      responseTime: p.responseTime ?? "< 1 hour",
+      distance: p.distance ?? undefined,
+      gallery: Array.isArray(p.gallery) ? p.gallery : [],
+      phone: p.phone ?? undefined,
+    }));
+  }, [apiData]);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [locationLabel, setLocationLabel] = useState("San Francisco, CA");
@@ -211,9 +248,13 @@ export default function FindScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
+    try {
+      await refetchProviders();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleCategoryPress = (category: ServiceCategory) => {
@@ -407,6 +448,9 @@ export default function FindScreen() {
               ? `Results for "${searchQuery.trim()}"`
               : "Featured Pros"}
           </ThemedText>
+          {providersLoading && !isSearching ? (
+            <ActivityIndicator size="small" color={Colors.accent} style={{ marginRight: Spacing.sm }} />
+          ) : null}
           {isSearching ? null : (
             <Pressable
               onPress={openFilterModal}
