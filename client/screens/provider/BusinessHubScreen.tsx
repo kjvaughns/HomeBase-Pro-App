@@ -167,6 +167,8 @@ export default function BusinessHubScreen() {
   } = useQuery<{ provider: ProviderRecord }>({
     queryKey: ["/api/provider", providerId],
     enabled: !!providerId,
+    retry: 2,
+    retryDelay: 1500,
   });
   const provider = providerData?.provider;
 
@@ -179,7 +181,8 @@ export default function BusinessHubScreen() {
     queryKey: ["/api/provider/user", user?.id],
     // Run when: no providerId stored, OR when the main fetch errored (stale/wrong ID in store)
     enabled: !!user?.id && (!providerId || providerError),
-    retry: false,
+    retry: 2,
+    retryDelay: 1500,
   });
 
   useEffect(() => {
