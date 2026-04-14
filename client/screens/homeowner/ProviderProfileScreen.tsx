@@ -103,9 +103,7 @@ export default function ProviderProfileScreen() {
   const allReviews = useHomeownerStore((s) => s.reviews);
   const toggleSavedProvider = useHomeownerStore((s) => s.toggleSavedProvider);
   const savedProviderIds = useHomeownerStore((s) => s.savedProviderIds);
-  const { isAuthenticated, providerProfile } = useAuthStore();
-
-  const isOwnProfile = providerProfile?.id === providerId;
+  const { isAuthenticated } = useAuthStore();
 
   const isSaved = savedProviderIds.includes(providerId);
 
@@ -532,20 +530,6 @@ export default function ProviderProfileScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        {isOwnProfile ? (
-          <Animated.View
-            entering={FadeInDown.duration(300)}
-            style={[styles.previewBanner, { backgroundColor: Colors.accentLight }]}
-          >
-            <Feather name="eye" size={14} color={Colors.accent} />
-            <ThemedText style={[styles.previewBannerText, { color: Colors.accent }]}>
-              Preview — this is what clients see
-            </ThemedText>
-            <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-              <ThemedText style={[styles.previewEditText, { color: Colors.accent }]}>Edit</ThemedText>
-            </Pressable>
-          </Animated.View>
-        ) : null}
 
         <Animated.View entering={FadeInDown.duration(400)}>
           <GlassCard style={styles.profileCard}>
@@ -889,24 +873,6 @@ const styles = StyleSheet.create({
   contactButtonText: {
     ...Typography.subhead,
     fontWeight: "600",
-  },
-  previewBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    marginBottom: Spacing.md,
-  },
-  previewBannerText: {
-    ...Typography.caption1,
-    fontWeight: "600",
-    flex: 1,
-  },
-  previewEditText: {
-    ...Typography.caption1,
-    fontWeight: "700",
   },
   serviceAreaText: {
     ...Typography.subhead,
