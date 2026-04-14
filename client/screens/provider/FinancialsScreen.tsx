@@ -17,7 +17,7 @@ import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import Animated, { FadeInDown, FadeIn, FadeOut } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, getAuthHeaders, getApiUrl } from "@/lib/query-client";
@@ -1098,21 +1098,23 @@ export default function FinancialsScreen() {
         </Animated.View>
       ) : null}
 
-      {/* Inline date range picker — expands below chip when Custom is active */}
-      {dateRange === "custom" ? (
-        <InlineDateRangePicker
-          visible={showInlinePicker}
-          initialStart={customStart}
-          initialEnd={customEnd}
-          maxDate={new Date()}
-          onApply={(s, e) => {
-            setCustomStart(s);
-            setCustomEnd(e);
-            setShowInlinePicker(false);
-          }}
-          onClose={() => setShowInlinePicker(false)}
-          theme={theme}
-        />
+      {/* Inline date range picker — fades in/out below chip when Custom is active */}
+      {dateRange === "custom" && showInlinePicker ? (
+        <Animated.View entering={FadeIn.duration(220)} exiting={FadeOut.duration(180)}>
+          <InlineDateRangePicker
+            visible={true}
+            initialStart={customStart}
+            initialEnd={customEnd}
+            maxDate={new Date()}
+            onApply={(s, e) => {
+              setCustomStart(s);
+              setCustomEnd(e);
+              setShowInlinePicker(false);
+            }}
+            onClose={() => setShowInlinePicker(false)}
+            theme={theme}
+          />
+        </Animated.View>
       ) : null}
 
       {/* Revenue + chart card */}

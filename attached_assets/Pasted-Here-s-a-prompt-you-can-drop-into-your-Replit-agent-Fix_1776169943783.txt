@@ -1,0 +1,21 @@
+Here's a prompt you can drop into your Replit agent:
+
+---
+
+**Fix iOS date & time picker UI — use native iOS design throughout the app**
+
+The date and time pickers in this React Native (Expo SDK 55, bare workflow) app are inconsistent and don't feel native on iOS. Fix the following:
+
+1. **Replace any custom-built or web-style date/time pickers** with `@react-native-community/datetimepicker` using `display="spinner"` on iOS for the classic native iOS drum-roll picker feel, and `display="default"` on Android. Do NOT use modal wrappers, custom overlays, or third-party picker libraries — use the native component directly.
+
+2. **Audit every screen that has a date or time input** — including but not limited to: scheduling appointments, creating/editing jobs, invoice due dates, custom date ranges on the Finance tab, and any calendar/availability settings. Make sure they all use the same native iOS picker pattern.
+
+3. **iOS picker should appear inline or in a bottom sheet** — on iOS, wrap the `DateTimePicker` component in a `Modal` with a clean bottom sheet style (white background, rounded top corners, Done button at top right, Cancel at top left). This is the standard iOS pattern users expect.
+
+4. **Separate date and time selection** — if a screen needs both a date AND a time, show two tappable fields (e.g., "Date" and "Time") that each open their own native picker (`mode="date"` and `mode="time"` respectively). Never combine them in one picker unless using `mode="datetime"` explicitly.
+
+5. **Style the trigger buttons consistently** — each date/time field that opens a picker should look like a standard iOS form row: left-aligned label, right-aligned selected value in a secondary color, and a chevron or calendar icon. Use a consistent component for this across all screens.
+
+6. **Test on iOS simulator** — after changes, verify the picker appears correctly without layout shifts, overlaps, or z-index issues on iPhone 15 Pro screen size.
+
+Do not change any backend logic, API calls, or navigation structure. Only fix the picker UI and the components that trigger them.
