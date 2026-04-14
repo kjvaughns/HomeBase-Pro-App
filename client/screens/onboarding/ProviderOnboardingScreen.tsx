@@ -479,9 +479,41 @@ function EmotionalHookStep({ theme }: { theme: ReturnType<typeof useTheme>["them
       </ThemedText>
 
       <View style={styles.hookStats}>
-        <HookPill icon="check-circle" label="Free to join" theme={theme} />
-        <HookPill icon="credit-card" label="No card needed" theme={theme} />
+        <HookPill icon="check-circle" label="Free until first booking" theme={theme} />
         <HookPill icon="clock" label="Setup in minutes" theme={theme} />
+      </View>
+
+      {/* Pricing card */}
+      <View style={[styles.hookPricingCard, { backgroundColor: Colors.accentLight, borderColor: Colors.accent + "30" }]}>
+        <View style={styles.hookPricingHeader}>
+          <Feather name="tag" size={15} color={Colors.accent} />
+          <ThemedText style={[styles.hookPricingTitle, { color: Colors.accent }]}>Simple, transparent pricing</ThemedText>
+        </View>
+
+        <View style={styles.hookPricingRow}>
+          <View style={styles.hookPricingMain}>
+            <ThemedText style={styles.hookPricingPrice}>$29.99<ThemedText style={[styles.hookPricingUnit, { color: theme.textSecondary }]}>/mo</ThemedText></ThemedText>
+            <View style={[styles.hookFreeBadge, { backgroundColor: Colors.accent }]}>
+              <ThemedText style={styles.hookFreeBadgeText}>FREE</ThemedText>
+            </View>
+          </View>
+          <ThemedText style={[styles.hookPricingFreeNote, { color: theme.textSecondary }]}>
+            until your first paid booking
+          </ThemedText>
+        </View>
+
+        <View style={[styles.hookPricingDivider, { backgroundColor: Colors.accent + "20" }]} />
+
+        <View style={styles.hookFeeRow}>
+          <Feather name="percent" size={12} color={theme.textSecondary} />
+          <ThemedText style={[styles.hookFeeText, { color: theme.textSecondary }]}>
+            3% HomeBase fee + 2.9% Stripe processing per payment
+          </ThemedText>
+        </View>
+
+        <ThemedText style={[styles.hookPricingNote, { color: theme.textTertiary }]}>
+          No contracts. Cancel anytime.
+        </ThemedText>
       </View>
     </ScrollView>
   );
@@ -1381,6 +1413,77 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   hookPillText: { fontSize: 12, fontWeight: "500" },
+  hookPricingCard: {
+    borderRadius: BorderRadius.card,
+    borderWidth: 1.5,
+    padding: Spacing.lg,
+    marginTop: Spacing.lg,
+    marginBottom: Spacing.sm,
+  },
+  hookPricingHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  hookPricingTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    letterSpacing: 0.2,
+  },
+  hookPricingRow: {
+    marginBottom: Spacing.md,
+  },
+  hookPricingMain: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    marginBottom: 4,
+  },
+  hookPricingPrice: {
+    fontSize: 28,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+    color: undefined,
+  },
+  hookPricingUnit: {
+    fontSize: 15,
+    fontWeight: "400",
+  },
+  hookFreeBadge: {
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  hookFreeBadgeText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1,
+  },
+  hookPricingFreeNote: {
+    fontSize: 13,
+    fontWeight: "400",
+  },
+  hookPricingDivider: {
+    height: 1,
+    marginBottom: Spacing.md,
+  },
+  hookFeeRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    marginBottom: Spacing.sm,
+  },
+  hookFeeText: {
+    fontSize: 13,
+    lineHeight: 18,
+    flex: 1,
+  },
+  hookPricingNote: {
+    fontSize: 12,
+    fontWeight: "400",
+  },
 
   // Steps
   stepHeader: { marginBottom: Spacing.xl },

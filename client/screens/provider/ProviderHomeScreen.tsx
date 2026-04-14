@@ -361,7 +361,7 @@ export default function ProviderHomeScreen() {
 
               <Pressable
                 style={[styles.statCard, { backgroundColor: theme.cardBackground }]}
-                onPress={() => navigation.navigate("FinancesTab")}
+                onPress={() => navigation.navigate("FinancialsTab")}
               >
                 <View style={[styles.statIcon, { backgroundColor: Colors.accentLight }]}>
                   <Feather name="dollar-sign" size={16} color={Colors.accent} />

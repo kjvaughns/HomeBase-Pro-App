@@ -423,30 +423,73 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Provider dashboard stats
-  async getProviderStats(providerId: string): Promise<{
+  async getProviderStats(
+    providerId: string,
+    startDate?: Date,
+    endDate?: Date
+  ): Promise<{
     revenueMTD: number;
     jobsCompleted: number;
     activeClients: number;
     upcomingJobs: number;
+    averageJobValue: number;
+    revenueByPeriod: { label: string; value: number }[];
   }> {
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
+    const start = startDate ?? (() => {
+      const d = new Date();
+      d.setDate(1);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    })();
+    const end = endDate ?? new Date();
 
-    // Revenue MTD - sum of paid invoices this month
+    // Revenue for the period - sum of paid invoices
     const paidInvoices = await db
-      .select({ total: invoices.total })
+      .select({ total: invoices.total, paidAt: invoices.paidAt })
       .from(invoices)
       .where(
         and(
           eq(invoices.providerId, providerId),
           eq(invoices.status, "paid"),
-          gte(invoices.paidAt, startOfMonth)
+          gte(invoices.paidAt, start),
+          lte(invoices.paidAt, end)
         )
       );
     const revenueMTD = paidInvoices.reduce((sum, inv) => sum + parseFloat(inv.total || "0"), 0);
+    const averageJobValue = paidInvoices.length > 0 ? revenueMTD / paidInvoices.length : 0;
 
-    // Jobs completed this month
+    // Build revenue breakdown by period (weekly buckets within the range)
+    const diffMs = end.getTime() - start.getTime();
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+    const bucketCount = diffDays <= 7 ? 7 : diffDays <= 31 ? Math.ceil(diffDays / 7) : diffDays <= 92 ? 13 : 12;
+    const bucketSizeMs = diffMs / bucketCount;
+
+    const revenueByPeriod: { label: string; value: number }[] = [];
+    for (let i = 0; i < bucketCount; i++) {
+      const bucketStart = new Date(start.getTime() + i * bucketSizeMs);
+      const bucketEnd = new Date(start.getTime() + (i + 1) * bucketSizeMs);
+      const bucketRevenue = paidInvoices
+        .filter((inv) => {
+          if (!inv.paidAt) return false;
+          const t = new Date(inv.paidAt).getTime();
+          return t >= bucketStart.getTime() && t < bucketEnd.getTime();
+        })
+        .reduce((sum, inv) => sum + parseFloat(inv.total || "0"), 0);
+
+      let label: string;
+      if (diffDays <= 7) {
+        label = bucketStart.toLocaleDateString("en-US", { weekday: "short" });
+      } else if (diffDays <= 31) {
+        label = bucketStart.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      } else if (diffDays <= 92) {
+        label = `W${i + 1}`;
+      } else {
+        label = bucketStart.toLocaleDateString("en-US", { month: "short" });
+      }
+      revenueByPeriod.push({ label, value: bucketRevenue });
+    }
+
+    // Jobs completed in the period
     const completedJobs = await db
       .select({ id: jobs.id })
       .from(jobs)
@@ -454,7 +497,8 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(jobs.providerId, providerId),
           eq(jobs.status, "completed"),
-          gte(jobs.completedAt, startOfMonth)
+          gte(jobs.completedAt, start),
+          lte(jobs.completedAt, end)
         )
       );
     const jobsCompleted = completedJobs.length;
@@ -477,7 +521,7 @@ export class DatabaseStorage implements IStorage {
       );
     const upcomingJobs = upcomingJobsList.length;
 
-    return { revenueMTD, jobsCompleted, activeClients, upcomingJobs };
+    return { revenueMTD, jobsCompleted, activeClients, upcomingJobs, averageJobValue, revenueByPeriod };
   }
 
   // Provider business insights (for dashboard Business Insights section)

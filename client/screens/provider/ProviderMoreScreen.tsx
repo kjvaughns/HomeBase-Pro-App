@@ -129,10 +129,10 @@ export default function ProviderMoreScreen() {
           </ThemedText>
           <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
             <ListRow
-              title="Stripe Payments"
-              subtitle="Bank account & payment setup"
+              title="Subscription & Plan"
+              subtitle="$29.99/mo · Free until first booking"
               leftIcon="credit-card"
-              onPress={() => navigation.navigate("StripeConnect")}
+              onPress={() => navigation.navigate("Subscription")}
               isFirst
             />
             <ListRow

@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { StyleSheet, ScrollView, View, ActivityIndicator, Pressable, Linking, Alert } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { StyleSheet, ScrollView, View, ActivityIndicator, Pressable, Linking, Alert, AppState } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -19,7 +19,7 @@ import { useAuthStore } from "@/state/authStore";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
 
 interface ConnectStatus {
-  hasAccount: boolean;
+  exists: boolean;
   onboardingStatus: "not_started" | "pending" | "complete";
   chargesEnabled: boolean;
   payoutsEnabled: boolean;
@@ -53,6 +53,8 @@ export default function StripeConnectScreen() {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [invoiceDescription, setInvoiceDescription] = useState("Test Service");
   const [invoiceAmount, setInvoiceAmount] = useState("50.00");
+  const appState = useRef(AppState.currentState);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const { data: connectStatus, isLoading: loadingStatus, refetch: refetchStatus } = useQuery<ConnectStatus>({
     queryKey: ["/api/stripe/connect/status", providerId],
@@ -63,6 +65,17 @@ export default function StripeConnectScreen() {
     },
     enabled: !!providerId,
   });
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (appState.current.match(/inactive|background/) && nextState === "active") {
+        setIsRefreshing(true);
+        refetchStatus().finally(() => setIsRefreshing(false));
+      }
+      appState.current = nextState;
+    });
+    return () => subscription.remove();
+  }, [refetchStatus]);
 
   const { data: clientsData } = useQuery<{ clients: Client[] }>({
     queryKey: ["/api/provider", providerId, "clients"],
@@ -234,7 +247,7 @@ export default function StripeConnectScreen() {
               />
             </View>
 
-            {connectStatus?.hasAccount ? (
+            {connectStatus?.exists ? (
               <>
                 <View style={styles.statusItem}>
                   <Feather
@@ -269,19 +282,38 @@ export default function StripeConnectScreen() {
               </>
             ) : null}
 
-            {!connectStatus?.hasAccount || connectStatus?.onboardingStatus !== "complete" ? (
+            {!connectStatus?.exists || connectStatus?.onboardingStatus !== "complete" ? (
               <PrimaryButton
                 onPress={() => onboardMutation.mutate()}
                 disabled={onboardMutation.isPending}
                 style={styles.ctaButton}
+                testID="button-start-onboarding"
               >
                 {onboardMutation.isPending
                   ? "Starting..."
-                  : connectStatus?.hasAccount
+                  : connectStatus?.exists
                   ? "Continue Onboarding"
                   : "Start Stripe Onboarding"}
               </PrimaryButton>
             ) : null}
+
+            <Pressable
+              onPress={() => {
+                setIsRefreshing(true);
+                refetchStatus().finally(() => setIsRefreshing(false));
+              }}
+              style={styles.refreshRow}
+              testID="button-refresh-status"
+            >
+              {isRefreshing ? (
+                <ActivityIndicator size="small" color={Colors.accent} />
+              ) : (
+                <Feather name="refresh-cw" size={14} color={theme.textSecondary} />
+              )}
+              <ThemedText style={[styles.refreshLabel, { color: theme.textSecondary }]}>
+                {isRefreshing ? "Checking status..." : "Refresh status"}
+              </ThemedText>
+            </Pressable>
           </GlassCard>
         </Animated.View>
 
@@ -506,6 +538,17 @@ const styles = StyleSheet.create({
   },
   ctaButton: {
     marginTop: Spacing.md,
+  },
+  refreshRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
+    marginTop: Spacing.sm,
+    paddingVertical: Spacing.xs,
+  },
+  refreshLabel: {
+    fontSize: 13,
   },
   label: {
     ...Typography.footnote,

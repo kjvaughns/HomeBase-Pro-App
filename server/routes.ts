@@ -13,7 +13,7 @@ import { getStripePublishableKey } from "./stripeClient";
 import { db } from "./db";
 import { sql, eq, and, desc, inArray, gte } from "drizzle-orm";
 import { appointments, maintenanceReminders, homes, reviews } from "@shared/schema";
-import { sendInvoiceEmail, sendProviderClientMessage, sendSupportTicketEmail } from "./emailService";
+import { sendInvoiceEmail, sendProviderClientMessage, sendSupportTicketEmail, sendInvoiceReminderEmail } from "./emailService";
 import { dispatch, dispatchWithResult, dispatchNotification, sendPush } from "./notificationService";
 import { 
   searchPlaces, 
@@ -32,6 +32,8 @@ import {
   createStripeCheckoutSession,
   createStripeInvoice,
   sendStripeInvoiceEmail,
+  sendPlatformStripeInvoice,
+  createDirectCheckoutSession,
   applyCreditsToInvoice,
   handleStripeWebhook,
   calculateFeePreview,
@@ -3441,7 +3443,37 @@ Respond with JSON only:
   // Provider dashboard stats
   app.get("/api/provider/:id/stats", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
-      const stats = await storage.getProviderStats(req.params.id);
+      // Verify the authenticated user owns this provider record
+      const providerRow = await storage.getProviderByUserId(req.authenticatedUserId!);
+      if (!providerRow || providerRow.id !== req.params.id) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+
+      const { startDate, endDate } = req.query;
+      let start: Date | undefined;
+      let end: Date | undefined;
+
+      if (startDate) {
+        start = new Date(startDate as string);
+        if (isNaN(start.getTime())) {
+          res.status(400).json({ error: "Invalid startDate" });
+          return;
+        }
+      }
+      if (endDate) {
+        end = new Date(endDate as string);
+        if (isNaN(end.getTime())) {
+          res.status(400).json({ error: "Invalid endDate" });
+          return;
+        }
+      }
+      if (start && end && start > end) {
+        res.status(400).json({ error: "startDate must be before endDate" });
+        return;
+      }
+
+      const stats = await storage.getProviderStats(req.params.id, start, end);
       res.json({ stats });
     } catch (error) {
       console.error("Get provider stats error:", error);
@@ -3905,8 +3937,7 @@ Respond with JSON only:
       if (!isProvider && !isHomeowner) {
         return res.status(403).json({ error: "Access denied" });
       }
-      const payments = await storage.getPaymentsByInvoice(req.params.id);
-      res.json({ invoice, payments });
+      res.json({ invoice });
     } catch (error) {
       console.error("Get invoice error:", error);
       res.status(500).json({ error: "Failed to get invoice" });
@@ -4052,17 +4083,15 @@ Respond with JSON only:
 
       const invoice = await storage.createInvoice(parsed.data);
 
-      // Create, finalize, and send the Stripe invoice (non-fatal — Stripe Connect may not be set up)
+      // Send proper Stripe Invoice — Stripe emails the client at invoice.stripe.com
       let hostedUrl: string | undefined;
       let stripeError: string | undefined;
-      const stripeInvoiceResult = await sendStripeInvoiceEmail(invoice.id).catch((err: any) => {
+      const platformResult = await sendPlatformStripeInvoice(invoice.id).catch((err: any) => {
         stripeError = err?.message || "Stripe invoice send failed";
         console.error("[stripe-invoice-send] create-and-send:", stripeError);
         return null;
       });
-      if (stripeInvoiceResult?.hostedInvoiceUrl) {
-        hostedUrl = stripeInvoiceResult.hostedInvoiceUrl;
-      }
+      if (platformResult?.hostedInvoiceUrl) hostedUrl = platformResult.hostedInvoiceUrl;
 
       // Send email via dispatcher
       let emailSent = false;
@@ -4107,7 +4136,8 @@ Respond with JSON only:
         }
       }
 
-      res.status(201).json({ invoice, emailSent, emailError, stripeError });
+      const invoiceWithStripe = hostedUrl ? { ...invoice, hostedInvoiceUrl: hostedUrl } : invoice;
+      res.status(201).json({ invoice: invoiceWithStripe, emailSent, emailError, stripeError });
     } catch (error) {
       console.error("Create and send invoice error:", error);
       res.status(500).json({ error: "Failed to create invoice" });
@@ -4153,16 +4183,26 @@ Respond with JSON only:
         return res.status(403).json({ error: "Access denied: you can only send invoices for your own provider account" });
       }
       
-      // Create, finalize, and send the Stripe invoice (non-fatal — Stripe Connect may not be set up)
+      // Send a proper Stripe Invoice — Stripe emails the client at invoice.stripe.com
+      // Primary: platform account (no Connect required). Fallback: existing Connect flow.
       let hostedUrl: string | undefined;
       let stripeError: string | undefined;
-      const stripeInvoiceResult = await sendStripeInvoiceEmail(invoiceId).catch((err: any) => {
-        stripeError = err?.message || "Stripe invoice send failed";
-        console.error("[stripe-invoice-send] invoices/:id/send:", stripeError);
-        return null;
-      });
-      if (stripeInvoiceResult?.hostedInvoiceUrl) {
-        hostedUrl = stripeInvoiceResult.hostedInvoiceUrl;
+
+      if (!invoice.stripeInvoiceId) {
+        // No existing Stripe invoice — create and send one now
+        const platformResult = await sendPlatformStripeInvoice(invoiceId).catch((err: any) => {
+          stripeError = err?.message || "Stripe invoice send failed";
+          console.error("[stripe-invoice-send] platform:", stripeError);
+          return null;
+        });
+        if (platformResult?.hostedInvoiceUrl) hostedUrl = platformResult.hostedInvoiceUrl;
+      } else {
+        // Stripe invoice already exists — just resend it
+        hostedUrl = invoice.hostedInvoiceUrl || undefined;
+        await getStripe().invoices.sendInvoice(invoice.stripeInvoiceId).catch((err: any) => {
+          stripeError = err?.message;
+          console.warn("[stripe-invoice-resend]", stripeError);
+        });
       }
 
       // Get client and provider details for email
@@ -4292,6 +4332,98 @@ Respond with JSON only:
     } catch (error) {
       console.error("Cancel invoice error:", error);
       res.status(500).json({ error: "Failed to cancel invoice" });
+    }
+  });
+
+  // Send a payment reminder email for an existing invoice
+  app.post("/api/invoices/:id/remind", requireAuth, async (req: Request<IdParams>, res: Response) => {
+    try {
+      const invoiceId = req.params.id;
+      const authUserId = req.authenticatedUserId!;
+
+      const invoice = await storage.getInvoice(invoiceId);
+      if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+
+      const authProvider = await storage.getProviderByUserId(authUserId);
+      if (!authProvider || invoice.providerId !== authProvider.id) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      if (!invoice.clientId) {
+        return res.status(400).json({ error: "No client associated with this invoice" });
+      }
+
+      const client = await storage.getClient(invoice.clientId);
+      if (!client?.email) {
+        return res.status(400).json({ error: "No email address on file for this client" });
+      }
+
+      const provider = await storage.getProvider(invoice.providerId);
+      const clientName = [client.firstName, client.lastName].filter(Boolean).join(" ") || "Client";
+      const providerName = provider?.businessName || "Your Service Provider";
+
+      const now = new Date();
+      const dueDate = invoice.dueDate ? new Date(invoice.dueDate) : null;
+      const diffMs = dueDate ? dueDate.getTime() - now.getTime() : 0;
+      const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+      // Use existing Stripe invoice URL for reminder, or generate one now
+      let reminderPaymentLink: string | undefined = invoice.hostedInvoiceUrl || undefined;
+      if (!reminderPaymentLink) {
+        const platformResult = await sendPlatformStripeInvoice(invoiceId).catch(() => null);
+        if (platformResult?.hostedInvoiceUrl) reminderPaymentLink = platformResult.hostedInvoiceUrl;
+      }
+
+      await sendInvoiceReminderEmail({
+        clientEmail: client.email,
+        clientName,
+        providerName,
+        invoiceNumber: invoice.invoiceNumber || `INV-${invoice.id.slice(0, 8)}`,
+        amount: parseFloat(invoice.total?.toString() || "0"),
+        dueDate: dueDate ? dueDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "Due on receipt",
+        daysUntilDue: diffDays > 0 ? diffDays : undefined,
+        daysOverdue: diffDays < 0 ? Math.abs(diffDays) : undefined,
+        paymentLink: reminderPaymentLink,
+      });
+
+      res.json({ sent: true });
+    } catch (error) {
+      console.error("Invoice remind error:", error);
+      res.status(500).json({ error: "Failed to send reminder" });
+    }
+  });
+
+  app.post("/api/invoices/:id/payment-link", requireAuth, async (req: Request<IdParams>, res: Response) => {
+    try {
+      const invoiceId = req.params.id;
+      const authUserId = req.authenticatedUserId!;
+
+      const invoice = await storage.getInvoice(invoiceId);
+      if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+
+      const authProvider = await storage.getProviderByUserId(authUserId);
+      if (!authProvider || invoice.providerId !== authProvider.id) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      let checkoutUrl: string | undefined;
+      let method: "stripe_invoice" | "checkout_session" | "existing" = "checkout_session";
+
+      // Return existing URL if already generated
+      if (invoice.hostedInvoiceUrl) {
+        checkoutUrl = invoice.hostedInvoiceUrl;
+        method = "existing";
+      } else {
+        // Send a proper Stripe Invoice (platform account — no Connect required)
+        const result = await sendPlatformStripeInvoice(invoiceId);
+        checkoutUrl = result.hostedInvoiceUrl;
+        method = "stripe_invoice";
+      }
+
+      res.json({ url: checkoutUrl, method });
+    } catch (error: any) {
+      console.error("Generate payment link error:", error);
+      res.status(500).json({ error: error.message || "Failed to generate payment link" });
     }
   });
 
@@ -4464,6 +4596,51 @@ Respond with JSON only:
   });
 
   // ============================================
+  // STRIPE CONNECT RETURN PAGES (after Stripe redirects the browser back)
+  const connectPageHtml = (title: string, message: string, isRefresh = false) => `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${title} – HomeBase Pro</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+    .card{background:#1c1f2b;border-radius:20px;padding:40px 32px;max-width:440px;width:100%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+    .icon{font-size:56px;margin-bottom:20px}
+    h1{font-size:24px;font-weight:700;margin-bottom:12px}
+    p{color:#a0a8c0;font-size:15px;line-height:1.6;margin-bottom:28px}
+    a.btn{display:inline-block;background:#38AE5F;color:#fff;text-decoration:none;padding:14px 32px;border-radius:12px;font-weight:600;font-size:16px}
+    a.btn:hover{background:#2e9a52}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">${isRefresh ? "🔄" : "✅"}</div>
+    <h1>${title}</h1>
+    <p>${message}</p>
+    <a class="btn" href="homebase://">Return to HomeBase Pro</a>
+  </div>
+</body>
+</html>`;
+
+  app.get("/provider/connect/complete", (_req: Request, res: Response) => {
+    res.setHeader("Content-Type", "text/html");
+    res.send(connectPageHtml(
+      "Stripe Setup Complete",
+      "Your payment account is connected. Return to the app to start accepting payments and receiving payouts."
+    ));
+  });
+
+  app.get("/provider/connect/refresh", (_req: Request, res: Response) => {
+    res.setHeader("Content-Type", "text/html");
+    res.send(connectPageHtml(
+      "Continue Stripe Setup",
+      "Your onboarding link has expired. Return to the app and tap \"Continue Onboarding\" to generate a fresh link.",
+      true
+    ));
+  });
+
   // STRIPE CONNECT ENDPOINTS
   // ============================================
 
@@ -4622,7 +4799,7 @@ Respond with JSON only:
         .select()
         .from(invoices)
         .where(eq(invoices.providerId, providerId as string))
-        .orderBy(invoices.createdAt);
+        .orderBy(desc(invoices.createdAt));
       res.json({ invoices: providerInvoices });
     } catch (error: any) {
       console.error("Get invoices error:", error);
@@ -4646,15 +4823,23 @@ Respond with JSON only:
         return res.status(403).json({ error: "Access denied: you can only send invoices for your own provider account" });
       }
 
-      // Create, finalize, and send via Stripe (non-fatal)
+      // Send a proper Stripe Invoice — Stripe emails the client at invoice.stripe.com
       let hostedUrl: string | undefined;
       let stripeError: string | undefined;
-      const stripeResult = await sendStripeInvoiceEmail(invoiceId).catch((err: any) => {
-        stripeError = err?.message || "Stripe invoice send failed";
-        console.error("[stripe-invoice-send] stripe/invoices/:id/send:", stripeError);
-        return null;
-      });
-      if (stripeResult?.hostedInvoiceUrl) hostedUrl = stripeResult.hostedInvoiceUrl;
+
+      if (!invoice.stripeInvoiceId) {
+        const platformResult = await sendPlatformStripeInvoice(invoiceId).catch((err: any) => {
+          stripeError = err?.message || "Stripe invoice send failed";
+          console.error("[stripe-invoice-send] stripe/invoices/:id/send:", stripeError);
+          return null;
+        });
+        if (platformResult?.hostedInvoiceUrl) hostedUrl = platformResult.hostedInvoiceUrl;
+      } else {
+        hostedUrl = invoice.hostedInvoiceUrl || undefined;
+        await getStripe().invoices.sendInvoice(invoice.stripeInvoiceId).catch((err: any) => {
+          stripeError = err?.message;
+        });
+      }
 
       // Send HomeBase notification email as secondary notification
       let emailSent = false;
@@ -4717,14 +4902,21 @@ Respond with JSON only:
   app.post("/api/stripe/invoices/:invoiceId/checkout", requireAuth, async (req: Request<{ invoiceId: string }>, res: Response) => {
     try {
       const { invoiceId } = req.params;
-      const result = await createStripeInvoice(invoiceId);
-      res.json({ url: result.hostedInvoiceUrl, stripeInvoiceId: result.stripeInvoiceId });
+
+      // Use existing Stripe invoice URL, or send one now via platform account
+      const [inv] = await db.select({ stripeInvoiceId: invoices.stripeInvoiceId, hostedInvoiceUrl: invoices.hostedInvoiceUrl }).from(invoices).where(eq(invoices.id, invoiceId));
+      if (!inv) return res.status(404).json({ error: "Invoice not found" });
+
+      let url = inv.hostedInvoiceUrl;
+      if (!url) {
+        const result = await sendPlatformStripeInvoice(invoiceId);
+        url = result.hostedInvoiceUrl;
+      }
+
+      res.json({ url, stripeInvoiceId: inv.stripeInvoiceId });
     } catch (error: any) {
       console.error("Create Stripe invoice error:", error);
-      if (error.message?.includes("not enabled") || error.message?.includes("not set up")) {
-        return res.status(402).json({ error: "stripe_not_ready", message: error.message });
-      }
-      res.status(500).json({ error: error.message || "Failed to create Stripe invoice" });
+      res.status(500).json({ error: error.message || "Failed to create checkout" });
     }
   });
 
@@ -4970,6 +5162,192 @@ Respond with JSON only:
     } catch (error: any) {
       console.error("Create payment intent error:", error);
       res.status(500).json({ error: error.message || "Failed to create payment intent" });
+    }
+  });
+
+  // ── Homeowner card-on-file & PaymentSheet routes ─────────────────────────
+
+  // Get or create Stripe customer for homeowner + return SetupIntent for saving a card
+  app.post("/api/homeowner/setup-payment-sheet", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const authUserId = req.authenticatedUserId!;
+
+      const [user] = await db.select().from(users).where(eq(users.id, authUserId));
+      if (!user) return res.status(404).json({ error: "User not found" });
+
+      const stripe = getStripe();
+      let customerId = user.stripeCustomerId;
+
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user.email,
+          name: [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email,
+          metadata: { userId: user.id },
+        });
+        customerId = customer.id;
+        await db.update(users).set({ stripeCustomerId: customerId, updatedAt: new Date() }).where(eq(users.id, authUserId));
+      }
+
+      const ephemeralKey = await stripe.ephemeralKeys.create(
+        { customer: customerId },
+        { apiVersion: "2023-10-16" }
+      );
+      const setupIntent = await stripe.setupIntents.create({
+        customer: customerId,
+        payment_method_types: ["card"],
+      });
+
+      res.json({
+        setupIntentClientSecret: setupIntent.client_secret,
+        ephemeralKeySecret: ephemeralKey.secret,
+        customerId,
+      });
+    } catch (error: any) {
+      console.error("Setup payment sheet error:", error);
+      res.status(500).json({ error: error.message || "Failed to create setup sheet" });
+    }
+  });
+
+  // Get homeowner's saved payment methods
+  app.get("/api/homeowner/payment-methods", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const authUserId = req.authenticatedUserId!;
+
+      const [user] = await db.select().from(users).where(eq(users.id, authUserId));
+      if (!user?.stripeCustomerId) return res.json({ paymentMethods: [], defaultPaymentMethodId: null });
+
+      const stripe = getStripe();
+      const pms = await stripe.paymentMethods.list({ customer: user.stripeCustomerId, type: "card" });
+
+      const customer = await stripe.customers.retrieve(user.stripeCustomerId) as any;
+      const defaultPmId = user.defaultPaymentMethodId ||
+        customer?.invoice_settings?.default_payment_method ||
+        (pms.data.length === 1 ? pms.data[0].id : null);
+
+      res.json({
+        paymentMethods: pms.data.map((pm) => ({
+          id: pm.id,
+          brand: pm.card?.brand ?? "card",
+          last4: pm.card?.last4 ?? "••••",
+          expMonth: pm.card?.exp_month,
+          expYear: pm.card?.exp_year,
+          isDefault: pm.id === defaultPmId,
+        })),
+        defaultPaymentMethodId: defaultPmId,
+      });
+    } catch (error: any) {
+      console.error("List payment methods error:", error);
+      res.status(500).json({ error: error.message || "Failed to list payment methods" });
+    }
+  });
+
+  // Detach a saved payment method
+  app.delete("/api/homeowner/payment-methods/:pmId", requireAuth, async (req: Request<{ pmId: string }>, res: Response) => {
+    try {
+      const authUserId = req.authenticatedUserId!;
+
+      const { pmId } = req.params;
+      const stripe = getStripe();
+      await stripe.paymentMethods.detach(pmId);
+
+      const [user] = await db.select().from(users).where(eq(users.id, authUserId));
+      if (user?.defaultPaymentMethodId === pmId) {
+        await db.update(users).set({ defaultPaymentMethodId: null, updatedAt: new Date() }).where(eq(users.id, authUserId));
+      }
+
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Detach payment method error:", error);
+      res.status(500).json({ error: error.message || "Failed to remove payment method" });
+    }
+  });
+
+  // Set default payment method for homeowner
+  app.patch("/api/homeowner/default-payment-method", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const authUserId = req.authenticatedUserId!;
+
+      const { paymentMethodId } = req.body;
+      if (!paymentMethodId) return res.status(400).json({ error: "paymentMethodId required" });
+
+      const [user] = await db.select().from(users).where(eq(users.id, authUserId));
+      if (!user?.stripeCustomerId) return res.status(400).json({ error: "No Stripe customer found" });
+
+      const stripe = getStripe();
+      await stripe.customers.update(user.stripeCustomerId, {
+        invoice_settings: { default_payment_method: paymentMethodId },
+      });
+
+      await db.update(users).set({ defaultPaymentMethodId: paymentMethodId, updatedAt: new Date() }).where(eq(users.id, authUserId));
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Set default PM error:", error);
+      res.status(500).json({ error: error.message || "Failed to set default payment method" });
+    }
+  });
+
+  // Create PaymentSheet params for paying an invoice in-app (with optional saved card)
+  app.post("/api/homeowner/payment-sheet", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const authUserId = req.authenticatedUserId!;
+
+      const { invoiceId } = req.body;
+      if (!invoiceId) return res.status(400).json({ error: "invoiceId required" });
+
+      const [invoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+      if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+      if (invoice.status === "paid") return res.status(400).json({ error: "Invoice already paid" });
+
+      const connectAccount = await getConnectAccount(invoice.providerId);
+      if (!connectAccount?.chargesEnabled) {
+        return res.status(402).json({ error: "stripe_not_ready", message: "Provider payment processing is not yet enabled" });
+      }
+
+      const [user] = await db.select().from(users).where(eq(users.id, authUserId));
+      if (!user) return res.status(404).json({ error: "User not found" });
+
+      const stripe = getStripe();
+      let customerId = user.stripeCustomerId;
+
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user.email,
+          name: [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email,
+          metadata: { userId: user.id },
+        });
+        customerId = customer.id;
+        await db.update(users).set({ stripeCustomerId: customerId, updatedAt: new Date() }).where(eq(users.id, authUserId));
+      }
+
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: invoice.totalCents,
+        currency: invoice.currency || "usd",
+        customer: customerId,
+        application_fee_amount: invoice.platformFeeCents || 0,
+        transfer_data: { destination: connectAccount.stripeAccountId },
+        setup_future_usage: "off_session",
+        metadata: { invoiceId: invoice.id, providerId: invoice.providerId, payerUserId: authUserId },
+      });
+
+      const ephemeralKey = await stripe.ephemeralKeys.create(
+        { customer: customerId },
+        { apiVersion: "2023-10-16" }
+      );
+
+      await db.update(invoices).set({ stripePaymentIntentId: paymentIntent.id, updatedAt: new Date() }).where(eq(invoices.id, invoiceId));
+
+      res.json({
+        paymentIntentClientSecret: paymentIntent.client_secret,
+        ephemeralKeySecret: ephemeralKey.secret,
+        customerId,
+        amount: invoice.totalCents,
+      });
+    } catch (error: any) {
+      console.error("Payment sheet error:", error);
+      if (error.message?.includes("not enabled") || error.message?.includes("not set up")) {
+        return res.status(402).json({ error: "stripe_not_ready", message: error.message });
+      }
+      res.status(500).json({ error: error.message || "Failed to create payment sheet" });
     }
   });
 

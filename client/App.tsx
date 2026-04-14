@@ -1,10 +1,11 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { StyleSheet } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
+import { StripeProviderWrapper } from "@/components/StripeProviderWrapper";
 
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/query-client";
@@ -14,6 +15,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useThemeStore } from "@/state/themeStore";
 import { useOnboardingStore } from "@/state/onboardingStore";
 import { useTheme } from "@/hooks/useTheme";
+import { getApiUrl } from "@/lib/query-client";
 
 const linking = {
   prefixes: ["homebase://", "exp+homebase://"],
@@ -40,10 +42,15 @@ function AppContent() {
 export default function App() {
   const hydrateTheme = useThemeStore((s) => s.hydrate);
   const hydrateOnboarding = useOnboardingStore((s) => s.hydrate);
-  
+  const [stripeKey, setStripeKey] = useState<string>("");
+
   useEffect(() => {
     hydrateTheme();
     hydrateOnboarding();
+    fetch(new URL("/api/stripe/config", getApiUrl()).toString())
+      .then((r) => r.json())
+      .then((d) => { if (d.publishableKey) setStripeKey(d.publishableKey); })
+      .catch(() => {});
   }, []);
   
   return (
@@ -52,7 +59,9 @@ export default function App() {
         <SafeAreaProvider>
           <GestureHandlerRootView style={styles.root}>
             <KeyboardProvider>
-              <AppContent />
+              <StripeProviderWrapper publishableKey={stripeKey}>
+                <AppContent />
+              </StripeProviderWrapper>
             </KeyboardProvider>
           </GestureHandlerRootView>
         </SafeAreaProvider>

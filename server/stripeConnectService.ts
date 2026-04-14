@@ -35,7 +35,11 @@ function getStripe(): Stripe {
   return stripe;
 }
 
-const APP_URL = process.env.APP_URL || "https://homebase.replit.app";
+const APP_URL =
+  process.env.APP_URL ||
+  (process.env.REPLIT_DEV_DOMAIN
+    ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+    : "https://homebase.replit.app");
 
 export interface PlatformFee {
   percent: number;
@@ -492,6 +496,65 @@ export async function createStripeCheckoutSession(invoiceId: string) {
     sessionId: session.id,
     checkoutUrl: session.url,
   };
+}
+
+export async function createDirectCheckoutSession(
+  invoiceId: string,
+  reqHost?: string,
+): Promise<{ checkoutUrl: string; sessionId: string }> {
+  const [invoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+  if (!invoice) throw new Error("Invoice not found");
+
+  const rawItems = invoice.lineItems;
+  const lineItems: any[] = rawItems
+    ? (Array.isArray(rawItems) ? rawItems : JSON.parse(rawItems as string))
+    : [];
+
+  const stripeLineItems = lineItems.length > 0
+    ? lineItems.map((item: any) => ({
+        price_data: {
+          currency: invoice.currency || "usd",
+          product_data: {
+            name: (item.description || item.name || "Service").slice(0, 200),
+          },
+          unit_amount: Math.max(1, Math.round(parseFloat(item.unitPrice?.toString() || "0") * 100)),
+        },
+        quantity: Math.max(1, Math.round(parseFloat(item.quantity?.toString() || "1"))),
+      }))
+    : [{
+        price_data: {
+          currency: invoice.currency || "usd",
+          product_data: {
+            name: `Invoice ${invoice.invoiceNumber || invoice.id.slice(0, 8)}`,
+            ...(invoice.notes ? { description: invoice.notes } : {}),
+          },
+          unit_amount: Math.max(
+            100,
+            invoice.totalCents || Math.round(parseFloat(invoice.total?.toString() || "0") * 100)
+          ),
+        },
+        quantity: 1,
+      }];
+
+  const domain = reqHost || process.env.REPLIT_DEV_DOMAIN || "homebase.replit.app";
+  const baseUrl = `https://${domain}`;
+
+  const session = await getStripe().checkout.sessions.create({
+    mode: "payment",
+    line_items: stripeLineItems,
+    success_url: `${baseUrl}/invoice/${invoiceId}/success`,
+    cancel_url: `${baseUrl}/invoice/${invoiceId}/cancel`,
+    metadata: {
+      invoiceId: invoice.id,
+      providerId: invoice.providerId,
+    },
+  });
+
+  await db.update(invoices)
+    .set({ stripeCheckoutSessionId: session.id, hostedInvoiceUrl: session.url, updatedAt: new Date() })
+    .where(eq(invoices.id, invoiceId));
+
+  return { checkoutUrl: session.url!, sessionId: session.id };
 }
 
 export async function applyCreditsToInvoice(
@@ -1181,6 +1244,131 @@ export async function sendStripeInvoiceEmail(invoiceId: string): Promise<{ strip
   await getStripe().invoices.sendInvoice(stripeInvoiceId, { stripeAccount: connectAccount.stripeAccountId });
 
   return { stripeInvoiceId, hostedInvoiceUrl };
+}
+
+/**
+ * Sends a proper Stripe Invoice to the client using the PLATFORM Stripe account.
+ * Does NOT require Stripe Connect. Follows the exact steps:
+ *   1. Find or create Stripe Customer by client email
+ *   2. Create Stripe Invoice (collection_method: 'send_invoice')
+ *   3. Attach each line item via stripe.invoiceItems.create (invoice: stripeInvoiceId)
+ *   4. Finalize the invoice
+ *   5. Send — Stripe emails the client a hosted invoice.stripe.com page
+ *   6. Persist stripeInvoiceId + hosted_invoice_url to our DB
+ */
+export async function sendPlatformStripeInvoice(invoiceId: string): Promise<{
+  stripeInvoiceId: string;
+  hostedInvoiceUrl: string;
+}> {
+  const stripe = getStripe();
+
+  // Load our invoice
+  const [invoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+  if (!invoice) throw new Error("Invoice not found");
+  if (!invoice.clientId) throw new Error("Invoice has no client attached");
+
+  // Load the client
+  const [client] = await db.select().from(clients).where(eq(clients.id, invoice.clientId));
+  if (!client) throw new Error("Client not found");
+  if (!client.email) throw new Error("Client has no email address — add the client's email first");
+
+  // ── 1. Find or create Stripe Customer on the platform account ─────────────
+  let stripeCustomerId: string | null = (client as any).stripeCustomerId || null;
+
+  if (stripeCustomerId) {
+    try {
+      const existing = await stripe.customers.retrieve(stripeCustomerId);
+      if ((existing as any).deleted) stripeCustomerId = null;
+    } catch {
+      stripeCustomerId = null;
+    }
+  }
+
+  if (!stripeCustomerId) {
+    // Search by email to avoid duplicates
+    const byEmail = await stripe.customers.list({ email: client.email, limit: 1 });
+    if (byEmail.data.length > 0) {
+      stripeCustomerId = byEmail.data[0].id;
+    } else {
+      const customerName = [client.firstName, client.lastName].filter(Boolean).join(" ") || undefined;
+      const newCustomer = await stripe.customers.create({
+        email: client.email,
+        name: customerName,
+        phone: client.phone || undefined,
+        metadata: { homebaseClientId: client.id, providerId: invoice.providerId },
+      });
+      stripeCustomerId = newCustomer.id;
+    }
+    // Save platform customer ID on the client record
+    await db
+      .update(clients)
+      .set({ stripeCustomerId, updatedAt: new Date() } as any)
+      .where(eq(clients.id, client.id));
+  }
+
+  const daysUntilDue = invoice.dueDate
+    ? Math.max(1, Math.ceil((new Date(invoice.dueDate).getTime() - Date.now()) / 86_400_000))
+    : 30;
+
+  // ── 2. Create the Stripe Invoice ──────────────────────────────────────────
+  const stripeInvoice = await stripe.invoices.create({
+    customer: stripeCustomerId,
+    collection_method: "send_invoice",
+    days_until_due: daysUntilDue,
+    metadata: {
+      homebaseInvoiceId: invoice.id,
+      providerId: invoice.providerId,
+    },
+  });
+
+  // ── 3. Add each line item to the Stripe Invoice ───────────────────────────
+  const rawItems = invoice.lineItems;
+  const lineItems: any[] = rawItems
+    ? Array.isArray(rawItems) ? rawItems : JSON.parse(rawItems as string)
+    : [];
+
+  if (lineItems.length > 0) {
+    for (const item of lineItems) {
+      const unitAmountCents = Math.round(
+        parseFloat(item.unitPrice?.toString() || item.price?.toString() || "0") * 100
+      );
+      const qty = Math.max(1, Math.round(parseFloat(item.quantity?.toString() || "1")));
+      const currency = (invoice.currency || "usd").toLowerCase();
+      await stripe.invoiceItems.create({
+        customer: stripeCustomerId,
+        invoice: stripeInvoice.id,
+        amount: unitAmountCents * qty,
+        currency,
+        description: item.description || item.name || "Service",
+      });
+    }
+  } else {
+    // Fallback: single line item for the total
+    const totalCents =
+      invoice.totalCents || Math.round(parseFloat(invoice.total?.toString() || "0") * 100);
+    await stripe.invoiceItems.create({
+      customer: stripeCustomerId,
+      invoice: stripeInvoice.id,
+      amount: totalCents,
+      currency: invoice.currency || "usd",
+      description: invoice.notes || `Invoice ${invoice.invoiceNumber}`,
+    });
+  }
+
+  // ── 4. Finalize the invoice (locks it, generates the hosted_invoice_url) ──
+  const finalized = await stripe.invoices.finalizeInvoice(stripeInvoice.id);
+  const hostedInvoiceUrl = finalized.hosted_invoice_url || "";
+
+  // ── 5. Send — Stripe emails the client at invoice.stripe.com ──────────────
+  await stripe.invoices.sendInvoice(stripeInvoice.id);
+
+  // ── 6. Persist stripeInvoiceId + hosted_invoice_url to our DB ─────────────
+  await db
+    .update(invoices)
+    .set({ stripeInvoiceId: finalized.id, hostedInvoiceUrl, updatedAt: new Date() })
+    .where(eq(invoices.id, invoiceId));
+
+  return { stripeInvoiceId: finalized.id, hostedInvoiceUrl };
 }
 
 export { getStripe };

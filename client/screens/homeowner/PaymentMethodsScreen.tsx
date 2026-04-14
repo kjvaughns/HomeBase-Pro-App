@@ -1,200 +1,154 @@
-import React, { useState } from "react";
-import { StyleSheet, View, ScrollView, Pressable, Alert } from "react-native";
+import React, { useState, useCallback } from "react";
+import {
+  StyleSheet,
+  View,
+  ScrollView,
+  Pressable,
+  ActivityIndicator,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { Feather } from "@expo/vector-icons";
+import { useStripe } from "@/lib/useStripePayment";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
-import { TextField } from "@/components/TextField";
-import { PrimaryButton } from "@/components/PrimaryButton";
-import { SecondaryButton } from "@/components/SecondaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
-import { useHomeownerStore } from "@/state/homeownerStore";
-import { PaymentMethod } from "@/state/types";
+import { getApiUrl, getAuthHeaders } from "@/lib/query-client";
+
+interface SavedCard {
+  id: string;
+  brand: string;
+  last4: string;
+  expMonth?: number;
+  expYear?: number;
+  isDefault: boolean;
+}
+
+function brandIcon(brand: string): keyof typeof Feather.glyphMap {
+  return "credit-card";
+}
+
+function brandLabel(brand: string): string {
+  const labels: Record<string, string> = {
+    visa: "Visa",
+    mastercard: "Mastercard",
+    amex: "American Express",
+    discover: "Discover",
+    jcb: "JCB",
+    unionpay: "UnionPay",
+    diners: "Diners Club",
+  };
+  return labels[brand] ?? brand.charAt(0).toUpperCase() + brand.slice(1);
+}
 
 export default function PaymentMethodsScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { theme } = useTheme();
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
+  const queryClient = useQueryClient();
+  const [addingCard, setAddingCard] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [settingDefaultId, setSettingDefaultId] = useState<string | null>(null);
 
-  const profile = useHomeownerStore((s) => s.profile);
-  const addPaymentMethod = useHomeownerStore((s) => s.addPaymentMethod);
-  const deletePaymentMethod = useHomeownerStore((s) => s.deletePaymentMethod);
-  const setDefaultPaymentMethod = useHomeownerStore((s) => s.setDefaultPaymentMethod);
-
-  const paymentMethods = profile?.paymentMethods || [];
-
-  const [isAdding, setIsAdding] = useState(false);
-  const [formData, setFormData] = useState({
-    cardNumber: "",
-    expiry: "",
-    cvv: "",
-    name: "",
+  const { data, isLoading } = useQuery<{ paymentMethods: SavedCard[]; defaultPaymentMethodId: string | null }>({
+    queryKey: ["/api/homeowner/payment-methods"],
+    queryFn: async () => {
+      const url = new URL("/api/homeowner/payment-methods", getApiUrl());
+      const res = await fetch(url.toString(), { headers: getAuthHeaders(), credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load cards");
+      return res.json();
+    },
   });
 
-  const resetForm = () => {
-    setFormData({ cardNumber: "", expiry: "", cvv: "", name: "" });
-    setIsAdding(false);
-  };
+  const cards = data?.paymentMethods ?? [];
 
-  const handleAdd = () => {
-    setIsAdding(true);
-  };
+  const deleteMutation = useMutation({
+    mutationFn: async (pmId: string) => {
+      const url = new URL(`/api/homeowner/payment-methods/${pmId}`, getApiUrl());
+      const res = await fetch(url.toString(), { method: "DELETE", headers: getAuthHeaders(), credentials: "include" });
+      if (!res.ok) throw new Error("Failed to remove card");
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/homeowner/payment-methods"] }),
+  });
 
-  const handleSave = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  const defaultMutation = useMutation({
+    mutationFn: async (pmId: string) => {
+      const url = new URL("/api/homeowner/default-payment-method", getApiUrl());
+      const res = await fetch(url.toString(), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        credentials: "include",
+        body: JSON.stringify({ paymentMethodId: pmId }),
+      });
+      if (!res.ok) throw new Error("Failed to set default");
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/homeowner/payment-methods"] }),
+  });
 
-    const last4 = formData.cardNumber.slice(-4);
-    const [month, year] = formData.expiry.split("/");
+  const handleAddCard = useCallback(async () => {
+    setAddingCard(true);
+    try {
+      const url = new URL("/api/homeowner/setup-payment-sheet", getApiUrl());
+      const res = await fetch(url.toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to initialize card setup");
+      const { setupIntentClientSecret, ephemeralKeySecret, customerId } = await res.json();
 
-    const newMethod: PaymentMethod = {
-      id: `pm-${Date.now()}`,
-      type: "card",
-      label: "Visa",
-      last4,
-      expiryMonth: parseInt(month, 10),
-      expiryYear: 2000 + parseInt(year, 10),
-      isDefault: paymentMethods.length === 0,
-    };
+      const { error: initError } = await initPaymentSheet({
+        merchantDisplayName: "HomeBase Pro",
+        customerId,
+        customerEphemeralKeySecret: ephemeralKeySecret,
+        setupIntentClientSecret,
+        allowsDelayedPaymentMethods: false,
+        appearance: { colors: { primary: Colors.accent } },
+      });
 
-    addPaymentMethod(newMethod);
-    resetForm();
-  };
+      if (initError) throw new Error(initError.message);
 
-  const handleDelete = (id: string) => {
-    Alert.alert(
-      "Remove Payment Method",
-      "Are you sure you want to remove this payment method?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: () => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            deletePaymentMethod(id);
-          },
-        },
-      ]
-    );
-  };
+      const { error: presentError } = await presentPaymentSheet();
+      if (presentError) {
+        if (presentError.code !== "Canceled") {
+          throw new Error(presentError.message);
+        }
+        return;
+      }
 
-  const handleSetDefault = (id: string) => {
-    Haptics.selectionAsync();
-    setDefaultPaymentMethod(id);
-  };
-
-  const getMethodIcon = (type: PaymentMethod["type"]): keyof typeof Feather.glyphMap => {
-    switch (type) {
-      case "card":
-        return "credit-card";
-      case "bank":
-        return "briefcase";
-      case "apple_pay":
-        return "smartphone";
-      default:
-        return "credit-card";
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      queryClient.invalidateQueries({ queryKey: ["/api/homeowner/payment-methods"] });
+    } catch (err) {
+      console.warn("Add card error:", err);
+    } finally {
+      setAddingCard(false);
     }
-  };
+  }, [initPaymentSheet, presentPaymentSheet, queryClient]);
 
-  const renderPaymentMethod = (method: PaymentMethod) => (
-    <View
-      key={method.id}
-      style={[styles.methodCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}
-    >
-      <View style={styles.methodHeader}>
-        <View style={[styles.methodIcon, { backgroundColor: Colors.accentLight }]}>
-          <Feather name={getMethodIcon(method.type)} size={20} color={Colors.accent} />
-        </View>
-        <View style={styles.methodInfo}>
-          <View style={styles.methodLabelRow}>
-            <ThemedText style={styles.methodLabel}>{method.label}</ThemedText>
-            {method.isDefault && (
-              <View style={[styles.defaultBadge, { backgroundColor: Colors.accentLight }]}>
-                <ThemedText style={styles.defaultBadgeText}>Default</ThemedText>
-              </View>
-            )}
-          </View>
-          <ThemedText style={[styles.methodDetails, { color: theme.textSecondary }]}>
-            {method.type === "apple_pay"
-              ? "Apple Pay"
-              : `ending in ${method.last4}${method.expiryMonth ? ` - ${method.expiryMonth}/${method.expiryYear?.toString().slice(-2)}` : ""}`}
-          </ThemedText>
-        </View>
-        <Pressable onPress={() => handleDelete(method.id)} style={styles.deleteBtn}>
-          <Feather name="trash-2" size={18} color={theme.textSecondary} />
-        </Pressable>
-      </View>
+  const handleDelete = useCallback(async (pmId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setDeletingId(pmId);
+    try {
+      await deleteMutation.mutateAsync(pmId);
+    } finally {
+      setDeletingId(null);
+    }
+  }, [deleteMutation]);
 
-      {!method.isDefault && (
-        <Pressable onPress={() => handleSetDefault(method.id)} style={styles.setDefaultBtn}>
-          <ThemedText style={[styles.setDefaultText, { color: Colors.accent }]}>
-            Set as default
-          </ThemedText>
-        </Pressable>
-      )}
-    </View>
-  );
-
-  const renderForm = () => (
-    <View style={[styles.formCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
-      <ThemedText style={styles.formTitle}>Add Payment Method</ThemedText>
-
-      <View style={styles.formFields}>
-        <TextField
-          placeholder="Card Number"
-          value={formData.cardNumber}
-          onChangeText={(cardNumber) => setFormData((f) => ({ ...f, cardNumber }))}
-          keyboardType="numeric"
-          maxLength={16}
-          leftIcon="credit-card"
-        />
-        <View style={styles.formRow}>
-          <View style={styles.formHalf}>
-            <TextField
-              placeholder="MM/YY"
-              value={formData.expiry}
-              onChangeText={(expiry) => setFormData((f) => ({ ...f, expiry }))}
-              maxLength={5}
-            />
-          </View>
-          <View style={styles.formHalf}>
-            <TextField
-              placeholder="CVV"
-              value={formData.cvv}
-              onChangeText={(cvv) => setFormData((f) => ({ ...f, cvv }))}
-              keyboardType="numeric"
-              maxLength={4}
-              secureTextEntry
-            />
-          </View>
-        </View>
-        <TextField
-          placeholder="Name on Card"
-          value={formData.name}
-          onChangeText={(name) => setFormData((f) => ({ ...f, name }))}
-        />
-      </View>
-
-      <View style={styles.formActions}>
-        <SecondaryButton onPress={resetForm} style={styles.formBtn}>Cancel</SecondaryButton>
-        <PrimaryButton
-          onPress={handleSave}
-          disabled={formData.cardNumber.length < 16 || formData.expiry.length < 5}
-          style={styles.formBtn}
-        >
-          Add Card
-        </PrimaryButton>
-      </View>
-
-      <ThemedText style={[styles.securityNote, { color: theme.textTertiary }]}>
-        Your payment information is stored securely
-      </ThemedText>
-    </View>
-  );
+  const handleSetDefault = useCallback(async (pmId: string) => {
+    Haptics.selectionAsync();
+    setSettingDefaultId(pmId);
+    try {
+      await defaultMutation.mutateAsync(pmId);
+    } finally {
+      setSettingDefaultId(null);
+    }
+  }, [defaultMutation]);
 
   return (
     <ThemedView style={styles.container}>
@@ -206,41 +160,130 @@ export default function PaymentMethodsScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        {paymentMethods.map(renderPaymentMethod)}
-
-        {isAdding && renderForm()}
-
-        {!isAdding && (
-          <Pressable
-            onPress={handleAdd}
-            style={[styles.addButton, { borderColor: theme.borderLight }]}
-          >
-            <Feather name="plus" size={20} color={Colors.accent} />
-            <ThemedText style={[styles.addButtonText, { color: Colors.accent }]}>
-              Add Payment Method
+        {isLoading ? (
+          <ActivityIndicator color={Colors.accent} style={{ marginTop: Spacing.xl }} />
+        ) : cards.length === 0 ? (
+          <View style={[styles.emptyCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
+            <Feather name="credit-card" size={32} color={theme.textTertiary} />
+            <ThemedText style={[styles.emptyTitle, { color: theme.textSecondary }]}>No saved cards</ThemedText>
+            <ThemedText style={[styles.emptySubtitle, { color: theme.textTertiary }]}>
+              Add a card to pay invoices and rebook services quickly.
             </ThemedText>
-          </Pressable>
+          </View>
+        ) : (
+          cards.map((card) => (
+            <View
+              key={card.id}
+              testID={`card-${card.id}`}
+              style={[
+                styles.cardRow,
+                {
+                  backgroundColor: theme.cardBackground,
+                  borderColor: card.isDefault ? Colors.accent + "60" : theme.borderLight,
+                  borderWidth: card.isDefault ? 1.5 : 1,
+                },
+              ]}
+            >
+              <View style={[styles.cardIcon, { backgroundColor: Colors.accentLight }]}>
+                <Feather name={brandIcon(card.brand)} size={20} color={Colors.accent} />
+              </View>
+              <View style={styles.cardInfo}>
+                <View style={styles.cardLabelRow}>
+                  <ThemedText style={styles.cardLabel}>{brandLabel(card.brand)} ••••{card.last4}</ThemedText>
+                  {card.isDefault ? (
+                    <View style={[styles.defaultBadge, { backgroundColor: Colors.accentLight }]}>
+                      <ThemedText style={[styles.defaultBadgeText, { color: Colors.accent }]}>Default</ThemedText>
+                    </View>
+                  ) : null}
+                </View>
+                {card.expMonth && card.expYear ? (
+                  <ThemedText style={[styles.cardExpiry, { color: theme.textSecondary }]}>
+                    Expires {card.expMonth}/{String(card.expYear).slice(-2)}
+                  </ThemedText>
+                ) : null}
+                {!card.isDefault ? (
+                  <Pressable
+                    onPress={() => handleSetDefault(card.id)}
+                    disabled={settingDefaultId === card.id}
+                    testID={`button-set-default-${card.id}`}
+                  >
+                    {settingDefaultId === card.id ? (
+                      <ActivityIndicator size="small" color={Colors.accent} style={{ marginTop: 4 }} />
+                    ) : (
+                      <ThemedText style={[styles.setDefaultText, { color: Colors.accent }]}>
+                        Set as default
+                      </ThemedText>
+                    )}
+                  </Pressable>
+                ) : null}
+              </View>
+              <Pressable
+                onPress={() => handleDelete(card.id)}
+                disabled={deletingId === card.id}
+                style={styles.deleteBtn}
+                testID={`button-delete-card-${card.id}`}
+              >
+                {deletingId === card.id ? (
+                  <ActivityIndicator size="small" color={theme.textSecondary} />
+                ) : (
+                  <Feather name="trash-2" size={18} color={theme.textSecondary} />
+                )}
+              </Pressable>
+            </View>
+          ))
         )}
+
+        <Pressable
+          onPress={handleAddCard}
+          disabled={addingCard}
+          style={[styles.addButton, { borderColor: Colors.accent + "60", opacity: addingCard ? 0.6 : 1 }]}
+          testID="button-add-card"
+        >
+          {addingCard ? (
+            <ActivityIndicator size="small" color={Colors.accent} />
+          ) : (
+            <>
+              <Feather name="plus" size={20} color={Colors.accent} />
+              <ThemedText style={[styles.addButtonText, { color: Colors.accent }]}>Add Payment Method</ThemedText>
+            </>
+          )}
+        </Pressable>
+
+        <ThemedText style={[styles.securityNote, { color: theme.textTertiary }]}>
+          Cards are stored securely by Stripe. HomeBase never sees your full card details.
+        </ThemedText>
       </ScrollView>
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  methodCard: {
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
+  container: { flex: 1 },
+  emptyCard: {
+    borderRadius: BorderRadius.card,
     borderWidth: 1,
+    padding: Spacing.xl,
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
+  emptyTitle: {
+    ...Typography.headline,
+    fontWeight: "600",
+    marginTop: Spacing.sm,
+  },
+  emptySubtitle: {
+    ...Typography.body,
+    textAlign: "center",
+  },
+  cardRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    borderRadius: BorderRadius.card,
+    padding: Spacing.md,
     marginBottom: Spacing.md,
   },
-  methodHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  methodIcon: {
+  cardIcon: {
     width: 44,
     height: 44,
     borderRadius: 12,
@@ -248,77 +291,40 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: Spacing.md,
   },
-  methodInfo: {
+  cardInfo: {
     flex: 1,
+    gap: 4,
   },
-  methodLabelRow: {
+  cardLabelRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.xs,
+    flexWrap: "wrap",
   },
-  methodLabel: {
+  cardLabel: {
     ...Typography.subhead,
     fontWeight: "600",
   },
   defaultBadge: {
-    paddingHorizontal: Spacing.xs,
+    paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 4,
   },
   defaultBadgeText: {
     ...Typography.caption2,
-    color: Colors.accent,
-    fontWeight: "600",
+    fontWeight: "700",
   },
-  methodDetails: {
+  cardExpiry: {
     ...Typography.caption1,
-    marginTop: 2,
-  },
-  deleteBtn: {
-    padding: Spacing.sm,
-  },
-  setDefaultBtn: {
-    marginTop: Spacing.md,
-    paddingTop: Spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "rgba(0,0,0,0.1)",
   },
   setDefaultText: {
     ...Typography.caption1,
     fontWeight: "600",
+    marginTop: 2,
   },
-  formCard: {
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    marginBottom: Spacing.md,
-  },
-  formTitle: {
-    ...Typography.headline,
-    marginBottom: Spacing.md,
-  },
-  formFields: {
-    gap: Spacing.sm,
-  },
-  formRow: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-  },
-  formHalf: {
-    flex: 1,
-  },
-  formActions: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-    marginTop: Spacing.lg,
-  },
-  formBtn: {
-    flex: 1,
-  },
-  securityNote: {
-    ...Typography.caption2,
-    textAlign: "center",
-    marginTop: Spacing.md,
+  deleteBtn: {
+    padding: Spacing.sm,
+    marginLeft: Spacing.xs,
   },
   addButton: {
     flexDirection: "row",
@@ -326,12 +332,19 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: Spacing.sm,
     paddingVertical: Spacing.lg,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
+    borderRadius: BorderRadius.card,
+    borderWidth: 1.5,
     borderStyle: "dashed",
+    marginBottom: Spacing.md,
   },
   addButtonText: {
     ...Typography.subhead,
     fontWeight: "600",
+  },
+  securityNote: {
+    ...Typography.caption1,
+    textAlign: "center",
+    lineHeight: 18,
+    paddingHorizontal: Spacing.md,
   },
 });

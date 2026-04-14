@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ProviderHomeScreen from "@/screens/provider/ProviderHomeScreen";
 import ClientsScreen from "@/screens/provider/ClientsScreen";
 import ScheduleScreen from "@/screens/provider/ScheduleScreen";
-import FinancesScreen from "@/screens/provider/FinancesScreen";
+import FinancialsScreen from "@/screens/provider/FinancialsScreen";
 import ProviderMoreScreen from "@/screens/provider/ProviderMoreScreen";
 import { useTheme } from "@/hooks/useTheme";
 import { HeaderTitle } from "@/components/HeaderTitle";
@@ -19,7 +19,7 @@ export type ProviderTabParamList = {
   HomeTab: undefined;
   ClientsTab: undefined;
   ScheduleTab: undefined;
-  FinancesTab: undefined;
+  FinancialsTab: undefined;
   MoreTab: undefined;
 };
 
@@ -33,8 +33,8 @@ function getIconName(routeName: string): keyof typeof Feather.glyphMap {
       return "users";
     case "ScheduleTab":
       return "calendar";
-    case "FinancesTab":
-      return "credit-card";
+    case "FinancialsTab":
+      return "bar-chart-2";
     case "MoreTab":
       return "menu";
     default:
@@ -194,11 +194,11 @@ export default function ProviderTabNavigator() {
           }}
         />
         <Tab.Screen
-          name="FinancesTab"
-          component={FinancesScreen}
+          name="FinancialsTab"
+          component={FinancialsScreen}
           options={{
-            title: "Finances",
-            headerTitle: "Finances",
+            title: "Finance",
+            headerTitle: "Finance",
           }}
         />
         <Tab.Screen
