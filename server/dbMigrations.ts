@@ -61,6 +61,12 @@ export async function runBootMigrations(): Promise<void> {
     // ── clients: Stripe Connect customer ID per provider account ──────────
     await runSql("clients.stripe_connect_customer_id", `ALTER TABLE clients ADD COLUMN IF NOT EXISTS stripe_connect_customer_id TEXT`);
 
+    // ── payments: Stripe charge ID (for matching Stripe charge objects) ───
+    await runSql("payments.stripe_charge_id", `ALTER TABLE payments ADD COLUMN IF NOT EXISTS stripe_charge_id TEXT`);
+
+    // ── refunds: Stripe charge ID (for matching refunds to charges) ───────
+    await runSql("refunds.stripe_charge_id", `ALTER TABLE refunds ADD COLUMN IF NOT EXISTS stripe_charge_id TEXT`);
+
     // ── enums required by messaging/notification tables ────────────────────
     const enumDefs: Array<[string, string]> = [
       ["enum.notification_channel",        `DO $$ BEGIN CREATE TYPE notification_channel AS ENUM ('email','push','in_app','sms'); EXCEPTION WHEN duplicate_object THEN null; END $$`],

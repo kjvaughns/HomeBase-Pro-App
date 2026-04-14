@@ -4047,7 +4047,12 @@ Respond with JSON only:
 
       // Create, finalize, and send the Stripe invoice (non-fatal — Stripe Connect may not be set up)
       let hostedUrl: string | undefined;
-      const stripeInvoiceResult = await sendStripeInvoiceEmail(invoice.id).catch(() => null);
+      let stripeError: string | undefined;
+      const stripeInvoiceResult = await sendStripeInvoiceEmail(invoice.id).catch((err: any) => {
+        stripeError = err?.message || "Stripe invoice send failed";
+        console.error("[stripe-invoice-send] create-and-send:", stripeError);
+        return null;
+      });
       if (stripeInvoiceResult?.hostedInvoiceUrl) {
         hostedUrl = stripeInvoiceResult.hostedInvoiceUrl;
       }
@@ -4095,7 +4100,7 @@ Respond with JSON only:
         }
       }
 
-      res.status(201).json({ invoice, emailSent, emailError });
+      res.status(201).json({ invoice, emailSent, emailError, stripeError });
     } catch (error) {
       console.error("Create and send invoice error:", error);
       res.status(500).json({ error: "Failed to create invoice" });
@@ -4136,7 +4141,12 @@ Respond with JSON only:
       
       // Create, finalize, and send the Stripe invoice (non-fatal — Stripe Connect may not be set up)
       let hostedUrl: string | undefined;
-      const stripeInvoiceResult = await sendStripeInvoiceEmail(invoiceId).catch(() => null);
+      let stripeError: string | undefined;
+      const stripeInvoiceResult = await sendStripeInvoiceEmail(invoiceId).catch((err: any) => {
+        stripeError = err?.message || "Stripe invoice send failed";
+        console.error("[stripe-invoice-send] invoices/:id/send:", stripeError);
+        return null;
+      });
       if (stripeInvoiceResult?.hostedInvoiceUrl) {
         hostedUrl = stripeInvoiceResult.hostedInvoiceUrl;
       }
@@ -4201,7 +4211,8 @@ Respond with JSON only:
         invoice: updatedInvoice, 
         paymentUrl: hostedUrl,
         emailSent,
-        emailError 
+        emailError,
+        stripeError,
       });
     } catch (error) {
       console.error("Send invoice error:", error);
@@ -4616,7 +4627,12 @@ Respond with JSON only:
 
       // Create, finalize, and send via Stripe (non-fatal)
       let hostedUrl: string | undefined;
-      const stripeResult = await sendStripeInvoiceEmail(invoiceId).catch(() => null);
+      let stripeError: string | undefined;
+      const stripeResult = await sendStripeInvoiceEmail(invoiceId).catch((err: any) => {
+        stripeError = err?.message || "Stripe invoice send failed";
+        console.error("[stripe-invoice-send] stripe/invoices/:id/send:", stripeError);
+        return null;
+      });
       if (stripeResult?.hostedInvoiceUrl) hostedUrl = stripeResult.hostedInvoiceUrl;
 
       // Send HomeBase notification email as secondary notification
@@ -4669,7 +4685,7 @@ Respond with JSON only:
         .where(eq(invoices.id, invoiceId))
         .returning();
 
-      res.json({ invoice: updated, paymentUrl: hostedUrl, emailSent, emailError });
+      res.json({ invoice: updated, paymentUrl: hostedUrl, emailSent, emailError, stripeError });
     } catch (error: any) {
       console.error("Send invoice error:", error);
       res.status(500).json({ error: error.message || "Failed to send invoice" });

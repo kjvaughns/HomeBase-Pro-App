@@ -286,7 +286,7 @@ export async function createStripeInvoice(invoiceId: string): Promise<{ stripeIn
   }
 
   const connectAccount = await getConnectAccount(invoice.providerId);
-  if (!connectAccount?.chargesEnabled) throw new Error("Provider payment processing not enabled");
+  if (!connectAccount?.stripeAccountId) throw new Error("Provider Stripe account not connected");
 
   const connectId = connectAccount.stripeAccountId;
 
