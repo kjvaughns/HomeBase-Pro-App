@@ -3938,11 +3938,18 @@ Respond with JSON only:
         ? JSON.stringify(lineItemsInput)
         : (req.body.amount ? JSON.stringify([{ description: req.body.notes || "Service", quantity: 1, unitPrice: parseFloat(req.body.amount), total: parseFloat(req.body.amount) }]) : undefined);
 
+      const subtotalCents = Math.round(total * 100);
       const invoiceData = {
         providerId: req.body.providerId,
         clientId: req.body.clientId,
         jobId: req.body.jobId || null,
         invoiceNumber,
+        currency: "usd",
+        subtotalCents,
+        taxCents: 0,
+        discountCents: 0,
+        platformFeeCents: 0,
+        totalCents: subtotalCents,
         amount: total.toFixed(2),
         total: total.toFixed(2),
         status: "draft",
@@ -4008,11 +4015,18 @@ Respond with JSON only:
         }];
       }
 
+      const subtotalCents = Math.round(amount * 100);
       const invoiceData = {
         providerId: req.body.providerId,
         clientId: req.body.clientId,
         jobId: req.body.jobId || null,
         invoiceNumber,
+        currency: "usd",
+        subtotalCents,
+        taxCents: 0,
+        discountCents: 0,
+        platformFeeCents: 0,
+        totalCents: subtotalCents,
         amount: amount.toFixed(2),
         total: amount.toFixed(2),
         lineItems: JSON.stringify(lineItems),
@@ -4170,11 +4184,21 @@ Respond with JSON only:
         }
       }
       
-      // Update invoice status to sent
-      const updatedInvoice = await storage.sendInvoice(invoiceId);
+      // Update invoice status to sent and persist hostedInvoiceUrl if generated
+      const [updatedInvoice] = await db
+        .update(invoices)
+        .set({
+          status: "sent",
+          sentAt: new Date(),
+          ...(hostedUrl ? { hostedInvoiceUrl: hostedUrl } : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(invoices.id, invoiceId))
+        .returning();
       
       res.json({ 
         invoice: updatedInvoice, 
+        paymentUrl: hostedUrl,
         emailSent,
         emailError 
       });
@@ -4846,94 +4870,6 @@ Respond with JSON only:
     } catch (error: any) {
       console.error("Create invoice error:", error);
       res.status(500).json({ error: error.message || "Failed to create invoice" });
-    }
-  });
-
-  // Send invoice (mark as sent and optionally generate payment link + send email)
-  app.post("/api/invoices/:invoiceId/send", requireAuth, async (req: Request<{ invoiceId: string }>, res: Response) => {
-    try {
-      const { invoiceId } = req.params;
-      const { deliveryMethod, generatePaymentLink } = req.body;
-
-      // Get invoice details
-      const invoice = await storage.getInvoice(invoiceId);
-      if (!invoice) {
-        return res.status(404).json({ error: "Invoice not found" });
-      }
-
-      // Get client details
-      if (!invoice.clientId) {
-        return res.status(400).json({ error: "Invoice has no client" });
-      }
-      const client = await storage.getClient(invoice.clientId);
-      if (!client) {
-        return res.status(404).json({ error: "Client not found" });
-      }
-
-      // Get provider details
-      const provider = await storage.getProvider(invoice.providerId);
-      if (!provider) {
-        return res.status(404).json({ error: "Provider not found" });
-      }
-
-      let hostedUrl: string | null = null;
-
-      if (generatePaymentLink) {
-        const invoiceResult = await createStripeInvoice(invoiceId).catch(() => null);
-        hostedUrl = invoiceResult?.hostedInvoiceUrl || null;
-      }
-
-      // Send email if client has email
-      let emailSent = false;
-      let emailError: string | undefined;
-      
-      if (client.email && (deliveryMethod === "email" || deliveryMethod === "both")) {
-        const rawLineItems = invoice.lineItems;
-        const lineItems = Array.isArray(rawLineItems) ? rawLineItems : (typeof rawLineItems === 'string' ? JSON.parse(rawLineItems) : []);
-        const clientName = [client.firstName, client.lastName].filter(Boolean).join(" ") || "Client";
-        
-        const sendResult = await dispatchWithResult('invoice.sent', {
-          clientEmail: client.email,
-          clientName,
-          providerName: provider.businessName || provider.userId || "Service Provider",
-          invoiceNumber: invoice.invoiceNumber || `INV-${invoice.id.slice(0, 8)}`,
-          amount: parseFloat(invoice.total?.toString() || "0"),
-          dueDate: invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : "Due on receipt",
-          lineItems: lineItems.map((item: any) => ({
-            description: item.description || item.name || "Service",
-            quantity: item.quantity || 1,
-            unitPrice: parseFloat(item.unitPrice?.toString() || item.price?.toString() || "0"),
-            total: parseFloat(item.total?.toString() || "0"),
-          })),
-          paymentLink: hostedUrl || undefined,
-          relatedRecordType: 'invoice',
-          relatedRecordId: invoice.id,
-        });
-        emailSent = sendResult.emailSent;
-        emailError = sendResult.emailError;
-      }
-
-      const [updated] = await db
-        .update(invoices)
-        .set({
-          status: "sent",
-          sentAt: new Date(),
-          hostedInvoiceUrl: hostedUrl || undefined,
-          updatedAt: new Date(),
-        })
-        .where(eq(invoices.id, invoiceId))
-        .returning();
-
-      res.json({
-        invoice: updated,
-        paymentUrl: hostedUrl,
-        deliveryMethod: deliveryMethod || "link",
-        emailSent,
-        emailError
-      });
-    } catch (error: any) {
-      console.error("Send invoice error:", error);
-      res.status(500).json({ error: error.message || "Failed to send invoice" });
     }
   });
 
