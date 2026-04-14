@@ -413,7 +413,38 @@ When unfocused, `TextField` has `borderWidth: 0`. The input field is distinguish
 
 ---
 
-## 7. Final Verdict on Launch Polish
+## 7. Coverage Matrix
+
+All 15 focal areas from the audit brief, mapped to the specific files reviewed and the report section where each is assessed.
+
+| # | Focal Area | Files Audited | Report Section |
+|---|-----------|--------------|----------------|
+| 1 | Onboarding | `FirstLaunchScreen.tsx`, `AccountTypeSelectionScreen.tsx`, `ProviderOnboardingScreen.tsx`, `ProviderSetupFlow.tsx` | §3.1–3.4 |
+| 2 | Dashboard | `ProviderHomeScreen.tsx`, `StatCard.tsx`, `GlassCard.tsx` | §3.5, D2, S1, F2 |
+| 3 | Business Profile | `BusinessHubScreen.tsx` (Profile tab), `ProviderMoreScreen.tsx` (avatar card) | §3.6 |
+| 4 | Service Management | `ServicesScreen.tsx`, `ServiceBlueprintWizardScreen.tsx`, `ServicePreviewScreen.tsx`, `NewServiceScreen.tsx`, `ServiceSummaryScreen.tsx` | §3.7–3.9 |
+| 5 | Booking Links | `BookingLinkScreen.tsx`, `BusinessHubScreen.tsx` (Booking tab) | §3.10, D1, F1 |
+| 6 | Public Page Controls | `ServicePreviewScreen.tsx`, `PublicProfileScreen.tsx` | §3.9, §3.27 |
+| 7 | Lead Inbox | `LeadsScreen.tsx`, `LeadCard.tsx` | §3.11, F5 |
+| 8 | Calendar / Schedule | `ScheduleScreen.tsx` | §3.12, F3 |
+| 9 | Clients (CRM) | `ClientsScreen.tsx`, `ClientDetailScreen.tsx`, `Avatar.tsx`, `FilterChips.tsx` | §3.13–3.14, C3, C4 |
+| 10 | Invoices | `AddInvoiceScreen.tsx`, `InvoiceDetailScreen.tsx`, `JobCard.tsx` | §3.17–3.18 |
+| 11 | Payments | `StripeConnectScreen.tsx`, `FinancialsScreen.tsx` | §3.19–3.20, D3 |
+| 12 | Analytics | `FinancialsScreen.tsx` (Overview tab with charts and StatCard) | §3.20, D3 |
+| 13 | Notifications | `ProviderMoreScreen.tsx` (Notification Preferences row) | §3.25 |
+| 14 | Reviews | `ReviewsScreen.tsx`, `PublicProfileScreen.tsx` (Reviews tab) | §3.21, §3.27 |
+| 15 | Settings | `ProviderMoreScreen.tsx`, `SubscriptionScreen.tsx`, `CommunicationsScreen.tsx`, `SendMessageScreen.tsx`, `ProviderAIAssistantScreen.tsx` | §3.22–3.26, D4, D7, D8, I3 |
+
+**Navigation architecture** was assessed separately via `ProviderTabNavigator.tsx` and `RootStackNavigator.tsx` (see D1, §4 F1, §6 I4–I5).
+
+**Shared components assessed** (findings mapped to sections C1–C7, D6–D8, I1, I6–I7):  
+`GlassCard`, `PrimaryButton`, `SecondaryButton`, `StatCard`, `EmptyState`, `ProviderFAB`, `ListRow`, `StatusPill`, `Avatar`, `FilterChips`, `JobCard`, `LeadCard`, `FormSectionHeader`, `SectionHeader`, `SkeletonLoader`, `TextField`, `ThemedText`, `Button`
+
+**Note on NewServiceScreen and ServiceSummaryScreen:** `NewServiceScreen.tsx` is the legacy direct-edit form (now routed via the `EditService` navigation alias) — it functions as a fallback editor and was assessed as part of the service management workflow (§3.7). `ServiceSummaryScreen.tsx` is the AI-generated scope of work display presented during intake; it shares the `GlassCard` / `ThemedText` component stack and was assessed as part of the booking intake workflow (§3.11). Neither introduces design patterns not already captured in the audit.
+
+---
+
+## 8. Final Verdict on Launch Polish
 
 ### Scores Explained
 **Design: 7/10** — The design language is clear and the component library is mostly solid. What holds it back is fragmented execution: two type scales, three color systems, inconsistent component reuse, and a few screens (Dashboard, MoreScreen) that feel noticeably less polished than the best screens (InvoiceDetail, StripeConnect, ServiceWizard).
