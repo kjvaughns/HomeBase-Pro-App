@@ -805,7 +805,7 @@ export default function FinancialsScreen() {
                 <View style={[styles.skeletonLine, { backgroundColor: theme.separator, width: 140, height: 36, marginTop: 4 }]} />
               ) : (
                 <ThemedText style={styles.revenueValue}>
-                  {formatDollars(stats.revenueMTD)}
+                  {formatDollars(stats.revenueMTD ?? 0)}
                 </ThemedText>
               )}
             </View>
@@ -844,7 +844,7 @@ export default function FinancialsScreen() {
           <View style={[styles.statCard, { backgroundColor: theme.cardBackground }]}>
             <Feather name="trending-up" size={18} color={Colors.accent} />
             <ThemedText style={styles.statCardValue}>
-              {statsLoading ? "-" : formatDollars(stats.averageJobValue)}
+              {statsLoading ? "-" : formatDollars(stats.averageJobValue ?? 0)}
             </ThemedText>
             <ThemedText style={[styles.statCardLabel, { color: theme.textSecondary }]}>
               Avg Job

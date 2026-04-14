@@ -233,9 +233,11 @@ export async function runBootMigrations(): Promise<void> {
       ["message_templates table",        `SELECT id FROM message_templates LIMIT 0`],
       ["notification_preferences table", `SELECT id FROM notification_preferences LIMIT 0`],
       ["support_tickets table",          `SELECT id FROM support_tickets LIMIT 0`],
-      ["homes.last_sold_date column",    `SELECT last_sold_date FROM homes LIMIT 0`],
-      ["homes.estimated_value column",   `SELECT estimated_value FROM homes LIMIT 0`],
-      ["homes.housefax_data column",     `SELECT housefax_data FROM homes LIMIT 0`],
+      ["homes.last_sold_date column",        `SELECT last_sold_date FROM homes LIMIT 0`],
+      ["homes.estimated_value column",       `SELECT estimated_value FROM homes LIMIT 0`],
+      ["homes.housefax_data column",         `SELECT housefax_data FROM homes LIMIT 0`],
+      ["users.stripe_customer_id column",    `SELECT stripe_customer_id FROM users LIMIT 0`],
+      ["users.default_payment_method_id",    `SELECT default_payment_method_id FROM users LIMIT 0`],
     ];
 
     const verificationErrors: string[] = [];
