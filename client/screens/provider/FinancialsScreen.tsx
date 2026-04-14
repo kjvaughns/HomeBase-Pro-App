@@ -10,9 +10,9 @@ import {
   Linking,
   Alert,
   Dimensions,
-  Platform,
+  Modal,
 } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import Svg, { Rect, Text as SvgText, Line, G } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
@@ -27,7 +27,6 @@ import { apiRequest, getAuthHeaders, getApiUrl } from "@/lib/query-client";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
-import { PrimaryButton } from "@/components/PrimaryButton";
 import { StatusPill, StatusType } from "@/components/StatusPill";
 import { EmptyState } from "@/components/EmptyState";
 import { useTheme } from "@/hooks/useTheme";
@@ -216,7 +215,7 @@ const DATE_RANGE_OPTIONS: { key: DateRange; label: string }[] = [
   { key: "custom", label: "Custom" },
 ];
 
-// ─── Bar Chart ───────────────────────────────────────────────────────────────
+// ─── SVG Bar Chart ────────────────────────────────────────────────────────────
 
 function BarChart({
   data,
@@ -228,112 +227,520 @@ function BarChart({
   theme: ReturnType<typeof useTheme>["theme"];
 }) {
   const screenWidth = Dimensions.get("window").width;
-  const chartWidth = screenWidth - Spacing.screenPadding * 2 - Spacing.lg * 2;
-  const gap = data.length > 12 ? 2 : 4;
-  const barWidth = Math.max(6, Math.floor((chartWidth - data.length * gap) / data.length));
-  const maxBarHeight = 120;
+  const HORIZ_PAD = Spacing.screenPadding * 2 + Spacing.lg * 2;
+  const chartWidth = screenWidth - HORIZ_PAD;
+  const chartHeight = 120;
+  const BOTTOM_AXIS = 24;
+  const totalH = chartHeight + BOTTOM_AXIS;
+  const n = data.length;
+  const gap = n > 12 ? 2 : n > 7 ? 3 : 4;
+  const barW = Math.max(4, Math.floor((chartWidth - (n - 1) * gap) / n));
   const maxIdx = data.reduce((best, item, i) => (item.value > data[best].value ? i : best), 0);
-
-  const gridLines = [0.25, 0.5, 0.75, 1];
+  const gridLines = [0.25, 0.5, 0.75, 1.0];
 
   return (
-    <View style={chartStyles.wrapper}>
-      {/* Y-axis grid lines */}
-      <View style={[chartStyles.gridContainer, { height: maxBarHeight }]}>
-        {gridLines.map((pct) => (
-          <View
+    <Svg width={chartWidth} height={totalH} style={{ marginTop: Spacing.md }}>
+      {/* Grid lines */}
+      {gridLines.map((pct) => {
+        const y = chartHeight - chartHeight * pct;
+        return (
+          <Line
             key={pct}
-            style={[
-              chartStyles.gridLine,
-              {
-                bottom: maxBarHeight * pct,
-                borderColor: theme.separator,
-              },
-            ]}
+            x1={0}
+            y1={y}
+            x2={chartWidth}
+            y2={y}
+            stroke={theme.separator}
+            strokeWidth={0.5}
+            strokeOpacity={0.6}
           />
-        ))}
-      </View>
+        );
+      })}
 
-      {/* Bars */}
-      <View style={[chartStyles.barsRow, { gap }]}>
-        {data.map((item, i) => {
-          const barH = maxValue > 0 ? Math.max(3, (item.value / maxValue) * maxBarHeight) : 3;
-          const isMax = i === maxIdx && item.value > 0;
-          const hasValue = item.value > 0;
-          return (
-            <View key={i} style={[chartStyles.barColumn, { width: barWidth }]}>
-              {isMax ? (
-                <ThemedText style={[chartStyles.peakLabel, { color: Colors.accent }]}>
-                  {formatDollars(item.value)}
-                </ThemedText>
-              ) : null}
-              <View
-                style={[
-                  chartStyles.bar,
-                  {
-                    height: barH,
-                    width: barWidth,
-                    backgroundColor: hasValue ? Colors.accent : theme.separator,
-                    borderRadius: Math.min(barWidth / 2, 4),
-                    opacity: hasValue ? 1 : 0.4,
-                  },
-                ]}
-              />
-            </View>
-          );
-        })}
-      </View>
+      {/* Bars + labels */}
+      {data.map((item, i) => {
+        const barH = maxValue > 0 ? Math.max(3, (item.value / maxValue) * chartHeight) : 3;
+        const x = i * (barW + gap);
+        const y = chartHeight - barH;
+        const hasValue = item.value > 0;
+        const isMax = i === maxIdx && hasValue;
+        const showLabel =
+          n <= 7 || i % Math.ceil(n / 6) === 0 || i === n - 1;
 
-      {/* X-axis labels */}
-      <View style={[chartStyles.labelsRow, { gap }]}>
-        {data.map((item, i) => {
-          const showLabel =
-            data.length <= 7 || i % Math.ceil(data.length / 6) === 0 || i === data.length - 1;
-          return (
-            <View key={i} style={[chartStyles.labelColumn, { width: barWidth }]}>
-              {showLabel ? (
-                <ThemedText style={[chartStyles.label, { color: theme.textTertiary }]} numberOfLines={1}>
-                  {item.label}
-                </ThemedText>
-              ) : null}
-            </View>
-          );
-        })}
-      </View>
-    </View>
+        return (
+          <G key={i}>
+            {/* Peak label */}
+            {isMax ? (
+              <SvgText
+                x={x + barW / 2}
+                y={y - 5}
+                fontSize={8}
+                fontWeight="700"
+                fill={Colors.accent}
+                textAnchor="middle"
+              >
+                {formatDollars(item.value)}
+              </SvgText>
+            ) : null}
+
+            {/* Bar */}
+            <Rect
+              x={x}
+              y={y}
+              width={barW}
+              height={barH}
+              rx={Math.min(barW / 2, 4)}
+              fill={hasValue ? Colors.accent : theme.separator}
+              opacity={hasValue ? 1 : 0.35}
+            />
+
+            {/* X-axis label */}
+            {showLabel ? (
+              <SvgText
+                x={x + barW / 2}
+                y={chartHeight + 16}
+                fontSize={8}
+                fontWeight="500"
+                fill={theme.textTertiary ?? theme.textSecondary}
+                textAnchor="middle"
+              >
+                {item.label}
+              </SvgText>
+            ) : null}
+          </G>
+        );
+      })}
+    </Svg>
   );
 }
 
-const chartStyles = StyleSheet.create({
-  wrapper: { paddingTop: Spacing.md, position: "relative" },
-  gridContainer: { position: "absolute", left: 0, right: 0, top: Spacing.md + 20 },
-  gridLine: {
+// ─── HomeBase Date Range Picker ───────────────────────────────────────────────
+
+const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+function isSameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function stripTime(d: Date): Date {
+  const c = new Date(d);
+  c.setHours(0, 0, 0, 0);
+  return c;
+}
+
+interface DateRangePickerProps {
+  visible: boolean;
+  initialStart: Date;
+  initialEnd: Date;
+  maxDate?: Date;
+  onApply: (start: Date, end: Date) => void;
+  onClose: () => void;
+  theme: ReturnType<typeof useTheme>["theme"];
+}
+
+function HomeBaseDateRangePicker({
+  visible,
+  initialStart,
+  initialEnd,
+  maxDate,
+  onApply,
+  onClose,
+  theme,
+}: DateRangePickerProps) {
+  const insets = useSafeAreaInsets();
+  const today = stripTime(maxDate ?? new Date());
+
+  const [displayMonth, setDisplayMonth] = useState<Date>(() => {
+    const d = new Date(initialStart);
+    d.setDate(1);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
+  const [rangeStart, setRangeStart] = useState<Date | null>(stripTime(initialStart));
+  const [rangeEnd, setRangeEnd] = useState<Date | null>(stripTime(initialEnd));
+
+  const year = displayMonth.getFullYear();
+  const month = displayMonth.getMonth();
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDayOfWeek = new Date(year, month, 1).getDay();
+
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < firstDayOfWeek; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  // Pad to full weeks
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const goToPrevMonth = () => {
+    const d = new Date(displayMonth);
+    d.setMonth(d.getMonth() - 1);
+    setDisplayMonth(d);
+  };
+
+  const goToNextMonth = () => {
+    const d = new Date(displayMonth);
+    d.setMonth(d.getMonth() + 1);
+    setDisplayMonth(d);
+  };
+
+  const canGoNext = () => {
+    const nextMonth = new Date(year, month + 1, 1);
+    return nextMonth <= today;
+  };
+
+  const handleDayPress = (day: number) => {
+    const tapped = new Date(year, month, day);
+    tapped.setHours(0, 0, 0, 0);
+
+    if (!rangeStart || (rangeStart && rangeEnd)) {
+      setRangeStart(tapped);
+      setRangeEnd(null);
+    } else {
+      if (tapped < rangeStart) {
+        setRangeStart(tapped);
+        setRangeEnd(rangeStart);
+      } else {
+        setRangeEnd(tapped);
+      }
+    }
+    Haptics.selectionAsync();
+  };
+
+  const getDayState = (day: number): "start" | "end" | "inRange" | "single" | "none" => {
+    const d = new Date(year, month, day);
+    d.setHours(0, 0, 0, 0);
+    if (!rangeStart) return "none";
+    const isStart = isSameDay(d, rangeStart);
+    const isEnd = rangeEnd ? isSameDay(d, rangeEnd) : false;
+    if (!rangeEnd) return isStart ? "single" : "none";
+    if (isStart && isEnd) return "single";
+    if (isStart) return "start";
+    if (isEnd) return "end";
+    if (d > rangeStart && d < rangeEnd) return "inRange";
+    return "none";
+  };
+
+  const isFuture = (day: number): boolean => {
+    const d = new Date(year, month, day);
+    d.setHours(0, 0, 0, 0);
+    return d > today;
+  };
+
+  const formattedStart = rangeStart
+    ? rangeStart.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : "Start date";
+  const formattedEnd = rangeEnd
+    ? rangeEnd.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : rangeStart
+    ? "End date"
+    : "End date";
+
+  const canApply = !!(rangeStart && rangeEnd);
+
+  const CELL_SIZE = Math.floor((Dimensions.get("window").width - 32 - 40) / 7);
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={pickerStyles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View
+          style={[
+            pickerStyles.sheet,
+            {
+              backgroundColor: theme.background,
+              paddingBottom: insets.bottom + Spacing.lg,
+            },
+          ]}
+        >
+          {/* Header */}
+          <View style={pickerStyles.sheetHeader}>
+            <View style={[pickerStyles.handle, { backgroundColor: theme.separator }]} />
+            <ThemedText style={pickerStyles.sheetTitle}>Select Date Range</ThemedText>
+          </View>
+
+          {/* Selected range display */}
+          <View style={[pickerStyles.rangeDisplay, { backgroundColor: theme.backgroundSecondary, borderColor: theme.separator }]}>
+            <View style={pickerStyles.rangeField}>
+              <ThemedText style={[pickerStyles.rangeFieldLabel, { color: theme.textSecondary }]}>From</ThemedText>
+              <ThemedText
+                style={[
+                  pickerStyles.rangeFieldValue,
+                  { color: rangeStart ? Colors.accent : theme.textSecondary },
+                ]}
+              >
+                {formattedStart}
+              </ThemedText>
+            </View>
+            <View style={[pickerStyles.rangeDivider, { backgroundColor: Colors.accent + "40" }]} />
+            <View style={pickerStyles.rangeField}>
+              <ThemedText style={[pickerStyles.rangeFieldLabel, { color: theme.textSecondary }]}>To</ThemedText>
+              <ThemedText
+                style={[
+                  pickerStyles.rangeFieldValue,
+                  { color: rangeEnd ? Colors.accent : theme.textSecondary },
+                ]}
+              >
+                {formattedEnd}
+              </ThemedText>
+            </View>
+          </View>
+
+          {/* Month navigator */}
+          <View style={pickerStyles.monthNav}>
+            <Pressable
+              style={[pickerStyles.navBtn, { backgroundColor: theme.backgroundSecondary }]}
+              onPress={goToPrevMonth}
+              hitSlop={12}
+            >
+              <Feather name="chevron-left" size={18} color={theme.text} />
+            </Pressable>
+            <ThemedText style={pickerStyles.monthTitle}>
+              {MONTHS[month]} {year}
+            </ThemedText>
+            <Pressable
+              style={[
+                pickerStyles.navBtn,
+                { backgroundColor: theme.backgroundSecondary },
+                !canGoNext() && { opacity: 0.3 },
+              ]}
+              onPress={canGoNext() ? goToNextMonth : undefined}
+              hitSlop={12}
+              disabled={!canGoNext()}
+            >
+              <Feather name="chevron-right" size={18} color={theme.text} />
+            </Pressable>
+          </View>
+
+          {/* Day of week headers */}
+          <View style={pickerStyles.dowRow}>
+            {DAYS_OF_WEEK.map((d) => (
+              <View key={d} style={[pickerStyles.dowCell, { width: CELL_SIZE }]}>
+                <ThemedText style={[pickerStyles.dowLabel, { color: theme.textSecondary }]}>{d[0]}</ThemedText>
+              </View>
+            ))}
+          </View>
+
+          {/* Calendar grid */}
+          <View style={pickerStyles.grid}>
+            {Array.from({ length: Math.ceil(cells.length / 7) }, (_, weekIdx) => (
+              <View key={weekIdx} style={pickerStyles.weekRow}>
+                {cells.slice(weekIdx * 7, weekIdx * 7 + 7).map((day, dayIdx) => {
+                  const cellKey = `w${weekIdx}-d${dayIdx}`;
+                  if (!day) {
+                    return <View key={cellKey} style={{ width: CELL_SIZE, height: CELL_SIZE }} />;
+                  }
+                  const state = getDayState(day);
+                  const future = isFuture(day);
+                  const isSelected = state === "start" || state === "end" || state === "single";
+                  const inRange = state === "inRange";
+
+                  const isFirstInWeek = dayIdx === 0;
+                  const isLastInWeek = dayIdx === 6;
+                  const isStartDay = state === "start";
+                  const isEndDay = state === "end";
+
+                  // Left half green: inRange OR end day
+                  const showLeft = inRange || isEndDay;
+                  // Right half green: inRange OR start day
+                  const showRight = inRange || isStartDay;
+
+                  return (
+                    <Pressable
+                      key={cellKey}
+                      style={[pickerStyles.dayCell, { width: CELL_SIZE, height: CELL_SIZE }]}
+                      onPress={() => !future && handleDayPress(day)}
+                      disabled={future}
+                      testID={`calendar-day-${day}`}
+                    >
+                      {/* Left half strip */}
+                      {showLeft ? (
+                        <View
+                          style={[
+                            pickerStyles.rangeStrip,
+                            {
+                              left: 0,
+                              right: "50%",
+                              backgroundColor: Colors.accent + "22",
+                              borderTopLeftRadius: isFirstInWeek ? 8 : 0,
+                              borderBottomLeftRadius: isFirstInWeek ? 8 : 0,
+                            },
+                          ]}
+                        />
+                      ) : null}
+                      {/* Right half strip */}
+                      {showRight ? (
+                        <View
+                          style={[
+                            pickerStyles.rangeStrip,
+                            {
+                              left: "50%",
+                              right: 0,
+                              backgroundColor: Colors.accent + "22",
+                              borderTopRightRadius: isLastInWeek ? 8 : 0,
+                              borderBottomRightRadius: isLastInWeek ? 8 : 0,
+                            },
+                          ]}
+                        />
+                      ) : null}
+
+                      {/* Circle for selected days */}
+                      <View
+                        style={[
+                          pickerStyles.dayCircle,
+                          { width: Math.min(CELL_SIZE - 4, 36), height: Math.min(CELL_SIZE - 4, 36) },
+                          isSelected && { backgroundColor: Colors.accent },
+                        ]}
+                      >
+                        <ThemedText
+                          style={[
+                            pickerStyles.dayText,
+                            isSelected && { color: "#FFFFFF", fontWeight: "700" },
+                            inRange && { color: Colors.accent, fontWeight: "600" },
+                            future && { opacity: 0.3 },
+                          ]}
+                        >
+                          {day}
+                        </ThemedText>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ))}
+          </View>
+
+          {/* Hint text */}
+          {rangeStart && !rangeEnd ? (
+            <ThemedText style={[pickerStyles.hintText, { color: theme.textSecondary }]}>
+              Tap another date to set the end
+            </ThemedText>
+          ) : null}
+
+          {/* Actions */}
+          <View style={pickerStyles.actions}>
+            <Pressable
+              style={[pickerStyles.cancelBtn, { borderColor: theme.separator }]}
+              onPress={onClose}
+            >
+              <ThemedText style={[pickerStyles.cancelBtnText, { color: theme.textSecondary }]}>Cancel</ThemedText>
+            </Pressable>
+            <Pressable
+              style={[pickerStyles.applyBtn, { backgroundColor: canApply ? Colors.accent : Colors.accent + "40" }]}
+              onPress={() => {
+                if (rangeStart && rangeEnd) {
+                  onApply(rangeStart, rangeEnd);
+                }
+              }}
+              disabled={!canApply}
+              testID="button-apply-date-range"
+            >
+              <ThemedText style={[pickerStyles.applyBtnText, { color: canApply ? "#FFFFFF" : "#FFFFFF80" }]}>
+                Apply Range
+              </ThemedText>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const pickerStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.45)",
+  },
+  sheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+  },
+  sheetHeader: { alignItems: "center", marginBottom: 16 },
+  handle: { width: 36, height: 4, borderRadius: 2, marginBottom: 14 },
+  sheetTitle: { fontSize: 17, fontWeight: "700" },
+
+  rangeDisplay: {
+    flexDirection: "row",
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: 20,
+    overflow: "hidden",
+  },
+  rangeField: { flex: 1, alignItems: "center", paddingVertical: 12 },
+  rangeFieldLabel: { fontSize: 11, fontWeight: "600", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.3 },
+  rangeFieldValue: { fontSize: 14, fontWeight: "700" },
+  rangeDivider: { width: 1 },
+
+  monthNav: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  navBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  monthTitle: { fontSize: 17, fontWeight: "700" },
+
+  dowRow: { flexDirection: "row", marginBottom: 8 },
+  dowCell: { alignItems: "center", justifyContent: "center" },
+  dowLabel: { fontSize: 12, fontWeight: "600" },
+
+  grid: { marginBottom: 8 },
+  weekRow: { flexDirection: "row" },
+  dayCell: {
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  rangeStrip: {
     position: "absolute",
-    left: 0,
-    right: 0,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    opacity: 0.6,
+    top: 2,
+    bottom: 2,
   },
-  barsRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    height: 140,
+  dayCircle: {
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1,
   },
-  barColumn: { alignItems: "center", justifyContent: "flex-end" },
-  bar: {},
-  peakLabel: {
-    fontSize: 9,
-    fontWeight: "700",
-    marginBottom: 3,
-    textAlign: "center",
+  dayText: { fontSize: 15, fontWeight: "500" },
+
+  hintText: { textAlign: "center", fontSize: 12, marginBottom: 8 },
+
+  actions: { flexDirection: "row", gap: 12, marginTop: 8 },
+  cancelBtn: {
+    flex: 1,
+    height: 50,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  labelsRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginTop: 5,
+  cancelBtnText: { fontSize: 16, fontWeight: "600" },
+  applyBtn: {
+    flex: 2,
+    height: 50,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  labelColumn: { alignItems: "center" },
-  label: { fontSize: 8, fontWeight: "500" },
+  applyBtnText: { fontSize: 16, fontWeight: "700" },
 });
 
 // ─── Skeleton Row ─────────────────────────────────────────────────────────────
@@ -372,6 +779,7 @@ export default function FinancialsScreen() {
   const [transactionTab, setTransactionTab] = useState<TransactionTab>("invoices");
   const [dateRange, setDateRange] = useState<DateRange>("month");
   const [refreshing, setRefreshing] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const defaultCustomStart = useMemo(() => {
     const d = new Date();
@@ -381,8 +789,6 @@ export default function FinancialsScreen() {
   }, []);
   const [customStart, setCustomStart] = useState<Date>(defaultCustomStart);
   const [customEnd, setCustomEnd] = useState<Date>(new Date());
-  // Android: show one picker at a time
-  const [androidPickerField, setAndroidPickerField] = useState<"start" | "end" | null>(null);
 
   const { start, end } = useMemo(
     () => getDateRange(dateRange, customStart, customEnd),
@@ -436,7 +842,7 @@ export default function FinancialsScreen() {
 
   const isConnected = !!(stripeStatus?.chargesEnabled && stripeStatus?.payoutsEnabled);
 
-  // ── Invoices (Income tab) ─────────────────────────────────────────────────
+  // ── Invoices ───────────────────────────────────────────────────────────────
 
   const {
     data: invoicesData,
@@ -498,9 +904,7 @@ export default function FinancialsScreen() {
       return response.json();
     },
     onSuccess: (data) => {
-      if (data.onboardingUrl) {
-        Linking.openURL(data.onboardingUrl);
-      }
+      if (data.onboardingUrl) Linking.openURL(data.onboardingUrl);
       refetchStripeStatus();
     },
     onError: (error: unknown) => {
@@ -661,6 +1065,13 @@ export default function FinancialsScreen() {
     </View>
   );
 
+  // ── Custom date range display chip ─────────────────────────────────────────
+
+  const customRangeSummary =
+    dateRange === "custom"
+      ? `${customStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${customEnd.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+      : null;
+
   // ── Overview header content ────────────────────────────────────────────────
 
   const OverviewContent = () => (
@@ -677,7 +1088,11 @@ export default function FinancialsScreen() {
                   styles.dateRangeItem,
                   isActive && { backgroundColor: theme.cardBackground },
                 ]}
-                onPress={() => { Haptics.selectionAsync(); setDateRange(opt.key); }}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setDateRange(opt.key);
+                  if (opt.key === "custom") setShowDatePicker(true);
+                }}
                 testID={`date-range-${opt.key}`}
               >
                 <ThemedText
@@ -696,92 +1111,20 @@ export default function FinancialsScreen() {
         </View>
       </Animated.View>
 
-      {/* Custom date pickers */}
+      {/* Custom range chip — tappable to re-open picker */}
       {dateRange === "custom" ? (
-        <Animated.View entering={FadeInDown.delay(80).duration(400)}>
-          <View style={[styles.customDateRow, { backgroundColor: theme.backgroundSecondary, borderRadius: BorderRadius.md }]}>
-            {/* From */}
-            <View style={styles.customDateField}>
-              <ThemedText style={[styles.customDateFieldLabel, { color: theme.textSecondary }]}>From</ThemedText>
-              {Platform.OS === "ios" ? (
-                <DateTimePicker
-                  value={customStart}
-                  mode="date"
-                  display="compact"
-                  maximumDate={customEnd}
-                  onChange={(_, date) => { if (date) setCustomStart(date); }}
-                  style={styles.iosCompactPicker}
-                />
-              ) : (
-                <Pressable
-                  style={[styles.androidDateBtn, { borderColor: theme.separator }]}
-                  onPress={() => setAndroidPickerField("start")}
-                  testID="button-custom-start"
-                >
-                  <Feather name="calendar" size={13} color={Colors.accent} />
-                  <ThemedText style={styles.androidDateBtnText}>
-                    {customStart.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                  </ThemedText>
-                </Pressable>
-              )}
-            </View>
-
-            <View style={[styles.customDateDivider, { backgroundColor: theme.separator }]} />
-
-            {/* To */}
-            <View style={styles.customDateField}>
-              <ThemedText style={[styles.customDateFieldLabel, { color: theme.textSecondary }]}>To</ThemedText>
-              {Platform.OS === "ios" ? (
-                <DateTimePicker
-                  value={customEnd}
-                  mode="date"
-                  display="compact"
-                  minimumDate={customStart}
-                  maximumDate={new Date()}
-                  onChange={(_, date) => { if (date) setCustomEnd(date); }}
-                  style={styles.iosCompactPicker}
-                />
-              ) : (
-                <Pressable
-                  style={[styles.androidDateBtn, { borderColor: theme.separator }]}
-                  onPress={() => setAndroidPickerField("end")}
-                  testID="button-custom-end"
-                >
-                  <Feather name="calendar" size={13} color={Colors.accent} />
-                  <ThemedText style={styles.androidDateBtnText}>
-                    {customEnd.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                  </ThemedText>
-                </Pressable>
-              )}
-            </View>
-          </View>
-
-          {/* Android pickers (rendered as modals, one at a time) */}
-          {Platform.OS === "android" && androidPickerField === "start" ? (
-            <DateTimePicker
-              value={customStart}
-              mode="date"
-              display="default"
-              maximumDate={customEnd}
-              onChange={(_, date) => {
-                setAndroidPickerField(null);
-                if (date) setCustomStart(date);
-              }}
-            />
-          ) : null}
-          {Platform.OS === "android" && androidPickerField === "end" ? (
-            <DateTimePicker
-              value={customEnd}
-              mode="date"
-              display="default"
-              minimumDate={customStart}
-              maximumDate={new Date()}
-              onChange={(_, date) => {
-                setAndroidPickerField(null);
-                if (date) setCustomEnd(date);
-              }}
-            />
-          ) : null}
+        <Animated.View entering={FadeInDown.delay(70).duration(300)}>
+          <Pressable
+            style={[styles.customChip, { backgroundColor: Colors.accentLight }]}
+            onPress={() => setShowDatePicker(true)}
+            testID="button-open-date-picker"
+          >
+            <Feather name="calendar" size={13} color={Colors.accent} />
+            <ThemedText style={[styles.customChipText, { color: Colors.accent }]}>
+              {customRangeSummary}
+            </ThemedText>
+            <Feather name="chevron-down" size={13} color={Colors.accent} />
+          </Pressable>
         </Animated.View>
       ) : null}
 
@@ -797,9 +1140,9 @@ export default function FinancialsScreen() {
                   ? "Revenue This Month"
                   : dateRange === "quarter"
                   ? "Revenue This Quarter"
-                  : dateRange === "custom"
-                  ? `${customStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })} \u2013 ${customEnd.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
-                  : "Revenue This Year"}
+                  : dateRange === "year"
+                  ? "Revenue This Year"
+                  : customRangeSummary ?? "Custom Range"}
               </ThemedText>
               {statsLoading ? (
                 <View style={[styles.skeletonLine, { backgroundColor: theme.separator, width: 140, height: 36, marginTop: 4 }]} />
@@ -861,7 +1204,6 @@ export default function FinancialsScreen() {
           </View>
         </View>
       </Animated.View>
-
     </View>
   );
 
@@ -921,7 +1263,6 @@ export default function FinancialsScreen() {
 
   const TransactionsHeader = () => (
     <View>
-      {/* New invoice CTA + sub-tabs */}
       <Animated.View entering={FadeInDown.delay(60).duration(400)}>
         <View style={styles.transHeaderRow}>
           <View style={[styles.transTabBar, { borderColor: theme.separator }]}>
@@ -964,7 +1305,6 @@ export default function FinancialsScreen() {
         </View>
       </Animated.View>
 
-      {/* Stripe setup nudge for payouts when not connected */}
       {transactionTab === "payouts" && !isConnected ? (
         <Animated.View entering={FadeInDown.delay(80).duration(400)}>
           <Pressable
@@ -1023,6 +1363,20 @@ export default function FinancialsScreen() {
         >
           <SharedHeader />
         </ScrollView>
+
+        <HomeBaseDateRangePicker
+          visible={showDatePicker}
+          initialStart={customStart}
+          initialEnd={customEnd}
+          maxDate={new Date()}
+          onApply={(s, e) => {
+            setCustomStart(s);
+            setCustomEnd(e);
+            setShowDatePicker(false);
+          }}
+          onClose={() => setShowDatePicker(false)}
+          theme={theme}
+        />
       </ThemedView>
     );
   }
@@ -1067,11 +1421,24 @@ export default function FinancialsScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
           }
         />
+        <HomeBaseDateRangePicker
+          visible={showDatePicker}
+          initialStart={customStart}
+          initialEnd={customEnd}
+          maxDate={new Date()}
+          onApply={(s, e) => {
+            setCustomStart(s);
+            setCustomEnd(e);
+            setShowDatePicker(false);
+          }}
+          onClose={() => setShowDatePicker(false)}
+          theme={theme}
+        />
       </ThemedView>
     );
   }
 
-  // Transactions — Payouts tab (bank transfers)
+  // Transactions — Payouts tab
   const PayoutsEmpty = () => {
     if (payoutsLoading) {
       return <View>{SKELETON_KEYS.map((k) => <SkeletonRow key={k} theme={theme} />)}</View>;
@@ -1106,6 +1473,19 @@ export default function FinancialsScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
         }
+      />
+      <HomeBaseDateRangePicker
+        visible={showDatePicker}
+        initialStart={customStart}
+        initialEnd={customEnd}
+        maxDate={new Date()}
+        onApply={(s, e) => {
+          setCustomStart(s);
+          setCustomEnd(e);
+          setShowDatePicker(false);
+        }}
+        onClose={() => setShowDatePicker(false)}
+        theme={theme}
       />
     </ThemedView>
   );
@@ -1145,7 +1525,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     borderRadius: BorderRadius.md,
     padding: 3,
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
   },
   dateRangeItem: {
     flex: 1,
@@ -1155,34 +1535,18 @@ const styles = StyleSheet.create({
   },
   dateRangeLabel: { ...Typography.footnote, fontWeight: "500" },
 
-  // Custom date picker
-  customDateRow: {
+  // Custom date chip
+  customChip: {
     flexDirection: "row",
     alignItems: "center",
-    padding: Spacing.sm,
+    gap: 6,
+    alignSelf: "flex-start",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 8,
+    borderRadius: 20,
     marginBottom: Spacing.md,
-    gap: 0,
   },
-  customDateField: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: Spacing.xs,
-    paddingHorizontal: Spacing.sm,
-  },
-  customDateFieldLabel: { ...Typography.caption2, fontWeight: "600", marginBottom: 4 },
-  iosCompactPicker: { height: 34 },
-  androidDateBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: BorderRadius.sm,
-    paddingVertical: 6,
-    paddingHorizontal: Spacing.sm,
-    marginTop: 2,
-  },
-  androidDateBtnText: { ...Typography.footnote, fontWeight: "600" },
-  customDateDivider: { width: StyleSheet.hairlineWidth, height: 40 },
+  customChipText: { ...Typography.footnote, fontWeight: "600" },
 
   // Revenue card
   revenueCard: { marginBottom: Spacing.md },
@@ -1205,7 +1569,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   newInvoiceBtnText: { ...Typography.footnote, fontWeight: "600" },
-  chartSkeleton: { height: 140, borderRadius: BorderRadius.sm, marginTop: Spacing.sm },
+  chartSkeleton: { height: 144, borderRadius: BorderRadius.sm, marginTop: Spacing.sm },
 
   // Stat cards
   statCardsRow: {
@@ -1274,7 +1638,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  // Stripe nudge (for payouts when disconnected)
+  // Stripe nudge
   stripeNudge: {
     flexDirection: "row",
     alignItems: "center",
