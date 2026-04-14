@@ -25,6 +25,10 @@ export interface ProviderProfile {
   completedJobs: number;
   serviceArea?: string;
   licenseNumber?: string;
+  description?: string;
+  capabilityTags?: string[];
+  yearsExperience?: number;
+  specialty?: string;
 }
 
 interface AuthState {

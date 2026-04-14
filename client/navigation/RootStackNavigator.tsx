@@ -43,7 +43,8 @@ import AddJobScreen from "@/screens/provider/AddJobScreen";
 import AddInvoiceScreen from "@/screens/provider/AddInvoiceScreen";
 import InvoiceDetailScreen from "@/screens/provider/InvoiceDetailScreen";
 import ServicesScreen from "@/screens/provider/ServicesScreen";
-import NewServiceScreen from "@/screens/provider/NewServiceScreen";
+import ServiceBlueprintWizardScreen from "@/screens/provider/ServiceBlueprintWizardScreen";
+import ServiceSummaryScreen from "@/screens/provider/ServiceSummaryScreen";
 import PublicProfileScreen from "@/screens/provider/PublicProfileScreen";
 import ServicePreviewScreen from "@/screens/provider/ServicePreviewScreen";
 import ProviderJobDetailScreen from "@/screens/provider/ProviderJobDetailScreen";
@@ -135,7 +136,8 @@ export type RootStackParamList = {
   InvoiceDetail: { invoiceId: string };
   Services: undefined;
   NewService: undefined;
-  EditService: { serviceId: string; service?: Record<string, unknown> };
+  ServiceSummary: { serviceId: string; service: Record<string, unknown> };
+  EditService: { serviceId: string; service?: Record<string, unknown>; initialStep?: number };
   ServicePreview: { service: any };
   BusinessProfile: undefined;
   PreviewBookingPage: { providerId?: string };
@@ -474,15 +476,22 @@ export default function RootStackNavigator() {
         }}
       />
       <Stack.Screen
-        name="NewService"
-        component={NewServiceScreen}
+        name="ServiceSummary"
+        component={ServiceSummaryScreen}
         options={{
-          headerTitle: "New Service",
+          headerTitle: "Service Overview",
+        }}
+      />
+      <Stack.Screen
+        name="NewService"
+        component={ServiceBlueprintWizardScreen}
+        options={{
+          headerTitle: "Add Service",
         }}
       />
       <Stack.Screen
         name="EditService"
-        component={NewServiceScreen}
+        component={ServiceBlueprintWizardScreen}
         options={{
           headerTitle: "Edit Service",
         }}

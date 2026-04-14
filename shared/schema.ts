@@ -179,6 +179,10 @@ export const providerCustomServices = pgTable("provider_custom_services", {
   isRecurring: boolean("is_recurring").default(false),
   recurringFrequency: text("recurring_frequency"),
   recurringPrice: decimal("recurring_price", { precision: 10, scale: 2 }),
+  intakeQuestionsJson: text("intake_questions_json"),
+  addOnsJson: text("add_ons_json"),
+  bookingMode: text("booking_mode").default("instant"),
+  aiPricingInsight: text("ai_pricing_insight"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

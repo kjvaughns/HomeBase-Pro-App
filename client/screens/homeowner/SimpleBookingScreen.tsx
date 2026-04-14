@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { StyleSheet, View, ScrollView, Pressable, FlatList, Alert, ActivityIndicator, Switch } from "react-native";
+import { StyleSheet, View, ScrollView, Pressable, FlatList, Alert, ActivityIndicator, Switch, TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
@@ -73,6 +73,16 @@ interface ProviderService {
   priceTiersJson: string | null;
   duration: number | null;
   isAddon: boolean;
+  intakeQuestionsJson: string | null;
+  bookingMode: string | null;
+}
+
+interface ServiceIntakeQuestion {
+  id: string;
+  question: string;
+  type: "text" | "select" | "number";
+  options: string[] | null;
+  required: boolean;
 }
 
 function getPriceLabel(svc: ProviderService): string {
@@ -119,6 +129,7 @@ export default function SimpleBookingScreen() {
   const [selectedAddonIds, setSelectedAddonIds] = useState<Set<string>>(new Set());
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurringFrequency, setRecurringFrequency] = useState<string>("monthly");
+  const [intakeAnswers, setIntakeAnswers] = useState<Record<string, string>>({});
 
   const { data: homesData, isLoading: homesLoading } = useQuery<{ homes: HomeRecord[] }>({
     queryKey: ["/api/homes", user?.id],
@@ -174,6 +185,16 @@ export default function SimpleBookingScreen() {
   }, [allServices.length, params.intakeData?.recommendedService]);
 
   const selectedService = primaryServices.find((s) => s.id === selectedServiceId);
+
+  const serviceIntakeQuestions: ServiceIntakeQuestion[] = (() => {
+    if (!selectedService?.intakeQuestionsJson) return [];
+    try {
+      const parsed = JSON.parse(selectedService.intakeQuestionsJson);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch { return []; }
+  })();
+
+  const isQuoteOnly = selectedService?.bookingMode === "quote_only";
 
   const homes = homesData?.homes || [];
   const defaultHome = homes.find((h) => h.isDefault) || homes[0];
@@ -232,6 +253,7 @@ export default function SimpleBookingScreen() {
         : selectedService.name;
 
       const url = new URL("/api/appointments", getApiUrl());
+      const intakeAnswersJson = Object.keys(intakeAnswers).length > 0 ? JSON.stringify(intakeAnswers) : undefined;
       const res = await apiRequest("POST", url.toString(), {
         userId: user.id,
         homeId: defaultHome.id,
@@ -240,10 +262,11 @@ export default function SimpleBookingScreen() {
         description: params.intakeData?.problemDescription || params.intakeData?.issueSummary || selectedService.description || "",
         scheduledDate: new Date(selectedDate).toISOString(),
         scheduledTime: selectedTimeLabel || selectedTime,
-        estimatedPrice: totalEstimatedPrice,
+        estimatedPrice: isQuoteOnly ? null : totalEstimatedPrice,
         urgency: params.intakeData?.urgency || "flexible",
         isRecurring,
         recurringFrequency: isRecurring ? recurringFrequency : null,
+        answersJson: intakeAnswersJson,
       });
       return res.json();
     },
@@ -464,6 +487,60 @@ export default function SimpleBookingScreen() {
           </Animated.View>
         ) : null}
 
+        {serviceIntakeQuestions.length > 0 ? (
+          <Animated.View entering={FadeInDown.delay(275)}>
+            <ThemedText style={styles.sectionTitle}>Booking Questions</ThemedText>
+            <GlassCard style={styles.intakeCard}>
+              {serviceIntakeQuestions.map((q, i) => (
+                <View key={q.id} style={[styles.intakeQuestion, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.borderLight }]}>
+                  <ThemedText style={[styles.intakeLabel, { color: theme.text }]}>
+                    {q.question}{q.required ? " *" : ""}
+                  </ThemedText>
+                  {q.options && q.options.length > 0 ? (
+                    <View style={styles.intakeOptions}>
+                      {q.options.map((opt) => {
+                        const isSelected = intakeAnswers[q.id] === opt;
+                        return (
+                          <Pressable
+                            key={opt}
+                            onPress={() => {
+                              Haptics.selectionAsync();
+                              setIntakeAnswers((prev) => ({ ...prev, [q.id]: opt }));
+                            }}
+                            style={[
+                              styles.intakeOption,
+                              {
+                                backgroundColor: isSelected ? Colors.accent + "18" : theme.backgroundElevated,
+                                borderColor: isSelected ? Colors.accent : theme.borderLight,
+                              },
+                            ]}
+                          >
+                            <ThemedText style={[styles.intakeOptionText, { color: isSelected ? Colors.accent : theme.text }]}>
+                              {opt}
+                            </ThemedText>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  ) : (
+                    <TextInput
+                      style={[
+                        styles.intakeInput,
+                        { color: theme.text, borderColor: theme.borderLight, backgroundColor: theme.backgroundElevated },
+                      ]}
+                      placeholder={q.type === "number" ? "Enter a number" : "Your answer..."}
+                      placeholderTextColor={theme.textTertiary}
+                      value={intakeAnswers[q.id] || ""}
+                      onChangeText={(text) => setIntakeAnswers((prev) => ({ ...prev, [q.id]: text }))}
+                      keyboardType={q.type === "number" ? "numeric" : "default"}
+                    />
+                  )}
+                </View>
+              ))}
+            </GlassCard>
+          </Animated.View>
+        ) : null}
+
         {!defaultHome && !homesLoading ? (
           <Animated.View entering={FadeInDown.delay(290)}>
             <GlassCard style={styles.alertCardWarning}>
@@ -593,7 +670,11 @@ export default function SimpleBookingScreen() {
         ]}
       >
         <View style={styles.priceRow}>
-          {selectedService?.pricingType === "quote" && selectedAddonIds.size === 0 ? (
+          {isQuoteOnly ? (
+            <ThemedText style={[styles.priceLabel, { color: theme.textSecondary }]}>
+              Request a Quote
+            </ThemedText>
+          ) : selectedService?.pricingType === "quote" && selectedAddonIds.size === 0 ? (
             <ThemedText style={[styles.priceLabel, { color: theme.textSecondary }]}>
               Quote will be provided
             </ThemedText>
@@ -623,9 +704,9 @@ export default function SimpleBookingScreen() {
         <PrimaryButton
           onPress={handleBook}
           disabled={!canBook || bookMutation.isPending}
-          style={{ flex: 1 }}
+          style={[styles.bookBtn, isQuoteOnly && { backgroundColor: "#AF52DE" }]}
         >
-          {bookMutation.isPending ? "Booking..." : "Request Appointment"}
+          {bookMutation.isPending ? "Submitting..." : isQuoteOnly ? "Request a Quote" : "Request Appointment"}
         </PrimaryButton>
       </View>
     </ThemedView>
@@ -893,5 +974,41 @@ const styles = StyleSheet.create({
   recurringBadgeText: {
     ...Typography.caption2,
     fontWeight: "600",
+  },
+  bookBtn: {
+    flex: 1,
+  },
+  intakeCard: {
+    padding: 0,
+    overflow: "hidden",
+    marginBottom: Spacing.sm,
+  },
+  intakeQuestion: {
+    padding: Spacing.md,
+    gap: Spacing.sm,
+  },
+  intakeLabel: {
+    ...Typography.body,
+    fontWeight: "600",
+  },
+  intakeOptions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.xs,
+  },
+  intakeOption: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+  },
+  intakeOptionText: {
+    ...Typography.subhead,
+  },
+  intakeInput: {
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    ...Typography.body,
   },
 });

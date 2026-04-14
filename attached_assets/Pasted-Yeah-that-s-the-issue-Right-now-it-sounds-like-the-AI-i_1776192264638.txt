@@ -1,0 +1,282 @@
+Yeah, that’s the issue.
+
+Right now it sounds like the AI is acting like the boss instead of a tool. Business owners will hate that fast.
+
+They want to feel like:
+
+**“I’m building my service. HomeBase is just making it easier.”**
+
+Not:
+
+**“This app is trying to decide how I run my business.”**
+
+## What needs to change
+
+### 1. AI should be secondary, not primary
+
+The screen should not feel like an AI chat takeover.
+
+Instead of:
+
+* AI asking everything
+* AI pushing recommendations everywhere
+* AI generating the whole service in a dominant way
+
+Make it:
+
+* provider chooses the service structure
+* AI offers optional suggestions inside each section
+* provider stays in control the whole time
+
+So the framing changes from:
+
+**“Let AI create your service”**
+
+to:
+
+**“Build your service with optional AI help”**
+
+That is a huge difference.
+
+## 2. The UI should feel like a normal builder first
+
+The base experience should feel like a clean service setup form.
+
+For example:
+
+### Page structure
+
+* Service Name
+* Category
+* Pricing Type
+* What should customers select?
+* Add ons
+* Booking settings
+
+Then inside each section, have a small AI assist button like:
+
+* Suggest options
+* Recommend questions
+* Help me price this
+* Generate common add ons
+
+That feels way better than making AI the center of the whole experience.
+
+## 3. Remove the “AI is talking at me” feeling
+
+Do not make every page sound like a chatbot.
+
+Business owners do not want to feel like they are being interviewed by a robot just to make a lawn mowing service.
+
+The tone should be more like:
+
+* “Choose how you price this service”
+* “Add the details customers need to provide”
+* “Offer add ons to increase ticket size”
+
+Then a smaller assist option:
+
+* “Get AI suggestions”
+
+That is enough.
+
+## 4. The provider should always make the first decision
+
+AI should react to their choices, not lead everything from the front.
+
+Example:
+
+Provider picks:
+
+* Cleaning
+* Pricing by home size
+* Add on options enabled
+
+Then AI says:
+
+* “Based on cleaning businesses, you may want to ask bedrooms, bathrooms, and clean type.”
+* “Want to add these?”
+
+That feels like assistance.
+
+Not control.
+
+## 5. Stop hiding progress and actions
+
+The green bar with no words is weak UX.
+
+Every page needs a clear action button at the bottom.
+
+Use simple CTA language like:
+
+* Continue
+* Next step
+* Save and continue
+* Review service
+* Publish service
+
+No silent green bars.
+That makes the app feel unfinished and confusing.
+
+## 6. Give them visible ownership language
+
+Everywhere in the flow, the wording should reinforce that this is **their** service.
+
+Use lines like:
+
+* Your service setup
+* Your pricing rules
+* What customers need to answer
+* Choose how you want to charge
+* Add optional upgrades
+
+Avoid wording like:
+
+* AI generated for you
+* Recommended flow selected
+* Smart setup decided
+* Optimized automatically
+
+That wording feels controlling.
+
+## Best structure instead
+
+## Service Creator should be 3 layers
+
+### Layer 1: Core manual setup
+
+Provider manually picks:
+
+* service name
+* category
+* pricing style
+* booking type
+
+### Layer 2: AI assistance
+
+Optional help buttons inside each section:
+
+* Suggest pricing structure
+* Suggest intake questions
+* Suggest add ons
+* Suggest upsells
+
+### Layer 3: Final review
+
+Show them a clean summary:
+
+* Base service
+* Pricing method
+* Customer questions
+* Add ons
+* Booking flow
+
+Then let them edit anything.
+
+That makes AI feel like an assistant, not a manager.
+
+## The rule you need to follow
+
+**AI should recommend, never assume.**
+**AI should simplify, never override.**
+**AI should stay one step behind the provider, not one step ahead.**
+
+That’s the product truth here.
+
+## What I would change in the actual design
+
+### Replace AI heavy screens with clean builder cards
+
+Each step should look more like:
+
+**Pricing**
+How do you want to charge for this service?
+
+* Flat rate
+* Starts at price
+* By property size
+* By time
+* Custom quote
+
+Small text button:
+**Get AI recommendation**
+
+---
+
+**Customer Details**
+What should customers tell you before booking?
+
+[Add question]
+
+Suggested for cleaning:
+
+* Bedrooms
+* Bathrooms
+* Square footage
+* Cleaning type
+
+Button:
+**Use suggestions**
+
+---
+
+**Add ons**
+Offer upgrades to increase order value
+
+Suggested:
+
+* Inside oven
+* Inside fridge
+* Deep clean
+
+Button:
+**Add suggested upsells**
+
+That’s it.
+Much cleaner.
+
+## What not to do
+
+Do not do:
+
+* full AI chat onboarding for service creation
+* long AI generated paragraphs
+* AI auto building the whole service before the provider decides anything
+* hidden CTA buttons
+* overexplaining why AI picked something
+
+That all creates friction.
+
+## The feeling you want
+
+Not:
+**“AI is building my service.”**
+
+But:
+**“I’m quickly setting up my service, and HomeBase helps when I need it.”**
+
+That is the right product feel for business owners.
+
+## blunt truth
+
+If it feels too AI, it will feel unserious.
+And if it feels unserious, providers will not trust it with pricing.
+
+That is the danger.
+
+For something tied to money, pricing, and bookings, the product has to feel:
+
+* clear
+* direct
+* editable
+* owner controlled
+
+AI should just make it faster.
+
+## Best positioning line
+
+**Build your service your way, with smart suggestions from HomeBase.**
+
+That is way better than making AI the star.
+
+I can turn this into a direct UI rewrite prompt for your builder screens.

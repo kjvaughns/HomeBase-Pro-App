@@ -201,6 +201,17 @@ export async function runBootMigrations(): Promise<void> {
       await runSql(label, sql);
     }
 
+    // ── provider_custom_services: AI Blueprint fields ────────────────────
+    const customServiceAlters: Array<[string, string]> = [
+      ["provider_custom_services.intake_questions_json", `ALTER TABLE provider_custom_services ADD COLUMN IF NOT EXISTS intake_questions_json TEXT`],
+      ["provider_custom_services.add_ons_json",          `ALTER TABLE provider_custom_services ADD COLUMN IF NOT EXISTS add_ons_json TEXT`],
+      ["provider_custom_services.booking_mode",          `ALTER TABLE provider_custom_services ADD COLUMN IF NOT EXISTS booking_mode TEXT DEFAULT 'instant'`],
+      ["provider_custom_services.ai_pricing_insight",    `ALTER TABLE provider_custom_services ADD COLUMN IF NOT EXISTS ai_pricing_insight TEXT`],
+    ];
+    for (const [label, sql] of customServiceAlters) {
+      await runSql(label, sql);
+    }
+
     // ── homes: HouseFax enrichment columns ────────────────────────────────
     const homeAlters: Array<[string, string]> = [
       ["homes.lot_size",            `ALTER TABLE homes ADD COLUMN IF NOT EXISTS lot_size INTEGER`],

@@ -2582,6 +2582,162 @@ Respond with ONLY a JSON object: {"names": ["Service One", "Service Two", "Servi
     }
   });
 
+  // ── AI Service Blueprint Endpoints ──────────────────────────────────────
+
+  app.post("/api/ai/suggest-service-types", requireAuth, aiRateLimit, async (req: Request, res: Response) => {
+    try {
+      const { businessDescription } = req.body as { businessDescription: string };
+      if (!businessDescription?.trim()) {
+        return res.status(400).json({ error: "businessDescription is required" });
+      }
+
+      const prompt = `You are an expert home services business consultant. Based on this business description, suggest 4-6 specific service types the provider could offer.
+
+Business Description: ${businessDescription}
+
+Return a JSON object with a "services" array. Each item must have:
+- "name": specific service name (3-6 words)
+- "category": one of [Cleaning, HVAC, Plumbing, Electrical, Landscaping, Handyman, Painting, Roofing, Pest Control, Pressure Washing, Junk Removal, Other]
+- "description": one compelling sentence describing the service
+- "icon": a simple icon keyword (home, thermometer, droplet, zap, sun, tool, edit-3, triangle, shield, wind, trash-2, package)
+
+Focus on high-demand services that match the business description. Be specific and realistic.
+
+Example output format:
+{"services": [{"name": "Standard Home Cleaning", "category": "Cleaning", "description": "Thorough top-to-bottom cleaning of all living areas, kitchens, and bathrooms.", "icon": "home"}]}`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 600,
+        response_format: { type: "json_object" },
+      });
+
+      let services: unknown[] = [];
+      try {
+        const parsed = JSON.parse(response.choices[0]?.message?.content || "{}");
+        services = Array.isArray(parsed.services) ? parsed.services : [];
+      } catch { services = []; }
+      res.json({ services });
+    } catch (error) {
+      console.error("Suggest service types error:", error);
+      res.status(500).json({ error: "Failed to suggest service types" });
+    }
+  });
+
+  app.post("/api/ai/service-blueprint", requireAuth, aiRateLimit, async (req: Request, res: Response) => {
+    try {
+      const { businessDescription, serviceType, category, providerLocation } = req.body as {
+        businessDescription: string;
+        serviceType: string;
+        category: string;
+        providerLocation?: string;
+      };
+      if (!serviceType || !category) {
+        return res.status(400).json({ error: "serviceType and category are required" });
+      }
+
+      const CATEGORY_CONTEXT: Record<string, string> = {
+        Cleaning: "residential/commercial cleaning services. Common intake questions: home size, number of bedrooms/bathrooms, pets, special areas. Common add-ons: inside fridge, inside oven, laundry, windows.",
+        HVAC: "heating, cooling, and ventilation services. Common intake questions: system age, brand, symptoms, last service date. Common add-ons: filter replacement, UV light, duct cleaning.",
+        Plumbing: "pipe, drain, and fixture services. Common intake questions: issue type, location in home, urgency. Common add-ons: drain cleaning, water heater flush, leak inspection.",
+        Electrical: "wiring, panel, and fixture services. Common intake questions: panel type, issue description, home age. Common add-ons: GFCI outlets, surge protection, smoke detectors.",
+        Landscaping: "lawn, garden, and outdoor services. Common intake questions: yard size, grass type, frequency. Common add-ons: edging, fertilizing, leaf removal, mulching.",
+        Handyman: "general repairs and installations. Common intake questions: task description, materials needed, estimated time. Common add-ons: supply pickup, furniture assembly, caulking.",
+        Painting: "interior/exterior painting. Common intake questions: rooms or areas, ceiling height, current color, prep needed. Common add-ons: trim, closets, ceiling, primer coat.",
+        Roofing: "roofing repair and replacement. Common intake questions: roof type, age, leak location, sq footage. Common add-ons: gutter cleaning, soffit/fascia, attic inspection.",
+        "Pest Control": "pest elimination and prevention. Common intake questions: pest type, infestation severity, home size. Common add-ons: termite inspection, rodent exclusion, quarterly service.",
+        "Pressure Washing": "exterior surface cleaning. Common intake questions: surface type, square footage, stain type. Common add-ons: sealing, gutter flush, deck/fence.",
+        "Junk Removal": "debris and junk hauling. Common intake questions: volume estimate, item types, hazardous materials. Common add-ons: dumpster rental, same-day service, donation drop-off.",
+      };
+
+      const prompt = `You are a home services business expert. Generate a complete service blueprint for a provider offering this service.
+
+Business: ${businessDescription || "Home service provider"}
+Service: ${serviceType}
+Category: ${category}
+Location: ${providerLocation || "local area"}
+Category Context: ${CATEGORY_CONTEXT[category] || "home service"}
+
+Return a JSON object with exactly these fields:
+{
+  "pricingModel": {
+    "type": "flat" | "variable" | "service_call" | "quote",
+    "basePrice": number (null if quote),
+    "priceTiers": [{"label": string, "price": number}] (for variable pricing, 2-4 tiers),
+    "unit": "per job" | "per hour" | "per sqft" | "per visit",
+    "description": "one sentence explaining the pricing logic"
+  },
+  "intakeQuestions": [
+    {"id": string, "question": string, "type": "text" | "select" | "number", "options": string[] | null, "required": boolean}
+  ],
+  "addOns": [
+    {"id": string, "name": string, "description": string, "price": number}
+  ],
+  "bookingMode": "instant" | "starts_at" | "quote_only",
+  "aiPricingInsight": "one sentence identifying a specific profit leak or pricing opportunity for this service type"
+}
+
+Rules:
+- intakeQuestions: 3-5 questions specific to this exact service. Include property size where relevant.
+- addOns: 2-4 high-value add-ons with realistic prices for ${providerLocation || "US"} market
+- bookingMode: use "instant" for straightforward flat-rate services, "starts_at" for variable pricing, "quote_only" for complex/large jobs
+- priceTiers: only include if type is "variable"
+- All prices in USD, no $ sign, just numbers
+- aiPricingInsight: be specific about the profit opportunity (e.g., "Large homes over 3,000 sqft take 40% longer but your flat rate doesn't capture that extra labor cost.")`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 1000,
+        response_format: { type: "json_object" },
+      });
+
+      let blueprint: unknown = {};
+      try {
+        blueprint = JSON.parse(response.choices[0]?.message?.content || "{}");
+      } catch { blueprint = {}; }
+      res.json({ blueprint });
+    } catch (error) {
+      console.error("Service blueprint error:", error);
+      res.status(500).json({ error: "Failed to generate service blueprint" });
+    }
+  });
+
+  app.post("/api/ai/edit-blueprint", requireAuth, aiRateLimit, async (req: Request, res: Response) => {
+    try {
+      const { blueprint, instruction } = req.body as { blueprint: unknown; instruction: string };
+      if (!blueprint || !instruction?.trim()) {
+        return res.status(400).json({ error: "blueprint and instruction are required" });
+      }
+
+      const prompt = `You are a home services business expert. Update this service blueprint based on the provider's instruction.
+
+Current Blueprint:
+${JSON.stringify(blueprint, null, 2)}
+
+Provider Instruction: "${instruction}"
+
+Apply the instruction to the blueprint and return the complete updated blueprint as a JSON object with the same structure. Preserve all existing fields unless the instruction modifies them. Make the changes precise and realistic.`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 1000,
+        response_format: { type: "json_object" },
+      });
+
+      let updatedBlueprint: unknown = blueprint;
+      try {
+        updatedBlueprint = JSON.parse(response.choices[0]?.message?.content || "{}");
+      } catch { updatedBlueprint = blueprint; }
+      res.json({ blueprint: updatedBlueprint });
+    } catch (error) {
+      console.error("Edit blueprint error:", error);
+      res.status(500).json({ error: "Failed to edit blueprint" });
+    }
+  });
+
   app.post("/api/ai/onboarding/suggest-description", onboardingRateLimit, async (req: Request, res: Response) => {
     try {
       const { serviceName, category } = req.body as { serviceName: string; category: string };
@@ -3283,7 +3439,7 @@ Respond with JSON only:
         return res.status(403).json({ error: "Access denied: provider does not belong to you" });
       }
       // Allowlist mutable fields only — prevent mass-assignment of id/providerId/createdAt
-      const { name, category, description, pricingType, basePrice, priceFrom, priceTo, priceTiersJson, duration, isPublished, isAddon, isRecurring, recurringFrequency, recurringPrice } = req.body;
+      const { name, category, description, pricingType, basePrice, priceFrom, priceTo, priceTiersJson, duration, isPublished, isAddon, isRecurring, recurringFrequency, recurringPrice, intakeQuestionsJson, addOnsJson, bookingMode, aiPricingInsight } = req.body;
       const allowedUpdate: Partial<typeof providerCustomServices.$inferInsert> = {};
       if (name !== undefined) allowedUpdate.name = name;
       if (category !== undefined) allowedUpdate.category = category;
@@ -3299,6 +3455,16 @@ Respond with JSON only:
       if (isRecurring !== undefined) allowedUpdate.isRecurring = isRecurring;
       if (recurringFrequency !== undefined) allowedUpdate.recurringFrequency = recurringFrequency;
       if (recurringPrice !== undefined) allowedUpdate.recurringPrice = recurringPrice;
+      if (intakeQuestionsJson !== undefined) allowedUpdate.intakeQuestionsJson = intakeQuestionsJson;
+      if (addOnsJson !== undefined) allowedUpdate.addOnsJson = addOnsJson;
+      const VALID_BOOKING_MODES = ["instant", "starts_at", "quote_only"];
+      if (bookingMode !== undefined) {
+        if (!VALID_BOOKING_MODES.includes(bookingMode)) {
+          return res.status(400).json({ error: `Invalid bookingMode. Must be one of: ${VALID_BOOKING_MODES.join(", ")}` });
+        }
+        allowedUpdate.bookingMode = bookingMode;
+      }
+      if (aiPricingInsight !== undefined) allowedUpdate.aiPricingInsight = aiPricingInsight;
       const [svc] = await db.update(providerCustomServices)
         .set({ ...allowedUpdate, updatedAt: new Date() })
         .where(eq(providerCustomServices.id, req.params.id))

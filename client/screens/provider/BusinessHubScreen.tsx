@@ -951,7 +951,7 @@ export default function BusinessHubScreen() {
                     size="small"
                   />
                   <Pressable
-                    onPress={() => navigation.navigate("EditService", { serviceId: item.id, service: item as unknown as Record<string, unknown> })}
+                    onPress={() => navigation.navigate("ServiceSummary", { serviceId: item.id, service: item as unknown as Record<string, unknown> })}
                     style={styles.editIconBtn}
                   >
                     <Feather name="chevron-right" size={18} color={theme.textTertiary} />

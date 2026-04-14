@@ -188,17 +188,21 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
   const serviceAreaText = provider.serviceArea ? escapeHtml(stripEmoji(provider.serviceArea)) : "";
 
   // Build service options for dropdown (injected into inline script safely)
-  type ServiceOption = { id: string; name: string; price: string | null };
+  type ServiceOption = { id: string; name: string; price: string | null; bookingMode: string | null; intakeQuestionsJson: string | null };
   const serviceOptions: ServiceOption[] = [
     ...customServices.map((s) => ({
       id: `custom_${s.id}`,
       name: s.name ?? "Service",
       price: s.basePrice != null ? String(s.basePrice) : s.priceFrom != null ? String(s.priceFrom) : null,
+      bookingMode: s.bookingMode ?? null,
+      intakeQuestionsJson: s.intakeQuestionsJson ?? null,
     })),
     ...catalogServices.map((s) => ({
       id: `catalog_${s.id}`,
       name: s.name ?? "Service",
       price: s.price != null ? String(s.price) : s.basePrice != null ? String(s.basePrice) : null,
+      bookingMode: null,
+      intakeQuestionsJson: null,
     })),
   ];
 
@@ -644,6 +648,52 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
       line-height: 1.5;
     }
 
+    .intake-question-group {
+      margin-bottom: 16px;
+    }
+    .intake-question-group label {
+      display: block;
+      font-size: 0.87rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+    .intake-question-group input,
+    .intake-question-group textarea {
+      width: 100%;
+    }
+    .intake-options {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .intake-option-btn {
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid var(--glass-border);
+      background: var(--glass-bg);
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      color: var(--text-muted);
+    }
+    .intake-option-btn.selected {
+      background: rgba(56,174,95,0.12);
+      border-color: var(--accent);
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .quote-only-banner {
+      background: rgba(175,82,222,0.1);
+      border: 1px solid rgba(175,82,222,0.25);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      font-size: 0.9rem;
+      color: #AF52DE;
+      font-weight: 600;
+    }
+
     .footer {
       text-align: center;
       padding: 32px 0 0;
@@ -740,6 +790,7 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
             </select>
             <span class="field-error" id="preferredTime-error">Please select a time.</span>
           </div>
+          <div id="intake-questions-container" style="display:none; grid-column: 1/-1;"></div>
           <div class="form-group full-width">
             <label for="notes">Notes</label>
             <textarea id="notes" name="notes" placeholder="Describe what you need help with..."></textarea>
@@ -785,9 +836,101 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
       serviceOptions.forEach(function(s) {
         var opt = document.createElement('option');
         opt.value = s.id;
-        opt.textContent = s.name + (showPricing && s.price ? ' \u2014 $' + s.price : '');
+        opt.textContent = s.name + (showPricing && s.price && s.bookingMode !== 'quote_only' ? ' \u2014 $' + s.price : '');
         serviceSelect.appendChild(opt);
       });
+
+      // Handle service selection: show intake questions and update CTA
+      var intakeAnswers = {};
+      function renderIntakeQuestions() {
+        var selectedId = serviceSelect.value;
+        var svc = serviceOptions.find(function(s) { return s.id === selectedId; });
+        var container = document.getElementById('intake-questions-container');
+        var btn = document.getElementById('submit-btn');
+
+        // Remove any existing quote-only banner
+        var existingBanner = document.getElementById('quote-only-banner');
+        if (existingBanner) existingBanner.remove();
+
+        intakeAnswers = {};
+        container.innerHTML = '';
+
+        if (!svc) {
+          container.style.display = 'none';
+          btn.textContent = 'Request Appointment';
+          btn.style.background = '';
+          return;
+        }
+
+        // Update CTA based on bookingMode
+        if (svc.bookingMode === 'quote_only') {
+          btn.textContent = 'Request a Quote';
+          btn.style.background = '#AF52DE';
+          var banner = document.createElement('div');
+          banner.id = 'quote-only-banner';
+          banner.className = 'quote-only-banner';
+          banner.textContent = 'This service requires a custom quote. Submit your details and the provider will reach out with pricing.';
+          container.parentNode.insertBefore(banner, container);
+        } else {
+          btn.textContent = svc.bookingMode === 'starts_at' ? 'Book \u2014 Starting at $' + svc.price : 'Request Appointment';
+          btn.style.background = '';
+        }
+
+        // Render intake questions
+        if (!svc.intakeQuestionsJson) {
+          container.style.display = 'none';
+          return;
+        }
+        var questions;
+        try { questions = JSON.parse(svc.intakeQuestionsJson); } catch(e) { container.style.display = 'none'; return; }
+        if (!Array.isArray(questions) || questions.length === 0) {
+          container.style.display = 'none';
+          return;
+        }
+
+        container.style.display = 'block';
+        var heading = document.createElement('div');
+        heading.style.cssText = 'font-size:0.75rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent);margin-bottom:14px;margin-top:8px;';
+        heading.textContent = 'Booking Questions';
+        container.appendChild(heading);
+
+        questions.forEach(function(q) {
+          var group = document.createElement('div');
+          group.className = 'intake-question-group';
+          var label = document.createElement('label');
+          label.textContent = q.question + (q.required ? ' *' : '');
+          group.appendChild(label);
+
+          if (q.options && Array.isArray(q.options) && q.options.length > 0) {
+            // Multiple choice
+            var optRow = document.createElement('div');
+            optRow.className = 'intake-options';
+            q.options.forEach(function(opt) {
+              var btn2 = document.createElement('button');
+              btn2.type = 'button';
+              btn2.className = 'intake-option-btn';
+              btn2.textContent = opt;
+              btn2.addEventListener('click', function() {
+                optRow.querySelectorAll('.intake-option-btn').forEach(function(b) { b.classList.remove('selected'); });
+                btn2.classList.add('selected');
+                intakeAnswers[q.id] = opt;
+              });
+              optRow.appendChild(btn2);
+            });
+            group.appendChild(optRow);
+          } else {
+            // Free text or number
+            var inp = document.createElement('input');
+            inp.type = q.type === 'number' ? 'number' : 'text';
+            inp.placeholder = q.type === 'number' ? 'Enter a number' : 'Your answer...';
+            inp.addEventListener('input', function() { intakeAnswers[q.id] = inp.value; });
+            group.appendChild(inp);
+          }
+          container.appendChild(group);
+        });
+      }
+
+      serviceSelect.addEventListener('change', renderIntakeQuestions);
 
       // Populate time dropdown (8:00 AM - 8:00 PM, 30-min increments)
       var timeSelect = document.getElementById('preferredTime');
@@ -893,6 +1036,7 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
           clientPhone: clientPhone.trim() || undefined,
           problemDescription: notes.trim() || serviceLabel.replace(/\s*\u2014\s*\$[\d.]+$/, '').trim(),
           preferredTimesJson: JSON.stringify([{ date: date, time: time }]),
+          answersJson: Object.keys(intakeAnswers).length > 0 ? JSON.stringify(intakeAnswers) : undefined,
         };
 
         fetch('/api/providers/' + slug + '/submit', {
