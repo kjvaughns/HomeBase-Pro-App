@@ -1,0 +1,21 @@
+Here's a prompt you can paste directly into Replit AI:
+
+---
+
+**Fix the invoice feature — it's completely broken due to two conflicting implementations.**
+
+**Root cause:** There are two parallel invoice implementations in `server/routes.ts`. The client UI calls the old broken routes (`POST /api/invoices` and `POST /api/invoices/create-and-send`) which are missing required database fields, causing every invoice creation to fail with a Zod validation error. A newer correct implementation exists at `POST /api/invoices/create` but the client isn't using it.
+
+**Fix the following:**
+
+1. **`server/routes.ts` — old routes around line 3924 and 3982:** Update the `invoiceData` object in both `POST /api/invoices` and `POST /api/invoices/create-and-send` to include the missing required fields: `amount`, `totalCents`, `subtotalCents`, `taxCents`, `discountCents`, `platformFeeCents`, and `currency: "usd"`. Match the pattern used in the correct implementation around line 4723.
+
+2. **`server/routes.ts` — duplicate send route:** There are two send routes — `POST /api/invoices/:id/send` (line ~4093) and `POST /api/invoices/:invoiceId/send` (line ~4825). The second one has better functionality (payment link generation, delivery method options) but is unreachable because Express uses the first match. Remove the old one at line ~4093 and keep/rename the one at line ~4825 to use `:id` for consistency.
+
+3. **`server/routes.ts` — duplicate checkout and apply-credits routes:** Remove the duplicate `POST /api/invoices/:invoiceId/checkout` and `POST /api/invoices/:invoiceId/apply-credits` routes that appear around line 4933 and 4956. Keep the first occurrences (~4570 and ~4593).
+
+4. **`client/screens/provider/AddInvoiceScreen.tsx` line ~130:** The screen calls `POST /api/invoices` and `POST /api/invoices/create-and-send`. Once step 1 is fixed these should work — but verify the request body includes all required fields: `providerId`, `clientId`, `lineItems` array with `description/quantity/unitPrice`, `dueDate`, `notes`, `taxCents`, `discountCents`, `paymentMethodsAllowed`.
+
+5. **After fixing:** Test the full flow — create a draft invoice, send it to a client, and verify it appears in the database with correct `totalCents`, `subtotalCents`, and `amount` values. Make sure the invoice number is being generated correctly and isn't duplicating.
+
+Do not rewrite the entire invoice system — only patch the missing fields and remove the duplicate routes.
