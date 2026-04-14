@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   TextInput,
   Image,
+  Platform,
 } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
@@ -28,6 +29,8 @@ import { StatusPill } from "@/components/StatusPill";
 import { EmptyState } from "@/components/EmptyState";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
+import { NativeDatePickerSheet } from "@/components/NativeDatePickerSheet";
+import { ZipCodeAreaInput } from "@/components/ZipCodeAreaInput";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
@@ -222,6 +225,14 @@ export default function BusinessHubScreen() {
   const [profileError, setProfileError] = useState("");
   const [logoUploading, setLogoUploading] = useState(false);
 
+  // AI state
+  const [aiWritingBio, setAiWritingBio] = useState(false);
+  const [aiPolishing, setAiPolishing] = useState(false);
+  const [detectingCities, setDetectingCities] = useState(false);
+
+  // Time picker state
+  const [timePicker, setTimePicker] = useState<{ day: DayKey; field: "open" | "close" } | null>(null);
+
   // Policies tab state
   const [instantBooking, setInstantBooking] = useState(false);
   const [policies, setPolicies] = useState<BookingPoliciesData>(DEFAULT_POLICIES);
@@ -339,6 +350,103 @@ export default function BusinessHubScreen() {
     }
   };
 
+  const timeStringToDate = (timeStr: string): Date => {
+    const match = timeStr.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+    if (!match) return new Date();
+    let h = parseInt(match[1]);
+    const m = parseInt(match[2]);
+    const ampm = match[3].toUpperCase();
+    if (ampm === "PM" && h !== 12) h += 12;
+    if (ampm === "AM" && h === 12) h = 0;
+    const d = new Date();
+    d.setHours(h, m, 0, 0);
+    return d;
+  };
+
+  const timeToString = (date: Date): string => {
+    const h = date.getHours();
+    const m = date.getMinutes();
+    const ampm = h >= 12 ? "PM" : "AM";
+    const h12 = h % 12 || 12;
+    return `${h12}:${m.toString().padStart(2, "0")} ${ampm}`;
+  };
+
+  const handleDetectCities = async () => {
+    const zips = zipCodes.split(",").map((s) => s.trim()).filter(Boolean);
+    if (zips.length === 0) return;
+    setDetectingCities(true);
+    try {
+      const url = new URL("/api/ai/suggest-cities", getApiUrl());
+      const resp = await fetch(url.toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: JSON.stringify({ zipCodes: zips }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.cities?.length) {
+          setCities(data.cities.join(", "));
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+      }
+    } catch {
+      // silent
+    } finally {
+      setDetectingCities(false);
+    }
+  };
+
+  const handleWriteBio = async () => {
+    if (!businessName.trim()) return;
+    setAiWritingBio(true);
+    try {
+      const url = new URL("/api/ai/onboarding/generate-bio", getApiUrl());
+      const resp = await fetch(url.toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: JSON.stringify({
+          businessName: businessName.trim(),
+          category: providerProfile?.services?.[0] || "Home Services",
+        }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.bio) {
+          setDescription(data.bio);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+      }
+    } catch {
+      // silent
+    } finally {
+      setAiWritingBio(false);
+    }
+  };
+
+  const handlePolishBio = async () => {
+    if (!description.trim()) return;
+    setAiPolishing(true);
+    try {
+      const url = new URL("/api/ai/onboarding/polish-text", getApiUrl());
+      const resp = await fetch(url.toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: JSON.stringify({ text: description.trim(), context: "business bio" }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.polished) {
+          setDescription(data.polished);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+      }
+    } catch {
+      // silent
+    } finally {
+      setAiPolishing(false);
+    }
+  };
+
   const handleSaveProfile = async () => {
     if (!providerId) return;
     setProfileSaving(true);
@@ -452,9 +560,45 @@ export default function BusinessHubScreen() {
           </View>
 
           <View style={[styles.fieldCol, { marginTop: Spacing.sm }]}>
-            <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
-              Description
-            </ThemedText>
+            <View style={styles.aiLabelRow}>
+              <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary, flex: 1 }]}>
+                Description
+              </ThemedText>
+              <View style={styles.aiButtonGroup}>
+                <Pressable
+                  onPress={handleWriteBio}
+                  disabled={aiWritingBio || !businessName.trim()}
+                  style={[styles.aiChipBtn, { opacity: aiWritingBio || !businessName.trim() ? 0.5 : 1 }]}
+                  testID="button-write-bio"
+                >
+                  {aiWritingBio ? (
+                    <ActivityIndicator size="small" color={Colors.accent} style={{ width: 12, height: 12 }} />
+                  ) : (
+                    <Feather name="edit-2" size={12} color={Colors.accent} />
+                  )}
+                  <ThemedText style={[styles.aiChipLabel, { color: Colors.accent }]}>
+                    {aiWritingBio ? "Writing..." : "Write for me"}
+                  </ThemedText>
+                </Pressable>
+                {description.trim().length > 0 ? (
+                  <Pressable
+                    onPress={handlePolishBio}
+                    disabled={aiPolishing}
+                    style={[styles.aiChipBtn, { opacity: aiPolishing ? 0.5 : 1 }]}
+                    testID="button-polish-bio"
+                  >
+                    {aiPolishing ? (
+                      <ActivityIndicator size="small" color={Colors.accent} style={{ width: 12, height: 12 }} />
+                    ) : (
+                      <Feather name="feather" size={12} color={Colors.accent} />
+                    )}
+                    <ThemedText style={[styles.aiChipLabel, { color: Colors.accent }]}>
+                      {aiPolishing ? "Polishing..." : "Polish"}
+                    </ThemedText>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
             <TextInput
               style={[styles.textArea, { color: theme.text, backgroundColor: theme.backgroundElevated }]}
               value={description}
@@ -568,24 +712,34 @@ export default function BusinessHubScreen() {
               placeholderTextColor={theme.textTertiary}
             />
           </View>
-          <View style={[styles.fieldCol, { marginTop: Spacing.sm }]}>
-            <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
-              ZIP Codes (comma-separated)
-            </ThemedText>
-            <TextInput
-              style={[styles.textArea, { color: theme.text, backgroundColor: theme.backgroundElevated }]}
+          <View style={{ marginTop: Spacing.sm }}>
+            <ZipCodeAreaInput
+              label="ZIP Code"
               value={zipCodes}
-              onChangeText={setZipCodes}
-              multiline
-              numberOfLines={2}
-              placeholder="94102, 94103, 94104"
-              placeholderTextColor={theme.textTertiary}
+              onChange={setZipCodes}
             />
           </View>
-          <View style={[styles.fieldCol, { marginTop: Spacing.sm }]}>
-            <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
-              Cities Served
-            </ThemedText>
+          <View style={[styles.fieldCol, { marginTop: Spacing.md }]}>
+            <View style={styles.aiLabelRow}>
+              <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary, flex: 1 }]}>
+                Cities Served
+              </ThemedText>
+              <Pressable
+                onPress={handleDetectCities}
+                disabled={detectingCities || !zipCodes.trim()}
+                style={[styles.aiChipBtn, { opacity: detectingCities || !zipCodes.trim() ? 0.5 : 1 }]}
+                testID="button-detect-cities"
+              >
+                {detectingCities ? (
+                  <ActivityIndicator size="small" color={Colors.accent} style={{ width: 12, height: 12 }} />
+                ) : (
+                  <Feather name="zap" size={12} color={Colors.accent} />
+                )}
+                <ThemedText style={[styles.aiChipLabel, { color: Colors.accent }]}>
+                  {detectingCities ? "Detecting..." : "Detect Cities"}
+                </ThemedText>
+              </Pressable>
+            </View>
             <TextInput
               style={[styles.textArea, { color: theme.text, backgroundColor: theme.backgroundElevated }]}
               value={cities}
@@ -630,23 +784,45 @@ export default function BusinessHubScreen() {
 
                 {dayData.enabled ? (
                   <View style={styles.hoursInputs}>
-                    <TextInput
-                      style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElevated }]}
-                      value={dayData.open}
-                      onChangeText={(v) => updateHour(day.key, "open", v)}
-                      placeholder="8:00 AM"
-                      placeholderTextColor={theme.textTertiary}
-                    />
+                    {Platform.OS === "web" ? (
+                      <TextInput
+                        style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElevated }]}
+                        value={dayData.open}
+                        onChangeText={(v) => updateHour(day.key, "open", v)}
+                        placeholder="8:00 AM"
+                        placeholderTextColor={theme.textTertiary}
+                      />
+                    ) : (
+                      <Pressable
+                        style={[styles.timeInput, styles.timeButton, { backgroundColor: theme.backgroundElevated }]}
+                        onPress={() => setTimePicker({ day: day.key, field: "open" })}
+                      >
+                        <ThemedText style={{ color: theme.text, ...Typography.caption1 }}>
+                          {dayData.open}
+                        </ThemedText>
+                      </Pressable>
+                    )}
                     <ThemedText style={[{ color: theme.textTertiary, ...Typography.footnote }]}>
                       {" — "}
                     </ThemedText>
-                    <TextInput
-                      style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElevated }]}
-                      value={dayData.close}
-                      onChangeText={(v) => updateHour(day.key, "close", v)}
-                      placeholder="6:00 PM"
-                      placeholderTextColor={theme.textTertiary}
-                    />
+                    {Platform.OS === "web" ? (
+                      <TextInput
+                        style={[styles.timeInput, { color: theme.text, backgroundColor: theme.backgroundElevated }]}
+                        value={dayData.close}
+                        onChangeText={(v) => updateHour(day.key, "close", v)}
+                        placeholder="6:00 PM"
+                        placeholderTextColor={theme.textTertiary}
+                      />
+                    ) : (
+                      <Pressable
+                        style={[styles.timeInput, styles.timeButton, { backgroundColor: theme.backgroundElevated }]}
+                        onPress={() => setTimePicker({ day: day.key, field: "close" })}
+                      >
+                        <ThemedText style={{ color: theme.text, ...Typography.caption1 }}>
+                          {dayData.close}
+                        </ThemedText>
+                      </Pressable>
+                    )}
                   </View>
                 ) : (
                   <ThemedText style={[styles.closedLabel, { color: theme.textTertiary }]}>
@@ -1079,6 +1255,21 @@ export default function BusinessHubScreen() {
           </>
         )}
       </View>
+
+      {timePicker ? (
+        <NativeDatePickerSheet
+          visible={true}
+          mode="time"
+          minuteInterval={15}
+          title={timePicker.field === "open" ? "Opening Time" : "Closing Time"}
+          value={timeStringToDate(hours[timePicker.day][timePicker.field])}
+          onConfirm={(date) => {
+            updateHour(timePicker.day, timePicker.field, timeToString(date));
+            setTimePicker(null);
+          }}
+          onCancel={() => setTimePicker(null)}
+        />
+      ) : null}
     </ThemedView>
   );
 }
@@ -1276,6 +1467,34 @@ const styles = StyleSheet.create({
     ...Typography.caption1,
     textAlign: "center",
     minWidth: 70,
+  },
+  timeButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 30,
+  },
+  aiLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.xs,
+  },
+  aiButtonGroup: {
+    flexDirection: "row",
+    gap: Spacing.xs,
+  },
+  aiChipBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.accent + "15",
+  },
+  aiChipLabel: {
+    fontSize: 11,
+    fontWeight: "600",
   },
   closedLabel: {
     ...Typography.footnote,

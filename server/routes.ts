@@ -2723,6 +2723,44 @@ Respond ONLY with the polished text. No quotes, no explanations.`;
     }
   });
 
+  app.post("/api/ai/suggest-cities", requireAuth, aiRateLimit, async (req: Request, res: Response) => {
+    try {
+      const { zipCodes } = req.body as { zipCodes: string[] };
+      if (!Array.isArray(zipCodes) || zipCodes.length === 0) {
+        return res.status(400).json({ error: "zipCodes array is required" });
+      }
+      const validZips = zipCodes.filter((z) => /^\d{5}$/.test(String(z).trim())).slice(0, 50);
+      if (validZips.length === 0) {
+        return res.status(400).json({ error: "No valid 5-digit ZIP codes provided" });
+      }
+
+      const prompt = `You are a US geography expert. Given the following US ZIP codes, return the unique city and state names they belong to.
+
+ZIP codes: ${validZips.join(", ")}
+
+Respond ONLY with a valid JSON array of strings in the format ["City, ST", "City, ST"]. Include only unique city names. No explanations, no markdown, no extra text.`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 300,
+      });
+
+      const raw = response.choices[0]?.message?.content?.trim() || "[]";
+      let cities: string[] = [];
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) cities = parsed.filter((c) => typeof c === "string");
+      } catch {
+        cities = [];
+      }
+      res.json({ cities });
+    } catch (error) {
+      console.error("Suggest cities error:", error);
+      res.status(500).json({ error: "Failed to detect cities" });
+    }
+  });
+
   // ============ SMART INTAKE ROUTES ============
 
   const INTAKE_SYSTEM_PROMPT = `You are HomeBase's Smart Intake AI. Your job is to understand home service problems and gather key details that help service professionals provide accurate quotes and close leads.
