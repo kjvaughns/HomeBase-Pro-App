@@ -167,7 +167,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export default function RootStackNavigator() {
   const screenOptions = useScreenOptions();
   const { theme } = useTheme();
-  const { isAuthenticated, isHydrated, activeRole, canAccessProviderMode, needsRoleSelection, setActiveRole, setNeedsRoleSelection } = useAuthStore();
+  const { isAuthenticated, isHydrated, activeRole, canAccessProviderMode, needsRoleSelection, setActiveRole, setNeedsRoleSelection, activateProviderMode } = useAuthStore();
   const { hasCompletedFirstLaunch, hasCompletedProviderSetup, isHydrated: onboardingHydrated } = useOnboardingStore();
 
   usePushNotifications();
@@ -176,8 +176,17 @@ export default function RootStackNavigator() {
   // login() now sets the correct role directly, so this is mostly a safety net.
   useEffect(() => {
     if (isAuthenticated && needsRoleSelection) {
-      const shouldBeProvider = canAccessProviderMode() || hasCompletedProviderSetup;
-      setActiveRole(shouldBeProvider ? "provider" : "homeowner");
+      if (canAccessProviderMode()) {
+        // Existing approved provider — setActiveRole is fine (guard will pass).
+        setActiveRole("provider");
+      } else if (hasCompletedProviderSetup) {
+        // New provider who completed onboarding but has no backend-approved profile
+        // yet. setActiveRole("provider") would be blocked by the canAccessProviderMode
+        // guard, so use activateProviderMode() which bypasses the guard.
+        activateProviderMode();
+      } else {
+        setActiveRole("homeowner");
+      }
       setNeedsRoleSelection(false);
     }
   }, [isAuthenticated, needsRoleSelection]);

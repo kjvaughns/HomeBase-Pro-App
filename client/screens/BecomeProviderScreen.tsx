@@ -59,9 +59,18 @@ export default function BecomeProviderScreen() {
           navigation.goBack();
           return;
         }
-      } catch {
-        // 404 or network error → user genuinely doesn't have a provider profile yet;
-        // fall through to show the registration form.
+      } catch (err) {
+        // Distinguish between "no profile" (404) and transient network/server errors.
+        // For 404 we know the user doesn't have a profile yet → show the form.
+        // For network errors the profile may exist but is unreachable → also show
+        // the form as a safe fallback (the 409-recovery path in onError will
+        // re-link the profile if the user submits while a profile already exists).
+        const errMsg = err instanceof Error ? err.message : String(err);
+        const is404 = errMsg.startsWith("404") || errMsg.includes("Not Found");
+        if (!is404) {
+          // Log unexpected errors so they're visible in dev but don't block the UI.
+          console.warn("BecomeProviderScreen: unexpected error checking existing profile:", errMsg);
+        }
       }
       setCheckingExisting(false);
     }
