@@ -502,7 +502,12 @@ export default function ClientsScreen() {
       description={
         statusFilter !== "all"
           ? "Try adjusting your filters to see more clients."
-          : "Add your first client to start managing your business."
+          : "Add your first client to start building your business on HomeBase."
+      }
+      primaryAction={
+        statusFilter === "all"
+          ? { label: "Add Your First Client", onPress: handleAddClient }
+          : undefined
       }
     />
   );

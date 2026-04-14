@@ -1,5 +1,5 @@
-import React from "react";
-import { StyleSheet, View, ScrollView, Switch } from "react-native";
+import React, { useState } from "react";
+import { StyleSheet, View, ScrollView, Switch, Modal, Pressable, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
@@ -20,6 +20,7 @@ import { useAuthStore } from "@/state/authStore";
 import { useProviderStore } from "@/state/providerStore";
 import { useThemeStore } from "@/state/themeStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { apiRequest } from "@/lib/query-client";
 
 export default function ProviderMoreScreen() {
   const insets = useSafeAreaInsets();
@@ -35,6 +36,9 @@ export default function ProviderMoreScreen() {
 
   const { setActiveRole, setNeedsRoleSelection } = useAuthStore();
 
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
   const handleSwitchToHomeowner = () => {
     setActiveRole("homeowner");
     setNeedsRoleSelection(false);
@@ -46,6 +50,19 @@ export default function ProviderMoreScreen() {
 
   const handleLogout = () => {
     logout();
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleteLoading(true);
+    try {
+      await apiRequest("DELETE", "/api/auth/account", undefined);
+      logout();
+    } catch (err) {
+      console.error("Delete account error:", err);
+    } finally {
+      setDeleteLoading(false);
+      setShowDeleteModal(false);
+    }
   };
 
   return (
@@ -231,12 +248,69 @@ export default function ProviderMoreScreen() {
           </View>
         </Animated.View>
 
+        <Animated.View entering={FadeInDown.delay(750).duration(400)}>
+          <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary, marginTop: Spacing.sm }]}>
+            Danger Zone
+          </ThemedText>
+          <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
+            <ListRow
+              title="Delete Account"
+              leftIcon="trash-2"
+              destructive
+              showChevron={false}
+              onPress={() => setShowDeleteModal(true)}
+              isFirst
+              isLast
+              testID="button-delete-account"
+            />
+          </View>
+        </Animated.View>
+
         <Animated.View entering={FadeInDown.delay(800).duration(400)}>
           <ThemedText style={[styles.version, { color: theme.textTertiary }]}>
             Version 1.0.0
           </ThemedText>
         </Animated.View>
       </ScrollView>
+
+      <Modal
+        visible={showDeleteModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDeleteModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: theme.cardBackground }]}>
+            <View style={[styles.modalIconWrap, { backgroundColor: "#FF3B3014" }]}>
+              <Feather name="trash-2" size={28} color="#FF3B30" />
+            </View>
+            <ThemedText style={styles.modalTitle}>Delete Account</ThemedText>
+            <ThemedText style={[styles.modalBody, { color: theme.textSecondary }]}>
+              This will permanently delete your provider account and all associated data including your clients, jobs, invoices, and business profile. This action cannot be undone.
+            </ThemedText>
+            <Pressable
+              style={[styles.modalDeleteBtn, deleteLoading && { opacity: 0.7 }]}
+              onPress={handleDeleteAccount}
+              disabled={deleteLoading}
+              testID="button-confirm-delete"
+            >
+              {deleteLoading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <ThemedText style={styles.modalDeleteText}>Delete My Account</ThemedText>
+              )}
+            </Pressable>
+            <Pressable
+              style={[styles.modalCancelBtn, { backgroundColor: theme.backgroundSecondary }]}
+              onPress={() => setShowDeleteModal(false)}
+              disabled={deleteLoading}
+              testID="button-cancel-delete"
+            >
+              <ThemedText style={[styles.modalCancelText, { color: theme.text }]}>Cancel</ThemedText>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </ThemedView>
   );
 }
@@ -305,5 +379,63 @@ const styles = StyleSheet.create({
     ...Typography.caption1,
     textAlign: "center",
     marginTop: Spacing.xl,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: Spacing.xl,
+  },
+  modalCard: {
+    borderRadius: BorderRadius.card,
+    padding: Spacing.xl,
+    width: "100%",
+    alignItems: "center",
+  },
+  modalIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.lg,
+  },
+  modalTitle: {
+    ...Typography.title2,
+    fontWeight: "700",
+    marginBottom: Spacing.sm,
+    textAlign: "center",
+  },
+  modalBody: {
+    ...Typography.body,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: Spacing.xl,
+  },
+  modalDeleteBtn: {
+    backgroundColor: "#FF3B30",
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.md,
+    width: "100%",
+    alignItems: "center",
+    marginBottom: Spacing.sm,
+    minHeight: 48,
+    justifyContent: "center",
+  },
+  modalDeleteText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  modalCancelBtn: {
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.md,
+    width: "100%",
+    alignItems: "center",
+  },
+  modalCancelText: {
+    fontWeight: "600",
+    fontSize: 16,
   },
 });

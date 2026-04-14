@@ -553,6 +553,16 @@ export default function FinancesScreen() {
                 </View>
               ))}
             </View>
+          ) : (invoicesData?.invoices ?? []).length === 0 ? (
+            <Pressable
+              style={styles.outstandingEmpty}
+              onPress={() => { Haptics.selectionAsync(); navigation.navigate("AddInvoice"); }}
+            >
+              <Feather name="file-plus" size={18} color={Colors.accent} />
+              <ThemedText style={[styles.outstandingEmptyText, { color: Colors.accent }]}>
+                Create your first invoice
+              </ThemedText>
+            </Pressable>
           ) : outstandingInvoices.length > 0 ? (
             <View>
               {outstandingInvoices.map((inv, index) => {

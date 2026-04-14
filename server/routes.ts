@@ -675,6 +675,117 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ success: true });
   });
 
+  app.post("/api/auth/forgot-password", async (req: Request, res: Response) => {
+    try {
+      const { email } = req.body;
+      if (!email || typeof email !== "string") {
+        return res.status(400).json({ error: "Email is required" });
+      }
+
+      const user = await storage.getUserByEmail(email.trim().toLowerCase());
+
+      if (user) {
+        const { JWT_SECRET } = await import("./auth");
+        const jwt = await import("jsonwebtoken");
+        const RESET_SECRET = `${JWT_SECRET}:password-reset`;
+        const resetToken = jwt.default.sign(
+          { userId: user.id, purpose: "password_reset" },
+          RESET_SECRET,
+          { expiresIn: "1h" }
+        );
+        const resetUrl = `https://homebaseproapp.com/reset-password?token=${resetToken}`;
+        const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "there";
+        const { sendPasswordResetEmail } = await import("./emailService");
+        sendPasswordResetEmail(user.email, fullName, resetUrl).catch((err: unknown) => {
+          console.error("[FORGOT_PASSWORD] Email send failed:", err);
+        });
+      }
+
+      res.json({ success: true, message: "If an account exists for that email, a reset link has been sent." });
+    } catch (error) {
+      console.error("Forgot password error:", error);
+      res.status(500).json({ error: "Failed to process request" });
+    }
+  });
+
+  app.delete("/api/auth/account", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.authenticatedUserId!;
+
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      await db.transaction(async (tx) => {
+        const providerRow = await tx.select({ id: providers.id, stripeAccountId: stripeConnectAccounts.stripeAccountId })
+          .from(providers)
+          .leftJoin(stripeConnectAccounts, eq(stripeConnectAccounts.providerId, providers.id))
+          .where(eq(providers.userId, userId))
+          .limit(1);
+
+        if (providerRow.length > 0) {
+          const provId = providerRow[0].id;
+
+          await tx.delete(invoiceLineItems).where(
+            sql`invoice_id IN (SELECT id FROM invoices WHERE provider_id = ${provId})`
+          );
+          await tx.delete(payments).where(
+            sql`invoice_id IN (SELECT id FROM invoices WHERE provider_id = ${provId})`
+          );
+          await tx.delete(invoices).where(eq(invoices.providerId, provId));
+          await tx.delete(jobs).where(eq(jobs.providerId, provId));
+          await tx.delete(clients).where(eq(clients.providerId, provId));
+          await tx.delete(bookingLinks).where(eq(bookingLinks.providerId, provId));
+          await tx.delete(intakeSubmissions).where(eq(intakeSubmissions.providerId, provId));
+          await tx.delete(leads).where(eq(leads.providerId, provId));
+          await tx.delete(providerMessages).where(eq(providerMessages.providerId, provId));
+          await tx.delete(messageTemplates).where(eq(messageTemplates.providerId, provId));
+          await tx.delete(providerCustomServices).where(eq(providerCustomServices.providerId, provId));
+          await tx.delete(providerServices).where(eq(providerServices.providerId, provId));
+          await tx.delete(providerPlans).where(eq(providerPlans.providerId, provId));
+          await tx.delete(stripeConnectAccounts).where(eq(stripeConnectAccounts.providerId, provId));
+          await tx.delete(payouts).where(eq(payouts.providerId, provId));
+          await tx.delete(reviews).where(eq(reviews.providerId, provId));
+          await tx.delete(providers).where(eq(providers.id, provId));
+        }
+
+        await tx.delete(notifications).where(eq(notifications.userId, userId));
+        await tx.delete(pushTokens).where(eq(pushTokens.userId, userId));
+        await tx.delete(notificationPreferences).where(eq(notificationPreferences.userId, userId));
+        await tx.delete(userCredits).where(eq(userCredits.userId, userId));
+        await tx.delete(creditLedger).where(eq(creditLedger.userId, userId));
+        await tx.delete(supportTickets).where(eq(supportTickets.userId, userId));
+
+        const userHomes = await tx.select({ id: homes.id }).from(homes).where(eq(homes.userId, userId));
+        if (userHomes.length > 0) {
+          const homeIds = userHomes.map((h) => h.id);
+          await tx.delete(housefaxEntries).where(sql`home_id = ANY(${homeIds})`);
+          await tx.delete(maintenanceReminders).where(sql`home_id = ANY(${homeIds})`);
+          await tx.delete(appointments).where(sql`home_id = ANY(${homeIds})`);
+        }
+        await tx.delete(homes).where(eq(homes.userId, userId));
+
+        if (user.stripeCustomerId) {
+          try {
+            const stripe = getStripe();
+            await stripe.customers.del(user.stripeCustomerId);
+          } catch (stripeErr) {
+            console.error("[DELETE_ACCOUNT] Stripe customer deletion failed (non-fatal):", stripeErr);
+          }
+        }
+
+        await tx.delete(users).where(eq(users.id, userId));
+      });
+
+      res.clearCookie("token");
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete account error:", error);
+      res.status(500).json({ error: "Failed to delete account" });
+    }
+  });
+
   app.get("/api/user/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
       const authUserId = req.authenticatedUserId!;

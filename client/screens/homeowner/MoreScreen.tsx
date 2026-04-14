@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { StyleSheet, View, ScrollView, Switch, Pressable } from "react-native";
+import { StyleSheet, View, ScrollView, Switch, Pressable, Modal, ActivityIndicator } from "react-native";
+import * as WebBrowser from "expo-web-browser";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
@@ -19,6 +20,7 @@ import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useThemeStore } from "@/state/themeStore";
 import { useNotificationCount } from "@/hooks/useNotificationCount";
+import { apiRequest } from "@/lib/query-client";
 
 export default function MoreScreen() {
   const insets = useSafeAreaInsets();
@@ -38,7 +40,9 @@ export default function MoreScreen() {
   const { count: unreadCount } = useNotificationCount();
 
   const [showAccountGate, setShowAccountGate] = useState(false);
-  
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
   const toggleDarkMode = useThemeStore((s) => s.toggleDarkMode);
   const { isDark } = useTheme();
 
@@ -69,6 +73,19 @@ export default function MoreScreen() {
 
   const handleLogout = () => {
     logout();
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleteLoading(true);
+    try {
+      await apiRequest("DELETE", "/api/auth/account", undefined);
+      logout();
+    } catch (err) {
+      console.error("Delete account error:", err);
+    } finally {
+      setDeleteLoading(false);
+      setShowDeleteModal(false);
+    }
   };
 
   const renderProfileSection = () => {
@@ -321,12 +338,12 @@ export default function MoreScreen() {
             <ListRow
               title="Terms of Service"
               leftIcon="file-text"
-              onPress={() => {}}
+              onPress={() => WebBrowser.openBrowserAsync("https://homebaseproapp.com/termsofservice")}
             />
             <ListRow
               title="Privacy Policy"
               leftIcon="shield"
-              onPress={() => {}}
+              onPress={() => WebBrowser.openBrowserAsync("https://homebaseproapp.com/privacy")}
               isLast
             />
           </View>
@@ -348,6 +365,26 @@ export default function MoreScreen() {
           </Animated.View>
         ) : null}
 
+        {isAuthenticated ? (
+          <Animated.View entering={FadeInDown.delay(750).duration(400)}>
+            <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary, marginTop: Spacing.lg }]}>
+              Danger Zone
+            </ThemedText>
+            <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
+              <ListRow
+                title="Delete Account"
+                leftIcon="trash-2"
+                destructive
+                showChevron={false}
+                onPress={() => setShowDeleteModal(true)}
+                isFirst
+                isLast
+                testID="button-delete-account"
+              />
+            </View>
+          </Animated.View>
+        ) : null}
+
         <Animated.View entering={FadeInDown.delay(800).duration(400)}>
           <ThemedText style={[styles.version, { color: theme.textTertiary }]}>
             Version 1.0.0
@@ -361,6 +398,45 @@ export default function MoreScreen() {
         onSignIn={handleSignIn}
         onSignUp={handleSignUp}
       />
+
+      <Modal
+        visible={showDeleteModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDeleteModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: theme.cardBackground }]}>
+            <View style={[styles.modalIconWrap, { backgroundColor: "#FF3B3014" }]}>
+              <Feather name="trash-2" size={28} color="#FF3B30" />
+            </View>
+            <ThemedText style={styles.modalTitle}>Delete Account</ThemedText>
+            <ThemedText style={[styles.modalBody, { color: theme.textSecondary }]}>
+              This will permanently delete your account and all associated data including your booking history, addresses, and payment methods. This action cannot be undone.
+            </ThemedText>
+            <Pressable
+              style={[styles.modalDeleteBtn, deleteLoading && { opacity: 0.7 }]}
+              onPress={handleDeleteAccount}
+              disabled={deleteLoading}
+              testID="button-confirm-delete"
+            >
+              {deleteLoading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <ThemedText style={styles.modalDeleteText}>Delete My Account</ThemedText>
+              )}
+            </Pressable>
+            <Pressable
+              style={[styles.modalCancelBtn, { backgroundColor: theme.backgroundSecondary }]}
+              onPress={() => setShowDeleteModal(false)}
+              disabled={deleteLoading}
+              testID="button-cancel-delete"
+            >
+              <ThemedText style={[styles.modalCancelText, { color: theme.text }]}>Cancel</ThemedText>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </ThemedView>
   );
 }
@@ -471,5 +547,63 @@ const styles = StyleSheet.create({
     ...Typography.caption1,
     textAlign: "center",
     marginTop: Spacing.xl,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: Spacing.xl,
+  },
+  modalCard: {
+    borderRadius: BorderRadius.card,
+    padding: Spacing.xl,
+    width: "100%",
+    alignItems: "center",
+  },
+  modalIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.lg,
+  },
+  modalTitle: {
+    ...Typography.title2,
+    fontWeight: "700",
+    marginBottom: Spacing.sm,
+    textAlign: "center",
+  },
+  modalBody: {
+    ...Typography.body,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: Spacing.xl,
+  },
+  modalDeleteBtn: {
+    backgroundColor: "#FF3B30",
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.md,
+    width: "100%",
+    alignItems: "center",
+    marginBottom: Spacing.sm,
+    minHeight: 48,
+    justifyContent: "center",
+  },
+  modalDeleteText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  modalCancelBtn: {
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.md,
+    width: "100%",
+    alignItems: "center",
+  },
+  modalCancelText: {
+    fontWeight: "600",
+    fontSize: 16,
   },
 });
