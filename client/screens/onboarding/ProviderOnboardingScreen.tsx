@@ -266,7 +266,7 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
       };
 
       login(
-        { id: data.user.id, name: data.user.name, email: data.user.email, phone: data.user.phone, avatarUrl: data.user.avatarUrl },
+        { id: data.user.id, name: data.user.name, email: data.user.email, phone: data.user.phone, avatarUrl: data.user.avatarUrl, isProvider: true },
         providerProfile,
         token,
       );

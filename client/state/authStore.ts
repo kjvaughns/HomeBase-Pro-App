@@ -11,6 +11,7 @@ export interface User {
   email: string;
   avatarUrl?: string;
   phone?: string;
+  isProvider?: boolean;
 }
 
 export interface ProviderProfile {
@@ -64,11 +65,11 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       isAuthenticated: true,
       user,
       sessionToken: token || null,
-      // Non-providers (or unapproved) go straight to homeowner mode.
-      // Approved providers see the RoleGateway so they can pick their mode.
-      activeRole: "homeowner" as UserRole,
+      // Providers land directly in provider mode. Homeowners land in homeowner mode.
+      // Role is stored persistently so returning users keep their last used view.
+      activeRole: hasApprovedProvider ? "provider" as UserRole : "homeowner" as UserRole,
       providerProfile: providerProfile || null,
-      needsRoleSelection: hasApprovedProvider,
+      needsRoleSelection: false,
     };
     set(newState);
     saveToStorage(get());
@@ -128,8 +129,13 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   canAccessProviderMode: () => {
-    const { providerProfile } = get();
-    return providerProfile?.status === "approved";
+    const { providerProfile, user } = get();
+    // Primary: explicit approved status set at login
+    if (providerProfile?.status === "approved") return true;
+    // Fallback: DB-sourced isProvider flag combined with a stored profile ID
+    // Covers stale AsyncStorage where status was never written or got wiped
+    if (user?.isProvider && providerProfile?.id) return true;
+    return false;
   },
 
   hydrate: async () => {
@@ -137,21 +143,30 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
       if (stored) {
         const data = JSON.parse(stored);
-        // If the user is authenticated, they've already picked a role — never
-        // show role selection on app resume. Only show it for truly new users
-        // (not authenticated yet).
         const isAuthenticated = data.isAuthenticated || false;
         const needsRoleSelection = isAuthenticated ? false : (data.needsRoleSelection ?? true);
-        // Ensure authenticated providers land in provider mode, not guest.
-        const providerProfile = data.providerProfile || null;
+        const storedUser = data.user || null;
+        let providerProfile = data.providerProfile || null;
+
+        // Repair stale cache: if a providerProfile.id is present but status is
+        // missing or non-approved, infer "approved" from the DB-sourced
+        // user.isProvider flag that was stored alongside the user object.
+        if (providerProfile?.id && providerProfile.status !== "approved") {
+          if (storedUser?.isProvider) {
+            providerProfile = { ...providerProfile, status: "approved" as ProviderStatus };
+          }
+        }
+
         const isApprovedProvider = providerProfile?.status === "approved";
         let activeRole: UserRole = data.activeRole || "guest";
+        // Recover from a "guest" role stored while authenticated (shouldn't happen
+        // normally, but guards against edge-case corruption).
         if (isAuthenticated && activeRole === "guest") {
           activeRole = isApprovedProvider ? "provider" : "homeowner";
         }
         set({
           isAuthenticated,
-          user: data.user || null,
+          user: storedUser,
           sessionToken: data.sessionToken || null,
           activeRole,
           providerProfile,

@@ -172,11 +172,12 @@ export default function RootStackNavigator() {
 
   usePushNotifications();
 
-  // Auto-resolve role selection: default to homeowner when the gateway would have shown.
-  // Users can still switch roles from within the app.
+  // Auto-resolve role selection edge cases (e.g., very old cached state).
+  // login() now sets the correct role directly, so this is mostly a safety net.
   useEffect(() => {
     if (isAuthenticated && needsRoleSelection) {
-      setActiveRole("homeowner");
+      const shouldBeProvider = canAccessProviderMode() || hasCompletedProviderSetup;
+      setActiveRole(shouldBeProvider ? "provider" : "homeowner");
       setNeedsRoleSelection(false);
     }
   }, [isAuthenticated, needsRoleSelection]);

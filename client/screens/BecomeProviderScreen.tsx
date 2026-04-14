@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { StyleSheet, View, Alert } from "react-native";
+import React, { useState, useEffect } from "react";
+import { StyleSheet, View, Alert, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation } from "@react-navigation/native";
@@ -26,6 +26,47 @@ export default function BecomeProviderScreen() {
   const { theme } = useTheme();
   const queryClient = useQueryClient();
   const { user, createProviderProfile, setActiveRole, setNeedsRoleSelection } = useAuthStore();
+  const [checkingExisting, setCheckingExisting] = useState(true);
+
+  // On mount: silently check whether this user already has a provider profile
+  // in the database. If they do, restore it in the store and navigate to provider
+  // mode without asking them to fill in the registration form again.
+  useEffect(() => {
+    if (!user?.id) {
+      setCheckingExisting(false);
+      return;
+    }
+    async function detectExistingProvider() {
+      try {
+        const res = await apiRequest("GET", `/api/provider/user/${user!.id}`);
+        const data = await res.json();
+        const provider = data.provider ?? data;
+        if (provider?.id) {
+          createProviderProfile({
+            id: provider.id,
+            userId: provider.userId,
+            businessName: provider.businessName,
+            services: provider.capabilityTags || [],
+            status: "approved",
+            rating: parseFloat(provider.rating) || 0,
+            reviewCount: provider.reviewCount || 0,
+            completedJobs: 0,
+          });
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          setActiveRole("provider");
+          setNeedsRoleSelection(false);
+          queryClient.invalidateQueries({ queryKey: ["/api/provider"] });
+          navigation.goBack();
+          return;
+        }
+      } catch {
+        // 404 or network error → user genuinely doesn't have a provider profile yet;
+        // fall through to show the registration form.
+      }
+      setCheckingExisting(false);
+    }
+    detectExistingProvider();
+  }, [user?.id]);
 
   const [businessName, setBusinessName] = useState("");
   const [phone, setPhone] = useState("");
@@ -130,6 +171,16 @@ export default function BecomeProviderScreen() {
       serviceArea: serviceArea.trim() || undefined,
     });
   };
+
+  // While checking for an existing provider, show a brief loading spinner.
+  // If one is found, the useEffect will navigate away before this is shown long.
+  if (checkingExisting) {
+    return (
+      <ThemedView style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
+        <ActivityIndicator size="large" color={Colors.accent} />
+      </ThemedView>
+    );
+  }
 
   return (
     <ThemedView style={styles.container}>

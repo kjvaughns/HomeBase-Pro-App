@@ -76,6 +76,7 @@ export default function LoginScreen({ navigation }: Props) {
           email: data.user.email,
           phone: data.user.phone,
           avatarUrl: data.user.avatarUrl,
+          isProvider: data.user.isProvider || false,
         }, providerProfile, data.token ?? null);
       }
     } catch (error) {
