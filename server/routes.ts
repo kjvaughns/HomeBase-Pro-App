@@ -251,23 +251,24 @@ async function convertIntakeToClientJob(
   const firstName = nameParts[0] || "Unknown";
   const lastName = nameParts.slice(1).join(" ") || "";
 
-  // Upsert client by provider+email
+  // Upsert client by provider+email using ON CONFLICT to prevent race conditions.
+  // Uses the partial unique index: clients(provider_id, email) WHERE email IS NOT NULL.
+  // On conflict, updates contact info so the record reflects the latest submission.
   let clientId: string;
   if (clientEmail) {
-    const [found] = await tx
-      .select({ id: clients.id })
-      .from(clients)
-      .where(and(eq(clients.providerId, providerId), eq(clients.email, clientEmail)));
-    if (found) {
-      clientId = found.id;
-    } else {
-      const [newC] = await tx
-        .insert(clients)
-        .values({ providerId, firstName, lastName: lastName || null, email: clientEmail, phone: clientPhone || null, address: address || null })
-        .returning({ id: clients.id });
-      clientId = newC.id;
-    }
+    const result = await tx.execute(sql`
+      INSERT INTO clients (id, provider_id, first_name, last_name, email, phone, address, created_at, updated_at)
+      VALUES (gen_random_uuid(), ${providerId}, ${firstName}, ${lastName || null}, ${clientEmail}, ${clientPhone || null}, ${address || null}, NOW(), NOW())
+      ON CONFLICT (provider_id, email) WHERE email IS NOT NULL
+      DO UPDATE SET
+        phone = COALESCE(EXCLUDED.phone, clients.phone),
+        address = COALESCE(EXCLUDED.address, clients.address),
+        updated_at = NOW()
+      RETURNING id
+    `);
+    clientId = (result.rows[0] as { id: string }).id;
   } else {
+    // No email — cannot deduplicate; always insert a new record
     const [newC] = await tx
       .insert(clients)
       .values({ providerId, firstName, lastName: lastName || null, email: null, phone: clientPhone || null, address: address || null })
