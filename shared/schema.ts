@@ -415,6 +415,7 @@ export const clients = pgTable("clients", {
   state: text("state"),
   zip: text("zip"),
   notes: text("notes"),
+  stripeConnectCustomerId: text("stripe_connect_customer_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -487,6 +488,7 @@ export const invoices = pgTable("invoices", {
   stripePaymentIntentId: text("stripe_payment_intent_id"),
   stripeCheckoutSessionId: text("stripe_checkout_session_id"),
   stripePaymentLinkId: text("stripe_payment_link_id"),
+  stripeInvoiceId: text("stripe_invoice_id"),
   hostedInvoiceUrl: text("hosted_invoice_url"),
   
   createdAt: timestamp("created_at").defaultNow().notNull(),

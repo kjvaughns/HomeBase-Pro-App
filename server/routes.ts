@@ -30,6 +30,7 @@ import {
   getConnectAccount,
   createInvoicePaymentIntent,
   createStripeCheckoutSession,
+  createStripeInvoice,
   applyCreditsToInvoice,
   handleStripeWebhook,
   calculateFeePreview,
@@ -4029,19 +4030,11 @@ Respond with JSON only:
 
       const invoice = await storage.createInvoice(parsed.data);
 
-      // Try to generate a Stripe payment link — non-fatal, only if Connect is active
+      // Try to generate a Stripe Invoice (hosted_invoice_url) — non-fatal, only if Connect is active
       let hostedUrl: string | undefined;
-      const [connectAcct] = await db.select({ chargesEnabled: stripeConnectAccounts.chargesEnabled })
-        .from(stripeConnectAccounts)
-        .where(eq(stripeConnectAccounts.providerId, req.body.providerId))
-        .limit(1)
-        .catch(() => [null]);
-      if (connectAcct?.chargesEnabled) {
-        const checkoutResult = await createStripeCheckoutSession(invoice.id).catch(() => null);
-        if (checkoutResult?.checkoutUrl) {
-          hostedUrl = checkoutResult.checkoutUrl;
-          await db.update(invoices).set({ hostedInvoiceUrl: hostedUrl, updatedAt: new Date() }).where(eq(invoices.id, invoice.id)).catch(() => {});
-        }
+      const stripeInvoiceResult = await createStripeInvoice(invoice.id).catch(() => null);
+      if (stripeInvoiceResult?.hostedInvoiceUrl) {
+        hostedUrl = stripeInvoiceResult.hostedInvoiceUrl;
       }
 
       // Send email via dispatcher
@@ -4126,19 +4119,11 @@ Respond with JSON only:
         return res.status(404).json({ error: "Invoice not found" });
       }
       
-      // Try to generate a Stripe payment link — non-fatal, only if Connect is active
+      // Try to generate a Stripe Invoice (hosted_invoice_url) — non-fatal, only if Connect is active
       let hostedUrl: string | undefined;
-      const [connectAcctSend] = await db.select({ chargesEnabled: stripeConnectAccounts.chargesEnabled })
-        .from(stripeConnectAccounts)
-        .where(eq(stripeConnectAccounts.providerId, invoice.providerId))
-        .limit(1)
-        .catch(() => [null]);
-      if (connectAcctSend?.chargesEnabled) {
-        const checkoutResult = await createStripeCheckoutSession(invoiceId).catch(() => null);
-        if (checkoutResult?.checkoutUrl) {
-          hostedUrl = checkoutResult.checkoutUrl;
-          await db.update(invoices).set({ hostedInvoiceUrl: hostedUrl, updatedAt: new Date() }).where(eq(invoices.id, invoiceId)).catch(() => {});
-        }
+      const stripeInvoiceResult = await createStripeInvoice(invoiceId).catch(() => null);
+      if (stripeInvoiceResult?.hostedInvoiceUrl) {
+        hostedUrl = stripeInvoiceResult.hostedInvoiceUrl;
       }
 
       // Get client and provider details for email
@@ -4617,26 +4602,18 @@ Respond with JSON only:
     }
   });
 
-  // Create Stripe checkout session for invoice payment
+  // Create Stripe Invoice for invoice payment (replaces checkout session)
   app.post("/api/stripe/invoices/:invoiceId/checkout", requireAuth, async (req: Request<{ invoiceId: string }>, res: Response) => {
     try {
       const { invoiceId } = req.params;
-      // Gate: check that provider has charges enabled before creating checkout
-      const [inv] = await db.select({ providerId: invoices.providerId }).from(invoices).where(eq(invoices.id, invoiceId));
-      if (inv) {
-        const [connectAcct] = await db.select({ chargesEnabled: stripeConnectAccounts.chargesEnabled }).from(stripeConnectAccounts).where(eq(stripeConnectAccounts.providerId, inv.providerId));
-        if (!connectAcct || !connectAcct.chargesEnabled) {
-          return res.status(402).json({ error: "stripe_not_ready", message: "Provider has not completed Stripe onboarding" });
-        }
-      }
-      const result = await createStripeCheckoutSession(invoiceId);
-      res.json({ url: result.checkoutUrl, sessionId: result.sessionId });
+      const result = await createStripeInvoice(invoiceId);
+      res.json({ url: result.hostedInvoiceUrl, stripeInvoiceId: result.stripeInvoiceId });
     } catch (error: any) {
-      console.error("Create checkout session error:", error);
-      if (error.code === "stripe_not_ready" || error.message === "stripe_not_ready") {
-        return res.status(402).json({ error: "stripe_not_ready", message: "Provider has not completed Stripe onboarding" });
+      console.error("Create Stripe invoice error:", error);
+      if (error.message?.includes("not enabled") || error.message?.includes("not set up")) {
+        return res.status(402).json({ error: "stripe_not_ready", message: error.message });
       }
-      res.status(500).json({ error: error.message || "Failed to create checkout session" });
+      res.status(500).json({ error: error.message || "Failed to create Stripe invoice" });
     }
   });
 
@@ -4902,15 +4879,8 @@ Respond with JSON only:
       let hostedUrl: string | null = null;
 
       if (generatePaymentLink) {
-        // Gate: verify Stripe Connect is active before generating payment link
-        const [connectAcct] = await db.select({ chargesEnabled: stripeConnectAccounts.chargesEnabled })
-          .from(stripeConnectAccounts)
-          .where(eq(stripeConnectAccounts.providerId, invoice.providerId));
-        if (!connectAcct || !connectAcct.chargesEnabled) {
-          return res.status(402).json({ error: "stripe_not_ready", message: "Provider must complete Stripe Connect setup before generating payment links" });
-        }
-        const checkoutResult = await createStripeCheckoutSession(invoiceId);
-        hostedUrl = checkoutResult.checkoutUrl;
+        const invoiceResult = await createStripeInvoice(invoiceId).catch(() => null);
+        hostedUrl = invoiceResult?.hostedInvoiceUrl || null;
       }
 
       // Send email if client has email
@@ -4980,26 +4950,18 @@ Respond with JSON only:
     }
   });
 
-  // Create Stripe checkout session for invoice (hosted payment page)
+  // Create Stripe Invoice for invoice (hosted payment page)
   app.post("/api/invoices/:invoiceId/checkout", requireAuth, async (req: Request<{ invoiceId: string }>, res: Response) => {
     try {
       const { invoiceId } = req.params;
-      // Gate: check that provider has charges enabled before creating checkout
-      const [inv] = await db.select({ providerId: invoices.providerId }).from(invoices).where(eq(invoices.id, invoiceId));
-      if (inv) {
-        const [connectAcct] = await db.select({ chargesEnabled: stripeConnectAccounts.chargesEnabled }).from(stripeConnectAccounts).where(eq(stripeConnectAccounts.providerId, inv.providerId));
-        if (!connectAcct || !connectAcct.chargesEnabled) {
-          return res.status(402).json({ error: "stripe_not_ready", message: "Provider has not completed Stripe onboarding" });
-        }
-      }
-      const result = await createStripeCheckoutSession(invoiceId);
-      res.json(result);
+      const result = await createStripeInvoice(invoiceId);
+      res.json({ url: result.hostedInvoiceUrl, stripeInvoiceId: result.stripeInvoiceId });
     } catch (error: any) {
-      console.error("Create checkout session error:", error);
-      if (error.code === "stripe_not_ready" || error.message === "stripe_not_ready") {
-        return res.status(402).json({ error: "stripe_not_ready", message: "Provider has not completed Stripe onboarding" });
+      console.error("Create Stripe invoice error:", error);
+      if (error.message?.includes("not enabled") || error.message?.includes("not set up")) {
+        return res.status(402).json({ error: "stripe_not_ready", message: error.message });
       }
-      res.status(500).json({ error: error.message || "Failed to create checkout session" });
+      res.status(500).json({ error: error.message || "Failed to create Stripe invoice" });
     }
   });
 

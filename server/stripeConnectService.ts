@@ -262,6 +262,108 @@ export async function createInvoicePaymentIntent(invoiceId: string, payerUserId?
   };
 }
 
+export async function createStripeInvoice(invoiceId: string): Promise<{ stripeInvoiceId: string; hostedInvoiceUrl: string }> {
+  const [invoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+  if (!invoice) throw new Error("Invoice not found");
+
+  const connectAccount = await getConnectAccount(invoice.providerId);
+  if (!connectAccount?.chargesEnabled) throw new Error("Provider payment processing not enabled");
+
+  const connectId = connectAccount.stripeAccountId;
+
+  if (!invoice.clientId) throw new Error("Invoice has no client");
+  const [client] = await db.select().from(clients).where(eq(clients.id, invoice.clientId));
+  if (!client) throw new Error("Client not found");
+
+  // ── 1. Find or create Stripe Customer on the connected account ──────────
+  let stripeCustomerId = client.stripeConnectCustomerId;
+  if (!stripeCustomerId) {
+    const customerName = [client.firstName, client.lastName].filter(Boolean).join(" ") || undefined;
+    const customer = await getStripe().customers.create(
+      {
+        email: client.email || undefined,
+        name: customerName,
+        phone: client.phone || undefined,
+        metadata: { homebaseClientId: client.id, providerId: invoice.providerId },
+      },
+      { stripeAccount: connectId }
+    );
+    stripeCustomerId = customer.id;
+    await db.update(clients)
+      .set({ stripeConnectCustomerId: stripeCustomerId, updatedAt: new Date() })
+      .where(eq(clients.id, client.id));
+  }
+
+  // ── 2. Create Stripe Invoice Items ──────────────────────────────────────
+  const rawItems = invoice.lineItems;
+  const lineItems: any[] = rawItems
+    ? (Array.isArray(rawItems) ? rawItems : JSON.parse(rawItems as string))
+    : [];
+
+  if (lineItems.length > 0) {
+    for (const item of lineItems) {
+      const unitAmountCents = Math.round(parseFloat(item.unitPrice?.toString() || "0") * 100);
+      const qty = Math.max(1, Math.round(parseFloat(item.quantity?.toString() || "1")));
+      await getStripe().invoiceItems.create(
+        {
+          customer: stripeCustomerId,
+          unit_amount: unitAmountCents,
+          quantity: qty,
+          currency: invoice.currency || "usd",
+          description: item.description || item.name || "Service",
+        },
+        { stripeAccount: connectId }
+      );
+    }
+  } else {
+    const totalCents = invoice.totalCents
+      || Math.round(parseFloat(invoice.total?.toString() || "0") * 100);
+    await getStripe().invoiceItems.create(
+      {
+        customer: stripeCustomerId,
+        amount: totalCents,
+        currency: invoice.currency || "usd",
+        description: invoice.notes || `Invoice ${invoice.invoiceNumber}`,
+      },
+      { stripeAccount: connectId }
+    );
+  }
+
+  // ── 3. Create and finalise the Stripe Invoice ───────────────────────────
+  const platformFeeCents = invoice.platformFeeCents || 0;
+  const daysUntilDue = invoice.dueDate
+    ? Math.max(1, Math.ceil((new Date(invoice.dueDate).getTime() - Date.now()) / 86_400_000))
+    : 30;
+
+  const stripeInvoice = await getStripe().invoices.create(
+    {
+      customer: stripeCustomerId,
+      collection_method: "send_invoice",
+      days_until_due: daysUntilDue,
+      ...(platformFeeCents > 0 ? { application_fee_amount: platformFeeCents } : {}),
+      metadata: {
+        homebaseInvoiceId: invoice.id,
+        providerId: invoice.providerId,
+      },
+    },
+    { stripeAccount: connectId }
+  );
+
+  const finalized = await getStripe().invoices.finalizeInvoice(
+    stripeInvoice.id,
+    { stripeAccount: connectId }
+  );
+
+  const hostedInvoiceUrl = finalized.hosted_invoice_url || "";
+
+  // ── 4. Persist Stripe IDs on our invoice row ────────────────────────────
+  await db.update(invoices)
+    .set({ stripeInvoiceId: finalized.id, hostedInvoiceUrl, updatedAt: new Date() })
+    .where(eq(invoices.id, invoiceId));
+
+  return { stripeInvoiceId: finalized.id, hostedInvoiceUrl };
+}
+
 export async function createStripeCheckoutSession(invoiceId: string) {
   const [invoice] = await db
     .select()
@@ -492,6 +594,14 @@ export async function handleStripeWebhook(event: Stripe.Event) {
 
     case "checkout.session.completed":
       await handleCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session);
+      break;
+
+    case "invoice.paid":
+      await handleStripeInvoicePaid(event.data.object as Stripe.Invoice);
+      break;
+
+    case "invoice.payment_failed":
+      await handleStripeInvoicePaymentFailed(event.data.object as Stripe.Invoice);
       break;
 
     default:
@@ -725,6 +835,91 @@ async function handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent) {
     } catch (err) {
       console.error('Failed to dispatch invoice.payment_failed from webhook:', err);
     }
+  }
+}
+
+async function handleStripeInvoicePaid(stripeInvoice: Stripe.Invoice) {
+  const homebaseInvoiceId = stripeInvoice.metadata?.homebaseInvoiceId;
+  if (!homebaseInvoiceId) return;
+
+  const [updatedInvoice] = await db
+    .update(invoices)
+    .set({ status: "paid", paidAt: new Date(), updatedAt: new Date() })
+    .where(eq(invoices.id, homebaseInvoiceId))
+    .returning();
+
+  if (!updatedInvoice) return;
+
+  try {
+    const [provider] = await db.select().from(providers).where(eq(providers.id, updatedInvoice.providerId));
+    let clientEmail: string | undefined;
+    let clientName: string | undefined;
+    if (updatedInvoice.clientId) {
+      const [client] = await db.select().from(clients).where(eq(clients.id, updatedInvoice.clientId));
+      if (client) {
+        clientEmail = client.email ?? undefined;
+        clientName = `${client.firstName || ''} ${client.lastName || ''}`.trim() || clientEmail;
+      }
+    } else if (updatedInvoice.homeownerUserId) {
+      const [homeowner] = await db.select().from(users).where(eq(users.id, updatedInvoice.homeownerUserId));
+      if (homeowner) {
+        clientEmail = homeowner.email;
+        clientName = `${homeowner.firstName || ''} ${homeowner.lastName || ''}`.trim() || homeowner.email;
+      }
+    }
+    if (clientEmail && provider) {
+      dispatch('invoice.paid', {
+        clientEmail,
+        clientName: clientName ?? clientEmail,
+        providerName: provider.businessName,
+        invoiceNumber: updatedInvoice.invoiceNumber,
+        amount: typeof updatedInvoice.total === 'string' ? parseFloat(updatedInvoice.total) : (updatedInvoice.total ?? 0),
+        paymentDate: new Date().toLocaleDateString(),
+        relatedRecordType: 'invoice',
+        relatedRecordId: homebaseInvoiceId,
+      }).catch((e: unknown) => console.error('invoice.paid dispatch error (stripe invoice webhook):', e));
+    }
+  } catch (err) {
+    console.error('Failed to dispatch invoice.paid from stripe invoice webhook:', err);
+  }
+}
+
+async function handleStripeInvoicePaymentFailed(stripeInvoice: Stripe.Invoice) {
+  const homebaseInvoiceId = stripeInvoice.metadata?.homebaseInvoiceId;
+  if (!homebaseInvoiceId) return;
+
+  try {
+    const [invoice] = await db.select().from(invoices).where(eq(invoices.id, homebaseInvoiceId));
+    if (!invoice) return;
+    const [provider] = await db.select().from(providers).where(eq(providers.id, invoice.providerId));
+    let clientEmail: string | undefined;
+    let clientName: string | undefined;
+    if (invoice.clientId) {
+      const [client] = await db.select().from(clients).where(eq(clients.id, invoice.clientId));
+      if (client) {
+        clientEmail = client.email ?? undefined;
+        clientName = `${client.firstName || ''} ${client.lastName || ''}`.trim() || clientEmail;
+      }
+    } else if (invoice.homeownerUserId) {
+      const [homeowner] = await db.select().from(users).where(eq(users.id, invoice.homeownerUserId));
+      if (homeowner) {
+        clientEmail = homeowner.email;
+        clientName = `${homeowner.firstName || ''} ${homeowner.lastName || ''}`.trim() || homeowner.email;
+      }
+    }
+    if (clientEmail && provider) {
+      dispatch('invoice.payment_failed', {
+        clientEmail,
+        clientName: clientName ?? clientEmail,
+        providerName: provider.businessName,
+        invoiceNumber: invoice.invoiceNumber,
+        amount: typeof invoice.total === 'string' ? parseFloat(invoice.total) : (invoice.total ?? 0),
+        relatedRecordType: 'invoice',
+        relatedRecordId: homebaseInvoiceId,
+      }).catch((e: unknown) => console.error('invoice.payment_failed dispatch error (stripe invoice webhook):', e));
+    }
+  } catch (err) {
+    console.error('Failed to dispatch invoice.payment_failed from stripe invoice webhook:', err);
   }
 }
 

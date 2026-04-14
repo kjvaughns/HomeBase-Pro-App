@@ -47,6 +47,7 @@ export async function runBootMigrations(): Promise<void> {
       ["invoices.stripe_payment_intent_id",   `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT`],
       ["invoices.stripe_checkout_session_id", `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_checkout_session_id TEXT`],
       ["invoices.stripe_payment_link_id",     `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_payment_link_id TEXT`],
+      ["invoices.stripe_invoice_id",           `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_invoice_id TEXT`],
       ["invoices.hosted_invoice_url",         `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS hosted_invoice_url TEXT`],
       ["invoices.sent_at",                    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS sent_at TIMESTAMP`],
       ["invoices.viewed_at",                  `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS viewed_at TIMESTAMP`],
@@ -56,6 +57,9 @@ export async function runBootMigrations(): Promise<void> {
     for (const [label, sql] of invoiceAlters) {
       await runSql(label, sql);
     }
+
+    // ── clients: Stripe Connect customer ID per provider account ──────────
+    await runSql("clients.stripe_connect_customer_id", `ALTER TABLE clients ADD COLUMN IF NOT EXISTS stripe_connect_customer_id TEXT`);
 
     // ── enums required by messaging/notification tables ────────────────────
     const enumDefs: Array<[string, string]> = [
