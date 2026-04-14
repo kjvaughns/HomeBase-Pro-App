@@ -2750,7 +2750,19 @@ Respond ONLY with a valid JSON array of strings in the format ["City, ST", "City
       let cities: string[] = [];
       try {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) cities = parsed.filter((c) => typeof c === "string");
+        if (Array.isArray(parsed)) {
+          // Deduplicate and normalize city names server-side
+          const seen = new Set<string>();
+          cities = parsed
+            .filter((c) => typeof c === "string" && c.trim().length > 0)
+            .map((c) => c.trim().replace(/\s+/g, " "))
+            .filter((c) => {
+              const key = c.toLowerCase();
+              if (seen.has(key)) return false;
+              seen.add(key);
+              return true;
+            });
+        }
       } catch {
         cities = [];
       }

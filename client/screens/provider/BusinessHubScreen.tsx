@@ -229,6 +229,8 @@ export default function BusinessHubScreen() {
   const [aiWritingBio, setAiWritingBio] = useState(false);
   const [aiPolishing, setAiPolishing] = useState(false);
   const [detectingCities, setDetectingCities] = useState(false);
+  const [bioError, setBioError] = useState("");
+  const [citiesError, setCitiesError] = useState("");
 
   // Time picker state
   const [timePicker, setTimePicker] = useState<{ day: DayKey; field: "open" | "close" } | null>(null);
@@ -375,6 +377,7 @@ export default function BusinessHubScreen() {
     const zips = zipCodes.split(",").map((s) => s.trim()).filter(Boolean);
     if (zips.length === 0) return;
     setDetectingCities(true);
+    setCitiesError("");
     try {
       const url = new URL("/api/ai/suggest-cities", getApiUrl());
       const resp = await fetch(url.toString(), {
@@ -387,10 +390,17 @@ export default function BusinessHubScreen() {
         if (data.cities?.length) {
           setCities(data.cities.join(", "));
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } else {
+          setCitiesError("No cities found for those ZIP codes.");
+          setTimeout(() => setCitiesError(""), 4000);
         }
+      } else {
+        setCitiesError("Could not detect cities. Try again.");
+        setTimeout(() => setCitiesError(""), 4000);
       }
     } catch {
-      // silent
+      setCitiesError("Could not detect cities. Check your connection.");
+      setTimeout(() => setCitiesError(""), 4000);
     } finally {
       setDetectingCities(false);
     }
@@ -399,6 +409,7 @@ export default function BusinessHubScreen() {
   const handleWriteBio = async () => {
     if (!businessName.trim()) return;
     setAiWritingBio(true);
+    setBioError("");
     try {
       const url = new URL("/api/ai/onboarding/generate-bio", getApiUrl());
       const resp = await fetch(url.toString(), {
@@ -415,9 +426,13 @@ export default function BusinessHubScreen() {
           setDescription(data.bio);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
+      } else {
+        setBioError("Could not write bio. Try again.");
+        setTimeout(() => setBioError(""), 4000);
       }
     } catch {
-      // silent
+      setBioError("Could not write bio. Check your connection.");
+      setTimeout(() => setBioError(""), 4000);
     } finally {
       setAiWritingBio(false);
     }
@@ -426,6 +441,7 @@ export default function BusinessHubScreen() {
   const handlePolishBio = async () => {
     if (!description.trim()) return;
     setAiPolishing(true);
+    setBioError("");
     try {
       const url = new URL("/api/ai/onboarding/polish-text", getApiUrl());
       const resp = await fetch(url.toString(), {
@@ -439,9 +455,13 @@ export default function BusinessHubScreen() {
           setDescription(data.polished);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
+      } else {
+        setBioError("Could not polish text. Try again.");
+        setTimeout(() => setBioError(""), 4000);
       }
     } catch {
-      // silent
+      setBioError("Could not polish text. Check your connection.");
+      setTimeout(() => setBioError(""), 4000);
     } finally {
       setAiPolishing(false);
     }
@@ -609,6 +629,9 @@ export default function BusinessHubScreen() {
               numberOfLines={3}
               testID="input-description"
             />
+            {bioError.length > 0 ? (
+              <ThemedText style={[styles.aiErrorText, { color: Colors.error }]}>{bioError}</ThemedText>
+            ) : null}
           </View>
 
           <View style={styles.fieldRow}>
@@ -749,6 +772,9 @@ export default function BusinessHubScreen() {
               placeholder="San Francisco, Oakland, Daly City"
               placeholderTextColor={theme.textTertiary}
             />
+            {citiesError.length > 0 ? (
+              <ThemedText style={[styles.aiErrorText, { color: Colors.error }]}>{citiesError}</ThemedText>
+            ) : null}
           </View>
         </GlassCard>
 
@@ -1495,6 +1521,10 @@ const styles = StyleSheet.create({
   aiChipLabel: {
     fontSize: 11,
     fontWeight: "600",
+  },
+  aiErrorText: {
+    ...Typography.caption1,
+    marginTop: 4,
   },
   closedLabel: {
     ...Typography.footnote,
