@@ -27,6 +27,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { getApiUrl, getAuthHeaders } from "@/lib/query-client";
+import { Provider } from "@/state/types";
 
 type TabType = "about" | "services" | "reviews";
 
@@ -48,7 +49,7 @@ interface BusinessHoursDay {
   close: string;
 }
 
-interface ProviderData {
+interface OwnerProviderResponse {
   id: string;
   businessName: string;
   description: string | null;
@@ -67,6 +68,11 @@ interface ProviderData {
   serviceZipCodes: string[] | null;
   serviceCities: string[] | null;
   businessHours: Record<DayKey, BusinessHoursDay> | null;
+}
+
+interface ApiServiceItem {
+  id: string;
+  name: string;
 }
 
 interface CustomService {
@@ -112,6 +118,28 @@ function formatServicePrice(svc: CustomService): string | null {
   return null;
 }
 
+function mapOwnerProvider(p: OwnerProviderResponse, serviceList: ApiServiceItem[]): Provider {
+  return {
+    id: p.id,
+    name: p.businessName ?? "",
+    businessName: p.businessName ?? "",
+    avatarUrl: p.avatarUrl ?? undefined,
+    rating: parseFloat(p.averageRating ?? p.rating ?? "0") || 0,
+    reviewCount: p.reviewCount ?? 0,
+    services: serviceList.map((s) => s.name ?? ""),
+    categoryIds: [],
+    hourlyRate: parseFloat(p.hourlyRate ?? "0") || 0,
+    verified: p.isVerified ?? false,
+    description: p.description ?? "",
+    yearsExperience: p.yearsExperience ?? 0,
+    completedJobs: p.completedJobs ?? 0,
+    responseTime: p.responseTime ?? "< 1 hour",
+    distance: undefined,
+    gallery: [],
+    phone: p.phone ?? undefined,
+  };
+}
+
 export default function PublicProfileScreen() {
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
@@ -124,7 +152,7 @@ export default function PublicProfileScreen() {
   const [activeTab, setActiveTab] = useState<TabType>("about");
   const [copyFeedback, setCopyFeedback] = useState(false);
 
-  const { data: providerData, isLoading: providerLoading } = useQuery<{ provider: ProviderData }>({
+  const { data: providerData, isLoading: providerLoading } = useQuery<{ provider: OwnerProviderResponse }>({
     queryKey: ["/api/provider", providerId],
     enabled: !!providerId,
     queryFn: async () => {
@@ -171,7 +199,7 @@ export default function PublicProfileScreen() {
     enabled: !!providerId,
   });
 
-  const provider = providerData?.provider;
+  const rawProvider = providerData?.provider;
   const allServices = servicesData?.services ?? [];
   const displayServices = allServices.filter((s) => s.isPublished !== false);
   const providerReviews = reviewsData?.reviews ?? [];
@@ -179,13 +207,12 @@ export default function PublicProfileScreen() {
   const slug = activeLink?.slug;
   const profileUrl = slug ? `https://homebaseproapp.com/providers/${slug}` : null;
 
-  const businessName = provider?.businessName || providerProfile?.businessName || "Your Business";
-  const safeRating = useMemo(() => {
-    const raw = provider?.averageRating ?? provider?.rating;
-    const n = raw ? parseFloat(raw) : 0;
-    return isNaN(n) ? 0 : n;
-  }, [provider]);
-  const reviewCount = provider?.reviewCount ?? 0;
+  const provider: Provider | null = useMemo(() => {
+    if (!rawProvider) return null;
+    return mapOwnerProvider(rawProvider, []);
+  }, [rawProvider]);
+
+  const safeRating = provider ? (isNaN(provider.rating) ? 0 : provider.rating) : 0;
 
   const handleEditHub = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -193,7 +220,7 @@ export default function PublicProfileScreen() {
   };
 
   const handleCall = async () => {
-    const phoneNumber = provider?.phone;
+    const phoneNumber = rawProvider?.phone;
     if (!phoneNumber) {
       Alert.alert("No phone number", "Add your phone number in Business Hub.");
       return;
@@ -201,10 +228,29 @@ export default function PublicProfileScreen() {
     const url = `tel:${phoneNumber}`;
     try {
       const supported = await Linking.canOpenURL(url);
-      if (supported) {
-        await Linking.openURL(url);
-      }
+      if (supported) await Linking.openURL(url);
     } catch {}
+  };
+
+  const handleText = async () => {
+    const phoneNumber = rawProvider?.phone;
+    if (!phoneNumber) {
+      Alert.alert("No phone number", "Add your phone number in Business Hub.");
+      return;
+    }
+    const url = `sms:${phoneNumber}`;
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) await Linking.openURL(url);
+    } catch {}
+  };
+
+  const handleBookNow = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    Alert.alert(
+      "Preview Mode",
+      "This is a preview of what clients see. Clients will be able to book you from this screen."
+    );
   };
 
   const handleShare = async () => {
@@ -215,7 +261,7 @@ export default function PublicProfileScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await Share.share({
-        message: `Book ${businessName} — ${profileUrl}`,
+        message: `Book ${provider?.businessName ?? "us"} — ${profileUrl}`,
         url: profileUrl,
       });
     } catch {}
@@ -247,8 +293,9 @@ export default function PublicProfileScreen() {
   };
 
   const renderAboutTab = () => {
-    const hasHours = provider?.businessHours != null &&
-      Object.keys(provider.businessHours).length > 0;
+    const hasHours =
+      rawProvider?.businessHours != null &&
+      Object.keys(rawProvider.businessHours).length > 0;
 
     return (
       <Animated.View entering={FadeInDown.duration(300)}>
@@ -266,42 +313,42 @@ export default function PublicProfileScreen() {
         <View style={styles.statsGrid}>
           <View style={[styles.statCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
             <Feather name="briefcase" size={20} color={Colors.accent} />
-            <ThemedText style={styles.statValue}>{provider?.yearsExperience ?? 0}</ThemedText>
+            <ThemedText style={styles.statValue}>{provider?.yearsExperience || 0}</ThemedText>
             <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Years Exp.</ThemedText>
           </View>
           <View style={[styles.statCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
             <Feather name="check-circle" size={20} color={Colors.accent} />
-            <ThemedText style={styles.statValue}>{provider?.completedJobs ?? 0}</ThemedText>
+            <ThemedText style={styles.statValue}>{provider?.completedJobs || 0}</ThemedText>
             <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Jobs Done</ThemedText>
           </View>
           <View style={[styles.statCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
-            <Feather name="star" size={20} color={Colors.accent} />
-            <ThemedText style={styles.statValue}>{reviewCount}</ThemedText>
-            <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Reviews</ThemedText>
+            <Feather name="map-pin" size={20} color={Colors.accent} />
+            <ThemedText style={styles.statValue}>N/A</ThemedText>
+            <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Miles Away</ThemedText>
           </View>
         </View>
 
-        {provider?.responseTime ? (
-          <View style={[styles.infoRow, { borderColor: theme.borderLight }]}>
-            <Feather name="message-circle" size={18} color={theme.textSecondary} />
-            <ThemedText style={[styles.infoText, { color: theme.textSecondary }]}>
-              Usually responds in {provider.responseTime}
-            </ThemedText>
-          </View>
-        ) : null}
+        <View style={[styles.infoRow, { borderColor: theme.borderLight }]}>
+          <Feather name="message-circle" size={18} color={theme.textSecondary} />
+          <ThemedText style={[styles.infoText, { color: theme.textSecondary }]}>
+            Usually responds in {provider?.responseTime || "< 1 hour"}
+          </ThemedText>
+        </View>
 
         {hasHours ? (
-          <View style={styles.hoursSection}>
+          <View style={styles.subSection}>
             <ThemedText style={[styles.subSectionTitle, { color: theme.text }]}>Business Hours</ThemedText>
             {DAY_ORDER.map((day, idx) => {
-              const dayData = provider!.businessHours![day];
+              const dayData = rawProvider!.businessHours![day];
               if (!dayData) return null;
               return (
                 <View
                   key={day}
                   style={[
                     styles.hoursRow,
-                    idx > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.borderLight } : {},
+                    idx > 0
+                      ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.borderLight }
+                      : {},
                   ]}
                 >
                   <ThemedText
@@ -334,17 +381,17 @@ export default function PublicProfileScreen() {
           </View>
         )}
 
-        {((provider?.serviceCities && provider.serviceCities.length > 0) ||
-          (provider?.serviceZipCodes && provider.serviceZipCodes.length > 0)) ? (
-          <View style={styles.hoursSection}>
+        {((rawProvider?.serviceCities && rawProvider.serviceCities.length > 0) ||
+          (rawProvider?.serviceZipCodes && rawProvider.serviceZipCodes.length > 0)) ? (
+          <View style={styles.subSection}>
             <ThemedText style={[styles.subSectionTitle, { color: theme.text }]}>Service Area</ThemedText>
             <View style={styles.chipWrap}>
-              {(provider!.serviceCities ?? []).map((city) => (
+              {(rawProvider.serviceCities ?? []).map((city) => (
                 <View key={city} style={[styles.chip, { backgroundColor: theme.backgroundSecondary }]}>
                   <ThemedText style={[styles.chipText, { color: theme.textSecondary }]}>{city}</ThemedText>
                 </View>
               ))}
-              {(provider!.serviceZipCodes ?? []).map((zip) => (
+              {(rawProvider.serviceZipCodes ?? []).map((zip) => (
                 <View key={zip} style={[styles.chip, { backgroundColor: theme.backgroundSecondary }]}>
                   <ThemedText style={[styles.chipText, { color: theme.textTertiary }]}>{zip}</ThemedText>
                 </View>
@@ -353,26 +400,38 @@ export default function PublicProfileScreen() {
           </View>
         ) : null}
 
-        {provider?.phone || provider?.email ? (
-          <View style={styles.hoursSection}>
+        {rawProvider?.phone || rawProvider?.email ? (
+          <View style={styles.subSection}>
             <ThemedText style={[styles.subSectionTitle, { color: theme.text }]}>Contact</ThemedText>
-            {provider?.phone ? (
+            {rawProvider.phone ? (
               <View style={[styles.contactRow, { borderColor: theme.borderLight }]}>
                 <Feather name="phone" size={16} color={theme.textSecondary} />
-                <ThemedText style={[styles.contactText, { color: theme.textSecondary }]}>{provider.phone}</ThemedText>
+                <ThemedText style={[styles.contactText, { color: theme.textSecondary }]}>
+                  {rawProvider.phone}
+                </ThemedText>
               </View>
             ) : null}
-            {provider?.email ? (
-              <View style={[styles.contactRow, { borderColor: theme.borderLight, borderTopWidth: provider?.phone ? StyleSheet.hairlineWidth : 0 }]}>
+            {rawProvider.email ? (
+              <View
+                style={[
+                  styles.contactRow,
+                  {
+                    borderColor: theme.borderLight,
+                    borderTopWidth: rawProvider.phone ? StyleSheet.hairlineWidth : 0,
+                  },
+                ]}
+              >
                 <Feather name="mail" size={16} color={theme.textSecondary} />
-                <ThemedText style={[styles.contactText, { color: theme.textSecondary }]}>{provider.email}</ThemedText>
+                <ThemedText style={[styles.contactText, { color: theme.textSecondary }]}>
+                  {rawProvider.email}
+                </ThemedText>
               </View>
             ) : null}
           </View>
         ) : null}
 
         {profileUrl ? (
-          <View style={styles.hoursSection}>
+          <View style={styles.subSection}>
             <ThemedText style={[styles.subSectionTitle, { color: theme.text }]}>Booking Link</ThemedText>
             <View style={[styles.linkPill, { backgroundColor: theme.backgroundSecondary }]}>
               <Feather name="globe" size={12} color={theme.textTertiary} />
@@ -415,7 +474,7 @@ export default function PublicProfileScreen() {
   const renderServicesTab = () => {
     if (servicesLoading) {
       return (
-        <View style={styles.loadingContainer}>
+        <View style={styles.loadingInline}>
           <ActivityIndicator size="small" color={Colors.accent} />
         </View>
       );
@@ -428,10 +487,7 @@ export default function PublicProfileScreen() {
           {displayServices.map((service) => {
             const priceLabel = formatServicePrice(service);
             return (
-              <View
-                key={service.id}
-                style={[styles.serviceRow, { borderColor: theme.borderLight }]}
-              >
+              <View key={service.id} style={[styles.serviceRow, { borderColor: theme.borderLight }]}>
                 <View style={[styles.serviceIcon, { backgroundColor: Colors.accentLight }]}>
                   <Feather name="check" size={16} color={Colors.accent} />
                 </View>
@@ -454,12 +510,36 @@ export default function PublicProfileScreen() {
               </View>
             );
           })}
-
-          {safeParsePrice(provider?.hourlyRate) != null ? (
+          {safeParsePrice(rawProvider?.hourlyRate) != null ? (
             <View style={styles.pricingCard}>
               <ThemedText style={[styles.subSectionTitle, { color: theme.text }]}>Hourly Rate</ThemedText>
               <ThemedText style={[styles.priceValue, { color: Colors.accent }]}>
-                ${safeParsePrice(provider!.hourlyRate)!.toFixed(0)}/hr
+                ${safeParsePrice(rawProvider!.hourlyRate)!.toFixed(0)}/hr
+              </ThemedText>
+            </View>
+          ) : null}
+        </Animated.View>
+      );
+    }
+
+    const serviceStrings = provider?.services ?? [];
+    if (serviceStrings.length > 0) {
+      return (
+        <Animated.View entering={FadeInDown.duration(300)}>
+          <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Services Offered</ThemedText>
+          {serviceStrings.map((service, index) => (
+            <View key={`${service}-${index}`} style={[styles.serviceRow, { borderColor: theme.borderLight }]}>
+              <View style={[styles.serviceIcon, { backgroundColor: Colors.accentLight }]}>
+                <Feather name="check" size={16} color={Colors.accent} />
+              </View>
+              <ThemedText style={styles.serviceName}>{service}</ThemedText>
+            </View>
+          ))}
+          {provider != null && provider.hourlyRate > 0 ? (
+            <View style={styles.pricingCard}>
+              <ThemedText style={[styles.subSectionTitle, { color: theme.text }]}>Pricing</ThemedText>
+              <ThemedText style={[styles.priceValue, { color: Colors.accent }]}>
+                ${provider.hourlyRate}/hr
               </ThemedText>
             </View>
           ) : null}
@@ -496,12 +576,14 @@ export default function PublicProfileScreen() {
       <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>
         Reviews ({providerReviews.length})
       </ThemedText>
-
       {providerReviews.length > 0 ? (
         providerReviews.map((review) => (
           <View
             key={review.id}
-            style={[styles.reviewCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}
+            style={[
+              styles.reviewCard,
+              { backgroundColor: theme.cardBackground, borderColor: theme.borderLight },
+            ]}
           >
             <View style={styles.reviewHeader}>
               <ThemedText style={styles.reviewerName}>{review.reviewerName}</ThemedText>
@@ -524,7 +606,7 @@ export default function PublicProfileScreen() {
             No reviews yet
           </ThemedText>
           <ThemedText style={[styles.emptyBody, { color: theme.textTertiary }]}>
-            Reviews will appear here once clients rate your work.
+            Reviews appear here once clients rate your work.
           </ThemedText>
         </View>
       )}
@@ -533,7 +615,7 @@ export default function PublicProfileScreen() {
 
   if (providerLoading) {
     return (
-      <ThemedView style={[styles.container, styles.loadingContainer]}>
+      <ThemedView style={[styles.container, styles.loadingFullScreen]}>
         <ActivityIndicator size="large" color={Colors.accent} />
         <ThemedText style={[styles.loadingText, { color: theme.textSecondary }]}>
           Loading preview...
@@ -544,51 +626,62 @@ export default function PublicProfileScreen() {
 
   return (
     <ThemedView style={styles.container}>
+      {/* Pinned preview banner — sits below nav header, does NOT scroll */}
+      <View
+        style={[
+          styles.pinnedBannerWrapper,
+          { paddingTop: headerHeight + Spacing.sm, backgroundColor: theme.backgroundRoot },
+        ]}
+      >
+        <View style={[styles.previewBanner, { backgroundColor: Colors.accentLight }]}>
+          <Feather name="eye" size={14} color={Colors.accent} />
+          <ThemedText style={[styles.previewBannerText, { color: Colors.accent }]}>
+            Preview — this is what clients see
+          </ThemedText>
+          <Pressable onPress={handleEditHub} style={styles.editBannerBtn} hitSlop={8}>
+            <ThemedText style={[styles.editBannerBtnText, { color: Colors.accent }]}>
+              Edit
+            </ThemedText>
+          </Pressable>
+        </View>
+      </View>
+
       <ScrollView
         contentContainerStyle={{
-          paddingTop: headerHeight + Spacing.sm,
-          paddingBottom: insets.bottom + 100,
+          paddingTop: Spacing.md,
+          paddingBottom: insets.bottom + 120,
           paddingHorizontal: Spacing.screenPadding,
         }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Preview Banner */}
-        <Animated.View entering={FadeInDown.delay(0).duration(300)}>
-          <View style={[styles.previewBanner, { backgroundColor: Colors.accentLight }]}>
-            <Feather name="eye" size={14} color={Colors.accent} />
-            <ThemedText style={[styles.previewBannerText, { color: Colors.accent }]}>
-              Preview — this is what clients see
-            </ThemedText>
-            <Pressable onPress={handleEditHub} style={styles.editBannerBtn} hitSlop={8}>
-              <ThemedText style={[styles.editBannerBtnText, { color: Colors.accent }]}>
-                Edit
-              </ThemedText>
-            </Pressable>
-          </View>
-        </Animated.View>
-
-        {/* Profile Card — mirrors ProviderProfileScreen */}
-        <Animated.View entering={FadeInDown.delay(60).duration(350)}>
+        {/* Profile Card — same structure as homeowner ProviderProfileScreen */}
+        <Animated.View entering={FadeInDown.delay(0).duration(350)}>
           <GlassCard style={styles.profileCard}>
             <View style={styles.profileHeader}>
-              <Avatar name={businessName} size="large" uri={provider?.avatarUrl} />
+              <Avatar
+                name={provider?.businessName ?? ""}
+                size="large"
+                uri={rawProvider?.avatarUrl}
+              />
               <View style={styles.profileInfo}>
-                <ThemedText style={styles.providerName}>{businessName}</ThemedText>
-                {provider?.serviceArea ? (
+                <ThemedText style={styles.providerName}>
+                  {provider?.name ?? provider?.businessName ?? "Your Business"}
+                </ThemedText>
+                {rawProvider?.serviceArea ? (
                   <ThemedText style={[styles.serviceAreaText, { color: theme.textSecondary }]}>
-                    {provider.serviceArea}
+                    {rawProvider.serviceArea}
                   </ThemedText>
                 ) : null}
                 <View style={styles.ratingRow}>
                   {renderStars(safeRating)}
                   <ThemedText style={styles.ratingText}>
-                    {safeRating.toFixed(1)} ({reviewCount})
+                    {safeRating.toFixed(1)} ({provider?.reviewCount ?? 0})
                   </ThemedText>
                 </View>
               </View>
             </View>
             <View style={styles.profileActions}>
-              {provider?.isVerified ? (
+              {provider?.verified ? (
                 <StatusPill label="Verified Pro" status="success" />
               ) : null}
             </View>
@@ -606,7 +699,9 @@ export default function PublicProfileScreen() {
               }}
               style={[
                 styles.tab,
-                activeTab === tab && { borderBottomColor: Colors.accent, borderBottomWidth: 2 },
+                activeTab === tab
+                  ? { borderBottomColor: Colors.accent, borderBottomWidth: 2 }
+                  : {},
               ]}
             >
               <ThemedText
@@ -626,35 +721,43 @@ export default function PublicProfileScreen() {
         {activeTab === "reviews" ? renderReviewsTab() : null}
       </ScrollView>
 
-      {/* Bottom Actions — preview equivalents of Call/Text/Book */}
+      {/* Bottom action bar — mirrors homeowner view: Call / Text / Book Now */}
       <View
         style={[
           styles.bottomBar,
-          { backgroundColor: theme.backgroundRoot, paddingBottom: insets.bottom + Spacing.md },
+          {
+            backgroundColor: theme.backgroundRoot,
+            paddingBottom: insets.bottom + Spacing.md,
+          },
         ]}
       >
         <View style={styles.contactButtons}>
           <Pressable
-            style={[styles.contactButton, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}
+            style={[
+              styles.contactButton,
+              { backgroundColor: theme.cardBackground, borderColor: theme.borderLight },
+            ]}
             onPress={handleCall}
           >
             <Feather name="phone" size={20} color={Colors.accent} />
             <ThemedText style={[styles.contactButtonText, { color: theme.text }]}>Call</ThemedText>
           </Pressable>
           <Pressable
-            style={[styles.contactButton, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}
-            onPress={handleShare}
+            style={[
+              styles.contactButton,
+              { backgroundColor: theme.cardBackground, borderColor: theme.borderLight },
+            ]}
+            onPress={handleText}
           >
-            <Feather name="share-2" size={20} color={Colors.accent} />
-            <ThemedText style={[styles.contactButtonText, { color: theme.text }]}>Share</ThemedText>
+            <Feather name="message-circle" size={20} color={Colors.accent} />
+            <ThemedText style={[styles.contactButtonText, { color: theme.text }]}>Text</ThemedText>
           </Pressable>
         </View>
         <Pressable
-          style={[styles.editButton, { backgroundColor: Colors.accent }]}
-          onPress={handleEditHub}
+          style={[styles.bookNowButton, { backgroundColor: Colors.accent }]}
+          onPress={handleBookNow}
         >
-          <Feather name="edit-2" size={18} color="#FFF" />
-          <ThemedText style={styles.editButtonText}>Edit Profile</ThemedText>
+          <ThemedText style={styles.bookNowText}>Book Now</ThemedText>
         </Pressable>
       </View>
     </ThemedView>
@@ -665,13 +768,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  loadingContainer: {
+  loadingFullScreen: {
     justifyContent: "center",
     alignItems: "center",
     gap: Spacing.md,
   },
   loadingText: {
     ...Typography.body,
+  },
+  loadingInline: {
+    paddingVertical: Spacing.xl,
+    alignItems: "center",
+  },
+  pinnedBannerWrapper: {
+    paddingHorizontal: Spacing.screenPadding,
+    paddingBottom: Spacing.sm,
   },
   previewBanner: {
     flexDirection: "row",
@@ -680,7 +791,6 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
-    marginBottom: Spacing.md,
   },
   previewBannerText: {
     ...Typography.footnote,
@@ -752,7 +862,6 @@ const styles = StyleSheet.create({
     ...Typography.subhead,
     fontWeight: "600",
     marginBottom: Spacing.sm,
-    marginTop: Spacing.lg,
   },
   description: {
     ...Typography.body,
@@ -791,11 +900,11 @@ const styles = StyleSheet.create({
   infoText: {
     ...Typography.subhead,
   },
-  hoursSection: {
-    marginTop: Spacing.md,
+  subSection: {
+    marginTop: Spacing.lg,
+    paddingTop: Spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "rgba(0,0,0,0.08)",
-    paddingTop: Spacing.md,
   },
   hoursRow: {
     flexDirection: "row",
@@ -998,15 +1107,14 @@ const styles = StyleSheet.create({
     ...Typography.subhead,
     fontWeight: "600",
   },
-  editButton: {
+  bookNowButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 14,
     borderRadius: BorderRadius.lg,
-    gap: Spacing.sm,
   },
-  editButtonText: {
+  bookNowText: {
     ...Typography.body,
     fontWeight: "700",
     color: "#FFF",
