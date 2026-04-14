@@ -325,7 +325,8 @@ export default function FinancesScreen() {
     queryFn: async () => {
       const url = new URL(`/api/provider/${providerId}/invoices`, getApiUrl());
       const res = await fetch(url.toString(), { headers: getAuthHeaders() });
-      if (!res.ok) return { invoices: [] };
+      if (res.status === 404) return { invoices: [] };
+      if (!res.ok) throw new Error(`Failed to fetch invoices (${res.status})`);
       return res.json();
     },
     enabled: !!providerId,
@@ -340,7 +341,8 @@ export default function FinancesScreen() {
     queryFn: async () => {
       const url = new URL(`/api/provider/${providerId}/clients`, getApiUrl());
       const res = await fetch(url.toString(), { headers: getAuthHeaders() });
-      if (!res.ok) return { clients: [] };
+      if (res.status === 404) return { clients: [] };
+      if (!res.ok) throw new Error(`Failed to fetch clients (${res.status})`);
       return res.json();
     },
     enabled: !!providerId,
@@ -527,7 +529,7 @@ export default function FinancesScreen() {
         <View style={[styles.outstandingCard, { backgroundColor: theme.cardBackground }]}>
           {/* Section header */}
           <View style={styles.outstandingHeader}>
-            <ThemedText style={styles.outstandingTitle}>Outstanding</ThemedText>
+            <ThemedText style={styles.outstandingTitle}>Outstanding Invoices</ThemedText>
             {outstandingInvoices.length > 0 ? (
               <View style={[styles.outstandingBadge, { backgroundColor: Colors.accent }]}>
                 <ThemedText style={styles.outstandingBadgeText}>{outstandingInvoices.length}</ThemedText>
