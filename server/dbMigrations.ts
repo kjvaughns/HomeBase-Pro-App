@@ -31,6 +31,10 @@ export async function runBootMigrations(): Promise<void> {
   }
 
   try {
+    // ── invoices: ensure legacy NOT NULL columns have defaults ────────────
+    await runSql("invoices.amount.default",  `ALTER TABLE invoices ALTER COLUMN amount SET DEFAULT '0'`);
+    await runSql("invoices.total.default",   `ALTER TABLE invoices ALTER COLUMN total SET DEFAULT '0'`);
+
     // ── invoices: columns added after initial schema creation ─────────────
     const invoiceAlters: Array<[string, string]> = [
       ["invoices.currency",                   `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS currency TEXT DEFAULT 'usd'`],

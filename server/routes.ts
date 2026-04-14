@@ -3942,6 +3942,7 @@ Respond with JSON only:
         clientId: req.body.clientId,
         jobId: req.body.jobId || null,
         invoiceNumber,
+        amount: total.toFixed(2),
         total: total.toFixed(2),
         status: "draft",
         notes: req.body.notes || null,
@@ -4011,6 +4012,7 @@ Respond with JSON only:
         clientId: req.body.clientId,
         jobId: req.body.jobId || null,
         invoiceNumber,
+        amount: amount.toFixed(2),
         total: amount.toFixed(2),
         lineItems: JSON.stringify(lineItems),
         notes: req.body.notes || null,
@@ -4056,6 +4058,14 @@ Respond with JSON only:
           });
           emailSent = sendResult.emailSent;
           emailError = sendResult.emailError;
+
+          // Push notification — non-fatal, only fires if client has a HomeBase account
+          if (client?.email) {
+            const [clientUser] = await db.select({ id: users.id }).from(users).where(eq(users.email, client.email)).limit(1).catch(() => [null]);
+            if (clientUser) {
+              sendPush(clientUser.id, `Invoice from ${provider.businessName || "Your Provider"}`, `Invoice ${invoice.invoiceNumber} for $${amount.toFixed(2)} is ready. Tap to view.`, { type: "invoice", invoiceId: invoice.id }, "invoices").catch(() => {});
+            }
+          }
         } else if (!client?.email) {
           emailError = "Client has no email address on file.";
         }
@@ -4131,6 +4141,15 @@ Respond with JSON only:
           });
           emailSent = sendResult.emailSent;
           emailError = sendResult.emailError;
+
+          // Push notification — non-fatal
+          if (client?.email) {
+            const [clientUser] = await db.select({ id: users.id }).from(users).where(eq(users.email, client.email)).limit(1).catch(() => [null]);
+            if (clientUser) {
+              const invoiceTotal = parseFloat(invoice.total?.toString() || "0");
+              sendPush(clientUser.id, `Invoice from ${provider.businessName || "Your Provider"}`, `Invoice ${invoice.invoiceNumber || invoiceId.slice(0, 8)} for $${invoiceTotal.toFixed(2)} is ready. Tap to view.`, { type: "invoice", invoiceId }, "invoices").catch(() => {});
+            }
+          }
         }
       }
       
