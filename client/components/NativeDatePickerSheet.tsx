@@ -45,6 +45,9 @@ export function NativeDatePickerSheet({
 
   if (!visible) return null;
 
+  // Web does not support the native DateTimePicker — return null gracefully.
+  if (Platform.OS === "web") return null;
+
   if (Platform.OS === "android") {
     return (
       <DateTimePicker
