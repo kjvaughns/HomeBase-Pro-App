@@ -1,0 +1,33 @@
+Based on everything I've seen from testing your app, reviewing the code, and the issues we've hit — here's my honest assessment:
+
+**Crashes & Stability**
+The Reanimated crash on the "About You" screen during provider onboarding is still the most critical issue. That's an instant App Store rejection if a reviewer hits it. The fix came in with today's pull (Task #42) but needs to be verified it actually works before submitting.
+
+**Core Feature Completeness**
+The invoice system is the big one we're fixing now. Beyond that, the homeowner/client side needs to be fully testable end-to-end — booking a job, receiving confirmation, paying, leaving a review. Apple will walk through the full user flow as both a provider and a client.
+
+**Auth & Accounts**
+You need a working "Delete My Account" option that actually purges user data. Apple requires this for any app with accounts, and it's an automatic rejection without it. Also make sure forgot password, email verification, and sign-out all work cleanly.
+
+**App Store Assets**
+You'll need screenshots for iPhone 6.9" (iPhone 16 Pro Max) and iPad if you're targeting iPad. These have to show actual app screens, not mockups. You'll also need a short preview video and a compelling description. The app icon needs to be finalized — no transparency, correct sizes.
+
+**Privacy & Legal**
+A Privacy Policy URL is required and must be live on a real domain. Same with Terms of Service. Since you're handling payments and storing user data, these need to actually cover what you collect (location, payment info, photos via the image picker you just added).
+
+**Permissions Justification**
+Every permission you request — camera, photo library, location, notifications — needs a clear usage description string in your app. Apple reviewers check that the permission prompt language matches actual usage. Right now expo-image-picker was just added so make sure the NSPhotoLibraryUsageDescription is in your Info.plist.
+
+**Stripe in Production**
+Your Stripe keys need to be production keys, not test keys, before submission. Also, if providers collect payments through the app, Apple may classify that as in-app purchases and require a 30% cut through IAP instead. This is a real grey area — you'd want to make sure the payment flow is framed as "pay a service provider outside the app" not "purchase something within the app."
+
+**Empty States & Edge Cases**
+When a new provider just signed up and has no jobs, no clients, no invoices — every screen needs a proper empty state rather than a blank or broken UI. Same for network errors.
+
+**Push Notifications**
+You have `expo-notifications` installed but it needs APNs certificates configured in EAS and real device testing. Simulators can't fully test push.
+
+**The Biggest Risk**
+Honestly the Stripe Connect flow. If Apple sees that providers are collecting money through your platform and you're taking a platform fee, they'll scrutinize whether it should go through Apple's IAP. The way to defend it is to ensure the payment is clearly a transaction between two people for a real-world service — which HomeBase is — but you want your App Store description and screenshots to make that crystal clear.
+
+Want me to help prioritize any of these or create prompts for the ones that need code changes?

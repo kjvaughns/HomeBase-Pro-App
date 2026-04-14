@@ -61,8 +61,9 @@ export async function runBootMigrations(): Promise<void> {
     // ── clients: Stripe Connect customer ID per provider account ──────────
     await runSql("clients.stripe_connect_customer_id", `ALTER TABLE clients ADD COLUMN IF NOT EXISTS stripe_connect_customer_id TEXT`);
 
-    // ── payments: Stripe charge ID (for matching Stripe charge objects) ───
+    // ── payments: Stripe fields (charge ID and payment intent ID) ─────────
     await runSql("payments.stripe_charge_id", `ALTER TABLE payments ADD COLUMN IF NOT EXISTS stripe_charge_id TEXT`);
+    await runSql("payments.stripe_payment_intent_id", `ALTER TABLE payments ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT`);
 
     // ── refunds: Stripe charge ID (for matching refunds to charges) ───────
     await runSql("refunds.stripe_charge_id", `ALTER TABLE refunds ADD COLUMN IF NOT EXISTS stripe_charge_id TEXT`);
