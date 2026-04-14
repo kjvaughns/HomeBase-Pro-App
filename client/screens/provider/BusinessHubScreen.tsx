@@ -119,6 +119,7 @@ interface BookingLink {
 interface ProviderRecord {
   id: string;
   userId: string;
+  slug: string | null;
   businessName: string | null;
   description: string | null;
   phone: string | null;
@@ -264,17 +265,11 @@ export default function BusinessHubScreen() {
     setPhone(provider.phone || "");
     setEmail(provider.email || "");
     setHourlyRate(provider.hourlyRate ? String(provider.hourlyRate) : "");
-    if (provider.avatarUrl) setAvatarUri(provider.avatarUrl);
-    if (provider.serviceRadius) setServiceRadius(String(provider.serviceRadius));
-    if (provider.serviceZipCodes?.length) {
-      setZipCodes(provider.serviceZipCodes.join(", "));
-    }
-    if (provider.serviceCities?.length) {
-      setCities(provider.serviceCities.join(", "));
-    }
-    if (provider.businessHours) {
-      setHours({ ...DEFAULT_HOURS, ...provider.businessHours });
-    }
+    setAvatarUri(provider.avatarUrl || null);
+    setServiceRadius(provider.serviceRadius != null ? String(provider.serviceRadius) : "");
+    setZipCodes(provider.serviceZipCodes?.length ? provider.serviceZipCodes.join(", ") : "");
+    setCities(provider.serviceCities?.length ? provider.serviceCities.join(", ") : "");
+    setHours(provider.businessHours ? { ...DEFAULT_HOURS, ...provider.businessHours } : DEFAULT_HOURS);
   }, [provider, user]);
 
   // Populate policies from API data (once only)
@@ -481,16 +476,22 @@ export default function BusinessHubScreen() {
         : null;
       await apiRequest("PATCH", `/api/provider/${providerId}`, {
         businessName: businessName.trim() || undefined,
-        description: description.trim() || undefined,
-        phone: phone.trim() || undefined,
-        email: email.trim() || undefined,
-        hourlyRate: hourlyRate.trim() ? parseFloat(hourlyRate) : undefined,
+        description: description.trim() || null,
+        phone: phone.trim() || null,
+        email: email.trim() || null,
+        hourlyRate: hourlyRate.trim() ? parseFloat(hourlyRate) : null,
         businessHours: hours,
         serviceRadius: Number.isFinite(parsedRadius) ? parsedRadius : null,
         serviceZipCodes: parsedZipCodes,
         serviceCities: parsedCities,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/providers", providerId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/provider/user", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/providers"] });
+      if (provider?.slug) {
+        queryClient.invalidateQueries({ queryKey: ["/api/providers", provider.slug] });
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setProfileSaved(true);
       setTimeout(() => setProfileSaved(false), 3000);
@@ -511,6 +512,11 @@ export default function BusinessHubScreen() {
         bookingPolicies: { ...policies, instantBooking },
       });
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/providers", providerId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/providers"] });
+      if (provider?.slug) {
+        queryClient.invalidateQueries({ queryKey: ["/api/providers", provider.slug] });
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setPoliciesSaved(true);
       setTimeout(() => setPoliciesSaved(false), 3000);

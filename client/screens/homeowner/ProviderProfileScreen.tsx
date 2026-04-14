@@ -30,6 +30,25 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 type TabType = "about" | "services" | "reviews";
 
+type DayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+
+interface BusinessHoursDay {
+  enabled: boolean;
+  open: string;
+  close: string;
+}
+
+const DAYS: { key: DayKey; label: string }[] = [
+  { key: "mon", label: "Monday" },
+  { key: "tue", label: "Tuesday" },
+  { key: "wed", label: "Wednesday" },
+  { key: "thu", label: "Thursday" },
+  { key: "fri", label: "Friday" },
+  { key: "sat", label: "Saturday" },
+  { key: "sun", label: "Sunday" },
+];
+
+
 interface ApiProviderResponse {
   provider: {
     id: string;
@@ -37,6 +56,7 @@ interface ApiProviderResponse {
     description?: string | null;
     avatarUrl?: string | null;
     phone?: string | null;
+    email?: string | null;
     rating?: string | null;
     reviewCount?: number | null;
     averageRating?: string | null;
@@ -47,6 +67,11 @@ interface ApiProviderResponse {
     completedJobs?: number | null;
     responseTime?: string | null;
     distance?: number | null;
+    slug?: string | null;
+    businessHours?: Record<DayKey, BusinessHoursDay> | null;
+    serviceZipCodes?: string[] | null;
+    serviceCities?: string[] | null;
+    serviceRadius?: number | null;
   };
   services: ApiServiceItem[];
 }
@@ -78,11 +103,11 @@ export default function ProviderProfileScreen() {
   const allReviews = useHomeownerStore((s) => s.reviews);
   const toggleSavedProvider = useHomeownerStore((s) => s.toggleSavedProvider);
   const savedProviderIds = useHomeownerStore((s) => s.savedProviderIds);
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, providerProfile } = useAuthStore();
+
+  const isOwnProfile = providerProfile?.id === providerId;
 
   const isSaved = savedProviderIds.includes(providerId);
-
-  const needsFetch = !passedProvider;
 
   const { data: apiData, isLoading: isApiLoading } = useQuery<ApiProviderResponse>({
     queryKey: ["/api/providers", providerId],
@@ -91,13 +116,13 @@ export default function ProviderProfileScreen() {
       if (!response.ok) throw new Error("Provider not found");
       return response.json();
     },
-    enabled: needsFetch,
+    enabled: !!providerId,
   });
 
   const provider: Provider | null = useMemo(() => {
+    if (apiData?.provider) return mapApiProvider(apiData.provider, apiData.services ?? []);
     if (passedProvider) return passedProvider;
-    if (!apiData?.provider) return null;
-    return mapApiProvider(apiData.provider, apiData.services ?? []);
+    return null;
   }, [passedProvider, apiData]);
 
   const { data: customServicesData } = useQuery<CustomServicesResponse>({
@@ -124,7 +149,7 @@ export default function ProviderProfileScreen() {
   const [activeTab, setActiveTab] = useState<TabType>("about");
   const [showAccountGate, setShowAccountGate] = useState(false);
 
-  if (isApiLoading && needsFetch) {
+  if (isApiLoading && !passedProvider && !apiData) {
     return (
       <ThemedView style={[styles.container, styles.loadingContainer]}>
         <ActivityIndicator size="large" color={Colors.accent} />
@@ -234,6 +259,18 @@ export default function ProviderProfileScreen() {
     return stars;
   };
 
+  const rawProvider = apiData?.provider;
+  const businessHours = rawProvider?.businessHours;
+  const serviceZipCodes = rawProvider?.serviceZipCodes ?? [];
+  const serviceCities = rawProvider?.serviceCities ?? [];
+  const providerEmail = rawProvider?.email ?? null;
+  const providerSlug = rawProvider?.slug ?? null;
+  const serviceAreaChips = [
+    ...serviceCities,
+    ...serviceZipCodes,
+  ].filter(Boolean);
+  const bookingUrl = providerSlug ? `https://homebaseproapp.com/providers/${providerSlug}` : null;
+
   const renderAboutTab = () => (
     <Animated.View entering={FadeInDown.duration(300)}>
       <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>About</ThemedText>
@@ -259,7 +296,7 @@ export default function ProviderProfileScreen() {
           <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Jobs Done</ThemedText>
         </View>
         <View style={[styles.statCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
-          <Feather name="clock" size={20} color={Colors.accent} />
+          <Feather name="map-pin" size={20} color={Colors.accent} />
           <ThemedText style={styles.statValue}>
             {provider.distance != null ? provider.distance.toFixed(1) : "N/A"}
           </ThemedText>
@@ -273,6 +310,80 @@ export default function ProviderProfileScreen() {
           Usually responds in {provider.responseTime || "< 1 hour"}
         </ThemedText>
       </View>
+
+      {businessHours ? (
+        <View style={styles.detailSection}>
+          <ThemedText style={[styles.detailSectionTitle, { color: theme.text }]}>Business Hours</ThemedText>
+          {DAYS.map(({ key, label }) => {
+            const day = businessHours[key];
+            const isEnabled = day?.enabled ?? false;
+            return (
+              <View key={key} style={styles.hoursRow}>
+                <ThemedText
+                  style={[
+                    styles.hoursDay,
+                    { color: isEnabled ? theme.text : theme.textTertiary, fontWeight: isEnabled ? "600" : "400" },
+                  ]}
+                >
+                  {label}
+                </ThemedText>
+                <ThemedText style={[styles.hoursTime, { color: isEnabled ? theme.textSecondary : theme.textTertiary }]}>
+                  {isEnabled ? `${day.open} — ${day.close}` : "Closed"}
+                </ThemedText>
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
+
+      {serviceAreaChips.length > 0 ? (
+        <View style={styles.detailSection}>
+          <ThemedText style={[styles.detailSectionTitle, { color: theme.text }]}>Service Area</ThemedText>
+          <View style={styles.chipsWrap}>
+            {serviceAreaChips.map((chip, i) => (
+              <View key={`${chip}-${i}`} style={[styles.chip, { backgroundColor: theme.backgroundElevated, borderColor: theme.borderLight }]}>
+                <ThemedText style={[styles.chipText, { color: theme.textSecondary }]}>{chip}</ThemedText>
+              </View>
+            ))}
+          </View>
+        </View>
+      ) : null}
+
+      {(provider.phone || providerEmail) ? (
+        <View style={styles.detailSection}>
+          <ThemedText style={[styles.detailSectionTitle, { color: theme.text }]}>Contact</ThemedText>
+          {provider.phone ? (
+            <Pressable style={styles.contactRow} onPress={handleCall}>
+              <Feather name="phone" size={16} color={theme.textSecondary} />
+              <ThemedText style={[styles.contactRowText, { color: theme.textSecondary }]}>{provider.phone}</ThemedText>
+            </Pressable>
+          ) : null}
+          {providerEmail ? (
+            <Pressable
+              style={styles.contactRow}
+              onPress={() => Linking.openURL(`mailto:${providerEmail}`).catch(() => {})}
+            >
+              <Feather name="mail" size={16} color={theme.textSecondary} />
+              <ThemedText style={[styles.contactRowText, { color: theme.textSecondary }]}>{providerEmail}</ThemedText>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
+      {bookingUrl ? (
+        <View style={styles.detailSection}>
+          <ThemedText style={[styles.detailSectionTitle, { color: theme.text }]}>Booking Link</ThemedText>
+          <Pressable
+            style={[styles.bookingLinkRow, { backgroundColor: theme.backgroundElevated, borderColor: theme.borderLight }]}
+            onPress={() => Linking.openURL(bookingUrl).catch(() => {})}
+          >
+            <Feather name="globe" size={14} color={theme.textTertiary} />
+            <ThemedText style={[styles.bookingLinkText, { color: theme.textSecondary }]} numberOfLines={1}>
+              {bookingUrl}
+            </ThemedText>
+          </Pressable>
+        </View>
+      ) : null}
     </Animated.View>
   );
 
@@ -421,6 +532,21 @@ export default function ProviderProfileScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
+        {isOwnProfile ? (
+          <Animated.View
+            entering={FadeInDown.duration(300)}
+            style={[styles.previewBanner, { backgroundColor: Colors.accentLight }]}
+          >
+            <Feather name="eye" size={14} color={Colors.accent} />
+            <ThemedText style={[styles.previewBannerText, { color: Colors.accent }]}>
+              Preview — this is what clients see
+            </ThemedText>
+            <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
+              <ThemedText style={[styles.previewEditText, { color: Colors.accent }]}>Edit</ThemedText>
+            </Pressable>
+          </Animated.View>
+        ) : null}
+
         <Animated.View entering={FadeInDown.duration(400)}>
           <GlassCard style={styles.profileCard}>
             <View style={styles.profileHeader}>
@@ -429,9 +555,9 @@ export default function ProviderProfileScreen() {
                 <ThemedText style={styles.providerName}>
                   {provider.name || provider.businessName}
                 </ThemedText>
-                {provider.name !== provider.businessName && provider.businessName ? (
-                  <ThemedText style={[styles.businessName, { color: theme.textSecondary }]}>
-                    {provider.businessName}
+                {rawProvider?.serviceArea ? (
+                  <ThemedText style={[styles.serviceAreaText, { color: theme.textSecondary }]}>
+                    {rawProvider.serviceArea}
                   </ThemedText>
                 ) : null}
                 <View style={styles.ratingRow}>
@@ -763,5 +889,84 @@ const styles = StyleSheet.create({
   contactButtonText: {
     ...Typography.subhead,
     fontWeight: "600",
+  },
+  previewBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.md,
+  },
+  previewBannerText: {
+    ...Typography.caption1,
+    fontWeight: "600",
+    flex: 1,
+  },
+  previewEditText: {
+    ...Typography.caption1,
+    fontWeight: "700",
+  },
+  serviceAreaText: {
+    ...Typography.subhead,
+    marginTop: 2,
+  },
+  detailSection: {
+    marginTop: Spacing.lg,
+    paddingTop: Spacing.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(128,128,128,0.2)",
+  },
+  detailSectionTitle: {
+    ...Typography.headline,
+    marginBottom: Spacing.md,
+  },
+  hoursRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 5,
+  },
+  hoursDay: {
+    ...Typography.body,
+  },
+  hoursTime: {
+    ...Typography.body,
+  },
+  chipsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.xs,
+  },
+  chip: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  chipText: {
+    ...Typography.caption1,
+  },
+  contactRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.xs,
+  },
+  contactRowText: {
+    ...Typography.body,
+  },
+  bookingLinkRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  bookingLinkText: {
+    ...Typography.caption1,
+    flex: 1,
   },
 });
