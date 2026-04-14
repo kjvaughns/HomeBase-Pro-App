@@ -383,17 +383,23 @@ export default function PublicProfileScreen() {
         </Animated.View>
 
         {/* Business Hours */}
-        {provider?.businessHours ? (
-          <Animated.View entering={FadeInDown.delay(180).duration(350)}>
-            <GlassCard style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <View style={[styles.sectionIconWrap, { backgroundColor: Colors.accentLight }]}>
-                  <Feather name="clock" size={15} color={Colors.accent} />
-                </View>
-                <ThemedText style={styles.sectionTitle}>Business Hours</ThemedText>
+        <Animated.View entering={FadeInDown.delay(180).duration(350)}>
+          <GlassCard style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={[styles.sectionIconWrap, { backgroundColor: Colors.accentLight }]}>
+                <Feather name="clock" size={15} color={Colors.accent} />
               </View>
+              <ThemedText style={styles.sectionTitle}>Business Hours</ThemedText>
+            </View>
 
-              {DAY_ORDER.map((day, idx) => {
+            {!provider?.businessHours ? (
+              <View style={styles.emptyInline}>
+                <ThemedText style={[styles.emptyInlineText, { color: theme.textTertiary }]}>
+                  No hours set. Add them in Business Hub.
+                </ThemedText>
+              </View>
+            ) : (
+              DAY_ORDER.map((day, idx) => {
                 const dayData = provider.businessHours![day];
                 if (!dayData) return null;
                 return (
@@ -423,10 +429,10 @@ export default function PublicProfileScreen() {
                     )}
                   </View>
                 );
-              })}
-            </GlassCard>
-          </Animated.View>
-        ) : null}
+              })
+            )}
+          </GlassCard>
+        </Animated.View>
 
         {/* Service Area */}
         {((provider?.serviceCities && provider.serviceCities.length > 0) ||
@@ -468,25 +474,30 @@ export default function PublicProfileScreen() {
         ) : null}
 
         {/* Contact */}
-        {(provider?.phone || provider?.email) ? (
-          <Animated.View entering={FadeInDown.delay(260).duration(350)}>
-            <GlassCard style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <View style={[styles.sectionIconWrap, { backgroundColor: theme.backgroundSecondary }]}>
-                  <Feather name="user" size={15} color={theme.textSecondary} />
-                </View>
-                <ThemedText style={styles.sectionTitle}>Contact</ThemedText>
+        <Animated.View entering={FadeInDown.delay(260).duration(350)}>
+          <GlassCard style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={[styles.sectionIconWrap, { backgroundColor: theme.backgroundSecondary }]}>
+                <Feather name="user" size={15} color={theme.textSecondary} />
               </View>
+              <ThemedText style={styles.sectionTitle}>Contact</ThemedText>
+            </View>
 
-              {provider.phone ? (
-                <InfoRow icon="phone" value={provider.phone} />
-              ) : null}
-              {provider.email ? (
-                <InfoRow icon="mail" value={provider.email} border={!!provider.phone} />
-              ) : null}
-            </GlassCard>
-          </Animated.View>
-        ) : null}
+            {provider?.phone ? (
+              <InfoRow icon="phone" value={provider.phone} />
+            ) : null}
+            {provider?.email ? (
+              <InfoRow icon="mail" value={provider.email} border={!!provider?.phone} />
+            ) : null}
+            {!provider?.phone && !provider?.email ? (
+              <View style={styles.emptyInline}>
+                <ThemedText style={[styles.emptyInlineText, { color: theme.textTertiary }]}>
+                  No contact info set. Add phone and email in Business Hub.
+                </ThemedText>
+              </View>
+            ) : null}
+          </GlassCard>
+        </Animated.View>
 
         {/* Booking Link */}
         <Animated.View entering={FadeInDown.delay(300).duration(350)}>
