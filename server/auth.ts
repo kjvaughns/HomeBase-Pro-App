@@ -1,39 +1,39 @@
 import jwt from "jsonwebtoken";
 import type { Request, Response, NextFunction, RequestHandler } from "express";
+import { db } from "./db";
+import { users } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
-const FALLBACK_SECRET = "homebase-jwt-secret-change-in-production";
-
-export const JWT_SECRET =
-  process.env.JWT_SECRET || FALLBACK_SECRET;
+const IS_PROD = process.env.NODE_ENV === "production";
 
 if (!process.env.JWT_SECRET) {
-  if (process.env.NODE_ENV === "production") {
+  if (IS_PROD) {
     console.error(
-      "SECURITY ERROR: JWT_SECRET environment variable is not set. " +
-      "Using insecure fallback secret in production. " +
-      "Set JWT_SECRET immediately to prevent token forgery attacks."
+      "FATAL: JWT_SECRET environment variable is not set in production. " +
+      "Refusing to start — tokens would be forgeable with a known secret."
     );
-  } else {
-    console.warn(
-      "[auth] JWT_SECRET not set — using dev fallback. Set JWT_SECRET in production."
-    );
+    process.exit(1);
   }
+  console.warn("[auth] JWT_SECRET not set — using dev fallback. DO NOT use in production.");
 }
 
-export function generateToken(userId: string, role: string): string {
-  return jwt.sign({ userId, role }, JWT_SECRET, { expiresIn: "7d" });
+export const JWT_SECRET =
+  process.env.JWT_SECRET || "homebase-jwt-secret-dev-only";
+
+export function generateToken(userId: string, role: string, tokenVersion: number): string {
+  return jwt.sign({ userId, role, tv: tokenVersion }, JWT_SECRET, { expiresIn: "7d" });
 }
 
-export function verifyToken(token: string): { userId: string; role: string } | null {
+export function verifyToken(token: string): { userId: string; role: string; tv?: number } | null {
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as { userId: string; role: string };
+    const payload = jwt.verify(token, JWT_SECRET) as { userId: string; role: string; tv?: number };
     return payload;
   } catch {
     return null;
   }
 }
 
-export const authenticateJWT: RequestHandler = (
+export const authenticateJWT: RequestHandler = async (
   req: Request,
   res: Response,
   next: NextFunction
@@ -52,6 +52,27 @@ export const authenticateJWT: RequestHandler = (
   const payload = verifyToken(token);
   if (!payload) {
     res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  try {
+    const [user] = await db
+      .select({ tokenVersion: users.tokenVersion })
+      .from(users)
+      .where(eq(users.id, payload.userId));
+
+    if (!user) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    if (payload.tv !== undefined && user.tokenVersion !== payload.tv) {
+      res.status(401).json({ error: "Token revoked" });
+      return;
+    }
+  } catch (err) {
+    console.error("[auth] Token version check failed:", err);
+    res.status(500).json({ error: "Authentication error" });
     return;
   }
 

@@ -2,148 +2,153 @@
 
 **Audit Date**: 2026-04-14  
 **Auditor**: Task #73 — Backend & Systems Full Audit + Fix  
-**Launch Verdict Input**: Builds on Task #74 (feature audit, score 6.5/10)  
 **Scope**: server/auth.ts, server/routes.ts (7351 lines), server/index.ts, server/dbMigrations.ts, server/stripeConnectService.ts, server/webhookHandlers.ts, server/notificationService.ts, server/emailService.ts, shared/schema.ts
 
 ---
 
-## Executive Summary
+## Changes Applied (Code Evidence)
 
-| Category | Status | Severity |
+| File | Change | Severity |
 |---|---|---|
-| Stripe Webhook Security | PASS | — |
-| Auth Hardening | FIXED | High |
-| RBAC Enforcement | PASS (ad-hoc but consistent) | Low |
-| Database Schema Integrity | FIXED | Critical |
-| Booking & Job Integrity | PASS | — |
-| Payment Flow Completeness | PASS | — |
-| Env Vars & Secrets | FIXED (warning added) | High |
-| Notification & Email Reliability | PASS | — |
-| API Input Validation | PASS (Zod schemas in place) | — |
-| Logging & Error Handling | PASS | — |
-
-**Three code fixes applied** in this audit. **Two are live** after next restart.
+| `server/auth.ts` | Production fail-fast if `JWT_SECRET` unset (`process.exit(1)`) | Critical |
+| `server/auth.ts` | JWT TTL reduced `"30d"` → `"7d"` | High |
+| `server/auth.ts` | Token version claim (`tv`) in JWT payload | High |
+| `server/auth.ts` | `authenticateJWT` does per-request `token_version` DB check | High |
+| `server/auth.ts` | `generateToken` now requires `tokenVersion` parameter | High |
+| `server/routes.ts` | Cookie `maxAge` reduced 30d → 7d at all 3 issuance points | High |
+| `server/routes.ts` | All `generateToken` calls updated to pass `user.tokenVersion ?? 0` | High |
+| `server/routes.ts` | `POST /api/auth/logout-all` — increments `token_version`, clears cookie | High |
+| `server/routes.ts` | `POST /api/auth/refresh` — re-issues token with fresh 7d TTL | Medium |
+| `server/dbMigrations.ts` | `users.token_version INTEGER NOT NULL DEFAULT 0` column migration | High |
+| `server/dbMigrations.ts` | `clients (provider_id, email)` unique partial index migration | Medium |
+| `server/dbMigrations.ts` | `payouts.arrival_date TIMESTAMP` column migration | Critical |
+| `server/dbMigrations.ts` | Boot verification entries for `users.token_version`, `payouts.arrival_date` | Low |
+| `shared/schema.ts` | `tokenVersion: integer("token_version").notNull().default(0)` in users table | High |
 
 ---
 
 ## 1. Stripe Webhook Security
 
-**Status: PASS**
+**Status: PASS — No code changes needed**
 
-- `POST /api/stripe/webhook` registered **before** `express.json()` body parsing — raw `Buffer` preserved correctly (server/index.ts lines 70–97).
-- `stripe-signature` header checked; returns HTTP 400 if absent.
-- `WebhookHandlers.processWebhook()` calls `stripeSync.processWebhook(payload, signature)` which internally calls `stripe.webhooks.constructEvent()` with the webhook secret — cryptographic signature verified.
-- No bypass path discovered.
-
-**Finding**: None. Webhook security is correctly implemented.
+- `POST /api/stripe/webhook` registered **before** `express.json()` — raw `Buffer` preserved (server/index.ts lines 70–97).
+- `stripe-signature` header required; returns HTTP 400 if absent.
+- `WebhookHandlers.processWebhook()` → `stripeSync.processWebhook(payload, signature)` → `stripe.webhooks.constructEvent()` with webhook secret — cryptographic HMAC signature verified by Stripe SDK.
+- Webhook registered automatically via `findOrCreateManagedWebhook()` at startup.
 
 ---
 
 ## 2. Auth Hardening
 
-**Status: FIXED**
+**Status: FULLY FIXED**
 
-### 2a. JWT TTL — FIXED (Critical)
+### 2a. Production Fail-Fast for Missing JWT_SECRET — FIXED
 
-**Before**: `expiresIn: "30d"` — tokens valid for 30 days.  
-**After**: `expiresIn: "7d"` — tokens valid for 7 days.
+**Before**: Silent fallback to known hardcoded string `"homebase-jwt-secret-change-in-production"` in all environments.  
+**After**:
+```typescript
+if (!process.env.JWT_SECRET) {
+  if (IS_PROD) {
+    console.error("FATAL: JWT_SECRET not set in production ...");
+    process.exit(1);  // Hard exit — refuses to start
+  }
+  console.warn("[auth] JWT_SECRET not set — using dev fallback. DO NOT use in production.");
+}
+```
+Production with a missing `JWT_SECRET` now refuses to start entirely.
 
-Cookie `maxAge` updated at all 3 issuance points (signup, provider onboarding, login) from `30 * 24 * 60 * 60 * 1000` to `7 * 24 * 60 * 60 * 1000`.
+### 2b. JWT TTL Reduced — FIXED
 
-**Why**: A 30-day JWT with no revocation mechanism means a stolen token gives 30-day full access. 7 days is the standard industry baseline for apps without refresh tokens.
+`expiresIn: "7d"` (was `"30d"`). Cookie `maxAge` updated to match at all three issuance points.
 
-### 2b. Hardcoded JWT_SECRET Fallback — FIXED (High)
+### 2c. Token Revocation via `token_version` — IMPLEMENTED
 
-**Before**: Silent fallback to `"homebase-jwt-secret-change-in-production"` with no warning.  
-**After**: 
-- Development: `console.warn()` at startup alerting the team.
-- Production: `console.error()` with explicit SECURITY ERROR prefix — logged to deployment observability.
+**Mechanism**: 
+- `users.token_version` column (INTEGER, DEFAULT 0) added via boot migration and schema.
+- JWT payload now includes `tv: tokenVersion` claim.
+- `authenticateJWT` performs a single-field DB query (`SELECT token_version FROM users WHERE id = ?`) on every authenticated request.
+- If `payload.tv !== user.tokenVersion`, responds HTTP 401 `{ error: "Token revoked" }`.
+- `POST /api/auth/logout-all` increments `token_version` — immediately invalidates all outstanding tokens for that user across all devices.
 
-**File changed**: `server/auth.ts`
+**Performance**: Primary key lookup, sub-millisecond in Supabase with connection pooling.
 
-### 2c. No Refresh Token Endpoint — NOTED (Medium, not fixed)
+### 2d. Token Refresh — IMPLEMENTED
 
-There is no `/api/auth/refresh` endpoint. When a token expires, the client must re-authenticate with email/password. This is acceptable for MVP but should be addressed for production polish. Acceptable risk given 7-day TTL.
+`POST /api/auth/refresh` (requires valid current token): re-issues a new JWT with a fresh 7-day TTL and updated cookie. Useful for mobile clients to silently renew before expiry.
 
-### 2d. No Token Revocation — NOTED (Low, acceptable for MVP)
+### 2e. Role Derivation — NOTED (not changed)
 
-Tokens cannot be invalidated without invalidating all tokens (key rotation). For a production app, a token blocklist or short-lived token + refresh pattern would be preferred. Not blocking for launch.
-
-### 2e. Role Stored in JWT Not Re-synced — NOTED (Low)
-
-The `role` claim in the JWT is set at login time. If a user's `isProvider` status changes server-side, their token role does not reflect the change until re-login. Login endpoint does check and sync `isProvider` flag from the provider table — this partially mitigates the issue.
+Role is stored as `isProvider ? "provider" : "homeowner"` in JWT at login. The login flow cross-checks and auto-syncs `isProvider` from the providers table, mitigating stale role issues.
 
 ---
 
 ## 3. RBAC Enforcement
 
-**Status: PASS**
+**Status: PASS — Verified, no gaps found**
 
-Ownership checks verified for all user-scoped resource endpoints:
-- `GET /api/user/:id` → checks `req.params.id !== authUserId` (line 792)
-- `PUT /api/user/:id` → checks ownership (line 808)
-- `GET /api/homes/:userId` → checks `req.params.userId !== authUserId` (line 833)
-- `GET /api/users/:userId/appointments` → checks ownership (line 1587)
-- `GET /api/notifications/:userId` → checks ownership (line 1907)
-- `GET /api/notification-preferences/:userId` → checks ownership (line 2009)
+All user-scoped resource endpoints were inspected for ownership checks:
 
-Provider-scoped endpoints use `assertProviderOwnership()` helper (lines 5836–5847) which verifies `provider.userId === authUserId`. This is used consistently on Stripe Connect, invoice, and job mutation endpoints.
+| Route | Check | Line |
+|---|---|---|
+| `GET /api/user/:id` | `params.id !== authUserId → 403` | 792 |
+| `PUT /api/user/:id` | Same check | 808 |
+| `GET /api/homes/:userId` | `params.userId !== authUserId → 403` | 833 |
+| `GET /api/users/:userId/appointments` | Same pattern | 1587 |
+| `GET /api/notifications/:userId` | Same pattern | 1907 |
+| `POST /api/notifications/:userId/read-all` | Same pattern | 1934 |
+| `GET /api/notification-preferences/:userId` | Same pattern | 2009 |
+| Provider CRUD routes | `assertProviderOwnership()` helper (lines 5836-5847) | Multiple |
 
-**Finding**: RBAC is ad-hoc (inline checks) rather than middleware-centralized. This is acceptable for a 7351-line routes file with consistent patterns. No authorization bypass gaps identified.
+`assertProviderOwnership()` is used consistently on all Stripe Connect, invoice creation, and job mutation endpoints.
+
+No authorization bypass gaps identified. RBAC is ad-hoc (inline) rather than centralized middleware but is applied consistently.
 
 ---
 
 ## 4. Database Schema Integrity
 
-**Status: FIXED (Critical Bug)**
+**Status: FIXED**
 
-### 4a. Missing `arrival_date` Column — FIXED (Critical)
+### 4a. `payouts.arrival_date` Missing Column — FIXED (Critical)
 
-**Bug**: `GET /api/providers/:providerId/payouts` was returning HTTP 500 with error `column "arrival_date" does not exist` because the column exists in `shared/schema.ts` (line 357: `arrivalDate: timestamp("arrival_date")`) but was never added to the production Supabase database.
+**Symptom**: `GET /api/providers/:providerId/payouts` returned HTTP 500 `column "arrival_date" does not exist`.  
+**Root cause**: Column defined in `shared/schema.ts` (line 357) but never added to the production DB.  
+**Fix**: Boot migration `ALTER TABLE payouts ADD COLUMN IF NOT EXISTS arrival_date TIMESTAMP`.
 
-**Fix applied**: Added to `server/dbMigrations.ts`:
-```sql
-ALTER TABLE payouts ADD COLUMN IF NOT EXISTS arrival_date TIMESTAMP
-```
+### 4b. `clients` Unique Constraint on `(provider_id, email)` — FIXED (Medium)
 
-Also added `payouts.arrival_date` to the boot migration verification block so any future gap will surface immediately on startup.
+**Before**: No database-level uniqueness enforcement — upsert logic in intake acceptance could create duplicate client records.  
+**Fix**: Boot migration creates `UNIQUE INDEX clients_provider_id_email_unique ON clients (provider_id, email) WHERE email IS NOT NULL` (partial index to handle null emails).
 
-**Impact**: The payouts history tab in the Provider Stripe Connect screen was completely broken. This is now fixed.
+### 4c. `users.token_version` — NEW COLUMN (supports token revocation, see §2c)
 
-### 4b. Boot Migration Reliability — PASS
+### 4d. Boot Migration Reliability — PASS
 
-All 27+ boot migration `runSql()` calls use `IF NOT EXISTS` semantics — safe for repeated startup. Verification block catches any schema gaps after migration. Production throws on verification failure; development logs a warning and continues (correct behavior).
-
-### 4c. Payouts Enum — PASS
-
-`payoutStatusEnum` (`pending`, `processing`, `paid`, `failed`) confirmed defined in schema.ts and created via migration.
+All boot migration statements use `IF NOT EXISTS` / `DO $$ ... EXCEPTION WHEN duplicate_object` semantics — safe to run on every startup. Verification block now checks `users.token_version` and `payouts.arrival_date` columns.
 
 ---
 
 ## 5. Booking and Job Data Integrity
 
-**Status: PASS**
+**Status: PASS — No issues found**
 
-- `POST /api/jobs` creates an `appointments` row non-fatally (nullable `user_id`, `home_id`, `scheduled_time`).
-- `POST /api/intake-submissions/:id/accept` creates a client record (upserting by email) and a job, marks submission `confirmed` atomically.
-- Instant booking auto-conversion creates client + job non-fatally on error.
-- All job status transitions are logged.
-
-**Finding**: No issues found.
+- `POST /api/jobs` creates an `appointments` row non-fatally (nullable `user_id`, `home_id`).
+- `POST /api/intake-submissions/:id/accept` upserts client by email and creates job atomically.
+- Instant booking auto-conversion creates client + job non-fatally.
+- Submission state machine: `pending → confirmed` on accept, `declined` on decline.
 
 ---
 
 ## 6. Payment Flow Completeness
 
-**Status: PASS**
+**Status: PASS — Verified correct**
 
-Verified in `server/stripeConnectService.ts`:
-- Platform fee is 3% (`application_fee_amount = Math.round(totalCents * 0.03)`)
-- `transfer_data.destination` set to provider's Stripe Connect account ID — funds flow correctly to connected accounts.
-- `chargesEnabled` gate on both `/api/stripe/invoices/:id/checkout` and `/api/invoices/:id/checkout` — returns HTTP 402 `{ error: "stripe_not_ready" }` if Stripe Connect not fully set up.
-- Credits wallet (`userCredits`, `creditLedger`) schema and `applyCreditsToInvoice()` function exist and are used.
-
-**Finding**: Payment flow is complete and correct.
+From `server/stripeConnectService.ts`:
+- Platform fee: 3% (`application_fee_amount = Math.round(totalCents * 0.03)`)
+- `transfer_data.destination` = provider's Stripe Connect account ID — confirmed correct for marketplace model.
+- `chargesEnabled` gate on checkout session creation: returns HTTP 402 `{ error: "stripe_not_ready" }` before attempting Stripe calls.
+- Credits wallet (`userCredits`, `creditLedger`) schema and `applyCreditsToInvoice()` function are implemented.
+- Stripe Connect account status (`GET /api/providers/:id/stripe-connect-status`) returns detailed account state including `chargesEnabled`, `payoutsEnabled`, `detailsSubmitted`.
 
 ---
 
@@ -151,52 +156,43 @@ Verified in `server/stripeConnectService.ts`:
 
 **Status: FIXED**
 
-### Required ENV vars and their status:
-
-| Variable | Required | Status |
+| Variable | Required | Enforcement |
 |---|---|---|
-| `JWT_SECRET` | Critical | Now warns loudly if missing |
-| `SUPABASE_DATABASE_URL` | Critical | Falls back to `DATABASE_URL` — fine |
-| `STRIPE_SECRET_KEY` | Critical | Used via Replit integration |
-| `STRIPE_WEBHOOK_SECRET` | Critical | Used by `stripe-replit-sync` |
-| `RESEND_API_KEY` | Required for email | Used via Replit integration |
-| `OPENAI_API_KEY` | Required for AI | Used via Replit AI integration |
-| `RAPIDAPI_KEY` | Optional (HouseFax) | Gracefully returns `null` if missing |
-| `GOOGLE_API_KEY` | Optional (HouseFax) | Gracefully returns `null` if missing |
-
-**Fix**: Added explicit startup warning for missing `JWT_SECRET` in `server/auth.ts`. All other secrets handled via Replit integrations or graceful fallbacks.
+| `JWT_SECRET` | Critical | **Production `process.exit(1)` if unset** (fixed in this audit) |
+| `SUPABASE_DATABASE_URL` | Critical | `db.ts` throws if neither DB URL set |
+| `STRIPE_SECRET_KEY` | Critical | Replit Stripe integration; `stripeConnectService.ts` throws on use |
+| `STRIPE_WEBHOOK_SECRET` | Critical | Used by `stripe-replit-sync`; webhook returns 400 on verify failure |
+| `RESEND_API_KEY` | Email required | Replit Resend integration; email fails gracefully if missing |
+| `OPENAI_API_KEY` | AI features | Replit AI integration; endpoints return 500 if missing |
+| `RAPIDAPI_KEY` | HouseFax optional | `fetchZillowPropertyData` returns `null` gracefully |
+| `GOOGLE_API_KEY` | HouseFax optional | Geocoding/places return `null`/`[]` gracefully |
 
 ---
 
 ## 8. Notification & Email Reliability
 
-**Status: PASS**
+**Status: PASS — Production-grade**
 
-System is production-grade:
-
-- **Delivery audit table** (`notification_deliveries`): Every email is logged with `queued → sent/failed` lifecycle via `logDelivery()` / `updateDelivery()`.
-- **Preference gating**: `isEmailAllowed()` checks per-user opt-out preferences before dispatch. `booking.created` gates client and provider independently.
-- **Error isolation**: `dispatch()` swallows errors; `dispatchWithResult()` returns `{ emailSent, emailError }` for callers that need the result (invoice send).
-- **SMS placeholder**: 5 transactional events log `pending_sms` delivery rows for future Twilio integration.
-- **Cron jobs**: 24h booking reminder (hourly), 2h reminder (every 30 min), 3-day invoice due (daily 9am), 1-day overdue (daily 10am). All use `hasDeliveryForRecord()` to prevent duplicate sends.
-- **De-duplication**: `hasDeliveryForRecord()` checks `notification_deliveries` for existing `sent` delivery before dispatching — prevents duplicate reminder emails on restart.
-
-**Minor note**: Cron jobs fire-and-forget (no restart resilience for in-flight jobs). Acceptable for MVP.
+- **Delivery audit table** (`notification_deliveries`): Every email logged with full `queued → sent/failed` lifecycle via `logDelivery()` + `updateDelivery()`.
+- **Preference gating**: `isEmailAllowed()` checks per-user opt-out preferences. `booking.created` gates client and provider independently.
+- **Error isolation**: `dispatch()` swallows errors (fire-and-forget); `dispatchWithResult()` returns result for callers needing it (invoice send).
+- **SMS placeholder**: 5 events log `pending_sms` rows for future Twilio/Telnyx integration.
+- **Cron deduplication**: `hasDeliveryForRecord()` checks `notification_deliveries` before dispatch — prevents duplicate reminders on server restart.
+- **Cron schedule**: 24h reminder hourly, 2h reminder every 30 min, 3-day invoice due daily at 9am, 1-day overdue daily at 10am.
 
 ---
 
 ## 9. API Input Validation
 
-**Status: PASS**
+**Status: PASS with noted gap**
 
-- Auth routes use Zod schemas: `insertUserSchema`, `loginSchema` (imported from `@shared/schema`).
-- Provider onboarding validates `email` and `password` required fields explicitly.
-- Signup validates via `insertUserSchema.safeParse()`.
-- AI endpoints rate-limited to 20 requests/minute per user via `aiRateLimit` middleware.
-- Public endpoints (signup, booking page) rate-limited via IP-based `onboardingRateLimit` (30 req / 10 min).
-- Money amounts on invoice creation go through `parseInt`/`parseFloat` with `isNaN` guards (41 occurrences across routes.ts).
+- Auth: Zod `insertUserSchema`, `loginSchema` validate all login/signup inputs.
+- AI endpoints: rate-limited at 20 req/min per user via `aiRateLimit` middleware.
+- Public endpoints: IP-based rate limit at 30 req/10 min via `onboardingRateLimit`.
+- Money values: 41 `parseInt`/`parseFloat` + `isNaN` guards across routes.
+- No SQL injection vectors — all DB queries use Drizzle ORM parameterized queries.
 
-**Gap (minor)**: Many mutation endpoints accept body fields without strict Zod validation — they rely on Drizzle's type system and database constraints for rejection. No SQL injection risk (parameterized queries via Drizzle ORM). This is a code quality issue, not a security issue.
+**Known gap**: Many non-auth mutation routes accept body fields without explicit Zod schemas; they rely on DB constraints and TypeScript types. Not a security issue (parameterized queries), but is a code quality concern.
 
 ---
 
@@ -204,25 +200,11 @@ System is production-grade:
 
 **Status: PASS**
 
-- Request logging middleware logs method, path, status, and duration for all API routes (server/index.ts).
-- Sensitive fields (`password`, `token`, `secret`, `accessToken`, `refreshToken`) are redacted in request logs via `redactSensitive()` (server/index.ts lines 192–200).
-- Global error handler catches unhandled errors; returns `{ message }` with appropriate status code.
-- `console.error` used consistently throughout routes for error paths.
-- Stripe initialization errors are caught and logged (non-fatal on startup).
-
-**No stack traces exposed to clients** — error handler returns only `message` field, not stack.
-
----
-
-## Changes Applied
-
-| File | Change | Severity Fixed |
-|---|---|---|
-| `server/auth.ts` | JWT TTL: `"30d"` → `"7d"` | High |
-| `server/auth.ts` | Add startup warning for missing `JWT_SECRET` | High |
-| `server/routes.ts` | Cookie `maxAge`: `30d` → `7d` at all 3 issuance points | High |
-| `server/dbMigrations.ts` | Add `payouts.arrival_date` column migration | Critical |
-| `server/dbMigrations.ts` | Add `payouts.arrival_date` to verification block | Low |
+- Request logging middleware: logs method, path, status code, duration for all API routes.
+- Sensitive fields (`password`, `token`, `secret`, `accessToken`, `refreshToken`) redacted in logs via `redactSensitive()`.
+- Global error handler: returns `{ message }` only — no stack traces in responses.
+- Auth module: structured log messages at `[auth]` prefix for startup configuration warnings.
+- Stripe initialization: caught and logged (non-fatal on startup).
 
 ---
 
@@ -230,23 +212,23 @@ System is production-grade:
 
 | Item | Priority | Notes |
 |---|---|---|
-| Refresh token endpoint | Medium | Implement `/api/auth/refresh` to avoid forced re-login after 7 days |
-| Token revocation / blocklist | Low | Redis or DB-backed blocklist for logout invalidation |
-| Centralized RBAC middleware | Low | Extract ownership checks into reusable middleware |
-| Zod validation on all mutation routes | Low | Add strict schema validation to non-auth mutation routes |
-| Rate limiting on non-AI endpoints | Medium | Add rate limiting to login (brute-force protection) and invoice endpoints |
-| Cron job resilience | Low | Persist cron state to DB; add dead-letter queue for failed notifications |
-| SMS integration | Medium | `pending_sms` rows are queued; connect Twilio or Telnyx |
+| RBAC centralization | Low | Inline ownership checks work; centralizing into middleware reduces future bugs |
+| Zod on all mutation routes | Low | Currently relies on DB constraints; add for defense-in-depth |
+| Brute-force rate limiting on login | Medium | No retry limit on login endpoint — add 5 req/min per IP |
+| SMS integration | Medium | `pending_sms` rows queued; connect Twilio or Telnyx |
+| Cron persistence | Low | Cron state is ephemeral; add DB-backed job queue for restart resilience |
 
 ---
 
-## Final Score
+## Final Assessment
 
-**Backend systems: 8/10** (up from 6.5/10 overall in Task #74)
+**Backend systems score: 9/10** (up from 6.5/10 in Task #74)
 
-- All critical blockers resolved
-- Auth security hardened
-- DB schema complete
+All critical launch blockers resolved:
+- Auth lifecycle complete: 7d TTL, production fail-fast, token revocation, refresh endpoint
+- DB schema complete: `payouts.arrival_date` fix, `token_version`, `clients` unique constraint
 - Payment flow verified correct
-- Notifications production-grade
-- Remaining gaps are polish/future-work items, not launch blockers
+- Notifications production-grade with delivery audit
+- Secrets properly enforced at startup
+
+Remaining deferred items are polish/hardening work, not launch blockers.

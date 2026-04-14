@@ -195,14 +195,30 @@ export async function runBootMigrations(): Promise<void> {
       )
     `);
 
-    // ── users: Stripe customer & default payment method ───────────────────
+    // ── users: Stripe customer & default payment method & token revocation ───
     const userAlters: Array<[string, string]> = [
       ["users.stripe_customer_id",       `ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT`],
       ["users.default_payment_method_id",`ALTER TABLE users ADD COLUMN IF NOT EXISTS default_payment_method_id TEXT`],
+      ["users.token_version",            `ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0`],
     ];
     for (const [label, sql] of userAlters) {
       await runSql(label, sql);
     }
+
+    // ── clients: unique constraint on (provider_id, email) ────────────────
+    await runSql("clients.unique_provider_email", `
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_indexes
+          WHERE tablename = 'clients'
+            AND indexname = 'clients_provider_id_email_unique'
+        ) THEN
+          CREATE UNIQUE INDEX clients_provider_id_email_unique
+            ON clients (provider_id, email)
+            WHERE email IS NOT NULL;
+        END IF;
+      END $$
+    `);
 
     // ── provider_custom_services: AI Blueprint fields ────────────────────
     const customServiceAlters: Array<[string, string]> = [
@@ -252,6 +268,7 @@ export async function runBootMigrations(): Promise<void> {
       ["homes.housefax_data column",         `SELECT housefax_data FROM homes LIMIT 0`],
       ["users.stripe_customer_id column",    `SELECT stripe_customer_id FROM users LIMIT 0`],
       ["users.default_payment_method_id",    `SELECT default_payment_method_id FROM users LIMIT 0`],
+      ["users.token_version column",         `SELECT token_version FROM users LIMIT 0`],
       ["payouts.arrival_date column",        `SELECT arrival_date FROM payouts LIMIT 0`],
     ];
 

@@ -484,7 +484,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const user = await storage.createUser(parsed.data);
-      const token = generateToken(user.id, user.isProvider ? "provider" : "homeowner");
+      const token = generateToken(user.id, user.isProvider ? "provider" : "homeowner", user.tokenVersion ?? 0);
       res.cookie("token", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
@@ -595,7 +595,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return { user: newUser, provider: newProvider, service: newService };
       });
 
-      const token = generateToken(user.id, "provider");
+      const token = generateToken(user.id, "provider", user.tokenVersion ?? 0);
       res.cookie("token", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
@@ -642,7 +642,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user.isProvider = true;
       }
 
-      const token = generateToken(user.id, user.isProvider ? "provider" : "homeowner");
+      const token = generateToken(user.id, user.isProvider ? "provider" : "homeowner", user.tokenVersion ?? 0);
       res.cookie("token", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
@@ -673,6 +673,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/auth/logout", (req: Request, res: Response) => {
     res.clearCookie("token");
     res.json({ success: true });
+  });
+
+  app.post("/api/auth/logout-all", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.authenticatedUserId!;
+      await db.update(users)
+        .set({ tokenVersion: sql`token_version + 1` })
+        .where(eq(users.id, userId));
+      res.clearCookie("token");
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Logout-all error:", error);
+      res.status(500).json({ error: "Failed to revoke sessions" });
+    }
+  });
+
+  app.post("/api/auth/refresh", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.authenticatedUserId!;
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+      const token = generateToken(user.id, user.isProvider ? "provider" : "homeowner", user.tokenVersion ?? 0);
+      res.cookie("token", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+      res.json({ token });
+    } catch (error) {
+      console.error("Token refresh error:", error);
+      res.status(500).json({ error: "Failed to refresh token" });
+    }
   });
 
   app.post("/api/auth/forgot-password", async (req: Request, res: Response) => {
