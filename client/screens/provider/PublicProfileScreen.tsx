@@ -27,7 +27,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { getApiUrl, getAuthHeaders } from "@/lib/query-client";
-import { Provider } from "@/state/types";
+import { mapApiProvider } from "@/lib/providerUtils";
 
 type TabType = "about" | "services" | "reviews";
 
@@ -68,11 +68,6 @@ interface OwnerProviderResponse {
   serviceZipCodes: string[] | null;
   serviceCities: string[] | null;
   businessHours: Record<DayKey, BusinessHoursDay> | null;
-}
-
-interface ApiServiceItem {
-  id: string;
-  name: string;
 }
 
 interface CustomService {
@@ -118,27 +113,6 @@ function formatServicePrice(svc: CustomService): string | null {
   return null;
 }
 
-function mapOwnerProvider(p: OwnerProviderResponse, serviceList: ApiServiceItem[]): Provider {
-  return {
-    id: p.id,
-    name: p.businessName ?? "",
-    businessName: p.businessName ?? "",
-    avatarUrl: p.avatarUrl ?? undefined,
-    rating: parseFloat(p.averageRating ?? p.rating ?? "0") || 0,
-    reviewCount: p.reviewCount ?? 0,
-    services: serviceList.map((s) => s.name ?? ""),
-    categoryIds: [],
-    hourlyRate: parseFloat(p.hourlyRate ?? "0") || 0,
-    verified: p.isVerified ?? false,
-    description: p.description ?? "",
-    yearsExperience: p.yearsExperience ?? 0,
-    completedJobs: p.completedJobs ?? 0,
-    responseTime: p.responseTime ?? "< 1 hour",
-    distance: undefined,
-    gallery: [],
-    phone: p.phone ?? undefined,
-  };
-}
 
 export default function PublicProfileScreen() {
   const headerHeight = useHeaderHeight();
@@ -207,10 +181,10 @@ export default function PublicProfileScreen() {
   const slug = activeLink?.slug;
   const profileUrl = slug ? `https://homebaseproapp.com/providers/${slug}` : null;
 
-  const provider: Provider | null = useMemo(() => {
+  const provider = useMemo(() => {
     if (!rawProvider) return null;
-    return mapOwnerProvider(rawProvider, []);
-  }, [rawProvider]);
+    return mapApiProvider(rawProvider, allServices);
+  }, [rawProvider, allServices]);
 
   const safeRating = provider ? (isNaN(provider.rating) ? 0 : provider.rating) : 0;
 

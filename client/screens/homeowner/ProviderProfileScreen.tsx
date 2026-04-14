@@ -23,16 +23,12 @@ import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { AccountGateModal } from "@/components/AccountGateModal";
 import { getApiUrl, getAuthHeaders } from "@/lib/query-client";
 import { Provider } from "@/state/types";
+import { mapApiProvider, ApiServiceItem } from "@/lib/providerUtils";
 
 type ScreenRouteProp = RouteProp<RootStackParamList, "ProviderProfile">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 type TabType = "about" | "services" | "reviews";
-
-interface ApiServiceItem {
-  id: string;
-  name: string;
-}
 
 interface ApiProviderResponse {
   provider: {
@@ -70,27 +66,6 @@ interface CustomServicesResponse {
   services: CustomService[];
 }
 
-function mapApiProvider(p: ApiProviderResponse["provider"], serviceList: ApiServiceItem[]): Provider {
-  return {
-    id: p.id,
-    name: p.businessName ?? "",
-    businessName: p.businessName ?? "",
-    avatarUrl: p.avatarUrl ?? undefined,
-    rating: parseFloat(p.averageRating ?? p.rating ?? "0") || 0,
-    reviewCount: p.reviewCount ?? 0,
-    services: serviceList.map((s) => s.name ?? ""),
-    categoryIds: [],
-    hourlyRate: parseFloat(p.hourlyRate ?? "0") || 0,
-    verified: p.isVerified ?? false,
-    description: p.description ?? "",
-    yearsExperience: p.yearsExperience ?? 0,
-    completedJobs: p.completedJobs ?? 0,
-    responseTime: p.responseTime ?? "< 1 hour",
-    distance: p.distance ?? undefined,
-    gallery: [],
-    phone: p.phone ?? undefined,
-  };
-}
 
 export default function ProviderProfileScreen() {
   const insets = useSafeAreaInsets();
