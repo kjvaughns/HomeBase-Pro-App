@@ -157,6 +157,8 @@ export default function FindScreen() {
           p.name?.toLowerCase().includes(q) ||
           p.services?.some((s) => s.toLowerCase().includes(q))
       );
+      result.sort((a, b) => b.rating - a.rating);
+      return result;
     }
 
     if (filters.minRating > 0) {
@@ -182,7 +184,7 @@ export default function FindScreen() {
         break;
     }
 
-    return isSearching ? result : result.slice(0, 5);
+    return result.slice(0, 5);
   }, [providers, filters, searchQuery, isSearching]);
 
   const openFilterModal = () => {
