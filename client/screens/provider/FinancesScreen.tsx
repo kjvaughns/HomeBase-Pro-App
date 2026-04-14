@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   StyleSheet,
   View,
@@ -10,11 +10,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, getAuthHeaders, getApiUrl } from "@/lib/query-client";
 
 import { ThemedText } from "@/components/ThemedText";
@@ -76,6 +76,24 @@ interface StripeRefund {
   reason: string | null;
   status: string;
   createdAt: string;
+}
+
+interface ProviderInvoice {
+  id: string;
+  providerId: string;
+  clientId: string | null;
+  invoiceNumber: string | null;
+  total: string | null;
+  totalCents: number | null;
+  status: string;
+  dueDate: string | null;
+  createdAt: string;
+}
+
+interface ProviderClient {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
 }
 
 type TabKey = "payouts" | "payments" | "refunds";
@@ -147,6 +165,38 @@ function formatRefundReason(reason: string | null): string {
   return reason.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function invoiceStatusType(status: string): StatusType {
+  switch (status) {
+    case "overdue": return "error";
+    case "sent": return "pending";
+    case "viewed": return "info";
+    case "partially_paid": return "warning";
+    default: return "neutral";
+  }
+}
+
+function invoiceStatusLabel(status: string): string {
+  if (status === "partially_paid") return "Partial";
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function formatInvoiceAmount(invoice: ProviderInvoice): string {
+  if (invoice.totalCents != null && invoice.totalCents > 0) {
+    return formatCents(invoice.totalCents);
+  }
+  const num = parseFloat(invoice.total ?? "0");
+  return isNaN(num) ? "$0.00" : `$${num.toFixed(2)}`;
+}
+
+function formatDueDate(dueDate: string | null): string {
+  if (!dueDate) return "No due date";
+  const d = new Date(dueDate);
+  const now = new Date();
+  const isOverdue = d < now;
+  const label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return isOverdue ? `Overdue ${label}` : `Due ${label}`;
+}
+
 // ─── Skeleton Loading ─────────────────────────────────────────────────────────
 
 function SkeletonRow({ theme }: { theme: ReturnType<typeof useTheme>["theme"] }) {
@@ -180,6 +230,16 @@ export default function FinancesScreen() {
   const providerId = providerProfile?.id ?? "";
   const [activeTab, setActiveTab] = useState<TabKey>("payouts");
   const [refreshing, setRefreshing] = useState(false);
+  const queryClient = useQueryClient();
+
+  // Refetch outstanding invoices whenever this tab comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (providerId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "invoices"] });
+      }
+    }, [providerId, queryClient])
+  );
 
   // ── Stats & Stripe status ──────────────────────────────────────────────────
 
@@ -254,16 +314,71 @@ export default function FinancesScreen() {
     staleTime: 60_000,
   });
 
+  // ── Provider invoices (outstanding) ───────────────────────────────────────
+
+  const {
+    data: invoicesData,
+    isLoading: invoicesLoading,
+    refetch: refetchInvoices,
+  } = useQuery<{ invoices: ProviderInvoice[] }>({
+    queryKey: ["/api/provider", providerId, "invoices"],
+    queryFn: async () => {
+      const url = new URL(`/api/provider/${providerId}/invoices`, getApiUrl());
+      const res = await fetch(url.toString(), { headers: getAuthHeaders() });
+      if (!res.ok) return { invoices: [] };
+      return res.json();
+    },
+    enabled: !!providerId,
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  });
+
+  const {
+    data: clientsData,
+  } = useQuery<{ clients: ProviderClient[] }>({
+    queryKey: ["/api/provider", providerId, "clients"],
+    queryFn: async () => {
+      const url = new URL(`/api/provider/${providerId}/clients`, getApiUrl());
+      const res = await fetch(url.toString(), { headers: getAuthHeaders() });
+      if (!res.ok) return { clients: [] };
+      return res.json();
+    },
+    enabled: !!providerId,
+    staleTime: 60_000,
+  });
+
   const stats = statsData?.stats ?? { revenueMTD: 0, jobsCompleted: 0, activeClients: 0, upcomingJobs: 0 };
   const stripePayouts = payoutsData?.payouts ?? [];
   const stripePayments = paymentsData?.payments ?? [];
   const stripeRefunds = refundsData?.refunds ?? [];
 
+  // Build a clientId → display name map
+  const clientNameMap = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    for (const c of clientsData?.clients ?? []) {
+      const name = [c.firstName, c.lastName].filter(Boolean).join(" ").trim();
+      map[c.id] = name || "Client";
+    }
+    return map;
+  }, [clientsData]);
+
+  // Outstanding = sent / viewed / overdue / partially_paid, sorted by dueDate asc
+  const outstandingInvoices = useMemo<ProviderInvoice[]>(() => {
+    const OUTSTANDING = new Set(["sent", "viewed", "overdue", "partially_paid"]);
+    return (invoicesData?.invoices ?? [])
+      .filter((inv) => OUTSTANDING.has(inv.status))
+      .sort((a, b) => {
+        const dateA = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+        const dateB = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+        return dateA - dateB;
+      });
+  }, [invoicesData]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([refetchPayouts(), refetchPayments(), refetchRefunds()]);
+    await Promise.all([refetchPayouts(), refetchPayments(), refetchRefunds(), refetchInvoices()]);
     setRefreshing(false);
-  }, [refetchPayouts, refetchPayments, refetchRefunds]);
+  }, [refetchPayouts, refetchPayments, refetchRefunds, refetchInvoices]);
 
   // ── Renderers ─────────────────────────────────────────────────────────────
 
@@ -405,6 +520,87 @@ export default function FinancesScreen() {
             </View>
           </View>
         </GlassCard>
+      </Animated.View>
+
+      {/* Outstanding Invoices section */}
+      <Animated.View entering={FadeInDown.delay(75).duration(400)}>
+        <View style={[styles.outstandingCard, { backgroundColor: theme.cardBackground }]}>
+          {/* Section header */}
+          <View style={styles.outstandingHeader}>
+            <ThemedText style={styles.outstandingTitle}>Outstanding</ThemedText>
+            {outstandingInvoices.length > 0 ? (
+              <View style={[styles.outstandingBadge, { backgroundColor: Colors.accent }]}>
+                <ThemedText style={styles.outstandingBadgeText}>{outstandingInvoices.length}</ThemedText>
+              </View>
+            ) : null}
+          </View>
+
+          {/* Loading skeleton */}
+          {invoicesLoading ? (
+            <View>
+              {["os1", "os2"].map((k) => (
+                <View key={k} style={styles.outstandingRow}>
+                  <View style={styles.outstandingRowInfo}>
+                    <View style={[styles.skeletonLine, { backgroundColor: theme.separator, width: "55%", marginBottom: 6 }]} />
+                    <View style={[styles.skeletonLine, { backgroundColor: theme.separator, width: "40%" }]} />
+                  </View>
+                  <View style={styles.outstandingRowRight}>
+                    <View style={[styles.skeletonLine, { backgroundColor: theme.separator, width: 64, marginBottom: 6 }]} />
+                    <View style={[styles.skeletonPill, { backgroundColor: theme.separator }]} />
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : outstandingInvoices.length > 0 ? (
+            <View>
+              {outstandingInvoices.map((inv, index) => {
+                const clientName = (inv.clientId ? clientNameMap[inv.clientId] : null) ?? "Client";
+                const isOverdue = inv.status === "overdue" ||
+                  (inv.dueDate != null && new Date(inv.dueDate) < new Date() && inv.status !== "paid");
+                return (
+                  <Pressable
+                    key={inv.id}
+                    style={[
+                      styles.outstandingRow,
+                      index < outstandingInvoices.length - 1
+                        ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.separator }
+                        : null,
+                    ]}
+                    onPress={() => { Haptics.selectionAsync(); navigation.navigate("InvoiceDetail", { invoiceId: inv.id }); }}
+                    testID={`outstanding-invoice-${inv.id}`}
+                  >
+                    <View style={[styles.outstandingIcon, { backgroundColor: isOverdue ? "#FF3B3014" : Colors.accentLight }]}>
+                      <Feather name="file-text" size={15} color={isOverdue ? "#FF3B30" : Colors.accent} />
+                    </View>
+                    <View style={styles.outstandingRowInfo}>
+                      <ThemedText style={styles.outstandingClientName} numberOfLines={1}>{clientName}</ThemedText>
+                      <ThemedText style={[styles.outstandingMeta, { color: isOverdue ? "#FF3B30" : theme.textSecondary }]}>
+                        {inv.invoiceNumber ? `#${inv.invoiceNumber}` : "Invoice"} · {formatDueDate(inv.dueDate)}
+                      </ThemedText>
+                    </View>
+                    <View style={styles.outstandingRowRight}>
+                      <ThemedText style={[styles.outstandingAmount, isOverdue ? { color: "#FF3B30" } : null]}>
+                        {formatInvoiceAmount(inv)}
+                      </ThemedText>
+                      <StatusPill
+                        status={invoiceStatusType(isOverdue && inv.status !== "overdue" ? "overdue" : inv.status)}
+                        label={invoiceStatusLabel(isOverdue && inv.status !== "overdue" ? "overdue" : inv.status)}
+                        size="small"
+                      />
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : (
+            <View style={styles.outstandingEmpty}>
+              <Feather name="check-circle" size={20} color={Colors.accent} />
+              <ThemedText style={[styles.outstandingEmptyText, { color: theme.textSecondary }]}>
+                All caught up
+              </ThemedText>
+            </View>
+          )}
+        </View>
       </Animated.View>
 
       {/* Stripe connect CTA */}
@@ -731,4 +927,64 @@ const styles = StyleSheet.create({
     paddingTop: Spacing["2xl"],
     alignItems: "center",
   },
+
+  // Outstanding Invoices section
+  outstandingCard: {
+    borderRadius: BorderRadius.card,
+    marginBottom: Spacing.md,
+    overflow: "hidden",
+  },
+  outstandingHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
+  },
+  outstandingTitle: {
+    ...Typography.callout,
+    fontWeight: "700",
+  },
+  outstandingBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+  outstandingBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#fff",
+  },
+  outstandingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  outstandingIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: BorderRadius.sm,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  outstandingRowInfo: { flex: 1, minWidth: 0 },
+  outstandingClientName: { ...Typography.callout, fontWeight: "600" },
+  outstandingMeta: { ...Typography.caption1, marginTop: 2 },
+  outstandingRowRight: { alignItems: "flex-end", gap: 4 },
+  outstandingAmount: { ...Typography.callout, fontWeight: "700" },
+  outstandingEmpty: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
+    paddingVertical: Spacing.md,
+    paddingBottom: Spacing.md,
+  },
+  outstandingEmptyText: { ...Typography.callout },
 });
