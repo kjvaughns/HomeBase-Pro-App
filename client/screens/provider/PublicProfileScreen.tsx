@@ -1,42 +1,44 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   StyleSheet,
   View,
   ScrollView,
   Pressable,
-  Share,
   ActivityIndicator,
+  Share,
+  Linking,
+  Alert,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import * as Clipboard from "expo-clipboard";
-import * as WebBrowser from "expo-web-browser";
 import { useQuery } from "@tanstack/react-query";
-import type { ComponentProps } from "react";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { Avatar } from "@/components/Avatar";
+import { StatusPill } from "@/components/StatusPill";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { getApiUrl, getAuthHeaders } from "@/lib/query-client";
 
-type FeatherName = ComponentProps<typeof Feather>["name"];
+type TabType = "about" | "services" | "reviews";
 
 type DayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 const DAY_LABELS: Record<DayKey, string> = {
-  mon: "Mon",
-  tue: "Tue",
-  wed: "Wed",
-  thu: "Thu",
-  fri: "Fri",
-  sat: "Sat",
-  sun: "Sun",
+  mon: "Monday",
+  tue: "Tuesday",
+  wed: "Wednesday",
+  thu: "Thursday",
+  fri: "Friday",
+  sat: "Saturday",
+  sun: "Sunday",
 };
 const DAY_ORDER: DayKey[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 
@@ -55,8 +57,13 @@ interface ProviderData {
   serviceArea: string | null;
   avatarUrl: string | null;
   rating: string | null;
+  averageRating: string | null;
   reviewCount: number | null;
   completedJobs: number | null;
+  yearsExperience: number | null;
+  hourlyRate: string | null;
+  isVerified: boolean | null;
+  responseTime: string | null;
   serviceZipCodes: string[] | null;
   serviceCities: string[] | null;
   businessHours: Record<DayKey, BusinessHoursDay> | null;
@@ -67,8 +74,18 @@ interface CustomService {
   name: string;
   description: string | null;
   basePrice: string | null;
+  priceFrom: string | null;
+  priceTo: string | null;
   pricingType: string | null;
-  isPublished: boolean;
+  isPublished: boolean | null;
+}
+
+interface ReviewItem {
+  id: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+  reviewerName: string;
 }
 
 interface BookingLink {
@@ -77,14 +94,34 @@ interface BookingLink {
   status: string;
 }
 
+function safeParsePrice(v?: string | null): number | null {
+  if (!v) return null;
+  const n = parseFloat(v);
+  return isNaN(n) ? null : n;
+}
+
+function formatServicePrice(svc: CustomService): string | null {
+  if (svc.pricingType === "quote") return "Quote";
+  const from = safeParsePrice(svc.priceFrom);
+  const to = safeParsePrice(svc.priceTo);
+  if (svc.pricingType === "range" && from != null && to != null) {
+    return `$${from.toFixed(0)}–$${to.toFixed(0)}`;
+  }
+  const base = safeParsePrice(svc.basePrice) ?? from;
+  if (base != null) return `$${base.toFixed(0)}`;
+  return null;
+}
+
 export default function PublicProfileScreen() {
   const headerHeight = useHeaderHeight();
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const { theme } = useTheme();
   const { providerProfile } = useAuthStore();
 
   const providerId = providerProfile?.id;
 
+  const [activeTab, setActiveTab] = useState<TabType>("about");
   const [copyFeedback, setCopyFeedback] = useState(false);
 
   const { data: providerData, isLoading: providerLoading } = useQuery<{ provider: ProviderData }>({
@@ -110,7 +147,21 @@ export default function PublicProfileScreen() {
         headers: getAuthHeaders(),
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to load services");
+      if (!res.ok) return { services: [] };
+      return res.json();
+    },
+  });
+
+  const { data: reviewsData } = useQuery<{ reviews: ReviewItem[] }>({
+    queryKey: ["/api/provider", providerId, "reviews"],
+    enabled: !!providerId,
+    queryFn: async () => {
+      const url = new URL(`/api/provider/${providerId}/reviews`, getApiUrl());
+      const res = await fetch(url.toString(), {
+        headers: getAuthHeaders(),
+        credentials: "include",
+      });
+      if (!res.ok) return { reviews: [] };
       return res.json();
     },
   });
@@ -121,32 +172,46 @@ export default function PublicProfileScreen() {
   });
 
   const provider = providerData?.provider;
-  const allServices = servicesData?.services || [];
-  const publishedServices = allServices.filter((s) => s.isPublished !== false);
+  const allServices = servicesData?.services ?? [];
+  const displayServices = allServices.filter((s) => s.isPublished !== false);
+  const providerReviews = reviewsData?.reviews ?? [];
   const activeLink = bookingLinksData?.bookingLinks?.find((l) => l.status === "active");
   const slug = activeLink?.slug;
   const profileUrl = slug ? `https://homebaseproapp.com/providers/${slug}` : null;
 
   const businessName = provider?.businessName || providerProfile?.businessName || "Your Business";
-  const providerRating = provider?.rating ? Number(provider.rating) : 0;
+  const safeRating = useMemo(() => {
+    const raw = provider?.averageRating ?? provider?.rating;
+    const n = raw ? parseFloat(raw) : 0;
+    return isNaN(n) ? 0 : n;
+  }, [provider]);
   const reviewCount = provider?.reviewCount ?? 0;
 
-  const formatPrice = (svc: CustomService): string => {
-    if (svc.pricingType === "quote") return "Get Quote";
-    if (svc.basePrice) return `$${parseFloat(svc.basePrice).toLocaleString()}`;
-    return "Contact";
+  const handleEditHub = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    navigation.navigate("BusinessHub");
   };
 
-  const handleCopyLink = async () => {
-    if (!profileUrl) return;
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    await Clipboard.setStringAsync(profileUrl);
-    setCopyFeedback(true);
-    setTimeout(() => setCopyFeedback(false), 2500);
+  const handleCall = async () => {
+    const phoneNumber = provider?.phone;
+    if (!phoneNumber) {
+      Alert.alert("No phone number", "Add your phone number in Business Hub.");
+      return;
+    }
+    const url = `tel:${phoneNumber}`;
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      }
+    } catch {}
   };
 
   const handleShare = async () => {
-    if (!profileUrl) return;
+    if (!profileUrl) {
+      Alert.alert("No booking link", "Create an active booking link in Business Hub.");
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await Share.share({
@@ -156,85 +221,323 @@ export default function PublicProfileScreen() {
     } catch {}
   };
 
-  const handleOpenWeb = async () => {
+  const handleCopyLink = async () => {
     if (!profileUrl) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await WebBrowser.openBrowserAsync(profileUrl);
+    await Clipboard.setStringAsync(profileUrl);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setCopyFeedback(true);
+    setTimeout(() => setCopyFeedback(false), 2500);
   };
 
-  const handleEditHub = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    navigation.navigate("BusinessHub");
+  const renderStars = (rating: number) => {
+    const safe = isNaN(rating) ? 0 : rating;
+    const stars = [];
+    const fullStars = Math.floor(safe);
+    const hasHalf = safe - fullStars >= 0.5;
+    for (let i = 0; i < 5; i++) {
+      if (i < fullStars) {
+        stars.push(<Feather key={i} name="star" size={16} color={Colors.accent} />);
+      } else if (i === fullStars && hasHalf) {
+        stars.push(<Feather key={i} name="star" size={16} color={Colors.accent} />);
+      } else {
+        stars.push(<Feather key={i} name="star" size={16} color={theme.borderLight} />);
+      }
+    }
+    return stars;
   };
 
-  const renderStars = (rating: number) => (
-    <View style={styles.starsRow}>
-      {[1, 2, 3, 4, 5].map((star) => (
-        <Feather
-          key={star}
-          name="star"
-          size={13}
-          color={star <= Math.round(rating) ? Colors.warning : theme.borderLight}
-        />
-      ))}
-    </View>
-  );
+  const renderAboutTab = () => {
+    const hasHours = provider?.businessHours != null &&
+      Object.keys(provider.businessHours).length > 0;
 
-  const ActionBtn = ({
-    icon,
-    label,
-    onPress,
-    accent,
-  }: {
-    icon: FeatherName;
-    label: string;
-    onPress: () => void;
-    accent?: boolean;
-  }) => (
-    <Pressable
-      onPress={onPress}
-      style={[
-        styles.actionBtn,
-        { backgroundColor: accent ? Colors.accentLight : theme.backgroundSecondary },
-      ]}
-    >
-      <Feather name={icon} size={15} color={accent ? Colors.accent : theme.textSecondary} />
-      <ThemedText style={[styles.actionBtnText, { color: accent ? Colors.accent : theme.textSecondary }]}>
-        {label}
-      </ThemedText>
-    </Pressable>
-  );
+    return (
+      <Animated.View entering={FadeInDown.duration(300)}>
+        <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>About</ThemedText>
+        {provider?.description ? (
+          <ThemedText style={[styles.description, { color: theme.textSecondary }]}>
+            {provider.description}
+          </ThemedText>
+        ) : (
+          <ThemedText style={[styles.description, { color: theme.textTertiary }]}>
+            No description yet. Add one in Business Hub.
+          </ThemedText>
+        )}
 
-  const InfoRow = ({
-    icon,
-    value,
-    border,
-  }: {
-    icon: FeatherName;
-    value: string;
-    border?: boolean;
-  }) => (
-    <View
-      style={[
-        styles.infoRow,
-        border ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.separator } : {},
-      ]}
-    >
-      <View style={[styles.infoIcon, { backgroundColor: theme.backgroundSecondary }]}>
-        <Feather name={icon} size={14} color={theme.textSecondary} />
-      </View>
-      <ThemedText style={[styles.infoText, { color: theme.textSecondary }]} numberOfLines={2}>
-        {value}
+        <View style={styles.statsGrid}>
+          <View style={[styles.statCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
+            <Feather name="briefcase" size={20} color={Colors.accent} />
+            <ThemedText style={styles.statValue}>{provider?.yearsExperience ?? 0}</ThemedText>
+            <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Years Exp.</ThemedText>
+          </View>
+          <View style={[styles.statCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
+            <Feather name="check-circle" size={20} color={Colors.accent} />
+            <ThemedText style={styles.statValue}>{provider?.completedJobs ?? 0}</ThemedText>
+            <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Jobs Done</ThemedText>
+          </View>
+          <View style={[styles.statCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
+            <Feather name="star" size={20} color={Colors.accent} />
+            <ThemedText style={styles.statValue}>{reviewCount}</ThemedText>
+            <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Reviews</ThemedText>
+          </View>
+        </View>
+
+        {provider?.responseTime ? (
+          <View style={[styles.infoRow, { borderColor: theme.borderLight }]}>
+            <Feather name="message-circle" size={18} color={theme.textSecondary} />
+            <ThemedText style={[styles.infoText, { color: theme.textSecondary }]}>
+              Usually responds in {provider.responseTime}
+            </ThemedText>
+          </View>
+        ) : null}
+
+        {hasHours ? (
+          <View style={styles.hoursSection}>
+            <ThemedText style={[styles.subSectionTitle, { color: theme.text }]}>Business Hours</ThemedText>
+            {DAY_ORDER.map((day, idx) => {
+              const dayData = provider!.businessHours![day];
+              if (!dayData) return null;
+              return (
+                <View
+                  key={day}
+                  style={[
+                    styles.hoursRow,
+                    idx > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.borderLight } : {},
+                  ]}
+                >
+                  <ThemedText
+                    style={[
+                      styles.hoursDay,
+                      { color: dayData.enabled ? theme.text : theme.textTertiary },
+                    ]}
+                  >
+                    {DAY_LABELS[day]}
+                  </ThemedText>
+                  {dayData.enabled ? (
+                    <ThemedText style={[styles.hoursTime, { color: theme.textSecondary }]}>
+                      {dayData.open} — {dayData.close}
+                    </ThemedText>
+                  ) : (
+                    <ThemedText style={[styles.hoursClosed, { color: theme.textTertiary }]}>
+                      Closed
+                    </ThemedText>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        ) : (
+          <View style={[styles.infoRow, { borderColor: theme.borderLight }]}>
+            <Feather name="clock" size={18} color={theme.textTertiary} />
+            <ThemedText style={[styles.infoText, { color: theme.textTertiary }]}>
+              No hours set — add them in Business Hub
+            </ThemedText>
+          </View>
+        )}
+
+        {((provider?.serviceCities && provider.serviceCities.length > 0) ||
+          (provider?.serviceZipCodes && provider.serviceZipCodes.length > 0)) ? (
+          <View style={styles.hoursSection}>
+            <ThemedText style={[styles.subSectionTitle, { color: theme.text }]}>Service Area</ThemedText>
+            <View style={styles.chipWrap}>
+              {(provider!.serviceCities ?? []).map((city) => (
+                <View key={city} style={[styles.chip, { backgroundColor: theme.backgroundSecondary }]}>
+                  <ThemedText style={[styles.chipText, { color: theme.textSecondary }]}>{city}</ThemedText>
+                </View>
+              ))}
+              {(provider!.serviceZipCodes ?? []).map((zip) => (
+                <View key={zip} style={[styles.chip, { backgroundColor: theme.backgroundSecondary }]}>
+                  <ThemedText style={[styles.chipText, { color: theme.textTertiary }]}>{zip}</ThemedText>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        {provider?.phone || provider?.email ? (
+          <View style={styles.hoursSection}>
+            <ThemedText style={[styles.subSectionTitle, { color: theme.text }]}>Contact</ThemedText>
+            {provider?.phone ? (
+              <View style={[styles.contactRow, { borderColor: theme.borderLight }]}>
+                <Feather name="phone" size={16} color={theme.textSecondary} />
+                <ThemedText style={[styles.contactText, { color: theme.textSecondary }]}>{provider.phone}</ThemedText>
+              </View>
+            ) : null}
+            {provider?.email ? (
+              <View style={[styles.contactRow, { borderColor: theme.borderLight, borderTopWidth: provider?.phone ? StyleSheet.hairlineWidth : 0 }]}>
+                <Feather name="mail" size={16} color={theme.textSecondary} />
+                <ThemedText style={[styles.contactText, { color: theme.textSecondary }]}>{provider.email}</ThemedText>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {profileUrl ? (
+          <View style={styles.hoursSection}>
+            <ThemedText style={[styles.subSectionTitle, { color: theme.text }]}>Booking Link</ThemedText>
+            <View style={[styles.linkPill, { backgroundColor: theme.backgroundSecondary }]}>
+              <Feather name="globe" size={12} color={theme.textTertiary} />
+              <ThemedText style={[styles.linkText, { color: theme.textSecondary }]} numberOfLines={1}>
+                {profileUrl}
+              </ThemedText>
+            </View>
+            {copyFeedback ? (
+              <Animated.View entering={FadeIn.duration(150)}>
+                <View style={[styles.copyBanner, { backgroundColor: Colors.accentLight }]}>
+                  <Feather name="check" size={12} color={Colors.accent} />
+                  <ThemedText style={[styles.copyBannerText, { color: Colors.accent }]}>
+                    Copied to clipboard
+                  </ThemedText>
+                </View>
+              </Animated.View>
+            ) : null}
+            <View style={styles.linkActions}>
+              <Pressable
+                style={[styles.linkActionBtn, { backgroundColor: Colors.accentLight }]}
+                onPress={handleCopyLink}
+              >
+                <Feather name="copy" size={14} color={Colors.accent} />
+                <ThemedText style={[styles.linkActionText, { color: Colors.accent }]}>Copy</ThemedText>
+              </Pressable>
+              <Pressable
+                style={[styles.linkActionBtn, { backgroundColor: theme.backgroundSecondary }]}
+                onPress={handleShare}
+              >
+                <Feather name="share-2" size={14} color={theme.textSecondary} />
+                <ThemedText style={[styles.linkActionText, { color: theme.textSecondary }]}>Share</ThemedText>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+      </Animated.View>
+    );
+  };
+
+  const renderServicesTab = () => {
+    if (servicesLoading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color={Colors.accent} />
+        </View>
+      );
+    }
+
+    if (displayServices.length > 0) {
+      return (
+        <Animated.View entering={FadeInDown.duration(300)}>
+          <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Services Offered</ThemedText>
+          {displayServices.map((service) => {
+            const priceLabel = formatServicePrice(service);
+            return (
+              <View
+                key={service.id}
+                style={[styles.serviceRow, { borderColor: theme.borderLight }]}
+              >
+                <View style={[styles.serviceIcon, { backgroundColor: Colors.accentLight }]}>
+                  <Feather name="check" size={16} color={Colors.accent} />
+                </View>
+                <View style={styles.serviceInfo}>
+                  <ThemedText style={styles.serviceName}>{service.name}</ThemedText>
+                  {service.description ? (
+                    <ThemedText
+                      style={[styles.serviceDesc, { color: theme.textTertiary }]}
+                      numberOfLines={1}
+                    >
+                      {service.description}
+                    </ThemedText>
+                  ) : null}
+                </View>
+                {priceLabel != null ? (
+                  <ThemedText style={[styles.servicePrice, { color: Colors.accent }]}>
+                    {priceLabel}
+                  </ThemedText>
+                ) : null}
+              </View>
+            );
+          })}
+
+          {safeParsePrice(provider?.hourlyRate) != null ? (
+            <View style={styles.pricingCard}>
+              <ThemedText style={[styles.subSectionTitle, { color: theme.text }]}>Hourly Rate</ThemedText>
+              <ThemedText style={[styles.priceValue, { color: Colors.accent }]}>
+                ${safeParsePrice(provider!.hourlyRate)!.toFixed(0)}/hr
+              </ThemedText>
+            </View>
+          ) : null}
+        </Animated.View>
+      );
+    }
+
+    return (
+      <Animated.View entering={FadeInDown.duration(300)}>
+        <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Services Offered</ThemedText>
+        <View style={styles.emptyState}>
+          <Feather name="tool" size={32} color={theme.textTertiary} />
+          <ThemedText style={[styles.emptyTitle, { color: theme.textSecondary }]}>
+            No services added yet
+          </ThemedText>
+          <ThemedText style={[styles.emptyBody, { color: theme.textTertiary }]}>
+            Add services in Business Hub so clients know what you offer.
+          </ThemedText>
+          <Pressable
+            style={[styles.emptyBtn, { backgroundColor: Colors.accentLight }]}
+            onPress={handleEditHub}
+          >
+            <ThemedText style={[styles.emptyBtnText, { color: Colors.accent }]}>
+              Go to Business Hub
+            </ThemedText>
+          </Pressable>
+        </View>
+      </Animated.View>
+    );
+  };
+
+  const renderReviewsTab = () => (
+    <Animated.View entering={FadeInDown.duration(300)}>
+      <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>
+        Reviews ({providerReviews.length})
       </ThemedText>
-    </View>
+
+      {providerReviews.length > 0 ? (
+        providerReviews.map((review) => (
+          <View
+            key={review.id}
+            style={[styles.reviewCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}
+          >
+            <View style={styles.reviewHeader}>
+              <ThemedText style={styles.reviewerName}>{review.reviewerName}</ThemedText>
+              <View style={styles.reviewStars}>{renderStars(review.rating)}</View>
+            </View>
+            {review.comment ? (
+              <ThemedText style={[styles.reviewComment, { color: theme.textSecondary }]}>
+                {review.comment}
+              </ThemedText>
+            ) : null}
+            <ThemedText style={[styles.reviewDate, { color: theme.textTertiary }]}>
+              {new Date(review.createdAt).toLocaleDateString()}
+            </ThemedText>
+          </View>
+        ))
+      ) : (
+        <View style={styles.emptyState}>
+          <Feather name="star" size={32} color={theme.textTertiary} />
+          <ThemedText style={[styles.emptyTitle, { color: theme.textSecondary }]}>
+            No reviews yet
+          </ThemedText>
+          <ThemedText style={[styles.emptyBody, { color: theme.textTertiary }]}>
+            Reviews will appear here once clients rate your work.
+          </ThemedText>
+        </View>
+      )}
+    </Animated.View>
   );
 
   if (providerLoading) {
     return (
-      <ThemedView style={styles.container}>
-        <View style={[styles.centered, { paddingTop: headerHeight + 40 }]}>
-          <ActivityIndicator size="large" color={Colors.accent} />
-        </View>
+      <ThemedView style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color={Colors.accent} />
+        <ThemedText style={[styles.loadingText, { color: theme.textSecondary }]}>
+          Loading preview...
+        </ThemedText>
       </ThemedView>
     );
   }
@@ -242,21 +545,21 @@ export default function PublicProfileScreen() {
   return (
     <ThemedView style={styles.container}>
       <ScrollView
-        contentContainerStyle={[
-          styles.scroll,
-          { paddingTop: headerHeight + Spacing.md, paddingBottom: 40 },
-        ]}
+        contentContainerStyle={{
+          paddingTop: headerHeight + Spacing.sm,
+          paddingBottom: insets.bottom + 100,
+          paddingHorizontal: Spacing.screenPadding,
+        }}
         showsVerticalScrollIndicator={false}
       >
-
-        {/* Preview Mode Banner */}
+        {/* Preview Banner */}
         <Animated.View entering={FadeInDown.delay(0).duration(300)}>
           <View style={[styles.previewBanner, { backgroundColor: Colors.accentLight }]}>
             <Feather name="eye" size={14} color={Colors.accent} />
             <ThemedText style={[styles.previewBannerText, { color: Colors.accent }]}>
               Preview — this is what clients see
             </ThemedText>
-            <Pressable onPress={handleEditHub} style={styles.editBannerBtn}>
+            <Pressable onPress={handleEditHub} style={styles.editBannerBtn} hitSlop={8}>
               <ThemedText style={[styles.editBannerBtnText, { color: Colors.accent }]}>
                 Edit
               </ThemedText>
@@ -264,296 +567,96 @@ export default function PublicProfileScreen() {
           </View>
         </Animated.View>
 
-        {/* Hero */}
+        {/* Profile Card — mirrors ProviderProfileScreen */}
         <Animated.View entering={FadeInDown.delay(60).duration(350)}>
-          <GlassCard style={styles.heroCard}>
-            <View style={styles.heroCentered}>
-              <Avatar
-                uri={provider?.avatarUrl}
-                name={businessName}
-                size="xl"
-              />
-              <View style={styles.verifiedRow}>
-                <Feather name="shield" size={12} color={Colors.accent} />
-                <ThemedText style={[styles.verifiedLabel, { color: Colors.accent }]}>
-                  Verified Provider
-                </ThemedText>
-              </View>
-              <ThemedText style={styles.heroName}>{businessName}</ThemedText>
-              {provider?.serviceArea ? (
-                <ThemedText style={[styles.heroArea, { color: theme.textSecondary }]}>
-                  {provider.serviceArea}
-                </ThemedText>
-              ) : null}
-              {provider?.description ? (
-                <ThemedText style={[styles.heroDescription, { color: theme.textSecondary }]}>
-                  {provider.description}
-                </ThemedText>
-              ) : null}
-            </View>
-
-            {(providerRating > 0 || (provider?.completedJobs ?? 0) > 0) ? (
-              <View style={[styles.statRow, { borderTopColor: theme.separator }]}>
-                {providerRating > 0 ? (
-                  <View style={styles.statItem}>
-                    {renderStars(providerRating)}
-                    <ThemedText style={[styles.statValue, { color: theme.text }]}>
-                      {providerRating.toFixed(1)}
-                    </ThemedText>
-                    <ThemedText style={[styles.statLabel, { color: theme.textTertiary }]}>
-                      ({reviewCount} reviews)
-                    </ThemedText>
-                  </View>
+          <GlassCard style={styles.profileCard}>
+            <View style={styles.profileHeader}>
+              <Avatar name={businessName} size="large" uri={provider?.avatarUrl} />
+              <View style={styles.profileInfo}>
+                <ThemedText style={styles.providerName}>{businessName}</ThemedText>
+                {provider?.serviceArea ? (
+                  <ThemedText style={[styles.serviceAreaText, { color: theme.textSecondary }]}>
+                    {provider.serviceArea}
+                  </ThemedText>
                 ) : null}
-                {(providerRating > 0) && ((provider?.completedJobs ?? 0) > 0) ? (
-                  <View style={[styles.statDivider, { backgroundColor: theme.separator }]} />
-                ) : null}
-                {(provider?.completedJobs ?? 0) > 0 ? (
-                  <View style={styles.statItem}>
-                    <Feather name="check-circle" size={13} color={Colors.accent} />
-                    <ThemedText style={[styles.statValue, { color: theme.text }]}>
-                      {provider?.completedJobs}
-                    </ThemedText>
-                    <ThemedText style={[styles.statLabel, { color: theme.textTertiary }]}>
-                      jobs done
-                    </ThemedText>
-                  </View>
-                ) : null}
-              </View>
-            ) : null}
-          </GlassCard>
-        </Animated.View>
-
-        {/* Services */}
-        <Animated.View entering={FadeInDown.delay(120).duration(350)}>
-          <GlassCard style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View style={[styles.sectionIconWrap, { backgroundColor: Colors.accentLight }]}>
-                <Feather name="tool" size={15} color={Colors.accent} />
-              </View>
-              <ThemedText style={styles.sectionTitle}>Services</ThemedText>
-              {publishedServices.length > 0 ? (
-                <View style={[styles.countBadge, { backgroundColor: theme.backgroundSecondary }]}>
-                  <ThemedText style={[styles.countText, { color: theme.textSecondary }]}>
-                    {publishedServices.length}
+                <View style={styles.ratingRow}>
+                  {renderStars(safeRating)}
+                  <ThemedText style={styles.ratingText}>
+                    {safeRating.toFixed(1)} ({reviewCount})
                   </ThemedText>
                 </View>
+              </View>
+            </View>
+            <View style={styles.profileActions}>
+              {provider?.isVerified ? (
+                <StatusPill label="Verified Pro" status="success" />
               ) : null}
             </View>
-
-            {servicesLoading ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator size="small" color={Colors.accent} />
-              </View>
-            ) : publishedServices.length > 0 ? (
-              publishedServices.map((svc, idx) => (
-                <View
-                  key={svc.id}
-                  style={[
-                    styles.serviceRow,
-                    idx > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.separator },
-                  ]}
-                >
-                  <View style={[styles.serviceAccent, { backgroundColor: Colors.accentLight }]}>
-                    <Feather name="check" size={11} color={Colors.accent} />
-                  </View>
-                  <View style={styles.serviceBody}>
-                    <ThemedText style={styles.serviceName}>{svc.name}</ThemedText>
-                    {svc.description ? (
-                      <ThemedText style={[styles.serviceDesc, { color: theme.textTertiary }]} numberOfLines={2}>
-                        {svc.description}
-                      </ThemedText>
-                    ) : null}
-                  </View>
-                  <View style={[styles.pricePill, { backgroundColor: Colors.accentLight }]}>
-                    <ThemedText style={[styles.priceText, { color: Colors.accent }]}>
-                      {formatPrice(svc)}
-                    </ThemedText>
-                  </View>
-                </View>
-              ))
-            ) : (
-              <View style={styles.emptyInline}>
-                <ThemedText style={[styles.emptyInlineText, { color: theme.textTertiary }]}>
-                  No published services yet. Add services in Business Hub.
-                </ThemedText>
-              </View>
-            )}
           </GlassCard>
         </Animated.View>
 
-        {/* Business Hours */}
-        <Animated.View entering={FadeInDown.delay(180).duration(350)}>
-          <GlassCard style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View style={[styles.sectionIconWrap, { backgroundColor: Colors.accentLight }]}>
-                <Feather name="clock" size={15} color={Colors.accent} />
-              </View>
-              <ThemedText style={styles.sectionTitle}>Business Hours</ThemedText>
-            </View>
+        {/* Tab Row */}
+        <View style={styles.tabRow}>
+          {(["about", "services", "reviews"] as TabType[]).map((tab) => (
+            <Pressable
+              key={tab}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setActiveTab(tab);
+              }}
+              style={[
+                styles.tab,
+                activeTab === tab && { borderBottomColor: Colors.accent, borderBottomWidth: 2 },
+              ]}
+            >
+              <ThemedText
+                style={[
+                  styles.tabText,
+                  { color: activeTab === tab ? Colors.accent : theme.textSecondary },
+                ]}
+              >
+                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              </ThemedText>
+            </Pressable>
+          ))}
+        </View>
 
-            {!provider?.businessHours ? (
-              <View style={styles.emptyInline}>
-                <ThemedText style={[styles.emptyInlineText, { color: theme.textTertiary }]}>
-                  No hours set. Add them in Business Hub.
-                </ThemedText>
-              </View>
-            ) : (
-              DAY_ORDER.map((day, idx) => {
-                const dayData = provider.businessHours![day];
-                if (!dayData) return null;
-                return (
-                  <View
-                    key={day}
-                    style={[
-                      styles.hoursRow,
-                      idx > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.separator },
-                    ]}
-                  >
-                    <ThemedText
-                      style={[
-                        styles.hoursDay,
-                        { color: dayData.enabled ? theme.text : theme.textTertiary },
-                      ]}
-                    >
-                      {DAY_LABELS[day]}
-                    </ThemedText>
-                    {dayData.enabled ? (
-                      <ThemedText style={[styles.hoursTime, { color: theme.textSecondary }]}>
-                        {dayData.open} — {dayData.close}
-                      </ThemedText>
-                    ) : (
-                      <ThemedText style={[styles.hoursClosed, { color: theme.textTertiary }]}>
-                        Closed
-                      </ThemedText>
-                    )}
-                  </View>
-                );
-              })
-            )}
-          </GlassCard>
-        </Animated.View>
-
-        {/* Service Area */}
-        {((provider?.serviceCities && provider.serviceCities.length > 0) ||
-          (provider?.serviceZipCodes && provider.serviceZipCodes.length > 0)) ? (
-          <Animated.View entering={FadeInDown.delay(220).duration(350)}>
-            <GlassCard style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <View style={[styles.sectionIconWrap, { backgroundColor: Colors.accentLight }]}>
-                  <Feather name="map-pin" size={15} color={Colors.accent} />
-                </View>
-                <ThemedText style={styles.sectionTitle}>Service Area</ThemedText>
-              </View>
-
-              {provider.serviceCities && provider.serviceCities.length > 0 ? (
-                <View style={styles.chipWrap}>
-                  {provider.serviceCities.map((city) => (
-                    <View key={city} style={[styles.chip, { backgroundColor: theme.backgroundSecondary }]}>
-                      <ThemedText style={[styles.chipText, { color: theme.textSecondary }]}>
-                        {city}
-                      </ThemedText>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-
-              {provider.serviceZipCodes && provider.serviceZipCodes.length > 0 ? (
-                <View style={[styles.chipWrap, provider.serviceCities && provider.serviceCities.length > 0 ? { marginTop: Spacing.sm } : {}]}>
-                  {provider.serviceZipCodes.map((zip) => (
-                    <View key={zip} style={[styles.chip, { backgroundColor: theme.backgroundSecondary }]}>
-                      <ThemedText style={[styles.chipText, { color: theme.textTertiary }]}>
-                        {zip}
-                      </ThemedText>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-            </GlassCard>
-          </Animated.View>
-        ) : null}
-
-        {/* Contact */}
-        <Animated.View entering={FadeInDown.delay(260).duration(350)}>
-          <GlassCard style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View style={[styles.sectionIconWrap, { backgroundColor: theme.backgroundSecondary }]}>
-                <Feather name="user" size={15} color={theme.textSecondary} />
-              </View>
-              <ThemedText style={styles.sectionTitle}>Contact</ThemedText>
-            </View>
-
-            {provider?.phone ? (
-              <InfoRow icon="phone" value={provider.phone} />
-            ) : null}
-            {provider?.email ? (
-              <InfoRow icon="mail" value={provider.email} border={!!provider?.phone} />
-            ) : null}
-            {!provider?.phone && !provider?.email ? (
-              <View style={styles.emptyInline}>
-                <ThemedText style={[styles.emptyInlineText, { color: theme.textTertiary }]}>
-                  No contact info set. Add phone and email in Business Hub.
-                </ThemedText>
-              </View>
-            ) : null}
-          </GlassCard>
-        </Animated.View>
-
-        {/* Booking Link */}
-        <Animated.View entering={FadeInDown.delay(300).duration(350)}>
-          <GlassCard style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View style={[styles.sectionIconWrap, { backgroundColor: Colors.accentLight }]}>
-                <Feather name="link-2" size={15} color={Colors.accent} />
-              </View>
-              <ThemedText style={styles.sectionTitle}>Booking Link</ThemedText>
-            </View>
-
-            {profileUrl ? (
-              <>
-                <View style={[styles.linkPill, { backgroundColor: theme.backgroundSecondary }]}>
-                  <Feather name="globe" size={12} color={theme.textTertiary} />
-                  <ThemedText style={[styles.linkText, { color: theme.textSecondary }]} numberOfLines={1}>
-                    {profileUrl}
-                  </ThemedText>
-                </View>
-
-                {copyFeedback ? (
-                  <Animated.View entering={FadeIn.duration(150)}>
-                    <View style={[styles.copyBanner, { backgroundColor: Colors.accentLight }]}>
-                      <Feather name="check" size={12} color={Colors.accent} />
-                      <ThemedText style={[styles.copyBannerText, { color: Colors.accent }]}>
-                        Copied to clipboard
-                      </ThemedText>
-                    </View>
-                  </Animated.View>
-                ) : null}
-
-                <View style={styles.actionRow}>
-                  <ActionBtn icon="copy" label="Copy" onPress={handleCopyLink} accent />
-                  <ActionBtn icon="external-link" label="Open" onPress={handleOpenWeb} />
-                  <ActionBtn icon="share-2" label="Share" onPress={handleShare} />
-                </View>
-              </>
-            ) : (
-              <View style={styles.emptyInline}>
-                <ThemedText style={[styles.emptyInlineText, { color: theme.textTertiary }]}>
-                  No active booking link. Create one from Business Hub.
-                </ThemedText>
-                <Pressable
-                  onPress={handleEditHub}
-                  style={[styles.emptyInlineBtn, { backgroundColor: Colors.accentLight }]}
-                >
-                  <ThemedText style={[styles.emptyInlineBtnText, { color: Colors.accent }]}>
-                    Go to Business Hub
-                  </ThemedText>
-                </Pressable>
-              </View>
-            )}
-          </GlassCard>
-        </Animated.View>
-
+        {activeTab === "about" ? renderAboutTab() : null}
+        {activeTab === "services" ? renderServicesTab() : null}
+        {activeTab === "reviews" ? renderReviewsTab() : null}
       </ScrollView>
+
+      {/* Bottom Actions — preview equivalents of Call/Text/Book */}
+      <View
+        style={[
+          styles.bottomBar,
+          { backgroundColor: theme.backgroundRoot, paddingBottom: insets.bottom + Spacing.md },
+        ]}
+      >
+        <View style={styles.contactButtons}>
+          <Pressable
+            style={[styles.contactButton, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}
+            onPress={handleCall}
+          >
+            <Feather name="phone" size={20} color={Colors.accent} />
+            <ThemedText style={[styles.contactButtonText, { color: theme.text }]}>Call</ThemedText>
+          </Pressable>
+          <Pressable
+            style={[styles.contactButton, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}
+            onPress={handleShare}
+          >
+            <Feather name="share-2" size={20} color={Colors.accent} />
+            <ThemedText style={[styles.contactButtonText, { color: theme.text }]}>Share</ThemedText>
+          </Pressable>
+        </View>
+        <Pressable
+          style={[styles.editButton, { backgroundColor: Colors.accent }]}
+          onPress={handleEditHub}
+        >
+          <Feather name="edit-2" size={18} color="#FFF" />
+          <ThemedText style={styles.editButtonText}>Edit Profile</ThemedText>
+        </Pressable>
+      </View>
     </ThemedView>
   );
 }
@@ -562,14 +665,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  centered: {
-    flex: 1,
-    alignItems: "center",
+  loadingContainer: {
     justifyContent: "center",
-  },
-  scroll: {
-    paddingHorizontal: Spacing.screenPadding,
+    alignItems: "center",
     gap: Spacing.md,
+  },
+  loadingText: {
+    ...Typography.body,
   },
   previewBanner: {
     flexDirection: "row",
@@ -578,7 +680,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   previewBannerText: {
     ...Typography.footnote,
@@ -593,154 +695,123 @@ const styles = StyleSheet.create({
     ...Typography.footnote,
     fontWeight: "700",
   },
-  heroCard: {
-    overflow: "hidden",
+  profileCard: {
+    marginBottom: Spacing.lg,
   },
-  heroCentered: {
-    alignItems: "center",
-    paddingBottom: Spacing.md,
-    gap: 4,
-  },
-  verifiedRow: {
+  profileHeader: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginTop: Spacing.sm,
-  },
-  verifiedLabel: {
-    ...Typography.caption2,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
-  heroName: {
-    ...Typography.title2,
-    fontWeight: "700",
-    textAlign: "center",
-  },
-  heroArea: {
-    ...Typography.subhead,
-    textAlign: "center",
-  },
-  heroDescription: {
-    ...Typography.footnote,
-    textAlign: "center",
-    lineHeight: 19,
-    marginTop: Spacing.xs,
-    paddingHorizontal: Spacing.md,
-  },
-  statRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingTop: Spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap: Spacing.lg,
-  },
-  statItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  statDivider: {
-    width: 1,
-    height: 16,
-  },
-  starsRow: {
-    flexDirection: "row",
-    gap: 2,
-  },
-  statValue: {
-    ...Typography.subhead,
-    fontWeight: "700",
-  },
-  statLabel: {
-    ...Typography.caption1,
-  },
-  section: {},
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
+    alignItems: "flex-start",
     marginBottom: Spacing.md,
   },
-  sectionIconWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: BorderRadius.md,
+  profileInfo: {
+    flex: 1,
+    marginLeft: Spacing.md,
+  },
+  providerName: {
+    ...Typography.title2,
+    fontWeight: "700",
+  },
+  serviceAreaText: {
+    ...Typography.subhead,
+    marginTop: 2,
+  },
+  ratingRow: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    marginTop: Spacing.xs,
+    gap: 2,
+  },
+  ratingText: {
+    ...Typography.caption1,
+    marginLeft: Spacing.xs,
+    color: Colors.accent,
+    fontWeight: "600",
+  },
+  profileActions: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  tabRow: {
+    flexDirection: "row",
+    marginBottom: Spacing.lg,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: Spacing.sm,
+    alignItems: "center",
+  },
+  tabText: {
+    ...Typography.subhead,
+    fontWeight: "600",
   },
   sectionTitle: {
     ...Typography.headline,
-    flex: 1,
+    marginBottom: Spacing.md,
   },
-  countBadge: {
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    minWidth: 26,
-    alignItems: "center",
-  },
-  countText: {
-    ...Typography.caption1,
-    fontWeight: "700",
-  },
-  loadingRow: {
-    paddingVertical: Spacing.lg,
-    alignItems: "center",
-  },
-  serviceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: Spacing.md,
-    gap: Spacing.sm,
-  },
-  serviceAccent: {
-    width: 22,
-    height: 22,
-    borderRadius: BorderRadius.sm,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  serviceBody: {
-    flex: 1,
-  },
-  serviceName: {
+  subSectionTitle: {
     ...Typography.subhead,
     fontWeight: "600",
+    marginBottom: Spacing.sm,
+    marginTop: Spacing.lg,
   },
-  serviceDesc: {
-    ...Typography.caption1,
+  description: {
+    ...Typography.body,
+    lineHeight: 22,
+    marginBottom: Spacing.lg,
+  },
+  statsGrid: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
+  statCard: {
+    flex: 1,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: "center",
+  },
+  statValue: {
+    ...Typography.title2,
+    fontWeight: "700",
+    marginTop: Spacing.xs,
+  },
+  statLabel: {
+    ...Typography.caption2,
     marginTop: 2,
-    lineHeight: 16,
   },
-  pricePill: {
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 3,
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginBottom: Spacing.sm,
   },
-  priceText: {
-    ...Typography.caption1,
-    fontWeight: "600",
+  infoText: {
+    ...Typography.subhead,
+  },
+  hoursSection: {
+    marginTop: Spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(0,0,0,0.08)",
+    paddingTop: Spacing.md,
   },
   hoursRow: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: Spacing.sm + 2,
+    alignItems: "center",
+    paddingVertical: Spacing.sm,
   },
   hoursDay: {
     ...Typography.subhead,
-    fontWeight: "600",
-    width: 44,
+    fontWeight: "500",
   },
   hoursTime: {
     ...Typography.subhead,
   },
   hoursClosed: {
     ...Typography.subhead,
-    fontStyle: "italic",
   },
   chipWrap: {
     flexDirection: "row",
@@ -748,91 +819,196 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
   },
   chip: {
-    borderRadius: BorderRadius.full,
     paddingHorizontal: Spacing.sm,
     paddingVertical: 4,
+    borderRadius: BorderRadius.sm,
   },
   chipText: {
     ...Typography.caption1,
     fontWeight: "500",
   },
-  infoRow: {
+  contactRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: Spacing.sm,
     gap: Spacing.sm,
+    paddingVertical: Spacing.sm,
   },
-  infoIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: BorderRadius.md,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  infoText: {
+  contactText: {
     ...Typography.subhead,
-    flex: 1,
   },
   linkPill: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.xs,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    marginBottom: Spacing.md,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.sm,
+    marginBottom: Spacing.xs,
   },
   linkText: {
-    ...Typography.footnote,
+    ...Typography.caption1,
     flex: 1,
   },
   copyBanner: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.xs,
-    alignSelf: "flex-start",
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 4,
-    marginBottom: Spacing.md,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.sm,
+    marginBottom: Spacing.xs,
   },
   copyBannerText: {
     ...Typography.caption1,
     fontWeight: "600",
   },
-  actionRow: {
+  linkActions: {
     flexDirection: "row",
     gap: Spacing.sm,
+    marginTop: Spacing.xs,
   },
-  actionBtn: {
+  linkActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+  },
+  linkActionText: {
+    ...Typography.subhead,
+    fontWeight: "600",
+  },
+  serviceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: Spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  serviceIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: Spacing.md,
+    flexShrink: 0,
+  },
+  serviceInfo: {
+    flex: 1,
+  },
+  serviceName: {
+    ...Typography.body,
+  },
+  serviceDesc: {
+    ...Typography.caption1,
+    marginTop: 2,
+  },
+  servicePrice: {
+    ...Typography.subhead,
+    fontWeight: "600",
+    marginLeft: Spacing.sm,
+    flexShrink: 0,
+  },
+  pricingCard: {
+    marginTop: Spacing.lg,
+  },
+  priceValue: {
+    ...Typography.title3,
+    fontWeight: "700",
+  },
+  emptyState: {
+    paddingVertical: Spacing.xl,
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  emptyTitle: {
+    ...Typography.subhead,
+    fontWeight: "600",
+  },
+  emptyBody: {
+    ...Typography.footnote,
+    textAlign: "center",
+    maxWidth: 260,
+  },
+  emptyBtn: {
+    marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+  },
+  emptyBtnText: {
+    ...Typography.subhead,
+    fontWeight: "600",
+  },
+  reviewCard: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: Spacing.md,
+  },
+  reviewHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Spacing.xs,
+  },
+  reviewerName: {
+    ...Typography.subhead,
+    fontWeight: "600",
+  },
+  reviewStars: {
+    flexDirection: "row",
+    gap: 2,
+  },
+  reviewComment: {
+    ...Typography.body,
+    lineHeight: 20,
+  },
+  reviewDate: {
+    ...Typography.caption2,
+    marginTop: Spacing.xs,
+  },
+  bottomBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: Spacing.screenPadding,
+    paddingTop: Spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(0,0,0,0.1)",
+  },
+  contactButtons: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  contactButton: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 5,
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: Spacing.xs,
   },
-  actionBtnText: {
-    ...Typography.footnote,
+  contactButtonText: {
+    ...Typography.subhead,
     fontWeight: "600",
   },
-  emptyInline: {
-    paddingVertical: Spacing.sm,
+  editButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 14,
+    borderRadius: BorderRadius.lg,
     gap: Spacing.sm,
-    alignItems: "flex-start",
   },
-  emptyInlineText: {
-    ...Typography.footnote,
-    lineHeight: 18,
-  },
-  emptyInlineBtn: {
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs + 2,
-  },
-  emptyInlineBtnText: {
-    ...Typography.footnote,
-    fontWeight: "600",
+  editButtonText: {
+    ...Typography.body,
+    fontWeight: "700",
+    color: "#FFF",
   },
 });
