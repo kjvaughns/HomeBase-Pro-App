@@ -318,8 +318,14 @@ export default function ProviderProfileScreen() {
         <Animated.View entering={FadeInDown.duration(300)}>
           <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Services Offered</ThemedText>
           {customServices.map((service) => {
-            const displayPrice = service.basePrice ?? service.priceFrom;
-            const priceNum = displayPrice ? parseFloat(displayPrice) : null;
+            const safeParsePrice = (v?: string | null): number | null => {
+              if (!v) return null;
+              const n = parseFloat(v);
+              return isNaN(n) ? null : n;
+            };
+            const displayPrice = safeParsePrice(service.basePrice) ?? safeParsePrice(service.priceFrom);
+            const priceFrom = safeParsePrice(service.priceFrom);
+            const priceTo = safeParsePrice(service.priceTo);
             return (
               <Pressable
                 key={service.id}
@@ -340,11 +346,11 @@ export default function ProviderProfileScreen() {
                     </ThemedText>
                   ) : null}
                 </View>
-                {priceNum != null ? (
+                {displayPrice != null ? (
                   <ThemedText style={[styles.servicePrice, { color: Colors.accent }]}>
-                    {service.pricingType === "range" && service.priceFrom && service.priceTo
-                      ? `$${parseFloat(service.priceFrom).toFixed(0)}–$${parseFloat(service.priceTo).toFixed(0)}`
-                      : `$${priceNum.toFixed(0)}`}
+                    {service.pricingType === "range" && priceFrom != null && priceTo != null
+                      ? `$${priceFrom.toFixed(0)}–$${priceTo.toFixed(0)}`
+                      : `$${displayPrice.toFixed(0)}`}
                   </ThemedText>
                 ) : null}
                 <Feather name="chevron-right" size={18} color={theme.textTertiary} style={{ marginLeft: Spacing.xs }} />
