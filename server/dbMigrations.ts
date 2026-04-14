@@ -192,6 +192,38 @@ export async function runBootMigrations(): Promise<void> {
       )
     `);
 
+    // ── users: Stripe customer & default payment method ───────────────────
+    const userAlters: Array<[string, string]> = [
+      ["users.stripe_customer_id",       `ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT`],
+      ["users.default_payment_method_id",`ALTER TABLE users ADD COLUMN IF NOT EXISTS default_payment_method_id TEXT`],
+    ];
+    for (const [label, sql] of userAlters) {
+      await runSql(label, sql);
+    }
+
+    // ── homes: HouseFax enrichment columns ────────────────────────────────
+    const homeAlters: Array<[string, string]> = [
+      ["homes.lot_size",            `ALTER TABLE homes ADD COLUMN IF NOT EXISTS lot_size INTEGER`],
+      ["homes.estimated_value",     `ALTER TABLE homes ADD COLUMN IF NOT EXISTS estimated_value DECIMAL(12,2)`],
+      ["homes.zillow_id",           `ALTER TABLE homes ADD COLUMN IF NOT EXISTS zillow_id TEXT`],
+      ["homes.zillow_url",          `ALTER TABLE homes ADD COLUMN IF NOT EXISTS zillow_url TEXT`],
+      ["homes.tax_assessed_value",  `ALTER TABLE homes ADD COLUMN IF NOT EXISTS tax_assessed_value DECIMAL(12,2)`],
+      ["homes.last_sold_date",      `ALTER TABLE homes ADD COLUMN IF NOT EXISTS last_sold_date TEXT`],
+      ["homes.last_sold_price",     `ALTER TABLE homes ADD COLUMN IF NOT EXISTS last_sold_price DECIMAL(12,2)`],
+      ["homes.latitude",            `ALTER TABLE homes ADD COLUMN IF NOT EXISTS latitude DECIMAL(10,7)`],
+      ["homes.longitude",           `ALTER TABLE homes ADD COLUMN IF NOT EXISTS longitude DECIMAL(10,7)`],
+      ["homes.place_id",            `ALTER TABLE homes ADD COLUMN IF NOT EXISTS place_id TEXT`],
+      ["homes.formatted_address",   `ALTER TABLE homes ADD COLUMN IF NOT EXISTS formatted_address TEXT`],
+      ["homes.neighborhood_name",   `ALTER TABLE homes ADD COLUMN IF NOT EXISTS neighborhood_name TEXT`],
+      ["homes.county_name",         `ALTER TABLE homes ADD COLUMN IF NOT EXISTS county_name TEXT`],
+      ["homes.housefax_data",       `ALTER TABLE homes ADD COLUMN IF NOT EXISTS housefax_data TEXT`],
+      ["homes.housefax_score",      `ALTER TABLE homes ADD COLUMN IF NOT EXISTS housefax_score INTEGER`],
+      ["homes.housefax_enriched_at",`ALTER TABLE homes ADD COLUMN IF NOT EXISTS housefax_enriched_at TIMESTAMP`],
+    ];
+    for (const [label, sql] of homeAlters) {
+      await runSql(label, sql);
+    }
+
     // ── Post-migration verification ───────────────────────────────────────
     // Verify that the critical tables and columns required for app functionality exist.
     const verifications: Array<[string, string]> = [
@@ -201,6 +233,9 @@ export async function runBootMigrations(): Promise<void> {
       ["message_templates table",        `SELECT id FROM message_templates LIMIT 0`],
       ["notification_preferences table", `SELECT id FROM notification_preferences LIMIT 0`],
       ["support_tickets table",          `SELECT id FROM support_tickets LIMIT 0`],
+      ["homes.last_sold_date column",    `SELECT last_sold_date FROM homes LIMIT 0`],
+      ["homes.estimated_value column",   `SELECT estimated_value FROM homes LIMIT 0`],
+      ["homes.housefax_data column",     `SELECT housefax_data FROM homes LIMIT 0`],
     ];
 
     const verificationErrors: string[] = [];

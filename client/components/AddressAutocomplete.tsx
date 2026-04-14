@@ -148,7 +148,7 @@ export function AddressAutocomplete({
           zillowId: zillow.zpid,
           zillowUrl: zillow.url,
           taxAssessedValue: zillow.taxAssessedValue,
-          lastSoldDate: zillow.lastSoldDate,
+          lastSoldDate: zillow.lastSoldDate != null ? String(zillow.lastSoldDate) : undefined,
           lastSoldPrice: zillow.lastSoldPrice,
         };
         

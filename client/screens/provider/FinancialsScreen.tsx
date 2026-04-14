@@ -94,8 +94,9 @@ function formatCents(cents: number): string {
   });
 }
 
-function formatDollars(amount: number): string {
-  return amount.toLocaleString("en-US", {
+function formatDollars(amount: number | null | undefined): string {
+  const n = amount ?? 0;
+  return n.toLocaleString("en-US", {
     style: "currency",
     currency: "USD",
     minimumFractionDigits: 0,

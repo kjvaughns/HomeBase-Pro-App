@@ -131,7 +131,7 @@ export default function AddressesScreen() {
         zillowId: enrichmentData.zillowId,
         zillowUrl: enrichmentData.zillowUrl,
         taxAssessedValue: enrichmentData.taxAssessedValue?.toString(),
-        lastSoldDate: enrichmentData.lastSoldDate,
+        lastSoldDate: enrichmentData.lastSoldDate != null ? String(enrichmentData.lastSoldDate) : undefined,
         lastSoldPrice: enrichmentData.lastSoldPrice?.toString(),
         isDefault: homes.length === 0,
       };
