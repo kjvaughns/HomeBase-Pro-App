@@ -220,6 +220,37 @@ export async function runBootMigrations(): Promise<void> {
       END $$
     `);
 
+    // ── provider_services: unique (provider_id, service_id) ───────────────
+    await runSql("provider_services.unique_provider_service", `
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_indexes
+          WHERE tablename = 'provider_services'
+            AND indexname = 'provider_services_provider_id_service_id_unique'
+        ) THEN
+          CREATE UNIQUE INDEX provider_services_provider_id_service_id_unique
+            ON provider_services (provider_id, service_id);
+        END IF;
+      END $$
+    `);
+
+    // ── intake_submissions: soft FK on deposit_payment_id (NOT VALID — skips existing rows) ──
+    await runSql("intake_submissions.deposit_payment_id_fk", `
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'intake_submissions_deposit_payment_id_fkey'
+        ) THEN
+          ALTER TABLE intake_submissions
+            ADD CONSTRAINT intake_submissions_deposit_payment_id_fkey
+            FOREIGN KEY (deposit_payment_id)
+            REFERENCES payments(id)
+            ON DELETE SET NULL
+            NOT VALID;
+        END IF;
+      END $$
+    `);
+
     // ── provider_custom_services: AI Blueprint fields ────────────────────
     const customServiceAlters: Array<[string, string]> = [
       ["provider_custom_services.intake_questions_json", `ALTER TABLE provider_custom_services ADD COLUMN IF NOT EXISTS intake_questions_json TEXT`],

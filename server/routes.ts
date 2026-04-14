@@ -5823,23 +5823,30 @@ Respond with JSON only:
     try {
       const sig = req.headers["stripe-signature"];
       const endpointSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
+      const IS_PROD = process.env.NODE_ENV === "production";
+
+      if (!sig) {
+        return res.status(400).json({ error: "Missing stripe-signature header" });
+      }
 
       let event: any;
 
-      if (endpointSecret && sig) {
+      if (!endpointSecret) {
+        if (IS_PROD) {
+          console.error("[webhook] FATAL: STRIPE_CONNECT_WEBHOOK_SECRET not set in production — rejecting Connect webhook request");
+          return res.status(400).json({ error: "Webhook secret not configured" });
+        }
+        // Development only: skip verification when Stripe CLI is not configured locally
+        console.warn("[webhook] STRIPE_CONNECT_WEBHOOK_SECRET not set — signature check skipped (development only)");
+        event = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+      } else {
+        // Always verify signature when secret is available
         try {
-          event = getStripe().webhooks.constructEvent(
-            req.body,
-            sig,
-            endpointSecret
-          );
+          event = getStripe().webhooks.constructEvent(req.body, sig, endpointSecret);
         } catch (err: any) {
           console.error("Webhook signature verification failed:", err.message);
           return res.status(400).json({ error: `Webhook Error: ${err.message}` });
         }
-      } else {
-        // In development without webhook secret, parse body directly
-        event = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
       }
 
       const result = await handleStripeWebhook(event);
@@ -5854,6 +5861,7 @@ Respond with JSON only:
   app.get("/api/providers/:providerId/payouts", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
     try {
       const { providerId } = req.params;
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
       const providerPayouts = await db
         .select()
         .from(payouts)

@@ -66,7 +66,8 @@ export const authenticateJWT: RequestHandler = async (
       return;
     }
 
-    if (payload.tv !== undefined && user.tokenVersion !== payload.tv) {
+    const claimedVersion = payload.tv ?? 0;
+    if (user.tokenVersion !== claimedVersion) {
       res.status(401).json({ error: "Token revoked" });
       return;
     }

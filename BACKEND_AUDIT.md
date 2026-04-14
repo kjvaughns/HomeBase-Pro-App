@@ -10,37 +10,58 @@
 
 | File | Change | Severity |
 |---|---|---|
-| `server/auth.ts` | Production fail-fast if `JWT_SECRET` unset (`process.exit(1)`) | Critical |
+| `server/auth.ts` | Production fail-fast: `process.exit(1)` if `JWT_SECRET` unset | Critical |
 | `server/auth.ts` | JWT TTL reduced `"30d"` → `"7d"` | High |
-| `server/auth.ts` | Token version claim (`tv`) in JWT payload | High |
-| `server/auth.ts` | `authenticateJWT` does per-request `token_version` DB check | High |
+| `server/auth.ts` | Token version claim (`tv`) in JWT payload; legacy tokens treated as `tv=0` | High |
+| `server/auth.ts` | `authenticateJWT` (async): per-request `token_version` DB check; 401 on mismatch | High |
 | `server/auth.ts` | `generateToken` now requires `tokenVersion` parameter | High |
 | `server/routes.ts` | Cookie `maxAge` reduced 30d → 7d at all 3 issuance points | High |
-| `server/routes.ts` | All `generateToken` calls updated to pass `user.tokenVersion ?? 0` | High |
+| `server/routes.ts` | All `generateToken` calls pass `user.tokenVersion ?? 0` | High |
 | `server/routes.ts` | `POST /api/auth/logout-all` — increments `token_version`, clears cookie | High |
 | `server/routes.ts` | `POST /api/auth/refresh` — re-issues token with fresh 7d TTL | Medium |
-| `server/dbMigrations.ts` | `users.token_version INTEGER NOT NULL DEFAULT 0` column migration | High |
-| `server/dbMigrations.ts` | `clients (provider_id, email)` unique partial index migration | Medium |
-| `server/dbMigrations.ts` | `payouts.arrival_date TIMESTAMP` column migration | Critical |
+| `server/routes.ts` | `/api/webhooks/stripe-connect` — removed insecure body-parse fallback; production rejects without `STRIPE_CONNECT_WEBHOOK_SECRET` | Critical |
+| `server/routes.ts` | `GET /api/providers/:id/payouts` — added `assertProviderOwnership()` ownership check | High |
+| `server/dbMigrations.ts` | `users.token_version INTEGER NOT NULL DEFAULT 0` | High |
+| `server/dbMigrations.ts` | `clients(provider_id, email)` unique partial index | Medium |
+| `server/dbMigrations.ts` | `provider_services(provider_id, service_id)` unique index | Medium |
+| `server/dbMigrations.ts` | `intake_submissions.deposit_payment_id FK → payments.id NOT VALID` | Medium |
+| `server/dbMigrations.ts` | `payouts.arrival_date TIMESTAMP` column | Critical |
 | `server/dbMigrations.ts` | Boot verification entries for `users.token_version`, `payouts.arrival_date` | Low |
-| `shared/schema.ts` | `tokenVersion: integer("token_version").notNull().default(0)` in users table | High |
+| `shared/schema.ts` | `tokenVersion: integer("token_version").notNull().default(0)` in users | High |
 
 ---
 
 ## 1. Stripe Webhook Security
 
-**Status: PASS — No code changes needed**
+**Status: FIXED (one vulnerability found and resolved)**
 
-- `POST /api/stripe/webhook` registered **before** `express.json()` — raw `Buffer` preserved (server/index.ts lines 70–97).
+### 1a. Primary webhook (`/api/stripe/webhook`) — PASS
+
+- Registered **before** `express.json()` — raw `Buffer` preserved (server/index.ts lines 70–97).
 - `stripe-signature` header required; returns HTTP 400 if absent.
-- `WebhookHandlers.processWebhook()` → `stripeSync.processWebhook(payload, signature)` → `stripe.webhooks.constructEvent()` with webhook secret — cryptographic HMAC signature verified by Stripe SDK.
-- Webhook registered automatically via `findOrCreateManagedWebhook()` at startup.
+- `WebhookHandlers.processWebhook()` → `stripe.webhooks.constructEvent()` — cryptographic HMAC verified.
+
+### 1b. Stripe Connect webhook (`/api/webhooks/stripe-connect`) — FIXED (Critical)
+
+**Vulnerability found**: When `STRIPE_CONNECT_WEBHOOK_SECRET` was unset, the handler parsed `req.body` directly without signature verification — allowing anyone to forge payment events.
+
+**Fix applied**:
+- `stripe-signature` header now required unconditionally (returns 400 if absent).
+- If `STRIPE_CONNECT_WEBHOOK_SECRET` is set: always calls `constructEvent()` — cryptographic verification.
+- If secret is unset in **production**: returns 400 and logs a FATAL error — no forged events processed.
+- If secret is unset in **development**: logs a warning and skips verification (for local testing without Stripe CLI).
 
 ---
 
 ## 2. Auth Hardening
 
-**Status: FULLY FIXED**
+**Status: FIXED (legacy token bypass closed)**
+
+**Gap found**: `authenticateJWT` previously used `if (payload.tv !== undefined && user.tokenVersion !== payload.tv)` — tokens issued before the `tv` claim was added would have `payload.tv === undefined`, causing the condition to evaluate to `false` and bypassing token revocation entirely. An attacker with a stolen old token could continue using it indefinitely even after `logout-all` was called.
+
+**Fix**: Changed to `const claimedVersion = payload.tv ?? 0; if (user.tokenVersion !== claimedVersion)` — legacy tokens without `tv` are treated as version 0 and checked against the DB. Calling `logout-all` increments `token_version` to ≥1, permanently invalidating all legacy tokens.
+
+---
 
 ### 2a. Production Fail-Fast for Missing JWT_SECRET — FIXED
 
@@ -101,7 +122,9 @@ All user-scoped resource endpoints were inspected for ownership checks:
 
 `assertProviderOwnership()` is used consistently on all Stripe Connect, invoice creation, and job mutation endpoints.
 
-No authorization bypass gaps identified. RBAC is ad-hoc (inline) rather than centralized middleware but is applied consistently.
+**Gap found and fixed**: `GET /api/providers/:providerId/payouts` was missing an ownership check — any authenticated user could read another provider's payout history by ID. Fixed by adding `assertProviderOwnership()` call at the start of the handler.
+
+RBAC is ad-hoc (inline) rather than centralized middleware but is applied consistently after this fix.
 
 ---
 
