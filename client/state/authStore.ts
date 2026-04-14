@@ -32,6 +32,9 @@ interface AuthState {
   user: User | null;
   sessionToken: string | null;
   activeRole: UserRole;
+  /** Last explicit role chosen by the user — persisted through logout/login so
+   *  dual-role users return to whichever view they were using last. */
+  lastActiveRole: UserRole | null;
   providerProfile: ProviderProfile | null;
   isHydrated: boolean;
   needsRoleSelection: boolean;
@@ -55,19 +58,34 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   user: null,
   sessionToken: null,
   activeRole: "guest",
+  lastActiveRole: null,
   providerProfile: null,
   isHydrated: false,
   needsRoleSelection: true,
 
   login: (user: User, providerProfile?: ProviderProfile | null, token?: string | null) => {
     const hasApprovedProvider = providerProfile?.status === "approved";
+
+    // Determine starting role. For dual-role users (or any user with a prior
+    // session), we honour lastActiveRole so they return to whichever view they
+    // used last. For brand-new logins with no prior preference, we default to
+    // "provider" when the user has an approved provider profile, "homeowner"
+    // otherwise.
+    const { lastActiveRole } = get();
+    let activeRole: UserRole = "homeowner";
+    if (hasApprovedProvider) {
+      if (lastActiveRole === "homeowner" || lastActiveRole === "provider") {
+        activeRole = lastActiveRole; // restore last choice for dual-role users
+      } else {
+        activeRole = "provider"; // no prior preference → land on provider dashboard
+      }
+    }
+
     const newState = {
       isAuthenticated: true,
       user,
       sessionToken: token || null,
-      // Providers land directly in provider mode. Homeowners land in homeowner mode.
-      // Role is stored persistently so returning users keep their last used view.
-      activeRole: hasApprovedProvider ? "provider" as UserRole : "homeowner" as UserRole,
+      activeRole,
       providerProfile: providerProfile || null,
       needsRoleSelection: false,
     };
@@ -76,12 +94,15 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   logout: () => {
+    const { lastActiveRole } = get();
     const newState = {
       isAuthenticated: false,
       user: null,
       sessionToken: null,
       activeRole: "guest" as UserRole,
       providerProfile: null,
+      // Keep lastActiveRole across logout so the next login restores the prior view.
+      lastActiveRole,
     };
     set(newState);
     saveToStorage(get());
@@ -93,14 +114,14 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     if (role === "provider" && !state.canAccessProviderMode()) {
       return;
     }
-    set({ activeRole: role });
+    set({ activeRole: role, lastActiveRole: role });
     saveToStorage(get());
   },
 
   activateProviderMode: () => {
     // Bypasses the canAccessProviderMode guard for use only after completing
     // ProviderSetupFlow — new providers don't have an approved backend profile yet.
-    set({ activeRole: "provider" });
+    set({ activeRole: "provider", lastActiveRole: "provider" });
     saveToStorage(get());
   },
 
@@ -169,6 +190,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
           user: storedUser,
           sessionToken: data.sessionToken || null,
           activeRole,
+          lastActiveRole: data.lastActiveRole || null,
           providerProfile,
           needsRoleSelection,
           isHydrated: true,
@@ -190,6 +212,7 @@ async function saveToStorage(state: AuthState) {
       user: state.user,
       sessionToken: state.sessionToken,
       activeRole: state.activeRole,
+      lastActiveRole: state.lastActiveRole,
       providerProfile: state.providerProfile,
       needsRoleSelection: state.needsRoleSelection,
     };
