@@ -1,0 +1,79 @@
+Conduct a full MVP readiness audit of the HomeBase homeowner app.
+
+Goal:
+Identify everything that absolutely must work for the homeowner side of HomeBase to be considered a functional MVP. Audit only the core flows and essential systems required for real user usage. Focus on what is mission critical, not nice to have.
+
+Context:
+HomeBase is an AI powered home services platform. On the homeowner side, users should be able to discover service providers, request services, book jobs, manage bookings, communicate, pay, and return for repeat service. The homeowner experience should feel modern, simple, polished, and trustworthy on iOS.
+
+Your task:
+Audit the entire homeowner app screen by screen, workflow by workflow, and identify:
+1. What core MVP flows exist
+2. What is fully working
+3. What is partially working
+4. What is broken
+5. What is missing but required for MVP
+6. What should be removed because it distracts from MVP readiness
+
+Test and evaluate these mission critical areas:
+- onboarding
+- sign up and login
+- account creation
+- homeowner profile setup
+- address entry
+- property details
+- AI intake flow
+- follow up intake questions
+- provider matching
+- provider profile viewing
+- service browsing
+- booking flow
+- availability selection
+- quote request flow
+- recurring booking flow if included
+- booking confirmation
+- job status tracking
+- notifications
+- payment flow
+- saved cards or payment methods
+- invoices or receipts
+- job history
+- rebooking flow
+- cancellation or reschedule flow
+- messaging or communication flow
+- support or issue reporting
+- logout
+- session persistence
+- loading states
+- empty states
+- network error states
+- edge cases and failure states
+
+Audit standard:
+For each area, determine:
+- does it work end to end
+- does it use real data correctly
+- does the state update correctly
+- does the UI reflect reality correctly
+- are errors handled properly
+- would a real homeowner trust this flow
+
+Output format:
+1. Executive summary
+2. MVP readiness score out of 10
+3. Critical blockers that must be fixed before launch
+4. High priority fixes
+5. Medium priority fixes
+6. Nice to have improvements
+7. Screen by screen audit
+8. End to end workflow audit
+9. Missing MVP requirements
+10. Final verdict: ready, almost ready, or not ready
+
+Important:
+- be brutally honest
+- do not be nice just to be nice
+- focus on real launch readiness
+- do not suggest bloated features unless they are truly necessary
+- prioritize simple, clean, reliable execution
+- call out fake flows, mock only behavior, broken routing, incorrect data binding, missing backend integration, and trust breaking UX

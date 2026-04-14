@@ -1,0 +1,73 @@
+Conduct a full MVP readiness audit of the HomeBase provider app.
+
+Goal:
+Identify everything that absolutely must work for the provider side of HomeBase to be considered a functional MVP. Focus only on essential systems for a real home service business owner to use the app and get value.
+
+Context:
+HomeBase helps service providers set up their business, create services, receive leads, manage bookings, handle customers, send invoices, collect payments, and retain clients. The provider side must feel efficient, trustworthy, empowering, and easy to use for real small business owners.
+
+Audit the provider app screen by screen and workflow by workflow.
+
+Test and evaluate these core areas:
+- provider onboarding
+- business profile creation
+- service setup
+- service editing
+- pricing setup
+- custom service options
+- booking link creation
+- public booking page setup
+- incoming lead handling
+- estimate or quote flow
+- calendar and availability
+- booking approval or management
+- client management
+- job management
+- invoices
+- payment collection
+- Stripe integration
+- payout flow if included
+- business settings
+- team or staff support if included
+- recurring service setup
+- automations
+- notifications
+- email and SMS features
+- reviews
+- analytics if included
+- dashboard
+- retention tools
+- rebooking tools
+- provider profile
+- logout
+- loading states
+- error states
+- empty states
+- edge cases
+
+Determine for each:
+- does it work end to end
+- does it save real business data correctly
+- is it trustworthy enough for a real provider
+- is it too confusing or too AI controlled
+- does it feel empowering instead of controlling
+- does it actually help the provider run their business
+
+Output format:
+1. Executive summary
+2. MVP readiness score out of 10
+3. Critical launch blockers
+4. High priority fixes
+5. Medium priority fixes
+6. Nice to have improvements
+7. Screen by screen audit
+8. Workflow audit
+9. Missing provider MVP requirements
+10. Final verdict
+
+Important:
+- be brutally honest
+- focus on what a real provider actually needs
+- prioritize simplicity and trust
+- call out anything that feels fake, broken, confusing, overcomplicated, or too AI driven
+- remember providers want assistance, not control
