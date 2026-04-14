@@ -1162,4 +1162,25 @@ export async function calculateFeePreview(providerId: string, totalCents: number
   };
 }
 
+/**
+ * Creates (idempotent) and actually sends a Stripe invoice to the client.
+ * After finalizing, calls stripe.invoices.sendInvoice so Stripe emails the
+ * client a hosted payment page directly.
+ */
+export async function sendStripeInvoiceEmail(invoiceId: string): Promise<{ stripeInvoiceId: string; hostedInvoiceUrl: string }> {
+  // Create + finalize (idempotent — returns existing if already done)
+  const { stripeInvoiceId, hostedInvoiceUrl } = await createStripeInvoice(invoiceId);
+
+  // Look up the connected account so we can send on behalf of it
+  const [inv] = await db.select({ providerId: invoices.providerId }).from(invoices).where(eq(invoices.id, invoiceId));
+  if (!inv) throw new Error("Invoice not found");
+  const connectAccount = await getConnectAccount(inv.providerId);
+  if (!connectAccount?.stripeAccountId) throw new Error("Provider Stripe account not found");
+
+  // This makes Stripe email the client a branded hosted payment page
+  await getStripe().invoices.sendInvoice(stripeInvoiceId, { stripeAccount: connectAccount.stripeAccountId });
+
+  return { stripeInvoiceId, hostedInvoiceUrl };
+}
+
 export { getStripe };

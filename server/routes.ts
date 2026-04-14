@@ -31,6 +31,7 @@ import {
   createInvoicePaymentIntent,
   createStripeCheckoutSession,
   createStripeInvoice,
+  sendStripeInvoiceEmail,
   applyCreditsToInvoice,
   handleStripeWebhook,
   calculateFeePreview,
@@ -4044,9 +4045,9 @@ Respond with JSON only:
 
       const invoice = await storage.createInvoice(parsed.data);
 
-      // Try to generate a Stripe Invoice (hosted_invoice_url) — non-fatal, only if Connect is active
+      // Create, finalize, and send the Stripe invoice (non-fatal — Stripe Connect may not be set up)
       let hostedUrl: string | undefined;
-      const stripeInvoiceResult = await createStripeInvoice(invoice.id).catch(() => null);
+      const stripeInvoiceResult = await sendStripeInvoiceEmail(invoice.id).catch(() => null);
       if (stripeInvoiceResult?.hostedInvoiceUrl) {
         hostedUrl = stripeInvoiceResult.hostedInvoiceUrl;
       }
@@ -4133,9 +4134,9 @@ Respond with JSON only:
         return res.status(404).json({ error: "Invoice not found" });
       }
       
-      // Try to generate a Stripe Invoice (hosted_invoice_url) — non-fatal, only if Connect is active
+      // Create, finalize, and send the Stripe invoice (non-fatal — Stripe Connect may not be set up)
       let hostedUrl: string | undefined;
-      const stripeInvoiceResult = await createStripeInvoice(invoiceId).catch(() => null);
+      const stripeInvoiceResult = await sendStripeInvoiceEmail(invoiceId).catch(() => null);
       if (stripeInvoiceResult?.hostedInvoiceUrl) {
         hostedUrl = stripeInvoiceResult.hostedInvoiceUrl;
       }
@@ -4604,22 +4605,71 @@ Respond with JSON only:
     }
   });
 
-  // Send invoice
+  // Send invoice — Stripe send + HomeBase notification email
   app.post("/api/stripe/invoices/:invoiceId/send", requireAuth, async (req: Request<{ invoiceId: string }>, res: Response) => {
     try {
       const { invoiceId } = req.params;
+
+      // Load invoice
+      const invoice = await storage.getInvoice(invoiceId);
+      if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+
+      // Create, finalize, and send via Stripe (non-fatal)
+      let hostedUrl: string | undefined;
+      const stripeResult = await sendStripeInvoiceEmail(invoiceId).catch(() => null);
+      if (stripeResult?.hostedInvoiceUrl) hostedUrl = stripeResult.hostedInvoiceUrl;
+
+      // Send HomeBase notification email as secondary notification
+      let emailSent = false;
+      let emailError: string | undefined;
+      if (invoice.clientId) {
+        const client = await storage.getClient(invoice.clientId);
+        const provider = await storage.getProvider(invoice.providerId);
+        if (client?.email && provider) {
+          const rawLineItems = invoice.lineItems;
+          const lineItems = Array.isArray(rawLineItems) ? rawLineItems : (typeof rawLineItems === 'string' ? JSON.parse(rawLineItems) : []);
+          const clientName = [client.firstName, client.lastName].filter(Boolean).join(" ") || "Client";
+          const sendResult = await dispatchWithResult('invoice.sent', {
+            clientEmail: client.email,
+            clientName,
+            providerName: provider.businessName || provider.userId || "Service Provider",
+            invoiceNumber: invoice.invoiceNumber || `INV-${invoice.id.slice(0, 8)}`,
+            amount: parseFloat(invoice.total?.toString() || "0"),
+            dueDate: invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : "Due on receipt",
+            lineItems: lineItems.map((item: any) => ({
+              description: item.description || item.name || "Service",
+              quantity: item.quantity || 1,
+              unitPrice: parseFloat(item.unitPrice?.toString() || item.price?.toString() || "0"),
+              total: parseFloat(item.total?.toString() || "0"),
+            })),
+            paymentLink: hostedUrl,
+            relatedRecordType: 'invoice',
+            relatedRecordId: invoice.id,
+          });
+          emailSent = sendResult.emailSent;
+          emailError = sendResult.emailError;
+
+          // Push notification — non-fatal
+          const [clientUser] = await db.select({ id: users.id }).from(users).where(eq(users.email, client.email)).limit(1).catch(() => [null]);
+          if (clientUser) {
+            const invoiceTotal = parseFloat(invoice.total?.toString() || "0");
+            sendPush(clientUser.id, `Invoice from ${provider.businessName || "Your Provider"}`, `Invoice ${invoice.invoiceNumber || invoiceId.slice(0, 8)} for $${invoiceTotal.toFixed(2)} is ready. Tap to view.`, { type: "invoice", invoiceId }, "invoices").catch(() => {});
+          }
+        }
+      }
 
       const [updated] = await db
         .update(invoices)
         .set({
           status: "sent",
           sentAt: new Date(),
+          ...(hostedUrl ? { hostedInvoiceUrl: hostedUrl } : {}),
           updatedAt: new Date(),
         })
         .where(eq(invoices.id, invoiceId))
         .returning();
 
-      res.json({ invoice: updated });
+      res.json({ invoice: updated, paymentUrl: hostedUrl, emailSent, emailError });
     } catch (error: any) {
       console.error("Send invoice error:", error);
       res.status(500).json({ error: error.message || "Failed to send invoice" });
