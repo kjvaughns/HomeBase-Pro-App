@@ -1,0 +1,380 @@
+You do **not** need a giant AI service builder.
+
+What you need is one feature:
+
+## **Smart Service Blueprint**
+
+It is basically an AI assisted service setup flow that helps a provider create a service with:
+
+1. **how they price**
+2. **what info they need before booking**
+3. **what upsells or add ons they offer**
+4. **when the job should switch from instant price to custom quote**
+
+That solves the real problem.
+
+Because the issue is not just “create a service.”
+The issue is:
+
+**providers need a simple way to turn their real world pricing logic into a clean booking flow without manually building every rule.**
+
+## What it should do
+
+When a provider creates a service, they choose something like:
+
+* House Cleaning
+* Lawn Mowing
+* Pest Control
+* Pressure Washing
+* Handyman
+* Junk Removal
+
+Then AI generates a **Service Blueprint** with 4 sections:
+
+### 1. Pricing Model
+
+The app asks:
+
+**How do you usually charge for this service?**
+
+Options:
+
+* Flat rate
+* Starts at price
+* Per square foot
+* By property size
+* By room count
+* By hourly rate
+* Custom quote only
+* Mixed pricing
+
+Then AI recommends the most common setup based on category.
+
+Example for cleaning:
+
+* base price by home size
+* modifiers for bedrooms and bathrooms
+* clean type selector
+* add ons like oven, fridge, deep clean
+
+Example for lawn care:
+
+* flat rate or lot size based
+* front yard only or front and back
+* frequency discount
+* add ons like edging, hedge trim, leaf cleanup
+
+## 2. Required Intake Questions
+
+This is where your booking AI and service creator connect.
+
+The provider should be able to choose:
+
+**What do you need to know before accepting this job?**
+
+AI prebuilds smart questions based on category.
+
+Cleaning example:
+
+* How many bedrooms?
+* How many bathrooms?
+* Approximate square footage?
+* What type of cleaning?
+* Any pets?
+* Do you want inside oven or fridge cleaned?
+
+Lawn example:
+
+* Approximate lot size?
+* Front yard only or full yard?
+* Is the grass overgrown?
+* Any gates or access issues?
+* Do you want edging?
+* Do you want recurring service?
+
+Pest control example:
+
+* What pest issue are you dealing with?
+* Inside, outside, or both?
+* How severe is the issue?
+* One time or recurring?
+* Is this residential or commercial?
+
+This is huge because it makes the intake actually useful instead of generic.
+
+## 3. Add Ons and Upsells
+
+This is where you help providers make more money.
+
+After AI builds the main service, it should suggest:
+
+* common add ons
+* recurring options
+* premium upgrades
+
+Examples:
+
+Cleaning:
+
+* deep clean
+* inside fridge
+* inside oven
+* move in or move out clean
+* same day rush
+
+Lawn:
+
+* edging
+* bush trimming
+* weed treatment
+* leaf removal
+* monthly recurring plan
+
+Pest:
+
+* mosquito treatment
+* monthly prevention
+* rodent exclusion
+* attic inspection
+
+This matters because most providers leave money on the table by only listing the basic service.
+
+## 4. Booking Logic
+
+This is the most important part.
+
+The provider decides whether the service should be:
+
+* **Instant Book with exact price**
+* **Starts at price and final confirmation later**
+* **Request quote only**
+
+That keeps it simple while still flexible.
+
+Because not every service should auto quote.
+
+Example:
+
+* basic lawn mow = instant price
+* deep cleaning = starts at price
+* heavy pest infestation = request quote
+
+That prevents bad quotes and protects provider profit.
+
+# What the flow should feel like
+
+## Step 1
+
+Provider types:
+“I run a residential cleaning company”
+
+## Step 2
+
+AI says:
+“Based on your business, here are your most likely service types”
+
+* Standard Cleaning
+* Deep Cleaning
+* Move In or Move Out Cleaning
+* Airbnb Turnover
+* Recurring Cleaning
+
+## Step 3
+
+Provider taps one
+
+## Step 4
+
+AI generates the full blueprint:
+
+* pricing style
+* intake questions
+* add ons
+* booking type
+
+## Step 5
+
+Provider edits anything in plain English
+
+Example:
+
+* “Charge more for homes over 2500 sq ft”
+* “Ask if they have pets”
+* “Add inside oven cleaning for $25”
+* “Make deep cleaning request quote only”
+
+## Step 6
+
+Preview booking flow
+
+So they can see exactly what the customer will see.
+
+That preview part is non negotiable. They need confidence.
+
+# Why this is better than a normal service creator
+
+Because most service creators make providers do too much manual setup.
+
+Yours should do the thinking first, then let them approve it.
+
+That means the provider is not building from scratch.
+They are **editing an intelligent draft**.
+
+That is the sweet spot.
+
+## The core principle
+
+**AI suggests. Provider approves.**
+
+Not:
+
+* AI fully controls everything
+* provider manually builds every field
+
+# Keep it simple in the UI
+
+Do not make them build complicated formulas.
+
+Instead use a simple structure:
+
+## Service Setup Card
+
+**Service name**
+Standard Cleaning
+
+**Pricing method**
+By home size + room count
+
+**Customer questions**
+6 included
+
+**Add ons**
+4 included
+
+**Booking type**
+Starts at $149
+
+Then they can tap into each section and edit.
+
+That keeps the creator clean.
+
+# Best version of this feature
+
+## **AI Service Blueprint + Smart Intake**
+
+That’s probably the best name and structure.
+
+It combines:
+
+* service setup
+* pricing setup
+* intake questions
+* upsells
+* quote protection
+
+without feeling like 5 different tools.
+
+# Important rule
+
+Do **not** try to support every possible pricing model on day one.
+
+Start with these 5:
+
+* Flat rate
+* Starts at price
+* Size based
+* Time based
+* Custom quote
+
+Then allow modifiers:
+
+* property size
+* bedrooms/bathrooms
+* frequency
+* add ons
+* urgency
+* condition level
+
+That covers a ton of service businesses without overcomplicating the app.
+
+# My honest take
+
+Your mistake right now is probably trying to make the “service creator” feel too smart and too custom all at once.
+
+That usually turns into a messy backend and a confusing UI.
+
+Instead, make it:
+
+**category aware**
+**template based**
+**AI assisted**
+**editable in plain English**
+
+That wins.
+
+# If I were designing the MVP, I’d structure it like this
+
+## Feature MVP
+
+**AI Service Blueprint**
+
+### Inputs
+
+* Business type
+* Service category
+* Short description of how they usually charge
+
+### Outputs
+
+* suggested service name
+* suggested pricing method
+* suggested intake questions
+* suggested add ons
+* suggested booking mode
+
+### Provider can edit
+
+* price
+* question wording
+* add ons
+* quote rules
+* availability
+
+That’s enough.
+
+# One more smart thing to add
+
+Let AI flag profit leaks.
+
+Example:
+“This service may be underpriced because you did not account for large homes, heavy overgrowth, or add on labor.”
+
+That is genuinely useful and directly tied to helping them make more money.
+
+Not too much.
+Just a small “AI pricing insight” box.
+
+# Final recommendation
+
+Build **AI Service Blueprint** with these 4 blocks:
+
+1. Pricing model
+2. Intake questions
+3. Add ons
+4. Booking logic
+
+And power it with category based recommendations + plain English editing.
+
+That gives you something:
+
+* simple
+* actually helpful
+* flexible for different industries
+* tied to your existing AI intake flow
+* built to increase provider revenue
+
+The clean one liner for your team is:
+
+**“HomeBase turns any service into a smart booking flow with AI generated pricing, intake questions, upsells, and quote rules.”**
+
+I can map this into an actual screen by screen flow next.
