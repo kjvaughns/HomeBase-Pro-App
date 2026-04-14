@@ -68,6 +68,7 @@ interface OwnerProviderResponse {
   serviceZipCodes: string[] | null;
   serviceCities: string[] | null;
   businessHours: Record<DayKey, BusinessHoursDay> | null;
+  distance?: number | null;
 }
 
 interface CustomService {
@@ -175,7 +176,8 @@ export default function PublicProfileScreen() {
 
   const rawProvider = providerData?.provider;
   const allServices = servicesData?.services ?? [];
-  const displayServices = allServices.filter((s) => s.isPublished !== false);
+  // Provider preview shows ALL services (published + drafts), not just published ones
+  const displayServices = allServices;
   const providerReviews = reviewsData?.reviews ?? [];
   const activeLink = bookingLinksData?.bookingLinks?.find((l) => l.status === "active");
   const slug = activeLink?.slug;
@@ -297,7 +299,9 @@ export default function PublicProfileScreen() {
           </View>
           <View style={[styles.statCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
             <Feather name="map-pin" size={20} color={Colors.accent} />
-            <ThemedText style={styles.statValue}>N/A</ThemedText>
+            <ThemedText style={styles.statValue}>
+              {provider?.distance != null ? `${provider.distance.toFixed(1)}` : "N/A"}
+            </ThemedText>
             <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Miles Away</ThemedText>
           </View>
         </View>
