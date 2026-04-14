@@ -356,7 +356,7 @@ export default function StripeConnectScreen() {
                     <View style={styles.feeRow}>
                       <ThemedText>Platform Fee ({feePreview.feePercent}%)</ThemedText>
                       <ThemedText style={{ fontWeight: "600" }}>
-                        ${(feePreview.platformFeeCents / 100).toFixed(2)}
+                        ${(feePreview.totalFeeCents / 100).toFixed(2)}
                       </ThemedText>
                     </View>
                     <View style={styles.feeRow}>
