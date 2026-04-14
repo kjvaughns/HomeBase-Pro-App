@@ -4029,6 +4029,21 @@ Respond with JSON only:
 
       const invoice = await storage.createInvoice(parsed.data);
 
+      // Try to generate a Stripe payment link — non-fatal, only if Connect is active
+      let hostedUrl: string | undefined;
+      const [connectAcct] = await db.select({ chargesEnabled: stripeConnectAccounts.chargesEnabled })
+        .from(stripeConnectAccounts)
+        .where(eq(stripeConnectAccounts.providerId, req.body.providerId))
+        .limit(1)
+        .catch(() => [null]);
+      if (connectAcct?.chargesEnabled) {
+        const checkoutResult = await createStripeCheckoutSession(invoice.id).catch(() => null);
+        if (checkoutResult?.checkoutUrl) {
+          hostedUrl = checkoutResult.checkoutUrl;
+          await db.update(invoices).set({ hostedInvoiceUrl: hostedUrl, updatedAt: new Date() }).where(eq(invoices.id, invoice.id)).catch(() => {});
+        }
+      }
+
       // Send email via dispatcher
       let emailSent = false;
       let emailError: string | undefined;
@@ -4053,6 +4068,7 @@ Respond with JSON only:
               unitPrice: item.unitPrice,
               total: item.total,
             })),
+            paymentLink: hostedUrl,
             relatedRecordType: 'invoice',
             relatedRecordId: invoice.id,
           });
@@ -4110,6 +4126,21 @@ Respond with JSON only:
         return res.status(404).json({ error: "Invoice not found" });
       }
       
+      // Try to generate a Stripe payment link — non-fatal, only if Connect is active
+      let hostedUrl: string | undefined;
+      const [connectAcctSend] = await db.select({ chargesEnabled: stripeConnectAccounts.chargesEnabled })
+        .from(stripeConnectAccounts)
+        .where(eq(stripeConnectAccounts.providerId, invoice.providerId))
+        .limit(1)
+        .catch(() => [null]);
+      if (connectAcctSend?.chargesEnabled) {
+        const checkoutResult = await createStripeCheckoutSession(invoiceId).catch(() => null);
+        if (checkoutResult?.checkoutUrl) {
+          hostedUrl = checkoutResult.checkoutUrl;
+          await db.update(invoices).set({ hostedInvoiceUrl: hostedUrl, updatedAt: new Date() }).where(eq(invoices.id, invoiceId)).catch(() => {});
+        }
+      }
+
       // Get client and provider details for email
       let emailSent = false;
       let emailError: string | undefined;
@@ -4136,6 +4167,7 @@ Respond with JSON only:
               unitPrice: parseFloat(item.unitPrice?.toString() || item.price?.toString() || "0"),
               total: parseFloat(item.total?.toString() || "0"),
             })),
+            paymentLink: hostedUrl,
             relatedRecordType: 'invoice',
             relatedRecordId: invoice.id,
           });
