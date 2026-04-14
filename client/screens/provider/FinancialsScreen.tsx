@@ -10,9 +10,7 @@ import {
   Linking,
   Alert,
   Dimensions,
-  Modal,
 } from "react-native";
-import Svg, { Rect, Text as SvgText, Line, G } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
@@ -215,7 +213,7 @@ const DATE_RANGE_OPTIONS: { key: DateRange; label: string }[] = [
   { key: "custom", label: "Custom" },
 ];
 
-// ─── SVG Bar Chart ────────────────────────────────────────────────────────────
+// ─── View-based Bar Chart ─────────────────────────────────────────────────────
 
 function BarChart({
   data,
@@ -226,95 +224,109 @@ function BarChart({
   maxValue: number;
   theme: ReturnType<typeof useTheme>["theme"];
 }) {
-  const screenWidth = Dimensions.get("window").width;
-  const HORIZ_PAD = Spacing.screenPadding * 2 + Spacing.lg * 2;
-  const chartWidth = screenWidth - HORIZ_PAD;
-  const chartHeight = 120;
-  const BOTTOM_AXIS = 24;
-  const totalH = chartHeight + BOTTOM_AXIS;
+  const CHART_HEIGHT = 120;
+  const EMPTY_BAR_H = 6;
   const n = data.length;
-  const gap = n > 12 ? 2 : n > 7 ? 3 : 4;
-  const barW = Math.max(4, Math.floor((chartWidth - (n - 1) * gap) / n));
-  const maxIdx = data.reduce((best, item, i) => (item.value > data[best].value ? i : best), 0);
-  const gridLines = [0.25, 0.5, 0.75, 1.0];
+  const maxIdx = data.reduce(
+    (best, item, i) => (item.value > data[best].value ? i : best),
+    0
+  );
+  const hasAnyValue = data.some((d) => d.value > 0);
 
   return (
-    <Svg width={chartWidth} height={totalH} style={{ marginTop: Spacing.md }}>
-      {/* Grid lines */}
-      {gridLines.map((pct) => {
-        const y = chartHeight - chartHeight * pct;
-        return (
-          <Line
-            key={pct}
-            x1={0}
-            y1={y}
-            x2={chartWidth}
-            y2={y}
-            stroke={theme.separator}
-            strokeWidth={0.5}
-            strokeOpacity={0.6}
-          />
-        );
-      })}
+    <View style={{ marginTop: Spacing.md }}>
+      {/* Chart area */}
+      <View
+        style={{
+          height: CHART_HEIGHT,
+          flexDirection: "row",
+          alignItems: "flex-end",
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: theme.separator,
+        }}
+      >
+        {data.map((item, i) => {
+          const hasValue = item.value > 0;
+          const barPct = maxValue > 0 && hasValue ? item.value / maxValue : 0;
+          const barH = hasValue
+            ? Math.max(EMPTY_BAR_H + 2, barPct * CHART_HEIGHT)
+            : EMPTY_BAR_H;
+          const isMax = i === maxIdx && hasValue;
+          const showLabel =
+            n <= 7 || i % Math.ceil(n / 6) === 0 || i === n - 1;
 
-      {/* Bars + labels */}
-      {data.map((item, i) => {
-        const barH = maxValue > 0 ? Math.max(3, (item.value / maxValue) * chartHeight) : 3;
-        const x = i * (barW + gap);
-        const y = chartHeight - barH;
-        const hasValue = item.value > 0;
-        const isMax = i === maxIdx && hasValue;
-        const showLabel =
-          n <= 7 || i % Math.ceil(n / 6) === 0 || i === n - 1;
+          return (
+            <View
+              key={i}
+              style={{ flex: 1, alignItems: "center", justifyContent: "flex-end" }}
+            >
+              {/* Peak value label */}
+              {isMax ? (
+                <ThemedText
+                  style={{
+                    fontSize: 7,
+                    fontWeight: "700",
+                    color: Colors.accent,
+                    marginBottom: 2,
+                  }}
+                  numberOfLines={1}
+                >
+                  {formatDollars(item.value)}
+                </ThemedText>
+              ) : null}
 
-        return (
-          <G key={i}>
-            {/* Peak label */}
-            {isMax ? (
-              <SvgText
-                x={x + barW / 2}
-                y={y - 5}
-                fontSize={8}
-                fontWeight="700"
-                fill={Colors.accent}
-                textAnchor="middle"
-              >
-                {formatDollars(item.value)}
-              </SvgText>
-            ) : null}
+              {/* Bar */}
+              <View
+                style={{
+                  width: "70%",
+                  height: barH,
+                  backgroundColor: hasValue ? Colors.accent : theme.separator,
+                  opacity: hasValue ? 1 : 0.4,
+                  borderRadius: 3,
+                }}
+              />
+            </View>
+          );
+        })}
+      </View>
 
-            {/* Bar */}
-            <Rect
-              x={x}
-              y={y}
-              width={barW}
-              height={barH}
-              rx={Math.min(barW / 2, 4)}
-              fill={hasValue ? Colors.accent : theme.separator}
-              opacity={hasValue ? 1 : 0.35}
-            />
+      {/* X-axis labels */}
+      <View style={{ flexDirection: "row", marginTop: 4 }}>
+        {data.map((item, i) => {
+          const showLabel =
+            n <= 7 || i % Math.ceil(n / 6) === 0 || i === n - 1;
+          return (
+            <View key={i} style={{ flex: 1, alignItems: "center" }}>
+              {showLabel ? (
+                <ThemedText
+                  style={{
+                    fontSize: 8,
+                    color: theme.textSecondary,
+                    textAlign: "center",
+                  }}
+                  numberOfLines={1}
+                >
+                  {item.label}
+                </ThemedText>
+              ) : null}
+            </View>
+          );
+        })}
+      </View>
 
-            {/* X-axis label */}
-            {showLabel ? (
-              <SvgText
-                x={x + barW / 2}
-                y={chartHeight + 16}
-                fontSize={8}
-                fontWeight="500"
-                fill={theme.textTertiary ?? theme.textSecondary}
-                textAnchor="middle"
-              >
-                {item.label}
-              </SvgText>
-            ) : null}
-          </G>
-        );
-      })}
-    </Svg>
+      {/* Empty state overlay */}
+      {!hasAnyValue ? (
+        <View style={{ alignItems: "center", marginTop: Spacing.sm }}>
+          <ThemedText style={{ fontSize: 11, color: theme.textSecondary }}>
+            No revenue data for this period
+          </ThemedText>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
-// ─── HomeBase Date Range Picker ───────────────────────────────────────────────
+// ─── Inline Date Range Picker ─────────────────────────────────────────────────
 
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = [
@@ -336,7 +348,7 @@ function stripTime(d: Date): Date {
   return c;
 }
 
-interface DateRangePickerProps {
+interface InlineDateRangePickerProps {
   visible: boolean;
   initialStart: Date;
   initialEnd: Date;
@@ -346,7 +358,7 @@ interface DateRangePickerProps {
   theme: ReturnType<typeof useTheme>["theme"];
 }
 
-function HomeBaseDateRangePicker({
+function InlineDateRangePicker({
   visible,
   initialStart,
   initialEnd,
@@ -354,8 +366,7 @@ function HomeBaseDateRangePicker({
   onApply,
   onClose,
   theme,
-}: DateRangePickerProps) {
-  const insets = useSafeAreaInsets();
+}: InlineDateRangePickerProps) {
   const today = stripTime(maxDate ?? new Date());
 
   const [displayMonth, setDisplayMonth] = useState<Date>(() => {
@@ -445,302 +456,256 @@ function HomeBaseDateRangePicker({
 
   const canApply = !!(rangeStart && rangeEnd);
 
-  const CELL_SIZE = Math.floor((Dimensions.get("window").width - 32 - 40) / 7);
+  const CELL_SIZE = Math.floor((Dimensions.get("window").width - Spacing.screenPadding * 2 - 24) / 7);
+
+  if (!visible) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={pickerStyles.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View
-          style={[
-            pickerStyles.sheet,
-            {
-              backgroundColor: theme.background,
-              paddingBottom: insets.bottom + Spacing.lg,
-            },
-          ]}
-        >
-          {/* Header */}
-          <View style={pickerStyles.sheetHeader}>
-            <View style={[pickerStyles.handle, { backgroundColor: theme.separator }]} />
-            <ThemedText style={pickerStyles.sheetTitle}>Select Date Range</ThemedText>
-          </View>
-
-          {/* Selected range display */}
-          <View style={[pickerStyles.rangeDisplay, { backgroundColor: theme.backgroundSecondary, borderColor: theme.separator }]}>
-            <View style={pickerStyles.rangeField}>
-              <ThemedText style={[pickerStyles.rangeFieldLabel, { color: theme.textSecondary }]}>From</ThemedText>
-              <ThemedText
-                style={[
-                  pickerStyles.rangeFieldValue,
-                  { color: rangeStart ? Colors.accent : theme.textSecondary },
-                ]}
-              >
-                {formattedStart}
-              </ThemedText>
-            </View>
-            <View style={[pickerStyles.rangeDivider, { backgroundColor: Colors.accent + "40" }]} />
-            <View style={pickerStyles.rangeField}>
-              <ThemedText style={[pickerStyles.rangeFieldLabel, { color: theme.textSecondary }]}>To</ThemedText>
-              <ThemedText
-                style={[
-                  pickerStyles.rangeFieldValue,
-                  { color: rangeEnd ? Colors.accent : theme.textSecondary },
-                ]}
-              >
-                {formattedEnd}
-              </ThemedText>
-            </View>
-          </View>
-
-          {/* Month navigator */}
-          <View style={pickerStyles.monthNav}>
-            <Pressable
-              style={[pickerStyles.navBtn, { backgroundColor: theme.backgroundSecondary }]}
-              onPress={goToPrevMonth}
-              hitSlop={12}
-            >
-              <Feather name="chevron-left" size={18} color={theme.text} />
-            </Pressable>
-            <ThemedText style={pickerStyles.monthTitle}>
-              {MONTHS[month]} {year}
-            </ThemedText>
-            <Pressable
-              style={[
-                pickerStyles.navBtn,
-                { backgroundColor: theme.backgroundSecondary },
-                !canGoNext() && { opacity: 0.3 },
-              ]}
-              onPress={canGoNext() ? goToNextMonth : undefined}
-              hitSlop={12}
-              disabled={!canGoNext()}
-            >
-              <Feather name="chevron-right" size={18} color={theme.text} />
-            </Pressable>
-          </View>
-
-          {/* Day of week headers */}
-          <View style={pickerStyles.dowRow}>
-            {DAYS_OF_WEEK.map((d) => (
-              <View key={d} style={[pickerStyles.dowCell, { width: CELL_SIZE }]}>
-                <ThemedText style={[pickerStyles.dowLabel, { color: theme.textSecondary }]}>{d[0]}</ThemedText>
-              </View>
-            ))}
-          </View>
-
-          {/* Calendar grid */}
-          <View style={pickerStyles.grid}>
-            {Array.from({ length: Math.ceil(cells.length / 7) }, (_, weekIdx) => (
-              <View key={weekIdx} style={pickerStyles.weekRow}>
-                {cells.slice(weekIdx * 7, weekIdx * 7 + 7).map((day, dayIdx) => {
-                  const cellKey = `w${weekIdx}-d${dayIdx}`;
-                  if (!day) {
-                    return <View key={cellKey} style={{ width: CELL_SIZE, height: CELL_SIZE }} />;
-                  }
-                  const state = getDayState(day);
-                  const future = isFuture(day);
-                  const isSelected = state === "start" || state === "end" || state === "single";
-                  const inRange = state === "inRange";
-
-                  const isFirstInWeek = dayIdx === 0;
-                  const isLastInWeek = dayIdx === 6;
-                  const isStartDay = state === "start";
-                  const isEndDay = state === "end";
-
-                  // Left half green: inRange OR end day
-                  const showLeft = inRange || isEndDay;
-                  // Right half green: inRange OR start day
-                  const showRight = inRange || isStartDay;
-
-                  return (
-                    <Pressable
-                      key={cellKey}
-                      style={[pickerStyles.dayCell, { width: CELL_SIZE, height: CELL_SIZE }]}
-                      onPress={() => !future && handleDayPress(day)}
-                      disabled={future}
-                      testID={`calendar-day-${day}`}
-                    >
-                      {/* Left half strip */}
-                      {showLeft ? (
-                        <View
-                          style={[
-                            pickerStyles.rangeStrip,
-                            {
-                              left: 0,
-                              right: "50%",
-                              backgroundColor: Colors.accent + "22",
-                              borderTopLeftRadius: isFirstInWeek ? 8 : 0,
-                              borderBottomLeftRadius: isFirstInWeek ? 8 : 0,
-                            },
-                          ]}
-                        />
-                      ) : null}
-                      {/* Right half strip */}
-                      {showRight ? (
-                        <View
-                          style={[
-                            pickerStyles.rangeStrip,
-                            {
-                              left: "50%",
-                              right: 0,
-                              backgroundColor: Colors.accent + "22",
-                              borderTopRightRadius: isLastInWeek ? 8 : 0,
-                              borderBottomRightRadius: isLastInWeek ? 8 : 0,
-                            },
-                          ]}
-                        />
-                      ) : null}
-
-                      {/* Circle for selected days */}
-                      <View
-                        style={[
-                          pickerStyles.dayCircle,
-                          { width: Math.min(CELL_SIZE - 4, 36), height: Math.min(CELL_SIZE - 4, 36) },
-                          isSelected && { backgroundColor: Colors.accent },
-                        ]}
-                      >
-                        <ThemedText
-                          style={[
-                            pickerStyles.dayText,
-                            isSelected && { color: "#FFFFFF", fontWeight: "700" },
-                            inRange && { color: Colors.accent, fontWeight: "600" },
-                            future && { opacity: 0.3 },
-                          ]}
-                        >
-                          {day}
-                        </ThemedText>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ))}
-          </View>
-
-          {/* Hint text */}
-          {rangeStart && !rangeEnd ? (
-            <ThemedText style={[pickerStyles.hintText, { color: theme.textSecondary }]}>
-              Tap another date to set the end
-            </ThemedText>
-          ) : null}
-
-          {/* Actions */}
-          <View style={pickerStyles.actions}>
-            <Pressable
-              style={[pickerStyles.cancelBtn, { borderColor: theme.separator }]}
-              onPress={onClose}
-            >
-              <ThemedText style={[pickerStyles.cancelBtnText, { color: theme.textSecondary }]}>Cancel</ThemedText>
-            </Pressable>
-            <Pressable
-              style={[pickerStyles.applyBtn, { backgroundColor: canApply ? Colors.accent : Colors.accent + "40" }]}
-              onPress={() => {
-                if (rangeStart && rangeEnd) {
-                  onApply(rangeStart, rangeEnd);
-                }
-              }}
-              disabled={!canApply}
-              testID="button-apply-date-range"
-            >
-              <ThemedText style={[pickerStyles.applyBtnText, { color: canApply ? "#FFFFFF" : "#FFFFFF80" }]}>
-                Apply Range
-              </ThemedText>
-            </Pressable>
-          </View>
+    <View
+      style={[
+        inlinePickerStyles.container,
+        { backgroundColor: theme.backgroundSecondary, borderColor: theme.separator },
+      ]}
+    >
+      {/* Header row: selected range + close */}
+      <View style={inlinePickerStyles.headerRow}>
+        <View style={inlinePickerStyles.rangeDisplay}>
+          <ThemedText
+            style={[
+              inlinePickerStyles.rangeValue,
+              { color: rangeStart ? Colors.accent : theme.textSecondary },
+            ]}
+          >
+            {formattedStart}
+          </ThemedText>
+          <Feather name="arrow-right" size={12} color={theme.textSecondary} style={{ marginHorizontal: 6 }} />
+          <ThemedText
+            style={[
+              inlinePickerStyles.rangeValue,
+              { color: rangeEnd ? Colors.accent : theme.textSecondary },
+            ]}
+          >
+            {formattedEnd}
+          </ThemedText>
         </View>
+        <Pressable
+          onPress={onClose}
+          hitSlop={12}
+          style={[inlinePickerStyles.closeBtn, { backgroundColor: theme.separator }]}
+        >
+          <Feather name="x" size={14} color={theme.textSecondary} />
+        </Pressable>
       </View>
-    </Modal>
+
+      {/* Month navigator */}
+      <View style={inlinePickerStyles.monthNav}>
+        <Pressable
+          style={[inlinePickerStyles.navBtn, { backgroundColor: theme.background }]}
+          onPress={goToPrevMonth}
+          hitSlop={10}
+        >
+          <Feather name="chevron-left" size={16} color={theme.text} />
+        </Pressable>
+        <ThemedText style={inlinePickerStyles.monthTitle}>
+          {MONTHS[month]} {year}
+        </ThemedText>
+        <Pressable
+          style={[
+            inlinePickerStyles.navBtn,
+            { backgroundColor: theme.background },
+            !canGoNext() && { opacity: 0.3 },
+          ]}
+          onPress={canGoNext() ? goToNextMonth : undefined}
+          hitSlop={10}
+          disabled={!canGoNext()}
+        >
+          <Feather name="chevron-right" size={16} color={theme.text} />
+        </Pressable>
+      </View>
+
+      {/* Day-of-week headers */}
+      <View style={inlinePickerStyles.dowRow}>
+        {DAYS_OF_WEEK.map((d) => (
+          <View key={d} style={{ width: CELL_SIZE, alignItems: "center" }}>
+            <ThemedText style={[inlinePickerStyles.dowLabel, { color: theme.textSecondary }]}>
+              {d[0]}
+            </ThemedText>
+          </View>
+        ))}
+      </View>
+
+      {/* Calendar grid */}
+      <View style={{ marginBottom: Spacing.sm }}>
+        {Array.from({ length: Math.ceil(cells.length / 7) }, (_, weekIdx) => (
+          <View key={weekIdx} style={{ flexDirection: "row" }}>
+            {cells.slice(weekIdx * 7, weekIdx * 7 + 7).map((day, dayIdx) => {
+              const cellKey = `w${weekIdx}-d${dayIdx}`;
+              if (!day) {
+                return <View key={cellKey} style={{ width: CELL_SIZE, height: CELL_SIZE }} />;
+              }
+              const state = getDayState(day);
+              const future = isFuture(day);
+              const isSelected = state === "start" || state === "end" || state === "single";
+              const inRange = state === "inRange";
+              const isFirstInWeek = dayIdx === 0;
+              const isLastInWeek = dayIdx === 6;
+              const isStartDay = state === "start";
+              const isEndDay = state === "end";
+              const showLeft = inRange || isEndDay;
+              const showRight = inRange || isStartDay;
+
+              return (
+                <Pressable
+                  key={cellKey}
+                  style={[
+                    inlinePickerStyles.dayCell,
+                    { width: CELL_SIZE, height: CELL_SIZE },
+                  ]}
+                  onPress={() => !future && handleDayPress(day)}
+                  disabled={future}
+                  testID={`calendar-day-${day}`}
+                >
+                  {showLeft ? (
+                    <View
+                      style={[
+                        inlinePickerStyles.rangeStrip,
+                        {
+                          left: 0,
+                          right: "50%",
+                          backgroundColor: Colors.accent + "22",
+                          borderTopLeftRadius: isFirstInWeek ? 6 : 0,
+                          borderBottomLeftRadius: isFirstInWeek ? 6 : 0,
+                        },
+                      ]}
+                    />
+                  ) : null}
+                  {showRight ? (
+                    <View
+                      style={[
+                        inlinePickerStyles.rangeStrip,
+                        {
+                          left: "50%",
+                          right: 0,
+                          backgroundColor: Colors.accent + "22",
+                          borderTopRightRadius: isLastInWeek ? 6 : 0,
+                          borderBottomRightRadius: isLastInWeek ? 6 : 0,
+                        },
+                      ]}
+                    />
+                  ) : null}
+                  <View
+                    style={[
+                      inlinePickerStyles.dayCircle,
+                      {
+                        width: Math.min(CELL_SIZE - 4, 32),
+                        height: Math.min(CELL_SIZE - 4, 32),
+                      },
+                      isSelected && { backgroundColor: Colors.accent },
+                    ]}
+                  >
+                    <ThemedText
+                      style={[
+                        inlinePickerStyles.dayText,
+                        isSelected && { color: "#FFFFFF", fontWeight: "700" },
+                        inRange && { color: Colors.accent, fontWeight: "600" },
+                        future && { opacity: 0.3 },
+                      ]}
+                    >
+                      {day}
+                    </ThemedText>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        ))}
+      </View>
+
+      {/* Hint */}
+      {rangeStart && !rangeEnd ? (
+        <ThemedText style={[inlinePickerStyles.hint, { color: theme.textSecondary }]}>
+          Tap another date to set the end
+        </ThemedText>
+      ) : null}
+
+      {/* Apply button */}
+      <Pressable
+        style={[
+          inlinePickerStyles.applyBtn,
+          { backgroundColor: canApply ? Colors.accent : Colors.accent + "40" },
+        ]}
+        onPress={() => {
+          if (rangeStart && rangeEnd) onApply(rangeStart, rangeEnd);
+        }}
+        disabled={!canApply}
+        testID="button-apply-date-range"
+      >
+        <ThemedText
+          style={[inlinePickerStyles.applyBtnText, { color: canApply ? "#FFFFFF" : "#FFFFFF80" }]}
+        >
+          Apply Range
+        </ThemedText>
+      </Pressable>
+    </View>
   );
 }
 
-const pickerStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: "rgba(0,0,0,0.45)",
-  },
-  sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-  },
-  sheetHeader: { alignItems: "center", marginBottom: 16 },
-  handle: { width: 36, height: 4, borderRadius: 2, marginBottom: 14 },
-  sheetTitle: { fontSize: 17, fontWeight: "700" },
-
-  rangeDisplay: {
-    flexDirection: "row",
-    borderRadius: 14,
+const inlinePickerStyles = StyleSheet.create({
+  container: {
+    borderRadius: BorderRadius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: 20,
-    overflow: "hidden",
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
   },
-  rangeField: { flex: 1, alignItems: "center", paddingVertical: 12 },
-  rangeFieldLabel: { fontSize: 11, fontWeight: "600", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.3 },
-  rangeFieldValue: { fontSize: 14, fontWeight: "700" },
-  rangeDivider: { width: 1 },
-
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.sm,
+  },
+  rangeDisplay: { flexDirection: "row", alignItems: "center", flex: 1 },
+  rangeValue: { fontSize: 13, fontWeight: "600" },
+  closeBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   monthNav: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 16,
-    paddingHorizontal: 4,
+    marginBottom: Spacing.sm,
   },
   navBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
   },
-  monthTitle: { fontSize: 17, fontWeight: "700" },
-
-  dowRow: { flexDirection: "row", marginBottom: 8 },
-  dowCell: { alignItems: "center", justifyContent: "center" },
-  dowLabel: { fontSize: 12, fontWeight: "600" },
-
-  grid: { marginBottom: 8 },
-  weekRow: { flexDirection: "row" },
-  dayCell: {
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-  },
-  rangeStrip: {
-    position: "absolute",
-    top: 2,
-    bottom: 2,
-  },
+  monthTitle: { fontSize: 15, fontWeight: "700" },
+  dowRow: { flexDirection: "row", marginBottom: 4 },
+  dowLabel: { fontSize: 11, fontWeight: "600" },
+  dayCell: { alignItems: "center", justifyContent: "center", position: "relative" },
+  rangeStrip: { position: "absolute", top: 2, bottom: 2 },
   dayCircle: {
     borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
     zIndex: 1,
   },
-  dayText: { fontSize: 15, fontWeight: "500" },
-
-  hintText: { textAlign: "center", fontSize: 12, marginBottom: 8 },
-
-  actions: { flexDirection: "row", gap: 12, marginTop: 8 },
-  cancelBtn: {
-    flex: 1,
-    height: 50,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  cancelBtnText: { fontSize: 16, fontWeight: "600" },
+  dayText: { fontSize: 13, fontWeight: "500" },
+  hint: { textAlign: "center", fontSize: 11, marginBottom: Spacing.sm },
   applyBtn: {
-    flex: 2,
-    height: 50,
-    borderRadius: 14,
+    height: 42,
+    borderRadius: BorderRadius.md,
     alignItems: "center",
     justifyContent: "center",
+    marginTop: Spacing.xs,
   },
-  applyBtnText: { fontSize: 16, fontWeight: "700" },
+  applyBtnText: { fontSize: 15, fontWeight: "700" },
 });
 
 // ─── Skeleton Row ─────────────────────────────────────────────────────────────
@@ -779,7 +744,7 @@ export default function FinancialsScreen() {
   const [transactionTab, setTransactionTab] = useState<TransactionTab>("invoices");
   const [dateRange, setDateRange] = useState<DateRange>("month");
   const [refreshing, setRefreshing] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showInlinePicker, setShowInlinePicker] = useState(false);
 
   const defaultCustomStart = useMemo(() => {
     const d = new Date();
@@ -1091,7 +1056,8 @@ export default function FinancialsScreen() {
                 onPress={() => {
                   Haptics.selectionAsync();
                   setDateRange(opt.key);
-                  if (opt.key === "custom") setShowDatePicker(true);
+                  if (opt.key === "custom") setShowInlinePicker(true);
+                  else setShowInlinePicker(false);
                 }}
                 testID={`date-range-${opt.key}`}
               >
@@ -1111,21 +1077,42 @@ export default function FinancialsScreen() {
         </View>
       </Animated.View>
 
-      {/* Custom range chip — tappable to re-open picker */}
+      {/* Custom range chip — tap to re-open inline picker */}
       {dateRange === "custom" ? (
         <Animated.View entering={FadeInDown.delay(70).duration(300)}>
           <Pressable
             style={[styles.customChip, { backgroundColor: Colors.accentLight }]}
-            onPress={() => setShowDatePicker(true)}
+            onPress={() => setShowInlinePicker((v) => !v)}
             testID="button-open-date-picker"
           >
             <Feather name="calendar" size={13} color={Colors.accent} />
             <ThemedText style={[styles.customChipText, { color: Colors.accent }]}>
-              {customRangeSummary}
+              {customRangeSummary ?? "Select range"}
             </ThemedText>
-            <Feather name="chevron-down" size={13} color={Colors.accent} />
+            <Feather
+              name={showInlinePicker ? "chevron-up" : "chevron-down"}
+              size={13}
+              color={Colors.accent}
+            />
           </Pressable>
         </Animated.View>
+      ) : null}
+
+      {/* Inline date range picker — expands below chip when Custom is active */}
+      {dateRange === "custom" ? (
+        <InlineDateRangePicker
+          visible={showInlinePicker}
+          initialStart={customStart}
+          initialEnd={customEnd}
+          maxDate={new Date()}
+          onApply={(s, e) => {
+            setCustomStart(s);
+            setCustomEnd(e);
+            setShowInlinePicker(false);
+          }}
+          onClose={() => setShowInlinePicker(false)}
+          theme={theme}
+        />
       ) : null}
 
       {/* Revenue + chart card */}
@@ -1166,9 +1153,15 @@ export default function FinancialsScreen() {
 
           {statsLoading ? (
             <View style={[styles.chartSkeleton, { backgroundColor: theme.separator }]} />
-          ) : stats.revenueByPeriod != null && stats.revenueByPeriod.length > 0 ? (
+          ) : (stats.revenueByPeriod ?? []).length > 0 ? (
             <BarChart data={stats.revenueByPeriod} maxValue={maxChartValue} theme={theme} />
-          ) : null}
+          ) : (
+            <View style={{ paddingVertical: Spacing.lg, alignItems: "center" }}>
+              <ThemedText style={{ fontSize: 12, color: theme.textSecondary }}>
+                No revenue data for this period
+              </ThemedText>
+            </View>
+          )}
         </GlassCard>
       </Animated.View>
 
@@ -1363,20 +1356,6 @@ export default function FinancialsScreen() {
         >
           <SharedHeader />
         </ScrollView>
-
-        <HomeBaseDateRangePicker
-          visible={showDatePicker}
-          initialStart={customStart}
-          initialEnd={customEnd}
-          maxDate={new Date()}
-          onApply={(s, e) => {
-            setCustomStart(s);
-            setCustomEnd(e);
-            setShowDatePicker(false);
-          }}
-          onClose={() => setShowDatePicker(false)}
-          theme={theme}
-        />
       </ThemedView>
     );
   }
@@ -1421,19 +1400,6 @@ export default function FinancialsScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
           }
         />
-        <HomeBaseDateRangePicker
-          visible={showDatePicker}
-          initialStart={customStart}
-          initialEnd={customEnd}
-          maxDate={new Date()}
-          onApply={(s, e) => {
-            setCustomStart(s);
-            setCustomEnd(e);
-            setShowDatePicker(false);
-          }}
-          onClose={() => setShowDatePicker(false)}
-          theme={theme}
-        />
       </ThemedView>
     );
   }
@@ -1473,19 +1439,6 @@ export default function FinancialsScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
         }
-      />
-      <HomeBaseDateRangePicker
-        visible={showDatePicker}
-        initialStart={customStart}
-        initialEnd={customEnd}
-        maxDate={new Date()}
-        onApply={(s, e) => {
-          setCustomStart(s);
-          setCustomEnd(e);
-          setShowDatePicker(false);
-        }}
-        onClose={() => setShowDatePicker(false)}
-        theme={theme}
       />
     </ThemedView>
   );
