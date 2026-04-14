@@ -1,5 +1,14 @@
 import React, { useState, useMemo } from "react";
-import { StyleSheet, View, FlatList, RefreshControl, Pressable, Modal, ScrollView } from "react-native";
+import {
+  StyleSheet,
+  View,
+  FlatList,
+  RefreshControl,
+  Pressable,
+  Modal,
+  ScrollView,
+  TextInput,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
@@ -47,6 +56,17 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
 ];
 
 const RATING_OPTIONS = [0, 3, 4, 4.5];
+
+const PRESET_LOCATIONS = [
+  "San Francisco, CA",
+  "Los Angeles, CA",
+  "New York, NY",
+  "Austin, TX",
+  "Seattle, WA",
+  "Chicago, IL",
+  "Miami, FL",
+  "Denver, CO",
+];
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -96,22 +116,27 @@ export default function FindScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { theme, isDark } = useTheme();
   const { isAuthenticated } = useAuthStore();
-  
+
   const categories = useHomeownerStore((s) => s.categories);
   const providers = useHomeownerStore((s) => s.providers);
   const getSavedProviders = useHomeownerStore((s) => s.getSavedProviders);
-  
+
   const savedProviders = useMemo(() => {
     if (!isAuthenticated) return [];
     return getSavedProviders();
   }, [isAuthenticated, getSavedProviders]);
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [locationLabel, setLocationLabel] = useState("San Francisco, CA");
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [customLocation, setCustomLocation] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [showAccountGate, setShowAccountGate] = useState(false);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [tempFilters, setTempFilters] = useState<Filters>(DEFAULT_FILTERS);
+
+  const isSearching = searchQuery.trim().length > 0;
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -123,7 +148,17 @@ export default function FindScreen() {
 
   const featuredProviders = useMemo(() => {
     let result = [...providers];
-    
+
+    if (isSearching) {
+      const q = searchQuery.trim().toLowerCase();
+      result = result.filter(
+        (p) =>
+          p.businessName?.toLowerCase().includes(q) ||
+          p.name?.toLowerCase().includes(q) ||
+          p.services?.some((s) => s.toLowerCase().includes(q))
+      );
+    }
+
     if (filters.minRating > 0) {
       result = result.filter((p) => p.rating >= filters.minRating);
     }
@@ -147,8 +182,8 @@ export default function FindScreen() {
         break;
     }
 
-    return result.slice(0, 5);
-  }, [providers, filters]);
+    return isSearching ? result : result.slice(0, 5);
+  }, [providers, filters, searchQuery, isSearching]);
 
   const openFilterModal = () => {
     setTempFilters(filters);
@@ -197,7 +232,6 @@ export default function FindScreen() {
     navigation.navigate("Login");
   };
 
-
   const handleSignUp = () => {
     setShowAccountGate(false);
     navigation.navigate("SignUp");
@@ -211,6 +245,25 @@ export default function FindScreen() {
     navigation.navigate("ProviderProfile", { providerId });
   };
 
+  const openLocationModal = () => {
+    setCustomLocation("");
+    setShowLocationModal(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const selectLocation = (loc: string) => {
+    setLocationLabel(loc);
+    setShowLocationModal(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const confirmCustomLocation = () => {
+    const trimmed = customLocation.trim();
+    if (trimmed.length > 0) {
+      selectLocation(trimmed);
+    }
+  };
+
   const renderHeader = () => (
     <View style={styles.headerContent}>
       <Animated.View entering={FadeInDown.delay(50).duration(400)}>
@@ -221,134 +274,174 @@ export default function FindScreen() {
           leftIcon="search"
           rightIcon={searchQuery ? "x" : undefined}
           onRightIconPress={() => setSearchQuery("")}
+          testID="search-input"
         />
       </Animated.View>
 
-      <Animated.View
-        entering={FadeInDown.delay(150).duration(400)}
-        style={styles.locationRow}
-      >
-        <Feather name="map-pin" size={16} color={Colors.accent} />
-        <ThemedText style={styles.locationText}>
-          San Francisco, CA
-        </ThemedText>
-        <Feather name="chevron-down" size={14} color={Colors.accent} />
-      </Animated.View>
-
-      <Animated.View entering={FadeInDown.delay(175).duration(400)}>
+      <Animated.View entering={FadeInDown.delay(150).duration(400)}>
         <Pressable
-          style={[styles.aiCard, { backgroundColor: theme.cardBackground }]}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            navigation.navigate("AIChat");
-          }}
-          testID="ask-homebase-ai-card"
+          style={styles.locationRow}
+          onPress={openLocationModal}
+          testID="location-picker"
         >
-          <View style={[styles.aiIconContainer, { backgroundColor: Colors.accentLight }]}>
-            <Feather name="message-circle" size={24} color={Colors.accent} />
-          </View>
-          <View style={styles.aiCardContent}>
-            <ThemedText style={styles.aiCardTitle}>Ask HomeBase AI</ThemedText>
-            <ThemedText style={[styles.aiCardSubtitle, { color: theme.textSecondary }]}>
-              Get instant answers or find the right pro
-            </ThemedText>
-          </View>
-          <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+          <Feather name="map-pin" size={16} color={Colors.accent} />
+          <ThemedText style={styles.locationText}>{locationLabel}</ThemedText>
+          <Feather name="chevron-down" size={14} color={Colors.accent} />
         </Pressable>
       </Animated.View>
 
-      {isAuthenticated && savedProviders.length > 0 ? (
-        <Animated.View entering={FadeInDown.delay(180).duration(400)}>
-          <SectionHeader 
-            title="Saved Providers" 
-            actionLabel="See All" 
-            onAction={() => navigation.navigate("SavedProviders")} 
-          />
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.savedProvidersRow}
-          >
-            {savedProviders.slice(0, 5).map((provider) => (
-              <Pressable
-                key={provider.id}
-                style={[styles.savedProviderCard, { backgroundColor: theme.cardBackground }]}
-                onPress={() => handleProviderCardPress(provider.id)}
+      {isSearching ? null : (
+        <>
+          <Animated.View entering={FadeInDown.delay(175).duration(400)}>
+            <Pressable
+              style={[styles.aiCard, { backgroundColor: theme.cardBackground }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                navigation.navigate("AIChat");
+              }}
+              testID="ask-homebase-ai-card"
+            >
+              <View
+                style={[
+                  styles.aiIconContainer,
+                  { backgroundColor: Colors.accentLight },
+                ]}
               >
-                <View style={[styles.savedProviderAvatar, { backgroundColor: Colors.accentLight }]}>
-                  <ThemedText style={styles.savedProviderInitial}>
-                    {provider.businessName.charAt(0)}
-                  </ThemedText>
-                </View>
-                <ThemedText style={styles.savedProviderName} numberOfLines={1}>
-                  {provider.businessName}
+                <Feather name="message-circle" size={24} color={Colors.accent} />
+              </View>
+              <View style={styles.aiCardContent}>
+                <ThemedText style={styles.aiCardTitle}>Ask HomeBase AI</ThemedText>
+                <ThemedText
+                  style={[styles.aiCardSubtitle, { color: theme.textSecondary }]}
+                >
+                  Get instant answers or find the right pro
                 </ThemedText>
-                <View style={styles.savedProviderRating}>
-                  <Feather name="star" size={12} color={Colors.warning} />
-                  <ThemedText style={[styles.savedProviderRatingText, { color: theme.textSecondary }]}>
-                    {provider.rating.toFixed(1)}
-                  </ThemedText>
-                </View>
-              </Pressable>
+              </View>
+              <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+            </Pressable>
+          </Animated.View>
+
+          {isAuthenticated && savedProviders.length > 0 ? (
+            <Animated.View entering={FadeInDown.delay(180).duration(400)}>
+              <SectionHeader
+                title="Saved Providers"
+                actionLabel="See All"
+                onAction={() => navigation.navigate("SavedProviders")}
+              />
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.savedProvidersRow}
+              >
+                {savedProviders.slice(0, 5).map((provider) => (
+                  <Pressable
+                    key={provider.id}
+                    style={[
+                      styles.savedProviderCard,
+                      { backgroundColor: theme.cardBackground },
+                    ]}
+                    onPress={() => handleProviderCardPress(provider.id)}
+                  >
+                    <View
+                      style={[
+                        styles.savedProviderAvatar,
+                        { backgroundColor: Colors.accentLight },
+                      ]}
+                    >
+                      <ThemedText style={styles.savedProviderInitial}>
+                        {provider.businessName.charAt(0)}
+                      </ThemedText>
+                    </View>
+                    <ThemedText
+                      style={styles.savedProviderName}
+                      numberOfLines={1}
+                    >
+                      {provider.businessName}
+                    </ThemedText>
+                    <View style={styles.savedProviderRating}>
+                      <Feather name="star" size={12} color={Colors.warning} />
+                      <ThemedText
+                        style={[
+                          styles.savedProviderRatingText,
+                          { color: theme.textSecondary },
+                        ]}
+                      >
+                        {provider.rating.toFixed(1)}
+                      </ThemedText>
+                    </View>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </Animated.View>
+          ) : null}
+
+          <Animated.View entering={FadeInDown.delay(200).duration(400)}>
+            <SectionHeader title="Services" actionLabel="See All" onAction={() => {}} />
+          </Animated.View>
+
+          <Animated.View
+            entering={FadeInDown.delay(250).duration(400)}
+            style={styles.categoriesGrid}
+          >
+            {categories.slice(0, 6).map((category) => (
+              <View key={category.id} style={styles.categoryItem}>
+                <CategoryCard
+                  name={category.name}
+                  icon={category.icon as any}
+                  onPress={() => handleCategoryPress(category)}
+                  testID={`category-${category.id}`}
+                  compact
+                />
+              </View>
             ))}
-          </ScrollView>
-        </Animated.View>
-      ) : null}
-
-      <Animated.View entering={FadeInDown.delay(200).duration(400)}>
-        <SectionHeader title="Services" actionLabel="See All" onAction={() => {}} />
-      </Animated.View>
-
-      <Animated.View
-        entering={FadeInDown.delay(250).duration(400)}
-        style={styles.categoriesGrid}
-      >
-        {categories.slice(0, 6).map((category) => (
-          <View key={category.id} style={styles.categoryItem}>
-            <CategoryCard
-              name={category.name}
-              icon={category.icon as any}
-              onPress={() => handleCategoryPress(category)}
-              testID={`category-${category.id}`}
-              compact
-            />
-          </View>
-        ))}
-      </Animated.View>
+          </Animated.View>
+        </>
+      )}
 
       <Animated.View entering={FadeInDown.delay(300).duration(400)}>
         <View style={styles.featuredHeader}>
-          <ThemedText style={styles.sectionTitle}>Featured Pros</ThemedText>
-          <Pressable
-            onPress={openFilterModal}
-            style={[
-              styles.filterButtonLarge,
-              {
-                backgroundColor: activeFilterCount > 0 ? Colors.accent : theme.cardBackground,
-                borderColor: activeFilterCount > 0 ? Colors.accent : theme.borderLight,
-              },
-            ]}
-            testID="filter-button"
-          >
-            <Feather
-              name="sliders"
-              size={18}
-              color={activeFilterCount > 0 ? "#fff" : theme.text}
-            />
-            <ThemedText
+          <ThemedText style={styles.sectionTitle}>
+            {isSearching
+              ? `Results for "${searchQuery.trim()}"`
+              : "Featured Pros"}
+          </ThemedText>
+          {isSearching ? null : (
+            <Pressable
+              onPress={openFilterModal}
               style={[
-                styles.filterButtonText,
-                { color: activeFilterCount > 0 ? "#fff" : theme.text },
+                styles.filterButtonLarge,
+                {
+                  backgroundColor:
+                    activeFilterCount > 0 ? Colors.accent : theme.cardBackground,
+                  borderColor:
+                    activeFilterCount > 0 ? Colors.accent : theme.borderLight,
+                },
               ]}
+              testID="filter-button"
             >
-              {activeFilterCount > 0 ? `Filters (${activeFilterCount})` : "Filter"}
-            </ThemedText>
-          </Pressable>
+              <Feather
+                name="sliders"
+                size={18}
+                color={activeFilterCount > 0 ? "#fff" : theme.text}
+              />
+              <ThemedText
+                style={[
+                  styles.filterButtonText,
+                  { color: activeFilterCount > 0 ? "#fff" : theme.text },
+                ]}
+              >
+                {activeFilterCount > 0 ? `Filters (${activeFilterCount})` : "Filter"}
+              </ThemedText>
+            </Pressable>
+          )}
         </View>
       </Animated.View>
 
-      {activeFilterCount > 0 ? (
-        <Animated.View entering={FadeInDown.delay(320).duration(400)} style={styles.activeFiltersRow}>
+      {activeFilterCount > 0 && !isSearching ? (
+        <Animated.View
+          entering={FadeInDown.delay(320).duration(400)}
+          style={styles.activeFiltersRow}
+        >
           {filters.sortBy !== "rating" ? (
             <Pressable
               onPress={() => clearFilter("sortBy")}
@@ -384,7 +477,132 @@ export default function FindScreen() {
           ) : null}
         </Animated.View>
       ) : null}
+
+      {isSearching && featuredProviders.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Feather name="search" size={40} color={theme.textSecondary} />
+          <ThemedText style={[styles.emptyTitle, { color: theme.text }]}>
+            No results found
+          </ThemedText>
+          <ThemedText style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
+            Try a different search term or browse by category
+          </ThemedText>
+        </View>
+      ) : null}
     </View>
+  );
+
+  const renderLocationModal = () => (
+    <Modal
+      visible={showLocationModal}
+      animationType="slide"
+      transparent
+      onRequestClose={() => setShowLocationModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <BlurView
+          intensity={isDark ? 40 : 60}
+          tint={isDark ? "dark" : "light"}
+          style={StyleSheet.absoluteFill}
+        />
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={() => setShowLocationModal(false)}
+        />
+        <View
+          style={[
+            styles.modalContent,
+            {
+              backgroundColor: theme.backgroundDefault,
+              paddingBottom: insets.bottom + Spacing.md,
+            },
+          ]}
+        >
+          <View style={styles.modalHeader}>
+            <ThemedText style={styles.modalTitle}>Choose Location</ThemedText>
+            <Pressable onPress={() => setShowLocationModal(false)}>
+              <Feather name="x" size={24} color={theme.text} />
+            </Pressable>
+          </View>
+
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            style={styles.modalScroll}
+          >
+            <View style={styles.filterSection}>
+              <ThemedText style={styles.filterLabel}>Popular Cities</ThemedText>
+              {PRESET_LOCATIONS.map((loc) => (
+                <Pressable
+                  key={loc}
+                  onPress={() => selectLocation(loc)}
+                  style={[
+                    styles.locationOption,
+                    {
+                      backgroundColor:
+                        locationLabel === loc
+                          ? Colors.accentLight
+                          : theme.cardBackground,
+                      borderColor:
+                        locationLabel === loc ? Colors.accent : theme.borderLight,
+                    },
+                  ]}
+                  testID={`location-option-${loc}`}
+                >
+                  <Feather
+                    name="map-pin"
+                    size={16}
+                    color={locationLabel === loc ? Colors.accent : theme.textSecondary}
+                  />
+                  <ThemedText
+                    style={[
+                      styles.locationOptionText,
+                      { color: locationLabel === loc ? Colors.accent : theme.text },
+                    ]}
+                  >
+                    {loc}
+                  </ThemedText>
+                  {locationLabel === loc ? (
+                    <Feather
+                      name="check"
+                      size={16}
+                      color={Colors.accent}
+                      style={{ marginLeft: "auto" }}
+                    />
+                  ) : null}
+                </Pressable>
+              ))}
+            </View>
+
+            <View style={styles.filterSection}>
+              <ThemedText style={styles.filterLabel}>Enter a city</ThemedText>
+              <View
+                style={[
+                  styles.customLocationRow,
+                  { borderColor: theme.borderLight, backgroundColor: theme.cardBackground },
+                ]}
+              >
+                <Feather name="edit-2" size={16} color={theme.textSecondary} />
+                <TextInput
+                  value={customLocation}
+                  onChangeText={setCustomLocation}
+                  placeholder="City, State (e.g. Phoenix, AZ)"
+                  placeholderTextColor={theme.textSecondary}
+                  style={[styles.customLocationInput, { color: theme.text }]}
+                  returnKeyType="done"
+                  onSubmitEditing={confirmCustomLocation}
+                  testID="custom-location-input"
+                />
+                {customLocation.trim().length > 0 ? (
+                  <Pressable onPress={confirmCustomLocation}>
+                    <Feather name="arrow-right" size={18} color={Colors.accent} />
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   );
 
   const renderFilterModal = () => (
@@ -407,7 +625,10 @@ export default function FindScreen() {
         <View
           style={[
             styles.modalContent,
-            { backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.md },
+            {
+              backgroundColor: theme.backgroundDefault,
+              paddingBottom: insets.bottom + Spacing.md,
+            },
           ]}
         >
           <View style={styles.modalHeader}>
@@ -424,21 +645,30 @@ export default function FindScreen() {
                 {SORT_OPTIONS.map((option) => (
                   <Pressable
                     key={option.value}
-                    onPress={() => setTempFilters((prev) => ({ ...prev, sortBy: option.value }))}
+                    onPress={() =>
+                      setTempFilters((prev) => ({ ...prev, sortBy: option.value }))
+                    }
                     style={[
                       styles.optionChip,
                       {
                         backgroundColor:
-                          tempFilters.sortBy === option.value ? Colors.accent : theme.cardBackground,
+                          tempFilters.sortBy === option.value
+                            ? Colors.accent
+                            : theme.cardBackground,
                         borderColor:
-                          tempFilters.sortBy === option.value ? Colors.accent : theme.borderLight,
+                          tempFilters.sortBy === option.value
+                            ? Colors.accent
+                            : theme.borderLight,
                       },
                     ]}
                   >
                     <ThemedText
                       style={[
                         styles.optionText,
-                        { color: tempFilters.sortBy === option.value ? "#fff" : theme.text },
+                        {
+                          color:
+                            tempFilters.sortBy === option.value ? "#fff" : theme.text,
+                        },
                       ]}
                     >
                       {option.label}
@@ -454,14 +684,20 @@ export default function FindScreen() {
                 {RATING_OPTIONS.map((rating) => (
                   <Pressable
                     key={rating}
-                    onPress={() => setTempFilters((prev) => ({ ...prev, minRating: rating }))}
+                    onPress={() =>
+                      setTempFilters((prev) => ({ ...prev, minRating: rating }))
+                    }
                     style={[
                       styles.optionChip,
                       {
                         backgroundColor:
-                          tempFilters.minRating === rating ? Colors.accent : theme.cardBackground,
+                          tempFilters.minRating === rating
+                            ? Colors.accent
+                            : theme.cardBackground,
                         borderColor:
-                          tempFilters.minRating === rating ? Colors.accent : theme.borderLight,
+                          tempFilters.minRating === rating
+                            ? Colors.accent
+                            : theme.borderLight,
                       },
                     ]}
                   >
@@ -476,7 +712,10 @@ export default function FindScreen() {
                     <ThemedText
                       style={[
                         styles.optionText,
-                        { color: tempFilters.minRating === rating ? "#fff" : theme.text },
+                        {
+                          color:
+                            tempFilters.minRating === rating ? "#fff" : theme.text,
+                        },
                       ]}
                     >
                       {rating === 0 ? "Any" : `${rating}+`}
@@ -490,12 +729,21 @@ export default function FindScreen() {
               <ThemedText style={styles.filterLabel}>Verification</ThemedText>
               <View style={styles.optionsRow}>
                 <Pressable
-                  onPress={() => setTempFilters((prev) => ({ ...prev, verifiedOnly: !prev.verifiedOnly }))}
+                  onPress={() =>
+                    setTempFilters((prev) => ({
+                      ...prev,
+                      verifiedOnly: !prev.verifiedOnly,
+                    }))
+                  }
                   style={[
                     styles.optionChip,
                     {
-                      backgroundColor: tempFilters.verifiedOnly ? Colors.accent : theme.cardBackground,
-                      borderColor: tempFilters.verifiedOnly ? Colors.accent : theme.borderLight,
+                      backgroundColor: tempFilters.verifiedOnly
+                        ? Colors.accent
+                        : theme.cardBackground,
+                      borderColor: tempFilters.verifiedOnly
+                        ? Colors.accent
+                        : theme.borderLight,
                     },
                   ]}
                 >
@@ -536,7 +784,13 @@ export default function FindScreen() {
     </Modal>
   );
 
-  const renderProvider = ({ item, index }: { item: typeof featuredProviders[0]; index: number }) => (
+  const renderProvider = ({
+    item,
+    index,
+  }: {
+    item: (typeof featuredProviders)[0];
+    index: number;
+  }) => (
     <Animated.View entering={FadeInDown.delay(350 + index * 100).duration(400)}>
       <ProviderCard
         name={item.name}
@@ -555,7 +809,7 @@ export default function FindScreen() {
 
   const renderFooter = () => (
     <View style={styles.footerContent}>
-      {!isAuthenticated ? (
+      {!isAuthenticated && !isSearching ? (
         <>
           <Animated.View entering={FadeInDown.delay(600).duration(400)}>
             <SectionHeader title="Homeowner Tools" />
@@ -569,13 +823,29 @@ export default function FindScreen() {
               <Pressable
                 key={tool.id}
                 onPress={() => handleToolPress(tool)}
-                style={[styles.toolCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}
+                style={[
+                  styles.toolCard,
+                  {
+                    backgroundColor: theme.cardBackground,
+                    borderColor: theme.borderLight,
+                  },
+                ]}
               >
-                <View style={[styles.toolIconContainer, { backgroundColor: Colors.accentLight }]}>
+                <View
+                  style={[
+                    styles.toolIconContainer,
+                    { backgroundColor: Colors.accentLight },
+                  ]}
+                >
                   <Feather name={tool.icon} size={20} color={Colors.accent} />
                 </View>
-                <ThemedText style={styles.toolName} numberOfLines={1}>{tool.name}</ThemedText>
-                <ThemedText style={[styles.toolDesc, { color: theme.textSecondary }]} numberOfLines={1}>
+                <ThemedText style={styles.toolName} numberOfLines={1}>
+                  {tool.name}
+                </ThemedText>
+                <ThemedText
+                  style={[styles.toolDesc, { color: theme.textSecondary }]}
+                  numberOfLines={1}
+                >
                   {tool.description}
                 </ThemedText>
               </Pressable>
@@ -616,6 +886,7 @@ export default function FindScreen() {
         onSignIn={handleSignIn}
         onSignUp={handleSignUp}
       />
+      {renderLocationModal()}
       {renderFilterModal()}
     </ThemedView>
   );
@@ -634,6 +905,7 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
     marginTop: Spacing.md,
     marginBottom: Spacing.md,
+    alignSelf: "flex-start",
   },
   locationText: {
     ...Typography.subhead,
@@ -714,10 +986,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...Typography.title2,
     fontWeight: "700",
-  },
-  featuredActions: {
-    flexDirection: "row",
-    gap: Spacing.xs,
+    flex: 1,
   },
   filterButtonLarge: {
     flexDirection: "row",
@@ -750,6 +1019,19 @@ const styles = StyleSheet.create({
     ...Typography.caption1,
     fontWeight: "500",
   },
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: Spacing["2xl"],
+    gap: Spacing.sm,
+  },
+  emptyTitle: {
+    ...Typography.title3,
+    fontWeight: "600",
+  },
+  emptySubtitle: {
+    ...Typography.subhead,
+    textAlign: "center",
+  },
   modalOverlay: {
     flex: 1,
     justifyContent: "flex-end",
@@ -758,7 +1040,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: BorderRadius.xl,
     borderTopRightRadius: BorderRadius.xl,
     paddingTop: Spacing.md,
-    maxHeight: "70%",
+    maxHeight: "75%",
   },
   modalHeader: {
     flexDirection: "row",
@@ -859,5 +1141,34 @@ const styles = StyleSheet.create({
   },
   savedProviderRatingText: {
     ...Typography.caption2,
+  },
+  locationOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    marginBottom: Spacing.xs,
+  },
+  locationOptionText: {
+    ...Typography.subhead,
+    fontWeight: "500",
+    flex: 1,
+  },
+  customLocationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+  },
+  customLocationInput: {
+    flex: 1,
+    ...Typography.subhead,
+    paddingVertical: Spacing.xs,
   },
 });
