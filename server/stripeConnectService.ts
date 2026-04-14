@@ -266,6 +266,25 @@ export async function createStripeInvoice(invoiceId: string): Promise<{ stripeIn
   const [invoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
   if (!invoice) throw new Error("Invoice not found");
 
+  // ── Idempotency: return existing Stripe invoice if already created ───────
+  if (invoice.stripeInvoiceId && invoice.hostedInvoiceUrl) {
+    try {
+      const connectAccount = await getConnectAccount(invoice.providerId);
+      if (connectAccount?.stripeAccountId) {
+        const existing = await getStripe().invoices.retrieve(
+          invoice.stripeInvoiceId,
+          { stripeAccount: connectAccount.stripeAccountId }
+        );
+        if (existing && existing.status !== "void" && existing.status !== "uncollectible") {
+          const hostedInvoiceUrl = existing.hosted_invoice_url || invoice.hostedInvoiceUrl;
+          return { stripeInvoiceId: invoice.stripeInvoiceId, hostedInvoiceUrl };
+        }
+      }
+    } catch {
+      // Stripe invoice not found or invalid — fall through to create a fresh one
+    }
+  }
+
   const connectAccount = await getConnectAccount(invoice.providerId);
   if (!connectAccount?.chargesEnabled) throw new Error("Provider payment processing not enabled");
 
@@ -277,6 +296,22 @@ export async function createStripeInvoice(invoiceId: string): Promise<{ stripeIn
 
   // ── 1. Find or create Stripe Customer on the connected account ──────────
   let stripeCustomerId = client.stripeConnectCustomerId;
+
+  // Verify the stored customer still exists on this connected account
+  if (stripeCustomerId) {
+    try {
+      const existingCustomer = await getStripe().customers.retrieve(
+        stripeCustomerId,
+        { stripeAccount: connectId }
+      );
+      if ((existingCustomer as any).deleted) {
+        stripeCustomerId = null; // Deleted — recreate below
+      }
+    } catch {
+      stripeCustomerId = null; // Not found on this account — recreate below
+    }
+  }
+
   if (!stripeCustomerId) {
     const customerName = [client.firstName, client.lastName].filter(Boolean).join(" ") || undefined;
     const customer = await getStripe().customers.create(
