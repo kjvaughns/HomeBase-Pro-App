@@ -158,36 +158,50 @@ export default function BusinessHubScreen() {
 
   const providerId = providerProfile?.id;
 
-  // Auto-recover: if providerProfile is missing from the store, fetch by userId
-  const { data: recoveredProviderData } = useQuery<{ provider: any }>({
-    queryKey: ["/api/provider/user", user?.id],
-    enabled: !providerId && !!user?.id,
-    retry: false,
-  });
-
-  useEffect(() => {
-    if (recoveredProviderData?.provider && !providerId) {
-      const p = recoveredProviderData.provider;
-      createProviderProfile({
-        id: p.id,
-        userId: p.userId,
-        businessName: p.businessName || "",
-        services: p.capabilityTags || p.services || [],
-        status: p.isActive ? "approved" : "pending",
-        rating: parseFloat(p.rating) || 0,
-        reviewCount: p.reviewCount || 0,
-        completedJobs: 0,
-        serviceArea: p.serviceArea,
-      });
-    }
-  }, [recoveredProviderData, providerId]);
-
   // Load provider data from API (for profile + policies)
-  const { data: providerData, isLoading: providerLoading } = useQuery<{ provider: ProviderRecord }>({
+  const {
+    data: providerData,
+    isLoading: providerLoading,
+    isError: providerError,
+    refetch: refetchProvider,
+  } = useQuery<{ provider: ProviderRecord }>({
     queryKey: ["/api/provider", providerId],
     enabled: !!providerId,
   });
   const provider = providerData?.provider;
+
+  // Auto-recover: if providerProfile is missing OR the stored ID returns 404, fetch by userId
+  const {
+    data: recoveredProviderData,
+    isError: recoveryError,
+    refetch: refetchRecovery,
+  } = useQuery<{ provider: any }>({
+    queryKey: ["/api/provider/user", user?.id],
+    // Run when: no providerId stored, OR when the main fetch errored (stale/wrong ID in store)
+    enabled: !!user?.id && (!providerId || providerError),
+    retry: false,
+  });
+
+  useEffect(() => {
+    const recovered = recoveredProviderData?.provider;
+    if (!recovered) return;
+    // Only update the store when the recovered ID differs from what's currently stored
+    if (recovered.id !== providerId) {
+      createProviderProfile({
+        id: recovered.id,
+        userId: recovered.userId,
+        businessName: recovered.businessName || "",
+        services: recovered.capabilityTags || recovered.services || [],
+        status: recovered.isActive ? "approved" : "pending",
+        rating: parseFloat(recovered.rating) || 0,
+        reviewCount: recovered.reviewCount || 0,
+        completedJobs: 0,
+        serviceArea: recovered.serviceArea,
+      });
+    }
+    // Always invalidate/refetch the main provider query with the recovered ID
+    queryClient.invalidateQueries({ queryKey: ["/api/provider", recovered.id] });
+  }, [recoveredProviderData]);
 
   // Profile tab state
   const [businessName, setBusinessName] = useState("");
@@ -1024,10 +1038,43 @@ export default function BusinessHubScreen() {
       </View>
 
       <View style={[styles.content, { paddingBottom: tabBarHeight + Spacing.md }]}>
-        {activeTab === "profile" ? renderProfileTab() : null}
-        {activeTab === "services" ? renderServicesTab() : null}
-        {activeTab === "booking" ? renderBookingTab() : null}
-        {activeTab === "policies" ? renderPoliciesTab() : null}
+        {!providerLoading && !provider && (providerError || recoveryError || (!providerId && recoveredProviderData !== undefined && !recoveredProviderData?.provider)) ? (
+          <View style={styles.errorContainer}>
+            <Feather name="alert-circle" size={40} color={Colors.error} />
+            <ThemedText style={styles.errorTitle}>
+              We couldn't load your business profile
+            </ThemedText>
+            <ThemedText style={[styles.errorBody, { color: theme.textSecondary }]}>
+              There was a problem connecting to your account data. Please try again.
+            </ThemedText>
+            <PrimaryButton
+              onPress={() => {
+                refetchProvider();
+                refetchRecovery();
+              }}
+              style={styles.retryButton}
+              testID="button-retry-provider"
+            >
+              Retry
+            </PrimaryButton>
+            <Pressable
+              onPress={() => navigation.navigate("ContactUs")}
+              style={styles.contactSupport}
+              testID="button-contact-support"
+            >
+              <ThemedText style={[styles.contactSupportText, { color: Colors.accent }]}>
+                Contact Support
+              </ThemedText>
+            </Pressable>
+          </View>
+        ) : (
+          <>
+            {activeTab === "profile" ? renderProfileTab() : null}
+            {activeTab === "services" ? renderServicesTab() : null}
+            {activeTab === "booking" ? renderBookingTab() : null}
+            {activeTab === "policies" ? renderPoliciesTab() : null}
+          </>
+        )}
       </View>
     </ThemedView>
   );
@@ -1329,5 +1376,32 @@ const styles = StyleSheet.create({
   errorText: {
     ...Typography.caption1,
     flex: 1,
+  },
+  errorContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: Spacing.screenPadding,
+    gap: Spacing.md,
+  },
+  errorTitle: {
+    ...Typography.title3,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  errorBody: {
+    ...Typography.body,
+    textAlign: "center",
+  },
+  retryButton: {
+    width: "100%",
+    maxWidth: 240,
+  },
+  contactSupport: {
+    paddingVertical: Spacing.sm,
+  },
+  contactSupportText: {
+    ...Typography.callout,
+    fontWeight: "500",
   },
 });
