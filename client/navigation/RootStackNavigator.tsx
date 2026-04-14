@@ -96,6 +96,7 @@ export type RootStackParamList = {
   ProviderList: { categoryId: string; categoryName: string };
   ProviderProfile: { 
     providerId: string;
+    provider?: import("@/state/types").Provider;
     intakeData?: {
       problemDescription: string;
       issueSummary: string;

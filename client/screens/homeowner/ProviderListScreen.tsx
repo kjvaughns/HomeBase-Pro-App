@@ -180,7 +180,7 @@ export default function ProviderListScreen() {
   };
 
   const handleProviderPress = (provider: Provider) => {
-    navigation.navigate("ProviderProfile", { providerId: provider.id });
+    navigation.navigate("ProviderProfile", { providerId: provider.id, provider });
   };
 
   const renderActiveFilters = () => {

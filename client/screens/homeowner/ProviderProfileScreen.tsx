@@ -29,39 +29,91 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 type TabType = "about" | "services" | "reviews";
 
+interface CustomService {
+  id: string;
+  name: string;
+  description?: string;
+  basePrice?: string | number;
+  price?: string | number;
+  duration?: number;
+  isPublished?: boolean;
+}
+
+function mapApiProvider(p: any, serviceList: any[] = []): Provider {
+  return {
+    id: p.id,
+    name: p.businessName ?? p.name ?? "",
+    businessName: p.businessName ?? "",
+    avatarUrl: p.avatarUrl ?? p.profilePhotoUrl ?? undefined,
+    rating: parseFloat(p.averageRating ?? p.rating ?? "0") || 0,
+    reviewCount: p.reviewCount ?? 0,
+    services: serviceList.length > 0
+      ? serviceList.map((s: any) => typeof s === "string" ? s : s.name ?? "")
+      : (Array.isArray(p.services)
+          ? p.services.map((s: any) => typeof s === "string" ? s : s.name ?? "")
+          : []),
+    categoryIds: Array.isArray(p.categoryIds) ? p.categoryIds : [],
+    hourlyRate: parseFloat(p.hourlyRate ?? "0") || 0,
+    verified: p.isVerified ?? p.verified ?? false,
+    description: p.description ?? "",
+    yearsExperience: p.yearsExperience ?? p.yearsInBusiness ?? 0,
+    completedJobs: p.completedJobs ?? 0,
+    responseTime: p.responseTime ?? "< 1 hour",
+    distance: p.distance ?? undefined,
+    gallery: Array.isArray(p.gallery) ? p.gallery : [],
+    phone: p.phone ?? undefined,
+  };
+}
+
 export default function ProviderProfileScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const route = useRoute<ScreenRouteProp>();
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
-  const { providerId, intakeData } = route.params;
+  const { providerId, intakeData, provider: passedProvider } = route.params;
 
-  const localProviders = useHomeownerStore((s) => s.providers);
   const allReviews = useHomeownerStore((s) => s.reviews);
-  const categories = useHomeownerStore((s) => s.categories);
   const toggleSavedProvider = useHomeownerStore((s) => s.toggleSavedProvider);
   const savedProviderIds = useHomeownerStore((s) => s.savedProviderIds);
   const { isAuthenticated } = useAuthStore();
-  
-  const isSaved = savedProviderIds.includes(providerId);
-  
-  const localProvider = useMemo(() => {
-    return localProviders.find((p) => p.id === providerId);
-  }, [localProviders, providerId]);
 
-  const { data: apiData, isLoading: isApiLoading } = useQuery<{ provider: Provider }>({
+  const isSaved = savedProviderIds.includes(providerId);
+
+  const needsFetch = !passedProvider;
+
+  const { data: apiData, isLoading: isApiLoading } = useQuery<{ provider: any; services: any[] }>({
     queryKey: ["/api/providers", providerId],
     queryFn: async () => {
       const response = await fetch(new URL(`/api/providers/${providerId}`, getApiUrl()).toString());
       if (!response.ok) throw new Error("Provider not found");
       return response.json();
     },
-    enabled: !localProvider,
+    enabled: needsFetch,
   });
 
-  const provider = localProvider || apiData?.provider;
-  
+  const provider: Provider | null = useMemo(() => {
+    if (passedProvider) return passedProvider;
+    if (!apiData?.provider) return null;
+    return mapApiProvider(apiData.provider, apiData.services ?? []);
+  }, [passedProvider, apiData]);
+
+  const { data: customServicesData } = useQuery<{ services: CustomService[] }>({
+    queryKey: ["/api/provider", providerId, "custom-services"],
+    queryFn: async () => {
+      const response = await fetch(
+        new URL(`/api/provider/${providerId}/custom-services`, getApiUrl()).toString()
+      );
+      if (!response.ok) return { services: [] };
+      return response.json();
+    },
+  });
+
+  const customServices = useMemo((): CustomService[] => {
+    const list = customServicesData?.services ?? [];
+    return list.filter((s) => s.isPublished !== false);
+  }, [customServicesData]);
+
   const reviews = useMemo(() => {
     return allReviews.filter((r) => r.providerId === providerId);
   }, [allReviews, providerId]);
@@ -69,7 +121,7 @@ export default function ProviderProfileScreen() {
   const [activeTab, setActiveTab] = useState<TabType>("about");
   const [showAccountGate, setShowAccountGate] = useState(false);
 
-  if (isApiLoading && !localProvider) {
+  if (isApiLoading && needsFetch) {
     return (
       <ThemedView style={[styles.container, styles.loadingContainer]}>
         <ActivityIndicator size="large" color={Colors.accent} />
@@ -93,9 +145,7 @@ export default function ProviderProfileScreen() {
     );
   }
 
-  const category = provider.categoryIds?.length 
-    ? categories.find((c) => c.id === provider.categoryIds[0])
-    : null;
+  const safeRating = typeof provider.rating === "number" && !isNaN(provider.rating) ? provider.rating : 0;
 
   const handleBookPress = () => {
     if (!isAuthenticated) {
@@ -103,9 +153,6 @@ export default function ProviderProfileScreen() {
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    
-    // If we already have intake data, go directly to booking
-    // Otherwise, go through Smart Intake first
     if (intakeData) {
       navigation.navigate("SimpleBooking", {
         providerId: provider.id,
@@ -145,7 +192,7 @@ export default function ProviderProfileScreen() {
       } else {
         Alert.alert("Unable to Call", "Phone calls are not supported on this device.");
       }
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Could not open phone dialer.");
     }
   };
@@ -160,16 +207,16 @@ export default function ProviderProfileScreen() {
       } else {
         Alert.alert("Unable to Text", "SMS is not supported on this device.");
       }
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Could not open messaging app.");
     }
   };
 
   const renderStars = (rating: number) => {
+    const safe = isNaN(rating) ? 0 : rating;
     const stars = [];
-    const fullStars = Math.floor(rating);
-    const hasHalf = rating - fullStars >= 0.5;
-
+    const fullStars = Math.floor(safe);
+    const hasHalf = safe - fullStars >= 0.5;
     for (let i = 0; i < 5; i++) {
       if (i < fullStars) {
         stars.push(<Feather key={i} name="star" size={16} color={Colors.accent} />);
@@ -185,24 +232,32 @@ export default function ProviderProfileScreen() {
   const renderAboutTab = () => (
     <Animated.View entering={FadeInDown.duration(300)}>
       <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>About</ThemedText>
-      <ThemedText style={[styles.description, { color: theme.textSecondary }]}>
-        {provider.description}
-      </ThemedText>
+      {provider.description ? (
+        <ThemedText style={[styles.description, { color: theme.textSecondary }]}>
+          {provider.description}
+        </ThemedText>
+      ) : (
+        <ThemedText style={[styles.description, { color: theme.textTertiary }]}>
+          No description provided.
+        </ThemedText>
+      )}
 
       <View style={styles.statsGrid}>
         <View style={[styles.statCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
           <Feather name="briefcase" size={20} color={Colors.accent} />
-          <ThemedText style={styles.statValue}>{provider.yearsExperience}</ThemedText>
+          <ThemedText style={styles.statValue}>{provider.yearsExperience || 0}</ThemedText>
           <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Years Exp.</ThemedText>
         </View>
         <View style={[styles.statCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
           <Feather name="check-circle" size={20} color={Colors.accent} />
-          <ThemedText style={styles.statValue}>{provider.completedJobs}</ThemedText>
+          <ThemedText style={styles.statValue}>{provider.completedJobs || 0}</ThemedText>
           <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Jobs Done</ThemedText>
         </View>
         <View style={[styles.statCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
           <Feather name="clock" size={20} color={Colors.accent} />
-          <ThemedText style={styles.statValue}>{provider.distance?.toFixed(1) || "N/A"}</ThemedText>
+          <ThemedText style={styles.statValue}>
+            {provider.distance != null ? provider.distance.toFixed(1) : "N/A"}
+          </ThemedText>
           <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Miles Away</ThemedText>
         </View>
       </View>
@@ -210,56 +265,111 @@ export default function ProviderProfileScreen() {
       <View style={[styles.infoRow, { borderColor: theme.borderLight }]}>
         <Feather name="message-circle" size={18} color={theme.textSecondary} />
         <ThemedText style={[styles.infoText, { color: theme.textSecondary }]}>
-          {provider.responseTime}
+          Usually responds in {provider.responseTime || "< 1 hour"}
         </ThemedText>
       </View>
     </Animated.View>
   );
 
-  const renderServicesTab = () => (
-    <Animated.View entering={FadeInDown.duration(300)}>
-      <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Services Offered</ThemedText>
-      {provider.services.map((service, index) => (
-        <Pressable
-          key={service}
-          style={[styles.serviceRow, { borderColor: theme.borderLight }]}
-          onPress={() => {
-            if (isAuthenticated) {
-              navigation.navigate("SimpleBooking", {
-                providerId: provider.id,
-                providerName: provider.businessName,
-              });
-            } else {
-              setShowAccountGate(true);
-            }
-          }}
-        >
-          <View style={[styles.serviceIcon, { backgroundColor: Colors.accentLight }]}>
-            <Feather name="check" size={16} color={Colors.accent} />
-          </View>
-          <ThemedText style={styles.serviceName}>{service}</ThemedText>
-          <Feather name="chevron-right" size={18} color={theme.textTertiary} />
-        </Pressable>
-      ))}
+  const renderServicesTab = () => {
+    if (customServices.length > 0) {
+      return (
+        <Animated.View entering={FadeInDown.duration(300)}>
+          <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Services Offered</ThemedText>
+          {customServices.map((service) => (
+            <Pressable
+              key={service.id}
+              style={[styles.serviceRow, { borderColor: theme.borderLight }]}
+              onPress={() => {
+                if (isAuthenticated) {
+                  navigation.navigate("SimpleBooking", {
+                    providerId: provider.id,
+                    providerName: provider.businessName,
+                  });
+                } else {
+                  setShowAccountGate(true);
+                }
+              }}
+            >
+              <View style={[styles.serviceIcon, { backgroundColor: Colors.accentLight }]}>
+                <Feather name="check" size={16} color={Colors.accent} />
+              </View>
+              <View style={styles.serviceInfo}>
+                <ThemedText style={styles.serviceName}>{service.name}</ThemedText>
+                {service.description ? (
+                  <ThemedText style={[styles.serviceDesc, { color: theme.textTertiary }]} numberOfLines={1}>
+                    {service.description}
+                  </ThemedText>
+                ) : null}
+              </View>
+              {(service.basePrice ?? service.price) != null ? (
+                <ThemedText style={[styles.servicePrice, { color: Colors.accent }]}>
+                  ${parseFloat(String(service.basePrice ?? service.price ?? 0)).toFixed(0)}
+                </ThemedText>
+              ) : null}
+              <Feather name="chevron-right" size={18} color={theme.textTertiary} style={{ marginLeft: Spacing.xs }} />
+            </Pressable>
+          ))}
+        </Animated.View>
+      );
+    }
 
-      <View style={styles.pricingCard}>
-        <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Pricing</ThemedText>
-        <View style={styles.priceRow}>
-          <ThemedText style={[styles.priceLabel, { color: theme.textSecondary }]}>
-            Hourly Rate
-          </ThemedText>
-          <ThemedText style={styles.priceValue}>${provider.hourlyRate}/hr</ThemedText>
-        </View>
-      </View>
-    </Animated.View>
-  );
+    const serviceStrings = provider.services ?? [];
+    return (
+      <Animated.View entering={FadeInDown.duration(300)}>
+        <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Services Offered</ThemedText>
+        {serviceStrings.length > 0 ? (
+          serviceStrings.map((service, index) => (
+            <Pressable
+              key={`${service}-${index}`}
+              style={[styles.serviceRow, { borderColor: theme.borderLight }]}
+              onPress={() => {
+                if (isAuthenticated) {
+                  navigation.navigate("SimpleBooking", {
+                    providerId: provider.id,
+                    providerName: provider.businessName,
+                  });
+                } else {
+                  setShowAccountGate(true);
+                }
+              }}
+            >
+              <View style={[styles.serviceIcon, { backgroundColor: Colors.accentLight }]}>
+                <Feather name="check" size={16} color={Colors.accent} />
+              </View>
+              <ThemedText style={styles.serviceName}>{service}</ThemedText>
+              <Feather name="chevron-right" size={18} color={theme.textTertiary} />
+            </Pressable>
+          ))
+        ) : (
+          <View style={styles.emptyServices}>
+            <ThemedText style={[styles.emptyText, { color: theme.textTertiary }]}>
+              No services listed yet.
+            </ThemedText>
+          </View>
+        )}
+
+        {provider.hourlyRate > 0 ? (
+          <View style={styles.pricingCard}>
+            <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Pricing</ThemedText>
+            <View style={styles.priceRow}>
+              <ThemedText style={[styles.priceLabel, { color: theme.textSecondary }]}>
+                Hourly Rate
+              </ThemedText>
+              <ThemedText style={styles.priceValue}>${provider.hourlyRate}/hr</ThemedText>
+            </View>
+          </View>
+        ) : null}
+      </Animated.View>
+    );
+  };
 
   const renderReviewsTab = () => (
     <Animated.View entering={FadeInDown.duration(300)}>
       <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>
         Reviews ({reviews.length})
       </ThemedText>
-      
+
       {reviews.length > 0 ? (
         reviews.map((review) => (
           <View
@@ -301,27 +411,31 @@ export default function ProviderProfileScreen() {
         <Animated.View entering={FadeInDown.duration(400)}>
           <GlassCard style={styles.profileCard}>
             <View style={styles.profileHeader}>
-              <Avatar name={provider.name} size="large" uri={provider.avatarUrl} />
+              <Avatar name={provider.name || provider.businessName} size="large" uri={provider.avatarUrl} />
               <View style={styles.profileInfo}>
-                <ThemedText style={styles.providerName}>{provider.name}</ThemedText>
-                <ThemedText style={[styles.businessName, { color: theme.textSecondary }]}>
-                  {provider.businessName}
+                <ThemedText style={styles.providerName}>
+                  {provider.name || provider.businessName}
                 </ThemedText>
+                {provider.name !== provider.businessName && provider.businessName ? (
+                  <ThemedText style={[styles.businessName, { color: theme.textSecondary }]}>
+                    {provider.businessName}
+                  </ThemedText>
+                ) : null}
                 <View style={styles.ratingRow}>
-                  {renderStars(provider.rating)}
+                  {renderStars(safeRating)}
                   <ThemedText style={styles.ratingText}>
-                    {provider.rating.toFixed(1)} ({provider.reviewCount})
+                    {safeRating.toFixed(1)} ({provider.reviewCount ?? 0})
                   </ThemedText>
                 </View>
               </View>
               <Pressable
                 style={[
-                  styles.saveButton, 
-                  { 
+                  styles.saveButton,
+                  {
                     backgroundColor: isSaved ? Colors.accent : theme.backgroundElevated,
                     borderColor: isSaved ? Colors.accent : theme.borderLight,
                     borderWidth: 1,
-                  }
+                  },
                 ]}
                 onPress={handleToggleSave}
                 hitSlop={8}
@@ -363,9 +477,9 @@ export default function ProviderProfileScreen() {
           ))}
         </View>
 
-        {activeTab === "about" && renderAboutTab()}
-        {activeTab === "services" && renderServicesTab()}
-        {activeTab === "reviews" && renderReviewsTab()}
+        {activeTab === "about" ? renderAboutTab() : null}
+        {activeTab === "services" ? renderServicesTab() : null}
+        {activeTab === "reviews" ? renderReviewsTab() : null}
       </ScrollView>
 
       <View style={[styles.bottomBar, { backgroundColor: theme.backgroundRoot, paddingBottom: insets.bottom + Spacing.md }]}>
@@ -534,10 +648,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: Spacing.md,
+    flexShrink: 0,
+  },
+  serviceInfo: {
+    flex: 1,
   },
   serviceName: {
     ...Typography.body,
     flex: 1,
+  },
+  serviceDesc: {
+    ...Typography.caption1,
+    marginTop: 2,
+  },
+  servicePrice: {
+    ...Typography.subhead,
+    fontWeight: "600",
+    marginLeft: Spacing.sm,
+    flexShrink: 0,
+  },
+  emptyServices: {
+    paddingVertical: Spacing.xl,
+    alignItems: "center",
   },
   pricingCard: {
     marginTop: Spacing.lg,
