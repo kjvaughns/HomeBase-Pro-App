@@ -111,7 +111,7 @@ const QUICK_LINKS: QuickLink[] = [
     icon: "file-text",
     label: "Terms of Service",
     type: "url",
-    url: "https://homebaseproapp.com/termsofservice",
+    url: "https://homebaseproapp.com/terms",
   },
   {
     icon: "lock",

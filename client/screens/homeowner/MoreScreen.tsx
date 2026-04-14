@@ -338,7 +338,7 @@ export default function MoreScreen() {
             <ListRow
               title="Terms of Service"
               leftIcon="file-text"
-              onPress={() => WebBrowser.openBrowserAsync("https://homebaseproapp.com/termsofservice")}
+              onPress={() => WebBrowser.openBrowserAsync("https://homebaseproapp.com/terms")}
             />
             <ListRow
               title="Privacy Policy"
