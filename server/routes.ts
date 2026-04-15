@@ -5423,6 +5423,7 @@ Respond with JSON only:
   app.post("/api/stripe/invoices/:invoiceId/checkout", requireAuth, async (req: Request<{ invoiceId: string }>, res: Response) => {
     try {
       const { invoiceId } = req.params;
+      if (!(await assertInvoiceAccess(req, invoiceId, res))) return;
 
       // Use existing Stripe invoice URL, or send one now via platform account
       const [inv] = await db.select({ stripeInvoiceId: invoices.stripeInvoiceId, hostedInvoiceUrl: invoices.hostedInvoiceUrl }).from(invoices).where(eq(invoices.id, invoiceId));
@@ -5445,9 +5446,12 @@ Respond with JSON only:
   app.post("/api/stripe/invoices/:invoiceId/apply-credits", requireAuth, async (req: Request<{ invoiceId: string }>, res: Response) => {
     try {
       const { invoiceId } = req.params;
-      const { userId, amountCents } = req.body;
-      if (!userId || amountCents === undefined) {
-        return res.status(400).json({ error: "userId and amountCents are required" });
+      if (!(await assertInvoiceAccess(req, invoiceId, res))) return;
+      const { amountCents } = req.body;
+      // Bind userId to the authenticated user — never trust body-supplied userId
+      const userId = req.authenticatedUserId!;
+      if (!amountCents || isNaN(Number(amountCents)) || Number(amountCents) <= 0) {
+        return res.status(400).json({ error: "amountCents must be a positive number" });
       }
       const result = await applyCreditsToInvoice(invoiceId, userId, amountCents);
       res.json(result);
@@ -5876,6 +5880,7 @@ Respond with JSON only:
   app.post("/api/invoices/:invoiceId/checkout", requireAuth, async (req: Request<{ invoiceId: string }>, res: Response) => {
     try {
       const { invoiceId } = req.params;
+      if (!(await assertInvoiceAccess(req, invoiceId, res))) return;
       const result = await createStripeInvoice(invoiceId);
       res.json({ url: result.hostedInvoiceUrl, stripeInvoiceId: result.stripeInvoiceId });
     } catch (error: any) {
@@ -5891,12 +5896,13 @@ Respond with JSON only:
   app.post("/api/invoices/:invoiceId/apply-credits", requireAuth, async (req: Request<{ invoiceId: string }>, res: Response) => {
     try {
       const { invoiceId } = req.params;
-      const { userId, amountCents } = req.body;
-
-      if (!userId || !amountCents) {
-        return res.status(400).json({ error: "userId and amountCents are required" });
+      if (!(await assertInvoiceAccess(req, invoiceId, res))) return;
+      const { amountCents } = req.body;
+      // Bind userId to the authenticated user — never trust body-supplied userId
+      const userId = req.authenticatedUserId!;
+      if (!amountCents || isNaN(Number(amountCents)) || Number(amountCents) <= 0) {
+        return res.status(400).json({ error: "amountCents must be a positive number" });
       }
-
       const result = await applyCreditsToInvoice(invoiceId, userId, amountCents);
       res.json(result);
     } catch (error: any) {
@@ -6010,6 +6016,41 @@ Respond with JSON only:
       return false;
     }
     return true;
+  }
+
+  /**
+   * assertInvoiceAccess — verifies the authenticated user is allowed to act on an invoice.
+   * Returns the invoice row on success, null (+ 403/404 sent) on failure.
+   * Access is granted if:
+   *   - The caller is the homeowner who owns the invoice (homeownerUserId === authUserId), OR
+   *   - The caller is the provider who issued the invoice (via providers.userId === authUserId)
+   */
+  async function assertInvoiceAccess(
+    req: Request,
+    invoiceId: string,
+    res: Response,
+  ): Promise<{ id: string; providerId: string; homeownerUserId: string | null } | null> {
+    const authUserId = req.authenticatedUserId!;
+    const [inv] = await db
+      .select({ id: invoices.id, providerId: invoices.providerId, homeownerUserId: invoices.homeownerUserId })
+      .from(invoices)
+      .where(eq(invoices.id, invoiceId))
+      .limit(1);
+    if (!inv) {
+      res.status(404).json({ error: "Invoice not found" });
+      return null;
+    }
+    // Homeowner access
+    if (inv.homeownerUserId && inv.homeownerUserId === authUserId) return inv;
+    // Provider access — look up provider record
+    const [provider] = await db
+      .select({ userId: providers.userId })
+      .from(providers)
+      .where(eq(providers.id, inv.providerId))
+      .limit(1);
+    if (provider && provider.userId === authUserId) return inv;
+    res.status(403).json({ error: "Forbidden" });
+    return null;
   }
 
   // GET /api/providers/:providerId/stripe-payouts — live Stripe payout list

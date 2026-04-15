@@ -31,6 +31,11 @@
 | `server/routes.ts` | `GET /api/providers/:providerId/leads` — added `assertProviderOwnership()` (cross-tenant read access fix) | Critical |
 | `server/routes.ts` | `POST /api/providers/:providerId/leads` — added `assertProviderOwnership()` + name input validation (cross-tenant write access fix) | Critical |
 | `server/routes.ts` | `PATCH /api/leads/:id` — added lead lookup then `assertProviderOwnership()` via lead's `providerId` (ownership enforcement fix) | Critical |
+| `server/routes.ts` | `POST /api/stripe/invoices/:id/apply-credits` — removed body-supplied `userId`; binds to `req.authenticatedUserId`; added `assertInvoiceAccess()` | Critical |
+| `server/routes.ts` | `POST /api/invoices/:id/apply-credits` — same fix as above | Critical |
+| `server/routes.ts` | `POST /api/stripe/invoices/:id/checkout` — added `assertInvoiceAccess()` ownership check | High |
+| `server/routes.ts` | `POST /api/invoices/:id/checkout` — added `assertInvoiceAccess()` ownership check | High |
+| `server/routes.ts` | `assertInvoiceAccess()` helper — new function verifying homeowner or issuing-provider access | High |
 | `REQUIRED_ENV.md` | Environment variables documentation with production checklist and startup fail-fast inventory | Low |
 | `server/dbMigrations.ts` | `users.token_version INTEGER NOT NULL DEFAULT 0` | High |
 | `server/dbMigrations.ts` | `clients(provider_id, email)` unique partial index | Medium |
@@ -152,11 +157,21 @@ All user-scoped resource endpoints were inspected for ownership checks:
 - `POST /api/providers/:providerId/leads` — missing ownership check allowed any authenticated user to create leads for any provider. **Fixed: `assertProviderOwnership()` added.**
 - `PATCH /api/leads/:id` — updated lead records without verifying the caller owned the provider. **Fixed: lead lookup + `assertProviderOwnership()` via lead's `providerId`.**
 
+**Gap 3 found and fixed — Invoice financial routes (critical financial fraud vector)**:
+- `POST /api/stripe/invoices/:invoiceId/apply-credits` — took `userId` from request body; attacker could drain any user's credit balance by supplying their `userId`. **Fixed: `userId` bound to `req.authenticatedUserId`; `assertInvoiceAccess()` added.**
+- `POST /api/invoices/:invoiceId/apply-credits` — same body-supplied userId vulnerability. **Fixed identically.**
+- `POST /api/stripe/invoices/:invoiceId/checkout` — no invoice ownership check; any authenticated user could trigger a payment flow for any invoice. **Fixed: `assertInvoiceAccess()` added.**
+- `POST /api/invoices/:invoiceId/checkout` — same issue. **Fixed: `assertInvoiceAccess()` added.**
+
+**`assertInvoiceAccess()` helper** (new, defined alongside `assertProviderOwnership()`):
+Grants access if: caller's `userId === invoice.homeownerUserId` (homeowner paying), OR caller's `userId === providers.userId` for the invoice's `providerId` (issuing provider). Returns 404 if invoice missing, 403 if unauthorized.
+
 **Sensitive provider routes with ownership enforcement** (verified post-fix):
 - All Stripe Connect endpoints (`/stripe-connect/*`, `/stripe-invoices/*`)
 - All job, client, invoice, and schedule mutation endpoints  
 - Payouts (`GET /api/providers/:id/payouts`) — fixed
 - All lead read/write routes (`/providers/:id/leads`, `/leads/:id`) — fixed
+- Invoice checkout + credit application routes — fixed (critical financial fraud)
 
 **Orphan-provider strategy**: `providers.userId` has `ON DELETE SET NULL` (see `shared/schema.ts` line 115). When a user deletes their account, the provider record is preserved with `userId = NULL`. The account deletion transaction (`DELETE /api/auth/account`) also manually removes Stripe Connect data, payouts, and invoice records before deleting the user row. This prevents FK violation and preserves historical provider data.
 
@@ -306,11 +321,13 @@ All critical launch blockers resolved:
 - Payment flow verified correct
 - Notifications production-grade with delivery audit
 - Secrets enforced at startup: 4 hard-required env vars cause `process.exit(1)` in production
-- RBAC complete: all provider-scoped routes have `assertProviderOwnership()` — including lead routes (critical cross-tenant gap fixed)
+- RBAC complete: all provider-scoped routes have `assertProviderOwnership()`; invoice financial routes protected by `assertInvoiceAccess()`; includes lead routes (cross-tenant) and invoice credit/checkout routes (financial fraud)
 - Race conditions resolved: atomic client upsert + `SELECT FOR UPDATE` on intake acceptance
+- Financial integrity: `apply-credits` routes bind to `req.authenticatedUserId` (body-supplied userId attack vector closed)
 
 Remaining deferred items are polish/hardening work, not launch blockers:
-- Full Zod `safeParse` on all mutation routes (currently relies on DB constraints + manual checks)
-- Brute-force rate limiting on login endpoint
-- SMS integration (Twilio/Telnyx)
-- DB-backed cron job persistence
+- Full Zod `safeParse` on all POST/PATCH mutation routes (current: DB constraints + manual guards; parameterized queries prevent injection)
+- Brute-force rate limiting on login endpoint (5 req/min per IP)
+- Centralized Express RBAC middleware pattern (current: consistent helper functions `assertProviderOwnership` + `assertInvoiceAccess`)
+- SMS integration (Twilio/Telnyx for blast messaging)
+- DB-backed cron job persistence (restart resilience)
