@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   StyleSheet,
   View,
@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useFocusEffect } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -130,6 +131,23 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
       ]).start();
     });
   };
+
+  // Track when we've navigated into the Service Blueprint Wizard from step 2
+  const returnedFromWizard = useRef(false);
+
+  // When the screen regains focus after visiting the wizard, auto-advance to step 3
+  // if the user successfully completed the wizard (pendingOnboardingService is now set).
+  useFocusEffect(
+    useCallback(() => {
+      if (returnedFromWizard.current) {
+        returnedFromWizard.current = false;
+        if (pendingOnboardingService && step === 2) {
+          animateTransition(true, () => setStep(3));
+        }
+      }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pendingOnboardingService, step])
+  );
 
   const canContinue = () => {
     switch (step) {
@@ -360,7 +378,10 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
           <ServiceBuilderStep
             theme={theme}
             pendingService={pendingOnboardingService}
-            onOpenBuilder={() => navigation.navigate("NewService", { onboardingMode: true })}
+            onOpenBuilder={() => {
+              returnedFromWizard.current = true;
+              navigation.navigate("NewService", { onboardingMode: true });
+            }}
             onClearService={() => setPendingOnboardingService(null)}
           />
         )}
