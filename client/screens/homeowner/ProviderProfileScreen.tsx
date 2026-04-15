@@ -284,7 +284,7 @@ export default function ProviderProfileScreen() {
     ...serviceCities,
     ...serviceZipCodes,
   ].filter(Boolean);
-  const bookingUrl = providerSlug ? `https://home-base-pro-app.replit.app/providers/${providerSlug}` : null;
+  const bookingUrl = providerSlug ? `https://homebaseproapp.com/providers/${providerSlug}` : null;
 
   const renderAboutTab = () => (
     <Animated.View entering={FadeInDown.duration(300)}>
