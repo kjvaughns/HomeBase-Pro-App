@@ -135,7 +135,7 @@ export type RootStackParamList = {
   AddInvoice: { clientId?: string } | undefined;
   InvoiceDetail: { invoiceId: string };
   Services: undefined;
-  NewService: undefined;
+  NewService: { onboardingMode?: boolean } | undefined;
   ServiceSummary: { serviceId: string; service: Record<string, unknown> };
   EditService: { serviceId: string; service?: Record<string, unknown>; initialStep?: number };
   ServicePreview: { service: any };

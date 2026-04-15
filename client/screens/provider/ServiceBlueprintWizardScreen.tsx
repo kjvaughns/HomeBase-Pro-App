@@ -28,6 +28,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useAuthStore } from "@/state/authStore";
+import { useOnboardingStore } from "@/state/onboardingStore";
 import { apiRequest, getApiUrl, getAuthHeaders } from "@/lib/query-client";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -143,16 +144,19 @@ export default function ServiceBlueprintWizardScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute();
   const { providerProfile } = useAuthStore();
+  const { setPendingOnboardingService } = useOnboardingStore();
   const queryClient = useQueryClient();
   const providerId = providerProfile?.id;
 
   // Edit mode - populated when navigated via EditService route
-  const routeParams = route.params as RootStackParamList["EditService"] | undefined;
+  const routeParams = route.params as (RootStackParamList["EditService"] & { onboardingMode?: boolean }) | undefined;
   const editServiceId = routeParams?.serviceId || "";
   const editServiceData = routeParams?.service;
   const isEditMode = !!editServiceId;
   // Quick-edit mode: opened from ServiceSummary at a specific step — save immediately on CTA
   const isQuickEdit = isEditMode && routeParams?.initialStep != null;
+  // Onboarding mode: skip API save, write to store instead
+  const isOnboardingMode = !!(routeParams as RootStackParamList["NewService"])?.onboardingMode;
 
   const [step, setStep] = useState(routeParams?.initialStep ?? 0);
 
@@ -243,6 +247,14 @@ export default function ServiceBlueprintWizardScreen() {
     navigation.setOptions({ headerTitle: title });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditMode]);
+
+  // Set header title in onboarding mode
+  useEffect(() => {
+    if (isOnboardingMode) {
+      navigation.setOptions({ headerTitle: "Build Your First Service" });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOnboardingMode]);
 
   const buildBusinessContext = () => {
     const parts: string[] = [];
@@ -399,8 +411,27 @@ export default function ServiceBlueprintWizardScreen() {
   };
 
   const handleSave = async () => {
-    if (!serviceName.trim() || !providerId) return;
+    if (!serviceName.trim()) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    // Onboarding mode: don't call the API — provider doesn't exist yet.
+    // Write service data to the onboarding store and return to the onboarding flow.
+    if (isOnboardingMode) {
+      setPendingOnboardingService({
+        name: serviceName.trim(),
+        category: serviceCategory,
+        description: serviceDescription.trim(),
+        pricingType,
+        basePrice: basePrice.trim(),
+        priceUnit: priceUnit.trim() || "per job",
+        duration: 60,
+        bookingMode: pricingType === "quote" ? "quote_only" : bookingMode,
+      });
+      navigation.goBack();
+      return;
+    }
+
+    if (!providerId) return;
     setSaving(true);
     setSaveError("");
     try {
@@ -630,12 +661,10 @@ export default function ServiceBlueprintWizardScreen() {
           <View style={styles.fieldGroup}>
             <SectionLabel text="BASE PRICE" />
             <View style={styles.priceInputRow}>
-              <View style={[styles.pricePrefix, { backgroundColor: theme.backgroundElevated, borderColor: theme.border }]}>
-                <ThemedText style={[styles.pricePrefixText, { color: theme.textSecondary }]}>$</ThemedText>
-              </View>
-              <View style={[styles.priceInputBox, { borderColor: theme.border, backgroundColor: theme.backgroundElevated }]}>
+              <View style={[styles.priceAmountBox, { borderColor: theme.border, backgroundColor: theme.backgroundElevated }]}>
+                <ThemedText style={[styles.pricePrefixInline, { color: theme.textSecondary }]}>$</ThemedText>
                 <TextInput
-                  style={[styles.inputText, { color: theme.text }]}
+                  style={[styles.inputText, { color: theme.text, flex: 1 }]}
                   placeholder="0.00"
                   placeholderTextColor={theme.textTertiary}
                   value={basePrice}
@@ -933,12 +962,10 @@ export default function ServiceBlueprintWizardScreen() {
                 />
               </View>
               <View style={styles.priceInputRow}>
-                <View style={[styles.pricePrefix, { backgroundColor: theme.backgroundElevated, borderColor: theme.border }]}>
-                  <ThemedText style={[styles.pricePrefixText, { color: theme.textSecondary }]}>+$</ThemedText>
-                </View>
-                <View style={[styles.priceInputBox, { borderColor: theme.border, backgroundColor: theme.backgroundElevated, flex: 1 }]}>
+                <View style={[styles.priceAmountBox, { borderColor: theme.border, backgroundColor: theme.backgroundElevated, flex: 1 }]}>
+                  <ThemedText style={[styles.pricePrefixInline, { color: theme.textSecondary }]}>+$</ThemedText>
                   <TextInput
-                    style={[styles.inputText, { color: theme.text }]}
+                    style={[styles.inputText, { color: theme.text, flex: 1 }]}
                     placeholder="Price"
                     placeholderTextColor={theme.textTertiary}
                     value={newAddonPrice}
@@ -1387,6 +1414,12 @@ export default function ServiceBlueprintWizardScreen() {
 
   const quickEditLabel = saving ? "Saving..." : "Save Changes";
 
+  const finalStepLabel = isOnboardingMode
+    ? "Add to My Onboarding"
+    : saving
+      ? (isEditMode ? "Saving..." : "Publishing...")
+      : (isEditMode ? "Save Changes" : "Publish Service");
+
   const CTALabels = isQuickEdit
     ? [
         quickEditLabel,
@@ -1402,7 +1435,7 @@ export default function ServiceBlueprintWizardScreen() {
         "Continue to Add-ons",
         "Continue to Booking",
         isEditMode ? "Review Changes" : "Review My Service",
-        saving ? (isEditMode ? "Saving..." : "Publishing...") : (isEditMode ? "Save Changes" : "Publish Service"),
+        finalStepLabel,
       ];
 
   const handleCTA = () => {
@@ -1533,20 +1566,19 @@ const styles = StyleSheet.create({
   optionLabel: { ...Typography.subhead, fontWeight: "600" },
   optionHint: { ...Typography.caption, marginTop: 2 },
   priceInputRow: { flexDirection: "row", gap: Spacing.sm },
-  pricePrefix: {
-    borderWidth: 1,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  pricePrefixText: { ...Typography.body, fontWeight: "600" },
-  priceInputBox: {
+  priceAmountBox: {
     flex: 1.2,
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1,
     borderRadius: BorderRadius.md,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
+  },
+  pricePrefixInline: {
+    ...Typography.body,
+    fontWeight: "600",
+    marginRight: Spacing.xs,
   },
   priceUnitBox: {
     flex: 1.5,

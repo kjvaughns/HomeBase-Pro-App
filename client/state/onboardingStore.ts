@@ -9,12 +9,24 @@ export interface ProviderPreSignupData {
   serviceArea: string;
 }
 
+export interface OnboardingServiceData {
+  name: string;
+  category: string;
+  description: string;
+  pricingType: "flat" | "starts_at" | "quote";
+  basePrice: string;
+  priceUnit: string;
+  duration: number;
+  bookingMode: "instant" | "starts_at" | "quote_only";
+}
+
 interface OnboardingState {
   hasCompletedFirstLaunch: boolean;
   hasCompletedProviderSetup: boolean;
   needsProviderSetup: boolean;
   selectedAccountType: AccountType | null;
   providerPreSignupData: ProviderPreSignupData | null;
+  pendingOnboardingService: OnboardingServiceData | null;
   isHydrated: boolean;
   
   setHasCompletedFirstLaunch: (completed: boolean) => void;
@@ -22,6 +34,7 @@ interface OnboardingState {
   setNeedsProviderSetup: (v: boolean) => void;
   setAccountType: (type: AccountType) => void;
   setProviderPreSignupData: (data: ProviderPreSignupData | null) => void;
+  setPendingOnboardingService: (data: OnboardingServiceData | null) => void;
   reset: () => void;
   hydrate: () => Promise<void>;
 }
@@ -47,6 +60,7 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
   needsProviderSetup: false,
   selectedAccountType: null,
   providerPreSignupData: null,
+  pendingOnboardingService: null,
   isHydrated: false,
 
   setHasCompletedFirstLaunch: (completed: boolean) => {
@@ -72,6 +86,10 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
     set({ providerPreSignupData: data });
   },
 
+  setPendingOnboardingService: (data: OnboardingServiceData | null) => {
+    set({ pendingOnboardingService: data });
+  },
+
   reset: () => {
     set({
       hasCompletedFirstLaunch: false,
@@ -79,6 +97,7 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
       needsProviderSetup: false,
       selectedAccountType: null,
       providerPreSignupData: null,
+      pendingOnboardingService: null,
     });
     AsyncStorage.removeItem(STORAGE_KEY);
   },

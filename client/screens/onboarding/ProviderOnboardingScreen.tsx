@@ -23,6 +23,7 @@ import { ZipCodeAreaInput } from "@/components/ZipCodeAreaInput";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius } from "@/constants/theme";
+import type { OnboardingServiceData } from "@/state/onboardingStore";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useOnboardingStore } from "@/state/onboardingStore";
 import { useAuthStore } from "@/state/authStore";
@@ -51,12 +52,6 @@ const SERVICE_CATEGORIES = [
   { id: "other", label: "Other", icon: "more-horizontal" as const },
 ];
 
-const DURATION_OPTIONS = [
-  { label: "30 min", value: 30 },
-  { label: "1 hr", value: 60 },
-  { label: "2 hrs", value: 120 },
-  { label: "3+ hrs", value: 180 },
-];
 
 const DAYS_OF_WEEK = [
   { id: "mon", label: "Mon" },
@@ -76,8 +71,13 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const safeTop = insets.top || 50;
 
-  const { setHasCompletedFirstLaunch, setHasCompletedProviderSetup, setProviderPreSignupData } =
-    useOnboardingStore();
+  const {
+    setHasCompletedFirstLaunch,
+    setHasCompletedProviderSetup,
+    setProviderPreSignupData,
+    pendingOnboardingService,
+    setPendingOnboardingService,
+  } = useOnboardingStore();
   const { login, activateProviderMode, setNeedsRoleSelection } = useAuthStore();
   const { addOnboardingService, setProviderAvailability, setProviderBusinessProfile } =
     useProviderStore();
@@ -88,12 +88,8 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
   const [businessName, setBusinessName] = useState("");
   const [category, setCategory] = useState("");
 
-  // Step 2: Service
-  const [serviceName, setServiceName] = useState("");
-  const [serviceDescription, setServiceDescription] = useState("");
-  const [servicePrice, setServicePrice] = useState("");
-  const [quoteRequired, setQuoteRequired] = useState(false);
-  const [serviceDuration, setServiceDuration] = useState(60);
+  // Step 2: Service is now built via ServiceBlueprintWizardScreen (onboarding mode)
+  // Data lives in onboardingStore.pendingOnboardingService
 
   // Step 3: Service Area
   const [serviceArea, setServiceArea] = useState("");
@@ -139,7 +135,7 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
     switch (step) {
       case 0: return true;
       case 1: return businessName.trim().length > 0 && category.length > 0;
-      case 2: return serviceName.trim().length > 0;
+      case 2: return true; // Service step is optional — user can skip or complete via wizard
       case 3: return true;
       case 4: return activeDays.length > 0;
       case 5: return true;
@@ -214,13 +210,15 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
             },
           ])
         ),
-        initialService: serviceName.trim() ? {
-          name: serviceName.trim(),
-          category: category || "General",
-          description: serviceDescription.trim() || undefined,
-          quoteRequired,
-          price: quoteRequired ? undefined : (parseFloat(servicePrice) || undefined),
-          duration: serviceDuration,
+        initialService: pendingOnboardingService ? {
+          name: pendingOnboardingService.name,
+          category: pendingOnboardingService.category || category || "General",
+          description: pendingOnboardingService.description || undefined,
+          quoteRequired: pendingOnboardingService.pricingType === "quote",
+          price: pendingOnboardingService.pricingType !== "quote"
+            ? (parseFloat(pendingOnboardingService.basePrice) || undefined)
+            : undefined,
+          duration: pendingOnboardingService.duration,
         } : undefined,
       });
       const data = await response.json();
@@ -235,14 +233,17 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
       const token = data.token ?? null;
       const providerId = data.provider.id;
 
-      // Step 4: Store all onboarding data locally
-      addOnboardingService({
-        id: `svc-${Date.now()}`,
-        name: serviceName.trim(),
-        price: quoteRequired ? null : parseFloat(servicePrice) || null,
-        quoteRequired,
-        durationMinutes: serviceDuration,
-      });
+      // Store onboarding data locally
+      if (pendingOnboardingService) {
+        addOnboardingService({
+          id: `svc-${Date.now()}`,
+          name: pendingOnboardingService.name,
+          price: pendingOnboardingService.pricingType !== "quote" ? (parseFloat(pendingOnboardingService.basePrice) || null) : null,
+          quoteRequired: pendingOnboardingService.pricingType === "quote",
+          durationMinutes: pendingOnboardingService.duration,
+        });
+        setPendingOnboardingService(null);
+      }
       setProviderAvailability({ activeDays, startTime, endTime });
       setProviderBusinessProfile({
         businessName: businessName.trim(),
@@ -257,7 +258,7 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
         id: providerId,
         userId: data.user.id,
         businessName: businessName.trim(),
-        services: serviceName.trim() ? [serviceName.trim()] : [],
+        services: pendingOnboardingService ? [pendingOnboardingService.name] : [],
         status: "approved" as const,
         rating: 0,
         reviewCount: 0,
@@ -356,19 +357,11 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
           />
         )}
         {step === 2 && (
-          <ServiceStep
+          <ServiceBuilderStep
             theme={theme}
-            serviceName={serviceName}
-            setServiceName={setServiceName}
-            serviceDescription={serviceDescription}
-            setServiceDescription={setServiceDescription}
-            servicePrice={servicePrice}
-            setServicePrice={setServicePrice}
-            quoteRequired={quoteRequired}
-            setQuoteRequired={setQuoteRequired}
-            serviceDuration={serviceDuration}
-            setServiceDuration={setServiceDuration}
-            category={category}
+            pendingService={pendingOnboardingService}
+            onOpenBuilder={() => navigation.navigate("NewService", { onboardingMode: true })}
+            onClearService={() => setPendingOnboardingService(null)}
           />
         )}
         {step === 3 && (
@@ -396,7 +389,7 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
             setBio={setBio}
             businessName={businessName}
             category={category}
-            serviceName={serviceName}
+            serviceName={pendingOnboardingService?.name ?? ""}
           />
         )}
         {step === 6 && (
@@ -647,275 +640,122 @@ function BusinessStep({
   );
 }
 
-// ─── Step 2: Service ─────────────────────────────────────────────────────────
+// ─── Step 2: Service Builder ──────────────────────────────────────────────────
 
-function ServiceStep({
+function ServiceBuilderStep({
   theme,
-  serviceName,
-  setServiceName,
-  serviceDescription,
-  setServiceDescription,
-  servicePrice,
-  setServicePrice,
-  quoteRequired,
-  setQuoteRequired,
-  serviceDuration,
-  setServiceDuration,
-  category,
+  pendingService,
+  onOpenBuilder,
+  onClearService,
 }: {
   theme: ReturnType<typeof useTheme>["theme"];
-  serviceName: string;
-  setServiceName: (v: string) => void;
-  serviceDescription: string;
-  setServiceDescription: (v: string) => void;
-  servicePrice: string;
-  setServicePrice: (v: string) => void;
-  quoteRequired: boolean;
-  setQuoteRequired: (v: boolean) => void;
-  serviceDuration: number;
-  setServiceDuration: (v: number) => void;
-  category: string;
+  pendingService: OnboardingServiceData | null;
+  onOpenBuilder: () => void;
+  onClearService: () => void;
 }) {
-  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
-  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
-  const [priceSuggestion, setPriceSuggestion] = useState<{ minPrice: number; maxPrice: number; hint: string } | null>(null);
-  const [loadingPrice, setLoadingPrice] = useState(false);
-  const [descriptionError, setDescriptionError] = useState<string | null>(null);
-  const priceDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const descDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (!category) return;
-    setLoadingSuggestions(true);
-    apiRequest("POST", "/api/ai/onboarding/suggest-service-names", { category })
-      .then((res) => res.json())
-      .then((json) => { if (Array.isArray(json.names)) setAiSuggestions(json.names.slice(0, 3)); })
-      .catch(() => {})
-      .finally(() => setLoadingSuggestions(false));
-  }, [category]);
-
-  useEffect(() => {
-    if (descDebounceRef.current) clearTimeout(descDebounceRef.current);
-    if (!serviceName.trim() || !category) { setServiceDescription(""); setDescriptionError(null); return; }
-    descDebounceRef.current = setTimeout(async () => {
-      setDescriptionError(null);
-      try {
-        const res = await apiRequest("POST", "/api/ai/onboarding/suggest-description", { serviceName: serviceName.trim(), category });
-        const json = await res.json();
-        if (json.description) {
-          setServiceDescription(json.description);
-        } else {
-          setServiceDescription("");
-          setDescriptionError("Could not generate description. You can write one manually.");
-        }
-      } catch {
-        setServiceDescription("");
-        setDescriptionError("Could not generate description. You can write one manually.");
-      }
-    }, 1200);
-    return () => { if (descDebounceRef.current) clearTimeout(descDebounceRef.current); };
-  }, [serviceName, category]);
-
-  useEffect(() => {
-    if (priceDebounceRef.current) clearTimeout(priceDebounceRef.current);
-    if (!serviceName.trim() || !category || quoteRequired) { setPriceSuggestion(null); return; }
-    priceDebounceRef.current = setTimeout(async () => {
-      setLoadingPrice(true);
-      try {
-        const res = await apiRequest("POST", "/api/ai/onboarding/suggest-price", { serviceName: serviceName.trim(), category, pricingType: "flat" });
-        const json = await res.json();
-        if (json.suggestion) setPriceSuggestion(json.suggestion);
-      } catch { /* silently fail */ }
-      finally { setLoadingPrice(false); }
-    }, 900);
-    return () => { if (priceDebounceRef.current) clearTimeout(priceDebounceRef.current); };
-  }, [serviceName, category, quoteRequired]);
-
   return (
     <ScrollView
       style={styles.scrollView}
       contentContainerStyle={styles.stepScrollContent}
       showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
     >
       <View style={styles.stepHeader}>
         <ThemedText style={styles.stepTitle}>Your first service</ThemedText>
         <ThemedText style={[styles.stepSubtitle, { color: theme.textSecondary }]}>
-          Define what you offer so customers can book you.
+          Use the Service Builder to create a fully configured offering — pricing, duration, add-ons, and more. You can skip this and add services later.
         </ThemedText>
       </View>
 
-      <GlassCard style={styles.card}>
-        <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Service name</ThemedText>
-        <View
-          style={[
-            styles.inputWrapper,
-            {
-              backgroundColor: theme.backgroundElevated,
-              borderColor: serviceName ? Colors.accent : theme.border,
-            },
-          ]}
-        >
-          <Feather name="tag" size={16} color={serviceName ? Colors.accent : theme.textSecondary} />
-          <TextInput
-            style={[styles.textInput, { color: theme.text }]}
-            placeholder="e.g. Drain Cleaning"
-            placeholderTextColor={theme.textTertiary}
-            value={serviceName}
-            onChangeText={setServiceName}
-            testID="input-service-name"
-          />
-        </View>
-
-        {loadingSuggestions ? (
-          <View style={[styles.suggestionRow, { alignItems: "center" }]}>
-            <ActivityIndicator size="small" color={Colors.accent} />
-            <ThemedText style={[styles.captionText, { color: Colors.accent }]}>Loading suggestions...</ThemedText>
-          </View>
-        ) : aiSuggestions.length > 0 ? (
-          <View style={styles.suggestionRow}>
-            <Feather name="zap" size={12} color={Colors.accent} />
-            <ThemedText style={[styles.captionText, { color: Colors.accent }]}>Quick picks:</ThemedText>
-            {aiSuggestions.map((s) => (
-              <Pressable
-                key={s}
-                onPress={() => { Haptics.selectionAsync(); setServiceName(s); setServiceDescription(""); }}
-                style={[
-                  styles.suggestionChip,
-                  {
-                    backgroundColor: serviceName === s ? Colors.accent + "20" : theme.backgroundElevated,
-                    borderColor: serviceName === s ? Colors.accent : theme.border,
-                  },
-                ]}
-              >
-                <ThemedText style={[styles.captionText, { color: serviceName === s ? Colors.accent : theme.textSecondary }]}>
-                  {s}
-                </ThemedText>
-              </Pressable>
-            ))}
-          </View>
-        ) : null}
-
-        {(serviceDescription || descriptionError) ? (
-          <View style={[
-            styles.descriptionPreview,
-            {
-              backgroundColor: descriptionError ? "#FF453A08" : Colors.accent + "08",
-              borderColor: descriptionError ? "#FF453A30" : Colors.accent + "30",
-            },
-          ]}>
-            {descriptionError ? (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.xs }}>
-                <Feather name="alert-circle" size={12} color="#FF453A" />
-                <ThemedText style={[styles.captionText, { color: "#FF453A", flex: 1 }]}>{descriptionError}</ThemedText>
-              </View>
-            ) : (
-              <>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: Spacing.xs }}>
-                  <Feather name="zap" size={11} color={Colors.accent} />
-                  <ThemedText style={[styles.captionText, { color: Colors.accent, fontWeight: "600" }]}>AI Description</ThemedText>
-                </View>
-                <ThemedText style={[styles.captionText, { color: theme.textSecondary, lineHeight: 18 }]}>{serviceDescription}</ThemedText>
-              </>
-            )}
-          </View>
-        ) : null}
-
-        <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary, marginTop: Spacing.lg }]}>Pricing</ThemedText>
-        <View style={[styles.pricingSegmented, { backgroundColor: theme.backgroundElevated, borderColor: theme.border }]}>
-          <Pressable
-            onPress={() => { Haptics.selectionAsync(); setQuoteRequired(false); }}
-            style={[
-              styles.pricingSegmentBtn,
-              !quoteRequired && { backgroundColor: Colors.accent, shadowColor: Colors.accent, shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
-            ]}
-            testID="segment-fixed-price"
-          >
-            <Feather name="dollar-sign" size={13} color={!quoteRequired ? "#fff" : theme.textSecondary} />
-            <ThemedText style={{ color: !quoteRequired ? "#fff" : theme.textSecondary, fontWeight: "600", fontSize: 13 }}>Fixed Price</ThemedText>
-          </Pressable>
-          <Pressable
-            onPress={() => { Haptics.selectionAsync(); setQuoteRequired(true); setServicePrice(""); }}
-            style={[
-              styles.pricingSegmentBtn,
-              quoteRequired && { backgroundColor: Colors.accent, shadowColor: Colors.accent, shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
-            ]}
-            testID="toggle-quote-required"
-          >
-            <Feather name="file-text" size={13} color={quoteRequired ? "#fff" : theme.textSecondary} />
-            <ThemedText style={{ color: quoteRequired ? "#fff" : theme.textSecondary, fontWeight: "600", fontSize: 13 }}>Quote Only</ThemedText>
-          </Pressable>
-        </View>
-
-        {!quoteRequired ? (
-          <View style={styles.pricingRow}>
-            <View style={styles.priceInputWrapper}>
-              <ThemedText style={[styles.currencySymbol, { color: theme.textSecondary }]}>$</ThemedText>
-              <TextInput
-                style={[styles.priceInput, { backgroundColor: theme.backgroundElevated, color: theme.text, borderColor: theme.border }]}
-                placeholder="0.00"
-                placeholderTextColor={theme.textSecondary}
-                value={servicePrice}
-                onChangeText={setServicePrice}
-                keyboardType="decimal-pad"
-                testID="input-service-price"
-              />
+      {pendingService ? (
+        <GlassCard style={styles.card}>
+          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: Spacing.sm }}>
+            <View style={[styles.serviceIconBadge, { backgroundColor: Colors.accent + "18" }]}>
+              <Feather name="check-circle" size={20} color={Colors.accent} />
             </View>
-          </View>
-        ) : (
-          <View style={[styles.quoteInfoRow, { backgroundColor: Colors.accent + "10", borderColor: Colors.accent + "25" }]}>
-            <Feather name="info" size={13} color={Colors.accent} />
-            <ThemedText style={[styles.captionText, { color: Colors.accent, flex: 1 }]}>
-              No price shown to customers — they request a quote and you respond directly.
+            <ThemedText style={[styles.fieldLabel, { color: Colors.accent, marginLeft: Spacing.sm, marginTop: 0 }]}>
+              Service configured
             </ThemedText>
           </View>
-        )}
-
-        {!quoteRequired && (loadingPrice || priceSuggestion) ? (
-          <View style={[styles.priceHint, { backgroundColor: Colors.accent + "10" }]}>
-            {loadingPrice ? (
-              <ActivityIndicator size="small" color={Colors.accent} style={{ marginRight: Spacing.xs }} />
+          <ThemedText style={[{ fontSize: 17, fontWeight: "600", color: theme.text, marginBottom: 4 }]}>
+            {pendingService.name}
+          </ThemedText>
+          {pendingService.description ? (
+            <ThemedText style={[styles.captionText, { color: theme.textSecondary, marginBottom: Spacing.sm }]} numberOfLines={2}>
+              {pendingService.description}
+            </ThemedText>
+          ) : null}
+          <View style={{ flexDirection: "row", gap: Spacing.sm, flexWrap: "wrap" }}>
+            {pendingService.pricingType === "quote" ? (
+              <View style={[styles.serviceTag, { backgroundColor: theme.backgroundElevated, borderColor: theme.border }]}>
+                <Feather name="file-text" size={12} color={theme.textSecondary} />
+                <ThemedText style={[styles.captionText, { color: theme.textSecondary }]}>Quote on request</ThemedText>
+              </View>
             ) : (
-              <Feather name="trending-up" size={13} color={Colors.accent} />
+              <View style={[styles.serviceTag, { backgroundColor: Colors.accent + "15", borderColor: Colors.accent + "30" }]}>
+                <Feather name="dollar-sign" size={12} color={Colors.accent} />
+                <ThemedText style={[styles.captionText, { color: Colors.accent }]}>
+                  {pendingService.basePrice ? `$${pendingService.basePrice}` : "Free"}
+                </ThemedText>
+              </View>
             )}
-            {priceSuggestion && !loadingPrice ? (
-              <ThemedText style={[styles.captionText, { color: Colors.accent, flex: 1 }]}>
-                Typical: ${priceSuggestion.minPrice}–${priceSuggestion.maxPrice}. {priceSuggestion.hint}
-              </ThemedText>
-            ) : loadingPrice ? (
-              <ThemedText style={[styles.captionText, { color: Colors.accent }]}>Getting price range...</ThemedText>
+            {pendingService.duration > 0 ? (
+              <View style={[styles.serviceTag, { backgroundColor: theme.backgroundElevated, borderColor: theme.border }]}>
+                <Feather name="clock" size={12} color={theme.textSecondary} />
+                <ThemedText style={[styles.captionText, { color: theme.textSecondary }]}>
+                  {pendingService.duration} min
+                </ThemedText>
+              </View>
             ) : null}
           </View>
-        ) : null}
+          <View style={{ flexDirection: "row", gap: Spacing.sm, marginTop: Spacing.lg }}>
+            <Pressable
+              onPress={onOpenBuilder}
+              style={[styles.serviceActionBtn, { backgroundColor: theme.backgroundElevated, borderColor: theme.border, flex: 1 }]}
+            >
+              <Feather name="edit-2" size={14} color={theme.textSecondary} />
+              <ThemedText style={[styles.captionText, { color: theme.textSecondary }]}>Edit</ThemedText>
+            </Pressable>
+            <Pressable
+              onPress={onClearService}
+              style={[styles.serviceActionBtn, { backgroundColor: "#FF453A10", borderColor: "#FF453A25", flex: 1 }]}
+            >
+              <Feather name="trash-2" size={14} color="#FF453A" />
+              <ThemedText style={[styles.captionText, { color: "#FF453A" }]}>Remove</ThemedText>
+            </Pressable>
+          </View>
+        </GlassCard>
+      ) : (
+        <Pressable onPress={onOpenBuilder} testID="button-open-service-builder">
+          <GlassCard style={[styles.card, styles.builderLaunchCard]}>
+            <View style={[styles.serviceIconBadge, { backgroundColor: Colors.accent + "18", marginBottom: Spacing.md }]}>
+              <Feather name="tool" size={24} color={Colors.accent} />
+            </View>
+            <ThemedText style={[{ fontSize: 16, fontWeight: "600", color: theme.text, marginBottom: 6 }]}>
+              Open Service Builder
+            </ThemedText>
+            <ThemedText style={[styles.captionText, { color: theme.textSecondary, textAlign: "center" }]}>
+              Build a complete service profile with AI assistance — pricing, duration, add-ons, and a custom booking form.
+            </ThemedText>
+            <View style={[styles.builderCTA, { backgroundColor: Colors.accent, marginTop: Spacing.lg }]}>
+              <ThemedText style={{ color: "#fff", fontWeight: "600", fontSize: 14 }}>Build My First Service</ThemedText>
+              <Feather name="arrow-right" size={16} color="#fff" />
+            </View>
+          </GlassCard>
+        </Pressable>
+      )}
 
-        <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary, marginTop: Spacing.lg }]}>Duration</ThemedText>
-        <View style={styles.durationRow}>
-          {DURATION_OPTIONS.map((opt) => {
-            const selected = serviceDuration === opt.value;
-            return (
-              <Pressable
-                key={opt.value}
-                onPress={() => { Haptics.selectionAsync(); setServiceDuration(opt.value); }}
-                testID={`duration-${opt.value}`}
-                style={[
-                  styles.durationOption,
-                  {
-                    backgroundColor: selected ? Colors.accent : theme.backgroundElevated,
-                    borderColor: selected ? Colors.accent : theme.border,
-                  },
-                ]}
-              >
-                <ThemedText style={{ color: selected ? "#fff" : theme.text, fontWeight: selected ? "600" : "400", fontSize: 13 }}>
-                  {opt.label}
-                </ThemedText>
-              </Pressable>
-            );
-          })}
-        </View>
-      </GlassCard>
+      <View style={[styles.skipHint, { borderColor: theme.border }]}>
+        <Feather name="info" size={13} color={theme.textTertiary} />
+        <ThemedText style={[styles.captionText, { color: theme.textTertiary, flex: 1 }]}>
+          You can always add and manage services from your Provider Portal after signing up.
+        </ThemedText>
+      </View>
     </ScrollView>
   );
 }
+
+// ─── (ServiceStep legacy removed) ────────────────────────────────────────────
+
 
 // ─── Step 3: Service Area ────────────────────────────────────────────────────
 
@@ -1651,5 +1491,54 @@ const styles = StyleSheet.create({
   footer: {
     paddingHorizontal: Spacing.screenPadding,
     paddingTop: Spacing.md,
+  },
+
+  // ServiceBuilderStep
+  serviceIconBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  serviceTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+  },
+  serviceActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+  },
+  builderLaunchCard: {
+    alignItems: "center",
+    paddingVertical: Spacing.xl,
+  },
+  builderCTA: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.full,
+  },
+  skipHint: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderStyle: "dashed",
   },
 });
