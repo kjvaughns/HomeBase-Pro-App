@@ -65,6 +65,10 @@ export function registerChatRoutes(app: Express): void {
       const conversationId = parseInt(req.params.id);
       const { content } = req.body;
 
+      if (!Number.isFinite(conversationId)) {
+        return res.status(400).json({ error: "Invalid conversation ID" });
+      }
+
       if (!content) {
         return res.status(400).json({ error: "Message content is required" });
       }
