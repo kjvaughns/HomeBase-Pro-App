@@ -132,16 +132,21 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
     });
   };
 
-  // Track when we've navigated into the Service Blueprint Wizard from step 2
-  const returnedFromWizard = useRef(false);
+  // Track wizard navigation: snapshot the service state before entering so we
+  // can detect a genuine completion (new/updated service) vs. a cancel-and-return.
+  const wizardSnapshot = useRef<OnboardingServiceData | null | undefined>(undefined); // undefined = not tracking
 
-  // When the screen regains focus after visiting the wizard, auto-advance to step 3
-  // if the user successfully completed the wizard (pendingOnboardingService is now set).
+  // When the screen regains focus after the wizard, auto-advance to step 3 only
+  // if the service was genuinely updated (different object reference = new completion).
   useFocusEffect(
     useCallback(() => {
-      if (returnedFromWizard.current) {
-        returnedFromWizard.current = false;
-        if (pendingOnboardingService && step === 2) {
+      if (wizardSnapshot.current !== undefined) {
+        const prev = wizardSnapshot.current;
+        wizardSnapshot.current = undefined;
+        // Only advance if the service changed (completed or re-completed the wizard).
+        // Cancel-with-existing-service leaves pendingOnboardingService at the same
+        // reference, so `prev === pendingOnboardingService` won't trigger advance.
+        if (pendingOnboardingService && prev !== pendingOnboardingService && step === 2) {
           animateTransition(true, () => setStep(3));
         }
       }
@@ -379,7 +384,7 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
             theme={theme}
             pendingService={pendingOnboardingService}
             onOpenBuilder={() => {
-              returnedFromWizard.current = true;
+              wizardSnapshot.current = pendingOnboardingService; // snapshot before entering
               navigation.navigate("NewService", { onboardingMode: true });
             }}
             onClearService={() => setPendingOnboardingService(null)}
