@@ -4437,6 +4437,7 @@ Respond with JSON only:
 
   app.get("/api/provider/:providerId/invoices", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
     try {
+      if (!(await assertProviderOwnership(req, req.params.providerId, res))) return;
       const invoices = await storage.getInvoices(req.params.providerId);
       res.json({ invoices });
     } catch (error) {
@@ -4467,6 +4468,7 @@ Respond with JSON only:
 
   app.get("/api/provider/:providerId/next-invoice-number", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
     try {
+      if (!(await assertProviderOwnership(req, req.params.providerId, res))) return;
       const invoiceNumber = await storage.getNextInvoiceNumber(req.params.providerId);
       res.json({ invoiceNumber });
     } catch (error) {
@@ -4478,6 +4480,9 @@ Respond with JSON only:
   app.post("/api/invoices", requireAuth, async (req: Request, res: Response) => {
     try {
       const invoiceNumber = req.body.invoiceNumber || `INV-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+
+      // Ownership: caller must own the provider they are creating an invoice for
+      if (req.body.providerId && !(await assertProviderOwnership(req, req.body.providerId, res))) return;
 
       // Calculate total from line items if provided
       const lineItemsInput: any[] = Array.isArray(req.body.lineItems) ? req.body.lineItems : [];
@@ -5169,6 +5174,7 @@ Respond with JSON only:
   app.post("/api/stripe/connect/onboard/:providerId", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
     try {
       const { providerId } = req.params;
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
       const result = await createConnectAccountLink(providerId);
       res.json(result);
     } catch (error: any) {
@@ -5181,6 +5187,7 @@ Respond with JSON only:
   app.post("/api/stripe/connect/refresh-link/:providerId", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
     try {
       const { providerId } = req.params;
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
       const result = await refreshConnectAccountLink(providerId);
       res.json(result);
     } catch (error: any) {
@@ -5234,6 +5241,9 @@ Respond with JSON only:
       if (!providerId) {
         return res.status(400).json({ error: "providerId is required" });
       }
+
+      // Ownership: caller must own the provider they are creating an invoice for
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
 
       // Calculate subtotal from line items
       let subtotalCents = 0;
@@ -5316,6 +5326,8 @@ Respond with JSON only:
       if (!providerId) {
         return res.status(400).json({ error: "providerId is required" });
       }
+      // Ownership: caller must own the provider whose invoices they are listing
+      if (!(await assertProviderOwnership(req, providerId as string, res))) return;
       const providerInvoices = await db
         .select()
         .from(invoices)

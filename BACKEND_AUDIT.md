@@ -36,6 +36,13 @@
 | `server/routes.ts` | `POST /api/stripe/invoices/:id/checkout` — added `assertInvoiceAccess()` ownership check | High |
 | `server/routes.ts` | `POST /api/invoices/:id/checkout` — added `assertInvoiceAccess()` ownership check | High |
 | `server/routes.ts` | `assertInvoiceAccess()` helper — new function verifying homeowner or issuing-provider access | High |
+| `server/routes.ts` | `GET /api/stripe/invoices` — added `assertProviderOwnership()` on query-param `providerId` | Critical |
+| `server/routes.ts` | `POST /api/stripe/invoices` — added `assertProviderOwnership()` on body `providerId` | Critical |
+| `server/routes.ts` | `GET /api/provider/:providerId/invoices` — added `assertProviderOwnership()` | Critical |
+| `server/routes.ts` | `GET /api/provider/:providerId/next-invoice-number` — added `assertProviderOwnership()` | High |
+| `server/routes.ts` | `POST /api/invoices` — added `assertProviderOwnership()` on body `providerId` | High |
+| `server/routes.ts` | `POST /api/stripe/connect/onboard/:providerId` — added `assertProviderOwnership()` | Critical |
+| `server/routes.ts` | `POST /api/stripe/connect/refresh-link/:providerId` — added `assertProviderOwnership()` | Critical |
 | `REQUIRED_ENV.md` | Environment variables documentation with production checklist and startup fail-fast inventory | Low |
 | `server/dbMigrations.ts` | `users.token_version INTEGER NOT NULL DEFAULT 0` | High |
 | `server/dbMigrations.ts` | `clients(provider_id, email)` unique partial index | Medium |
@@ -158,20 +165,36 @@ All user-scoped resource endpoints were inspected for ownership checks:
 - `PATCH /api/leads/:id` — updated lead records without verifying the caller owned the provider. **Fixed: lead lookup + `assertProviderOwnership()` via lead's `providerId`.**
 
 **Gap 3 found and fixed — Invoice financial routes (critical financial fraud vector)**:
-- `POST /api/stripe/invoices/:invoiceId/apply-credits` — took `userId` from request body; attacker could drain any user's credit balance by supplying their `userId`. **Fixed: `userId` bound to `req.authenticatedUserId`; `assertInvoiceAccess()` added.**
+- `POST /api/stripe/invoices/:invoiceId/apply-credits` — took `userId` from request body; attacker could drain any user's credit balance. **Fixed: `userId` bound to `req.authenticatedUserId`; `assertInvoiceAccess()` added.**
 - `POST /api/invoices/:invoiceId/apply-credits` — same body-supplied userId vulnerability. **Fixed identically.**
-- `POST /api/stripe/invoices/:invoiceId/checkout` — no invoice ownership check; any authenticated user could trigger a payment flow for any invoice. **Fixed: `assertInvoiceAccess()` added.**
+- `POST /api/stripe/invoices/:invoiceId/checkout` — no invoice ownership check. **Fixed: `assertInvoiceAccess()` added.**
 - `POST /api/invoices/:invoiceId/checkout` — same issue. **Fixed: `assertInvoiceAccess()` added.**
+- `GET /api/stripe/invoices` — trusted query-param `providerId` without ownership check. **Fixed: `assertProviderOwnership()` added.**
+- `POST /api/stripe/invoices` — trusted body `providerId` without ownership check. **Fixed: `assertProviderOwnership()` added.**
+- `GET /api/provider/:providerId/invoices` — no ownership check. **Fixed: `assertProviderOwnership()` added.**
+- `GET /api/provider/:providerId/next-invoice-number` — no ownership check. **Fixed: `assertProviderOwnership()` added.**
+- `POST /api/invoices` — body `providerId` not verified. **Fixed: `assertProviderOwnership()` added (conditional guard).**
+
+**Gap 4 found and fixed — Stripe Connect endpoints without ownership**:
+- `POST /api/stripe/connect/onboard/:providerId` — auth-only; attacker could trigger Stripe onboarding for any provider. **Fixed: `assertProviderOwnership()` added.**
+- `POST /api/stripe/connect/refresh-link/:providerId` — same issue. **Fixed: `assertProviderOwnership()` added.**
 
 **`assertInvoiceAccess()` helper** (new, defined alongside `assertProviderOwnership()`):
 Grants access if: caller's `userId === invoice.homeownerUserId` (homeowner paying), OR caller's `userId === providers.userId` for the invoice's `providerId` (issuing provider). Returns 404 if invoice missing, 403 if unauthorized.
 
-**Sensitive provider routes with ownership enforcement** (verified post-fix):
-- All Stripe Connect endpoints (`/stripe-connect/*`, `/stripe-invoices/*`)
-- All job, client, invoice, and schedule mutation endpoints  
-- Payouts (`GET /api/providers/:id/payouts`) — fixed
-- All lead read/write routes (`/providers/:id/leads`, `/leads/:id`) — fixed
-- Invoice checkout + credit application routes — fixed (critical financial fraud)
+**Routes already secured (no changes needed)**:
+- `PUT /api/invoices/:id` — `getProviderByUserId()` + `invoice.providerId !== provider.id` check (line 4680)
+- `POST /api/invoices/:id/send` — same pattern (line 4707)
+- `POST /api/invoices/create-and-send` — `getProviderByUserId()` + body providerId check (line 4552)
+- `POST /api/stripe/invoices/:invoiceId/send` — `getProviderByUserId()` + `invoice.providerId !== authProviderRecord.id` (line 5349)
+- `GET /api/invoices/:id` — checks both `isProvider` and `isHomeowner` (line 4455)
+
+**Sensitive provider routes with ownership enforcement** (all gaps now resolved):
+- All Stripe Connect endpoints: `onboard`, `refresh-link`, `status` — secured
+- All invoice list/create/read/update/send routes — secured
+- Invoice checkout + credit application routes — secured (financial fraud)
+- Payouts (`GET /api/providers/:id/payouts`) — secured
+- All lead read/write routes (`/providers/:id/leads`, `/leads/:id`) — secured
 
 **Orphan-provider strategy**: `providers.userId` has `ON DELETE SET NULL` (see `shared/schema.ts` line 115). When a user deletes their account, the provider record is preserved with `userId = NULL`. The account deletion transaction (`DELETE /api/auth/account`) also manually removes Stripe Connect data, payouts, and invoice records before deleting the user row. This prevents FK violation and preserves historical provider data.
 
