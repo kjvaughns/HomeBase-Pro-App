@@ -2195,34 +2195,18 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
         ...messages,
       ];
 
-      res.setHeader("Content-Type", "text/event-stream");
-      res.setHeader("Cache-Control", "no-cache");
-      res.setHeader("Connection", "keep-alive");
-
-      const stream = await openai.chat.completions.create({
+      // Buffered response — SSE not supported on native iOS/Android
+      const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: chatMessages,
-        stream: true,
         max_tokens: 1024,
       });
 
-      for await (const chunk of stream) {
-        const content = chunk.choices[0]?.delta?.content || "";
-        if (content) {
-          res.write(`data: ${JSON.stringify({ content })}\n\n`);
-        }
-      }
-
-      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-      res.end();
+      const content = completion.choices[0]?.message?.content || "I'm here to help.";
+      res.json({ content, done: true });
     } catch (error) {
       console.error("Error in chat:", error);
-      if (res.headersSent) {
-        res.write(`data: ${JSON.stringify({ error: "Failed to get response" })}\n\n`);
-        res.end();
-      } else {
-        res.status(500).json({ error: "Failed to process chat request" });
-      }
+      res.status(500).json({ error: "Failed to process chat request" });
     }
   });
 
@@ -2790,7 +2774,7 @@ Rules:
 - aiPricingInsight: be specific about the profit opportunity (e.g., "Large homes over 3,000 sqft take 40% longer but your flat rate doesn't capture that extra labor cost.")`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-4o-mini",
         messages: [{ role: "user", content: prompt }],
         max_tokens: 1000,
         response_format: { type: "json_object" },

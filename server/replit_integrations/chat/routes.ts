@@ -59,11 +59,15 @@ export function registerChatRoutes(app: Express): void {
     }
   });
 
-  // Send message and get AI response (streaming)
+  // Send message and get AI response (buffered — SSE not supported on native mobile)
   app.post("/api/conversations/:id/messages", async (req: Request, res: Response) => {
     try {
       const conversationId = parseInt(req.params.id);
       const { content } = req.body;
+
+      if (!content) {
+        return res.status(400).json({ error: "Message content is required" });
+      }
 
       // Save user message
       await chatStorage.createMessage(conversationId, "user", content);
@@ -75,43 +79,22 @@ export function registerChatRoutes(app: Express): void {
         content: m.content,
       }));
 
-      // Set up SSE
-      res.setHeader("Content-Type", "text/event-stream");
-      res.setHeader("Cache-Control", "no-cache");
-      res.setHeader("Connection", "keep-alive");
-
-      // Stream response from OpenAI
-      const stream = await openai.chat.completions.create({
-        model: "gpt-5.1",
+      // Buffer the full response server-side (SSE / ReadableStream not supported on iOS/Android)
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
         messages: chatMessages,
-        stream: true,
-        max_completion_tokens: 2048,
+        max_tokens: 2048,
       });
 
-      let fullResponse = "";
-
-      for await (const chunk of stream) {
-        const content = chunk.choices[0]?.delta?.content || "";
-        if (content) {
-          fullResponse += content;
-          res.write(`data: ${JSON.stringify({ content })}\n\n`);
-        }
-      }
+      const fullResponse = completion.choices[0]?.message?.content || "I'm here to help.";
 
       // Save assistant message
       await chatStorage.createMessage(conversationId, "assistant", fullResponse);
 
-      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-      res.end();
+      res.json({ content: fullResponse, done: true });
     } catch (error) {
       console.error("Error sending message:", error);
-      // Check if headers already sent (SSE streaming started)
-      if (res.headersSent) {
-        res.write(`data: ${JSON.stringify({ error: "Failed to send message" })}\n\n`);
-        res.end();
-      } else {
-        res.status(500).json({ error: "Failed to send message" });
-      }
+      res.status(500).json({ error: "Failed to send message" });
     }
   });
 }
