@@ -642,7 +642,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user.isProvider = true;
       }
 
-      const token = generateToken(user.id, user.isProvider ? "provider" : "homeowner", user.tokenVersion ?? 0);
+      // Derive role from authoritative provider record (not stale isProvider flag)
+      const role = providerProfile ? "provider" : "homeowner";
+      const token = generateToken(user.id, role, user.tokenVersion ?? 0);
       res.cookie("token", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",

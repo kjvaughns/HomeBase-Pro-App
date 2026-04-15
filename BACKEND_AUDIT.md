@@ -23,7 +23,9 @@
 | `server/index.ts` | Production startup fail-fast: `process.exit(1)` if `STRIPE_CONNECT_WEBHOOK_SECRET` unset in `NODE_ENV=production` | Critical |
 | `server/routes.ts` | `/api/webhooks/stripe-connect` duplicate handler removed; `handleStripeWebhook` import removed | Critical |
 | `server/routes.ts` | `GET /api/providers/:id/payouts` — added `assertProviderOwnership()` ownership check | High |
-| `server/routes.ts` | `POST /api/auth/refresh` — role derived from providers DB record, not stale `isProvider` flag; returns `{ token, role }` | Medium |
+| `server/routes.ts` | `POST /api/auth/refresh` — role derived from providers DB record; returns `{ token, role }` | Medium |
+| `server/routes.ts` | `POST /api/auth/login` — role derived from provider record lookup, not stale `isProvider` flag | Medium |
+| `server/routes.ts` | `convertIntakeToClientJob()` — replaced select-then-insert with `INSERT ... ON CONFLICT DO UPDATE RETURNING id` (atomic upsert; no race condition) | High |
 | `REQUIRED_ENV.md` | Environment variables documentation with production checklist and startup fail-fast inventory | Low |
 | `server/dbMigrations.ts` | `users.token_version INTEGER NOT NULL DEFAULT 0` | High |
 | `server/dbMigrations.ts` | `clients(provider_id, email)` unique partial index | Medium |
@@ -104,11 +106,15 @@ Production with a missing `JWT_SECRET` now refuses to start entirely.
 
 `POST /api/auth/refresh` (requires valid current token): re-issues a new JWT with a fresh 7-day TTL and updated cookie. Returns `{ token, role }`.
 
-### 2e. Role Derivation — FIXED (authoritative at refresh)
+### 2e. Role Derivation — FIXED (authoritative at all issuance points)
 
-**Gap found**: `POST /api/auth/refresh` derived role from `user.isProvider` flag — a stale DB field that could lag behind the authoritative provider record.
+**Gap found**: Token issuance at login and refresh used `user.isProvider` (a cached DB flag that can drift) rather than the authoritative provider record.
 
-**Fix**: Refresh endpoint now queries `providers` table by `userId` to compute role at token issuance time. If a provider record exists, role = `"provider"`; otherwise `"homeowner"`. The `isProvider` flag is auto-synced if out of date.
+**Fix — login** (`server/routes.ts`): Login already fetches `providerProfile` via `storage.getProviderByUserId()`. Role is now derived directly: `const role = providerProfile ? "provider" : "homeowner"` — not from the `isProvider` flag.
+
+**Fix — refresh** (`server/routes.ts`): Refresh endpoint queries `providers` table by `userId` at token issuance. Role is derived from existence of a provider record. The `isProvider` flag is auto-synced if out of date. Returns `{ token, role }`.
+
+Signup always issues `role = "provider"` since provider signup requires creating a provider record atomically in the same transaction.
 
 ---
 
@@ -129,11 +135,19 @@ All user-scoped resource endpoints were inspected for ownership checks:
 | `GET /api/notification-preferences/:userId` | Same pattern | 2009 |
 | Provider CRUD routes | `assertProviderOwnership()` helper (lines 5836-5847) | Multiple |
 
-`assertProviderOwnership()` is used consistently on all Stripe Connect, invoice creation, and job mutation endpoints.
+`assertProviderOwnership()` is the shared RBAC helper for provider ownership. It:
+1. Looks up `providers.userId` for the given `providerId`
+2. Compares with `req.authenticatedUserId`
+3. Returns HTTP 403 and `false` if mismatch; returns `true` if authorized
 
-**Gap found and fixed**: `GET /api/providers/:providerId/payouts` was missing an ownership check — any authenticated user could read another provider's payout history by ID. Fixed by adding `assertProviderOwnership()` call at the start of the handler.
+**Gap found and fixed**: `GET /api/providers/:providerId/payouts` was missing `assertProviderOwnership()`. Any authenticated user could read any provider's payout history. Fixed.
 
-RBAC is ad-hoc (inline) rather than centralized middleware but is applied consistently after this fix.
+**Sensitive provider routes with ownership enforcement** (verified post-fix):
+- All Stripe Connect endpoints (`/stripe-connect/*`, `/stripe-invoices/*`)
+- All job, client, invoice, and schedule mutation endpoints  
+- Payouts (`GET /api/providers/:id/payouts`) — now fixed
+
+**Orphan-provider strategy**: `providers.userId` has `ON DELETE SET NULL` (see `shared/schema.ts` line 115). When a user deletes their account, the provider record is preserved with `userId = NULL`. The account deletion transaction (`DELETE /api/auth/account`) also manually removes Stripe Connect data, payouts, and invoice records before deleting the user row. This prevents FK violation and preserves historical provider data.
 
 ---
 
@@ -162,12 +176,17 @@ All boot migration statements use `IF NOT EXISTS` / `DO $$ ... EXCEPTION WHEN du
 
 ## 5. Booking and Job Data Integrity
 
-**Status: PASS — No issues found**
+**Status: FIXED (race condition in client upsert)**
 
-- `POST /api/jobs` creates an `appointments` row non-fatally (nullable `user_id`, `home_id`).
-- `POST /api/intake-submissions/:id/accept` upserts client by email and creates job atomically.
-- Instant booking auto-conversion creates client + job non-fatally.
-- Submission state machine: `pending → confirmed` on accept, `declined` on decline.
+**Gap found**: `convertIntakeToClientJob()` used a select-then-insert pattern for client deduplication by `(provider_id, email)`. Two concurrent accept requests for the same submission could both see no existing client and both attempt insert — resulting in a constraint error or duplicate client depending on timing.
+
+**Fix**: Replaced with a single atomic `INSERT ... ON CONFLICT (provider_id, email) WHERE email IS NOT NULL DO UPDATE SET phone = COALESCE(...), updated_at = NOW() RETURNING id`. This is idempotent under concurrency — always returns the canonical client ID.
+
+Additional verifications (no changes needed):
+- `POST /api/jobs` creates `appointments` row non-fatally (nullable `user_id`, `home_id`).
+- Instant booking auto-conversion creates client + job non-fatally, wrapped in try/catch.
+- Submission state machine: `submitted → confirmed` on accept, `declined` on decline.
+- Accept endpoint is itself wrapped in a DB transaction for atomicity.
 
 ---
 
