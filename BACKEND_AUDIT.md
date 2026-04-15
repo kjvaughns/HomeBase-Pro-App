@@ -55,6 +55,9 @@
 | `server/routes.ts` | `POST /api/providers/:providerId/booking-links` — added `assertProviderOwnership()` | Critical |
 | `server/routes.ts` | `GET /api/provider/:providerId/custom-services` — added conditional `assertProviderOwnership()` for non-published services (private drafts) | High |
 | `server/routes.ts` | All 8 messaging routes — replaced fragile `getProviderByUserId` + id comparison with canonical `assertProviderOwnership()` (fixes multi-provider edge case) | Critical |
+| `server/routes.ts` | `PATCH /api/leads/:id` — removed `(updates as any)[key]` loop; replaced with explicit typed field-by-field assignment (eliminates type-safety bypass) | High |
+| `server/routes.ts` | Login route — bidirectional `isProvider` sync: now clears flag when no provider record exists (`true → false`) in addition to setting it on provider creation | High |
+| `server/routes.ts` | Refresh route — same bidirectional `isProvider` sync as login | High |
 | `REQUIRED_ENV.md` | Environment variables documentation with production checklist and startup fail-fast inventory | Low |
 | `server/dbMigrations.ts` | `users.token_version INTEGER NOT NULL DEFAULT 0` | High |
 | `server/dbMigrations.ts` | `clients(provider_id, email)` unique partial index | Medium |

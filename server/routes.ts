@@ -633,13 +633,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Invalid email or password" });
       }
 
-      // Always try to fetch provider profile (in case isProvider flag is out of sync)
+      // Always try to fetch provider profile (authoritative source for role)
       let providerProfile = await storage.getProviderByUserId(user.id);
-      
-      // If provider profile found but user.isProvider is false, update the user flag
+
+      // Bidirectional sync: keep isProvider flag consistent with provider record existence
       if (providerProfile && !user.isProvider) {
         await storage.updateUser(user.id, { isProvider: true });
         user.isProvider = true;
+      } else if (!providerProfile && user.isProvider) {
+        await storage.updateUser(user.id, { isProvider: false });
+        user.isProvider = false;
       }
 
       // Derive role from authoritative provider record (not stale isProvider flag)
@@ -705,9 +708,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(providers.userId, userId))
         .limit(1);
       const hasProviderRecord = providerRecord.length > 0;
-      // Keep isProvider flag in sync
+      // Bidirectional sync: keep isProvider flag consistent with provider record existence
       if (hasProviderRecord && !user.isProvider) {
         await storage.updateUser(userId, { isProvider: true });
+      } else if (!hasProviderRecord && user.isProvider) {
+        await storage.updateUser(userId, { isProvider: false });
       }
       const role = hasProviderRecord ? "provider" : "homeowner";
       const token = generateToken(user.id, role, user.tokenVersion ?? 0);
@@ -6916,10 +6921,14 @@ Respond with JSON only:
       if (!(await assertProviderOwnership(req, existing.providerId, res))) return;
 
       const updates: Partial<typeof leads.$inferInsert> = {};
-      const allowed = ["name", "email", "phone", "service", "message", "status", "source"] as const;
-      for (const key of allowed) {
-        if (req.body[key] !== undefined) (updates as any)[key] = req.body[key];
-      }
+      const { name, email, phone, service, message, status, source } = req.body;
+      if (name !== undefined) updates.name = name;
+      if (email !== undefined) updates.email = email;
+      if (phone !== undefined) updates.phone = phone;
+      if (service !== undefined) updates.service = service;
+      if (message !== undefined) updates.message = message;
+      if (status !== undefined) updates.status = status;
+      if (source !== undefined) updates.source = source;
       updates.updatedAt = new Date();
       const [lead] = await db.update(leads).set(updates).where(eq(leads.id, id)).returning();
       if (!lead) return res.status(404).json({ error: "Lead not found" });
