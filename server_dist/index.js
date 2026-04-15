@@ -24,11 +24,14 @@ __export(schema_exports, {
   creditLedgerRelations: () => creditLedgerRelations,
   homes: () => homes,
   homesRelations: () => homesRelations,
+  housefaxEntries: () => housefaxEntries,
+  housefaxEntriesRelations: () => housefaxEntriesRelations,
   insertAppointmentSchema: () => insertAppointmentSchema,
   insertBookingLinkSchema: () => insertBookingLinkSchema,
   insertClientSchema: () => insertClientSchema,
   insertCreditLedgerSchema: () => insertCreditLedgerSchema,
   insertHomeSchema: () => insertHomeSchema,
+  insertHousefaxEntrySchema: () => insertHousefaxEntrySchema,
   insertIntakeSubmissionSchema: () => insertIntakeSubmissionSchema,
   insertInvoiceLineItemSchema: () => insertInvoiceLineItemSchema,
   insertInvoiceSchema: () => insertInvoiceSchema,
@@ -43,6 +46,7 @@ __export(schema_exports, {
   insertProviderPlanSchema: () => insertProviderPlanSchema,
   insertProviderSchema: () => insertProviderSchema,
   insertStripeConnectAccountSchema: () => insertStripeConnectAccountSchema,
+  insertSupportTicketSchema: () => insertSupportTicketSchema,
   insertUserCreditsSchema: () => insertUserCreditsSchema,
   insertUserSchema: () => insertUserSchema,
   intakeStatusEnum: () => intakeStatusEnum,
@@ -107,6 +111,8 @@ __export(schema_exports, {
   stripeConnectAccounts: () => stripeConnectAccounts,
   stripeConnectAccountsRelations: () => stripeConnectAccountsRelations,
   stripeWebhookEvents: () => stripeWebhookEvents,
+  supportTickets: () => supportTickets,
+  supportTicketsRelations: () => supportTicketsRelations,
   urgencyEnum: () => urgencyEnum,
   userCredits: () => userCredits,
   userCreditsRelations: () => userCreditsRelations,
@@ -117,7 +123,7 @@ import { sql, relations } from "drizzle-orm";
 import { pgTable, text, varchar, integer, timestamp, boolean, decimal, pgEnum, json } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-var propertyTypeEnum, appointmentStatusEnum, urgencyEnum, jobSizeEnum, jobStatusEnum, invoiceStatusEnum, paymentMethodEnum, paymentStatusEnum, payoutStatusEnum, connectOnboardingStatusEnum, providerPlanTierEnum, users, usersRelations, homes, homesRelations, serviceCategories, serviceCategoriesRelations, services, servicesRelations, providers, providersRelations, providerServices, providerServicesRelations, pricingTypeEnum, providerCustomServices, providerCustomServicesRelations, insertProviderCustomServiceSchema, appointments, appointmentsRelations, reviews, reviewsRelations, notifications, notificationsRelations, maintenanceReminderFrequencyEnum, maintenanceReminders, maintenanceRemindersRelations, providerPlans, providerPlansRelations, stripeConnectAccounts, stripeConnectAccountsRelations, userCredits, userCreditsRelations, creditLedger, creditLedgerRelations, payouts, payoutsRelations, refundStatusEnum, refunds, refundsRelations, stripeWebhookEvents, invoiceLineItems, invoiceLineItemsRelations, clients, clientsRelations, jobs, jobsRelations, invoices, invoicesRelations, payments, paymentsRelations, bookingLinkStatusEnum, quoteModeEnum, intakeStatusEnum, bookingLinks, bookingLinksRelations, intakeSubmissions, intakeSubmissionsRelations, insertUserSchema, loginSchema, insertHomeSchema, insertAppointmentSchema, insertClientSchema, insertJobSchema, insertInvoiceSchema, insertPaymentSchema, insertProviderSchema, insertProviderPlanSchema, insertStripeConnectAccountSchema, insertInvoiceLineItemSchema, insertPayoutSchema, insertUserCreditsSchema, insertCreditLedgerSchema, insertBookingLinkSchema, insertIntakeSubmissionSchema, notificationChannelEnum, notificationDeliveryStatusEnum, pushTokens, notificationPreferences, providerMessageTemplates, notificationDeliveries, messageChannelEnum, messageStatusEnum, providerMessages, providerMessagesRelations, insertProviderMessageSchema, messageTemplates, messageTemplatesRelations, insertMessageTemplateSchema, leads, insertLeadSchema, insertNotificationPreferenceSchema;
+var propertyTypeEnum, appointmentStatusEnum, urgencyEnum, jobSizeEnum, jobStatusEnum, invoiceStatusEnum, paymentMethodEnum, paymentStatusEnum, payoutStatusEnum, connectOnboardingStatusEnum, providerPlanTierEnum, users, usersRelations, homes, homesRelations, serviceCategories, serviceCategoriesRelations, services, servicesRelations, providers, providersRelations, providerServices, providerServicesRelations, pricingTypeEnum, providerCustomServices, providerCustomServicesRelations, insertProviderCustomServiceSchema, appointments, appointmentsRelations, reviews, reviewsRelations, notifications, notificationsRelations, maintenanceReminderFrequencyEnum, maintenanceReminders, maintenanceRemindersRelations, providerPlans, providerPlansRelations, stripeConnectAccounts, stripeConnectAccountsRelations, userCredits, userCreditsRelations, creditLedger, creditLedgerRelations, payouts, payoutsRelations, refundStatusEnum, refunds, refundsRelations, stripeWebhookEvents, invoiceLineItems, invoiceLineItemsRelations, clients, clientsRelations, jobs, jobsRelations, invoices, invoicesRelations, payments, paymentsRelations, bookingLinkStatusEnum, quoteModeEnum, intakeStatusEnum, bookingLinks, bookingLinksRelations, intakeSubmissions, intakeSubmissionsRelations, insertUserSchema, loginSchema, insertHomeSchema, insertAppointmentSchema, insertClientSchema, insertJobSchema, insertInvoiceSchema, insertPaymentSchema, insertProviderSchema, insertProviderPlanSchema, insertStripeConnectAccountSchema, insertInvoiceLineItemSchema, insertPayoutSchema, insertUserCreditsSchema, insertCreditLedgerSchema, insertBookingLinkSchema, insertIntakeSubmissionSchema, notificationChannelEnum, notificationDeliveryStatusEnum, pushTokens, notificationPreferences, providerMessageTemplates, notificationDeliveries, messageChannelEnum, messageStatusEnum, providerMessages, providerMessagesRelations, insertProviderMessageSchema, messageTemplates, messageTemplatesRelations, insertMessageTemplateSchema, leads, insertLeadSchema, insertNotificationPreferenceSchema, housefaxEntries, housefaxEntriesRelations, insertHousefaxEntrySchema, supportTickets, supportTicketsRelations, insertSupportTicketSchema;
 var init_schema = __esm({
   "shared/schema.ts"() {
     "use strict";
@@ -141,6 +147,9 @@ var init_schema = __esm({
       phone: text("phone"),
       avatarUrl: text("avatar_url"),
       isProvider: boolean("is_provider").default(false),
+      stripeCustomerId: text("stripe_customer_id"),
+      defaultPaymentMethodId: text("default_payment_method_id"),
+      tokenVersion: integer("token_version").notNull().default(0),
       createdAt: timestamp("created_at").defaultNow().notNull(),
       updatedAt: timestamp("updated_at").defaultNow().notNull()
     });
@@ -189,7 +198,8 @@ var init_schema = __esm({
     });
     homesRelations = relations(homes, ({ one, many }) => ({
       user: one(users, { fields: [homes.userId], references: [users.id] }),
-      appointments: many(appointments)
+      appointments: many(appointments),
+      housefaxEntries: many(housefaxEntries)
     }));
     serviceCategories = pgTable("service_categories", {
       id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -276,6 +286,13 @@ var init_schema = __esm({
       duration: integer("duration").default(60),
       isPublished: boolean("is_published").default(true),
       isAddon: boolean("is_addon").default(false),
+      isRecurring: boolean("is_recurring").default(false),
+      recurringFrequency: text("recurring_frequency"),
+      recurringPrice: decimal("recurring_price", { precision: 10, scale: 2 }),
+      intakeQuestionsJson: text("intake_questions_json"),
+      addOnsJson: text("add_ons_json"),
+      bookingMode: text("booking_mode").default("instant"),
+      aiPricingInsight: text("ai_pricing_insight"),
       createdAt: timestamp("created_at").defaultNow().notNull(),
       updatedAt: timestamp("updated_at").defaultNow().notNull()
     });
@@ -289,8 +306,8 @@ var init_schema = __esm({
     });
     appointments = pgTable("appointments", {
       id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-      userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-      homeId: varchar("home_id").notNull().references(() => homes.id, { onDelete: "cascade" }),
+      userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }),
+      homeId: varchar("home_id").references(() => homes.id, { onDelete: "cascade" }),
       providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
       serviceId: varchar("service_id").references(() => services.id, { onDelete: "set null" }),
       serviceName: text("service_name").notNull(),
@@ -299,7 +316,7 @@ var init_schema = __esm({
       urgency: urgencyEnum("urgency").default("flexible"),
       jobSize: jobSizeEnum("job_size").default("small"),
       scheduledDate: timestamp("scheduled_date").notNull(),
-      scheduledTime: text("scheduled_time").notNull(),
+      scheduledTime: text("scheduled_time"),
       status: appointmentStatusEnum("status").default("pending"),
       estimatedPrice: decimal("estimated_price", { precision: 10, scale: 2 }),
       finalPrice: decimal("final_price", { precision: 10, scale: 2 }),
@@ -481,6 +498,8 @@ var init_schema = __esm({
       state: text("state"),
       zip: text("zip"),
       notes: text("notes"),
+      stripeCustomerId: text("stripe_customer_id"),
+      stripeConnectCustomerId: text("stripe_connect_customer_id"),
       createdAt: timestamp("created_at").defaultNow().notNull(),
       updatedAt: timestamp("updated_at").defaultNow().notNull()
     });
@@ -492,7 +511,7 @@ var init_schema = __esm({
     jobs = pgTable("jobs", {
       id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
       providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
-      clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+      clientId: varchar("client_id").references(() => clients.id, { onDelete: "set null" }),
       appointmentId: varchar("appointment_id").references(() => appointments.id, { onDelete: "set null" }),
       serviceId: varchar("service_id").references(() => services.id, { onDelete: "set null" }),
       title: text("title").notNull(),
@@ -546,6 +565,7 @@ var init_schema = __esm({
       stripePaymentIntentId: text("stripe_payment_intent_id"),
       stripeCheckoutSessionId: text("stripe_checkout_session_id"),
       stripePaymentLinkId: text("stripe_payment_link_id"),
+      stripeInvoiceId: text("stripe_invoice_id"),
       hostedInvoiceUrl: text("hosted_invoice_url"),
       createdAt: timestamp("created_at").defaultNow().notNull(),
       updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -688,7 +708,9 @@ var init_schema = __esm({
       updatedAt: true
     });
     insertJobSchema = createInsertSchema(jobs, {
-      scheduledDate: z.coerce.date()
+      scheduledDate: z.coerce.date(),
+      // clientId is optional for provider-initiated jobs (no homeowner link yet)
+      clientId: z.string().optional()
     }).omit({
       id: true,
       createdAt: true,
@@ -866,6 +888,711 @@ var init_schema = __esm({
       createdAt: true,
       updatedAt: true
     });
+    housefaxEntries = pgTable("housefax_entries", {
+      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+      homeId: varchar("home_id").notNull().references(() => homes.id, { onDelete: "cascade" }),
+      appointmentId: varchar("appointment_id").references(() => appointments.id, { onDelete: "set null" }),
+      jobId: varchar("job_id").references(() => jobs.id, { onDelete: "set null" }),
+      serviceCategory: text("service_category").notNull().default("General"),
+      serviceName: text("service_name").notNull(),
+      providerId: varchar("provider_id").references(() => providers.id, { onDelete: "set null" }),
+      providerName: text("provider_name"),
+      completedAt: timestamp("completed_at").notNull(),
+      costCents: integer("cost_cents").default(0),
+      aiSummary: text("ai_summary"),
+      photos: json("photos").$type().default([]),
+      systemAffected: text("system_affected"),
+      notes: text("notes"),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    housefaxEntriesRelations = relations(housefaxEntries, ({ one }) => ({
+      home: one(homes, { fields: [housefaxEntries.homeId], references: [homes.id] }),
+      appointment: one(appointments, { fields: [housefaxEntries.appointmentId], references: [appointments.id] }),
+      job: one(jobs, { fields: [housefaxEntries.jobId], references: [jobs.id] }),
+      provider: one(providers, { fields: [housefaxEntries.providerId], references: [providers.id] })
+    }));
+    insertHousefaxEntrySchema = createInsertSchema(housefaxEntries).omit({
+      id: true,
+      createdAt: true
+    });
+    supportTickets = pgTable("support_tickets", {
+      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+      userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
+      name: text("name").notNull(),
+      email: text("email").notNull(),
+      category: text("category").notNull(),
+      subject: text("subject").notNull(),
+      message: text("message").notNull(),
+      status: text("status").notNull().default("open"),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    supportTicketsRelations = relations(supportTickets, ({ one }) => ({
+      user: one(users, { fields: [supportTickets.userId], references: [users.id] })
+    }));
+    insertSupportTicketSchema = createInsertSchema(supportTickets).omit({
+      id: true,
+      createdAt: true
+    });
+  }
+});
+
+// server/db.ts
+import { drizzle } from "drizzle-orm/node-postgres";
+import pg from "pg";
+var Pool, databaseUrl, isSupabase, pool, db;
+var init_db = __esm({
+  "server/db.ts"() {
+    "use strict";
+    init_schema();
+    ({ Pool } = pg);
+    databaseUrl = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
+    if (!databaseUrl) {
+      throw new Error(
+        "SUPABASE_DATABASE_URL or DATABASE_URL must be set. Did you forget to configure a database?"
+      );
+    }
+    isSupabase = databaseUrl.includes("supabase");
+    console.log(`[db] Connecting to ${isSupabase ? "Supabase" : "Replit PostgreSQL"}`);
+    pool = new Pool({
+      connectionString: databaseUrl,
+      // Supabase requires SSL; Replit's internal Postgres does not use SSL so we enable only when connecting to Supabase
+      ...isSupabase ? { ssl: { rejectUnauthorized: false } } : {}
+    });
+    db = drizzle(pool, { schema: schema_exports });
+  }
+});
+
+// server/stripeClient.ts
+var stripeClient_exports = {};
+__export(stripeClient_exports, {
+  getStripePublishableKey: () => getStripePublishableKey,
+  getStripeSecretKey: () => getStripeSecretKey,
+  getStripeSync: () => getStripeSync,
+  getUncachableStripeClient: () => getUncachableStripeClient
+});
+import Stripe from "stripe";
+async function getCredentials() {
+  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
+  const xReplitToken = process.env.REPL_IDENTITY ? "repl " + process.env.REPL_IDENTITY : process.env.WEB_REPL_RENEWAL ? "depl " + process.env.WEB_REPL_RENEWAL : null;
+  if (!xReplitToken) {
+    throw new Error("X_REPLIT_TOKEN not found for repl/depl");
+  }
+  const connectorName = "stripe";
+  const isProduction = process.env.REPLIT_DEPLOYMENT === "1";
+  const targetEnvironment = isProduction ? "production" : "development";
+  const url = new URL(`https://${hostname}/api/v2/connection`);
+  url.searchParams.set("include_secrets", "true");
+  url.searchParams.set("connector_names", connectorName);
+  url.searchParams.set("environment", targetEnvironment);
+  const response = await fetch(url.toString(), {
+    headers: {
+      "Accept": "application/json",
+      "X_REPLIT_TOKEN": xReplitToken
+    }
+  });
+  const data = await response.json();
+  connectionSettings = data.items?.[0];
+  if (!connectionSettings || (!connectionSettings.settings.publishable || !connectionSettings.settings.secret)) {
+    throw new Error(`Stripe ${targetEnvironment} connection not found`);
+  }
+  return {
+    publishableKey: connectionSettings.settings.publishable,
+    secretKey: connectionSettings.settings.secret
+  };
+}
+async function getUncachableStripeClient() {
+  const { secretKey } = await getCredentials();
+  return new Stripe(secretKey, {
+    apiVersion: "2025-11-17.clover"
+  });
+}
+async function getStripePublishableKey() {
+  const { publishableKey } = await getCredentials();
+  return publishableKey;
+}
+async function getStripeSecretKey() {
+  const { secretKey } = await getCredentials();
+  return secretKey;
+}
+async function getStripeSync() {
+  if (!stripeSync) {
+    const { StripeSync } = await import("stripe-replit-sync");
+    const secretKey = await getStripeSecretKey();
+    stripeSync = new StripeSync({
+      poolConfig: {
+        connectionString: process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL,
+        max: 2,
+        ssl: { rejectUnauthorized: false }
+      },
+      stripeSecretKey: secretKey
+    });
+  }
+  return stripeSync;
+}
+var connectionSettings, stripeSync;
+var init_stripeClient = __esm({
+  "server/stripeClient.ts"() {
+    "use strict";
+    stripeSync = null;
+  }
+});
+
+// server/emailService.ts
+var emailService_exports = {};
+__export(emailService_exports, {
+  sendBookingCancelledEmail: () => sendBookingCancelledEmail,
+  sendBookingConfirmationEmail: () => sendBookingConfirmationEmail,
+  sendBookingReminderEmail: () => sendBookingReminderEmail,
+  sendBookingRescheduledEmail: () => sendBookingRescheduledEmail,
+  sendEmailVerificationEmail: () => sendEmailVerificationEmail,
+  sendIntakeSubmissionNotification: () => sendIntakeSubmissionNotification,
+  sendInvoiceCreatedEmail: () => sendInvoiceCreatedEmail,
+  sendInvoiceEmail: () => sendInvoiceEmail,
+  sendInvoicePaidEmail: () => sendInvoicePaidEmail,
+  sendInvoiceReminderEmail: () => sendInvoiceReminderEmail,
+  sendJobStatusChangedEmail: () => sendJobStatusChangedEmail,
+  sendPasswordResetEmail: () => sendPasswordResetEmail,
+  sendPaymentFailedEmail: () => sendPaymentFailedEmail,
+  sendPaymentReceiptEmail: () => sendPaymentReceiptEmail,
+  sendProviderBookingNotificationEmail: () => sendProviderBookingNotificationEmail,
+  sendProviderClientMessage: () => sendProviderClientMessage,
+  sendProviderOnboardingCompleteEmail: () => sendProviderOnboardingCompleteEmail,
+  sendRebookingNudgeEmail: () => sendRebookingNudgeEmail,
+  sendReviewRequestEmail: () => sendReviewRequestEmail,
+  sendStripeConnectedEmail: () => sendStripeConnectedEmail,
+  sendStripeOnboardingNeededEmail: () => sendStripeOnboardingNeededEmail,
+  sendSupportTicketEmail: () => sendSupportTicketEmail,
+  sendWelcomeEmail: () => sendWelcomeEmail
+});
+import { Resend } from "resend";
+async function getCredentials2() {
+  const envApiKey = process.env.RESEND_API_KEY;
+  const envFromEmail = process.env.RESEND_FROM_EMAIL || "HomeBase <noreply@updates.homebaseproapp.com>";
+  if (envApiKey) {
+    return { apiKey: envApiKey, fromEmail: envFromEmail };
+  }
+  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
+  const xReplitToken = process.env.REPL_IDENTITY ? "repl " + process.env.REPL_IDENTITY : process.env.WEB_REPL_RENEWAL ? "depl " + process.env.WEB_REPL_RENEWAL : null;
+  if (hostname && xReplitToken) {
+    try {
+      connectionSettings2 = await fetch(
+        "https://" + hostname + "/api/v2/connection?include_secrets=true&connector_names=resend",
+        {
+          headers: {
+            "Accept": "application/json",
+            "X-Replit-Token": xReplitToken
+          }
+        }
+      ).then((res) => res.json()).then((data) => data.items?.[0]);
+      if (connectionSettings2?.settings?.api_key) {
+        return {
+          apiKey: connectionSettings2.settings.api_key,
+          fromEmail: connectionSettings2.settings.from_email || envFromEmail
+        };
+      }
+    } catch (e) {
+    }
+  }
+  throw new Error("Resend not configured - set RESEND_API_KEY secret or connect the Resend integration");
+}
+async function getResendClient() {
+  const { apiKey, fromEmail } = await getCredentials2();
+  return {
+    client: new Resend(apiKey),
+    fromEmail
+  };
+}
+function fmtUsd(amount) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
+}
+function buildEmailBase(title, body, ctaLabel, ctaUrl) {
+  const ctaHtml = ctaLabel && ctaUrl ? `<a href="${ctaUrl}" style="display:block;background:#38AE5F;color:#fff;text-align:center;padding:16px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;margin:24px 0;">${ctaLabel}</a>` : "";
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>${title}</title>
+</head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;margin:0;padding:0;background-color:#f3f4f6;">
+  <div style="max-width:600px;margin:0 auto;padding:40px 20px;">
+    <div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.08);">
+      <!-- Header -->
+      <div style="background:#38AE5F;padding:28px 32px;text-align:center;">
+        <div style="font-size:22px;font-weight:700;color:#fff;letter-spacing:-0.3px;">HomeBase</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:4px;">The smart way to manage home services</div>
+      </div>
+      <!-- Body -->
+      <div style="padding:32px;">
+        ${body}
+        ${ctaHtml}
+      </div>
+      <!-- Footer -->
+      <div style="background:#f9fafb;padding:20px 32px;text-align:center;border-top:1px solid #e5e7eb;">
+        <p style="color:#9ca3af;font-size:11px;margin:0 0 4px;">Sent via HomeBase &mdash; The smart way to manage home services</p>
+        <p style="color:#d1d5db;font-size:10px;margin:0;">You are receiving this because you have an account or transaction on HomeBase. <a href="#" style="color:#9ca3af;">Unsubscribe</a></p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+function infoRow(label, value) {
+  return `<div style="display:flex;justify-content:space-between;margin-bottom:10px;">
+    <span style="color:#6b7280;font-size:14px;">${label}</span>
+    <span style="color:#111827;font-weight:600;font-size:14px;">${value}</span>
+  </div>`;
+}
+function infoBox(rows) {
+  return `<div style="background:#f9fafb;border-radius:8px;padding:20px;margin-bottom:24px;">${rows}</div>`;
+}
+function greeting(name) {
+  return `<p style="color:#374151;font-size:16px;margin:0 0 20px;">Hi ${name},</p>`;
+}
+function paragraph(text2) {
+  return `<p style="color:#6b7280;font-size:14px;line-height:1.6;margin:0 0 20px;">${text2}</p>`;
+}
+function appDownloadSection() {
+  return `<div style="background:linear-gradient(135deg,#f0fdf4 0%,#dcfce7 100%);border-radius:8px;padding:20px;margin-top:24px;text-align:center;">
+    <p style="color:#166534;font-weight:600;margin:0 0 6px;font-size:14px;">Manage your home services with HomeBase</p>
+    <p style="color:#15803d;font-size:13px;margin:0 0 14px;">Track invoices, book services, and get instant quotes &mdash; all in one app.</p>
+    <div>
+      <a href="https://apps.apple.com/app/homebase" style="display:inline-block;background:#111827;color:#fff;padding:9px 18px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:500;margin:0 4px;">App Store</a>
+      <a href="https://play.google.com/store/apps/details?id=com.homebase" style="display:inline-block;background:#111827;color:#fff;padding:9px 18px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:500;margin:0 4px;">Google Play</a>
+    </div>
+  </div>`;
+}
+async function sendEmail(to, subject, html) {
+  try {
+    const { client, fromEmail } = await getResendClient();
+    const result = await client.emails.send({
+      from: fromEmail || "HomeBase <noreply@resend.dev>",
+      to,
+      subject,
+      html
+    });
+    if (result.error) {
+      console.error("Resend error:", result.error);
+      return { success: false, error: result.error.message };
+    }
+    return { success: true, messageId: result.data?.id };
+  } catch (err) {
+    console.error("sendEmail error:", err);
+    return { success: false, error: err.message || "Failed to send email" };
+  }
+}
+async function sendWelcomeEmail(to, name) {
+  const body = greeting(name) + paragraph("Welcome to HomeBase! We're thrilled to have you. HomeBase helps you manage your home services, track invoices, and connect with trusted providers &mdash; all in one place.") + `<h2 style="color:#111827;font-size:18px;margin:0 0 12px;">What you can do</h2><ul style="color:#6b7280;font-size:14px;line-height:1.8;padding-left:20px;margin:0 0 20px;">
+      <li>Book local service providers</li>
+      <li>Manage invoices and payments</li>
+      <li>Track your home maintenance history</li>
+      <li>Get smart reminders for recurring services</li>
+    </ul>` + appDownloadSection();
+  return sendEmail(to, "Welcome to HomeBase!", buildEmailBase("Welcome to HomeBase", body, "Open HomeBase", "https://homebaseproapp.com"));
+}
+async function sendPasswordResetEmail(to, name, resetUrl) {
+  const body = greeting(name) + paragraph("You requested a password reset for your HomeBase account. Click the button below to set a new password. This link expires in 1 hour.") + paragraph("If you did not request this, you can safely ignore this email. Your password will not change.");
+  return sendEmail(to, "Reset your HomeBase password", buildEmailBase("Password Reset", body, "Reset Password", resetUrl));
+}
+async function sendEmailVerificationEmail(to, name, verifyUrl) {
+  const body = greeting(name) + paragraph("Thanks for signing up! Please verify your email address to activate your HomeBase account.") + paragraph("This verification link expires in 24 hours.");
+  return sendEmail(to, "Verify your HomeBase email", buildEmailBase("Verify Email", body, "Verify Email Address", verifyUrl));
+}
+async function sendProviderOnboardingCompleteEmail(to, providerName) {
+  const body = greeting(providerName) + paragraph("Congratulations! Your HomeBase provider account is fully set up and active. You can now accept bookings, send invoices, and grow your business.") + `<div style="background:#f0fdf4;border-radius:8px;padding:20px;margin-bottom:20px;border-left:4px solid #38AE5F;">
+      <p style="color:#166534;font-weight:600;margin:0 0 6px;">You're ready to go</p>
+      <p style="color:#15803d;font-size:13px;margin:0;">Share your booking link, manage your schedule, and get paid faster with HomeBase.</p>
+    </div>` + appDownloadSection();
+  return sendEmail(to, "Your HomeBase provider account is ready", buildEmailBase("Provider Account Ready", body));
+}
+async function sendBookingConfirmationEmail(data) {
+  const priceRow = data.estimatedPrice ? infoRow("Est. Price", fmtUsd(data.estimatedPrice)) : "";
+  const body = greeting(data.clientName) + paragraph("Great news! Your service appointment has been confirmed. Here are your booking details:") + infoBox(
+    (data.confirmationNumber ? infoRow("Confirmation #", data.confirmationNumber) : "") + infoRow("Service", data.serviceName) + infoRow("Provider", data.providerName) + infoRow("Date", data.appointmentDate) + infoRow("Time", data.appointmentTime) + (data.address ? infoRow("Location", data.address) : "") + priceRow
+  ) + `<div style="background:#fffbeb;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #f59e0b;">
+      <p style="color:#92400e;font-size:13px;margin:0;"><strong>Need to reschedule?</strong> Contact ${data.providerName} at least 24 hours before your appointment.</p>
+    </div>` + appDownloadSection();
+  return sendEmail(
+    data.clientEmail,
+    `Booking Confirmed: ${data.serviceName} with ${data.providerName}`,
+    buildEmailBase("Booking Confirmed", body)
+  );
+}
+async function sendBookingReminderEmail(data, hoursUntil) {
+  const label = hoursUntil <= 2 ? "in 2 hours" : "tomorrow";
+  const body = greeting(data.clientName) + paragraph(`This is a reminder that your appointment is coming up ${label}. Here are the details:`) + infoBox(
+    infoRow("Service", data.serviceName) + infoRow("Provider", data.providerName) + infoRow("Date", data.appointmentDate) + infoRow("Time", data.appointmentTime) + (data.address ? infoRow("Location", data.address) : "")
+  ) + appDownloadSection();
+  return sendEmail(
+    data.clientEmail,
+    `Reminder: ${data.serviceName} with ${data.providerName} ${label}`,
+    buildEmailBase("Appointment Reminder", body)
+  );
+}
+async function sendBookingCancelledEmail(data, reason) {
+  const body = greeting(data.clientName) + paragraph(`Your ${data.serviceName} appointment with ${data.providerName} has been cancelled.`) + infoBox(
+    infoRow("Service", data.serviceName) + infoRow("Provider", data.providerName) + infoRow("Date", data.appointmentDate) + infoRow("Time", data.appointmentTime) + (reason ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb;"><span style="color:#6b7280;font-size:14px;">Reason: </span><span style="color:#111827;font-size:14px;">${reason}</span></div>` : "")
+  ) + paragraph("If you would like to rebook, please contact the provider or visit HomeBase to schedule a new appointment.") + appDownloadSection();
+  return sendEmail(
+    data.clientEmail,
+    `Booking Cancelled: ${data.serviceName} with ${data.providerName}`,
+    buildEmailBase("Booking Cancelled", body)
+  );
+}
+async function sendBookingRescheduledEmail(data, oldDate, oldTime) {
+  const body = greeting(data.clientName) + paragraph(`Your ${data.serviceName} appointment with ${data.providerName} has been rescheduled.`) + `<p style="color:#6b7280;font-size:13px;text-decoration:line-through;margin:0 0 4px;">Previously: ${oldDate} at ${oldTime}</p>` + infoBox(
+    `<p style="color:#38AE5F;font-weight:600;font-size:13px;margin:0 0 12px;">New schedule</p>` + infoRow("Service", data.serviceName) + infoRow("Provider", data.providerName) + infoRow("Date", data.appointmentDate) + infoRow("Time", data.appointmentTime) + (data.address ? infoRow("Location", data.address) : "")
+  ) + appDownloadSection();
+  return sendEmail(
+    data.clientEmail,
+    `Rescheduled: ${data.serviceName} with ${data.providerName}`,
+    buildEmailBase("Appointment Rescheduled", body)
+  );
+}
+async function sendInvoiceEmail(data) {
+  const lineItemsHtml = data.lineItems.map((item) => `
+    <tr>
+      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;color:#374151;font-size:13px;">${item.description}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:center;color:#374151;font-size:13px;">${item.quantity}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;color:#374151;font-size:13px;">$${item.unitPrice.toFixed(2)}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;color:#374151;font-size:13px;">$${item.total.toFixed(2)}</td>
+    </tr>`).join("");
+  const body = greeting(data.clientName) + paragraph(`You have received a new invoice from <strong>${data.providerName}</strong>. Please find the details below.`) + infoBox(
+    infoRow("Invoice #", data.invoiceNumber) + infoRow("Due Date", data.dueDate) + `<div style="display:flex;justify-content:space-between;padding-top:12px;border-top:1px solid #e5e7eb;">
+        <span style="color:#6b7280;font-size:14px;">Total Amount</span>
+        <span style="color:#38AE5F;font-weight:700;font-size:20px;">${fmtUsd(data.amount)}</span>
+      </div>`
+  ) + `<table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+      <thead>
+        <tr style="background:#f3f4f6;">
+          <th style="padding:10px 12px;text-align:left;color:#374151;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Description</th>
+          <th style="padding:10px 12px;text-align:center;color:#374151;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Qty</th>
+          <th style="padding:10px 12px;text-align:right;color:#374151;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Price</th>
+          <th style="padding:10px 12px;text-align:right;color:#374151;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Total</th>
+        </tr>
+      </thead>
+      <tbody>${lineItemsHtml}</tbody>
+    </table>` + (data.paymentLink ? `<a href="${data.paymentLink}" style="display:block;background:#38AE5F;color:#fff;text-align:center;padding:16px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;margin-bottom:24px;">Pay Now</a>` : "") + appDownloadSection();
+  return sendEmail(
+    data.clientEmail,
+    `Invoice ${data.invoiceNumber} from ${data.providerName} &ndash; ${fmtUsd(data.amount)}`,
+    buildEmailBase(`Invoice from ${data.providerName}`, body)
+  );
+}
+async function sendInvoiceCreatedEmail(data) {
+  return sendInvoiceEmail(data);
+}
+async function sendInvoiceReminderEmail(data) {
+  const isOverdue = (data.daysOverdue ?? 0) > 0;
+  const urgencyText = isOverdue ? `Your invoice is <strong>${data.daysOverdue} day${data.daysOverdue === 1 ? "" : "s"} overdue</strong>. Please arrange payment as soon as possible to avoid any service interruptions.` : `Your invoice is due in <strong>${data.daysUntilDue} day${data.daysUntilDue === 1 ? "" : "s"}</strong>. Please arrange payment before the due date.`;
+  const body = greeting(data.clientName) + `<div style="background:${isOverdue ? "#fef2f2" : "#fffbeb"};border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid ${isOverdue ? "#ef4444" : "#f59e0b"};">
+      <p style="color:${isOverdue ? "#991b1b" : "#92400e"};font-size:14px;margin:0;">${urgencyText}</p>
+    </div>` + infoBox(
+    infoRow("Invoice #", data.invoiceNumber) + infoRow("Provider", data.providerName) + infoRow("Due Date", data.dueDate) + `<div style="display:flex;justify-content:space-between;padding-top:12px;border-top:1px solid #e5e7eb;">
+        <span style="color:#6b7280;font-size:14px;">Amount Due</span>
+        <span style="color:${isOverdue ? "#ef4444" : "#38AE5F"};font-weight:700;font-size:20px;">${fmtUsd(data.amount)}</span>
+      </div>`
+  ) + (data.paymentLink ? `<a href="${data.paymentLink}" style="display:block;background:#38AE5F;color:#fff;text-align:center;padding:16px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;margin-bottom:24px;">Pay Now</a>` : "") + appDownloadSection();
+  const subject = isOverdue ? `Overdue: Invoice ${data.invoiceNumber} from ${data.providerName}` : `Reminder: Invoice ${data.invoiceNumber} due in ${data.daysUntilDue} day${data.daysUntilDue === 1 ? "" : "s"}`;
+  return sendEmail(data.clientEmail, subject, buildEmailBase("Invoice Reminder", body));
+}
+async function sendPaymentReceiptEmail(data) {
+  const body = greeting(data.clientName) + `<div style="text-align:center;margin-bottom:24px;">
+      <div style="width:60px;height:60px;background:#f0fdf4;border-radius:50%;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;">
+        <div style="font-size:28px;color:#38AE5F;">&#10003;</div>
+      </div>
+      <p style="color:#166534;font-weight:600;margin:0;">Payment confirmed</p>
+    </div>` + paragraph("Thank you for your payment! This email confirms we've received your payment for the following:") + infoBox(
+    infoRow("Invoice #", data.invoiceNumber) + infoRow("Payment Date", data.paymentDate) + infoRow("Provider", data.providerName) + (data.paymentMethod ? infoRow("Payment Method", data.paymentMethod) : "") + `<div style="display:flex;justify-content:space-between;padding-top:12px;border-top:1px solid #e5e7eb;">
+        <span style="color:#6b7280;font-size:14px;">Amount Paid</span>
+        <span style="color:#38AE5F;font-weight:700;font-size:20px;">${fmtUsd(data.amount)}</span>
+      </div>`
+  ) + paragraph(`Keep this email as your receipt. If you have any questions about this payment, please contact ${data.providerName} directly.`) + appDownloadSection();
+  return sendEmail(
+    data.clientEmail,
+    `Payment Receipt &ndash; ${fmtUsd(data.amount)} to ${data.providerName}`,
+    buildEmailBase("Payment Receipt", body)
+  );
+}
+async function sendInvoicePaidEmail(data) {
+  return sendPaymentReceiptEmail(data);
+}
+async function sendPaymentFailedEmail(data) {
+  const body = greeting(data.clientName) + `<div style="background:#fef2f2;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #ef4444;">
+      <p style="color:#991b1b;font-size:14px;margin:0;"><strong>Payment failed.</strong> We were unable to process your payment for invoice ${data.invoiceNumber}.</p>
+    </div>` + infoBox(
+    infoRow("Invoice #", data.invoiceNumber) + infoRow("Provider", data.providerName) + `<div style="display:flex;justify-content:space-between;padding-top:12px;border-top:1px solid #e5e7eb;">
+        <span style="color:#6b7280;font-size:14px;">Amount Due</span>
+        <span style="color:#ef4444;font-weight:700;font-size:20px;">${fmtUsd(data.amount)}</span>
+      </div>`
+  ) + paragraph("Please update your payment method and try again. If you need assistance, contact your service provider directly.") + (data.paymentLink ? `<a href="${data.paymentLink}" style="display:block;background:#38AE5F;color:#fff;text-align:center;padding:16px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;margin-bottom:24px;">Retry Payment</a>` : "") + appDownloadSection();
+  return sendEmail(
+    data.clientEmail,
+    `Payment Failed: Invoice ${data.invoiceNumber} from ${data.providerName}`,
+    buildEmailBase("Payment Failed", body)
+  );
+}
+async function sendReviewRequestEmail(data) {
+  const body = greeting(data.clientName) + paragraph(`Thank you for choosing ${data.providerName} for your ${data.serviceName}! We hope everything went smoothly. Your feedback helps other homeowners find great service providers.`) + paragraph("Would you mind leaving a quick review? It only takes a minute and means a lot to your provider.") + appDownloadSection();
+  return sendEmail(
+    data.clientEmail,
+    `How did your ${data.serviceName} go? Leave a review for ${data.providerName}`,
+    buildEmailBase("Leave a Review", body, data.reviewUrl ? "Leave a Review" : void 0, data.reviewUrl)
+  );
+}
+async function sendStripeOnboardingNeededEmail(to, providerName, onboardingUrl) {
+  const body = greeting(providerName) + paragraph("To start accepting online payments through HomeBase, you need to complete your Stripe payout account setup. This takes about 5 minutes.") + `<ul style="color:#6b7280;font-size:14px;line-height:1.8;padding-left:20px;margin:0 0 20px;">
+      <li>Accept card payments from clients</li>
+      <li>Receive automatic payouts to your bank account</li>
+      <li>Issue refunds directly from HomeBase</li>
+    </ul>`;
+  return sendEmail(to, "Complete your payout setup to get paid faster", buildEmailBase("Set Up Payouts", body, "Set Up Stripe Payouts", onboardingUrl));
+}
+async function sendStripeConnectedEmail(to, providerName) {
+  const body = greeting(providerName) + paragraph("Your Stripe payout account has been successfully connected to HomeBase. You can now accept online payments from clients and receive payouts directly to your bank account.") + `<div style="background:#f0fdf4;border-radius:8px;padding:16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
+      <p style="color:#166534;font-weight:600;margin:0;">Payments are now active</p>
+      <p style="color:#15803d;font-size:13px;margin:6px 0 0;">Send invoices with &ldquo;Pay Now&rdquo; links and get paid faster.</p>
+    </div>` + appDownloadSection();
+  return sendEmail(to, "Your Stripe payout account is connected", buildEmailBase("Payouts Connected", body));
+}
+async function sendIntakeSubmissionNotification(data) {
+  const body = greeting(data.providerName) + paragraph(`You've received a new service request via ${data.bookingLinkName || "your booking page"}! Here are the details:`) + infoBox(
+    `<div style="margin-bottom:14px;">
+        <span style="color:#6b7280;font-size:11px;text-transform:uppercase;font-weight:500;">Client</span>
+        <p style="color:#111827;font-weight:600;margin:3px 0 0;font-size:15px;">${data.clientName}</p>
+      </div>` + (data.clientEmail ? `<div style="margin-bottom:14px;"><span style="color:#6b7280;font-size:11px;text-transform:uppercase;font-weight:500;">Email</span><p style="color:#111827;margin:3px 0 0;"><a href="mailto:${data.clientEmail}" style="color:#38AE5F;">${data.clientEmail}</a></p></div>` : "") + (data.clientPhone ? `<div style="margin-bottom:14px;"><span style="color:#6b7280;font-size:11px;text-transform:uppercase;font-weight:500;">Phone</span><p style="color:#111827;margin:3px 0 0;"><a href="tel:${data.clientPhone}" style="color:#38AE5F;">${data.clientPhone}</a></p></div>` : "") + (data.address ? `<div style="margin-bottom:14px;"><span style="color:#6b7280;font-size:11px;text-transform:uppercase;font-weight:500;">Address</span><p style="color:#111827;margin:3px 0 0;">${data.address}</p></div>` : "") + `<div><span style="color:#6b7280;font-size:11px;text-transform:uppercase;font-weight:500;">Problem Description</span><p style="color:#111827;margin:3px 0 0;line-height:1.5;">${data.problemDescription}</p></div>`
+  ) + paragraph("Respond quickly to increase your chances of winning this job.");
+  return sendEmail(
+    data.providerEmail,
+    `New Lead: ${data.clientName} &ndash; ${data.problemDescription.substring(0, 50)}${data.problemDescription.length > 50 ? "..." : ""}`,
+    buildEmailBase("New Lead Received", body, "View in HomeBase", "https://homebaseproapp.com")
+  );
+}
+async function sendProviderBookingNotificationEmail(data) {
+  const body = greeting(data.providerName) + paragraph(`${data.clientName} has booked a ${data.serviceName} with you. Here are the details:`) + infoBox(
+    infoRow("Client", data.clientName) + infoRow("Service", data.serviceName) + infoRow("Date", data.appointmentDate) + infoRow("Time", data.appointmentTime) + (data.address ? infoRow("Location", data.address) : "")
+  );
+  return sendEmail(
+    data.providerEmail,
+    `New Booking: ${data.serviceName} with ${data.clientName}`,
+    buildEmailBase("New Booking", body, "View in HomeBase", "https://homebaseproapp.com")
+  );
+}
+async function sendJobStatusChangedEmail(data) {
+  const statusLabel = {
+    scheduled: "Scheduled",
+    in_progress: "In Progress",
+    completed: "Completed",
+    cancelled: "Cancelled",
+    on_hold: "On Hold"
+  };
+  const label = statusLabel[data.newStatus] ?? data.newStatus;
+  const body = greeting(data.clientName) + paragraph(`We wanted to let you know that the status of your ${data.serviceName} job with ${data.providerName} has been updated to <strong>${label}</strong>.`) + (data.scheduledDate || data.notes ? infoBox(
+    (data.scheduledDate ? infoRow("Scheduled Date", data.scheduledDate) : "") + (data.notes ? infoRow("Notes", data.notes) : "")
+  ) : "") + paragraph(`If you have any questions, please reach out through the HomeBase app.`);
+  return sendEmail(
+    data.clientEmail,
+    `Job Update: ${data.serviceName} is now ${label}`,
+    buildEmailBase("Job Status Update", body, "View in HomeBase", "https://homebaseproapp.com")
+  );
+}
+async function sendRebookingNudgeEmail(data) {
+  const body = greeting(data.clientName) + paragraph(`Great news \u2014 your ${data.serviceName} with ${data.providerName} is complete! Ready to schedule your next visit?`) + paragraph(`Keeping up with regular maintenance can save you money in the long run. Book ${data.providerName} again in just a few taps.`);
+  return sendEmail(
+    data.clientEmail,
+    `Your service is complete \u2014 book ${data.providerName} again?`,
+    buildEmailBase("Service Complete", body, "Book Again", data.rebookLink || "https://homebaseproapp.com")
+  );
+}
+async function sendSupportTicketEmail(data) {
+  try {
+    const { client, fromEmail } = await getResendClient();
+    const body = greeting(data.name) + paragraph(`Thank you for reaching out to HomeBase support. We've received your message and will respond within 24 hours. Here's a copy of your submission:`) + infoBox(
+      infoRow("Ticket ID", data.ticketId.slice(0, 8).toUpperCase()) + infoRow("Name", data.name) + infoRow("Email", data.email) + infoRow("Category", data.category) + infoRow("Subject", data.subject) + `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb;">
+          <span style="color:#6b7280;font-size:14px;">Message</span>
+          <p style="color:#111827;font-size:14px;line-height:1.6;margin:6px 0 0;">${data.message.replace(/\n/g, "<br/>")}</p>
+        </div>`
+    ) + paragraph('Our support team will review your request and reply to this email address. If your issue is urgent, please include "URGENT" in any follow-up replies.') + `<div style="background:#f0fdf4;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
+        <p style="color:#166534;font-size:13px;margin:0;"><strong>Support email:</strong> support@homebaseproapp.com</p>
+      </div>`;
+    const html = buildEmailBase("Support Request Received", body);
+    const result = await client.emails.send({
+      from: fromEmail || "HomeBase <noreply@resend.dev>",
+      to: "support@homebaseproapp.com",
+      cc: data.email,
+      subject: `[Support #${data.ticketId.slice(0, 8).toUpperCase()}] ${data.category}: ${data.subject}`,
+      html
+    });
+    if (result.error) {
+      console.error("Resend error:", result.error);
+      return { success: false, error: result.error.message };
+    }
+    return { success: true, messageId: result.data?.id };
+  } catch (err) {
+    console.error("sendSupportTicketEmail error:", err);
+    return { success: false, error: err.message || "Failed to send support email" };
+  }
+}
+async function sendProviderClientMessage(data) {
+  try {
+    const { client, fromEmail } = await getResendClient();
+    const bodyHtml = data.body.replace(/\n/g, "<br/>");
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f3f4f6;">
+        <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+          <div style="background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+            <div style="background: #38AE5F; padding: 32px; text-align: center;">
+              <h1 style="color: white; margin: 0; font-size: 22px;">${data.providerName}</h1>
+              <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px;">Sent via HomeBase</p>
+            </div>
+
+            <div style="padding: 32px;">
+              <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">
+                Hi ${data.clientName},
+              </p>
+
+              <div style="color: #374151; font-size: 15px; line-height: 1.7; margin-bottom: 24px;">
+                ${bodyHtml}
+              </div>
+
+              <div style="border-top: 1px solid #e5e7eb; padding-top: 20px; margin-top: 24px;">
+                <p style="color: #6b7280; font-size: 13px; margin: 0;">
+                  This message was sent to you by <strong>${data.providerName}</strong> through HomeBase. To reply, simply respond to this email.
+                </p>
+              </div>
+            </div>
+
+            <div style="background: #f9fafb; padding: 16px; text-align: center; border-top: 1px solid #e5e7eb;">
+              <p style="color: #9ca3af; font-size: 11px; margin: 0;">
+                Powered by HomeBase &mdash; The smart way to manage home services
+              </p>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+    const result = await client.emails.send({
+      from: fromEmail || "HomeBase <noreply@resend.dev>",
+      to: data.clientEmail,
+      subject: data.subject || `Message from ${data.providerName}`,
+      html
+    });
+    if (result.error) {
+      console.error("Resend error:", result.error);
+      return { success: false, error: result.error.message };
+    }
+    return { success: true, messageId: result.data?.id };
+  } catch (error) {
+    console.error("Send provider client message error:", error);
+    return { success: false, error: error.message || "Failed to send message" };
+  }
+}
+var connectionSettings2;
+var init_emailService = __esm({
+  "server/emailService.ts"() {
+    "use strict";
+  }
+});
+
+// server/auth.ts
+var auth_exports = {};
+__export(auth_exports, {
+  JWT_SECRET: () => JWT_SECRET,
+  authenticateJWT: () => authenticateJWT,
+  generateToken: () => generateToken,
+  verifyToken: () => verifyToken
+});
+import jwt from "jsonwebtoken";
+import { eq as eq4 } from "drizzle-orm";
+function generateToken(userId, role, tokenVersion) {
+  return jwt.sign({ userId, role, tv: tokenVersion }, JWT_SECRET, { expiresIn: "7d" });
+}
+function verifyToken(token) {
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    return payload;
+  } catch {
+    return null;
+  }
+}
+var IS_PROD, JWT_SECRET, authenticateJWT;
+var init_auth = __esm({
+  "server/auth.ts"() {
+    "use strict";
+    init_db();
+    init_schema();
+    IS_PROD = process.env.NODE_ENV === "production";
+    if (!process.env.JWT_SECRET) {
+      if (IS_PROD) {
+        console.error(
+          "FATAL: JWT_SECRET environment variable is not set in production. Refusing to start \u2014 tokens would be forgeable with a known secret."
+        );
+        process.exit(1);
+      }
+      console.warn("[auth] JWT_SECRET not set \u2014 using dev fallback. DO NOT use in production.");
+    }
+    JWT_SECRET = process.env.JWT_SECRET || "homebase-jwt-secret-dev-only";
+    authenticateJWT = async (req, res, next) => {
+      const authHeader = req.headers["authorization"];
+      const raw = Array.isArray(authHeader) ? authHeader[0] : authHeader;
+      const headerToken = raw?.startsWith("Bearer ") ? raw.slice(7) : void 0;
+      const cookieToken = req.cookies?.token;
+      const token = headerToken || cookieToken;
+      if (!token) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      const payload = verifyToken(token);
+      if (!payload) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      try {
+        const [user] = await db.select({ tokenVersion: users.tokenVersion }).from(users).where(eq4(users.id, payload.userId));
+        if (!user) {
+          res.status(401).json({ error: "Unauthorized" });
+          return;
+        }
+        const claimedVersion = payload.tv ?? 0;
+        if (user.tokenVersion !== claimedVersion) {
+          res.status(401).json({ error: "Token revoked" });
+          return;
+        }
+      } catch (err) {
+        console.error("[auth] Token version check failed:", err);
+        res.status(500).json({ error: "Authentication error" });
+        return;
+      }
+      req.authenticatedUserId = payload.userId;
+      next();
+    };
+  }
+});
+
+// server/lib/supabase.ts
+var supabase_exports = {};
+__export(supabase_exports, {
+  default: () => supabase_default,
+  supabase: () => supabase
+});
+import { createClient } from "@supabase/supabase-js";
+var supabaseUrl, supabaseKey, supabase, supabase_default;
+var init_supabase = __esm({
+  "server/lib/supabase.ts"() {
+    "use strict";
+    supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+    supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SECRET_KEY;
+    if (!supabaseUrl) throw new Error("SUPABASE_URL environment variable is not set");
+    if (!supabaseKey) throw new Error("SUPABASE_SERVICE_KEY environment variable is not set");
+    supabase = createClient(supabaseUrl, supabaseKey);
+    supabase_default = supabase;
   }
 });
 
@@ -874,10 +1601,14 @@ var bookingPage_exports = {};
 __export(bookingPage_exports, {
   renderBookingPage: () => renderBookingPage
 });
-import { eq as eq5, and as and5, desc as desc3 } from "drizzle-orm";
+import { eq as eq6, and as and5, desc as desc3 } from "drizzle-orm";
 function escapeHtml(str) {
   if (!str) return "";
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function stripEmoji(str) {
+  if (!str) return "";
+  return str.replace(/[\u{1F300}-\u{1F9FF}]/gu, "").replace(/[\u{2600}-\u{26FF}]/gu, "").replace(/[\u{2700}-\u{27BF}]/gu, "").replace(/[\u{FE00}-\u{FE0F}]/gu, "").replace(/[\u{1F000}-\u{1FFFF}]/gu, "").trim();
 }
 function safeJsonInScript(value) {
   return JSON.stringify(value).replace(/<\/script/gi, "<\\/script");
@@ -943,21 +1674,21 @@ function errorPage(status, title, message) {
   return { html, status };
 }
 async function renderBookingPage(slug, db2) {
-  const [link] = await db2.select().from(bookingLinks).where(eq5(bookingLinks.slug, slug)).limit(1);
+  const [link] = await db2.select().from(bookingLinks).where(eq6(bookingLinks.slug, slug)).limit(1);
   if (!link) {
     return errorPage(404, "Provider not found", "This booking page does not exist. Please check the link and try again.");
   }
   if (link.isActive === false || link.status !== "active") {
     return errorPage(404, "Booking page unavailable", "This booking page is currently unavailable. Please contact the provider directly.");
   }
-  const [provider] = await db2.select().from(providers).where(eq5(providers.id, link.providerId)).limit(1);
-  if (!provider || provider.isPublic === false) {
+  const [provider] = await db2.select().from(providers).where(eq6(providers.id, link.providerId)).limit(1);
+  if (!provider) {
     return errorPage(404, "Provider not found", "The provider associated with this booking page could not be found.");
   }
   const customServices = await db2.select().from(providerCustomServices).where(
     and5(
-      eq5(providerCustomServices.providerId, provider.id),
-      eq5(providerCustomServices.isPublished, true)
+      eq6(providerCustomServices.providerId, provider.id),
+      eq6(providerCustomServices.isPublished, true)
     )
   );
   const catalogServices = await db2.select({
@@ -967,10 +1698,10 @@ async function renderBookingPage(slug, db2) {
     basePrice: services.basePrice,
     price: providerServices.price,
     providerServiceId: providerServices.id
-  }).from(providerServices).innerJoin(services, eq5(providerServices.serviceId, services.id)).where(
+  }).from(providerServices).innerJoin(services, eq6(providerServices.serviceId, services.id)).where(
     and5(
-      eq5(providerServices.providerId, provider.id),
-      eq5(services.isPublic, true)
+      eq6(providerServices.providerId, provider.id),
+      eq6(services.isPublic, true)
     )
   );
   const recentReviews = await db2.select({
@@ -979,7 +1710,7 @@ async function renderBookingPage(slug, db2) {
     comment: reviews.comment,
     createdAt: reviews.createdAt,
     reviewerFirstName: users.firstName
-  }).from(reviews).leftJoin(users, eq5(reviews.userId, users.id)).where(eq5(reviews.providerId, provider.id)).orderBy(desc3(reviews.createdAt)).limit(5);
+  }).from(reviews).leftJoin(users, eq6(reviews.userId, users.id)).where(eq6(reviews.providerId, provider.id)).orderBy(desc3(reviews.createdAt)).limit(5);
   const showPricing = link.showPricing !== false;
   const businessName = escapeHtml(provider.businessName ?? "Your Provider");
   const pageTitle = link.customTitle ? escapeHtml(link.customTitle) : `Book with ${businessName}`;
@@ -987,16 +1718,21 @@ async function renderBookingPage(slug, db2) {
   const avatarUrl = escapeHtml(provider.avatarUrl ?? "");
   const rating = provider.averageRating ?? provider.rating ?? 0;
   const reviewCount = provider.reviewCount ?? 0;
+  const serviceAreaText = provider.serviceArea ? escapeHtml(stripEmoji(provider.serviceArea)) : "";
   const serviceOptions = [
     ...customServices.map((s) => ({
       id: `custom_${s.id}`,
       name: s.name ?? "Service",
-      price: s.basePrice != null ? String(s.basePrice) : s.priceFrom != null ? String(s.priceFrom) : null
+      price: s.basePrice != null ? String(s.basePrice) : s.priceFrom != null ? String(s.priceFrom) : null,
+      bookingMode: s.bookingMode ?? null,
+      intakeQuestionsJson: s.intakeQuestionsJson ?? null
     })),
     ...catalogServices.map((s) => ({
       id: `catalog_${s.id}`,
       name: s.name ?? "Service",
-      price: s.price != null ? String(s.price) : s.basePrice != null ? String(s.basePrice) : null
+      price: s.price != null ? String(s.price) : s.basePrice != null ? String(s.basePrice) : null,
+      bookingMode: null,
+      intakeQuestionsJson: null
     }))
   ];
   const allServices = [
@@ -1067,14 +1803,14 @@ async function renderBookingPage(slug, db2) {
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg: #0a0f1e;
-      --accent: #6C63FF;
-      --accent-hover: #5a52e0;
-      --glass-bg: rgba(255,255,255,0.06);
-      --glass-border: rgba(255,255,255,0.12);
-      --text: #ffffff;
-      --text-muted: rgba(255,255,255,0.6);
-      --text-dim: rgba(255,255,255,0.35);
+      --bg: #F2F2F7;
+      --accent: #38AE5F;
+      --accent-hover: #2d9151;
+      --glass-bg: #FFFFFF;
+      --glass-border: rgba(0,0,0,0.08);
+      --text: #111111;
+      --text-muted: #6B6B6B;
+      --text-dim: #ADADAD;
       --radius: 16px;
       --radius-sm: 10px;
     }
@@ -1114,7 +1850,7 @@ async function renderBookingPage(slug, db2) {
       overflow: hidden;
       margin: 0 auto 16px;
       border: 3px solid var(--accent);
-      background: rgba(108,99,255,0.2);
+      background: rgba(56,174,95,0.1);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1243,7 +1979,7 @@ async function renderBookingPage(slug, db2) {
     }
 
     input, select, textarea {
-      background: rgba(255,255,255,0.07);
+      background: rgba(0,0,0,0.04);
       border: 1px solid var(--glass-border);
       border-radius: var(--radius-sm);
       color: var(--text);
@@ -1258,13 +1994,13 @@ async function renderBookingPage(slug, db2) {
     }
 
     select {
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23ffffff80' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C%2Fsvg%3E");
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b6b6b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C%2Fsvg%3E");
       background-repeat: no-repeat;
       background-position: right 14px center;
       padding-right: 36px;
     }
 
-    select option { background: #1a2040; color: #fff; }
+    select option { background: #ffffff; color: #111111; }
 
     textarea { resize: vertical; min-height: 90px; }
 
@@ -1330,7 +2066,7 @@ async function renderBookingPage(slug, db2) {
       width: 64px;
       height: 64px;
       border-radius: 50%;
-      background: rgba(108,99,255,0.2);
+      background: rgba(56,174,95,0.12);
       border: 2px solid var(--accent);
       display: flex;
       align-items: center;
@@ -1351,7 +2087,7 @@ async function renderBookingPage(slug, db2) {
     }
 
     .summary-box {
-      background: rgba(255,255,255,0.04);
+      background: rgba(0,0,0,0.03);
       border: 1px solid var(--glass-border);
       border-radius: var(--radius-sm);
       padding: 16px;
@@ -1372,8 +2108,8 @@ async function renderBookingPage(slug, db2) {
     .app-cta {
       margin-top: 24px;
       padding: 14px 20px;
-      background: rgba(108,99,255,0.15);
-      border: 1px solid rgba(108,99,255,0.3);
+      background: rgba(56,174,95,0.07);
+      border: 1px solid rgba(56,174,95,0.2);
       border-radius: var(--radius-sm);
     }
 
@@ -1431,6 +2167,52 @@ async function renderBookingPage(slug, db2) {
       line-height: 1.5;
     }
 
+    .intake-question-group {
+      margin-bottom: 16px;
+    }
+    .intake-question-group label {
+      display: block;
+      font-size: 0.87rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+    .intake-question-group input,
+    .intake-question-group textarea {
+      width: 100%;
+    }
+    .intake-options {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .intake-option-btn {
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid var(--glass-border);
+      background: var(--glass-bg);
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      color: var(--text-muted);
+    }
+    .intake-option-btn.selected {
+      background: rgba(56,174,95,0.12);
+      border-color: var(--accent);
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .quote-only-banner {
+      background: rgba(175,82,222,0.1);
+      border: 1px solid rgba(175,82,222,0.25);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      font-size: 0.9rem;
+      color: #AF52DE;
+      font-weight: 600;
+    }
+
     .footer {
       text-align: center;
       padding: 32px 0 0;
@@ -1444,6 +2226,15 @@ async function renderBookingPage(slug, db2) {
     }
 
     .footer a:hover { text-decoration: underline; }
+
+    .service-area {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 8px;
+    }
   </style>
 </head>
 <body>
@@ -1463,6 +2254,7 @@ async function renderBookingPage(slug, db2) {
         <span class="rating-score">${Number(rating).toFixed(1)}</span>
         <span class="rating-count">(${reviewCount} review${reviewCount !== 1 ? "s" : ""})</span>
       </div>` : ""}
+      ${serviceAreaText ? `<div class="service-area">Serving ${serviceAreaText}</div>` : ""}
     </div>
 
     <!-- Services Section -->
@@ -1514,6 +2306,7 @@ async function renderBookingPage(slug, db2) {
             </select>
             <span class="field-error" id="preferredTime-error">Please select a time.</span>
           </div>
+          <div id="intake-questions-container" style="display:none; grid-column: 1/-1;"></div>
           <div class="form-group full-width">
             <label for="notes">Notes</label>
             <textarea id="notes" name="notes" placeholder="Describe what you need help with..."></textarea>
@@ -1559,9 +2352,101 @@ async function renderBookingPage(slug, db2) {
       serviceOptions.forEach(function(s) {
         var opt = document.createElement('option');
         opt.value = s.id;
-        opt.textContent = s.name + (showPricing && s.price ? ' \u2014 $' + s.price : '');
+        opt.textContent = s.name + (showPricing && s.price && s.bookingMode !== 'quote_only' ? ' \u2014 $' + s.price : '');
         serviceSelect.appendChild(opt);
       });
+
+      // Handle service selection: show intake questions and update CTA
+      var intakeAnswers = {};
+      function renderIntakeQuestions() {
+        var selectedId = serviceSelect.value;
+        var svc = serviceOptions.find(function(s) { return s.id === selectedId; });
+        var container = document.getElementById('intake-questions-container');
+        var btn = document.getElementById('submit-btn');
+
+        // Remove any existing quote-only banner
+        var existingBanner = document.getElementById('quote-only-banner');
+        if (existingBanner) existingBanner.remove();
+
+        intakeAnswers = {};
+        container.innerHTML = '';
+
+        if (!svc) {
+          container.style.display = 'none';
+          btn.textContent = 'Request Appointment';
+          btn.style.background = '';
+          return;
+        }
+
+        // Update CTA based on bookingMode
+        if (svc.bookingMode === 'quote_only') {
+          btn.textContent = 'Request a Quote';
+          btn.style.background = '#AF52DE';
+          var banner = document.createElement('div');
+          banner.id = 'quote-only-banner';
+          banner.className = 'quote-only-banner';
+          banner.textContent = 'This service requires a custom quote. Submit your details and the provider will reach out with pricing.';
+          container.parentNode.insertBefore(banner, container);
+        } else {
+          btn.textContent = svc.bookingMode === 'starts_at' ? 'Book \u2014 Starting at $' + svc.price : 'Request Appointment';
+          btn.style.background = '';
+        }
+
+        // Render intake questions
+        if (!svc.intakeQuestionsJson) {
+          container.style.display = 'none';
+          return;
+        }
+        var questions;
+        try { questions = JSON.parse(svc.intakeQuestionsJson); } catch(e) { container.style.display = 'none'; return; }
+        if (!Array.isArray(questions) || questions.length === 0) {
+          container.style.display = 'none';
+          return;
+        }
+
+        container.style.display = 'block';
+        var heading = document.createElement('div');
+        heading.style.cssText = 'font-size:0.75rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent);margin-bottom:14px;margin-top:8px;';
+        heading.textContent = 'Booking Questions';
+        container.appendChild(heading);
+
+        questions.forEach(function(q) {
+          var group = document.createElement('div');
+          group.className = 'intake-question-group';
+          var label = document.createElement('label');
+          label.textContent = q.question + (q.required ? ' *' : '');
+          group.appendChild(label);
+
+          if (q.options && Array.isArray(q.options) && q.options.length > 0) {
+            // Multiple choice
+            var optRow = document.createElement('div');
+            optRow.className = 'intake-options';
+            q.options.forEach(function(opt) {
+              var btn2 = document.createElement('button');
+              btn2.type = 'button';
+              btn2.className = 'intake-option-btn';
+              btn2.textContent = opt;
+              btn2.addEventListener('click', function() {
+                optRow.querySelectorAll('.intake-option-btn').forEach(function(b) { b.classList.remove('selected'); });
+                btn2.classList.add('selected');
+                intakeAnswers[q.id] = opt;
+              });
+              optRow.appendChild(btn2);
+            });
+            group.appendChild(optRow);
+          } else {
+            // Free text or number
+            var inp = document.createElement('input');
+            inp.type = q.type === 'number' ? 'number' : 'text';
+            inp.placeholder = q.type === 'number' ? 'Enter a number' : 'Your answer...';
+            inp.addEventListener('input', function() { intakeAnswers[q.id] = inp.value; });
+            group.appendChild(inp);
+          }
+          container.appendChild(group);
+        });
+      }
+
+      serviceSelect.addEventListener('change', renderIntakeQuestions);
 
       // Populate time dropdown (8:00 AM - 8:00 PM, 30-min increments)
       var timeSelect = document.getElementById('preferredTime');
@@ -1667,9 +2552,10 @@ async function renderBookingPage(slug, db2) {
           clientPhone: clientPhone.trim() || undefined,
           problemDescription: notes.trim() || serviceLabel.replace(/s*\u2014s*$[d.]+$/, '').trim(),
           preferredTimesJson: JSON.stringify([{ date: date, time: time }]),
+          answersJson: Object.keys(intakeAnswers).length > 0 ? JSON.stringify(intakeAnswers) : undefined,
         };
 
-        fetch('/api/book/' + slug + '/submit', {
+        fetch('/api/providers/' + slug + '/submit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
@@ -1726,12 +2612,15 @@ import { createProxyMiddleware } from "http-proxy-middleware";
 
 // server/routes.ts
 import { createServer } from "node:http";
+import * as fs from "fs";
+import * as path from "path";
+import { hash as bcryptHash } from "bcryptjs";
 
 // server/openai.ts
 import OpenAI from "openai";
 var openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL
+  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
+  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || process.env.OPENAI_BASE_URL
 });
 var HOMEBASE_SYSTEM_PROMPT = `You are HomeBase AI, a friendly and knowledgeable home services assistant. You help homeowners with:
 
@@ -1762,25 +2651,8 @@ Be professional yet friendly - running a service business is challenging, and yo
 
 // server/storage.ts
 init_schema();
-
-// server/db.ts
-init_schema();
-import { drizzle } from "drizzle-orm/node-postgres";
-import pg from "pg";
-var { Pool } = pg;
-var databaseUrl = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
-if (!databaseUrl) {
-  throw new Error(
-    "SUPABASE_DATABASE_URL or DATABASE_URL must be set. Did you forget to configure a database?"
-  );
-}
-var pool = new Pool({
-  connectionString: databaseUrl
-});
-var db = drizzle(pool, { schema: schema_exports });
-
-// server/storage.ts
-import { eq, and, desc, gte } from "drizzle-orm";
+init_db();
+import { eq, and, desc, sql as sql2, gte, lte } from "drizzle-orm";
 import { hash, compare } from "bcryptjs";
 var SALT_ROUNDS = 10;
 var DatabaseStorage = class {
@@ -1789,7 +2661,9 @@ var DatabaseStorage = class {
     return user || void 0;
   }
   async getUserByEmail(email) {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
+    const [user] = await db.select().from(users).where(
+      sql2`LOWER(${users.email}) = LOWER(${email})`
+    );
     return user || void 0;
   }
   async createUser(insertUser) {
@@ -1845,9 +2719,22 @@ var DatabaseStorage = class {
   }
   async getProviders(categoryId) {
     if (categoryId) {
-      const providerIds = await db.select({ providerId: providerServices.providerId }).from(providerServices).where(eq(providerServices.categoryId, categoryId));
-      if (providerIds.length === 0) return [];
-      const uniqueIds = [...new Set(providerIds.map((p) => p.providerId))];
+      const catalogIds = await db.select({ providerId: providerServices.providerId }).from(providerServices).where(eq(providerServices.categoryId, categoryId));
+      const [catRow] = await db.select({ name: serviceCategories.name }).from(serviceCategories).where(eq(serviceCategories.id, categoryId));
+      const customIds = catRow ? await db.select({ providerId: providerCustomServices.providerId }).from(providerCustomServices).where(sql2`lower(${providerCustomServices.category}) = lower(${catRow.name})`) : [];
+      const nameIds = catRow ? await db.select({ providerId: providers.id }).from(providers).where(
+        and(
+          sql2`lower(${providers.businessName}) like ${"%" + catRow.name.toLowerCase() + "%"}`,
+          eq(providers.isActive, true)
+        )
+      ) : [];
+      const allProviderIds = [
+        ...catalogIds.map((r) => r.providerId),
+        ...customIds.map((r) => r.providerId),
+        ...nameIds.map((r) => r.providerId)
+      ];
+      if (allProviderIds.length === 0) return [];
+      const uniqueIds = [...new Set(allProviderIds)];
       const results = [];
       for (const id of uniqueIds) {
         const [provider] = await db.select().from(providers).where(eq(providers.id, id));
@@ -2018,23 +2905,55 @@ var DatabaseStorage = class {
     return newPayment;
   }
   // Provider dashboard stats
-  async getProviderStats(providerId) {
-    const startOfMonth = /* @__PURE__ */ new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
-    const paidInvoices = await db.select({ total: invoices.total }).from(invoices).where(
+  async getProviderStats(providerId, startDate, endDate) {
+    const start = startDate ?? (() => {
+      const d = /* @__PURE__ */ new Date();
+      d.setDate(1);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    })();
+    const end = endDate ?? /* @__PURE__ */ new Date();
+    const paidInvoices = await db.select({ total: invoices.total, paidAt: invoices.paidAt }).from(invoices).where(
       and(
         eq(invoices.providerId, providerId),
         eq(invoices.status, "paid"),
-        gte(invoices.paidAt, startOfMonth)
+        gte(invoices.paidAt, start),
+        lte(invoices.paidAt, end)
       )
     );
     const revenueMTD = paidInvoices.reduce((sum, inv) => sum + parseFloat(inv.total || "0"), 0);
+    const averageJobValue = paidInvoices.length > 0 ? revenueMTD / paidInvoices.length : 0;
+    const diffMs = end.getTime() - start.getTime();
+    const diffDays = diffMs / (1e3 * 60 * 60 * 24);
+    const bucketCount = diffDays <= 7 ? 7 : diffDays <= 31 ? Math.ceil(diffDays / 7) : diffDays <= 92 ? 13 : 12;
+    const bucketSizeMs = diffMs / bucketCount;
+    const revenueByPeriod = [];
+    for (let i = 0; i < bucketCount; i++) {
+      const bucketStart = new Date(start.getTime() + i * bucketSizeMs);
+      const bucketEnd = new Date(start.getTime() + (i + 1) * bucketSizeMs);
+      const bucketRevenue = paidInvoices.filter((inv) => {
+        if (!inv.paidAt) return false;
+        const t = new Date(inv.paidAt).getTime();
+        return t >= bucketStart.getTime() && t < bucketEnd.getTime();
+      }).reduce((sum, inv) => sum + parseFloat(inv.total || "0"), 0);
+      let label;
+      if (diffDays <= 7) {
+        label = bucketStart.toLocaleDateString("en-US", { weekday: "short" });
+      } else if (diffDays <= 31) {
+        label = bucketStart.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      } else if (diffDays <= 92) {
+        label = `W${i + 1}`;
+      } else {
+        label = bucketStart.toLocaleDateString("en-US", { month: "short" });
+      }
+      revenueByPeriod.push({ label, value: bucketRevenue });
+    }
     const completedJobs = await db.select({ id: jobs.id }).from(jobs).where(
       and(
         eq(jobs.providerId, providerId),
         eq(jobs.status, "completed"),
-        gte(jobs.completedAt, startOfMonth)
+        gte(jobs.completedAt, start),
+        lte(jobs.completedAt, end)
       )
     );
     const jobsCompleted = completedJobs.length;
@@ -2049,7 +2968,37 @@ var DatabaseStorage = class {
       )
     );
     const upcomingJobs = upcomingJobsList.length;
-    return { revenueMTD, jobsCompleted, activeClients, upcomingJobs };
+    return { revenueMTD, jobsCompleted, activeClients, upcomingJobs, averageJobValue, revenueByPeriod };
+  }
+  // Provider business insights (for dashboard Business Insights section)
+  async getProviderInsights(providerId) {
+    const now = /* @__PURE__ */ new Date();
+    const completedJobRows = await db.select({ finalPrice: jobs.finalPrice }).from(jobs).where(and(eq(jobs.providerId, providerId), eq(jobs.status, "completed")));
+    const allTimeRevenue = completedJobRows.reduce((sum, j) => sum + parseFloat(j.finalPrice || "0"), 0);
+    const quarterMonth = Math.floor(now.getMonth() / 3) * 3;
+    const startOfThisQuarter = new Date(now.getFullYear(), quarterMonth, 1, 0, 0, 0, 0);
+    const startOfLastQuarter = new Date(now.getFullYear(), quarterMonth - 3, 1, 0, 0, 0, 0);
+    const endOfLastQuarter = new Date(startOfThisQuarter.getTime() - 1);
+    const clientsThisQuarter = await db.select({ id: clients.id }).from(clients).where(and(eq(clients.providerId, providerId), gte(clients.createdAt, startOfThisQuarter)));
+    const clientsLastQuarter = await db.select({ id: clients.id }).from(clients).where(
+      and(
+        eq(clients.providerId, providerId),
+        gte(clients.createdAt, startOfLastQuarter),
+        lte(clients.createdAt, endOfLastQuarter)
+      )
+    );
+    const clientCountThisQuarter = clientsThisQuarter.length;
+    const clientCountLastQuarter = clientsLastQuarter.length;
+    const clientGrowthPct = clientCountLastQuarter > 0 ? Math.round((clientCountThisQuarter - clientCountLastQuarter) / clientCountLastQuarter * 100) : clientCountThisQuarter > 0 ? 100 : 0;
+    const [providerRow] = await db.select({ rating: providers.rating, reviewCount: providers.reviewCount }).from(providers).where(eq(providers.id, providerId));
+    return {
+      allTimeRevenue,
+      clientCountThisQuarter,
+      clientCountLastQuarter,
+      clientGrowthPct,
+      rating: providerRow?.rating ?? "0",
+      reviewCount: providerRow?.reviewCount ?? 0
+    };
   }
   // Get next invoice number
   async getNextInvoiceNumber(providerId) {
@@ -2117,6 +3066,7 @@ var DatabaseStorage = class {
 var storage = new DatabaseStorage();
 
 // server/seed.ts
+init_db();
 init_schema();
 import bcrypt from "bcryptjs";
 var TEST_USER_EMAIL = "test@homebase.com";
@@ -2280,70 +3230,8 @@ async function seedDatabase() {
 // server/routes.ts
 init_schema();
 
-// server/stripeClient.ts
-import Stripe from "stripe";
-var connectionSettings;
-async function getCredentials() {
-  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  const xReplitToken = process.env.REPL_IDENTITY ? "repl " + process.env.REPL_IDENTITY : process.env.WEB_REPL_RENEWAL ? "depl " + process.env.WEB_REPL_RENEWAL : null;
-  if (!xReplitToken) {
-    throw new Error("X_REPLIT_TOKEN not found for repl/depl");
-  }
-  const connectorName = "stripe";
-  const isProduction = process.env.REPLIT_DEPLOYMENT === "1";
-  const targetEnvironment = isProduction ? "production" : "development";
-  const url = new URL(`https://${hostname}/api/v2/connection`);
-  url.searchParams.set("include_secrets", "true");
-  url.searchParams.set("connector_names", connectorName);
-  url.searchParams.set("environment", targetEnvironment);
-  const response = await fetch(url.toString(), {
-    headers: {
-      "Accept": "application/json",
-      "X_REPLIT_TOKEN": xReplitToken
-    }
-  });
-  const data = await response.json();
-  connectionSettings = data.items?.[0];
-  if (!connectionSettings || (!connectionSettings.settings.publishable || !connectionSettings.settings.secret)) {
-    throw new Error(`Stripe ${targetEnvironment} connection not found`);
-  }
-  return {
-    publishableKey: connectionSettings.settings.publishable,
-    secretKey: connectionSettings.settings.secret
-  };
-}
-async function getUncachableStripeClient() {
-  const { secretKey } = await getCredentials();
-  return new Stripe(secretKey, {
-    apiVersion: "2025-11-17.clover"
-  });
-}
-async function getStripePublishableKey() {
-  const { publishableKey } = await getCredentials();
-  return publishableKey;
-}
-async function getStripeSecretKey() {
-  const { secretKey } = await getCredentials();
-  return secretKey;
-}
-var stripeSync = null;
-async function getStripeSync() {
-  if (!stripeSync) {
-    const { StripeSync } = await import("stripe-replit-sync");
-    const secretKey = await getStripeSecretKey();
-    stripeSync = new StripeSync({
-      poolConfig: {
-        connectionString: process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL,
-        max: 2,
-        ssl: { rejectUnauthorized: false }
-      },
-      stripeSecretKey: secretKey
-    });
-  }
-  return stripeSync;
-}
-
 // server/stripeService.ts
+init_stripeClient();
 var StripeService = class {
   async createCustomer(email, userId) {
     const stripe2 = await getUncachableStripeClient();
@@ -2383,380 +3271,16 @@ var StripeService = class {
 var stripeService = new StripeService();
 
 // server/routes.ts
+init_stripeClient();
+init_db();
 init_schema();
-import { sql as sql3, eq as eq4, and as and4, desc as desc2 } from "drizzle-orm";
-
-// server/emailService.ts
-import { Resend } from "resend";
-var connectionSettings2;
-async function getCredentials2() {
-  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  const xReplitToken = process.env.REPL_IDENTITY ? "repl " + process.env.REPL_IDENTITY : process.env.WEB_REPL_RENEWAL ? "depl " + process.env.WEB_REPL_RENEWAL : null;
-  if (!xReplitToken) {
-    throw new Error("Resend authentication token not found");
-  }
-  connectionSettings2 = await fetch(
-    "https://" + hostname + "/api/v2/connection?include_secrets=true&connector_names=resend",
-    {
-      headers: {
-        "Accept": "application/json",
-        "X_REPLIT_TOKEN": xReplitToken
-      }
-    }
-  ).then((res) => res.json()).then((data) => data.items?.[0]);
-  if (!connectionSettings2 || !connectionSettings2.settings.api_key) {
-    throw new Error("Resend not connected - please set up the Resend integration");
-  }
-  return {
-    apiKey: connectionSettings2.settings.api_key,
-    fromEmail: connectionSettings2.settings.from_email
-  };
-}
-async function getResendClient() {
-  const { apiKey, fromEmail } = await getCredentials2();
-  return {
-    client: new Resend(apiKey),
-    fromEmail
-  };
-}
-function fmtUsd(amount) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
-}
-function buildEmailBase(title, body, ctaLabel, ctaUrl) {
-  const ctaHtml = ctaLabel && ctaUrl ? `<a href="${ctaUrl}" style="display:block;background:#38AE5F;color:#fff;text-align:center;padding:16px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;margin:24px 0;">${ctaLabel}</a>` : "";
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>${title}</title>
-</head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;margin:0;padding:0;background-color:#f3f4f6;">
-  <div style="max-width:600px;margin:0 auto;padding:40px 20px;">
-    <div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.08);">
-      <!-- Header -->
-      <div style="background:#38AE5F;padding:28px 32px;text-align:center;">
-        <div style="font-size:22px;font-weight:700;color:#fff;letter-spacing:-0.3px;">HomeBase</div>
-        <div style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:4px;">The smart way to manage home services</div>
-      </div>
-      <!-- Body -->
-      <div style="padding:32px;">
-        ${body}
-        ${ctaHtml}
-      </div>
-      <!-- Footer -->
-      <div style="background:#f9fafb;padding:20px 32px;text-align:center;border-top:1px solid #e5e7eb;">
-        <p style="color:#9ca3af;font-size:11px;margin:0 0 4px;">Sent via HomeBase &mdash; The smart way to manage home services</p>
-        <p style="color:#d1d5db;font-size:10px;margin:0;">You are receiving this because you have an account or transaction on HomeBase. <a href="#" style="color:#9ca3af;">Unsubscribe</a></p>
-      </div>
-    </div>
-  </div>
-</body>
-</html>`;
-}
-function infoRow(label, value) {
-  return `<div style="display:flex;justify-content:space-between;margin-bottom:10px;">
-    <span style="color:#6b7280;font-size:14px;">${label}</span>
-    <span style="color:#111827;font-weight:600;font-size:14px;">${value}</span>
-  </div>`;
-}
-function infoBox(rows) {
-  return `<div style="background:#f9fafb;border-radius:8px;padding:20px;margin-bottom:24px;">${rows}</div>`;
-}
-function greeting(name) {
-  return `<p style="color:#374151;font-size:16px;margin:0 0 20px;">Hi ${name},</p>`;
-}
-function paragraph(text2) {
-  return `<p style="color:#6b7280;font-size:14px;line-height:1.6;margin:0 0 20px;">${text2}</p>`;
-}
-function appDownloadSection() {
-  return `<div style="background:linear-gradient(135deg,#f0fdf4 0%,#dcfce7 100%);border-radius:8px;padding:20px;margin-top:24px;text-align:center;">
-    <p style="color:#166534;font-weight:600;margin:0 0 6px;font-size:14px;">Manage your home services with HomeBase</p>
-    <p style="color:#15803d;font-size:13px;margin:0 0 14px;">Track invoices, book services, and get instant quotes &mdash; all in one app.</p>
-    <div>
-      <a href="https://apps.apple.com/app/homebase" style="display:inline-block;background:#111827;color:#fff;padding:9px 18px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:500;margin:0 4px;">App Store</a>
-      <a href="https://play.google.com/store/apps/details?id=com.homebase" style="display:inline-block;background:#111827;color:#fff;padding:9px 18px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:500;margin:0 4px;">Google Play</a>
-    </div>
-  </div>`;
-}
-async function sendEmail(to, subject, html) {
-  try {
-    const { client, fromEmail } = await getResendClient();
-    const result = await client.emails.send({
-      from: fromEmail || "HomeBase <noreply@resend.dev>",
-      to,
-      subject,
-      html
-    });
-    if (result.error) {
-      console.error("Resend error:", result.error);
-      return { success: false, error: result.error.message };
-    }
-    return { success: true, messageId: result.data?.id };
-  } catch (err) {
-    console.error("sendEmail error:", err);
-    return { success: false, error: err.message || "Failed to send email" };
-  }
-}
-async function sendWelcomeEmail(to, name) {
-  const body = greeting(name) + paragraph("Welcome to HomeBase! We're thrilled to have you. HomeBase helps you manage your home services, track invoices, and connect with trusted providers &mdash; all in one place.") + `<h2 style="color:#111827;font-size:18px;margin:0 0 12px;">What you can do</h2><ul style="color:#6b7280;font-size:14px;line-height:1.8;padding-left:20px;margin:0 0 20px;">
-      <li>Book local service providers</li>
-      <li>Manage invoices and payments</li>
-      <li>Track your home maintenance history</li>
-      <li>Get smart reminders for recurring services</li>
-    </ul>` + appDownloadSection();
-  return sendEmail(to, "Welcome to HomeBase!", buildEmailBase("Welcome to HomeBase", body, "Open HomeBase", "https://homebaseproapp.com"));
-}
-async function sendBookingConfirmationEmail(data) {
-  const priceRow = data.estimatedPrice ? infoRow("Est. Price", fmtUsd(data.estimatedPrice)) : "";
-  const body = greeting(data.clientName) + paragraph("Great news! Your service appointment has been confirmed. Here are your booking details:") + infoBox(
-    (data.confirmationNumber ? infoRow("Confirmation #", data.confirmationNumber) : "") + infoRow("Service", data.serviceName) + infoRow("Provider", data.providerName) + infoRow("Date", data.appointmentDate) + infoRow("Time", data.appointmentTime) + (data.address ? infoRow("Location", data.address) : "") + priceRow
-  ) + `<div style="background:#fffbeb;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #f59e0b;">
-      <p style="color:#92400e;font-size:13px;margin:0;"><strong>Need to reschedule?</strong> Contact ${data.providerName} at least 24 hours before your appointment.</p>
-    </div>` + appDownloadSection();
-  return sendEmail(
-    data.clientEmail,
-    `Booking Confirmed: ${data.serviceName} with ${data.providerName}`,
-    buildEmailBase("Booking Confirmed", body)
-  );
-}
-async function sendBookingReminderEmail(data, hoursUntil) {
-  const label = hoursUntil <= 2 ? "in 2 hours" : "tomorrow";
-  const body = greeting(data.clientName) + paragraph(`This is a reminder that your appointment is coming up ${label}. Here are the details:`) + infoBox(
-    infoRow("Service", data.serviceName) + infoRow("Provider", data.providerName) + infoRow("Date", data.appointmentDate) + infoRow("Time", data.appointmentTime) + (data.address ? infoRow("Location", data.address) : "")
-  ) + appDownloadSection();
-  return sendEmail(
-    data.clientEmail,
-    `Reminder: ${data.serviceName} with ${data.providerName} ${label}`,
-    buildEmailBase("Appointment Reminder", body)
-  );
-}
-async function sendBookingCancelledEmail(data, reason) {
-  const body = greeting(data.clientName) + paragraph(`Your ${data.serviceName} appointment with ${data.providerName} has been cancelled.`) + infoBox(
-    infoRow("Service", data.serviceName) + infoRow("Provider", data.providerName) + infoRow("Date", data.appointmentDate) + infoRow("Time", data.appointmentTime) + (reason ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb;"><span style="color:#6b7280;font-size:14px;">Reason: </span><span style="color:#111827;font-size:14px;">${reason}</span></div>` : "")
-  ) + paragraph("If you would like to rebook, please contact the provider or visit HomeBase to schedule a new appointment.") + appDownloadSection();
-  return sendEmail(
-    data.clientEmail,
-    `Booking Cancelled: ${data.serviceName} with ${data.providerName}`,
-    buildEmailBase("Booking Cancelled", body)
-  );
-}
-async function sendBookingRescheduledEmail(data, oldDate, oldTime) {
-  const body = greeting(data.clientName) + paragraph(`Your ${data.serviceName} appointment with ${data.providerName} has been rescheduled.`) + `<p style="color:#6b7280;font-size:13px;text-decoration:line-through;margin:0 0 4px;">Previously: ${oldDate} at ${oldTime}</p>` + infoBox(
-    `<p style="color:#38AE5F;font-weight:600;font-size:13px;margin:0 0 12px;">New schedule</p>` + infoRow("Service", data.serviceName) + infoRow("Provider", data.providerName) + infoRow("Date", data.appointmentDate) + infoRow("Time", data.appointmentTime) + (data.address ? infoRow("Location", data.address) : "")
-  ) + appDownloadSection();
-  return sendEmail(
-    data.clientEmail,
-    `Rescheduled: ${data.serviceName} with ${data.providerName}`,
-    buildEmailBase("Appointment Rescheduled", body)
-  );
-}
-async function sendInvoiceEmail(data) {
-  const lineItemsHtml = data.lineItems.map((item) => `
-    <tr>
-      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;color:#374151;font-size:13px;">${item.description}</td>
-      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:center;color:#374151;font-size:13px;">${item.quantity}</td>
-      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;color:#374151;font-size:13px;">$${item.unitPrice.toFixed(2)}</td>
-      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;color:#374151;font-size:13px;">$${item.total.toFixed(2)}</td>
-    </tr>`).join("");
-  const body = greeting(data.clientName) + paragraph(`You have received a new invoice from <strong>${data.providerName}</strong>. Please find the details below.`) + infoBox(
-    infoRow("Invoice #", data.invoiceNumber) + infoRow("Due Date", data.dueDate) + `<div style="display:flex;justify-content:space-between;padding-top:12px;border-top:1px solid #e5e7eb;">
-        <span style="color:#6b7280;font-size:14px;">Total Amount</span>
-        <span style="color:#38AE5F;font-weight:700;font-size:20px;">${fmtUsd(data.amount)}</span>
-      </div>`
-  ) + `<table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
-      <thead>
-        <tr style="background:#f3f4f6;">
-          <th style="padding:10px 12px;text-align:left;color:#374151;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Description</th>
-          <th style="padding:10px 12px;text-align:center;color:#374151;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Qty</th>
-          <th style="padding:10px 12px;text-align:right;color:#374151;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Price</th>
-          <th style="padding:10px 12px;text-align:right;color:#374151;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Total</th>
-        </tr>
-      </thead>
-      <tbody>${lineItemsHtml}</tbody>
-    </table>` + (data.paymentLink ? `<a href="${data.paymentLink}" style="display:block;background:#38AE5F;color:#fff;text-align:center;padding:16px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;margin-bottom:24px;">Pay Now</a>` : "") + appDownloadSection();
-  return sendEmail(
-    data.clientEmail,
-    `Invoice ${data.invoiceNumber} from ${data.providerName} &ndash; ${fmtUsd(data.amount)}`,
-    buildEmailBase(`Invoice from ${data.providerName}`, body)
-  );
-}
-async function sendInvoiceCreatedEmail(data) {
-  return sendInvoiceEmail(data);
-}
-async function sendInvoiceReminderEmail(data) {
-  const isOverdue = (data.daysOverdue ?? 0) > 0;
-  const urgencyText = isOverdue ? `Your invoice is <strong>${data.daysOverdue} day${data.daysOverdue === 1 ? "" : "s"} overdue</strong>. Please arrange payment as soon as possible to avoid any service interruptions.` : `Your invoice is due in <strong>${data.daysUntilDue} day${data.daysUntilDue === 1 ? "" : "s"}</strong>. Please arrange payment before the due date.`;
-  const body = greeting(data.clientName) + `<div style="background:${isOverdue ? "#fef2f2" : "#fffbeb"};border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid ${isOverdue ? "#ef4444" : "#f59e0b"};">
-      <p style="color:${isOverdue ? "#991b1b" : "#92400e"};font-size:14px;margin:0;">${urgencyText}</p>
-    </div>` + infoBox(
-    infoRow("Invoice #", data.invoiceNumber) + infoRow("Provider", data.providerName) + infoRow("Due Date", data.dueDate) + `<div style="display:flex;justify-content:space-between;padding-top:12px;border-top:1px solid #e5e7eb;">
-        <span style="color:#6b7280;font-size:14px;">Amount Due</span>
-        <span style="color:${isOverdue ? "#ef4444" : "#38AE5F"};font-weight:700;font-size:20px;">${fmtUsd(data.amount)}</span>
-      </div>`
-  ) + (data.paymentLink ? `<a href="${data.paymentLink}" style="display:block;background:#38AE5F;color:#fff;text-align:center;padding:16px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;margin-bottom:24px;">Pay Now</a>` : "") + appDownloadSection();
-  const subject = isOverdue ? `Overdue: Invoice ${data.invoiceNumber} from ${data.providerName}` : `Reminder: Invoice ${data.invoiceNumber} due in ${data.daysUntilDue} day${data.daysUntilDue === 1 ? "" : "s"}`;
-  return sendEmail(data.clientEmail, subject, buildEmailBase("Invoice Reminder", body));
-}
-async function sendPaymentReceiptEmail(data) {
-  const body = greeting(data.clientName) + `<div style="text-align:center;margin-bottom:24px;">
-      <div style="width:60px;height:60px;background:#f0fdf4;border-radius:50%;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;">
-        <div style="font-size:28px;color:#38AE5F;">&#10003;</div>
-      </div>
-      <p style="color:#166534;font-weight:600;margin:0;">Payment confirmed</p>
-    </div>` + paragraph("Thank you for your payment! This email confirms we've received your payment for the following:") + infoBox(
-    infoRow("Invoice #", data.invoiceNumber) + infoRow("Payment Date", data.paymentDate) + infoRow("Provider", data.providerName) + (data.paymentMethod ? infoRow("Payment Method", data.paymentMethod) : "") + `<div style="display:flex;justify-content:space-between;padding-top:12px;border-top:1px solid #e5e7eb;">
-        <span style="color:#6b7280;font-size:14px;">Amount Paid</span>
-        <span style="color:#38AE5F;font-weight:700;font-size:20px;">${fmtUsd(data.amount)}</span>
-      </div>`
-  ) + paragraph(`Keep this email as your receipt. If you have any questions about this payment, please contact ${data.providerName} directly.`) + appDownloadSection();
-  return sendEmail(
-    data.clientEmail,
-    `Payment Receipt &ndash; ${fmtUsd(data.amount)} to ${data.providerName}`,
-    buildEmailBase("Payment Receipt", body)
-  );
-}
-async function sendInvoicePaidEmail(data) {
-  return sendPaymentReceiptEmail(data);
-}
-async function sendPaymentFailedEmail(data) {
-  const body = greeting(data.clientName) + `<div style="background:#fef2f2;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #ef4444;">
-      <p style="color:#991b1b;font-size:14px;margin:0;"><strong>Payment failed.</strong> We were unable to process your payment for invoice ${data.invoiceNumber}.</p>
-    </div>` + infoBox(
-    infoRow("Invoice #", data.invoiceNumber) + infoRow("Provider", data.providerName) + `<div style="display:flex;justify-content:space-between;padding-top:12px;border-top:1px solid #e5e7eb;">
-        <span style="color:#6b7280;font-size:14px;">Amount Due</span>
-        <span style="color:#ef4444;font-weight:700;font-size:20px;">${fmtUsd(data.amount)}</span>
-      </div>`
-  ) + paragraph("Please update your payment method and try again. If you need assistance, contact your service provider directly.") + (data.paymentLink ? `<a href="${data.paymentLink}" style="display:block;background:#38AE5F;color:#fff;text-align:center;padding:16px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;margin-bottom:24px;">Retry Payment</a>` : "") + appDownloadSection();
-  return sendEmail(
-    data.clientEmail,
-    `Payment Failed: Invoice ${data.invoiceNumber} from ${data.providerName}`,
-    buildEmailBase("Payment Failed", body)
-  );
-}
-async function sendReviewRequestEmail(data) {
-  const body = greeting(data.clientName) + paragraph(`Thank you for choosing ${data.providerName} for your ${data.serviceName}! We hope everything went smoothly. Your feedback helps other homeowners find great service providers.`) + paragraph("Would you mind leaving a quick review? It only takes a minute and means a lot to your provider.") + appDownloadSection();
-  return sendEmail(
-    data.clientEmail,
-    `How did your ${data.serviceName} go? Leave a review for ${data.providerName}`,
-    buildEmailBase("Leave a Review", body, data.reviewUrl ? "Leave a Review" : void 0, data.reviewUrl)
-  );
-}
-async function sendStripeOnboardingNeededEmail(to, providerName, onboardingUrl) {
-  const body = greeting(providerName) + paragraph("To start accepting online payments through HomeBase, you need to complete your Stripe payout account setup. This takes about 5 minutes.") + `<ul style="color:#6b7280;font-size:14px;line-height:1.8;padding-left:20px;margin:0 0 20px;">
-      <li>Accept card payments from clients</li>
-      <li>Receive automatic payouts to your bank account</li>
-      <li>Issue refunds directly from HomeBase</li>
-    </ul>`;
-  return sendEmail(to, "Complete your payout setup to get paid faster", buildEmailBase("Set Up Payouts", body, "Set Up Stripe Payouts", onboardingUrl));
-}
-async function sendStripeConnectedEmail(to, providerName) {
-  const body = greeting(providerName) + paragraph("Your Stripe payout account has been successfully connected to HomeBase. You can now accept online payments from clients and receive payouts directly to your bank account.") + `<div style="background:#f0fdf4;border-radius:8px;padding:16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
-      <p style="color:#166534;font-weight:600;margin:0;">Payments are now active</p>
-      <p style="color:#15803d;font-size:13px;margin:6px 0 0;">Send invoices with &ldquo;Pay Now&rdquo; links and get paid faster.</p>
-    </div>` + appDownloadSection();
-  return sendEmail(to, "Your Stripe payout account is connected", buildEmailBase("Payouts Connected", body));
-}
-async function sendProviderBookingNotificationEmail(data) {
-  const body = greeting(data.providerName) + paragraph(`${data.clientName} has booked a ${data.serviceName} with you. Here are the details:`) + infoBox(
-    infoRow("Client", data.clientName) + infoRow("Service", data.serviceName) + infoRow("Date", data.appointmentDate) + infoRow("Time", data.appointmentTime) + (data.address ? infoRow("Location", data.address) : "")
-  );
-  return sendEmail(
-    data.providerEmail,
-    `New Booking: ${data.serviceName} with ${data.clientName}`,
-    buildEmailBase("New Booking", body, "View in HomeBase", "https://homebaseproapp.com")
-  );
-}
-async function sendJobStatusChangedEmail(data) {
-  const statusLabel = {
-    scheduled: "Scheduled",
-    in_progress: "In Progress",
-    completed: "Completed",
-    cancelled: "Cancelled",
-    on_hold: "On Hold"
-  };
-  const label = statusLabel[data.newStatus] ?? data.newStatus;
-  const body = greeting(data.clientName) + paragraph(`We wanted to let you know that the status of your ${data.serviceName} job with ${data.providerName} has been updated to <strong>${label}</strong>.`) + (data.scheduledDate || data.notes ? infoBox(
-    (data.scheduledDate ? infoRow("Scheduled Date", data.scheduledDate) : "") + (data.notes ? infoRow("Notes", data.notes) : "")
-  ) : "") + paragraph(`If you have any questions, please reach out through the HomeBase app.`);
-  return sendEmail(
-    data.clientEmail,
-    `Job Update: ${data.serviceName} is now ${label}`,
-    buildEmailBase("Job Status Update", body, "View in HomeBase", "https://homebaseproapp.com")
-  );
-}
-async function sendRebookingNudgeEmail(data) {
-  const body = greeting(data.clientName) + paragraph(`Great news \u2014 your ${data.serviceName} with ${data.providerName} is complete! Ready to schedule your next visit?`) + paragraph(`Keeping up with regular maintenance can save you money in the long run. Book ${data.providerName} again in just a few taps.`);
-  return sendEmail(
-    data.clientEmail,
-    `Your service is complete \u2014 book ${data.providerName} again?`,
-    buildEmailBase("Service Complete", body, "Book Again", data.rebookLink || "https://homebaseproapp.com")
-  );
-}
-async function sendProviderClientMessage(data) {
-  try {
-    const { client, fromEmail } = await getResendClient();
-    const bodyHtml = data.body.replace(/\n/g, "<br/>");
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      </head>
-      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f3f4f6;">
-        <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
-          <div style="background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
-            <div style="background: #38AE5F; padding: 32px; text-align: center;">
-              <h1 style="color: white; margin: 0; font-size: 22px;">${data.providerName}</h1>
-              <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px;">Sent via HomeBase</p>
-            </div>
-
-            <div style="padding: 32px;">
-              <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">
-                Hi ${data.clientName},
-              </p>
-
-              <div style="color: #374151; font-size: 15px; line-height: 1.7; margin-bottom: 24px;">
-                ${bodyHtml}
-              </div>
-
-              <div style="border-top: 1px solid #e5e7eb; padding-top: 20px; margin-top: 24px;">
-                <p style="color: #6b7280; font-size: 13px; margin: 0;">
-                  This message was sent to you by <strong>${data.providerName}</strong> through HomeBase. To reply, simply respond to this email.
-                </p>
-              </div>
-            </div>
-
-            <div style="background: #f9fafb; padding: 16px; text-align: center; border-top: 1px solid #e5e7eb;">
-              <p style="color: #9ca3af; font-size: 11px; margin: 0;">
-                Powered by HomeBase &mdash; The smart way to manage home services
-              </p>
-            </div>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
-    const result = await client.emails.send({
-      from: fromEmail || "HomeBase <noreply@resend.dev>",
-      to: data.clientEmail,
-      subject: data.subject || `Message from ${data.providerName}`,
-      html
-    });
-    if (result.error) {
-      console.error("Resend error:", result.error);
-      return { success: false, error: result.error.message };
-    }
-    return { success: true, messageId: result.data?.id };
-  } catch (error) {
-    console.error("Send provider client message error:", error);
-    return { success: false, error: error.message || "Failed to send message" };
-  }
-}
+init_emailService();
+import { sql as sql3, eq as eq5, and as and4, desc as desc2, inArray, gte as gte2 } from "drizzle-orm";
 
 // server/notificationService.ts
+init_db();
 init_schema();
+init_emailService();
 import { eq as eq2, and as and2 } from "drizzle-orm";
 async function logDelivery(opts) {
   try {
@@ -3507,8 +4031,9 @@ Recent Work: ${faxData.recentWork.join(", ")}
 }
 
 // server/stripeConnectService.ts
-import Stripe2 from "stripe";
+init_db();
 init_schema();
+import Stripe2 from "stripe";
 import { eq as eq3, and as and3 } from "drizzle-orm";
 var stripe = null;
 function getStripe() {
@@ -3521,7 +4046,7 @@ function getStripe() {
   }
   return stripe;
 }
-var APP_URL = process.env.APP_URL || "https://homebase.replit.app";
+var APP_URL = process.env.APP_URL || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "https://homebase.replit.app");
 async function getProviderPlan(providerId) {
   const [plan] = await db.select().from(providerPlans).where(eq3(providerPlans.providerId, providerId));
   if (!plan) {
@@ -3529,7 +4054,7 @@ async function getProviderPlan(providerId) {
       id: null,
       providerId,
       planTier: "free",
-      platformFeePercent: "10.00",
+      platformFeePercent: "3.00",
       platformFeeFixedCents: 0
     };
   }
@@ -3686,77 +4211,110 @@ async function createInvoicePaymentIntent(invoiceId, payerUserId) {
     amount: invoice.totalCents
   };
 }
-async function createStripeCheckoutSession(invoiceId) {
+async function createStripeInvoice(invoiceId) {
   const [invoice] = await db.select().from(invoices).where(eq3(invoices.id, invoiceId));
-  if (!invoice) {
-    throw new Error("Invoice not found");
+  if (!invoice) throw new Error("Invoice not found");
+  if (invoice.stripeInvoiceId && invoice.hostedInvoiceUrl) {
+    try {
+      const connectAccount2 = await getConnectAccount(invoice.providerId);
+      if (connectAccount2?.stripeAccountId) {
+        const existing = await getStripe().invoices.retrieve(
+          invoice.stripeInvoiceId,
+          { stripeAccount: connectAccount2.stripeAccountId }
+        );
+        if (existing && existing.status !== "void" && existing.status !== "uncollectible") {
+          const hostedInvoiceUrl2 = existing.hosted_invoice_url || invoice.hostedInvoiceUrl;
+          return { stripeInvoiceId: invoice.stripeInvoiceId, hostedInvoiceUrl: hostedInvoiceUrl2 };
+        }
+      }
+    } catch {
+    }
   }
   const connectAccount = await getConnectAccount(invoice.providerId);
-  if (!connectAccount) {
-    const err = new Error("stripe_not_ready");
-    err.code = "stripe_not_ready";
-    throw err;
+  if (!connectAccount?.stripeAccountId) throw new Error("Provider Stripe account not connected");
+  const connectId = connectAccount.stripeAccountId;
+  if (!invoice.clientId) throw new Error("Invoice has no client");
+  const [client] = await db.select().from(clients).where(eq3(clients.id, invoice.clientId));
+  if (!client) throw new Error("Client not found");
+  let stripeCustomerId = client.stripeConnectCustomerId;
+  if (stripeCustomerId) {
+    try {
+      const existingCustomer = await getStripe().customers.retrieve(
+        stripeCustomerId,
+        { stripeAccount: connectId }
+      );
+      if (existingCustomer.deleted) {
+        stripeCustomerId = null;
+      }
+    } catch {
+      stripeCustomerId = null;
+    }
   }
-  if (!connectAccount.chargesEnabled) {
-    const err = new Error("stripe_not_ready");
-    err.code = "stripe_not_ready";
-    throw err;
-  }
-  const [provider] = await db.select().from(providers).where(eq3(providers.id, invoice.providerId));
-  const lineItemsData = await db.select().from(invoiceLineItems).where(eq3(invoiceLineItems.invoiceId, invoiceId));
-  const stripeLineItems = lineItemsData.map((item) => ({
-    price_data: {
-      currency: invoice.currency || "usd",
-      product_data: {
-        name: item.name,
-        description: item.description || void 0
+  if (!stripeCustomerId) {
+    const customerName = [client.firstName, client.lastName].filter(Boolean).join(" ") || void 0;
+    const customer = await getStripe().customers.create(
+      {
+        email: client.email || void 0,
+        name: customerName,
+        phone: client.phone || void 0,
+        metadata: { homebaseClientId: client.id, providerId: invoice.providerId }
       },
-      unit_amount: item.unitPriceCents
-    },
-    quantity: Math.round(parseFloat(item.quantity?.toString() || "1"))
-  }));
-  if (stripeLineItems.length === 0) {
-    stripeLineItems.push({
-      price_data: {
-        currency: invoice.currency || "usd",
-        product_data: {
-          name: `Invoice ${invoice.invoiceNumber}`,
-          description: invoice.notes || void 0
+      { stripeAccount: connectId }
+    );
+    stripeCustomerId = customer.id;
+    await db.update(clients).set({ stripeConnectCustomerId: stripeCustomerId, updatedAt: /* @__PURE__ */ new Date() }).where(eq3(clients.id, client.id));
+  }
+  const rawItems = invoice.lineItems;
+  const lineItems = rawItems ? Array.isArray(rawItems) ? rawItems : JSON.parse(rawItems) : [];
+  if (lineItems.length > 0) {
+    for (const item of lineItems) {
+      const unitAmountCents = Math.round(parseFloat(item.unitPrice?.toString() || "0") * 100);
+      const qty = Math.max(1, Math.round(parseFloat(item.quantity?.toString() || "1")));
+      await getStripe().invoiceItems.create(
+        {
+          customer: stripeCustomerId,
+          unit_amount: unitAmountCents,
+          quantity: qty,
+          currency: invoice.currency || "usd",
+          description: item.description || item.name || "Service"
         },
-        unit_amount: invoice.totalCents
+        { stripeAccount: connectId }
+      );
+    }
+  } else {
+    const totalCents = invoice.totalCents || Math.round(parseFloat(invoice.total?.toString() || "0") * 100);
+    await getStripe().invoiceItems.create(
+      {
+        customer: stripeCustomerId,
+        amount: totalCents,
+        currency: invoice.currency || "usd",
+        description: invoice.notes || `Invoice ${invoice.invoiceNumber}`
       },
-      quantity: 1
-    });
+      { stripeAccount: connectId }
+    );
   }
-  const session = await getStripe().checkout.sessions.create({
-    mode: "payment",
-    line_items: stripeLineItems,
-    payment_intent_data: {
-      application_fee_amount: invoice.platformFeeCents || 0,
-      transfer_data: {
-        destination: connectAccount.stripeAccountId
-      },
+  const platformFeeCents = invoice.platformFeeCents || 0;
+  const daysUntilDue = invoice.dueDate ? Math.max(1, Math.ceil((new Date(invoice.dueDate).getTime() - Date.now()) / 864e5)) : 30;
+  const stripeInvoice = await getStripe().invoices.create(
+    {
+      customer: stripeCustomerId,
+      collection_method: "send_invoice",
+      days_until_due: daysUntilDue,
+      ...platformFeeCents > 0 ? { application_fee_amount: platformFeeCents } : {},
       metadata: {
-        invoiceId: invoice.id,
+        homebaseInvoiceId: invoice.id,
         providerId: invoice.providerId
       }
     },
-    success_url: `${APP_URL}/invoice/${invoiceId}/success`,
-    cancel_url: `${APP_URL}/invoice/${invoiceId}/cancel`,
-    metadata: {
-      invoiceId: invoice.id,
-      providerId: invoice.providerId
-    }
-  });
-  await db.update(invoices).set({
-    stripeCheckoutSessionId: session.id,
-    hostedInvoiceUrl: session.url,
-    updatedAt: /* @__PURE__ */ new Date()
-  }).where(eq3(invoices.id, invoiceId));
-  return {
-    sessionId: session.id,
-    checkoutUrl: session.url
-  };
+    { stripeAccount: connectId }
+  );
+  const finalized = await getStripe().invoices.finalizeInvoice(
+    stripeInvoice.id,
+    { stripeAccount: connectId }
+  );
+  const hostedInvoiceUrl = finalized.hosted_invoice_url || "";
+  await db.update(invoices).set({ stripeInvoiceId: finalized.id, hostedInvoiceUrl, updatedAt: /* @__PURE__ */ new Date() }).where(eq3(invoices.id, invoiceId));
+  return { stripeInvoiceId: finalized.id, hostedInvoiceUrl };
 }
 async function applyCreditsToInvoice(invoiceId, userId, amountCents) {
   const [invoice] = await db.select().from(invoices).where(eq3(invoices.id, invoiceId));
@@ -3847,6 +4405,12 @@ async function handleStripeWebhook(event) {
     case "checkout.session.completed":
       await handleCheckoutSessionCompleted(event.data.object);
       break;
+    case "invoice.paid":
+      await handleStripeInvoicePaid(event.data.object);
+      break;
+    case "invoice.payment_failed":
+      await handleStripeInvoicePaymentFailed(event.data.object);
+      break;
     default:
       console.log(`Unhandled webhook event type: ${event.type}`);
   }
@@ -3912,6 +4476,59 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
           relatedRecordId: invoiceId
         }).catch((e) => console.error("invoice.paid dispatch error (webhook):", e));
       }
+      (async () => {
+        try {
+          const jobId = updatedInvoice.jobId;
+          if (!jobId) return;
+          const costCents = updatedInvoice.total ? Math.round((typeof updatedInvoice.total === "string" ? parseFloat(updatedInvoice.total) : updatedInvoice.total) * 100) : 0;
+          if (costCents <= 0) return;
+          const [entry] = await db.select({ id: housefaxEntries.id, costCents: housefaxEntries.costCents }).from(housefaxEntries).where(eq3(housefaxEntries.jobId, jobId));
+          if (entry) {
+            await db.update(housefaxEntries).set({ costCents }).where(eq3(housefaxEntries.id, entry.id));
+            console.log(`[HouseFax] Updated cost for job ${jobId} to ${costCents} cents via payment webhook`);
+          } else {
+            const [job] = await db.select().from(jobs).where(eq3(jobs.id, jobId));
+            if (job && job.status === "completed") {
+              let homeId = null;
+              if (job.appointmentId) {
+                const [appt] = await db.select({ homeId: appointments.homeId }).from(appointments).where(eq3(appointments.id, job.appointmentId));
+                if (appt) homeId = appt.homeId;
+              }
+              if (!homeId) {
+                const [inv] = await db.select({ homeownerUserId: invoices.homeownerUserId }).from(invoices).where(eq3(invoices.jobId, job.id));
+                if (inv?.homeownerUserId) {
+                  const [home] = await db.select({ id: homes.id }).from(homes).where(eq3(homes.userId, inv.homeownerUserId));
+                  if (home) homeId = home.id;
+                }
+              }
+              if (homeId) {
+                const [existing] = await db.select({ id: housefaxEntries.id }).from(housefaxEntries).where(eq3(housefaxEntries.jobId, job.id));
+                if (!existing) {
+                  const [provider2] = job.providerId ? await db.select({ businessName: providers.businessName }).from(providers).where(eq3(providers.id, job.providerId)) : [null];
+                  await db.insert(housefaxEntries).values({
+                    homeId,
+                    jobId: job.id,
+                    appointmentId: job.appointmentId || null,
+                    serviceCategory: "General",
+                    serviceName: job.title,
+                    providerId: job.providerId || null,
+                    providerName: provider2?.businessName || null,
+                    completedAt: job.completedAt || /* @__PURE__ */ new Date(),
+                    costCents,
+                    aiSummary: null,
+                    photos: [],
+                    systemAffected: "General",
+                    notes: job.notes || null
+                  });
+                  console.log(`[HouseFax] Created entry for job ${jobId} with cost ${costCents} cents via payment webhook`);
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.error("[HouseFax] Payment webhook cost update error:", e);
+        }
+      })();
     } catch (err) {
       console.error("Failed to dispatch invoice.paid from webhook:", err);
     }
@@ -3958,6 +4575,81 @@ async function handlePaymentIntentFailed(paymentIntent) {
     } catch (err) {
       console.error("Failed to dispatch invoice.payment_failed from webhook:", err);
     }
+  }
+}
+async function handleStripeInvoicePaid(stripeInvoice) {
+  const homebaseInvoiceId = stripeInvoice.metadata?.homebaseInvoiceId;
+  if (!homebaseInvoiceId) return;
+  const [updatedInvoice] = await db.update(invoices).set({ status: "paid", paidAt: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date() }).where(eq3(invoices.id, homebaseInvoiceId)).returning();
+  if (!updatedInvoice) return;
+  try {
+    const [provider] = await db.select().from(providers).where(eq3(providers.id, updatedInvoice.providerId));
+    let clientEmail;
+    let clientName;
+    if (updatedInvoice.clientId) {
+      const [client] = await db.select().from(clients).where(eq3(clients.id, updatedInvoice.clientId));
+      if (client) {
+        clientEmail = client.email ?? void 0;
+        clientName = `${client.firstName || ""} ${client.lastName || ""}`.trim() || clientEmail;
+      }
+    } else if (updatedInvoice.homeownerUserId) {
+      const [homeowner] = await db.select().from(users).where(eq3(users.id, updatedInvoice.homeownerUserId));
+      if (homeowner) {
+        clientEmail = homeowner.email;
+        clientName = `${homeowner.firstName || ""} ${homeowner.lastName || ""}`.trim() || homeowner.email;
+      }
+    }
+    if (clientEmail && provider) {
+      dispatch("invoice.paid", {
+        clientEmail,
+        clientName: clientName ?? clientEmail,
+        providerName: provider.businessName,
+        invoiceNumber: updatedInvoice.invoiceNumber,
+        amount: typeof updatedInvoice.total === "string" ? parseFloat(updatedInvoice.total) : updatedInvoice.total ?? 0,
+        paymentDate: (/* @__PURE__ */ new Date()).toLocaleDateString(),
+        relatedRecordType: "invoice",
+        relatedRecordId: homebaseInvoiceId
+      }).catch((e) => console.error("invoice.paid dispatch error (stripe invoice webhook):", e));
+    }
+  } catch (err) {
+    console.error("Failed to dispatch invoice.paid from stripe invoice webhook:", err);
+  }
+}
+async function handleStripeInvoicePaymentFailed(stripeInvoice) {
+  const homebaseInvoiceId = stripeInvoice.metadata?.homebaseInvoiceId;
+  if (!homebaseInvoiceId) return;
+  try {
+    const [invoice] = await db.select().from(invoices).where(eq3(invoices.id, homebaseInvoiceId));
+    if (!invoice) return;
+    const [provider] = await db.select().from(providers).where(eq3(providers.id, invoice.providerId));
+    let clientEmail;
+    let clientName;
+    if (invoice.clientId) {
+      const [client] = await db.select().from(clients).where(eq3(clients.id, invoice.clientId));
+      if (client) {
+        clientEmail = client.email ?? void 0;
+        clientName = `${client.firstName || ""} ${client.lastName || ""}`.trim() || clientEmail;
+      }
+    } else if (invoice.homeownerUserId) {
+      const [homeowner] = await db.select().from(users).where(eq3(users.id, invoice.homeownerUserId));
+      if (homeowner) {
+        clientEmail = homeowner.email;
+        clientName = `${homeowner.firstName || ""} ${homeowner.lastName || ""}`.trim() || homeowner.email;
+      }
+    }
+    if (clientEmail && provider) {
+      dispatch("invoice.payment_failed", {
+        clientEmail,
+        clientName: clientName ?? clientEmail,
+        providerName: provider.businessName,
+        invoiceNumber: invoice.invoiceNumber,
+        amount: typeof invoice.total === "string" ? parseFloat(invoice.total) : invoice.total ?? 0,
+        relatedRecordType: "invoice",
+        relatedRecordId: homebaseInvoiceId
+      }).catch((e) => console.error("invoice.payment_failed dispatch error (stripe invoice webhook):", e));
+    }
+  } catch (err) {
+    console.error("Failed to dispatch invoice.payment_failed from stripe invoice webhook:", err);
   }
 }
 async function handleChargeRefunded(charge) {
@@ -4082,7 +4774,7 @@ async function calculateFeePreview(providerId, totalCents) {
   const plan = await getProviderPlan(providerId);
   const fee = calculatePlatformFee(
     totalCents,
-    plan.platformFeePercent || "10.00",
+    plan.platformFeePercent || "3.00",
     plan.platformFeeFixedCents || 0
   );
   return {
@@ -4093,46 +4785,147 @@ async function calculateFeePreview(providerId, totalCents) {
     providerReceivesCents: totalCents - fee.totalCents
   };
 }
+async function sendPlatformStripeInvoice(invoiceId) {
+  const stripe2 = getStripe();
+  const [invoice] = await db.select().from(invoices).where(eq3(invoices.id, invoiceId));
+  if (!invoice) throw new Error("Invoice not found");
+  if (!invoice.clientId) throw new Error("Invoice has no client attached");
+  const [client] = await db.select().from(clients).where(eq3(clients.id, invoice.clientId));
+  if (!client) throw new Error("Client not found");
+  if (!client.email) throw new Error("Client has no email address \u2014 add the client's email first");
+  let stripeCustomerId = client.stripeCustomerId || null;
+  if (stripeCustomerId) {
+    try {
+      const existing = await stripe2.customers.retrieve(stripeCustomerId);
+      if (existing.deleted) stripeCustomerId = null;
+    } catch {
+      stripeCustomerId = null;
+    }
+  }
+  if (!stripeCustomerId) {
+    const byEmail = await stripe2.customers.list({ email: client.email, limit: 1 });
+    if (byEmail.data.length > 0) {
+      stripeCustomerId = byEmail.data[0].id;
+    } else {
+      const customerName = [client.firstName, client.lastName].filter(Boolean).join(" ") || void 0;
+      const newCustomer = await stripe2.customers.create({
+        email: client.email,
+        name: customerName,
+        phone: client.phone || void 0,
+        metadata: { homebaseClientId: client.id, providerId: invoice.providerId }
+      });
+      stripeCustomerId = newCustomer.id;
+    }
+    await db.update(clients).set({ stripeCustomerId, updatedAt: /* @__PURE__ */ new Date() }).where(eq3(clients.id, client.id));
+  }
+  const daysUntilDue = invoice.dueDate ? Math.max(1, Math.ceil((new Date(invoice.dueDate).getTime() - Date.now()) / 864e5)) : 30;
+  const stripeInvoice = await stripe2.invoices.create({
+    customer: stripeCustomerId,
+    collection_method: "send_invoice",
+    days_until_due: daysUntilDue,
+    metadata: {
+      homebaseInvoiceId: invoice.id,
+      providerId: invoice.providerId
+    }
+  });
+  const rawItems = invoice.lineItems;
+  const lineItems = rawItems ? Array.isArray(rawItems) ? rawItems : JSON.parse(rawItems) : [];
+  if (lineItems.length > 0) {
+    for (const item of lineItems) {
+      const unitAmountCents = Math.round(
+        parseFloat(item.unitPrice?.toString() || item.price?.toString() || "0") * 100
+      );
+      const qty = Math.max(1, Math.round(parseFloat(item.quantity?.toString() || "1")));
+      const currency = (invoice.currency || "usd").toLowerCase();
+      await stripe2.invoiceItems.create({
+        customer: stripeCustomerId,
+        invoice: stripeInvoice.id,
+        amount: unitAmountCents * qty,
+        currency,
+        description: item.description || item.name || "Service"
+      });
+    }
+  } else {
+    const totalCents = invoice.totalCents || Math.round(parseFloat(invoice.total?.toString() || "0") * 100);
+    await stripe2.invoiceItems.create({
+      customer: stripeCustomerId,
+      invoice: stripeInvoice.id,
+      amount: totalCents,
+      currency: invoice.currency || "usd",
+      description: invoice.notes || `Invoice ${invoice.invoiceNumber}`
+    });
+  }
+  const finalized = await stripe2.invoices.finalizeInvoice(stripeInvoice.id);
+  const hostedInvoiceUrl = finalized.hosted_invoice_url || "";
+  await stripe2.invoices.sendInvoice(stripeInvoice.id);
+  await db.update(invoices).set({ stripeInvoiceId: finalized.id, hostedInvoiceUrl, updatedAt: /* @__PURE__ */ new Date() }).where(eq3(invoices.id, invoiceId));
+  return { stripeInvoiceId: finalized.id, hostedInvoiceUrl };
+}
 
 // server/routes.ts
 init_schema();
-
-// server/auth.ts
-import jwt from "jsonwebtoken";
-var JWT_SECRET = process.env.JWT_SECRET || "homebase-jwt-secret-change-in-production";
-function generateToken(userId, role) {
-  return jwt.sign({ userId, role }, JWT_SECRET, { expiresIn: "30d" });
-}
-function verifyToken(token) {
-  try {
-    const payload = jwt.verify(token, JWT_SECRET);
-    return payload;
-  } catch {
-    return null;
-  }
-}
-var authenticateJWT = (req, res, next) => {
-  const authHeader = req.headers["authorization"];
-  const raw = Array.isArray(authHeader) ? authHeader[0] : authHeader;
-  const headerToken = raw?.startsWith("Bearer ") ? raw.slice(7) : void 0;
-  const cookieToken = req.cookies?.token;
-  const token = headerToken || cookieToken;
-  if (!token) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-  const payload = verifyToken(token);
-  if (!payload) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-  req.authenticatedUserId = payload.userId;
-  next();
-};
-
-// server/routes.ts
+init_auth();
+var BCRYPT_SALT_ROUNDS = 10;
 var requireAuth = authenticateJWT;
 var aiRateLimitMap = /* @__PURE__ */ new Map();
+var insightsAiCache = /* @__PURE__ */ new Map();
+var REVENUE_MILESTONES = [1e4, 25e3, 5e4, 1e5, 15e4, 2e5, 3e5, 5e5];
+async function fireInsightNotifications(userId, insights) {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1e3);
+  const topMilestone = REVENUE_MILESTONES.slice().reverse().find((m) => insights.allTimeRevenue >= m);
+  if (topMilestone) {
+    const milestoneType = `revenue_milestone_${topMilestone}`;
+    const [existing] = await db.select({ id: notifications.id }).from(notifications).where(and4(
+      eq5(notifications.userId, userId),
+      eq5(notifications.type, milestoneType),
+      gte2(notifications.createdAt, thirtyDaysAgo)
+    )).limit(1);
+    if (!existing) {
+      await dispatchNotification(
+        userId,
+        "Revenue Milestone Reached",
+        `You've earned $${(topMilestone / 1e3).toFixed(0)}K all-time \u2014 incredible work!`,
+        milestoneType,
+        {},
+        "updates"
+      );
+    }
+  }
+  if (insights.clientGrowthPct >= 10) {
+    const [existing] = await db.select({ id: notifications.id }).from(notifications).where(and4(
+      eq5(notifications.userId, userId),
+      eq5(notifications.type, "quarterly_client_growth"),
+      gte2(notifications.createdAt, thirtyDaysAgo)
+    )).limit(1);
+    if (!existing) {
+      await dispatchNotification(
+        userId,
+        "Client Growth Surge",
+        `Your client base grew ${insights.clientGrowthPct}% this quarter \u2014 great momentum!`,
+        "quarterly_client_growth",
+        {},
+        "updates"
+      );
+    }
+  }
+  if (parseFloat(insights.rating) >= 4.8 && insights.reviewCount >= 10) {
+    const [existing] = await db.select({ id: notifications.id }).from(notifications).where(and4(
+      eq5(notifications.userId, userId),
+      eq5(notifications.type, "top_rated_achievement"),
+      gte2(notifications.createdAt, thirtyDaysAgo)
+    )).limit(1);
+    if (!existing) {
+      await dispatchNotification(
+        userId,
+        "Top Rated Provider",
+        `${insights.rating} stars from ${insights.reviewCount} reviews \u2014 you're among the best!`,
+        "top_rated_achievement",
+        {},
+        "updates"
+      );
+    }
+  }
+}
 var aiRateLimit = (req, res, next) => {
   const userId = req.authenticatedUserId;
   const now = Date.now();
@@ -4218,13 +5011,17 @@ async function convertIntakeToClientJob(tx, params) {
   const lastName = nameParts.slice(1).join(" ") || "";
   let clientId;
   if (clientEmail) {
-    const [found] = await tx.select({ id: clients.id }).from(clients).where(and4(eq4(clients.providerId, providerId), eq4(clients.email, clientEmail)));
-    if (found) {
-      clientId = found.id;
-    } else {
-      const [newC] = await tx.insert(clients).values({ providerId, firstName, lastName: lastName || null, email: clientEmail, phone: clientPhone || null, address: address || null }).returning({ id: clients.id });
-      clientId = newC.id;
-    }
+    const result = await tx.execute(sql3`
+      INSERT INTO clients (id, provider_id, first_name, last_name, email, phone, address, created_at, updated_at)
+      VALUES (gen_random_uuid(), ${providerId}, ${firstName}, ${lastName || null}, ${clientEmail}, ${clientPhone || null}, ${address || null}, NOW(), NOW())
+      ON CONFLICT (provider_id, email) WHERE email IS NOT NULL
+      DO UPDATE SET
+        phone = COALESCE(EXCLUDED.phone, clients.phone),
+        address = COALESCE(EXCLUDED.address, clients.address),
+        updated_at = NOW()
+      RETURNING id
+    `);
+    clientId = result.rows[0].id;
   } else {
     const [newC] = await tx.insert(clients).values({ providerId, firstName, lastName: lastName || null, email: null, phone: clientPhone || null, address: address || null }).returning({ id: clients.id });
     clientId = newC.id;
@@ -4243,11 +5040,127 @@ async function convertIntakeToClientJob(tx, params) {
     notes: notes || null
   }).returning();
   const now = /* @__PURE__ */ new Date();
-  await tx.update(intakeSubmissions).set({ status: targetStatus, convertedClientId: clientId, convertedJobId: newJob.id, convertedAt: now, updatedAt: now }).where(eq4(intakeSubmissions.id, submissionId));
+  await tx.update(intakeSubmissions).set({ status: targetStatus, convertedClientId: clientId, convertedJobId: newJob.id, convertedAt: now, updatedAt: now }).where(eq5(intakeSubmissions.id, submissionId));
   return { clientId, job: newJob };
 }
+function detectServiceCategory(title) {
+  const t = (title || "").toLowerCase();
+  if (t.includes("hvac") || t.includes("heat") || t.includes("air") || t.includes("furnace") || t.includes("ac ") || t.includes("cooling")) return "HVAC";
+  if (t.includes("plumb") || t.includes("pipe") || t.includes("water") || t.includes("drain") || t.includes("toilet") || t.includes("faucet")) return "Plumbing";
+  if (t.includes("electr") || t.includes("wiring") || t.includes("outlet") || t.includes("circuit")) return "Electrical";
+  if (t.includes("roof") || t.includes("gutter") || t.includes("shingle")) return "Roof";
+  if (t.includes("pest") || t.includes("termite") || t.includes("rodent") || t.includes("insect")) return "Pest Control";
+  if (t.includes("lawn") || t.includes("garden") || t.includes("landscap") || t.includes("grass") || t.includes("mow")) return "Lawn";
+  if (t.includes("paint") || t.includes("coat")) return "Painting";
+  if (t.includes("clean")) return "Cleaning";
+  if (t.includes("appliance") || t.includes("washer") || t.includes("dryer") || t.includes("dishwash") || t.includes("refriger")) return "Appliances";
+  return "General";
+}
+async function autoLogHouseFaxEntry(job) {
+  try {
+    let homeId = null;
+    if (job.appointmentId) {
+      const [appt] = await db.select({ homeId: appointments.homeId }).from(appointments).where(eq5(appointments.id, job.appointmentId));
+      if (appt) homeId = appt.homeId;
+    }
+    if (!homeId && job.id) {
+      const [inv] = await db.select({ homeownerUserId: invoices.homeownerUserId }).from(invoices).where(eq5(invoices.jobId, job.id));
+      if (inv?.homeownerUserId) {
+        const [defaultHome] = await db.select({ id: homes.id }).from(homes).where(and4(eq5(homes.userId, inv.homeownerUserId), eq5(homes.isDefault, true)));
+        if (defaultHome) homeId = defaultHome.id;
+        else {
+          const [anyHome] = await db.select({ id: homes.id }).from(homes).where(eq5(homes.userId, inv.homeownerUserId));
+          if (anyHome) homeId = anyHome.id;
+        }
+      }
+    }
+    if (!homeId) {
+      console.log(`[HouseFax] No home found for job ${job.id}, skipping auto-log`);
+      return;
+    }
+    const [existing] = await db.select({ id: housefaxEntries.id }).from(housefaxEntries).where(eq5(housefaxEntries.jobId, job.id));
+    if (existing) {
+      console.log(`[HouseFax] Entry already exists for job ${job.id}`);
+      return;
+    }
+    const [provider] = job.providerId ? await db.select({ businessName: providers.businessName }).from(providers).where(eq5(providers.id, job.providerId)) : [null];
+    const serviceCategory = detectServiceCategory(job.title);
+    const costCents = job.finalPrice ? Math.round(parseFloat(job.finalPrice) * 100) : 0;
+    let aiSummary = null;
+    try {
+      const prompt = `Write a 1-2 sentence plain-English summary of this home service job for a homeowner's records:
+
+Service: ${job.title}
+Category: ${serviceCategory}
+Description: ${job.description || "No additional details"}
+Notes: ${job.notes || "None"}
+Provider: ${provider?.businessName || "Unknown provider"}
+Cost: ${costCents > 0 ? "$" + (costCents / 100).toFixed(2) : "Not specified"}
+
+Be concise and factual. No bullet points. Just 1-2 sentences.`;
+      const aiResponse = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 100
+      });
+      aiSummary = aiResponse.choices[0]?.message?.content?.trim() || null;
+    } catch (e) {
+      console.error("[HouseFax] AI summary generation failed:", e);
+    }
+    await db.insert(housefaxEntries).values({
+      homeId,
+      jobId: job.id,
+      appointmentId: job.appointmentId || null,
+      serviceCategory,
+      serviceName: job.title,
+      providerId: job.providerId || null,
+      providerName: provider?.businessName || null,
+      completedAt: job.completedAt || /* @__PURE__ */ new Date(),
+      costCents,
+      aiSummary,
+      photos: [],
+      systemAffected: serviceCategory,
+      notes: job.notes || null
+    });
+    console.log(`[HouseFax] Auto-logged entry for job ${job.id} (${job.title}) -> home ${homeId}`);
+    calculateAndPersistHouseFaxScore(homeId).catch(
+      (e) => console.error("[HouseFax] Score persistence failed:", e)
+    );
+  } catch (error) {
+    console.error("[HouseFax] Auto-log failed:", error);
+    throw error;
+  }
+}
+async function calculateAndPersistHouseFaxScore(homeId) {
+  const KEY_SYSTEMS = ["HVAC", "Plumbing", "Electrical", "Roof", "Pest Control", "Lawn"];
+  const allEntries = await db.select().from(housefaxEntries).where(eq5(housefaxEntries.homeId, homeId));
+  const now = /* @__PURE__ */ new Date();
+  const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1e3);
+  const twoYearsAgo = new Date(now.getTime() - 2 * 365 * 24 * 60 * 60 * 1e3);
+  let score = 50;
+  for (const sys of KEY_SYSTEMS) {
+    const sysEntries = allEntries.filter((e) => {
+      const s = (e.systemAffected || e.serviceCategory || "").toLowerCase();
+      return s.includes(sys.toLowerCase().split(" ")[0]);
+    });
+    if (sysEntries.length > 0) {
+      score += sysEntries.find((e) => e.completedAt >= oneYearAgo) ? 6 : 2;
+    }
+    if (sysEntries.length === 0) score -= 3;
+    else if (!sysEntries.find((e) => e.completedAt >= twoYearsAgo)) score -= 2;
+  }
+  const withPhotos = allEntries.filter((e) => Array.isArray(e.photos) && e.photos.length > 0).length;
+  const withSummaries = allEntries.filter((e) => e.aiSummary).length;
+  score += Math.min(withPhotos * 2, 10);
+  score += Math.min(withSummaries, 10);
+  score = Math.max(0, Math.min(100, score));
+  await storage.updateHome(homeId, { housefaxScore: score });
+  return score;
+}
 async function registerRoutes(app2) {
-  await seedDatabase();
+  if (process.env.NODE_ENV !== "production") {
+    await seedDatabase();
+  }
   app2.get("/api/health", (_req, res) => {
     res.json({ status: "ok", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
   });
@@ -4265,18 +5178,118 @@ async function registerRoutes(app2) {
         return res.status(409).json({ error: "Email already registered" });
       }
       const user = await storage.createUser(parsed.data);
-      const token = generateToken(user.id, user.isProvider ? "provider" : "homeowner");
+      const token = generateToken(user.id, user.isProvider ? "provider" : "homeowner", user.tokenVersion ?? 0);
       res.cookie("token", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        maxAge: 30 * 24 * 60 * 60 * 1e3
+        maxAge: 7 * 24 * 60 * 60 * 1e3
       });
       res.status(201).json({ user: formatUserResponse(user), token });
       const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "there";
-      dispatch("user.signup", { recipientUserId: user.id, recipientEmail: user.email, clientName: fullName });
+      dispatch("user.signup", { recipientUserId: user.id, recipientEmail: user.email, clientName: fullName }).catch((emailErr) => {
+        console.error("[SIGNUP_EMAIL_FAILURE] Welcome email failed for user", user.id, ":", emailErr);
+      });
     } catch (error) {
       console.error("Signup error:", error);
       res.status(500).json({ error: "Failed to create account" });
+    }
+  });
+  app2.post("/api/provider/onboard-complete", async (req, res) => {
+    try {
+      const {
+        name,
+        email,
+        password,
+        phone,
+        businessName,
+        description,
+        serviceArea,
+        serviceZipCodes,
+        serviceCities,
+        serviceRadius,
+        capabilityTags,
+        businessHours,
+        initialService
+      } = req.body;
+      if (!email || !password || !businessName) {
+        return res.status(400).json({ error: "email, password, and businessName are required" });
+      }
+      const existing = await storage.getUserByEmail(email.trim().toLowerCase());
+      if (existing) {
+        return res.status(409).json({ error: "Email already registered" });
+      }
+      const nameFields = parseUserName(name);
+      const hashedPassword = await bcryptHash(password, BCRYPT_SALT_ROUNDS);
+      const { user, provider, service } = await db.transaction(async (tx) => {
+        const [newUser] = await tx.insert(users).values({
+          ...nameFields,
+          email: email.trim().toLowerCase(),
+          password: hashedPassword,
+          phone: phone?.trim() || null,
+          isProvider: true
+        }).returning();
+        const defaultBookingPolicies = {
+          instantBooking: false,
+          depositRequired: false,
+          depositPercentage: 0,
+          cancellationWindowHours: 24,
+          advanceBookingDays: 60
+        };
+        const parsedServiceZipCodes = Array.isArray(serviceZipCodes) ? serviceZipCodes : serviceZipCodes ? String(serviceZipCodes).split(",").map((s) => s.trim()).filter(Boolean) : null;
+        const parsedServiceCities = Array.isArray(serviceCities) ? serviceCities : serviceCities ? String(serviceCities).split(",").map((s) => s.trim()).filter(Boolean) : null;
+        const [newProvider] = await tx.insert(providers).values({
+          userId: newUser.id,
+          businessName: businessName.trim(),
+          description: description?.trim() || null,
+          serviceArea: serviceArea?.trim() || null,
+          serviceZipCodes: parsedServiceZipCodes,
+          serviceCities: parsedServiceCities,
+          serviceRadius: serviceRadius ? Number(serviceRadius) : null,
+          capabilityTags: Array.isArray(capabilityTags) ? capabilityTags : [],
+          businessHours: businessHours ?? null,
+          bookingPolicies: defaultBookingPolicies,
+          isActive: true,
+          // schema-aligned: no "status" column in providers table
+          isPublic: true,
+          // make discoverable immediately post-onboarding
+          email: email.trim().toLowerCase(),
+          phone: phone?.trim() || null
+        }).returning();
+        let newService = null;
+        if (initialService?.name?.trim()) {
+          const [svc] = await tx.insert(providerCustomServices).values({
+            providerId: newProvider.id,
+            name: initialService.name.trim(),
+            category: initialService.category || "General",
+            description: initialService.description?.trim() || null,
+            pricingType: initialService.quoteRequired ? "quote" : "fixed",
+            basePrice: !initialService.quoteRequired && initialService.price ? String(initialService.price) : null,
+            duration: initialService.duration || 60,
+            isPublished: true
+          }).returning();
+          newService = svc;
+        }
+        return { user: newUser, provider: newProvider, service: newService };
+      });
+      const token = generateToken(user.id, "provider", user.tokenVersion ?? 0);
+      res.cookie("token", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 7 * 24 * 60 * 60 * 1e3
+      });
+      res.status(201).json({
+        user: formatUserResponse(user),
+        provider,
+        service,
+        token
+      });
+      const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "there";
+      dispatch("user.signup", { recipientUserId: user.id, recipientEmail: user.email, clientName: fullName }).catch((emailErr) => {
+        console.error("[ONBOARD_EMAIL_FAILURE] Welcome email failed for user", user.id, ":", emailErr);
+      });
+    } catch (error) {
+      console.error("Provider onboard-complete error:", error);
+      res.status(500).json({ error: "Failed to create provider account" });
     }
   });
   app2.post("/api/auth/login", async (req, res) => {
@@ -4293,12 +5306,16 @@ async function registerRoutes(app2) {
       if (providerProfile && !user.isProvider) {
         await storage.updateUser(user.id, { isProvider: true });
         user.isProvider = true;
+      } else if (!providerProfile && user.isProvider) {
+        await storage.updateUser(user.id, { isProvider: false });
+        user.isProvider = false;
       }
-      const token = generateToken(user.id, user.isProvider ? "provider" : "homeowner");
+      const role = providerProfile ? "provider" : "homeowner";
+      const token = generateToken(user.id, role, user.tokenVersion ?? 0);
       res.cookie("token", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        maxAge: 30 * 24 * 60 * 60 * 1e3
+        maxAge: 7 * 24 * 60 * 60 * 1e3
       });
       res.json({ user: formatUserResponse(user), providerProfile, token });
     } catch (error) {
@@ -4323,6 +5340,168 @@ async function registerRoutes(app2) {
   app2.post("/api/auth/logout", (req, res) => {
     res.clearCookie("token");
     res.json({ success: true });
+  });
+  app2.post("/api/auth/logout-all", requireAuth, async (req, res) => {
+    try {
+      const userId = req.authenticatedUserId;
+      await db.update(users).set({ tokenVersion: sql3`token_version + 1` }).where(eq5(users.id, userId));
+      res.clearCookie("token");
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Logout-all error:", error);
+      res.status(500).json({ error: "Failed to revoke sessions" });
+    }
+  });
+  app2.post("/api/auth/refresh", requireAuth, async (req, res) => {
+    try {
+      const userId = req.authenticatedUserId;
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+      const providerRecord = await db.select({ id: providers.id }).from(providers).where(eq5(providers.userId, userId)).limit(1);
+      const hasProviderRecord = providerRecord.length > 0;
+      if (hasProviderRecord && !user.isProvider) {
+        await storage.updateUser(userId, { isProvider: true });
+      } else if (!hasProviderRecord && user.isProvider) {
+        await storage.updateUser(userId, { isProvider: false });
+      }
+      const role = hasProviderRecord ? "provider" : "homeowner";
+      const token = generateToken(user.id, role, user.tokenVersion ?? 0);
+      res.cookie("token", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 7 * 24 * 60 * 60 * 1e3
+      });
+      res.json({ token, role });
+    } catch (error) {
+      console.error("Token refresh error:", error);
+      res.status(500).json({ error: "Failed to refresh token" });
+    }
+  });
+  app2.post("/api/auth/forgot-password", async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email || typeof email !== "string") {
+        return res.status(400).json({ error: "Email is required" });
+      }
+      const user = await storage.getUserByEmail(email.trim().toLowerCase());
+      if (user) {
+        const { JWT_SECRET: JWT_SECRET2 } = await Promise.resolve().then(() => (init_auth(), auth_exports));
+        const jwt2 = await import("jsonwebtoken");
+        const RESET_SECRET = `${JWT_SECRET2}:password-reset`;
+        const resetToken = jwt2.default.sign(
+          { userId: user.id, purpose: "password_reset" },
+          RESET_SECRET,
+          { expiresIn: "1h" }
+        );
+        const host = req.headers["x-forwarded-host"] || req.get("host") || "homebaseproapp.com";
+        const protocol = req.headers["x-forwarded-proto"]?.split(",")[0]?.trim() || req.protocol || "https";
+        const resetUrl = `${protocol}://${host}/reset-password?token=${resetToken}`;
+        const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "there";
+        const { sendPasswordResetEmail: sendPasswordResetEmail2 } = await Promise.resolve().then(() => (init_emailService(), emailService_exports));
+        sendPasswordResetEmail2(user.email, fullName, resetUrl).catch((err) => {
+          console.error("[FORGOT_PASSWORD] Email send failed:", err);
+        });
+      }
+      res.json({ success: true, message: "If an account exists for that email, a reset link has been sent." });
+    } catch (error) {
+      console.error("Forgot password error:", error);
+      res.status(500).json({ error: "Failed to process request" });
+    }
+  });
+  app2.post("/api/auth/reset-password", async (req, res) => {
+    try {
+      const { token, password } = req.body;
+      if (!token || typeof token !== "string") {
+        return res.status(400).json({ error: "Reset token is required" });
+      }
+      if (!password || typeof password !== "string" || password.length < 8) {
+        return res.status(400).json({ error: "Password must be at least 8 characters" });
+      }
+      const { JWT_SECRET: JWT_SECRET2 } = await Promise.resolve().then(() => (init_auth(), auth_exports));
+      const jwt2 = await import("jsonwebtoken");
+      const RESET_SECRET = `${JWT_SECRET2}:password-reset`;
+      let decoded;
+      try {
+        decoded = jwt2.default.verify(token, RESET_SECRET);
+      } catch {
+        return res.status(400).json({ error: "Invalid or expired reset link. Please request a new one." });
+      }
+      if (decoded.purpose !== "password_reset" || !decoded.userId) {
+        return res.status(400).json({ error: "Invalid reset token" });
+      }
+      const hashed = await bcryptHash(password, 10);
+      await db.update(users).set({ password: hashed, updatedAt: /* @__PURE__ */ new Date() }).where(eq5(users.id, decoded.userId));
+      res.json({ success: true, message: "Password updated successfully" });
+    } catch (error) {
+      console.error("Reset password error:", error);
+      res.status(500).json({ error: "Failed to reset password" });
+    }
+  });
+  app2.delete("/api/auth/account", requireAuth, async (req, res) => {
+    try {
+      const userId = req.authenticatedUserId;
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      await db.transaction(async (tx) => {
+        const providerRow = await tx.select({ id: providers.id, stripeAccountId: stripeConnectAccounts.stripeAccountId }).from(providers).leftJoin(stripeConnectAccounts, eq5(stripeConnectAccounts.providerId, providers.id)).where(eq5(providers.userId, userId)).limit(1);
+        if (providerRow.length > 0) {
+          const provId = providerRow[0].id;
+          await tx.delete(invoiceLineItems).where(
+            sql3`invoice_id IN (SELECT id FROM invoices WHERE provider_id = ${provId})`
+          );
+          await tx.delete(payments).where(
+            sql3`invoice_id IN (SELECT id FROM invoices WHERE provider_id = ${provId})`
+          );
+          await tx.delete(invoices).where(eq5(invoices.providerId, provId));
+          await tx.delete(jobs).where(eq5(jobs.providerId, provId));
+          await tx.delete(clients).where(eq5(clients.providerId, provId));
+          await tx.delete(bookingLinks).where(eq5(bookingLinks.providerId, provId));
+          await tx.delete(intakeSubmissions).where(eq5(intakeSubmissions.providerId, provId));
+          await tx.delete(leads).where(eq5(leads.providerId, provId));
+          await tx.delete(providerMessages).where(eq5(providerMessages.providerId, provId));
+          await tx.delete(messageTemplates).where(eq5(messageTemplates.providerId, provId));
+          await tx.delete(providerCustomServices).where(eq5(providerCustomServices.providerId, provId));
+          await tx.delete(providerServices).where(eq5(providerServices.providerId, provId));
+          await tx.delete(providerPlans).where(eq5(providerPlans.providerId, provId));
+          await tx.delete(stripeConnectAccounts).where(eq5(stripeConnectAccounts.providerId, provId));
+          await tx.delete(payouts).where(eq5(payouts.providerId, provId));
+          await tx.delete(reviews).where(eq5(reviews.providerId, provId));
+          await tx.delete(providers).where(eq5(providers.id, provId));
+        }
+        await tx.delete(notifications).where(eq5(notifications.userId, userId));
+        await tx.delete(pushTokens).where(eq5(pushTokens.userId, userId));
+        await tx.delete(notificationPreferences).where(eq5(notificationPreferences.userId, userId));
+        await tx.delete(userCredits).where(eq5(userCredits.userId, userId));
+        await tx.delete(creditLedger).where(eq5(creditLedger.userId, userId));
+        await tx.delete(supportTickets).where(eq5(supportTickets.userId, userId));
+        const userHomes = await tx.select({ id: homes.id }).from(homes).where(eq5(homes.userId, userId));
+        if (userHomes.length > 0) {
+          const homeIds = userHomes.map((h) => h.id);
+          await tx.delete(housefaxEntries).where(sql3`home_id = ANY(${homeIds})`);
+          await tx.delete(maintenanceReminders).where(sql3`home_id = ANY(${homeIds})`);
+          await tx.delete(appointments).where(sql3`home_id = ANY(${homeIds})`);
+        }
+        await tx.delete(homes).where(eq5(homes.userId, userId));
+        if (user.stripeCustomerId) {
+          try {
+            const stripe2 = getStripe();
+            await stripe2.customers.del(user.stripeCustomerId);
+          } catch (stripeErr) {
+            console.error("[DELETE_ACCOUNT] Stripe customer deletion failed (non-fatal):", stripeErr);
+          }
+        }
+        await tx.delete(users).where(eq5(users.id, userId));
+      });
+      res.clearCookie("token");
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete account error:", error);
+      res.status(500).json({ error: "Failed to delete account" });
+    }
   });
   app2.get("/api/user/:id", requireAuth, async (req, res) => {
     try {
@@ -4367,8 +5546,8 @@ async function registerRoutes(app2) {
       if (req.params.userId !== authUserId) {
         return res.status(403).json({ error: "Access denied" });
       }
-      const homes3 = await storage.getHomes(req.params.userId);
-      res.json({ homes: homes3.map(formatHomeResponse) });
+      const homes2 = await storage.getHomes(req.params.userId);
+      res.json({ homes: homes2.map(formatHomeResponse) });
     } catch (error) {
       console.error("Get homes error:", error);
       res.status(500).json({ error: "Failed to get homes" });
@@ -4616,6 +5795,301 @@ async function registerRoutes(app2) {
       res.status(500).json({ error: "Failed to get HouseFax context" });
     }
   });
+  app2.get("/api/housefax/:homeId", requireAuth, async (req, res) => {
+    try {
+      const { homeId } = req.params;
+      const authUserId = req.authenticatedUserId;
+      const home = await storage.getHome(homeId);
+      if (!home) return res.status(404).json({ error: "Home not found" });
+      if (home.userId !== authUserId) return res.status(403).json({ error: "Access denied" });
+      const entries = await db.select().from(housefaxEntries).where(eq5(housefaxEntries.homeId, homeId)).orderBy(desc2(housefaxEntries.completedAt));
+      const systemMap = /* @__PURE__ */ new Map();
+      for (const entry of entries) {
+        const sys = entry.systemAffected || entry.serviceCategory || "General";
+        if (!systemMap.has(sys)) systemMap.set(sys, { lastServiced: entry.completedAt, count: 0, entries: [] });
+        const data = systemMap.get(sys);
+        data.count += 1;
+        data.entries.push(entry);
+        if (entry.completedAt > data.lastServiced) data.lastServiced = entry.completedAt;
+      }
+      const KEY_SYSTEMS = ["HVAC", "Plumbing", "Electrical", "Roof", "Pest Control", "Lawn"];
+      const SERVICE_INTERVALS = {
+        HVAC: 12,
+        Plumbing: 24,
+        Electrical: 36,
+        Roof: 60,
+        "Pest Control": 12,
+        Lawn: 3,
+        Painting: 84,
+        Cleaning: 3,
+        Appliances: 24,
+        General: 12
+      };
+      const assets = Array.from(systemMap.entries()).map(([system, data]) => {
+        const sortedEntries = data.entries.sort((a, b) => b.completedAt.getTime() - a.completedAt.getTime());
+        const lastEntry = sortedEntries[0];
+        const intervalMonths = SERVICE_INTERVALS[system] || 12;
+        const nextDueDate = new Date(data.lastServiced.getTime() + intervalMonths * 30 * 24 * 60 * 60 * 1e3);
+        return {
+          system,
+          lastServiced: data.lastServiced.toISOString(),
+          serviceCount: data.count,
+          lastServiceName: lastEntry?.serviceName || system,
+          lastProviderName: lastEntry?.providerName || null,
+          nextDue: nextDueDate.toISOString(),
+          recommendedIntervalMonths: intervalMonths
+        };
+      });
+      const score = await calculateAndPersistHouseFaxScore(homeId);
+      const jobIds = entries.map((e) => e.jobId).filter(Boolean);
+      const allInvoices = jobIds.length > 0 ? await db.select().from(invoices).where(and4(
+        inArray(invoices.jobId, jobIds),
+        inArray(invoices.status, ["paid", "partially_paid"])
+      )) : [];
+      const invoiceJobIds = new Set(allInvoices.map((i) => i.jobId).filter(Boolean));
+      const documentsFromInvoices = allInvoices.map((inv) => {
+        const matchingEntry = entries.find((e) => e.jobId === inv.jobId);
+        const totalAmt = inv.totalCents ? inv.totalCents / 100 : parseFloat(inv.total || "0");
+        return {
+          id: inv.id,
+          name: matchingEntry ? `${matchingEntry.serviceName} - ${new Date(matchingEntry.completedAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}` : `Invoice #${inv.invoiceNumber}`,
+          type: "invoice",
+          date: inv.paidAt ? new Date(inv.paidAt).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : new Date(inv.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" }),
+          amount: totalAmt,
+          providerId: matchingEntry?.providerId || null,
+          providerName: matchingEntry?.providerName || null,
+          hasPhotos: Array.isArray(matchingEntry?.photos) && (matchingEntry?.photos).length > 0,
+          invoiceId: inv.id
+        };
+      });
+      const documentsFromFreeJobs = entries.filter((e) => !e.jobId || !invoiceJobIds.has(e.jobId)).filter((e) => (e.costCents || 0) === 0).map((e) => ({
+        id: e.id,
+        name: `${e.serviceName} - ${new Date(e.completedAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}`,
+        type: "receipt",
+        date: new Date(e.completedAt).toLocaleDateString("en-US", { month: "short", year: "numeric" }),
+        amount: 0,
+        providerId: e.providerId,
+        providerName: e.providerName,
+        hasPhotos: Array.isArray(e.photos) && e.photos.length > 0,
+        invoiceId: null
+      }));
+      const documents = [...documentsFromInvoices, ...documentsFromFreeJobs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const totalSpentCents = entries.reduce((sum, e) => sum + (e.costCents || 0), 0);
+      let insights = [];
+      if (entries.length > 0) {
+        try {
+          const systemsServiced = [...systemMap.keys()].join(", ");
+          const missingKey = KEY_SYSTEMS.filter((sys) => {
+            return !entries.some((e) => {
+              const s = (e.systemAffected || e.serviceCategory || "").toLowerCase();
+              return s.includes(sys.toLowerCase().split(" ")[0]);
+            });
+          });
+          const prompt = `You are a home maintenance advisor. Based on this homeowner's service history, provide exactly 3 concise bullet point recommendations (no bullet symbols, just text, one per line).
+
+Systems serviced: ${systemsServiced || "none yet"}
+Key systems not yet documented: ${missingKey.join(", ") || "all covered"}
+Total jobs documented: ${entries.length}
+Home age: ${home.yearBuilt ? (/* @__PURE__ */ new Date()).getFullYear() - home.yearBuilt + " years" : "unknown"}
+
+Give actionable, specific recommendations. Be brief (1 sentence each).`;
+          const aiResponse = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [{ role: "user", content: prompt }],
+            max_tokens: 200
+          });
+          const content = aiResponse.choices[0]?.message?.content || "";
+          insights = content.split("\n").filter((l) => l.trim()).slice(0, 3);
+        } catch (e) {
+          console.error("Insights generation error:", e);
+          insights = [];
+        }
+      }
+      res.json({
+        entries,
+        assets,
+        score,
+        totalSpentCents,
+        documents,
+        insights
+      });
+    } catch (error) {
+      console.error("HouseFax get error:", error);
+      res.status(500).json({ error: "Failed to get HouseFax data" });
+    }
+  });
+  app2.post("/api/housefax/:homeId/score", requireAuth, async (req, res) => {
+    try {
+      const { homeId } = req.params;
+      const home = await storage.getHome(homeId);
+      if (!home) return res.status(404).json({ error: "Home not found" });
+      if (home.userId !== req.authenticatedUserId) return res.status(403).json({ error: "Access denied" });
+      const score = await calculateAndPersistHouseFaxScore(homeId);
+      res.json({ score });
+    } catch (error) {
+      console.error("HouseFax score error:", error);
+      res.status(500).json({ error: "Failed to calculate score" });
+    }
+  });
+  app2.post("/api/jobs/:id/photos", requireAuth, async (req, res) => {
+    const MAX_PHOTOS_PER_JOB = 10;
+    const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+    const ALLOWED_MIME_PREFIXES = ["data:image/jpeg;base64,", "data:image/png;base64,", "data:image/webp;base64,"];
+    try {
+      const authUserId = req.authenticatedUserId;
+      const job = await storage.getJob(req.params.id);
+      if (!job) return res.status(404).json({ error: "Job not found" });
+      const providerProfile = await storage.getProviderByUserId(authUserId);
+      if (!providerProfile || job.providerId !== providerProfile.id) {
+        return res.status(403).json({ error: "Only the assigned provider can upload photos for this job" });
+      }
+      const { photos } = req.body;
+      if (!Array.isArray(photos) || photos.length === 0) {
+        return res.status(400).json({ error: "photos array is required" });
+      }
+      if (photos.length > MAX_PHOTOS_PER_JOB) {
+        return res.status(400).json({ error: `Maximum ${MAX_PHOTOS_PER_JOB} photos per upload` });
+      }
+      for (const photo of photos) {
+        const validPrefix = ALLOWED_MIME_PREFIXES.find((p) => photo.startsWith(p));
+        if (!validPrefix) {
+          return res.status(400).json({ error: "Only JPEG, PNG, and WebP images are allowed" });
+        }
+        const base64Data = photo.slice(validPrefix.length);
+        const sizeBytes = Math.ceil(base64Data.length * 3 / 4);
+        if (sizeBytes > MAX_PHOTO_BYTES) {
+          return res.status(400).json({ error: "Each photo must be smaller than 5 MB" });
+        }
+      }
+      let [entry] = await db.select().from(housefaxEntries).where(eq5(housefaxEntries.jobId, job.id));
+      if (!entry) {
+        await autoLogHouseFaxEntry(job);
+        const [newEntry] = await db.select().from(housefaxEntries).where(eq5(housefaxEntries.jobId, job.id));
+        if (!newEntry) {
+          return res.status(404).json({ error: "Could not create HouseFax entry for this job. No home found for client." });
+        }
+        entry = newEntry;
+      }
+      const existingPhotos = Array.isArray(entry.photos) ? entry.photos : [];
+      if (existingPhotos.length + photos.length > MAX_PHOTOS_PER_JOB) {
+        return res.status(400).json({ error: `This job already has ${existingPhotos.length} photos. Maximum is ${MAX_PHOTOS_PER_JOB} total.` });
+      }
+      const savedUrls = [];
+      const isDev = process.env.NODE_ENV === "development";
+      let supabaseClient = null;
+      try {
+        supabaseClient = (await Promise.resolve().then(() => (init_supabase(), supabase_exports))).supabase;
+      } catch (importErr) {
+        if (!isDev) {
+          throw new Error("Photo storage is not configured. Please set SUPABASE_SERVICE_KEY and EXPO_PUBLIC_SUPABASE_URL.");
+        }
+      }
+      for (const photo of photos) {
+        const prefix = ALLOWED_MIME_PREFIXES.find((p) => photo.startsWith(p));
+        const ext = prefix.includes("jpeg") ? "jpg" : prefix.includes("png") ? "png" : "webp";
+        const mimeType = prefix.includes("jpeg") ? "image/jpeg" : prefix.includes("png") ? "image/png" : "image/webp";
+        const base64Data = photo.slice(prefix.length);
+        const buffer = Buffer.from(base64Data, "base64");
+        const filename = `${job.id}-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        if (supabaseClient) {
+          const { data: uploadData, error: uploadError } = await supabaseClient.storage.from("job-photos").upload(`photos/${filename}`, buffer, { contentType: mimeType, upsert: false });
+          if (uploadError) {
+            console.error("Supabase upload error:", uploadError);
+            throw new Error("Failed to upload photo to storage");
+          }
+          const { data: publicUrlData } = supabaseClient.storage.from("job-photos").getPublicUrl(`photos/${filename}`);
+          savedUrls.push(publicUrlData.publicUrl);
+        } else if (isDev) {
+          const uploadDir = path.resolve(process.cwd(), "uploads", "photos");
+          if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+          const filePath = path.join(uploadDir, filename);
+          fs.writeFileSync(filePath, buffer);
+          const protocol = req.protocol;
+          const host = req.get("host") || "";
+          savedUrls.push(`${protocol}://${host}/uploads/photos/${filename}`);
+        } else {
+          throw new Error("Photo storage is not available. Please configure Supabase Storage.");
+        }
+      }
+      const updatedPhotos = [...existingPhotos, ...savedUrls];
+      await db.update(housefaxEntries).set({ photos: updatedPhotos }).where(eq5(housefaxEntries.id, entry.id));
+      res.json({ success: true, photosCount: updatedPhotos.length, urls: savedUrls });
+    } catch (error) {
+      console.error("Job photos upload error:", error);
+      res.status(500).json({ error: "Failed to upload photos" });
+    }
+  });
+  app2.post("/api/appointments/:id/complete", requireAuth, async (req, res) => {
+    try {
+      const authUserId = req.authenticatedUserId;
+      const appointment = await storage.getAppointment(req.params.id);
+      if (!appointment) return res.status(404).json({ error: "Appointment not found" });
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      const isProvider = providerRecord && appointment.providerId === providerRecord.id;
+      const isOwner = appointment.userId === authUserId;
+      if (!isProvider && !isOwner) return res.status(403).json({ error: "Access denied" });
+      const updatedAppointment = await storage.updateAppointment(req.params.id, {
+        status: "completed"
+      });
+      if (!updatedAppointment) return res.status(500).json({ error: "Failed to update appointment" });
+      const [linkedJob] = await db.select().from(jobs).where(eq5(jobs.appointmentId, req.params.id));
+      if (linkedJob && linkedJob.status !== "completed") {
+        const { finalPrice } = req.body;
+        const completedJob = await storage.updateJob(linkedJob.id, {
+          status: "completed",
+          completedAt: /* @__PURE__ */ new Date(),
+          finalPrice: finalPrice || linkedJob.estimatedPrice
+        });
+        if (completedJob) {
+          autoLogHouseFaxEntry(completedJob).catch((e) => console.error("housefax auto-log error:", e));
+        }
+      } else {
+        const { finalPrice } = req.body;
+        const [provider] = appointment.providerId ? await db.select({ businessName: providers.businessName }).from(providers).where(eq5(providers.id, appointment.providerId)) : [null];
+        const serviceCategory = detectServiceCategory(appointment.serviceName || "General Service");
+        const costCents = finalPrice ? Math.round(parseFloat(finalPrice) * 100) : 0;
+        const [existingByAppt] = await db.select({ id: housefaxEntries.id }).from(housefaxEntries).where(eq5(housefaxEntries.appointmentId, req.params.id));
+        if (!existingByAppt) {
+          let aiSummary = null;
+          try {
+            const aiResponse = await openai.chat.completions.create({
+              model: "gpt-4o-mini",
+              messages: [{
+                role: "user",
+                content: `Write a 1-2 sentence summary for a homeowner's records: Service: ${appointment.serviceName}, Provider: ${provider?.businessName || "Unknown"}. Be concise and factual.`
+              }],
+              max_tokens: 80
+            });
+            aiSummary = aiResponse.choices[0]?.message?.content?.trim() || null;
+          } catch (e) {
+            console.error("[HouseFax] AI summary error:", e);
+          }
+          await db.insert(housefaxEntries).values({
+            homeId: appointment.homeId,
+            jobId: null,
+            appointmentId: req.params.id,
+            serviceCategory,
+            serviceName: appointment.serviceName || "Service",
+            providerId: appointment.providerId || null,
+            providerName: provider?.businessName || null,
+            completedAt: /* @__PURE__ */ new Date(),
+            costCents,
+            aiSummary,
+            photos: [],
+            systemAffected: serviceCategory,
+            notes: null
+          }).onConflictDoNothing();
+          calculateAndPersistHouseFaxScore(appointment.homeId).catch(
+            (e) => console.error("[HouseFax] Score persistence failed (appointment path):", e)
+          );
+        }
+      }
+      res.json({ appointment: updatedAppointment });
+    } catch (error) {
+      console.error("Complete appointment error:", error);
+      res.status(500).json({ error: "Failed to complete appointment" });
+    }
+  });
   app2.get("/api/categories", async (req, res) => {
     try {
       const categories = await storage.getCategories();
@@ -4652,7 +6126,21 @@ async function registerRoutes(app2) {
         return res.status(404).json({ error: "Provider not found" });
       }
       const providerServices2 = await storage.getProviderServices(req.params.id);
-      res.json({ provider, services: providerServices2 });
+      const bookingPolicies = provider.bookingPolicies && typeof provider.bookingPolicies === "string" ? (() => {
+        try {
+          return JSON.parse(provider.bookingPolicies);
+        } catch {
+          return provider.bookingPolicies;
+        }
+      })() : provider.bookingPolicies;
+      const businessHours = provider.businessHours && typeof provider.businessHours === "string" ? (() => {
+        try {
+          return JSON.parse(provider.businessHours);
+        } catch {
+          return provider.businessHours;
+        }
+      })() : provider.businessHours;
+      res.json({ provider: { ...provider, bookingPolicies, businessHours }, services: providerServices2 });
     } catch (error) {
       console.error("Get provider error:", error);
       res.status(500).json({ error: "Failed to get provider" });
@@ -4725,9 +6213,9 @@ async function registerRoutes(app2) {
       const appointment = await storage.createAppointment(parsed.data);
       let clientId = null;
       try {
-        const [user] = await db.select().from(users).where(eq4(users.id, parsed.data.userId));
+        const [user] = await db.select().from(users).where(eq5(users.id, parsed.data.userId));
         if (user) {
-          const existingClients = await db.select().from(clients).where(eq4(clients.providerId, parsed.data.providerId));
+          const existingClients = await db.select().from(clients).where(eq5(clients.providerId, parsed.data.providerId));
           const matchingClient = existingClients.find(
             (c) => c.email === user.email || c.firstName === (user.firstName || "") && c.phone === user.phone
           );
@@ -4774,8 +6262,8 @@ async function registerRoutes(app2) {
         "booking_confirmed",
         JSON.stringify({ appointmentId: appointment.id })
       );
-      const [bookedUser] = await db.select().from(users).where(eq4(users.id, parsed.data.userId)).catch(() => [null]);
-      const [bookedProvider] = await db.select().from(providers).where(eq4(providers.id, parsed.data.providerId)).catch(() => [null]);
+      const [bookedUser] = await db.select().from(users).where(eq5(users.id, parsed.data.userId)).catch(() => [null]);
+      const [bookedProvider] = await db.select().from(providers).where(eq5(providers.id, parsed.data.providerId)).catch(() => [null]);
       if (bookedUser && bookedProvider) {
         dispatch("booking.created", {
           clientEmail: bookedUser.email,
@@ -4811,8 +6299,8 @@ async function registerRoutes(app2) {
       if (!appointment) {
         return res.status(404).json({ error: "Appointment not found" });
       }
-      const [updatedApptUser] = await db.select().from(users).where(eq4(users.id, appointment.userId)).catch(() => [null]);
-      const [updatedApptProvider] = await db.select().from(providers).where(eq4(providers.id, appointment.providerId)).catch(() => [null]);
+      const [updatedApptUser] = await db.select().from(users).where(eq5(users.id, appointment.userId)).catch(() => [null]);
+      const [updatedApptProvider] = await db.select().from(providers).where(eq5(providers.id, appointment.providerId)).catch(() => [null]);
       if (updatedApptUser && updatedApptProvider) {
         dispatch("booking.updated", {
           clientEmail: updatedApptUser.email,
@@ -4852,8 +6340,8 @@ async function registerRoutes(app2) {
         "booking_cancelled",
         JSON.stringify({ appointmentId: appointment.id })
       );
-      const [cancelledUser] = await db.select().from(users).where(eq4(users.id, appointment.userId)).catch(() => [null]);
-      const [cancelledProvider] = await db.select().from(providers).where(eq4(providers.id, appointment.providerId)).catch(() => [null]);
+      const [cancelledUser] = await db.select().from(users).where(eq5(users.id, appointment.userId)).catch(() => [null]);
+      const [cancelledProvider] = await db.select().from(providers).where(eq5(providers.id, appointment.providerId)).catch(() => [null]);
       if (cancelledUser && cancelledProvider) {
         dispatch("booking.cancelled", {
           clientEmail: cancelledUser.email,
@@ -4902,8 +6390,8 @@ async function registerRoutes(app2) {
         "booking_update",
         JSON.stringify({ appointmentId: appointment.id })
       );
-      const [rescheduledUser] = await db.select().from(users).where(eq4(users.id, appointment.userId)).catch(() => [null]);
-      const [rescheduledProvider] = await db.select().from(providers).where(eq4(providers.id, appointment.providerId)).catch(() => [null]);
+      const [rescheduledUser] = await db.select().from(users).where(eq5(users.id, appointment.userId)).catch(() => [null]);
+      const [rescheduledProvider] = await db.select().from(providers).where(eq5(providers.id, appointment.providerId)).catch(() => [null]);
       if (rescheduledUser && rescheduledProvider) {
         dispatch("booking.rescheduled", {
           clientEmail: rescheduledUser.email,
@@ -4923,6 +6411,23 @@ async function registerRoutes(app2) {
     } catch (error) {
       console.error("Reschedule appointment error:", error);
       res.status(500).json({ error: "Failed to reschedule appointment" });
+    }
+  });
+  app2.post("/api/appointments/:id/update-condition", requireAuth, async (req, res) => {
+    try {
+      const authUserId = req.authenticatedUserId;
+      const { description } = req.body;
+      if (!description || typeof description !== "string" || !description.trim()) {
+        return res.status(400).json({ error: "Description is required" });
+      }
+      const existing = await storage.getAppointment(req.params.id);
+      if (!existing) return res.status(404).json({ error: "Appointment not found" });
+      if (existing.userId !== authUserId) return res.status(403).json({ error: "Access denied" });
+      const updated = await storage.updateAppointment(req.params.id, { notes: description.trim() });
+      res.json({ appointment: updated, success: true });
+    } catch (error) {
+      console.error("Update condition error:", error);
+      res.status(500).json({ error: "Failed to update condition" });
     }
   });
   app2.get("/api/appointments/:id", requireAuth, async (req, res) => {
@@ -4978,7 +6483,7 @@ async function registerRoutes(app2) {
         return res.status(403).json({ error: "Access denied" });
       }
       await db.update(notifications).set({ isRead: true }).where(
-        and4(eq4(notifications.userId, authUserId), eq4(notifications.isRead, false))
+        and4(eq5(notifications.userId, authUserId), eq5(notifications.isRead, false))
       );
       res.json({ success: true });
     } catch (error) {
@@ -4992,7 +6497,7 @@ async function registerRoutes(app2) {
       if (req.params.userId !== authUserId) {
         return res.status(403).json({ error: "Access denied" });
       }
-      const result = await db.select({ count: sql3`count(*)::int` }).from(notifications).where(and4(eq4(notifications.userId, authUserId), eq4(notifications.isRead, false)));
+      const result = await db.select({ count: sql3`count(*)::int` }).from(notifications).where(and4(eq5(notifications.userId, authUserId), eq5(notifications.isRead, false)));
       const count = result[0]?.count || 0;
       res.json({ count });
     } catch (error) {
@@ -5009,7 +6514,7 @@ async function registerRoutes(app2) {
       }
       await db.insert(pushTokens).values({ userId, token, platform: platform || "expo", isActive: true }).onConflictDoNothing();
       await db.update(pushTokens).set({ isActive: true, updatedAt: /* @__PURE__ */ new Date() }).where(
-        and4(eq4(pushTokens.userId, userId), eq4(pushTokens.token, token))
+        and4(eq5(pushTokens.userId, userId), eq5(pushTokens.token, token))
       );
       res.json({ success: true });
     } catch (error) {
@@ -5023,11 +6528,11 @@ async function registerRoutes(app2) {
       const { token } = req.body;
       if (token) {
         await db.update(pushTokens).set({ isActive: false, updatedAt: /* @__PURE__ */ new Date() }).where(
-          and4(eq4(pushTokens.userId, userId), eq4(pushTokens.token, token))
+          and4(eq5(pushTokens.userId, userId), eq5(pushTokens.token, token))
         );
       } else {
         await db.update(pushTokens).set({ isActive: false, updatedAt: /* @__PURE__ */ new Date() }).where(
-          eq4(pushTokens.userId, userId)
+          eq5(pushTokens.userId, userId)
         );
       }
       res.json({ success: true });
@@ -5042,7 +6547,7 @@ async function registerRoutes(app2) {
       if (req.params.userId !== authUserId) {
         return res.status(403).json({ error: "Access denied" });
       }
-      const [prefs] = await db.select().from(notificationPreferences).where(eq4(notificationPreferences.userId, authUserId));
+      const [prefs] = await db.select().from(notificationPreferences).where(eq5(notificationPreferences.userId, authUserId));
       if (!prefs) {
         const defaults = {
           emailBookingConfirmation: true,
@@ -5085,9 +6590,9 @@ async function registerRoutes(app2) {
       for (const key of allowed) {
         if (updates[key] !== void 0) safeUpdates[key] = updates[key];
       }
-      const [existing] = await db.select().from(notificationPreferences).where(eq4(notificationPreferences.userId, userId));
+      const [existing] = await db.select().from(notificationPreferences).where(eq5(notificationPreferences.userId, userId));
       if (existing) {
-        const [updated] = await db.update(notificationPreferences).set(safeUpdates).where(eq4(notificationPreferences.userId, userId)).returning();
+        const [updated] = await db.update(notificationPreferences).set(safeUpdates).where(eq5(notificationPreferences.userId, userId)).returning();
         res.json({ preferences: updated });
       } else {
         const [created] = await db.insert(notificationPreferences).values(safeUpdates).returning();
@@ -5121,37 +6626,16 @@ ${houseFaxContext}`;
         { role: "system", content: systemPrompt },
         ...messages
       ];
-      res.setHeader("Content-Type", "text/event-stream");
-      res.setHeader("Cache-Control", "no-cache");
-      res.setHeader("Connection", "keep-alive");
-      const stream = await openai.chat.completions.create({
+      const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: chatMessages,
-        stream: true,
         max_tokens: 1024
       });
-      for await (const chunk of stream) {
-        const content = chunk.choices[0]?.delta?.content || "";
-        if (content) {
-          res.write(`data: ${JSON.stringify({ content })}
-
-`);
-        }
-      }
-      res.write(`data: ${JSON.stringify({ done: true })}
-
-`);
-      res.end();
+      const content = completion.choices[0]?.message?.content || "I'm here to help.";
+      res.json({ content, done: true });
     } catch (error) {
       console.error("Error in chat:", error);
-      if (res.headersSent) {
-        res.write(`data: ${JSON.stringify({ error: "Failed to get response" })}
-
-`);
-        res.end();
-      } else {
-        res.status(500).json({ error: "Failed to process chat request" });
-      }
+      res.status(500).json({ error: "Failed to process chat request" });
     }
   });
   const ENHANCED_CHAT_PROMPT = `You are HomeBase AI, a helpful home assistant. Answer questions about home maintenance, repairs, and services.
@@ -5539,6 +7023,148 @@ Respond with ONLY a JSON object: {"names": ["Service One", "Service Two", "Servi
       res.status(500).json({ error: "Failed to suggest service names" });
     }
   });
+  app2.post("/api/ai/suggest-service-types", requireAuth, aiRateLimit, async (req, res) => {
+    try {
+      const { businessDescription } = req.body;
+      if (!businessDescription?.trim()) {
+        return res.status(400).json({ error: "businessDescription is required" });
+      }
+      const prompt = `You are an expert home services business consultant. Based on this business description, suggest 4-6 specific service types the provider could offer.
+
+Business Description: ${businessDescription}
+
+Return a JSON object with a "services" array. Each item must have:
+- "name": specific service name (3-6 words)
+- "category": one of [Cleaning, HVAC, Plumbing, Electrical, Landscaping, Handyman, Painting, Roofing, Pest Control, Pressure Washing, Junk Removal, Other]
+- "description": one compelling sentence describing the service
+- "icon": a simple icon keyword (home, thermometer, droplet, zap, sun, tool, edit-3, triangle, shield, wind, trash-2, package)
+
+Focus on high-demand services that match the business description. Be specific and realistic.
+
+Example output format:
+{"services": [{"name": "Standard Home Cleaning", "category": "Cleaning", "description": "Thorough top-to-bottom cleaning of all living areas, kitchens, and bathrooms.", "icon": "home"}]}`;
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 600,
+        response_format: { type: "json_object" }
+      });
+      let services2 = [];
+      try {
+        const parsed = JSON.parse(response.choices[0]?.message?.content || "{}");
+        services2 = Array.isArray(parsed.services) ? parsed.services : [];
+      } catch {
+        services2 = [];
+      }
+      res.json({ services: services2 });
+    } catch (error) {
+      console.error("Suggest service types error:", error);
+      res.status(500).json({ error: "Failed to suggest service types" });
+    }
+  });
+  app2.post("/api/ai/service-blueprint", requireAuth, aiRateLimit, async (req, res) => {
+    try {
+      const { businessDescription, serviceType, category, providerLocation } = req.body;
+      if (!serviceType || !category) {
+        return res.status(400).json({ error: "serviceType and category are required" });
+      }
+      const CATEGORY_CONTEXT = {
+        Cleaning: "residential/commercial cleaning services. Common intake questions: home size, number of bedrooms/bathrooms, pets, special areas. Common add-ons: inside fridge, inside oven, laundry, windows.",
+        HVAC: "heating, cooling, and ventilation services. Common intake questions: system age, brand, symptoms, last service date. Common add-ons: filter replacement, UV light, duct cleaning.",
+        Plumbing: "pipe, drain, and fixture services. Common intake questions: issue type, location in home, urgency. Common add-ons: drain cleaning, water heater flush, leak inspection.",
+        Electrical: "wiring, panel, and fixture services. Common intake questions: panel type, issue description, home age. Common add-ons: GFCI outlets, surge protection, smoke detectors.",
+        Landscaping: "lawn, garden, and outdoor services. Common intake questions: yard size, grass type, frequency. Common add-ons: edging, fertilizing, leaf removal, mulching.",
+        Handyman: "general repairs and installations. Common intake questions: task description, materials needed, estimated time. Common add-ons: supply pickup, furniture assembly, caulking.",
+        Painting: "interior/exterior painting. Common intake questions: rooms or areas, ceiling height, current color, prep needed. Common add-ons: trim, closets, ceiling, primer coat.",
+        Roofing: "roofing repair and replacement. Common intake questions: roof type, age, leak location, sq footage. Common add-ons: gutter cleaning, soffit/fascia, attic inspection.",
+        "Pest Control": "pest elimination and prevention. Common intake questions: pest type, infestation severity, home size. Common add-ons: termite inspection, rodent exclusion, quarterly service.",
+        "Pressure Washing": "exterior surface cleaning. Common intake questions: surface type, square footage, stain type. Common add-ons: sealing, gutter flush, deck/fence.",
+        "Junk Removal": "debris and junk hauling. Common intake questions: volume estimate, item types, hazardous materials. Common add-ons: dumpster rental, same-day service, donation drop-off."
+      };
+      const prompt = `You are a home services business expert. Generate a complete service blueprint for a provider offering this service.
+
+Business: ${businessDescription || "Home service provider"}
+Service: ${serviceType}
+Category: ${category}
+Location: ${providerLocation || "local area"}
+Category Context: ${CATEGORY_CONTEXT[category] || "home service"}
+
+Return a JSON object with exactly these fields:
+{
+  "pricingModel": {
+    "type": "flat" | "variable" | "service_call" | "quote",
+    "basePrice": number (null if quote),
+    "priceTiers": [{"label": string, "price": number}] (for variable pricing, 2-4 tiers),
+    "unit": "per job" | "per hour" | "per sqft" | "per visit",
+    "description": "one sentence explaining the pricing logic"
+  },
+  "intakeQuestions": [
+    {"id": string, "question": string, "type": "text" | "select" | "number", "options": string[] | null, "required": boolean}
+  ],
+  "addOns": [
+    {"id": string, "name": string, "description": string, "price": number}
+  ],
+  "bookingMode": "instant" | "starts_at" | "quote_only",
+  "aiPricingInsight": "one sentence identifying a specific profit leak or pricing opportunity for this service type"
+}
+
+Rules:
+- intakeQuestions: 3-5 questions specific to this exact service. Include property size where relevant.
+- addOns: 2-4 high-value add-ons with realistic prices for ${providerLocation || "US"} market
+- bookingMode: use "instant" for straightforward flat-rate services, "starts_at" for variable pricing, "quote_only" for complex/large jobs
+- priceTiers: only include if type is "variable"
+- All prices in USD, no $ sign, just numbers
+- aiPricingInsight: be specific about the profit opportunity (e.g., "Large homes over 3,000 sqft take 40% longer but your flat rate doesn't capture that extra labor cost.")`;
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 1e3,
+        response_format: { type: "json_object" }
+      });
+      let blueprint = {};
+      try {
+        blueprint = JSON.parse(response.choices[0]?.message?.content || "{}");
+      } catch {
+        blueprint = {};
+      }
+      res.json({ blueprint });
+    } catch (error) {
+      console.error("Service blueprint error:", error);
+      res.status(500).json({ error: "Failed to generate service blueprint" });
+    }
+  });
+  app2.post("/api/ai/edit-blueprint", requireAuth, aiRateLimit, async (req, res) => {
+    try {
+      const { blueprint, instruction } = req.body;
+      if (!blueprint || !instruction?.trim()) {
+        return res.status(400).json({ error: "blueprint and instruction are required" });
+      }
+      const prompt = `You are a home services business expert. Update this service blueprint based on the provider's instruction.
+
+Current Blueprint:
+${JSON.stringify(blueprint, null, 2)}
+
+Provider Instruction: "${instruction}"
+
+Apply the instruction to the blueprint and return the complete updated blueprint as a JSON object with the same structure. Preserve all existing fields unless the instruction modifies them. Make the changes precise and realistic.`;
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 1e3,
+        response_format: { type: "json_object" }
+      });
+      let updatedBlueprint = blueprint;
+      try {
+        updatedBlueprint = JSON.parse(response.choices[0]?.message?.content || "{}");
+      } catch {
+        updatedBlueprint = blueprint;
+      }
+      res.json({ blueprint: updatedBlueprint });
+    } catch (error) {
+      console.error("Edit blueprint error:", error);
+      res.status(500).json({ error: "Failed to edit blueprint" });
+    }
+  });
   app2.post("/api/ai/onboarding/suggest-description", onboardingRateLimit, async (req, res) => {
     try {
       const { serviceName, category } = req.body;
@@ -5653,6 +7279,48 @@ Respond ONLY with the polished text. No quotes, no explanations.`;
     } catch (error) {
       console.error("Polish text error:", error);
       res.status(500).json({ error: "Failed to polish text" });
+    }
+  });
+  app2.post("/api/ai/suggest-cities", requireAuth, aiRateLimit, async (req, res) => {
+    try {
+      const { zipCodes } = req.body;
+      if (!Array.isArray(zipCodes) || zipCodes.length === 0) {
+        return res.status(400).json({ error: "zipCodes array is required" });
+      }
+      const validZips = zipCodes.filter((z2) => /^\d{5}$/.test(String(z2).trim())).slice(0, 50);
+      if (validZips.length === 0) {
+        return res.status(400).json({ error: "No valid 5-digit ZIP codes provided" });
+      }
+      const prompt = `You are a US geography expert. Given the following US ZIP codes, return the unique city and state names they belong to.
+
+ZIP codes: ${validZips.join(", ")}
+
+Respond ONLY with a valid JSON array of strings in the format ["City, ST", "City, ST"]. Include only unique city names. No explanations, no markdown, no extra text.`;
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 300
+      });
+      const raw = response.choices[0]?.message?.content?.trim() || "[]";
+      let cities = [];
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          const seen = /* @__PURE__ */ new Set();
+          cities = parsed.filter((c) => typeof c === "string" && c.trim().length > 0).map((c) => c.trim().replace(/\s+/g, " ")).filter((c) => {
+            const key = c.toLowerCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+        }
+      } catch {
+        cities = [];
+      }
+      res.json({ cities });
+    } catch (error) {
+      console.error("Suggest cities error:", error);
+      res.status(500).json({ error: "Failed to detect cities" });
     }
   });
   const INTAKE_SYSTEM_PROMPT = `You are HomeBase's Smart Intake AI. Your job is to understand home service problems and gather key details that help service professionals provide accurate quotes and close leads.
@@ -5896,7 +7564,23 @@ Respond with JSON only:
   app2.get("/api/homes/:homeId/service-history", requireAuth, async (req, res) => {
     try {
       const { homeId } = req.params;
-      const serviceHistory = await db.select().from(appointments).where(eq4(appointments.homeId, homeId)).orderBy(sql3`${appointments.completedAt} DESC NULLS LAST, ${appointments.scheduledDate} DESC`);
+      const serviceHistory = await db.select({
+        id: appointments.id,
+        homeId: appointments.homeId,
+        providerId: appointments.providerId,
+        serviceName: appointments.serviceName,
+        description: appointments.description,
+        status: appointments.status,
+        estimatedPrice: appointments.estimatedPrice,
+        finalPrice: appointments.finalPrice,
+        notes: appointments.notes,
+        scheduledDate: appointments.scheduledDate,
+        completedAt: appointments.completedAt,
+        cancelledAt: appointments.cancelledAt,
+        isRecurring: appointments.isRecurring,
+        createdAt: appointments.createdAt,
+        providerName: providers.businessName
+      }).from(appointments).leftJoin(providers, eq5(appointments.providerId, providers.id)).where(eq5(appointments.homeId, homeId)).orderBy(sql3`${appointments.completedAt} DESC NULLS LAST, ${appointments.scheduledDate} DESC`);
       res.json({ serviceHistory });
     } catch (error) {
       console.error("Error fetching service history:", error);
@@ -5906,7 +7590,7 @@ Respond with JSON only:
   app2.get("/api/homes/:homeId/reminders", requireAuth, async (req, res) => {
     try {
       const { homeId } = req.params;
-      const reminders = await db.select().from(maintenanceReminders).where(eq4(maintenanceReminders.homeId, homeId)).orderBy(maintenanceReminders.nextDueAt);
+      const reminders = await db.select().from(maintenanceReminders).where(eq5(maintenanceReminders.homeId, homeId)).orderBy(maintenanceReminders.nextDueAt);
       res.json({ reminders });
     } catch (error) {
       console.error("Error fetching reminders:", error);
@@ -5935,7 +7619,7 @@ Respond with JSON only:
   app2.put("/api/reminders/:id/complete", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
-      const [existing] = await db.select().from(maintenanceReminders).where(eq4(maintenanceReminders.id, id));
+      const [existing] = await db.select().from(maintenanceReminders).where(eq5(maintenanceReminders.id, id));
       if (!existing) {
         return res.status(404).json({ error: "Reminder not found" });
       }
@@ -5952,7 +7636,7 @@ Respond with JSON only:
       const [updated] = await db.update(maintenanceReminders).set({
         lastCompletedAt: /* @__PURE__ */ new Date(),
         nextDueAt: nextDue
-      }).where(eq4(maintenanceReminders.id, id)).returning();
+      }).where(eq5(maintenanceReminders.id, id)).returning();
       res.json({ reminder: updated });
     } catch (error) {
       console.error("Error completing reminder:", error);
@@ -5962,7 +7646,7 @@ Respond with JSON only:
   app2.get("/api/provider/:providerId/availability", requireAuth, async (req, res) => {
     try {
       const { date } = req.query;
-      const [link] = await db.select().from(bookingLinks).where(eq4(bookingLinks.providerId, req.params.providerId)).limit(1);
+      const [link] = await db.select().from(bookingLinks).where(eq5(bookingLinks.providerId, req.params.providerId)).limit(1);
       let rules = {};
       if (link?.availabilityRules) {
         try {
@@ -6004,7 +7688,10 @@ Respond with JSON only:
   app2.get("/api/provider/:providerId/custom-services", requireAuth, async (req, res) => {
     try {
       const publishedOnly = req.query.publishedOnly === "true";
-      const conditions = publishedOnly ? and4(eq4(providerCustomServices.providerId, req.params.providerId), eq4(providerCustomServices.isPublished, true)) : eq4(providerCustomServices.providerId, req.params.providerId);
+      if (!publishedOnly) {
+        if (!await assertProviderOwnership(req, req.params.providerId, res)) return;
+      }
+      const conditions = publishedOnly ? and4(eq5(providerCustomServices.providerId, req.params.providerId), eq5(providerCustomServices.isPublished, true)) : eq5(providerCustomServices.providerId, req.params.providerId);
       const svcList = await db.select().from(providerCustomServices).where(conditions).orderBy(providerCustomServices.createdAt);
       res.json({ services: svcList });
     } catch (error) {
@@ -6014,9 +7701,13 @@ Respond with JSON only:
   });
   app2.post("/api/provider/:providerId/custom-services", requireAuth, async (req, res) => {
     try {
+      const authUserId = req.authenticatedUserId;
       const provider = await storage.getProvider(req.params.providerId);
       if (!provider) {
         return res.status(404).json({ error: "Provider not found" });
+      }
+      if (provider.userId !== authUserId) {
+        return res.status(403).json({ error: "Access denied: provider does not belong to you" });
       }
       const parsed = insertProviderCustomServiceSchema.safeParse({ ...req.body, providerId: req.params.providerId });
       if (!parsed.success) {
@@ -6031,12 +7722,17 @@ Respond with JSON only:
   });
   app2.put("/api/provider/:providerId/custom-services/:id", requireAuth, async (req, res) => {
     try {
-      const [existing] = await db.select().from(providerCustomServices).where(eq4(providerCustomServices.id, req.params.id));
+      const authUserId = req.authenticatedUserId;
+      const [existing] = await db.select().from(providerCustomServices).where(eq5(providerCustomServices.id, req.params.id));
       if (!existing) return res.status(404).json({ error: "Service not found" });
       if (existing.providerId !== req.params.providerId) {
         return res.status(403).json({ error: "Forbidden" });
       }
-      const { name, category, description, pricingType, basePrice, priceFrom, priceTo, priceTiersJson, duration, isPublished, isAddon } = req.body;
+      const provider = await storage.getProvider(req.params.providerId);
+      if (!provider || provider.userId !== authUserId) {
+        return res.status(403).json({ error: "Access denied: provider does not belong to you" });
+      }
+      const { name, category, description, pricingType, basePrice, priceFrom, priceTo, priceTiersJson, duration, isPublished, isAddon, isRecurring, recurringFrequency, recurringPrice, intakeQuestionsJson, addOnsJson, bookingMode, aiPricingInsight } = req.body;
       const allowedUpdate = {};
       if (name !== void 0) allowedUpdate.name = name;
       if (category !== void 0) allowedUpdate.category = category;
@@ -6049,7 +7745,20 @@ Respond with JSON only:
       if (duration !== void 0) allowedUpdate.duration = duration;
       if (isPublished !== void 0) allowedUpdate.isPublished = isPublished;
       if (isAddon !== void 0) allowedUpdate.isAddon = isAddon;
-      const [svc] = await db.update(providerCustomServices).set({ ...allowedUpdate, updatedAt: /* @__PURE__ */ new Date() }).where(eq4(providerCustomServices.id, req.params.id)).returning();
+      if (isRecurring !== void 0) allowedUpdate.isRecurring = isRecurring;
+      if (recurringFrequency !== void 0) allowedUpdate.recurringFrequency = recurringFrequency;
+      if (recurringPrice !== void 0) allowedUpdate.recurringPrice = recurringPrice;
+      if (intakeQuestionsJson !== void 0) allowedUpdate.intakeQuestionsJson = intakeQuestionsJson;
+      if (addOnsJson !== void 0) allowedUpdate.addOnsJson = addOnsJson;
+      const VALID_BOOKING_MODES = ["instant", "starts_at", "quote_only"];
+      if (bookingMode !== void 0) {
+        if (!VALID_BOOKING_MODES.includes(bookingMode)) {
+          return res.status(400).json({ error: `Invalid bookingMode. Must be one of: ${VALID_BOOKING_MODES.join(", ")}` });
+        }
+        allowedUpdate.bookingMode = bookingMode;
+      }
+      if (aiPricingInsight !== void 0) allowedUpdate.aiPricingInsight = aiPricingInsight;
+      const [svc] = await db.update(providerCustomServices).set({ ...allowedUpdate, updatedAt: /* @__PURE__ */ new Date() }).where(eq5(providerCustomServices.id, req.params.id)).returning();
       res.json({ service: svc });
     } catch (error) {
       console.error("Update custom service error:", error);
@@ -6058,12 +7767,17 @@ Respond with JSON only:
   });
   app2.delete("/api/provider/:providerId/custom-services/:id", requireAuth, async (req, res) => {
     try {
-      const [existing] = await db.select().from(providerCustomServices).where(eq4(providerCustomServices.id, req.params.id));
+      const authUserId = req.authenticatedUserId;
+      const [existing] = await db.select().from(providerCustomServices).where(eq5(providerCustomServices.id, req.params.id));
       if (!existing) return res.status(404).json({ error: "Service not found" });
       if (existing.providerId !== req.params.providerId) {
         return res.status(403).json({ error: "Forbidden" });
       }
-      await db.delete(providerCustomServices).where(eq4(providerCustomServices.id, req.params.id));
+      const provider = await storage.getProvider(req.params.providerId);
+      if (!provider || provider.userId !== authUserId) {
+        return res.status(403).json({ error: "Access denied: provider does not belong to you" });
+      }
+      await db.delete(providerCustomServices).where(eq5(providerCustomServices.id, req.params.id));
       res.json({ success: true });
     } catch (error) {
       console.error("Delete custom service error:", error);
@@ -6072,20 +7786,21 @@ Respond with JSON only:
   });
   app2.post("/api/provider/register", requireAuth, async (req, res) => {
     try {
+      const authUserId = req.authenticatedUserId;
       const parsed = insertProviderSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
       }
-      if (parsed.data.userId) {
-        const existing = await storage.getProviderByUserId(parsed.data.userId);
-        if (existing) {
-          return res.status(409).json({ error: "User already has a provider profile" });
-        }
+      if (parsed.data.userId && parsed.data.userId !== authUserId) {
+        return res.status(403).json({ error: "Cannot register provider profile for another user" });
       }
-      const provider = await storage.createProvider(parsed.data);
-      if (parsed.data.userId) {
-        await storage.updateUser(parsed.data.userId, { isProvider: true });
+      const providerData = { ...parsed.data, userId: authUserId };
+      const existing = await storage.getProviderByUserId(authUserId);
+      if (existing) {
+        return res.status(409).json({ error: "User already has a provider profile" });
       }
+      const provider = await storage.createProvider(providerData);
+      await storage.updateUser(authUserId, { isProvider: true });
       res.status(201).json({ provider });
     } catch (error) {
       console.error("Provider registration error:", error);
@@ -6117,8 +7832,44 @@ Respond with JSON only:
       res.status(500).json({ error: "Failed to get provider" });
     }
   });
+  app2.get("/api/provider/:id", requireAuth, async (req, res) => {
+    try {
+      const provider = await storage.getProvider(req.params.id);
+      if (!provider) {
+        return res.status(404).json({ error: "Provider not found" });
+      }
+      if (provider.userId !== req.authenticatedUserId) {
+        return res.status(403).json({ error: "Forbidden: you do not own this provider profile" });
+      }
+      const bookingPolicies = provider.bookingPolicies && typeof provider.bookingPolicies === "string" ? (() => {
+        try {
+          return JSON.parse(provider.bookingPolicies);
+        } catch {
+          return provider.bookingPolicies;
+        }
+      })() : provider.bookingPolicies;
+      const businessHours = provider.businessHours && typeof provider.businessHours === "string" ? (() => {
+        try {
+          return JSON.parse(provider.businessHours);
+        } catch {
+          return provider.businessHours;
+        }
+      })() : provider.businessHours;
+      res.json({ provider: { ...provider, bookingPolicies, businessHours } });
+    } catch (error) {
+      console.error("Get provider by ID error:", error);
+      res.status(500).json({ error: "Failed to get provider" });
+    }
+  });
   app2.put("/api/provider/:id", requireAuth, async (req, res) => {
     try {
+      const existing = await storage.getProvider(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ error: "Provider not found" });
+      }
+      if (existing.userId !== req.authenticatedUserId) {
+        return res.status(403).json({ error: "Forbidden: you do not own this provider profile" });
+      }
       const provider = await storage.updateProvider(req.params.id, req.body);
       if (!provider) {
         return res.status(404).json({ error: "Provider not found" });
@@ -6132,6 +7883,13 @@ Respond with JSON only:
   app2.patch("/api/provider/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
+      const ownerCheck = await storage.getProvider(id);
+      if (!ownerCheck) {
+        return res.status(404).json({ error: "Provider not found" });
+      }
+      if (ownerCheck.userId !== req.authenticatedUserId) {
+        return res.status(403).json({ error: "Forbidden: you do not own this provider profile" });
+      }
       const body = req.body;
       const update = {};
       const directFields = [
@@ -6146,15 +7904,28 @@ Respond with JSON only:
         "serviceRadius",
         "serviceZipCodes",
         "serviceCities",
-        "isPublic",
-        "instantBooking",
-        "advanceBookingDays"
+        "isPublic"
       ];
       for (const field of directFields) {
         if (body[field] !== void 0) update[field] = body[field];
       }
-      if (body.bookingPolicies !== void 0) {
-        update.bookingPolicies = typeof body.bookingPolicies === "string" ? JSON.parse(body.bookingPolicies) : body.bookingPolicies;
+      if (body.bookingPolicies !== void 0 || body.instantBooking !== void 0 || body.advanceBookingDays !== void 0) {
+        const existingProvider = await storage.getProvider(id);
+        let currentPolicies = {};
+        if (existingProvider?.bookingPolicies) {
+          currentPolicies = typeof existingProvider.bookingPolicies === "string" ? (() => {
+            try {
+              return JSON.parse(existingProvider.bookingPolicies);
+            } catch {
+              return {};
+            }
+          })() : existingProvider.bookingPolicies || {};
+        }
+        const incomingPolicies = body.bookingPolicies !== void 0 ? typeof body.bookingPolicies === "string" ? JSON.parse(body.bookingPolicies) : body.bookingPolicies : {};
+        const merged = { ...currentPolicies, ...incomingPolicies };
+        if (body.instantBooking !== void 0) merged.instantBooking = body.instantBooking;
+        if (body.advanceBookingDays !== void 0) merged.advanceBookingDays = body.advanceBookingDays;
+        update.bookingPolicies = merged;
       }
       if (body.businessHours !== void 0) {
         update.businessHours = typeof body.businessHours === "string" ? JSON.parse(body.businessHours) : body.businessHours;
@@ -6176,9 +7947,15 @@ Respond with JSON only:
         return res.status(404).json({ error: "Provider not found" });
       }
       const parsed = { ...provider };
-      if (parsed.bookingPolicies) {
+      if (parsed.bookingPolicies && typeof parsed.bookingPolicies === "string") {
         try {
           parsed.bookingPolicies = JSON.parse(parsed.bookingPolicies);
+        } catch {
+        }
+      }
+      if (parsed.businessHours && typeof parsed.businessHours === "string") {
+        try {
+          parsed.businessHours = JSON.parse(parsed.businessHours);
         } catch {
         }
       }
@@ -6188,13 +7965,158 @@ Respond with JSON only:
       res.status(500).json({ error: error.message || "Failed to update provider" });
     }
   });
+  app2.post("/api/provider/:id/logo", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { base64 } = req.body;
+      if (!base64) {
+        return res.status(400).json({ error: "base64 image data required" });
+      }
+      const existing = await storage.getProvider(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Provider not found" });
+      }
+      if (existing.userId !== req.authenticatedUserId) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      const ALLOWED_MIME_PREFIXES_LOGO = [
+        "data:image/jpeg;base64,",
+        "data:image/jpg;base64,",
+        "data:image/png;base64,",
+        "data:image/webp;base64,"
+      ];
+      const prefix = ALLOWED_MIME_PREFIXES_LOGO.find((p) => base64.startsWith(p));
+      if (!prefix) {
+        return res.status(400).json({ error: "Invalid image format. Use JPEG, PNG, or WebP." });
+      }
+      const ext = prefix.includes("jpeg") || prefix.includes("jpg") ? "jpg" : prefix.includes("png") ? "png" : "webp";
+      const mimeType = ext === "jpg" ? "image/jpeg" : ext === "png" ? "image/png" : "image/webp";
+      const base64Data = base64.slice(prefix.length);
+      const buffer = Buffer.from(base64Data, "base64");
+      const filename = `provider-${id}-logo-${Date.now()}.${ext}`;
+      let logoUrl;
+      const isDev = process.env.NODE_ENV === "development";
+      let supabaseClient = null;
+      try {
+        supabaseClient = (await Promise.resolve().then(() => (init_supabase(), supabase_exports))).supabase;
+      } catch {
+      }
+      if (supabaseClient) {
+        const { error: uploadError } = await supabaseClient.storage.from("job-photos").upload(`logos/${filename}`, buffer, { contentType: mimeType, upsert: true });
+        if (uploadError) throw new Error("Failed to upload logo to storage");
+        const { data: publicUrlData } = supabaseClient.storage.from("job-photos").getPublicUrl(`logos/${filename}`);
+        logoUrl = publicUrlData.publicUrl;
+      } else if (isDev) {
+        const uploadDir = path.resolve(process.cwd(), "uploads", "logos");
+        if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+        fs.writeFileSync(path.join(uploadDir, filename), buffer);
+        const protocol = req.protocol;
+        const host = req.get("host") || "";
+        logoUrl = `${protocol}://${host}/uploads/logos/${filename}`;
+      } else {
+        return res.status(503).json({ error: "Storage not configured" });
+      }
+      const updated = await storage.updateProvider(id, { avatarUrl: logoUrl });
+      res.json({ avatarUrl: logoUrl, provider: updated });
+    } catch (error) {
+      console.error("Provider logo upload error:", error);
+      res.status(500).json({ error: error.message || "Failed to upload logo" });
+    }
+  });
   app2.get("/api/provider/:id/stats", requireAuth, async (req, res) => {
     try {
-      const stats = await storage.getProviderStats(req.params.id);
+      const providerRow = await storage.getProviderByUserId(req.authenticatedUserId);
+      if (!providerRow || providerRow.id !== req.params.id) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+      const { startDate, endDate } = req.query;
+      let start;
+      let end;
+      if (startDate) {
+        start = new Date(startDate);
+        if (isNaN(start.getTime())) {
+          res.status(400).json({ error: "Invalid startDate" });
+          return;
+        }
+      }
+      if (endDate) {
+        end = new Date(endDate);
+        if (isNaN(end.getTime())) {
+          res.status(400).json({ error: "Invalid endDate" });
+          return;
+        }
+      }
+      if (start && end && start > end) {
+        res.status(400).json({ error: "startDate must be before endDate" });
+        return;
+      }
+      const stats = await storage.getProviderStats(req.params.id, start, end);
       res.json({ stats });
     } catch (error) {
       console.error("Get provider stats error:", error);
       res.status(500).json({ error: "Failed to get provider stats" });
+    }
+  });
+  app2.get("/api/provider/:id/insights", requireAuth, async (req, res) => {
+    try {
+      const providerRow = await storage.getProviderByUserId(req.authenticatedUserId);
+      if (!providerRow || providerRow.id !== req.params.id) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+      const insights = await storage.getProviderInsights(req.params.id);
+      const businessName = providerRow.businessName || "your business";
+      let aiMessages;
+      const cached = insightsAiCache.get(req.params.id);
+      if (cached && cached.expiresAt > Date.now()) {
+        aiMessages = { revenue: cached.revenue, growth: cached.growth, rating: cached.rating };
+      } else {
+        try {
+          const aiResp = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [
+              {
+                role: "system",
+                content: "You are a business coach for home service providers. Write short, specific, motivating insight captions (max 10 words each). Celebrate real numbers. No emojis. No bullet points. No numbering."
+              },
+              {
+                role: "user",
+                content: `Business: ${businessName}
+All-time revenue: $${Math.round(insights.allTimeRevenue).toLocaleString()}
+New clients this quarter: ${insights.clientCountThisQuarter} (${insights.clientGrowthPct > 0 ? "+" : ""}${insights.clientGrowthPct}% vs last quarter)
+Rating: ${insights.rating} stars from ${insights.reviewCount} reviews
+
+Write exactly 3 lines:
+Line 1: revenue caption celebrating $${Math.round(insights.allTimeRevenue / 1e3)}K milestone
+Line 2: client growth caption for ${insights.clientGrowthPct > 0 ? "+" : ""}${insights.clientGrowthPct}% growth
+Line 3: rating caption for ${insights.rating} stars`
+              }
+            ],
+            max_tokens: 120,
+            temperature: 0.75
+          });
+          const lines = (aiResp.choices[0]?.message?.content || "").split("\n").map((l) => l.replace(/^[\d\.\-\*\s]+/, "").trim()).filter(Boolean);
+          aiMessages = {
+            revenue: lines[0] || `$${Math.round(insights.allTimeRevenue / 1e3)}K earned all-time`,
+            growth: lines[1] || `${insights.clientGrowthPct > 0 ? "+" : ""}${insights.clientGrowthPct}% client growth this quarter`,
+            rating: lines[2] || `${insights.rating} stars from ${insights.reviewCount} reviews`
+          };
+          insightsAiCache.set(req.params.id, { ...aiMessages, expiresAt: Date.now() + 60 * 60 * 1e3 });
+        } catch (aiErr) {
+          console.error("Insights AI generation error:", aiErr);
+          aiMessages = {
+            revenue: `$${Math.round(insights.allTimeRevenue / 1e3)}K earned all-time`,
+            growth: `${insights.clientGrowthPct > 0 ? "+" : ""}${insights.clientGrowthPct}% client growth this quarter`,
+            rating: `${insights.rating} stars from ${insights.reviewCount} reviews`
+          };
+        }
+      }
+      fireInsightNotifications(req.authenticatedUserId, insights).catch(console.error);
+      res.json({ insights: { ...insights, aiMessages } });
+    } catch (error) {
+      console.error("Get provider insights error:", error);
+      res.status(500).json({ error: "Failed to get provider insights" });
     }
   });
   app2.get("/api/provider/:id/reviews", requireAuth, async (req, res) => {
@@ -6205,15 +8127,60 @@ Respond with JSON only:
         comment: reviews.comment,
         createdAt: reviews.createdAt,
         reviewerName: sql3`TRIM(CONCAT(COALESCE(${users.firstName}, ''), ' ', COALESCE(${users.lastName}, '')))`
-      }).from(reviews).innerJoin(users, eq4(reviews.userId, users.id)).where(eq4(reviews.providerId, req.params.id)).orderBy(desc2(reviews.createdAt));
+      }).from(reviews).innerJoin(users, eq5(reviews.userId, users.id)).where(eq5(reviews.providerId, req.params.id)).orderBy(desc2(reviews.createdAt));
       res.json({ reviews: reviewRows });
     } catch (error) {
       console.error("Get provider reviews error:", error);
       res.status(500).json({ error: "Failed to fetch reviews" });
     }
   });
+  app2.post("/api/appointments/:id/review", requireAuth, async (req, res) => {
+    try {
+      const authUserId = req.authenticatedUserId;
+      const appointmentId = req.params.id;
+      const { rating, comment } = req.body;
+      if (!rating || typeof rating !== "number" || rating < 1 || rating > 5) {
+        return res.status(400).json({ error: "Rating must be a number between 1 and 5" });
+      }
+      const [appointment] = await db.select().from(appointments).where(eq5(appointments.id, appointmentId)).limit(1);
+      if (!appointment) {
+        return res.status(404).json({ error: "Appointment not found" });
+      }
+      if (appointment.userId !== authUserId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      const reviewableStatuses = ["completed", "paid", "closed", "awaiting_payment"];
+      if (!reviewableStatuses.includes(appointment.status || "")) {
+        return res.status(400).json({ error: "Reviews can only be submitted for completed appointments" });
+      }
+      const [existingReview] = await db.select({ id: reviews.id }).from(reviews).where(eq5(reviews.appointmentId, appointmentId)).limit(1);
+      if (existingReview) {
+        return res.status(409).json({ error: "Review already submitted for this appointment" });
+      }
+      const [review] = await db.insert(reviews).values({
+        appointmentId,
+        userId: authUserId,
+        providerId: appointment.providerId,
+        rating,
+        comment: comment?.trim() || null
+      }).returning();
+      const providerReviews = await db.select({ rating: reviews.rating }).from(reviews).where(eq5(reviews.providerId, appointment.providerId));
+      const totalReviews = providerReviews.length;
+      const avgRating = totalReviews > 0 ? providerReviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews : 0;
+      await db.update(providers).set({
+        reviewCount: totalReviews,
+        rating: avgRating.toFixed(1),
+        averageRating: avgRating.toFixed(2)
+      }).where(eq5(providers.id, appointment.providerId));
+      res.status(201).json({ review });
+    } catch (error) {
+      console.error("Submit review error:", error);
+      res.status(500).json({ error: "Failed to submit review" });
+    }
+  });
   app2.get("/api/provider/:providerId/clients", requireAuth, async (req, res) => {
     try {
+      if (!await assertProviderOwnership(req, req.params.providerId, res)) return;
       const clients2 = await storage.getClients(req.params.providerId);
       res.json({ clients: clients2 });
     } catch (error) {
@@ -6257,7 +8224,19 @@ Respond with JSON only:
   });
   app2.put("/api/clients/:id", requireAuth, async (req, res) => {
     try {
-      const client = await storage.updateClient(req.params.id, req.body);
+      const existing = await storage.getClient(req.params.id);
+      if (!existing) return res.status(404).json({ error: "Client not found" });
+      if (!await assertProviderOwnership(req, existing.providerId, res)) return;
+      const { firstName, lastName, email, phone, address, notes, tags } = req.body;
+      const update = {};
+      if (firstName !== void 0) update.firstName = firstName;
+      if (lastName !== void 0) update.lastName = lastName;
+      if (email !== void 0) update.email = email;
+      if (phone !== void 0) update.phone = phone;
+      if (address !== void 0) update.address = address;
+      if (notes !== void 0) update.notes = notes;
+      if (tags !== void 0) update.tags = tags;
+      const client = await storage.updateClient(req.params.id, update);
       if (!client) {
         return res.status(404).json({ error: "Client not found" });
       }
@@ -6281,11 +8260,12 @@ Respond with JSON only:
   });
   app2.get("/api/provider/:providerId/jobs", requireAuth, async (req, res) => {
     try {
+      if (!await assertProviderOwnership(req, req.params.providerId, res)) return;
       const rawJobs = await storage.getJobs(req.params.providerId);
       const enrichedJobs = await Promise.all(
         rawJobs.map(async (job) => {
           if (!job.appointmentId) return { ...job, isRecurring: false, recurringFrequency: null };
-          const [appt] = await db.select({ isRecurring: appointments.isRecurring, recurringFrequency: appointments.recurringFrequency }).from(appointments).where(eq4(appointments.id, job.appointmentId)).limit(1).catch(() => [null]);
+          const [appt] = await db.select({ isRecurring: appointments.isRecurring, recurringFrequency: appointments.recurringFrequency }).from(appointments).where(eq5(appointments.id, job.appointmentId)).limit(1).catch(() => [null]);
           return {
             ...job,
             isRecurring: appt?.isRecurring ?? false,
@@ -6308,7 +8288,7 @@ Respond with JSON only:
       let isRecurring = false;
       let recurringFrequency = null;
       if (job.appointmentId) {
-        const [appt] = await db.select({ isRecurring: appointments.isRecurring, recurringFrequency: appointments.recurringFrequency }).from(appointments).where(eq4(appointments.id, job.appointmentId)).limit(1).catch(() => [null]);
+        const [appt] = await db.select({ isRecurring: appointments.isRecurring, recurringFrequency: appointments.recurringFrequency }).from(appointments).where(eq5(appointments.id, job.appointmentId)).limit(1).catch(() => [null]);
         if (appt) {
           isRecurring = appt.isRecurring ?? false;
           recurringFrequency = appt.recurringFrequency ?? null;
@@ -6329,7 +8309,7 @@ Respond with JSON only:
       const isOwner = appointment.userId === authUserId;
       const isProvider = providerRecord && appointment.providerId === providerRecord.id;
       if (!isOwner && !isProvider) return res.status(403).json({ error: "Access denied" });
-      const [job] = await db.select().from(jobs).where(eq4(jobs.appointmentId, req.params.id)).limit(1);
+      const [job] = await db.select().from(jobs).where(eq5(jobs.appointmentId, req.params.id)).limit(1);
       if (!job) return res.json({ job: null });
       res.json({ job });
     } catch (error) {
@@ -6341,7 +8321,7 @@ Respond with JSON only:
     try {
       const authUserId = req.authenticatedUserId;
       const providerRecord = await storage.getProviderByUserId(authUserId);
-      const [invoice] = await db.select().from(invoices).where(eq4(invoices.jobId, req.params.id)).limit(1);
+      const [invoice] = await db.select().from(invoices).where(eq5(invoices.jobId, req.params.id)).limit(1);
       if (!invoice) return res.json({ invoice: null });
       const isHomeowner = invoice.homeownerUserId === authUserId;
       const isProvider = providerRecord && invoice.providerId === providerRecord.id;
@@ -6354,8 +8334,8 @@ Respond with JSON only:
   });
   async function dispatchJobStatusEmail(job, newStatus) {
     if (!job.clientId || !job.providerId) return;
-    const [client] = await db.select().from(clients).where(eq4(clients.id, job.clientId)).catch(() => [null]);
-    const [provider] = await db.select().from(providers).where(eq4(providers.id, job.providerId)).catch(() => [null]);
+    const [client] = await db.select().from(clients).where(eq5(clients.id, job.clientId)).catch(() => [null]);
+    const [provider] = await db.select().from(providers).where(eq5(providers.id, job.providerId)).catch(() => [null]);
     if (!client || !provider || !client.email) return;
     await dispatch("job.status_changed", {
       clientEmail: client.email,
@@ -6380,8 +8360,22 @@ Respond with JSON only:
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
       }
-      const job = await storage.createJob(parsed.data);
-      res.status(201).json({ job });
+      const { job: newJob, appointment } = await db.transaction(async (tx) => {
+        const [job] = await tx.insert(jobs).values(parsed.data).returning();
+        const [apptRow] = await tx.insert(appointments).values({
+          providerId: job.providerId,
+          serviceName: job.title,
+          description: job.description || void 0,
+          scheduledDate: job.scheduledDate,
+          scheduledTime: job.scheduledTime || void 0,
+          estimatedPrice: job.estimatedPrice || void 0,
+          status: "confirmed",
+          notes: job.notes || void 0
+        }).returning();
+        const [linkedJob] = await tx.update(jobs).set({ appointmentId: apptRow.id }).where(eq5(jobs.id, job.id)).returning();
+        return { job: linkedJob, appointment: apptRow };
+      });
+      return res.status(201).json({ job: newJob, appointment });
     } catch (error) {
       console.error("Create job error:", error);
       res.status(500).json({ error: "Failed to create job" });
@@ -6390,12 +8384,35 @@ Respond with JSON only:
   app2.put("/api/jobs/:id", requireAuth, async (req, res) => {
     try {
       const existing = await storage.getJob(req.params.id);
-      const job = await storage.updateJob(req.params.id, req.body);
+      if (!existing) return res.status(404).json({ error: "Job not found" });
+      if (!await assertProviderOwnership(req, existing.providerId, res)) return;
+      const {
+        title,
+        description,
+        status,
+        scheduledDate,
+        scheduledTime,
+        estimatedPrice,
+        finalPrice,
+        notes,
+        address
+      } = req.body;
+      const update = {};
+      if (title !== void 0) update.title = title;
+      if (description !== void 0) update.description = description;
+      if (status !== void 0) update.status = status;
+      if (scheduledDate !== void 0) update.scheduledDate = scheduledDate;
+      if (scheduledTime !== void 0) update.scheduledTime = scheduledTime;
+      if (estimatedPrice !== void 0) update.estimatedPrice = estimatedPrice;
+      if (finalPrice !== void 0) update.finalPrice = finalPrice;
+      if (notes !== void 0) update.notes = notes;
+      if (address !== void 0) update.address = address;
+      const job = await storage.updateJob(req.params.id, update);
       if (!job) {
         return res.status(404).json({ error: "Job not found" });
       }
-      if (req.body.status && existing && req.body.status !== existing.status) {
-        dispatchJobStatusEmail(job, req.body.status).catch((e) => console.error("job.status_changed dispatch error:", e));
+      if (status && existing.status !== status) {
+        dispatchJobStatusEmail(job, status).catch((e) => console.error("job.status_changed dispatch error:", e));
       }
       res.json({ job });
     } catch (error) {
@@ -6414,8 +8431,8 @@ Respond with JSON only:
       (async () => {
         try {
           if (!job.clientId || !job.providerId) return;
-          const [client] = await db.select().from(clients).where(eq4(clients.id, job.clientId)).catch(() => [null]);
-          const [provider] = await db.select().from(providers).where(eq4(providers.id, job.providerId)).catch(() => [null]);
+          const [client] = await db.select().from(clients).where(eq5(clients.id, job.clientId)).catch(() => [null]);
+          const [provider] = await db.select().from(providers).where(eq5(providers.id, job.providerId)).catch(() => [null]);
           if (!client?.email || !provider) return;
           const homeownerUserId = client.homeownerUserId ?? void 0;
           const encodedName = encodeURIComponent(provider.businessName);
@@ -6444,6 +8461,7 @@ Respond with JSON only:
           console.error("rebook.prompt dispatch error:", e);
         }
       })();
+      autoLogHouseFaxEntry(job).catch((e) => console.error("housefax auto-log error:", e));
       res.json({ job });
     } catch (error) {
       console.error("Complete job error:", error);
@@ -6477,6 +8495,7 @@ Respond with JSON only:
   });
   app2.get("/api/provider/:providerId/invoices", requireAuth, async (req, res) => {
     try {
+      if (!await assertProviderOwnership(req, req.params.providerId, res)) return;
       const invoices2 = await storage.getInvoices(req.params.providerId);
       res.json({ invoices: invoices2 });
     } catch (error) {
@@ -6497,8 +8516,7 @@ Respond with JSON only:
       if (!isProvider && !isHomeowner) {
         return res.status(403).json({ error: "Access denied" });
       }
-      const payments2 = await storage.getPaymentsByInvoice(req.params.id);
-      res.json({ invoice, payments: payments2 });
+      res.json({ invoice });
     } catch (error) {
       console.error("Get invoice error:", error);
       res.status(500).json({ error: "Failed to get invoice" });
@@ -6506,6 +8524,7 @@ Respond with JSON only:
   });
   app2.get("/api/provider/:providerId/next-invoice-number", requireAuth, async (req, res) => {
     try {
+      if (!await assertProviderOwnership(req, req.params.providerId, res)) return;
       const invoiceNumber = await storage.getNextInvoiceNumber(req.params.providerId);
       res.json({ invoiceNumber });
     } catch (error) {
@@ -6516,6 +8535,7 @@ Respond with JSON only:
   app2.post("/api/invoices", requireAuth, async (req, res) => {
     try {
       const invoiceNumber = req.body.invoiceNumber || `INV-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+      if (req.body.providerId && !await assertProviderOwnership(req, req.body.providerId, res)) return;
       const lineItemsInput = Array.isArray(req.body.lineItems) ? req.body.lineItems : [];
       let total = parseFloat(req.body.amount || "0");
       if (lineItemsInput.length > 0) {
@@ -6524,11 +8544,19 @@ Respond with JSON only:
         }, 0);
       }
       const lineItemsJson = lineItemsInput.length > 0 ? JSON.stringify(lineItemsInput) : req.body.amount ? JSON.stringify([{ description: req.body.notes || "Service", quantity: 1, unitPrice: parseFloat(req.body.amount), total: parseFloat(req.body.amount) }]) : void 0;
+      const subtotalCents = Math.round(total * 100);
       const invoiceData = {
         providerId: req.body.providerId,
         clientId: req.body.clientId,
         jobId: req.body.jobId || null,
         invoiceNumber,
+        currency: "usd",
+        subtotalCents,
+        taxCents: 0,
+        discountCents: 0,
+        platformFeeCents: 0,
+        totalCents: subtotalCents,
+        amount: total.toFixed(2),
         total: total.toFixed(2),
         status: "draft",
         notes: req.body.notes || null,
@@ -6541,8 +8569,8 @@ Respond with JSON only:
       }
       const invoice = await storage.createInvoice(parsed.data);
       if (invoice.clientId) {
-        const [draftClient] = await db.select().from(clients).where(eq4(clients.id, invoice.clientId)).catch(() => [null]);
-        const [draftProvider] = await db.select().from(providers).where(eq4(providers.id, invoice.providerId)).catch(() => [null]);
+        const [draftClient] = await db.select().from(clients).where(eq5(clients.id, invoice.clientId)).catch(() => [null]);
+        const [draftProvider] = await db.select().from(providers).where(eq5(providers.id, invoice.providerId)).catch(() => [null]);
         if (draftClient?.email && draftProvider) {
           dispatch("invoice.created", {
             clientEmail: draftClient.email,
@@ -6565,6 +8593,10 @@ Respond with JSON only:
   });
   app2.post("/api/invoices/create-and-send", requireAuth, async (req, res) => {
     try {
+      const { providerId: bodyProviderId } = req.body;
+      if (!bodyProviderId) return res.status(400).json({ error: "providerId is required" });
+      if (!await assertProviderOwnership(req, bodyProviderId, res)) return;
+      const authProviderRecord = await storage.getProvider(bodyProviderId);
       const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
       const lineItemsInput = Array.isArray(req.body.lineItems) ? req.body.lineItems : [];
       let amount;
@@ -6586,11 +8618,19 @@ Respond with JSON only:
           total: amount
         }];
       }
+      const subtotalCents = Math.round(amount * 100);
       const invoiceData = {
-        providerId: req.body.providerId,
+        providerId: bodyProviderId,
         clientId: req.body.clientId,
         jobId: req.body.jobId || null,
         invoiceNumber,
+        currency: "usd",
+        subtotalCents,
+        taxCents: 0,
+        discountCents: 0,
+        platformFeeCents: 0,
+        totalCents: subtotalCents,
+        amount: amount.toFixed(2),
         total: amount.toFixed(2),
         lineItems: JSON.stringify(lineItems),
         notes: req.body.notes || null,
@@ -6602,6 +8642,14 @@ Respond with JSON only:
         return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
       }
       const invoice = await storage.createInvoice(parsed.data);
+      let hostedUrl;
+      let stripeError;
+      const platformResult = await sendPlatformStripeInvoice(invoice.id).catch((err) => {
+        stripeError = err?.message || "Stripe invoice send failed";
+        console.error("[stripe-invoice-send] create-and-send:", stripeError);
+        return null;
+      });
+      if (platformResult?.hostedInvoiceUrl) hostedUrl = platformResult.hostedInvoiceUrl;
       let emailSent = false;
       let emailError;
       if (invoice.clientId) {
@@ -6622,16 +8670,25 @@ Respond with JSON only:
               unitPrice: item.unitPrice,
               total: item.total
             })),
+            paymentLink: hostedUrl,
             relatedRecordType: "invoice",
             relatedRecordId: invoice.id
           });
           emailSent = sendResult.emailSent;
           emailError = sendResult.emailError;
+          if (client?.email) {
+            const [clientUser] = await db.select({ id: users.id }).from(users).where(eq5(users.email, client.email)).limit(1).catch(() => [null]);
+            if (clientUser) {
+              sendPush(clientUser.id, `Invoice from ${provider.businessName || "Your Provider"}`, `Invoice ${invoice.invoiceNumber} for $${amount.toFixed(2)} is ready. Tap to view.`, { type: "invoice", invoiceId: invoice.id }, "invoices").catch(() => {
+              });
+            }
+          }
         } else if (!client?.email) {
           emailError = "Client has no email address on file.";
         }
       }
-      res.status(201).json({ invoice, emailSent, emailError });
+      const invoiceWithStripe = hostedUrl ? { ...invoice, hostedInvoiceUrl: hostedUrl } : invoice;
+      res.status(201).json({ invoice: invoiceWithStripe, emailSent, emailError, stripeError });
     } catch (error) {
       console.error("Create and send invoice error:", error);
       res.status(500).json({ error: "Failed to create invoice" });
@@ -6639,16 +8696,32 @@ Respond with JSON only:
   });
   app2.put("/api/invoices/:id", requireAuth, async (req, res) => {
     try {
-      const authUserId = req.authenticatedUserId;
       const existing = await storage.getInvoice(req.params.id);
       if (!existing) {
         return res.status(404).json({ error: "Invoice not found" });
       }
-      const provider = await storage.getProviderByUserId(authUserId);
-      if (!provider || existing.providerId !== provider.id) {
-        return res.status(403).json({ error: "Access denied" });
+      if (!await assertProviderOwnership(req, existing.providerId, res)) return;
+      const allowedFields = [
+        "status",
+        "notes",
+        "dueDate",
+        "lineItems",
+        "amount",
+        "total",
+        "subtotalCents",
+        "taxCents",
+        "discountCents",
+        "totalCents",
+        "paymentMethodsAllowed"
+      ];
+      const update = {};
+      for (const field of allowedFields) {
+        if (req.body[field] !== void 0) update[field] = req.body[field];
       }
-      const invoice = await storage.updateInvoice(req.params.id, req.body);
+      if (Object.keys(update).length === 0) {
+        return res.status(400).json({ error: "No valid fields provided for update" });
+      }
+      const invoice = await storage.updateInvoice(req.params.id, update);
       if (!invoice) {
         return res.status(404).json({ error: "Invoice not found" });
       }
@@ -6661,9 +8734,30 @@ Respond with JSON only:
   app2.post("/api/invoices/:id/send", requireAuth, async (req, res) => {
     try {
       const invoiceId = req.params.id;
+      const authUserId = req.authenticatedUserId;
       const invoice = await storage.getInvoice(invoiceId);
       if (!invoice) {
         return res.status(404).json({ error: "Invoice not found" });
+      }
+      const authProviderRecord = await storage.getProviderByUserId(authUserId);
+      if (!authProviderRecord || invoice.providerId !== authProviderRecord.id) {
+        return res.status(403).json({ error: "Access denied: you can only send invoices for your own provider account" });
+      }
+      let hostedUrl;
+      let stripeError;
+      if (!invoice.stripeInvoiceId) {
+        const platformResult = await sendPlatformStripeInvoice(invoiceId).catch((err) => {
+          stripeError = err?.message || "Stripe invoice send failed";
+          console.error("[stripe-invoice-send] platform:", stripeError);
+          return null;
+        });
+        if (platformResult?.hostedInvoiceUrl) hostedUrl = platformResult.hostedInvoiceUrl;
+      } else {
+        hostedUrl = invoice.hostedInvoiceUrl || void 0;
+        await getStripe().invoices.sendInvoice(invoice.stripeInvoiceId).catch((err) => {
+          stripeError = err?.message;
+          console.warn("[stripe-invoice-resend]", stripeError);
+        });
       }
       let emailSent = false;
       let emailError;
@@ -6687,18 +8781,34 @@ Respond with JSON only:
               unitPrice: parseFloat(item.unitPrice?.toString() || item.price?.toString() || "0"),
               total: parseFloat(item.total?.toString() || "0")
             })),
+            paymentLink: hostedUrl,
             relatedRecordType: "invoice",
             relatedRecordId: invoice.id
           });
           emailSent = sendResult.emailSent;
           emailError = sendResult.emailError;
+          if (client?.email) {
+            const [clientUser] = await db.select({ id: users.id }).from(users).where(eq5(users.email, client.email)).limit(1).catch(() => [null]);
+            if (clientUser) {
+              const invoiceTotal = parseFloat(invoice.total?.toString() || "0");
+              sendPush(clientUser.id, `Invoice from ${provider.businessName || "Your Provider"}`, `Invoice ${invoice.invoiceNumber || invoiceId.slice(0, 8)} for $${invoiceTotal.toFixed(2)} is ready. Tap to view.`, { type: "invoice", invoiceId }, "invoices").catch(() => {
+              });
+            }
+          }
         }
       }
-      const updatedInvoice = await storage.sendInvoice(invoiceId);
+      const [updatedInvoice] = await db.update(invoices).set({
+        status: "sent",
+        sentAt: /* @__PURE__ */ new Date(),
+        ...hostedUrl ? { hostedInvoiceUrl: hostedUrl } : {},
+        updatedAt: /* @__PURE__ */ new Date()
+      }).where(eq5(invoices.id, invoiceId)).returning();
       res.json({
         invoice: updatedInvoice,
+        paymentUrl: hostedUrl,
         emailSent,
-        emailError
+        emailError,
+        stripeError
       });
     } catch (error) {
       console.error("Send invoice error:", error);
@@ -6763,8 +8873,81 @@ Respond with JSON only:
       res.status(500).json({ error: "Failed to cancel invoice" });
     }
   });
+  app2.post("/api/invoices/:id/remind", requireAuth, async (req, res) => {
+    try {
+      const invoiceId = req.params.id;
+      const authUserId = req.authenticatedUserId;
+      const invoice = await storage.getInvoice(invoiceId);
+      if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+      const authProvider = await storage.getProviderByUserId(authUserId);
+      if (!authProvider || invoice.providerId !== authProvider.id) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      if (!invoice.clientId) {
+        return res.status(400).json({ error: "No client associated with this invoice" });
+      }
+      const client = await storage.getClient(invoice.clientId);
+      if (!client?.email) {
+        return res.status(400).json({ error: "No email address on file for this client" });
+      }
+      const provider = await storage.getProvider(invoice.providerId);
+      const clientName = [client.firstName, client.lastName].filter(Boolean).join(" ") || "Client";
+      const providerName = provider?.businessName || "Your Service Provider";
+      const now = /* @__PURE__ */ new Date();
+      const dueDate = invoice.dueDate ? new Date(invoice.dueDate) : null;
+      const diffMs = dueDate ? dueDate.getTime() - now.getTime() : 0;
+      const diffDays = Math.round(diffMs / (1e3 * 60 * 60 * 24));
+      let reminderPaymentLink = invoice.hostedInvoiceUrl || void 0;
+      if (!reminderPaymentLink) {
+        const platformResult = await sendPlatformStripeInvoice(invoiceId).catch(() => null);
+        if (platformResult?.hostedInvoiceUrl) reminderPaymentLink = platformResult.hostedInvoiceUrl;
+      }
+      await sendInvoiceReminderEmail({
+        clientEmail: client.email,
+        clientName,
+        providerName,
+        invoiceNumber: invoice.invoiceNumber || `INV-${invoice.id.slice(0, 8)}`,
+        amount: parseFloat(invoice.total?.toString() || "0"),
+        dueDate: dueDate ? dueDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "Due on receipt",
+        daysUntilDue: diffDays > 0 ? diffDays : void 0,
+        daysOverdue: diffDays < 0 ? Math.abs(diffDays) : void 0,
+        paymentLink: reminderPaymentLink
+      });
+      res.json({ sent: true });
+    } catch (error) {
+      console.error("Invoice remind error:", error);
+      res.status(500).json({ error: "Failed to send reminder" });
+    }
+  });
+  app2.post("/api/invoices/:id/payment-link", requireAuth, async (req, res) => {
+    try {
+      const invoiceId = req.params.id;
+      const authUserId = req.authenticatedUserId;
+      const invoice = await storage.getInvoice(invoiceId);
+      if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+      const authProvider = await storage.getProviderByUserId(authUserId);
+      if (!authProvider || invoice.providerId !== authProvider.id) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      let checkoutUrl;
+      let method = "checkout_session";
+      if (invoice.hostedInvoiceUrl) {
+        checkoutUrl = invoice.hostedInvoiceUrl;
+        method = "existing";
+      } else {
+        const result = await sendPlatformStripeInvoice(invoiceId);
+        checkoutUrl = result.hostedInvoiceUrl;
+        method = "stripe_invoice";
+      }
+      res.json({ url: checkoutUrl, method });
+    } catch (error) {
+      console.error("Generate payment link error:", error);
+      res.status(500).json({ error: error.message || "Failed to generate payment link" });
+    }
+  });
   app2.get("/api/provider/:providerId/payments", requireAuth, async (req, res) => {
     try {
+      if (!await assertProviderOwnership(req, req.params.providerId, res)) return;
       const payments2 = await storage.getPayments(req.params.providerId);
       res.json({ payments: payments2 });
     } catch (error) {
@@ -6917,9 +9100,51 @@ Respond with JSON only:
       res.status(500).json({ error: "Failed to create customer portal session" });
     }
   });
+  const connectPageHtml = (title, message, isRefresh = false) => `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${title} \u2013 HomeBase Pro</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+    .card{background:#1c1f2b;border-radius:20px;padding:40px 32px;max-width:440px;width:100%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+    .icon{font-size:56px;margin-bottom:20px}
+    h1{font-size:24px;font-weight:700;margin-bottom:12px}
+    p{color:#a0a8c0;font-size:15px;line-height:1.6;margin-bottom:28px}
+    a.btn{display:inline-block;background:#38AE5F;color:#fff;text-decoration:none;padding:14px 32px;border-radius:12px;font-weight:600;font-size:16px}
+    a.btn:hover{background:#2e9a52}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">${isRefresh ? "\u{1F504}" : "\u2705"}</div>
+    <h1>${title}</h1>
+    <p>${message}</p>
+    <a class="btn" href="homebase://">Return to HomeBase Pro</a>
+  </div>
+</body>
+</html>`;
+  app2.get("/provider/connect/complete", (_req, res) => {
+    res.setHeader("Content-Type", "text/html");
+    res.send(connectPageHtml(
+      "Stripe Setup Complete",
+      "Your payment account is connected. Return to the app to start accepting payments and receiving payouts."
+    ));
+  });
+  app2.get("/provider/connect/refresh", (_req, res) => {
+    res.setHeader("Content-Type", "text/html");
+    res.send(connectPageHtml(
+      "Continue Stripe Setup",
+      'Your onboarding link has expired. Return to the app and tap "Continue Onboarding" to generate a fresh link.',
+      true
+    ));
+  });
   app2.post("/api/stripe/connect/onboard/:providerId", requireAuth, async (req, res) => {
     try {
       const { providerId } = req.params;
+      if (!await assertProviderOwnership(req, providerId, res)) return;
       const result = await createConnectAccountLink(providerId);
       res.json(result);
     } catch (error) {
@@ -6930,6 +9155,7 @@ Respond with JSON only:
   app2.post("/api/stripe/connect/refresh-link/:providerId", requireAuth, async (req, res) => {
     try {
       const { providerId } = req.params;
+      if (!await assertProviderOwnership(req, providerId, res)) return;
       const result = await refreshConnectAccountLink(providerId);
       res.json(result);
     } catch (error) {
@@ -6976,6 +9202,7 @@ Respond with JSON only:
       if (!providerId) {
         return res.status(400).json({ error: "providerId is required" });
       }
+      if (!await assertProviderOwnership(req, providerId, res)) return;
       let subtotalCents = 0;
       const parsedLineItems = Array.isArray(lineItemsInput) ? lineItemsInput : [];
       for (const item of parsedLineItems) {
@@ -6986,7 +9213,7 @@ Respond with JSON only:
       const plan = await getProviderPlan(providerId);
       const fee = calculatePlatformFee(
         subtotalCents,
-        plan.platformFeePercent || "10.00",
+        plan.platformFeePercent || "3.00",
         plan.platformFeeFixedCents || 0
       );
       const totalBeforeTax = subtotalCents - (discountCents || 0);
@@ -7041,7 +9268,8 @@ Respond with JSON only:
       if (!providerId) {
         return res.status(400).json({ error: "providerId is required" });
       }
-      const providerInvoices = await db.select().from(invoices).where(eq4(invoices.providerId, providerId)).orderBy(invoices.createdAt);
+      if (!await assertProviderOwnership(req, providerId, res)) return;
+      const providerInvoices = await db.select().from(invoices).where(eq5(invoices.providerId, providerId)).orderBy(desc2(invoices.createdAt));
       res.json({ invoices: providerInvoices });
     } catch (error) {
       console.error("Get invoices error:", error);
@@ -7051,12 +9279,71 @@ Respond with JSON only:
   app2.post("/api/stripe/invoices/:invoiceId/send", requireAuth, async (req, res) => {
     try {
       const { invoiceId } = req.params;
+      const authUserId = req.authenticatedUserId;
+      const invoice = await storage.getInvoice(invoiceId);
+      if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+      const authProviderRecord = await storage.getProviderByUserId(authUserId);
+      if (!authProviderRecord || invoice.providerId !== authProviderRecord.id) {
+        return res.status(403).json({ error: "Access denied: you can only send invoices for your own provider account" });
+      }
+      let hostedUrl;
+      let stripeError;
+      if (!invoice.stripeInvoiceId) {
+        const platformResult = await sendPlatformStripeInvoice(invoiceId).catch((err) => {
+          stripeError = err?.message || "Stripe invoice send failed";
+          console.error("[stripe-invoice-send] stripe/invoices/:id/send:", stripeError);
+          return null;
+        });
+        if (platformResult?.hostedInvoiceUrl) hostedUrl = platformResult.hostedInvoiceUrl;
+      } else {
+        hostedUrl = invoice.hostedInvoiceUrl || void 0;
+        await getStripe().invoices.sendInvoice(invoice.stripeInvoiceId).catch((err) => {
+          stripeError = err?.message;
+        });
+      }
+      let emailSent = false;
+      let emailError;
+      if (invoice.clientId) {
+        const client = await storage.getClient(invoice.clientId);
+        const provider = await storage.getProvider(invoice.providerId);
+        if (client?.email && provider) {
+          const rawLineItems = invoice.lineItems;
+          const lineItems = Array.isArray(rawLineItems) ? rawLineItems : typeof rawLineItems === "string" ? JSON.parse(rawLineItems) : [];
+          const clientName = [client.firstName, client.lastName].filter(Boolean).join(" ") || "Client";
+          const sendResult = await dispatchWithResult("invoice.sent", {
+            clientEmail: client.email,
+            clientName,
+            providerName: provider.businessName || provider.userId || "Service Provider",
+            invoiceNumber: invoice.invoiceNumber || `INV-${invoice.id.slice(0, 8)}`,
+            amount: parseFloat(invoice.total?.toString() || "0"),
+            dueDate: invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : "Due on receipt",
+            lineItems: lineItems.map((item) => ({
+              description: item.description || item.name || "Service",
+              quantity: item.quantity || 1,
+              unitPrice: parseFloat(item.unitPrice?.toString() || item.price?.toString() || "0"),
+              total: parseFloat(item.total?.toString() || "0")
+            })),
+            paymentLink: hostedUrl,
+            relatedRecordType: "invoice",
+            relatedRecordId: invoice.id
+          });
+          emailSent = sendResult.emailSent;
+          emailError = sendResult.emailError;
+          const [clientUser] = await db.select({ id: users.id }).from(users).where(eq5(users.email, client.email)).limit(1).catch(() => [null]);
+          if (clientUser) {
+            const invoiceTotal = parseFloat(invoice.total?.toString() || "0");
+            sendPush(clientUser.id, `Invoice from ${provider.businessName || "Your Provider"}`, `Invoice ${invoice.invoiceNumber || invoiceId.slice(0, 8)} for $${invoiceTotal.toFixed(2)} is ready. Tap to view.`, { type: "invoice", invoiceId }, "invoices").catch(() => {
+            });
+          }
+        }
+      }
       const [updated] = await db.update(invoices).set({
         status: "sent",
         sentAt: /* @__PURE__ */ new Date(),
+        ...hostedUrl ? { hostedInvoiceUrl: hostedUrl } : {},
         updatedAt: /* @__PURE__ */ new Date()
-      }).where(eq4(invoices.id, invoiceId)).returning();
-      res.json({ invoice: updated });
+      }).where(eq5(invoices.id, invoiceId)).returning();
+      res.json({ invoice: updated, paymentUrl: hostedUrl, emailSent, emailError, stripeError });
     } catch (error) {
       console.error("Send invoice error:", error);
       res.status(500).json({ error: error.message || "Failed to send invoice" });
@@ -7065,29 +9352,28 @@ Respond with JSON only:
   app2.post("/api/stripe/invoices/:invoiceId/checkout", requireAuth, async (req, res) => {
     try {
       const { invoiceId } = req.params;
-      const [inv] = await db.select({ providerId: invoices.providerId }).from(invoices).where(eq4(invoices.id, invoiceId));
-      if (inv) {
-        const [connectAcct] = await db.select({ chargesEnabled: stripeConnectAccounts.chargesEnabled }).from(stripeConnectAccounts).where(eq4(stripeConnectAccounts.providerId, inv.providerId));
-        if (!connectAcct || !connectAcct.chargesEnabled) {
-          return res.status(402).json({ error: "stripe_not_ready", message: "Provider has not completed Stripe onboarding" });
-        }
+      if (!await assertInvoiceAccess(req, invoiceId, res)) return;
+      const [inv] = await db.select({ stripeInvoiceId: invoices.stripeInvoiceId, hostedInvoiceUrl: invoices.hostedInvoiceUrl }).from(invoices).where(eq5(invoices.id, invoiceId));
+      if (!inv) return res.status(404).json({ error: "Invoice not found" });
+      let url = inv.hostedInvoiceUrl;
+      if (!url) {
+        const result = await sendPlatformStripeInvoice(invoiceId);
+        url = result.hostedInvoiceUrl;
       }
-      const result = await createStripeCheckoutSession(invoiceId);
-      res.json({ url: result.checkoutUrl, sessionId: result.sessionId });
+      res.json({ url, stripeInvoiceId: inv.stripeInvoiceId });
     } catch (error) {
-      console.error("Create checkout session error:", error);
-      if (error.code === "stripe_not_ready" || error.message === "stripe_not_ready") {
-        return res.status(402).json({ error: "stripe_not_ready", message: "Provider has not completed Stripe onboarding" });
-      }
-      res.status(500).json({ error: error.message || "Failed to create checkout session" });
+      console.error("Create Stripe invoice error:", error);
+      res.status(500).json({ error: error.message || "Failed to create checkout" });
     }
   });
   app2.post("/api/stripe/invoices/:invoiceId/apply-credits", requireAuth, async (req, res) => {
     try {
       const { invoiceId } = req.params;
-      const { userId, amountCents } = req.body;
-      if (!userId || amountCents === void 0) {
-        return res.status(400).json({ error: "userId and amountCents are required" });
+      if (!await assertInvoiceAccess(req, invoiceId, res)) return;
+      const { amountCents } = req.body;
+      const userId = req.authenticatedUserId;
+      if (!amountCents || isNaN(Number(amountCents)) || Number(amountCents) <= 0) {
+        return res.status(400).json({ error: "amountCents must be a positive number" });
       }
       const result = await applyCreditsToInvoice(invoiceId, userId, amountCents);
       res.json(result);
@@ -7102,6 +9388,7 @@ Respond with JSON only:
       if (!providerId) {
         return res.status(400).json({ error: "providerId is required" });
       }
+      if (!await assertProviderOwnership(req, providerId, res)) return;
       const result = await createConnectAccountLink(providerId);
       res.json(result);
     } catch (error) {
@@ -7115,6 +9402,7 @@ Respond with JSON only:
       if (!providerId) {
         return res.status(400).json({ error: "providerId is required" });
       }
+      if (!await assertProviderOwnership(req, providerId, res)) return;
       const result = await refreshConnectAccountLink(providerId);
       res.json(result);
     } catch (error) {
@@ -7135,21 +9423,22 @@ Respond with JSON only:
   app2.post("/api/providers/:providerId/plan", requireAuth, async (req, res) => {
     try {
       const { providerId } = req.params;
+      if (!await assertProviderOwnership(req, providerId, res)) return;
       const { planTier, platformFeePercent, platformFeeFixedCents } = req.body;
-      const [existing] = await db.select().from(providerPlans).where(eq4(providerPlans.providerId, providerId));
+      const [existing] = await db.select().from(providerPlans).where(eq5(providerPlans.providerId, providerId));
       if (existing) {
         const [updated] = await db.update(providerPlans).set({
           planTier: planTier || existing.planTier,
           platformFeePercent: platformFeePercent || existing.platformFeePercent,
           platformFeeFixedCents: platformFeeFixedCents ?? existing.platformFeeFixedCents,
           updatedAt: /* @__PURE__ */ new Date()
-        }).where(eq4(providerPlans.id, existing.id)).returning();
+        }).where(eq5(providerPlans.id, existing.id)).returning();
         res.json({ plan: updated });
       } else {
         const [created] = await db.insert(providerPlans).values({
           providerId,
           planTier: planTier || "free",
-          platformFeePercent: platformFeePercent || "10.00",
+          platformFeePercent: platformFeePercent || "3.00",
           platformFeeFixedCents: platformFeeFixedCents || 0
         }).returning();
         res.status(201).json({ plan: created });
@@ -7162,6 +9451,7 @@ Respond with JSON only:
   app2.get("/api/providers/:providerId/plan", requireAuth, async (req, res) => {
     try {
       const { providerId } = req.params;
+      if (!await assertProviderOwnership(req, providerId, res)) return;
       const plan = await getProviderPlan(providerId);
       res.json({ plan });
     } catch (error) {
@@ -7199,6 +9489,7 @@ Respond with JSON only:
       if (!providerId) {
         return res.status(400).json({ error: "providerId is required" });
       }
+      if (!await assertProviderOwnership(req, providerId, res)) return;
       let subtotalCents = 0;
       const parsedLineItems = Array.isArray(lineItemsInput) ? lineItemsInput : [];
       for (const item of parsedLineItems) {
@@ -7209,7 +9500,7 @@ Respond with JSON only:
       const plan = await getProviderPlan(providerId);
       const fee = calculatePlatformFee(
         subtotalCents,
-        plan.platformFeePercent || "10.00",
+        plan.platformFeePercent || "3.00",
         plan.platformFeeFixedCents || 0
       );
       const totalBeforeTax = subtotalCents - (discountCents || 0);
@@ -7250,7 +9541,7 @@ Respond with JSON only:
           }))
         );
       }
-      const createdLineItems = await db.select().from(invoiceLineItems).where(eq4(invoiceLineItems.invoiceId, invoice.id));
+      const createdLineItems = await db.select().from(invoiceLineItems).where(eq5(invoiceLineItems.invoiceId, invoice.id));
       res.status(201).json({
         invoice,
         lineItems: createdLineItems,
@@ -7261,111 +9552,187 @@ Respond with JSON only:
       res.status(500).json({ error: error.message || "Failed to create invoice" });
     }
   });
-  app2.post("/api/invoices/:invoiceId/send", requireAuth, async (req, res) => {
-    try {
-      const { invoiceId } = req.params;
-      const { deliveryMethod, generatePaymentLink } = req.body;
-      const invoice = await storage.getInvoice(invoiceId);
-      if (!invoice) {
-        return res.status(404).json({ error: "Invoice not found" });
-      }
-      if (!invoice.clientId) {
-        return res.status(400).json({ error: "Invoice has no client" });
-      }
-      const client = await storage.getClient(invoice.clientId);
-      if (!client) {
-        return res.status(404).json({ error: "Client not found" });
-      }
-      const provider = await storage.getProvider(invoice.providerId);
-      if (!provider) {
-        return res.status(404).json({ error: "Provider not found" });
-      }
-      let hostedUrl = null;
-      if (generatePaymentLink) {
-        const checkoutResult = await createStripeCheckoutSession(invoiceId);
-        hostedUrl = checkoutResult.checkoutUrl;
-      }
-      let emailSent = false;
-      let emailError;
-      if (client.email && (deliveryMethod === "email" || deliveryMethod === "both")) {
-        const rawLineItems = invoice.lineItems;
-        const lineItems = Array.isArray(rawLineItems) ? rawLineItems : typeof rawLineItems === "string" ? JSON.parse(rawLineItems) : [];
-        const clientName = [client.firstName, client.lastName].filter(Boolean).join(" ") || "Client";
-        const sendResult = await dispatchWithResult("invoice.sent", {
-          clientEmail: client.email,
-          clientName,
-          providerName: provider.businessName || provider.userId || "Service Provider",
-          invoiceNumber: invoice.invoiceNumber || `INV-${invoice.id.slice(0, 8)}`,
-          amount: parseFloat(invoice.total?.toString() || "0"),
-          dueDate: invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : "Due on receipt",
-          lineItems: lineItems.map((item) => ({
-            description: item.description || item.name || "Service",
-            quantity: item.quantity || 1,
-            unitPrice: parseFloat(item.unitPrice?.toString() || item.price?.toString() || "0"),
-            total: parseFloat(item.total?.toString() || "0")
-          })),
-          paymentLink: hostedUrl || void 0,
-          relatedRecordType: "invoice",
-          relatedRecordId: invoice.id
-        });
-        emailSent = sendResult.emailSent;
-        emailError = sendResult.emailError;
-      }
-      const [updated] = await db.update(invoices).set({
-        status: "sent",
-        sentAt: /* @__PURE__ */ new Date(),
-        hostedInvoiceUrl: hostedUrl || void 0,
-        updatedAt: /* @__PURE__ */ new Date()
-      }).where(eq4(invoices.id, invoiceId)).returning();
-      res.json({
-        invoice: updated,
-        paymentUrl: hostedUrl,
-        deliveryMethod: deliveryMethod || "link",
-        emailSent,
-        emailError
-      });
-    } catch (error) {
-      console.error("Send invoice error:", error);
-      res.status(500).json({ error: error.message || "Failed to send invoice" });
-    }
-  });
   app2.post("/api/invoices/:invoiceId/payment-intent", requireAuth, async (req, res) => {
     try {
       const { invoiceId } = req.params;
-      const { payerUserId } = req.body;
-      const result = await createInvoicePaymentIntent(invoiceId, payerUserId);
+      if (!await assertInvoiceAccess(req, invoiceId, res)) return;
+      const authUserId = req.authenticatedUserId;
+      const result = await createInvoicePaymentIntent(invoiceId, authUserId);
       res.json(result);
     } catch (error) {
       console.error("Create payment intent error:", error);
       res.status(500).json({ error: error.message || "Failed to create payment intent" });
     }
   });
+  app2.post("/api/homeowner/setup-payment-sheet", requireAuth, async (req, res) => {
+    try {
+      const authUserId = req.authenticatedUserId;
+      const [user] = await db.select().from(users).where(eq5(users.id, authUserId));
+      if (!user) return res.status(404).json({ error: "User not found" });
+      const stripe2 = getStripe();
+      let customerId = user.stripeCustomerId;
+      if (!customerId) {
+        const customer = await stripe2.customers.create({
+          email: user.email,
+          name: [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email,
+          metadata: { userId: user.id }
+        });
+        customerId = customer.id;
+        await db.update(users).set({ stripeCustomerId: customerId, updatedAt: /* @__PURE__ */ new Date() }).where(eq5(users.id, authUserId));
+      }
+      const ephemeralKey = await stripe2.ephemeralKeys.create(
+        { customer: customerId },
+        { apiVersion: "2023-10-16" }
+      );
+      const setupIntent = await stripe2.setupIntents.create({
+        customer: customerId,
+        payment_method_types: ["card"]
+      });
+      res.json({
+        setupIntentClientSecret: setupIntent.client_secret,
+        ephemeralKeySecret: ephemeralKey.secret,
+        customerId
+      });
+    } catch (error) {
+      console.error("Setup payment sheet error:", error);
+      res.status(500).json({ error: error.message || "Failed to create setup sheet" });
+    }
+  });
+  app2.get("/api/homeowner/payment-methods", requireAuth, async (req, res) => {
+    try {
+      const authUserId = req.authenticatedUserId;
+      const [user] = await db.select().from(users).where(eq5(users.id, authUserId));
+      if (!user?.stripeCustomerId) return res.json({ paymentMethods: [], defaultPaymentMethodId: null });
+      const stripe2 = getStripe();
+      const pms = await stripe2.paymentMethods.list({ customer: user.stripeCustomerId, type: "card" });
+      const customer = await stripe2.customers.retrieve(user.stripeCustomerId);
+      const defaultPmId = user.defaultPaymentMethodId || customer?.invoice_settings?.default_payment_method || (pms.data.length === 1 ? pms.data[0].id : null);
+      res.json({
+        paymentMethods: pms.data.map((pm) => ({
+          id: pm.id,
+          brand: pm.card?.brand ?? "card",
+          last4: pm.card?.last4 ?? "\u2022\u2022\u2022\u2022",
+          expMonth: pm.card?.exp_month,
+          expYear: pm.card?.exp_year,
+          isDefault: pm.id === defaultPmId
+        })),
+        defaultPaymentMethodId: defaultPmId
+      });
+    } catch (error) {
+      console.error("List payment methods error:", error);
+      res.status(500).json({ error: error.message || "Failed to list payment methods" });
+    }
+  });
+  app2.delete("/api/homeowner/payment-methods/:pmId", requireAuth, async (req, res) => {
+    try {
+      const authUserId = req.authenticatedUserId;
+      const { pmId } = req.params;
+      const stripe2 = getStripe();
+      await stripe2.paymentMethods.detach(pmId);
+      const [user] = await db.select().from(users).where(eq5(users.id, authUserId));
+      if (user?.defaultPaymentMethodId === pmId) {
+        await db.update(users).set({ defaultPaymentMethodId: null, updatedAt: /* @__PURE__ */ new Date() }).where(eq5(users.id, authUserId));
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Detach payment method error:", error);
+      res.status(500).json({ error: error.message || "Failed to remove payment method" });
+    }
+  });
+  app2.patch("/api/homeowner/default-payment-method", requireAuth, async (req, res) => {
+    try {
+      const authUserId = req.authenticatedUserId;
+      const { paymentMethodId } = req.body;
+      if (!paymentMethodId) return res.status(400).json({ error: "paymentMethodId required" });
+      const [user] = await db.select().from(users).where(eq5(users.id, authUserId));
+      if (!user?.stripeCustomerId) return res.status(400).json({ error: "No Stripe customer found" });
+      const stripe2 = getStripe();
+      await stripe2.customers.update(user.stripeCustomerId, {
+        invoice_settings: { default_payment_method: paymentMethodId }
+      });
+      await db.update(users).set({ defaultPaymentMethodId: paymentMethodId, updatedAt: /* @__PURE__ */ new Date() }).where(eq5(users.id, authUserId));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Set default PM error:", error);
+      res.status(500).json({ error: error.message || "Failed to set default payment method" });
+    }
+  });
+  app2.post("/api/homeowner/payment-sheet", requireAuth, async (req, res) => {
+    try {
+      const authUserId = req.authenticatedUserId;
+      const { invoiceId } = req.body;
+      if (!invoiceId) return res.status(400).json({ error: "invoiceId required" });
+      if (!await assertInvoiceAccess(req, invoiceId, res)) return;
+      const [invoice] = await db.select().from(invoices).where(eq5(invoices.id, invoiceId));
+      if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+      if (invoice.status === "paid") return res.status(400).json({ error: "Invoice already paid" });
+      const connectAccount = await getConnectAccount(invoice.providerId);
+      if (!connectAccount?.chargesEnabled) {
+        return res.status(402).json({ error: "stripe_not_ready", message: "Provider payment processing is not yet enabled" });
+      }
+      const [user] = await db.select().from(users).where(eq5(users.id, authUserId));
+      if (!user) return res.status(404).json({ error: "User not found" });
+      const stripe2 = getStripe();
+      let customerId = user.stripeCustomerId;
+      if (!customerId) {
+        const customer = await stripe2.customers.create({
+          email: user.email,
+          name: [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email,
+          metadata: { userId: user.id }
+        });
+        customerId = customer.id;
+        await db.update(users).set({ stripeCustomerId: customerId, updatedAt: /* @__PURE__ */ new Date() }).where(eq5(users.id, authUserId));
+      }
+      const paymentIntent = await stripe2.paymentIntents.create({
+        amount: invoice.totalCents,
+        currency: invoice.currency || "usd",
+        customer: customerId,
+        application_fee_amount: invoice.platformFeeCents || 0,
+        transfer_data: { destination: connectAccount.stripeAccountId },
+        setup_future_usage: "off_session",
+        metadata: { invoiceId: invoice.id, providerId: invoice.providerId, payerUserId: authUserId }
+      });
+      const ephemeralKey = await stripe2.ephemeralKeys.create(
+        { customer: customerId },
+        { apiVersion: "2023-10-16" }
+      );
+      await db.update(invoices).set({ stripePaymentIntentId: paymentIntent.id, updatedAt: /* @__PURE__ */ new Date() }).where(eq5(invoices.id, invoiceId));
+      res.json({
+        paymentIntentClientSecret: paymentIntent.client_secret,
+        ephemeralKeySecret: ephemeralKey.secret,
+        customerId,
+        amount: invoice.totalCents
+      });
+    } catch (error) {
+      console.error("Payment sheet error:", error);
+      if (error.message?.includes("not enabled") || error.message?.includes("not set up")) {
+        return res.status(402).json({ error: "stripe_not_ready", message: error.message });
+      }
+      res.status(500).json({ error: error.message || "Failed to create payment sheet" });
+    }
+  });
   app2.post("/api/invoices/:invoiceId/checkout", requireAuth, async (req, res) => {
     try {
       const { invoiceId } = req.params;
-      const [inv] = await db.select({ providerId: invoices.providerId }).from(invoices).where(eq4(invoices.id, invoiceId));
-      if (inv) {
-        const [connectAcct] = await db.select({ chargesEnabled: stripeConnectAccounts.chargesEnabled }).from(stripeConnectAccounts).where(eq4(stripeConnectAccounts.providerId, inv.providerId));
-        if (!connectAcct || !connectAcct.chargesEnabled) {
-          return res.status(402).json({ error: "stripe_not_ready", message: "Provider has not completed Stripe onboarding" });
-        }
-      }
-      const result = await createStripeCheckoutSession(invoiceId);
-      res.json(result);
+      if (!await assertInvoiceAccess(req, invoiceId, res)) return;
+      const result = await createStripeInvoice(invoiceId);
+      res.json({ url: result.hostedInvoiceUrl, stripeInvoiceId: result.stripeInvoiceId });
     } catch (error) {
-      console.error("Create checkout session error:", error);
-      if (error.code === "stripe_not_ready" || error.message === "stripe_not_ready") {
-        return res.status(402).json({ error: "stripe_not_ready", message: "Provider has not completed Stripe onboarding" });
+      console.error("Create Stripe invoice error:", error);
+      if (error.message?.includes("not enabled") || error.message?.includes("not set up")) {
+        return res.status(402).json({ error: "stripe_not_ready", message: error.message });
       }
-      res.status(500).json({ error: error.message || "Failed to create checkout session" });
+      res.status(500).json({ error: error.message || "Failed to create Stripe invoice" });
     }
   });
   app2.post("/api/invoices/:invoiceId/apply-credits", requireAuth, async (req, res) => {
     try {
       const { invoiceId } = req.params;
-      const { userId, amountCents } = req.body;
-      if (!userId || !amountCents) {
-        return res.status(400).json({ error: "userId and amountCents are required" });
+      if (!await assertInvoiceAccess(req, invoiceId, res)) return;
+      const { amountCents } = req.body;
+      const userId = req.authenticatedUserId;
+      if (!amountCents || isNaN(Number(amountCents)) || Number(amountCents) <= 0) {
+        return res.status(400).json({ error: "amountCents must be a positive number" });
       }
       const result = await applyCreditsToInvoice(invoiceId, userId, amountCents);
       res.json(result);
@@ -7380,7 +9747,7 @@ Respond with JSON only:
       if (userId !== req.authenticatedUserId) {
         return res.status(403).json({ error: "Access denied" });
       }
-      const [credits] = await db.select().from(userCredits).where(eq4(userCredits.userId, userId));
+      const [credits] = await db.select().from(userCredits).where(eq5(userCredits.userId, userId));
       res.json({
         balanceCents: credits?.balanceCents || 0,
         balance: ((credits?.balanceCents || 0) / 100).toFixed(2)
@@ -7400,11 +9767,11 @@ Respond with JSON only:
       if (!amountCents || amountCents <= 0) {
         return res.status(400).json({ error: "amountCents must be a positive number" });
       }
-      const [existing] = await db.select().from(userCredits).where(eq4(userCredits.userId, userId));
+      const [existing] = await db.select().from(userCredits).where(eq5(userCredits.userId, userId));
       let newBalance;
       if (existing) {
         newBalance = (existing.balanceCents || 0) + amountCents;
-        await db.update(userCredits).set({ balanceCents: newBalance, updatedAt: /* @__PURE__ */ new Date() }).where(eq4(userCredits.userId, userId));
+        await db.update(userCredits).set({ balanceCents: newBalance, updatedAt: /* @__PURE__ */ new Date() }).where(eq5(userCredits.userId, userId));
       } else {
         newBalance = amountCents;
         await db.insert(userCredits).values({
@@ -7426,36 +9793,11 @@ Respond with JSON only:
       res.status(500).json({ error: error.message || "Failed to add credits" });
     }
   });
-  app2.post("/api/webhooks/stripe-connect", async (req, res) => {
-    try {
-      const sig = req.headers["stripe-signature"];
-      const endpointSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
-      let event;
-      if (endpointSecret && sig) {
-        try {
-          event = getStripe().webhooks.constructEvent(
-            req.body,
-            sig,
-            endpointSecret
-          );
-        } catch (err) {
-          console.error("Webhook signature verification failed:", err.message);
-          return res.status(400).json({ error: `Webhook Error: ${err.message}` });
-        }
-      } else {
-        event = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-      }
-      const result = await handleStripeWebhook(event);
-      res.json(result);
-    } catch (error) {
-      console.error("Stripe webhook error:", error);
-      res.status(500).json({ error: error.message || "Webhook processing failed" });
-    }
-  });
   app2.get("/api/providers/:providerId/payouts", requireAuth, async (req, res) => {
     try {
       const { providerId } = req.params;
-      const providerPayouts = await db.select().from(payouts).where(eq4(payouts.providerId, providerId));
+      if (!await assertProviderOwnership(req, providerId, res)) return;
+      const providerPayouts = await db.select().from(payouts).where(eq5(payouts.providerId, providerId));
       res.json({ payouts: providerPayouts });
     } catch (error) {
       console.error("Get payouts error:", error);
@@ -7464,12 +9806,25 @@ Respond with JSON only:
   });
   async function assertProviderOwnership(req, providerId, res) {
     const authUserId = req.authenticatedUserId;
-    const [provider] = await db.select({ userId: providers.userId }).from(providers).where(eq4(providers.id, providerId));
+    const [provider] = await db.select({ userId: providers.userId }).from(providers).where(eq5(providers.id, providerId));
     if (!provider || provider.userId !== authUserId) {
       res.status(403).json({ error: "Forbidden" });
       return false;
     }
     return true;
+  }
+  async function assertInvoiceAccess(req, invoiceId, res) {
+    const authUserId = req.authenticatedUserId;
+    const [inv] = await db.select({ id: invoices.id, providerId: invoices.providerId, homeownerUserId: invoices.homeownerUserId }).from(invoices).where(eq5(invoices.id, invoiceId)).limit(1);
+    if (!inv) {
+      res.status(404).json({ error: "Invoice not found" });
+      return null;
+    }
+    if (inv.homeownerUserId && inv.homeownerUserId === authUserId) return inv;
+    const [provider] = await db.select({ userId: providers.userId }).from(providers).where(eq5(providers.id, inv.providerId)).limit(1);
+    if (provider && provider.userId === authUserId) return inv;
+    res.status(403).json({ error: "Forbidden" });
+    return null;
   }
   app2.get("/api/providers/:providerId/stripe-payouts", requireAuth, async (req, res) => {
     try {
@@ -7524,13 +9879,13 @@ Respond with JSON only:
         stripeChargeId: payments.stripeChargeId,
         stripePaymentIntentId: payments.stripePaymentIntentId,
         invoiceId: payments.invoiceId
-      }).from(payments).where(eq4(payments.providerId, providerId));
+      }).from(payments).where(eq5(payments.providerId, providerId));
       const localInvoices = await db.select({
         id: invoices.id,
         invoiceNumber: invoices.invoiceNumber,
         clientId: invoices.clientId
-      }).from(invoices).where(eq4(invoices.providerId, providerId));
-      const localClients = await db.select({ id: clients.id, firstName: clients.firstName, lastName: clients.lastName }).from(clients).where(eq4(clients.providerId, providerId));
+      }).from(invoices).where(eq5(invoices.providerId, providerId));
+      const localClients = await db.select({ id: clients.id, firstName: clients.firstName, lastName: clients.lastName }).from(clients).where(eq5(clients.providerId, providerId));
       const result = charges.data.filter(
         (charge) => localPayments.some(
           (p) => p.stripeChargeId === charge.id || p.stripePaymentIntentId === charge.payment_intent?.toString()
@@ -7594,6 +9949,7 @@ Respond with JSON only:
   app2.get("/api/providers/:providerId/booking-links", requireAuth, async (req, res) => {
     try {
       const { providerId } = req.params;
+      if (!await assertProviderOwnership(req, providerId, res)) return;
       const links = await storage.getBookingLinksByProvider(providerId);
       res.json({ bookingLinks: links });
     } catch (error) {
@@ -7604,6 +9960,7 @@ Respond with JSON only:
   app2.post("/api/providers/:providerId/booking-links", requireAuth, async (req, res) => {
     try {
       const { providerId } = req.params;
+      if (!await assertProviderOwnership(req, providerId, res)) return;
       const { slug, customTitle, customDescription, welcomeMessage, confirmationMessage, instantBooking, showPricing, depositRequired, depositAmount, depositPercentage, intakeQuestions, serviceCatalog, availabilityRules, brandColor, logoUrl } = req.body;
       if (!slug) {
         return res.status(400).json({ error: "slug is required" });
@@ -7636,7 +9993,13 @@ Respond with JSON only:
       res.status(500).json({ error: error.message || "Failed to create booking link" });
     }
   });
-  app2.get("/api/book/:slug", async (req, res) => {
+  app2.get("/api/book/:slug", (req, res) => {
+    res.redirect(301, `/api/providers/${req.params.slug}`);
+  });
+  app2.post("/api/book/:slug/submit", (req, res) => {
+    res.redirect(308, `/api/providers/${req.params.slug}/submit`);
+  });
+  app2.get("/api/providers/:slug", async (req, res) => {
     try {
       const { slug } = req.params;
       const link = await storage.getBookingLinkBySlug(slug);
@@ -7701,7 +10064,7 @@ Respond with JSON only:
       res.status(500).json({ error: error.message || "Failed to delete booking link" });
     }
   });
-  app2.post("/api/book/:slug/submit", async (req, res) => {
+  app2.post("/api/providers/:slug/submit", async (req, res) => {
     try {
       const { slug } = req.params;
       const { clientName, clientPhone, clientEmail, address, problemDescription, answersJson, photosJson, preferredTimesJson, homeownerUserId } = req.body;
@@ -7727,8 +10090,8 @@ Respond with JSON only:
       });
       try {
         const existingLeads = clientEmail ? await db.select().from(leads).where(and4(
-          eq4(leads.providerId, link.providerId),
-          eq4(leads.email, clientEmail)
+          eq5(leads.providerId, link.providerId),
+          eq5(leads.email, clientEmail)
         )).limit(1) : [];
         if (existingLeads.length === 0) {
           await db.insert(leads).values({
@@ -7754,18 +10117,18 @@ Respond with JSON only:
   app2.get("/api/booking/:slug", async (req, res) => {
     try {
       const { slug } = req.params;
-      const [link] = await db.select().from(bookingLinks).where(eq4(bookingLinks.slug, slug)).limit(1);
+      const [link] = await db.select().from(bookingLinks).where(eq5(bookingLinks.slug, slug)).limit(1);
       if (!link || link.isActive === false || link.status !== "active") {
         return res.status(404).json({ error: "Booking page not found" });
       }
-      const [provider] = await db.select().from(providers).where(eq4(providers.id, link.providerId)).limit(1);
-      if (!provider || provider.isPublic === false) {
+      const [provider] = await db.select().from(providers).where(eq5(providers.id, link.providerId)).limit(1);
+      if (!provider) {
         return res.status(404).json({ error: "Provider not found" });
       }
       const customServices = await db.select().from(providerCustomServices).where(
         and4(
-          eq4(providerCustomServices.providerId, provider.id),
-          eq4(providerCustomServices.isPublished, true)
+          eq5(providerCustomServices.providerId, provider.id),
+          eq5(providerCustomServices.isPublished, true)
         )
       );
       const catalogServices = await db.select({
@@ -7776,10 +10139,10 @@ Respond with JSON only:
         categoryId: services.categoryId,
         price: providerServices.price,
         providerServiceId: providerServices.id
-      }).from(providerServices).innerJoin(services, eq4(providerServices.serviceId, services.id)).where(
+      }).from(providerServices).innerJoin(services, eq5(providerServices.serviceId, services.id)).where(
         and4(
-          eq4(providerServices.providerId, provider.id),
-          eq4(services.isPublic, true)
+          eq5(providerServices.providerId, provider.id),
+          eq5(services.isPublic, true)
         )
       );
       const recentReviews = await db.select({
@@ -7787,7 +10150,7 @@ Respond with JSON only:
         rating: reviews.rating,
         comment: reviews.comment,
         createdAt: reviews.createdAt
-      }).from(reviews).where(eq4(reviews.providerId, provider.id)).orderBy(desc2(reviews.createdAt)).limit(5);
+      }).from(reviews).where(eq5(reviews.providerId, provider.id)).orderBy(desc2(reviews.createdAt)).limit(5);
       res.json({
         provider: {
           id: provider.id,
@@ -7802,7 +10165,13 @@ Respond with JSON only:
               return provider.businessHours;
             }
           })() : null,
-          bookingPolicies: provider.bookingPolicies,
+          bookingPolicies: provider.bookingPolicies ? (() => {
+            try {
+              return JSON.parse(provider.bookingPolicies);
+            } catch {
+              return provider.bookingPolicies;
+            }
+          })() : null,
           averageRating: provider.averageRating ?? provider.rating,
           reviewCount: provider.reviewCount
         },
@@ -7851,7 +10220,7 @@ Respond with JSON only:
       if (!clientName || !problemDescription) {
         return res.status(400).json({ error: "clientName and problemDescription are required" });
       }
-      const [link] = await db.select().from(bookingLinks).where(eq4(bookingLinks.slug, slug)).limit(1);
+      const [link] = await db.select().from(bookingLinks).where(eq5(bookingLinks.slug, slug)).limit(1);
       if (!link || link.isActive === false || link.status !== "active") {
         return res.status(404).json({ error: "Booking page not found" });
       }
@@ -7909,7 +10278,7 @@ Respond with JSON only:
         submission = sub;
       }
       try {
-        const [providerRow] = await db.select({ userId: providers.userId, businessName: providers.businessName, email: providers.email }).from(providers).where(eq4(providers.id, link.providerId)).limit(1);
+        const [providerRow] = await db.select({ userId: providers.userId, businessName: providers.businessName, email: providers.email }).from(providers).where(eq5(providers.id, link.providerId)).limit(1);
         if (providerRow?.userId) {
           const notificationTitle = link.instantBooking ? "New Booking Confirmed" : "New Booking Request";
           const notificationMessage = link.instantBooking ? `${clientName} has booked an appointment. Check your intake submissions for details.` : `${clientName} submitted a new booking request. Review it in your intake submissions.`;
@@ -7955,7 +10324,7 @@ Respond with JSON only:
     try {
       const { providerId } = req.params;
       const authUserId = req.authenticatedUserId;
-      const [providerRow] = await db.select({ userId: providers.userId }).from(providers).where(eq4(providers.id, providerId)).limit(1);
+      const [providerRow] = await db.select({ userId: providers.userId }).from(providers).where(eq5(providers.id, providerId)).limit(1);
       if (!providerRow || providerRow.userId !== authUserId) {
         return res.status(403).json({ error: "Forbidden" });
       }
@@ -7975,7 +10344,7 @@ Respond with JSON only:
       if (!existing) {
         return res.status(404).json({ error: "Submission not found" });
       }
-      const [providerRow] = await db.select({ userId: providers.userId }).from(providers).where(eq4(providers.id, existing.providerId)).limit(1);
+      const [providerRow] = await db.select({ userId: providers.userId }).from(providers).where(eq5(providers.id, existing.providerId)).limit(1);
       if (!providerRow || providerRow.userId !== authUserId) {
         return res.status(403).json({ error: "Forbidden" });
       }
@@ -7998,7 +10367,7 @@ Respond with JSON only:
       if (!submission) {
         return res.status(404).json({ error: "Submission not found" });
       }
-      const [providerOwner] = await db.select({ userId: providers.userId }).from(providers).where(eq4(providers.id, submission.providerId));
+      const [providerOwner] = await db.select({ userId: providers.userId }).from(providers).where(eq5(providers.id, submission.providerId));
       if (!providerOwner || providerOwner.userId !== authUserId) {
         return res.status(403).json({ error: "Forbidden" });
       }
@@ -8020,7 +10389,16 @@ Respond with JSON only:
         } catch {
         }
       }
+      let alreadyAccepted = false;
       const result = await db.transaction(async (tx) => {
+        const locked = await tx.execute(sql3`
+          SELECT status FROM intake_submissions WHERE id = ${id} FOR UPDATE
+        `);
+        const lockedStatus = locked.rows[0]?.status;
+        if (lockedStatus === "converted" || lockedStatus === "confirmed") {
+          alreadyAccepted = true;
+          return null;
+        }
         const converted = await convertIntakeToClientJob(tx, {
           submissionId: id,
           providerId: submission.providerId,
@@ -8039,13 +10417,16 @@ Respond with JSON only:
           const now = /* @__PURE__ */ new Date();
           await tx.update(leads).set({ status: "won", updatedAt: now }).where(
             and4(
-              eq4(leads.providerId, submission.providerId),
-              eq4(leads.email, submission.clientEmail)
+              eq5(leads.providerId, submission.providerId),
+              eq5(leads.email, submission.clientEmail)
             )
           );
         }
         return converted;
       });
+      if (alreadyAccepted) {
+        return res.status(400).json({ error: "Submission has already been accepted" });
+      }
       res.status(201).json({
         message: "Booking accepted",
         clientId: result.clientId,
@@ -8059,7 +10440,8 @@ Respond with JSON only:
   app2.get("/api/providers/:providerId/leads", requireAuth, async (req, res) => {
     try {
       const { providerId } = req.params;
-      const rows = await db.select().from(leads).where(eq4(leads.providerId, providerId)).orderBy(desc2(leads.createdAt));
+      if (!await assertProviderOwnership(req, providerId, res)) return;
+      const rows = await db.select().from(leads).where(eq5(leads.providerId, providerId)).orderBy(desc2(leads.createdAt));
       res.json({ leads: rows });
     } catch (error) {
       console.error("Get leads error:", error);
@@ -8069,11 +10451,14 @@ Respond with JSON only:
   app2.post("/api/providers/:providerId/leads", requireAuth, async (req, res) => {
     try {
       const { providerId } = req.params;
+      if (!await assertProviderOwnership(req, providerId, res)) return;
       const { name, email, phone, service, message, status, source } = req.body;
-      if (!name) return res.status(400).json({ error: "Name is required" });
+      if (!name || typeof name !== "string" || !name.trim()) {
+        return res.status(400).json({ error: "Name is required" });
+      }
       const [lead] = await db.insert(leads).values({
         providerId,
-        name,
+        name: name.trim(),
         email: email || null,
         phone: phone || null,
         service: service || null,
@@ -8090,13 +10475,20 @@ Respond with JSON only:
   app2.patch("/api/leads/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
+      const [existing] = await db.select({ providerId: leads.providerId }).from(leads).where(eq5(leads.id, id)).limit(1);
+      if (!existing) return res.status(404).json({ error: "Lead not found" });
+      if (!await assertProviderOwnership(req, existing.providerId, res)) return;
       const updates = {};
-      const allowed = ["name", "email", "phone", "service", "message", "status", "source"];
-      for (const key of allowed) {
-        if (req.body[key] !== void 0) updates[key] = req.body[key];
-      }
+      const { name, email, phone, service, message, status, source } = req.body;
+      if (name !== void 0) updates.name = name;
+      if (email !== void 0) updates.email = email;
+      if (phone !== void 0) updates.phone = phone;
+      if (service !== void 0) updates.service = service;
+      if (message !== void 0) updates.message = message;
+      if (status !== void 0) updates.status = status;
+      if (source !== void 0) updates.source = source;
       updates.updatedAt = /* @__PURE__ */ new Date();
-      const [lead] = await db.update(leads).set(updates).where(eq4(leads.id, id)).returning();
+      const [lead] = await db.update(leads).set(updates).where(eq5(leads.id, id)).returning();
       if (!lead) return res.status(404).json({ error: "Lead not found" });
       res.json({ lead });
     } catch (error) {
@@ -8109,9 +10501,9 @@ Respond with JSON only:
       const { id } = req.params;
       const { scheduledDate, scheduledTime, estimatedPrice, notes } = req.body;
       const authUserId = req.authenticatedUserId;
-      const [lead] = await db.select().from(leads).where(eq4(leads.id, id)).limit(1);
+      const [lead] = await db.select().from(leads).where(eq5(leads.id, id)).limit(1);
       if (!lead) return res.status(404).json({ error: "Lead not found" });
-      const [providerRow] = await db.select({ userId: providers.userId }).from(providers).where(eq4(providers.id, lead.providerId)).limit(1);
+      const [providerRow] = await db.select({ userId: providers.userId }).from(providers).where(eq5(providers.id, lead.providerId)).limit(1);
       if (!providerRow || providerRow.userId !== authUserId) {
         return res.status(403).json({ error: "Forbidden" });
       }
@@ -8125,7 +10517,7 @@ Respond with JSON only:
         const lastName = nameParts.slice(1).join(" ") || null;
         let clientId;
         if (lead.email) {
-          const [found] = await tx.select({ id: clients.id }).from(clients).where(and4(eq4(clients.providerId, lead.providerId), eq4(clients.email, lead.email)));
+          const [found] = await tx.select({ id: clients.id }).from(clients).where(and4(eq5(clients.providerId, lead.providerId), eq5(clients.email, lead.email)));
           if (found) {
             clientId = found.id;
           } else {
@@ -8148,7 +10540,7 @@ Respond with JSON only:
           notes: notes || null
         }).returning();
         const now = /* @__PURE__ */ new Date();
-        await tx.update(leads).set({ status: "won", updatedAt: now }).where(eq4(leads.id, id));
+        await tx.update(leads).set({ status: "won", updatedAt: now }).where(eq5(leads.id, id));
         return { clientId, job: newJob };
       });
       res.status(201).json({ message: "Lead accepted", clientId: result.clientId, job: result.job });
@@ -8160,7 +10552,7 @@ Respond with JSON only:
   app2.delete("/api/leads/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
-      const [deleted] = await db.delete(leads).where(eq4(leads.id, id)).returning();
+      const [deleted] = await db.delete(leads).where(eq5(leads.id, id)).returning();
       if (!deleted) return res.status(404).json({ error: "Lead not found" });
       res.json({ success: true });
     } catch (error) {
@@ -8185,18 +10577,15 @@ Respond with JSON only:
   }
   app2.post("/api/providers/:providerId/messages", requireAuth, async (req, res) => {
     try {
-      const authUserId = req.authenticatedUserId;
       const { providerId } = req.params;
-      const providerRecord = await storage.getProviderByUserId(authUserId);
-      if (!providerRecord || providerRecord.id !== providerId) {
-        return res.status(403).json({ error: "Access denied" });
-      }
+      if (!await assertProviderOwnership(req, providerId, res)) return;
+      const providerRecord = await storage.getProvider(providerId);
       const { clientId, channel, subject, body, jobId, invoiceId } = req.body;
       if (!clientId || !body) {
         return res.status(400).json({ error: "clientId and body are required" });
       }
       const [client] = await db.select().from(clients).where(
-        and4(eq4(clients.id, clientId), eq4(clients.providerId, providerId))
+        and4(eq5(clients.id, clientId), eq5(clients.providerId, providerId))
       );
       if (!client) {
         return res.status(403).json({ error: "Client does not belong to this provider" });
@@ -8208,14 +10597,14 @@ Respond with JSON only:
       let processedBody = body.replace(/\{\{client_name\}\}/g, clientName).replace(/\{\{provider_name\}\}/g, providerRecord.businessName);
       let processedSubject = (subject || `Message from ${providerRecord.businessName}`).replace(/\{\{client_name\}\}/g, clientName).replace(/\{\{provider_name\}\}/g, providerRecord.businessName);
       if (jobId) {
-        const [jobRecord] = await db.select().from(jobs).where(eq4(jobs.id, jobId));
+        const [jobRecord] = await db.select().from(jobs).where(eq5(jobs.id, jobId));
         if (jobRecord) {
           processedBody = processedBody.replace(/\{\{service\}\}/g, jobRecord.title || "").replace(/\{\{booking_date\}\}/g, jobRecord.scheduledDate ? new Date(jobRecord.scheduledDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "");
           processedSubject = processedSubject.replace(/\{\{service\}\}/g, jobRecord.title || "").replace(/\{\{booking_date\}\}/g, jobRecord.scheduledDate ? new Date(jobRecord.scheduledDate).toLocaleDateString() : "");
         }
       }
       if (invoiceId) {
-        const [invoiceRecord] = await db.select().from(invoices).where(eq4(invoices.id, invoiceId));
+        const [invoiceRecord] = await db.select().from(invoices).where(eq5(invoices.id, invoiceId));
         if (invoiceRecord) {
           const amount = invoiceRecord.total || invoiceRecord.amount || "0";
           processedBody = processedBody.replace(/\{\{amount_due\}\}/g, `$${parseFloat(amount).toFixed(2)}`);
@@ -8257,15 +10646,85 @@ Respond with JSON only:
       res.status(500).json({ error: error.message || "Failed to send message" });
     }
   });
+  app2.post("/api/providers/:providerId/messages/blast", requireAuth, async (req, res) => {
+    try {
+      const { providerId } = req.params;
+      if (!await assertProviderOwnership(req, providerId, res)) return;
+      const providerRecord = await storage.getProvider(providerId);
+      const { clientIds, channel, subject, body } = req.body;
+      if (!Array.isArray(clientIds) || clientIds.length === 0) {
+        return res.status(400).json({ error: "clientIds (array) is required" });
+      }
+      if (!body) {
+        return res.status(400).json({ error: "body is required" });
+      }
+      if (clientIds.length > 100) {
+        return res.status(400).json({ error: "Cannot blast more than 100 clients at once" });
+      }
+      const results = [];
+      for (const clientId of clientIds) {
+        try {
+          const [client] = await db.select().from(clients).where(
+            and4(eq5(clients.id, clientId), eq5(clients.providerId, providerId))
+          );
+          if (!client) {
+            results.push({ clientId, status: "skipped", error: "Client not found" });
+            continue;
+          }
+          if (!checkMessageRateLimit(providerId, clientId)) {
+            results.push({ clientId, status: "skipped", error: "Rate limit exceeded" });
+            continue;
+          }
+          const clientName = [client.firstName, client.lastName].filter(Boolean).join(" ");
+          const processedBody = body.replace(/\{\{client_name\}\}/g, clientName).replace(/\{\{provider_name\}\}/g, providerRecord.businessName);
+          const processedSubject = (subject || `Message from ${providerRecord.businessName}`).replace(/\{\{client_name\}\}/g, clientName).replace(/\{\{provider_name\}\}/g, providerRecord.businessName);
+          let status = "sent";
+          let resendMessageId;
+          if (channel === "email") {
+            if (!client.email) {
+              results.push({ clientId, status: "skipped", error: "No email on file" });
+              continue;
+            }
+            const emailResult = await sendProviderClientMessage({
+              clientEmail: client.email,
+              clientName,
+              providerName: providerRecord.businessName,
+              subject: processedSubject,
+              body: processedBody
+            });
+            status = emailResult.success ? "sent" : "failed";
+            resendMessageId = emailResult.messageId;
+          } else if (channel === "sms") {
+            status = "pending_sms";
+          }
+          await db.insert(providerMessages).values({
+            providerId,
+            clientId,
+            channel: channel || "email",
+            subject: processedSubject,
+            body: processedBody,
+            status,
+            resendMessageId: resendMessageId || null
+          });
+          results.push({ clientId, status });
+        } catch (clientErr) {
+          results.push({ clientId, status: "failed", error: clientErr.message || "Unknown error" });
+        }
+      }
+      const sent = results.filter((r) => r.status === "sent" || r.status === "pending_sms").length;
+      const failed = results.filter((r) => r.status === "failed").length;
+      const skipped = results.filter((r) => r.status === "skipped").length;
+      res.status(201).json({ results, summary: { sent, failed, skipped, total: clientIds.length } });
+    } catch (error) {
+      console.error("Blast message error:", error);
+      res.status(500).json({ error: error.message || "Failed to send blast" });
+    }
+  });
   app2.get("/api/providers/:providerId/clients/:clientId/messages", requireAuth, async (req, res) => {
     try {
-      const authUserId = req.authenticatedUserId;
       const { providerId, clientId } = req.params;
-      const providerRecord = await storage.getProviderByUserId(authUserId);
-      if (!providerRecord || providerRecord.id !== providerId) {
-        return res.status(403).json({ error: "Access denied" });
-      }
-      const messages = await db.select().from(providerMessages).where(and4(eq4(providerMessages.providerId, providerId), eq4(providerMessages.clientId, clientId))).orderBy(desc2(providerMessages.createdAt));
+      if (!await assertProviderOwnership(req, providerId, res)) return;
+      const messages = await db.select().from(providerMessages).where(and4(eq5(providerMessages.providerId, providerId), eq5(providerMessages.clientId, clientId))).orderBy(desc2(providerMessages.createdAt));
       res.json({ messages });
     } catch (error) {
       console.error("Get provider messages error:", error);
@@ -8274,13 +10733,9 @@ Respond with JSON only:
   });
   app2.get("/api/providers/:providerId/message-templates", requireAuth, async (req, res) => {
     try {
-      const authUserId = req.authenticatedUserId;
       const { providerId } = req.params;
-      const providerRecord = await storage.getProviderByUserId(authUserId);
-      if (!providerRecord || providerRecord.id !== providerId) {
-        return res.status(403).json({ error: "Access denied" });
-      }
-      const templates = await db.select().from(messageTemplates).where(eq4(messageTemplates.providerId, providerId)).orderBy(desc2(messageTemplates.createdAt));
+      if (!await assertProviderOwnership(req, providerId, res)) return;
+      const templates = await db.select().from(messageTemplates).where(eq5(messageTemplates.providerId, providerId)).orderBy(desc2(messageTemplates.createdAt));
       res.json({ templates });
     } catch (error) {
       console.error("Get message templates error:", error);
@@ -8289,12 +10744,8 @@ Respond with JSON only:
   });
   app2.post("/api/providers/:providerId/message-templates", requireAuth, async (req, res) => {
     try {
-      const authUserId = req.authenticatedUserId;
       const { providerId } = req.params;
-      const providerRecord = await storage.getProviderByUserId(authUserId);
-      if (!providerRecord || providerRecord.id !== providerId) {
-        return res.status(403).json({ error: "Access denied" });
-      }
+      if (!await assertProviderOwnership(req, providerId, res)) return;
       const { name, channel, subject, body } = req.body;
       if (!name || !body) {
         return res.status(400).json({ error: "name and body are required" });
@@ -8314,19 +10765,15 @@ Respond with JSON only:
   });
   app2.patch("/api/providers/:providerId/message-templates/:templateId", requireAuth, async (req, res) => {
     try {
-      const authUserId = req.authenticatedUserId;
       const { providerId, templateId } = req.params;
-      const providerRecord = await storage.getProviderByUserId(authUserId);
-      if (!providerRecord || providerRecord.id !== providerId) {
-        return res.status(403).json({ error: "Access denied" });
-      }
+      if (!await assertProviderOwnership(req, providerId, res)) return;
       const { name, channel, subject, body } = req.body;
       const updates = { updatedAt: /* @__PURE__ */ new Date() };
       if (name !== void 0) updates.name = name;
       if (channel !== void 0) updates.channel = channel;
       if (subject !== void 0) updates.subject = subject;
       if (body !== void 0) updates.body = body;
-      const [template] = await db.update(messageTemplates).set(updates).where(and4(eq4(messageTemplates.id, templateId), eq4(messageTemplates.providerId, providerId))).returning();
+      const [template] = await db.update(messageTemplates).set(updates).where(and4(eq5(messageTemplates.id, templateId), eq5(messageTemplates.providerId, providerId))).returning();
       if (!template) return res.status(404).json({ error: "Template not found" });
       res.json({ template });
     } catch (error) {
@@ -8336,13 +10783,9 @@ Respond with JSON only:
   });
   app2.delete("/api/providers/:providerId/message-templates/:templateId", requireAuth, async (req, res) => {
     try {
-      const authUserId = req.authenticatedUserId;
       const { providerId, templateId } = req.params;
-      const providerRecord = await storage.getProviderByUserId(authUserId);
-      if (!providerRecord || providerRecord.id !== providerId) {
-        return res.status(403).json({ error: "Access denied" });
-      }
-      const [deleted] = await db.delete(messageTemplates).where(and4(eq4(messageTemplates.id, templateId), eq4(messageTemplates.providerId, providerId))).returning();
+      if (!await assertProviderOwnership(req, providerId, res)) return;
+      const [deleted] = await db.delete(messageTemplates).where(and4(eq5(messageTemplates.id, templateId), eq5(messageTemplates.providerId, providerId))).returning();
       if (!deleted) return res.status(404).json({ error: "Template not found" });
       res.json({ success: true });
     } catch (error) {
@@ -8352,12 +10795,8 @@ Respond with JSON only:
   });
   app2.get("/api/providers/:providerId/clients/last-messages", requireAuth, async (req, res) => {
     try {
-      const authUserId = req.authenticatedUserId;
       const { providerId } = req.params;
-      const providerRecord = await storage.getProviderByUserId(authUserId);
-      if (!providerRecord || providerRecord.id !== providerId) {
-        return res.status(403).json({ error: "Access denied" });
-      }
+      if (!await assertProviderOwnership(req, providerId, res)) return;
       const lastMessages = await db.execute(sql3`
         SELECT DISTINCT ON (client_id) 
           client_id as "clientId",
@@ -8375,17 +10814,492 @@ Respond with JSON only:
       res.status(500).json({ error: "Failed to get last messages" });
     }
   });
+  app2.post("/api/providers/:providerId/communicate/individual", requireAuth, async (req, res) => {
+    try {
+      const { providerId } = req.params;
+      if (!await assertProviderOwnership(req, providerId, res)) return;
+      const providerRecord = await storage.getProvider(providerId);
+      const { clientId, subject, body, channels } = req.body;
+      const VALID_CHANNELS = ["push", "email"];
+      if (!clientId || !body || !channels || !Array.isArray(channels) || channels.length === 0) {
+        return res.status(400).json({ error: "clientId, body, and channels are required" });
+      }
+      const validatedChannels = channels.filter((ch) => VALID_CHANNELS.includes(ch));
+      if (validatedChannels.length === 0) {
+        return res.status(400).json({ error: "channels must include at least one of: push, email" });
+      }
+      const [client] = await db.select().from(clients).where(and4(eq5(clients.id, clientId), eq5(clients.providerId, providerId)));
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+      const providerName = providerRecord.businessName;
+      const clientName = [client.firstName, client.lastName].filter(Boolean).join(" ");
+      const results = [];
+      if (validatedChannels.includes("email") && client.email) {
+        const result = await sendProviderClientMessage({
+          clientEmail: client.email,
+          clientName,
+          providerName,
+          subject: subject || `Message from ${providerName}`,
+          body
+        });
+        results.push({ channel: "email", success: result.success, error: result.error });
+      }
+      if (validatedChannels.includes("push")) {
+        if (client.email) {
+          const [verifiedUser] = await db.select({ id: users.id }).from(users).innerJoin(appointments, and4(eq5(appointments.userId, users.id), eq5(appointments.providerId, providerId))).where(eq5(users.email, client.email)).limit(1);
+          if (verifiedUser) {
+            await sendPush(verifiedUser.id, subject || providerName, body, { type: "provider_message", providerId }, "messages");
+            results.push({ channel: "push", success: true });
+          } else {
+            results.push({ channel: "push", success: false, error: "Client has no verified app account with this provider" });
+          }
+        } else {
+          results.push({ channel: "push", success: false, error: "Client has no email on file" });
+        }
+      }
+      res.json({ success: true, results });
+    } catch (error) {
+      console.error("Communicate individual error:", error);
+      res.status(500).json({ error: "Failed to send message" });
+    }
+  });
+  app2.post("/api/providers/:providerId/communicate/broadcast", requireAuth, async (req, res) => {
+    try {
+      const { providerId } = req.params;
+      if (!await assertProviderOwnership(req, providerId, res)) return;
+      const providerRecord = await storage.getProvider(providerId);
+      const { subject, body, channels } = req.body;
+      const VALID_CHANNELS_BROADCAST = ["push", "email"];
+      if (!body || !channels || !Array.isArray(channels) || channels.length === 0) {
+        return res.status(400).json({ error: "body and channels are required" });
+      }
+      const validatedChannels = channels.filter((ch) => VALID_CHANNELS_BROADCAST.includes(ch));
+      if (validatedChannels.length === 0) {
+        return res.status(400).json({ error: "channels must include at least one of: push, email" });
+      }
+      const allClients = await db.select().from(clients).where(eq5(clients.providerId, providerId));
+      const providerName = providerRecord.businessName;
+      let emailSent = 0;
+      let pushSent = 0;
+      let emailFailed = 0;
+      let pushFailed = 0;
+      for (const client of allClients) {
+        const clientName = [client.firstName, client.lastName].filter(Boolean).join(" ");
+        if (validatedChannels.includes("email") && client.email) {
+          const result = await sendProviderClientMessage({
+            clientEmail: client.email,
+            clientName,
+            providerName,
+            subject: subject || `Message from ${providerName}`,
+            body
+          });
+          if (result.success) emailSent++;
+          else emailFailed++;
+        }
+        if (validatedChannels.includes("push") && client.email) {
+          const [verifiedUser] = await db.select({ id: users.id }).from(users).innerJoin(appointments, and4(eq5(appointments.userId, users.id), eq5(appointments.providerId, providerId))).where(eq5(users.email, client.email)).limit(1);
+          if (verifiedUser) {
+            await sendPush(verifiedUser.id, subject || providerName, body, { type: "provider_broadcast", providerId }, "messages");
+            pushSent++;
+          } else {
+            pushFailed++;
+          }
+        }
+      }
+      res.json({
+        success: true,
+        totalClients: allClients.length,
+        emailSent,
+        emailFailed,
+        pushSent,
+        pushFailed
+      });
+    } catch (error) {
+      console.error("Communicate broadcast error:", error);
+      res.status(500).json({ error: "Failed to send broadcast" });
+    }
+  });
+  app2.post("/api/support/ticket", async (req, res) => {
+    try {
+      const { name, email, category, subject, message } = req.body;
+      if (!name || !email || !category || !subject || !message) {
+        return res.status(400).json({ error: "All fields are required" });
+      }
+      let userId = null;
+      try {
+        const authHeader = req.headers.authorization;
+        if (authHeader?.startsWith("Bearer ")) {
+          const { verifyToken: verifyToken2 } = await Promise.resolve().then(() => (init_auth(), auth_exports));
+          const payload = verifyToken2(authHeader.slice(7));
+          if (payload?.userId) userId = payload.userId;
+        }
+      } catch {
+      }
+      const [ticket] = await db.insert(supportTickets).values({
+        userId: userId || null,
+        name: name.trim(),
+        email: email.trim(),
+        category: category.trim(),
+        subject: subject.trim(),
+        message: message.trim(),
+        status: "open"
+      }).returning();
+      sendSupportTicketEmail({
+        ticketId: ticket.id,
+        name: ticket.name,
+        email: ticket.email,
+        category: ticket.category,
+        subject: ticket.subject,
+        message: ticket.message
+      }).catch((err) => {
+        console.error("[SUPPORT_EMAIL] Failed to send support ticket email:", err);
+      });
+      res.status(201).json({ success: true, ticketId: ticket.id });
+    } catch (error) {
+      console.error("Support ticket error:", error);
+      res.status(500).json({ error: "Failed to submit support ticket" });
+    }
+  });
   const httpServer = createServer(app2);
   return httpServer;
 }
 
 // server/index.ts
-import * as fs from "fs";
-import * as path from "path";
+import * as fs2 from "fs";
+import * as path2 from "path";
 import { spawn } from "child_process";
 import { runMigrations } from "stripe-replit-sync";
 
+// server/dbMigrations.ts
+init_db();
+var IS_DEV = process.env.NODE_ENV !== "production";
+async function runBootMigrations() {
+  const client = await pool.connect();
+  const errors = [];
+  async function runSql(label, sql4) {
+    try {
+      await client.query(sql4);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      errors.push(`[${label}] ${msg}`);
+      console.warn(`Boot migration skipped (${label}):`, msg);
+    }
+  }
+  try {
+    await runSql("invoices.amount.default", `ALTER TABLE invoices ALTER COLUMN amount SET DEFAULT '0'`);
+    await runSql("invoices.total.default", `ALTER TABLE invoices ALTER COLUMN total SET DEFAULT '0'`);
+    const invoiceAlters = [
+      ["invoices.currency", `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS currency TEXT DEFAULT 'usd'`],
+      ["invoices.subtotal_cents", `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS subtotal_cents INTEGER NOT NULL DEFAULT 0`],
+      ["invoices.tax_cents", `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS tax_cents INTEGER DEFAULT 0`],
+      ["invoices.discount_cents", `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS discount_cents INTEGER DEFAULT 0`],
+      ["invoices.platform_fee_cents", `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS platform_fee_cents INTEGER DEFAULT 0`],
+      ["invoices.total_cents", `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS total_cents INTEGER NOT NULL DEFAULT 0`],
+      ["invoices.payment_methods_allowed", `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_methods_allowed TEXT DEFAULT 'stripe,credits'`],
+      ["invoices.stripe_payment_intent_id", `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT`],
+      ["invoices.stripe_checkout_session_id", `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_checkout_session_id TEXT`],
+      ["invoices.stripe_payment_link_id", `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_payment_link_id TEXT`],
+      ["invoices.stripe_invoice_id", `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_invoice_id TEXT`],
+      ["invoices.hosted_invoice_url", `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS hosted_invoice_url TEXT`],
+      ["invoices.sent_at", `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS sent_at TIMESTAMP`],
+      ["invoices.viewed_at", `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS viewed_at TIMESTAMP`],
+      ["invoices.paid_at", `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP`],
+      ["invoices.updated_at", `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW() NOT NULL`]
+    ];
+    for (const [label, sql4] of invoiceAlters) {
+      await runSql(label, sql4);
+    }
+    await runSql("clients.stripe_connect_customer_id", `ALTER TABLE clients ADD COLUMN IF NOT EXISTS stripe_connect_customer_id TEXT`);
+    await runSql("payments.stripe_charge_id", `ALTER TABLE payments ADD COLUMN IF NOT EXISTS stripe_charge_id TEXT`);
+    await runSql("payments.stripe_payment_intent_id", `ALTER TABLE payments ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT`);
+    await runSql("refunds.stripe_charge_id", `ALTER TABLE refunds ADD COLUMN IF NOT EXISTS stripe_charge_id TEXT`);
+    await runSql("payouts.arrival_date", `ALTER TABLE payouts ADD COLUMN IF NOT EXISTS arrival_date TIMESTAMP`);
+    await runSql("payouts.amount_cents", `ALTER TABLE payouts ADD COLUMN IF NOT EXISTS amount_cents INTEGER NOT NULL DEFAULT 0`);
+    await runSql("refunds.amount_cents", `ALTER TABLE refunds ADD COLUMN IF NOT EXISTS amount_cents INTEGER NOT NULL DEFAULT 0`);
+    await runSql("invoice_line_items.amount_cents", `ALTER TABLE invoice_line_items ADD COLUMN IF NOT EXISTS amount_cents INTEGER NOT NULL DEFAULT 0`);
+    await runSql("payments.amount_cents", `ALTER TABLE payments ADD COLUMN IF NOT EXISTS amount_cents INTEGER NOT NULL DEFAULT 0`);
+    await runSql("providers.is_public", `ALTER TABLE providers ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE`);
+    await runSql("services.is_public", `ALTER TABLE services ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT TRUE`);
+    const enumDefs = [
+      ["enum.refund_status", `DO $$ BEGIN CREATE TYPE refund_status AS ENUM ('pending','succeeded','failed','canceled'); EXCEPTION WHEN duplicate_object THEN null; END $$`],
+      ["enum.notification_channel", `DO $$ BEGIN CREATE TYPE notification_channel AS ENUM ('email','push','in_app','sms'); EXCEPTION WHEN duplicate_object THEN null; END $$`],
+      ["enum.notification_delivery_status", `DO $$ BEGIN CREATE TYPE notification_delivery_status AS ENUM ('queued','sent','delivered','failed','pending_sms'); EXCEPTION WHEN duplicate_object THEN null; END $$`],
+      ["enum.message_channel", `DO $$ BEGIN CREATE TYPE message_channel AS ENUM ('email','sms'); EXCEPTION WHEN duplicate_object THEN null; END $$`],
+      ["enum.message_status", `DO $$ BEGIN CREATE TYPE message_status AS ENUM ('sent','failed','pending_sms'); EXCEPTION WHEN duplicate_object THEN null; END $$`]
+    ];
+    for (const [label, sql4] of enumDefs) {
+      await runSql(label, sql4);
+    }
+    await runSql("table.push_tokens", `
+      CREATE TABLE IF NOT EXISTS push_tokens (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+        user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token TEXT NOT NULL,
+        platform TEXT NOT NULL,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+    await runSql("table.notification_preferences", `
+      CREATE TABLE IF NOT EXISTS notification_preferences (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+        user_id VARCHAR NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+        email_booking_confirmation BOOLEAN DEFAULT TRUE,
+        email_booking_reminder BOOLEAN DEFAULT TRUE,
+        email_booking_cancelled BOOLEAN DEFAULT TRUE,
+        email_invoice_created BOOLEAN DEFAULT TRUE,
+        email_invoice_reminder BOOLEAN DEFAULT TRUE,
+        email_invoice_paid BOOLEAN DEFAULT TRUE,
+        email_payment_failed BOOLEAN DEFAULT TRUE,
+        email_review_request BOOLEAN DEFAULT TRUE,
+        push_enabled BOOLEAN DEFAULT TRUE,
+        in_app_enabled BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+    await runSql("table.notification_deliveries", `
+      CREATE TABLE IF NOT EXISTS notification_deliveries (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+        channel notification_channel NOT NULL,
+        status notification_delivery_status DEFAULT 'queued',
+        event_type TEXT NOT NULL,
+        recipient_user_id VARCHAR REFERENCES users(id) ON DELETE SET NULL,
+        recipient_email TEXT,
+        related_record_type TEXT,
+        related_record_id VARCHAR,
+        external_message_id TEXT,
+        error TEXT,
+        metadata TEXT,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+    await runSql("table.provider_message_templates", `
+      CREATE TABLE IF NOT EXISTS provider_message_templates (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+        provider_id VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        subject TEXT,
+        body TEXT NOT NULL,
+        event_type TEXT,
+        is_default BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+    await runSql("table.provider_messages", `
+      CREATE TABLE IF NOT EXISTS provider_messages (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+        provider_id VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+        client_id VARCHAR NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        job_id VARCHAR REFERENCES jobs(id) ON DELETE SET NULL,
+        invoice_id VARCHAR REFERENCES invoices(id) ON DELETE SET NULL,
+        channel message_channel NOT NULL DEFAULT 'email',
+        subject TEXT,
+        body TEXT NOT NULL,
+        status message_status NOT NULL DEFAULT 'sent',
+        resend_message_id TEXT,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+    await runSql("table.message_templates", `
+      CREATE TABLE IF NOT EXISTS message_templates (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+        provider_id VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        channel message_channel NOT NULL DEFAULT 'email',
+        subject TEXT,
+        body TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+    await runSql("table.support_tickets", `
+      CREATE TABLE IF NOT EXISTS support_tickets (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+        user_id VARCHAR REFERENCES users(id) ON DELETE SET NULL,
+        name TEXT NOT NULL,
+        email TEXT NOT NULL,
+        category TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        message TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'open',
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+    await runSql("table.refunds", `
+      CREATE TABLE IF NOT EXISTS refunds (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+        provider_id VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+        payment_id VARCHAR REFERENCES payments(id) ON DELETE SET NULL,
+        stripe_refund_id TEXT UNIQUE,
+        stripe_charge_id TEXT,
+        amount_cents INTEGER NOT NULL DEFAULT 0,
+        reason TEXT,
+        status refund_status DEFAULT 'pending',
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    const userAlters = [
+      ["users.stripe_customer_id", `ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT`],
+      ["users.default_payment_method_id", `ALTER TABLE users ADD COLUMN IF NOT EXISTS default_payment_method_id TEXT`],
+      ["users.token_version", `ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0`]
+    ];
+    for (const [label, sql4] of userAlters) {
+      await runSql(label, sql4);
+    }
+    await runSql("clients.unique_provider_email", `
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_indexes
+          WHERE tablename = 'clients'
+            AND indexname = 'clients_provider_id_email_unique'
+        ) THEN
+          CREATE UNIQUE INDEX clients_provider_id_email_unique
+            ON clients (provider_id, email)
+            WHERE email IS NOT NULL;
+        END IF;
+      END $$
+    `);
+    await runSql("provider_services.unique_provider_service", `
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_indexes
+          WHERE tablename = 'provider_services'
+            AND indexname = 'provider_services_provider_id_service_id_unique'
+        ) THEN
+          CREATE UNIQUE INDEX provider_services_provider_id_service_id_unique
+            ON provider_services (provider_id, service_id);
+        END IF;
+      END $$
+    `);
+    await runSql("intake_submissions.deposit_payment_id_fk", `
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'intake_submissions_deposit_payment_id_fkey'
+        ) THEN
+          ALTER TABLE intake_submissions
+            ADD CONSTRAINT intake_submissions_deposit_payment_id_fkey
+            FOREIGN KEY (deposit_payment_id)
+            REFERENCES payments(id)
+            ON DELETE SET NULL
+            NOT VALID;
+        END IF;
+      END $$
+    `);
+    const customServiceAlters = [
+      ["provider_custom_services.intake_questions_json", `ALTER TABLE provider_custom_services ADD COLUMN IF NOT EXISTS intake_questions_json TEXT`],
+      ["provider_custom_services.add_ons_json", `ALTER TABLE provider_custom_services ADD COLUMN IF NOT EXISTS add_ons_json TEXT`],
+      ["provider_custom_services.booking_mode", `ALTER TABLE provider_custom_services ADD COLUMN IF NOT EXISTS booking_mode TEXT DEFAULT 'instant'`],
+      ["provider_custom_services.ai_pricing_insight", `ALTER TABLE provider_custom_services ADD COLUMN IF NOT EXISTS ai_pricing_insight TEXT`]
+    ];
+    for (const [label, sql4] of customServiceAlters) {
+      await runSql(label, sql4);
+    }
+    await runSql("table.housefax_entries", `
+      CREATE TABLE IF NOT EXISTS housefax_entries (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+        home_id VARCHAR NOT NULL REFERENCES homes(id) ON DELETE CASCADE,
+        appointment_id VARCHAR REFERENCES appointments(id) ON DELETE SET NULL,
+        job_id VARCHAR REFERENCES jobs(id) ON DELETE SET NULL,
+        service_category TEXT NOT NULL DEFAULT 'General',
+        service_name TEXT NOT NULL,
+        provider_id VARCHAR REFERENCES providers(id) ON DELETE SET NULL,
+        provider_name TEXT,
+        completed_at TIMESTAMP NOT NULL,
+        cost_cents INTEGER DEFAULT 0,
+        ai_summary TEXT,
+        photos JSON DEFAULT '[]',
+        system_affected TEXT,
+        notes TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    const homeAlters = [
+      ["homes.lot_size", `ALTER TABLE homes ADD COLUMN IF NOT EXISTS lot_size INTEGER`],
+      ["homes.estimated_value", `ALTER TABLE homes ADD COLUMN IF NOT EXISTS estimated_value DECIMAL(12,2)`],
+      ["homes.zillow_id", `ALTER TABLE homes ADD COLUMN IF NOT EXISTS zillow_id TEXT`],
+      ["homes.zillow_url", `ALTER TABLE homes ADD COLUMN IF NOT EXISTS zillow_url TEXT`],
+      ["homes.tax_assessed_value", `ALTER TABLE homes ADD COLUMN IF NOT EXISTS tax_assessed_value DECIMAL(12,2)`],
+      ["homes.last_sold_date", `ALTER TABLE homes ADD COLUMN IF NOT EXISTS last_sold_date TEXT`],
+      ["homes.last_sold_price", `ALTER TABLE homes ADD COLUMN IF NOT EXISTS last_sold_price DECIMAL(12,2)`],
+      ["homes.latitude", `ALTER TABLE homes ADD COLUMN IF NOT EXISTS latitude DECIMAL(10,7)`],
+      ["homes.longitude", `ALTER TABLE homes ADD COLUMN IF NOT EXISTS longitude DECIMAL(10,7)`],
+      ["homes.place_id", `ALTER TABLE homes ADD COLUMN IF NOT EXISTS place_id TEXT`],
+      ["homes.formatted_address", `ALTER TABLE homes ADD COLUMN IF NOT EXISTS formatted_address TEXT`],
+      ["homes.neighborhood_name", `ALTER TABLE homes ADD COLUMN IF NOT EXISTS neighborhood_name TEXT`],
+      ["homes.county_name", `ALTER TABLE homes ADD COLUMN IF NOT EXISTS county_name TEXT`],
+      ["homes.housefax_data", `ALTER TABLE homes ADD COLUMN IF NOT EXISTS housefax_data TEXT`],
+      ["homes.housefax_score", `ALTER TABLE homes ADD COLUMN IF NOT EXISTS housefax_score INTEGER`],
+      ["homes.housefax_enriched_at", `ALTER TABLE homes ADD COLUMN IF NOT EXISTS housefax_enriched_at TIMESTAMP`]
+    ];
+    for (const [label, sql4] of homeAlters) {
+      await runSql(label, sql4);
+    }
+    try {
+      const orphanResult = await client.query(`
+        DELETE FROM providers WHERE user_id IS NULL
+      `);
+      if (orphanResult.rowCount && orphanResult.rowCount > 0) {
+        console.log(`[boot-migration] Removed ${orphanResult.rowCount} orphaned provider record(s) (user_id IS NULL)`);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn("[boot-migration] Orphan-provider cleanup skipped:", msg);
+    }
+    const verifications = [
+      ["invoices.currency column", `SELECT currency FROM invoices LIMIT 0`],
+      ["invoices.paid_at column", `SELECT paid_at FROM invoices LIMIT 0`],
+      ["provider_messages table", `SELECT id FROM provider_messages LIMIT 0`],
+      ["message_templates table", `SELECT id FROM message_templates LIMIT 0`],
+      ["notification_preferences table", `SELECT id FROM notification_preferences LIMIT 0`],
+      ["support_tickets table", `SELECT id FROM support_tickets LIMIT 0`],
+      ["homes.last_sold_date column", `SELECT last_sold_date FROM homes LIMIT 0`],
+      ["homes.estimated_value column", `SELECT estimated_value FROM homes LIMIT 0`],
+      ["homes.housefax_data column", `SELECT housefax_data FROM homes LIMIT 0`],
+      ["housefax_entries table", `SELECT id FROM housefax_entries LIMIT 0`],
+      ["users.stripe_customer_id column", `SELECT stripe_customer_id FROM users LIMIT 0`],
+      ["users.default_payment_method_id", `SELECT default_payment_method_id FROM users LIMIT 0`],
+      ["users.token_version column", `SELECT token_version FROM users LIMIT 0`],
+      ["payouts.arrival_date column", `SELECT arrival_date FROM payouts LIMIT 0`],
+      ["payouts.amount_cents column", `SELECT amount_cents FROM payouts LIMIT 0`],
+      ["refunds table", `SELECT id FROM refunds LIMIT 0`],
+      ["invoice_line_items.amount_cents", `SELECT amount_cents FROM invoice_line_items LIMIT 0`],
+      ["payments.amount_cents column", `SELECT amount_cents FROM payments LIMIT 0`],
+      ["providers.is_public column", `SELECT is_public FROM providers LIMIT 0`]
+    ];
+    const verificationErrors = [];
+    for (const [label, sql4] of verifications) {
+      try {
+        await client.query(sql4);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        verificationErrors.push(`MISSING ${label}: ${msg}`);
+      }
+    }
+    if (verificationErrors.length > 0) {
+      const summary = verificationErrors.join("; ");
+      if (!IS_DEV) {
+        throw new Error(`Boot migration verification failed \u2014 schema is incomplete in production: ${summary}`);
+      }
+      console.error("Boot migration verification \u2014 schema gaps detected:", summary);
+    } else {
+      console.log("Boot migrations applied and verified successfully");
+    }
+  } finally {
+    client.release();
+  }
+}
+
+// server/index.ts
+init_stripeClient();
+
 // server/webhookHandlers.ts
+init_stripeClient();
 var WebhookHandlers = class {
   static async processWebhook(payload, signature) {
     if (!Buffer.isBuffer(payload)) {
@@ -8399,9 +11313,10 @@ var WebhookHandlers = class {
 };
 
 // server/index.ts
+init_db();
 init_schema();
 import cron from "node-cron";
-import { eq as eq6, and as and6, gte as gte2, lte as lte2, lt } from "drizzle-orm";
+import { eq as eq7, and as and6, gte as gte3, lte as lte2, lt } from "drizzle-orm";
 var app = express();
 var log = console.log;
 function setupCors(app2) {
@@ -8415,15 +11330,15 @@ function setupCors(app2) {
         origins.add(`https://${d.trim()}`);
       });
     }
-    origins.add("https://api.homebaseproapp.com");
     origins.add("https://homebaseproapp.com");
+    origins.add("https://api.homebaseproapp.com");
     const origin = req.header("origin");
     const isLocalhost = origin?.startsWith("http://localhost:") || origin?.startsWith("http://127.0.0.1:");
     if (origin && (origins.has(origin) || isLocalhost)) {
       res.header("Access-Control-Allow-Origin", origin);
       res.header(
         "Access-Control-Allow-Methods",
-        "GET, POST, PUT, DELETE, OPTIONS"
+        "GET, POST, PUT, PATCH, DELETE, OPTIONS"
       );
       res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
       res.header("Access-Control-Allow-Credentials", "true");
@@ -8458,16 +11373,49 @@ function setupStripeWebhook(app2) {
     }
   );
 }
+function setupStripeConnectWebhook(app2) {
+  app2.post(
+    "/api/webhooks/stripe-connect",
+    express.raw({ type: "application/json" }),
+    async (req, res) => {
+      const sig = req.headers["stripe-signature"];
+      const endpointSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
+      if (!sig) {
+        return res.status(400).json({ error: "Missing stripe-signature header" });
+      }
+      if (!endpointSecret) {
+        console.error("[webhook] STRIPE_CONNECT_WEBHOOK_SECRET is not set \u2014 Connect webhook rejected");
+        return res.status(400).json({ error: "Webhook secret not configured" });
+      }
+      const stripe2 = (await Promise.resolve().then(() => (init_stripeClient(), stripeClient_exports))).getStripe();
+      let event;
+      try {
+        event = stripe2.webhooks.constructEvent(req.body, sig, endpointSecret);
+      } catch (err) {
+        console.error("[webhook] Stripe Connect signature verification failed:", err.message);
+        return res.status(400).json({ error: `Webhook Error: ${err.message}` });
+      }
+      try {
+        const result = await handleStripeWebhook(event);
+        res.json(result);
+      } catch (error) {
+        console.error("[webhook] Stripe Connect processing error:", error);
+        res.status(500).json({ error: error.message || "Webhook processing failed" });
+      }
+    }
+  );
+}
 function setupBodyParsing(app2) {
   app2.use(cookieParser());
   app2.use(
     express.json({
+      limit: "10mb",
       verify: (req, _res, buf) => {
         req.rawBody = buf;
       }
     })
   );
-  app2.use(express.urlencoded({ extended: false }));
+  app2.use(express.urlencoded({ extended: false, limit: "10mb" }));
 }
 async function initStripe() {
   const databaseUrl2 = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
@@ -8508,11 +11456,15 @@ async function initStripe() {
     try {
       const stripeSync2 = await getStripeSync();
       console.log("Setting up managed webhook...");
-      const webhookBaseUrl = `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
-      const { webhook } = await stripeSync2.findOrCreateManagedWebhook(
-        `${webhookBaseUrl}/api/stripe/webhook`
-      );
-      console.log(`Webhook configured: ${webhook.url}`);
+      const webhookBaseUrl = process.env.REPLIT_DOMAINS?.split(",")[0] ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}` : null;
+      if (!webhookBaseUrl) {
+        console.log("Stripe webhook setup skipped: REPLIT_DOMAINS not set");
+      } else {
+        const { webhook } = await stripeSync2.findOrCreateManagedWebhook(
+          `${webhookBaseUrl}/api/stripe/webhook`
+        );
+        console.log(`Webhook configured: ${webhook?.url ?? "unknown"}`);
+      }
       console.log("Syncing Stripe data...");
       stripeSync2.syncBackfill().then(() => {
         console.log("Stripe data synced");
@@ -8539,7 +11491,7 @@ function redactSensitive(obj) {
 function setupRequestLogging(app2) {
   app2.use((req, res, next) => {
     const start = Date.now();
-    const path2 = req.path;
+    const path3 = req.path;
     let capturedJsonResponse = void 0;
     const originalResJson = res.json;
     res.json = function(bodyJson, ...args) {
@@ -8547,9 +11499,9 @@ function setupRequestLogging(app2) {
       return originalResJson.apply(res, [bodyJson, ...args]);
     };
     res.on("finish", () => {
-      if (!path2.startsWith("/api")) return;
+      if (!path3.startsWith("/api")) return;
       const duration = Date.now() - start;
-      let logLine = `${req.method} ${path2} ${res.statusCode} in ${duration}ms`;
+      let logLine = `${req.method} ${path3} ${res.statusCode} in ${duration}ms`;
       const requestBody = req.body && typeof req.body === "object" ? req.body : void 0;
       if (requestBody && Object.keys(requestBody).length > 0) {
         const redactedBody = JSON.stringify(redactSensitive(requestBody));
@@ -8570,8 +11522,8 @@ function setupRequestLogging(app2) {
 }
 function getAppName() {
   try {
-    const appJsonPath = path.resolve(process.cwd(), "app.json");
-    const appJsonContent = fs.readFileSync(appJsonPath, "utf-8");
+    const appJsonPath = path2.resolve(process.cwd(), "app.json");
+    const appJsonContent = fs2.readFileSync(appJsonPath, "utf-8");
     const appJson = JSON.parse(appJsonContent);
     return appJson.expo?.name || "App Landing Page";
   } catch {
@@ -8579,19 +11531,19 @@ function getAppName() {
   }
 }
 function serveExpoManifest(platform, res) {
-  const manifestPath = path.resolve(
+  const manifestPath = path2.resolve(
     process.cwd(),
     "static-build",
     platform,
     "manifest.json"
   );
-  if (!fs.existsSync(manifestPath)) {
+  if (!fs2.existsSync(manifestPath)) {
     return res.status(404).json({ error: `Manifest not found for platform: ${platform}` });
   }
   res.setHeader("expo-protocol-version", "1");
   res.setHeader("expo-sfv-version", "0");
   res.setHeader("content-type", "application/json");
-  const manifest = fs.readFileSync(manifestPath, "utf-8");
+  const manifest = fs2.readFileSync(manifestPath, "utf-8");
   res.send(manifest);
 }
 function serveLandingPage({
@@ -8608,7 +11560,7 @@ function serveLandingPage({
   const expsUrl = `${host}`;
   let expFullUrl = `exps://${expsUrl}`;
   try {
-    const tunnelUrl = fs.readFileSync("/tmp/expo-tunnel-url.txt", "utf8").trim();
+    const tunnelUrl = fs2.readFileSync("/tmp/expo-tunnel-url.txt", "utf8").trim();
     if (tunnelUrl) expFullUrl = tunnelUrl;
   } catch (_) {
   }
@@ -8621,7 +11573,7 @@ function serveLandingPage({
 function setupMetroProxy(app2) {
   const METRO_PORT = 8081;
   const metroProxy = createProxyMiddleware({
-    pathFilter: (path2, req) => path2.startsWith("/_expo") || path2.startsWith("/index.bundle") || path2.startsWith("/index.map") || path2.startsWith("/__metro__") || path2.startsWith("/__hmr") || path2.startsWith("/hot") || path2.startsWith("/debugger-ui") || path2.startsWith("/client/") || path2.startsWith("/assets/") && !!(req.query?.platform || req.query?.hash || req.headers?.["expo-platform"]) || path2 === "/" && !!(req.headers && req.headers["expo-platform"]),
+    pathFilter: (path3, req) => path3.startsWith("/_expo") || path3.startsWith("/index.bundle") || path3.startsWith("/index.map") || path3.startsWith("/__metro__") || path3.startsWith("/__hmr") || path3.startsWith("/hot") || path3.startsWith("/debugger-ui") || path3.startsWith("/client/") || path3.startsWith("/assets/") && !!(req.query?.platform || req.query?.hash || req.headers?.["expo-platform"]) || path3 === "/" && !!(req.headers && req.headers["expo-platform"]),
     target: `http://localhost:${METRO_PORT}`,
     changeOrigin: true,
     ws: true,
@@ -8639,15 +11591,25 @@ function setupMetroProxy(app2) {
   log("Metro proxy configured: /_expo/*, /client/*, /assets/* \u2192 localhost:8081");
 }
 function configureExpoAndLanding(app2) {
-  const templatePath = path.resolve(
+  const templatePath = path2.resolve(
     process.cwd(),
     "server",
     "templates",
     "landing-page.html"
   );
-  const landingPageTemplate = fs.readFileSync(templatePath, "utf-8");
+  const landingPageTemplate = fs2.readFileSync(templatePath, "utf-8");
   const appName = getAppName();
-  app2.get("/book/:slug", async (req, res) => {
+  const resetPasswordTemplatePath = path2.resolve(process.cwd(), "server", "templates", "reset-password.html");
+  const resetPasswordHtml = fs2.readFileSync(resetPasswordTemplatePath, "utf-8");
+  app2.get("/reset-password", (_req, res) => {
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.send(resetPasswordHtml);
+  });
+  app2.get("/book/:slug", (req, res) => {
+    res.redirect(301, `/providers/${req.params.slug}`);
+  });
+  app2.get("/providers/:slug", async (req, res) => {
     try {
       const { renderBookingPage: renderBookingPage2 } = await Promise.resolve().then(() => (init_bookingPage(), bookingPage_exports));
       const { html, status } = await renderBookingPage2(req.params.slug, db);
@@ -8664,7 +11626,7 @@ function configureExpoAndLanding(app2) {
   app2.get("/qr", (_req, res) => {
     let tunnelUrl = "";
     try {
-      tunnelUrl = fs.readFileSync("/tmp/expo-tunnel-url.txt", "utf8").trim();
+      tunnelUrl = fs2.readFileSync("/tmp/expo-tunnel-url.txt", "utf8").trim();
     } catch (_) {
     }
     const ready = !!tunnelUrl;
@@ -8764,7 +11726,7 @@ function configureExpoAndLanding(app2) {
   app2.get("/api/tunnel-url", (_req, res) => {
     let tunnelUrl = null;
     try {
-      const content = fs.readFileSync("/tmp/expo-tunnel-url.txt", "utf8").trim();
+      const content = fs2.readFileSync("/tmp/expo-tunnel-url.txt", "utf8").trim();
       if (content) tunnelUrl = content;
     } catch (_) {
     }
@@ -8902,32 +11864,33 @@ function configureExpoAndLanding(app2) {
     }
     next();
   });
-  app2.use("/assets", express.static(path.resolve(process.cwd(), "assets")));
-  app2.use(express.static(path.resolve(process.cwd(), "static-build")));
+  app2.use("/assets", express.static(path2.resolve(process.cwd(), "assets")));
+  app2.use("/uploads", express.static(path2.resolve(process.cwd(), "uploads")));
+  app2.use(express.static(path2.resolve(process.cwd(), "static-build")));
   log("Expo routing: Checking expo-platform header on / and /manifest");
 }
 function maybeStartMetro() {
   if (process.env.NODE_ENV !== "production") return;
-  const manifestPath = path.resolve(process.cwd(), "static-build", "ios", "manifest.json");
-  if (fs.existsSync(manifestPath)) {
+  const manifestPath = path2.resolve(process.cwd(), "static-build", "ios", "manifest.json");
+  if (fs2.existsSync(manifestPath)) {
     log("Static Expo bundle found \u2014 skipping dynamic Metro startup.");
     return;
   }
   log("No static Expo bundle found \u2014 starting Metro dynamically for production...");
   const devToolsCandidates = [
-    path.resolve(
+    path2.resolve(
       process.cwd(),
       "node_modules/expo/node_modules/@react-native/debugger-shell/bin/react-native-devtools"
     ),
-    path.resolve(
+    path2.resolve(
       process.cwd(),
       "node_modules/@react-native/debugger-shell/bin/react-native-devtools"
     )
   ];
   for (const bin of devToolsCandidates) {
-    if (fs.existsSync(bin)) {
+    if (fs2.existsSync(bin)) {
       try {
-        fs.writeFileSync(bin, "#!/bin/sh\nexit 0\n", { mode: 493 });
+        fs2.writeFileSync(bin, "#!/bin/sh\nexit 0\n", { mode: 493 });
         log(`Stubbed DevTools binary: ${bin}`);
       } catch (_) {
       }
@@ -8990,7 +11953,7 @@ async function runBookingReminder24h() {
     const broadFrom = new Date(now.getTime() + 22 * 60 * 60 * 1e3);
     const broadTo = new Date(now.getTime() + 26 * 60 * 60 * 1e3);
     const upcoming = await db.select().from(appointments).where(
-      and6(gte2(appointments.scheduledDate, broadFrom), lte2(appointments.scheduledDate, broadTo), eq6(appointments.status, "confirmed"))
+      and6(gte3(appointments.scheduledDate, broadFrom), lte2(appointments.scheduledDate, broadTo), eq7(appointments.status, "confirmed"))
     );
     const windowFrom = new Date(now.getTime() + 23 * 60 * 60 * 1e3);
     const windowTo = new Date(now.getTime() + 25 * 60 * 60 * 1e3);
@@ -9000,8 +11963,8 @@ async function runBookingReminder24h() {
       const alreadySent = await hasDeliveryForRecord("booking.reminder_24h", appt.id);
       if (alreadySent) continue;
       const [user, provider] = await Promise.all([
-        db.select().from(users).where(eq6(users.id, appt.userId)).then((r) => r[0]),
-        db.select().from(providers).where(eq6(providers.id, appt.providerId)).then((r) => r[0])
+        db.select().from(users).where(eq7(users.id, appt.userId)).then((r) => r[0]),
+        db.select().from(providers).where(eq7(providers.id, appt.providerId)).then((r) => r[0])
       ]);
       if (!user?.email) continue;
       const name = [user.firstName, user.lastName].filter(Boolean).join(" ") || "there";
@@ -9028,7 +11991,7 @@ async function runBookingReminder2h() {
     const broadFrom = new Date(now.getTime() + 60 * 60 * 1e3);
     const broadTo = new Date(now.getTime() + 3 * 60 * 60 * 1e3);
     const upcoming = await db.select().from(appointments).where(
-      and6(gte2(appointments.scheduledDate, broadFrom), lte2(appointments.scheduledDate, broadTo), eq6(appointments.status, "confirmed"))
+      and6(gte3(appointments.scheduledDate, broadFrom), lte2(appointments.scheduledDate, broadTo), eq7(appointments.status, "confirmed"))
     );
     const windowFrom = new Date(now.getTime() + 90 * 60 * 1e3);
     const windowTo = new Date(now.getTime() + 150 * 60 * 1e3);
@@ -9038,8 +12001,8 @@ async function runBookingReminder2h() {
       const alreadySent = await hasDeliveryForRecord("booking.reminder_2h", appt.id);
       if (alreadySent) continue;
       const [user, provider] = await Promise.all([
-        db.select().from(users).where(eq6(users.id, appt.userId)).then((r) => r[0]),
-        db.select().from(providers).where(eq6(providers.id, appt.providerId)).then((r) => r[0])
+        db.select().from(users).where(eq7(users.id, appt.userId)).then((r) => r[0]),
+        db.select().from(providers).where(eq7(providers.id, appt.providerId)).then((r) => r[0])
       ]);
       if (!user?.email) continue;
       const name = [user.firstName, user.lastName].filter(Boolean).join(" ") || "there";
@@ -9067,9 +12030,9 @@ async function runInvoiceDueReminder() {
     const to = new Date(now.getTime() + 3.5 * 24 * 60 * 60 * 1e3);
     const dueInvoices = await db.select().from(invoices).where(
       and6(
-        gte2(invoices.dueDate, from),
+        gte3(invoices.dueDate, from),
         lte2(invoices.dueDate, to),
-        eq6(invoices.status, "sent")
+        eq7(invoices.status, "sent")
       )
     );
     for (const invoice of dueInvoices) {
@@ -9077,14 +12040,14 @@ async function runInvoiceDueReminder() {
       const alreadySent = await hasDeliveryForRecord("invoice.reminder_3d", invoice.id);
       if (alreadySent) continue;
       const [client, provider] = await Promise.all([
-        invoice.clientId ? db.select().from(clients).where(eq6(clients.id, invoice.clientId)).then((r) => r[0]) : Promise.resolve(void 0),
-        db.select().from(providers).where(eq6(providers.id, invoice.providerId)).then((r) => r[0])
+        invoice.clientId ? db.select().from(clients).where(eq7(clients.id, invoice.clientId)).then((r) => r[0]) : Promise.resolve(void 0),
+        db.select().from(providers).where(eq7(providers.id, invoice.providerId)).then((r) => r[0])
       ]);
       let recipientEmail = client?.email;
       let recipientName = [client?.firstName, client?.lastName].filter(Boolean).join(" ") || "Client";
       let recipientUserId;
       if (invoice.homeownerUserId) {
-        const homeowner = await db.select().from(users).where(eq6(users.id, invoice.homeownerUserId)).then((r) => r[0]);
+        const homeowner = await db.select().from(users).where(eq7(users.id, invoice.homeownerUserId)).then((r) => r[0]);
         if (homeowner?.email) {
           recipientEmail = homeowner.email;
           recipientName = [homeowner.firstName, homeowner.lastName].filter(Boolean).join(" ") || "Client";
@@ -9120,9 +12083,9 @@ async function runInvoiceOverdueReminder() {
     const to = new Date(now.getTime() - 0.5 * 24 * 60 * 60 * 1e3);
     const overdueInvoices = await db.select().from(invoices).where(
       and6(
-        gte2(invoices.dueDate, from),
+        gte3(invoices.dueDate, from),
         lt(invoices.dueDate, to),
-        eq6(invoices.status, "sent")
+        eq7(invoices.status, "sent")
       )
     );
     for (const invoice of overdueInvoices) {
@@ -9130,14 +12093,14 @@ async function runInvoiceOverdueReminder() {
       const alreadySent = await hasDeliveryForRecord("invoice.overdue_1d", invoice.id);
       if (alreadySent) continue;
       const [client, provider] = await Promise.all([
-        invoice.clientId ? db.select().from(clients).where(eq6(clients.id, invoice.clientId)).then((r) => r[0]) : Promise.resolve(void 0),
-        db.select().from(providers).where(eq6(providers.id, invoice.providerId)).then((r) => r[0])
+        invoice.clientId ? db.select().from(clients).where(eq7(clients.id, invoice.clientId)).then((r) => r[0]) : Promise.resolve(void 0),
+        db.select().from(providers).where(eq7(providers.id, invoice.providerId)).then((r) => r[0])
       ]);
       let recipientEmail = client?.email;
       let recipientName = [client?.firstName, client?.lastName].filter(Boolean).join(" ") || "Client";
       let recipientUserId;
       if (invoice.homeownerUserId) {
-        const homeowner = await db.select().from(users).where(eq6(users.id, invoice.homeownerUserId)).then((r) => r[0]);
+        const homeowner = await db.select().from(users).where(eq7(users.id, invoice.homeownerUserId)).then((r) => r[0]);
         if (homeowner?.email) {
           recipientEmail = homeowner.email;
           recipientName = [homeowner.firstName, homeowner.lastName].filter(Boolean).join(" ") || "Client";
@@ -9171,7 +12134,22 @@ function setupReminderJobs() {
   cron.schedule("*/30 * * * *", runBookingReminder2h);
   cron.schedule("0 9 * * *", runInvoiceDueReminder);
   cron.schedule("0 10 * * *", runInvoiceOverdueReminder);
-  console.log("[cron] reminder jobs scheduled: 24h/2h booking reminders, 3d/1d invoice reminders");
+  cron.schedule("0 3 * * *", async () => {
+    try {
+      const client = await pool.connect();
+      try {
+        const result = await client.query(`DELETE FROM providers WHERE user_id IS NULL`);
+        if (result.rowCount && result.rowCount > 0) {
+          console.log(`[cron:orphan-cleanup] Removed ${result.rowCount} orphaned provider record(s)`);
+        }
+      } finally {
+        client.release();
+      }
+    } catch (err) {
+      console.error("[cron:orphan-cleanup] error:", err);
+    }
+  });
+  console.log("[cron] reminder jobs scheduled: 24h/2h booking reminders, 3d/1d invoice reminders, daily orphan-provider cleanup");
 }
 function setupErrorHandler(app2) {
   app2.use((err, _req, res, next) => {
@@ -9185,10 +12163,47 @@ function setupErrorHandler(app2) {
     return res.status(status).json({ message });
   });
 }
+function validateProductionEnv() {
+  const IS_PROD2 = process.env.NODE_ENV === "production";
+  const hardRequired = [
+    ["STRIPE_CONNECT_WEBHOOK_SECRET", "Stripe Connect webhook events cannot be verified \u2014 payment state will be corrupted"],
+    ["STRIPE_SECRET_KEY", "All Stripe payment features are unavailable \u2014 invoicing, Connect, checkout all fail"],
+    ["STRIPE_WEBHOOK_SECRET", "Primary Stripe webhook events cannot be verified \u2014 payment state will be corrupted"],
+    ["RESEND_API_KEY", "Transactional email (invoices, booking confirmations, reminders) will silently fail"]
+  ];
+  const softRequired = [
+    ["SUPABASE_DATABASE_URL", "Falling back to DATABASE_URL \u2014 ensure it is set for production"],
+    [process.env.AI_INTEGRATIONS_OPENAI_API_KEY ? "AI_INTEGRATIONS_OPENAI_API_KEY" : "OPENAI_API_KEY", "AI assistant features will return 500 errors"]
+  ];
+  if (IS_PROD2) {
+    let fatal = false;
+    for (const [key, reason] of hardRequired) {
+      if (!process.env[key]) {
+        console.error(`[startup] FATAL: ${key} is required in production \u2014 ${reason}`);
+        fatal = true;
+      }
+    }
+    if (fatal) process.exit(1);
+    for (const [key, reason] of softRequired) {
+      if (!process.env[key]) {
+        console.error(`[startup] ERROR: ${key} is not set \u2014 ${reason}`);
+      }
+    }
+  } else {
+    for (const [key] of [...hardRequired, ...softRequired]) {
+      if (!process.env[key]) {
+        console.warn(`[startup] WARNING: ${key} is not set (required in production)`);
+      }
+    }
+  }
+}
 (async () => {
+  await runBootMigrations();
+  validateProductionEnv();
   setupCors(app);
   setupMetroProxy(app);
   setupStripeWebhook(app);
+  setupStripeConnectWebhook(app);
   setupBodyParsing(app);
   setupRequestLogging(app);
   configureExpoAndLanding(app);

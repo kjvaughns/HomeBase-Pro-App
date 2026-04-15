@@ -7,8 +7,8 @@ packages = ["glib"]
 
 [deployment]
 deploymentTarget = "autoscale"
-build = ["npm", "run", "server:build"]
-run = ["npm", "start"]
+build = ["sh", "-c", "npm run server:build"]
+run = ["node", "server_dist/index.js"]
 
 [[ports]]
 localPort = 5000
@@ -79,6 +79,9 @@ EXPO_PUBLIC_REVENUECAT_API_KEY = "test_zZYZBXWbDqGeSvZkzZudxxaoCwj"
 EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY = "pk_test_51SGSjDIPJg4hfhnF7O1wPHht6zWQEHY9SVbaR89Bas9ID7BWzIvMpYukdTmwR0TW9fBdwiaU2wWdvyu5v2JEWkZD00pjoE91Ri"
 EXPO_PUBLIC_SUPABASE_URL = "https://yvedkmtjynhgsuxukxjj.supabase.co"
 EXPO_PUBLIC_SUPABASE_ANON_KEY = "sb_publishable_IZ9DbM1vrlxFIz8RpBjw0Q_Yjhb1PLJ"
+
+[userenv.production]
+NODE_ENV = "production"
 
 [postMerge]
 path = "scripts/post-merge.sh"
