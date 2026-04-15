@@ -265,16 +265,18 @@ export default function HomeScreen() {
           ) : (
             <Pressable onPress={() => navigation.navigate("FindTab")}>
               <GlassCard style={styles.firstBookingCard}>
-                <View style={[styles.firstBookingIconRing, { backgroundColor: Colors.accentLight }]}>
-                  <Feather name="search" size={20} color={Colors.accent} />
+                <View style={styles.firstBookingCardContent}>
+                  <View style={[styles.firstBookingIconRing, { backgroundColor: Colors.accentLight }]}>
+                    <Feather name="search" size={24} color={Colors.accent} />
+                  </View>
+                  <View style={styles.firstBookingContent}>
+                    <ThemedText style={styles.firstBookingTitle}>Find your first pro</ThemedText>
+                    <ThemedText style={[styles.firstBookingSubtext, { color: theme.textSecondary }]}>
+                      Trusted professionals in your area
+                    </ThemedText>
+                  </View>
+                  <Feather name="chevron-right" size={20} color={theme.textSecondary} />
                 </View>
-                <View style={styles.firstBookingContent}>
-                  <ThemedText style={styles.firstBookingTitle}>Find your first pro</ThemedText>
-                  <ThemedText style={[styles.firstBookingSubtext, { color: theme.textSecondary }]}>
-                    Trusted professionals in your area
-                  </ThemedText>
-                </View>
-                <Feather name="chevron-right" size={18} color={theme.textTertiary} />
               </GlassCard>
             </Pressable>
           )}
@@ -459,32 +461,29 @@ const styles = StyleSheet.create({
     marginTop: Spacing.xs,
   },
   firstBookingCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg,
     marginBottom: Spacing.xl,
   },
+  firstBookingCardContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
   firstBookingIconRing: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    flexShrink: 0,
+    marginRight: Spacing.md,
   },
   firstBookingContent: {
     flex: 1,
   },
   firstBookingTitle: {
-    ...Typography.callout,
-    fontWeight: "600",
+    ...Typography.headline,
     marginBottom: 2,
   },
   firstBookingSubtext: {
-    ...Typography.caption1,
-    lineHeight: 18,
+    ...Typography.subhead,
   },
   categoriesGrid: {
     flexDirection: "row",
