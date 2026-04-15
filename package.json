@@ -14,7 +14,8 @@
     "lint:fix": "npx expo lint --fix",
     "check:types": "tsc --noEmit",
     "check:format": "prettier --check \"**/*.{js,ts,tsx,css,json}\"",
-    "format": "prettier --write \"**/*.{js,ts,tsx,css,json}\""
+    "format": "prettier --write \"**/*.{js,ts,tsx,css,json}\"",
+    "start": "NODE_ENV=production node server_dist/index.js"
   },
   "dependencies": {
     "@babel/plugin-syntax-import-meta": "^7.10.4",
