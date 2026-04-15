@@ -8,7 +8,7 @@ packages = ["glib"]
 [deployment]
 deploymentTarget = "autoscale"
 build = ["npm", "run", "server:build"]
-run = ["npm", "run", "server:prod"]
+run = ["bash", "-c", "PORT=8081 npm run server:prod"]
 
 [[ports]]
 localPort = 4040
