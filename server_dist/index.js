@@ -1510,6 +1510,7 @@ __export(auth_exports, {
   verifyToken: () => verifyToken
 });
 import jwt from "jsonwebtoken";
+import { randomBytes } from "crypto";
 import { eq as eq4 } from "drizzle-orm";
 function generateToken(userId, role, tokenVersion) {
   return jwt.sign({ userId, role, tv: tokenVersion }, JWT_SECRET, { expiresIn: "7d" });
@@ -1522,7 +1523,7 @@ function verifyToken(token) {
     return null;
   }
 }
-var IS_PROD, JWT_SECRET, authenticateJWT;
+var IS_PROD, _generatedSecret, JWT_SECRET, authenticateJWT;
 var init_auth = __esm({
   "server/auth.ts"() {
     "use strict";
@@ -1532,13 +1533,14 @@ var init_auth = __esm({
     if (!process.env.JWT_SECRET) {
       if (IS_PROD) {
         console.error(
-          "FATAL: JWT_SECRET environment variable is not set in production. Refusing to start \u2014 tokens would be forgeable with a known secret."
+          "[auth] CRITICAL: JWT_SECRET is not set in the production environment. Sessions will not persist across server restarts. Set JWT_SECRET in Replit Secrets to fix this permanently."
         );
-        process.exit(1);
+      } else {
+        console.warn("[auth] JWT_SECRET not set \u2014 using dev fallback. DO NOT use in production.");
       }
-      console.warn("[auth] JWT_SECRET not set \u2014 using dev fallback. DO NOT use in production.");
     }
-    JWT_SECRET = process.env.JWT_SECRET || "homebase-jwt-secret-dev-only";
+    _generatedSecret = randomBytes(64).toString("hex");
+    JWT_SECRET = process.env.JWT_SECRET || (IS_PROD ? _generatedSecret : "homebase-jwt-secret-dev-only");
     authenticateJWT = async (req, res, next) => {
       const authHeader = req.headers["authorization"];
       const raw = Array.isArray(authHeader) ? authHeader[0] : authHeader;
@@ -11319,6 +11321,10 @@ import cron from "node-cron";
 import { eq as eq7, and as and6, gte as gte3, lte as lte2, lt } from "drizzle-orm";
 var app = express();
 var log = console.log;
+if (process.env.NODE_ENV === "production") {
+  const envKeys = Object.keys(process.env).sort();
+  console.log("[startup] Production env keys available:", envKeys.join(", "));
+}
 function setupCors(app2) {
   app2.use((req, res, next) => {
     const origins = /* @__PURE__ */ new Set();

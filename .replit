@@ -7,12 +7,16 @@ packages = ["glib"]
 
 [deployment]
 deploymentTarget = "autoscale"
-build = ["sh", "-c", "npm run server:build"]
+build = ["npm", "run", "server:build"]
 run = ["node", "server_dist/index.js"]
 
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[[ports]]
+localPort = 8081
+externalPort = 8081
 
 [env]
 PORT = "5000"

@@ -20,6 +20,11 @@ import { dispatch, hasDeliveryForRecord } from "./notificationService";
 const app = express();
 const log = console.log;
 
+if (process.env.NODE_ENV === "production") {
+  const envKeys = Object.keys(process.env).sort();
+  console.log("[startup] Production env keys available:", envKeys.join(", "));
+}
+
 declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;

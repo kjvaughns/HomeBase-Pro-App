@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import { randomBytes } from "crypto";
 import type { Request, Response, NextFunction, RequestHandler } from "express";
 import { db } from "./db";
 import { users } from "@shared/schema";
@@ -9,16 +10,19 @@ const IS_PROD = process.env.NODE_ENV === "production";
 if (!process.env.JWT_SECRET) {
   if (IS_PROD) {
     console.error(
-      "FATAL: JWT_SECRET environment variable is not set in production. " +
-      "Refusing to start — tokens would be forgeable with a known secret."
+      "[auth] CRITICAL: JWT_SECRET is not set in the production environment. " +
+      "Sessions will not persist across server restarts. " +
+      "Set JWT_SECRET in Replit Secrets to fix this permanently."
     );
-    process.exit(1);
+  } else {
+    console.warn("[auth] JWT_SECRET not set — using dev fallback. DO NOT use in production.");
   }
-  console.warn("[auth] JWT_SECRET not set — using dev fallback. DO NOT use in production.");
 }
 
+const _generatedSecret = randomBytes(64).toString("hex");
+
 export const JWT_SECRET =
-  process.env.JWT_SECRET || "homebase-jwt-secret-dev-only";
+  process.env.JWT_SECRET || (IS_PROD ? _generatedSecret : "homebase-jwt-secret-dev-only");
 
 export function generateToken(userId: string, role: string, tokenVersion: number): string {
   return jwt.sign({ userId, role, tv: tokenVersion }, JWT_SECRET, { expiresIn: "7d" });
