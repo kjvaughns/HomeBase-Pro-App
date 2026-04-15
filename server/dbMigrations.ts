@@ -68,8 +68,24 @@ export async function runBootMigrations(): Promise<void> {
     // ── refunds: Stripe charge ID (for matching refunds to charges) ───────
     await runSql("refunds.stripe_charge_id", `ALTER TABLE refunds ADD COLUMN IF NOT EXISTS stripe_charge_id TEXT`);
 
-    // ── payouts: arrival_date column (missing from initial schema deployment) ──
-    await runSql("payouts.arrival_date", `ALTER TABLE payouts ADD COLUMN IF NOT EXISTS arrival_date TIMESTAMP`);
+    // ── payouts: missing columns ──────────────────────────────────────────
+    await runSql("payouts.arrival_date",  `ALTER TABLE payouts ADD COLUMN IF NOT EXISTS arrival_date TIMESTAMP`);
+    await runSql("payouts.amount_cents",  `ALTER TABLE payouts ADD COLUMN IF NOT EXISTS amount_cents INTEGER NOT NULL DEFAULT 0`);
+
+    // ── refunds: missing amount_cents column ──────────────────────────────
+    await runSql("refunds.amount_cents",  `ALTER TABLE refunds ADD COLUMN IF NOT EXISTS amount_cents INTEGER NOT NULL DEFAULT 0`);
+
+    // ── invoice_line_items: missing amount_cents column ───────────────────
+    await runSql("invoice_line_items.amount_cents", `ALTER TABLE invoice_line_items ADD COLUMN IF NOT EXISTS amount_cents INTEGER NOT NULL DEFAULT 0`);
+
+    // ── payments: missing amount_cents column ─────────────────────────────
+    await runSql("payments.amount_cents", `ALTER TABLE payments ADD COLUMN IF NOT EXISTS amount_cents INTEGER NOT NULL DEFAULT 0`);
+
+    // ── providers: is_public (public profile visibility flag) ─────────────
+    await runSql("providers.is_public", `ALTER TABLE providers ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE`);
+
+    // ── services: is_public (platform-level service visibility) ──────────
+    await runSql("services.is_public", `ALTER TABLE services ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT TRUE`);
 
     // ── enums required by messaging/notification tables ────────────────────
     const enumDefs: Array<[string, string]> = [
@@ -339,6 +355,11 @@ export async function runBootMigrations(): Promise<void> {
       ["users.default_payment_method_id",    `SELECT default_payment_method_id FROM users LIMIT 0`],
       ["users.token_version column",         `SELECT token_version FROM users LIMIT 0`],
       ["payouts.arrival_date column",        `SELECT arrival_date FROM payouts LIMIT 0`],
+      ["payouts.amount_cents column",        `SELECT amount_cents FROM payouts LIMIT 0`],
+      ["refunds.amount_cents column",        `SELECT amount_cents FROM refunds LIMIT 0`],
+      ["invoice_line_items.amount_cents",    `SELECT amount_cents FROM invoice_line_items LIMIT 0`],
+      ["payments.amount_cents column",       `SELECT amount_cents FROM payments LIMIT 0`],
+      ["providers.is_public column",         `SELECT is_public FROM providers LIMIT 0`],
     ];
 
     const verificationErrors: string[] = [];
