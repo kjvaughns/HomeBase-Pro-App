@@ -87,8 +87,9 @@ export async function runBootMigrations(): Promise<void> {
     // ── services: is_public (platform-level service visibility) ──────────
     await runSql("services.is_public", `ALTER TABLE services ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT TRUE`);
 
-    // ── enums required by messaging/notification tables ────────────────────
+    // ── enums required by refunds + messaging/notification tables ─────────
     const enumDefs: Array<[string, string]> = [
+      ["enum.refund_status",               `DO $$ BEGIN CREATE TYPE refund_status AS ENUM ('pending','succeeded','failed','canceled'); EXCEPTION WHEN duplicate_object THEN null; END $$`],
       ["enum.notification_channel",        `DO $$ BEGIN CREATE TYPE notification_channel AS ENUM ('email','push','in_app','sms'); EXCEPTION WHEN duplicate_object THEN null; END $$`],
       ["enum.notification_delivery_status", `DO $$ BEGIN CREATE TYPE notification_delivery_status AS ENUM ('queued','sent','delivered','failed','pending_sms'); EXCEPTION WHEN duplicate_object THEN null; END $$`],
       ["enum.message_channel",             `DO $$ BEGIN CREATE TYPE message_channel AS ENUM ('email','sms'); EXCEPTION WHEN duplicate_object THEN null; END $$`],
@@ -208,6 +209,21 @@ export async function runBootMigrations(): Promise<void> {
         message TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'open',
         created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+
+    // ── refunds: create table if missing (stripe Connect refunds) ────────
+    await runSql("table.refunds", `
+      CREATE TABLE IF NOT EXISTS refunds (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+        provider_id VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+        payment_id VARCHAR REFERENCES payments(id) ON DELETE SET NULL,
+        stripe_refund_id TEXT UNIQUE,
+        stripe_charge_id TEXT,
+        amount_cents INTEGER NOT NULL DEFAULT 0,
+        reason TEXT,
+        status refund_status DEFAULT 'pending',
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
       )
     `);
 
@@ -356,7 +372,7 @@ export async function runBootMigrations(): Promise<void> {
       ["users.token_version column",         `SELECT token_version FROM users LIMIT 0`],
       ["payouts.arrival_date column",        `SELECT arrival_date FROM payouts LIMIT 0`],
       ["payouts.amount_cents column",        `SELECT amount_cents FROM payouts LIMIT 0`],
-      ["refunds.amount_cents column",        `SELECT amount_cents FROM refunds LIMIT 0`],
+      ["refunds table",                       `SELECT id FROM refunds LIMIT 0`],
       ["invoice_line_items.amount_cents",    `SELECT amount_cents FROM invoice_line_items LIMIT 0`],
       ["payments.amount_cents column",       `SELECT amount_cents FROM payments LIMIT 0`],
       ["providers.is_public column",         `SELECT is_public FROM providers LIMIT 0`],
