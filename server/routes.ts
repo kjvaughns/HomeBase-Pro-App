@@ -5753,8 +5753,11 @@ Respond with JSON only:
   app.post("/api/invoices/:invoiceId/payment-intent", requireAuth, async (req: Request<{ invoiceId: string }>, res: Response) => {
     try {
       const { invoiceId } = req.params;
-      const { payerUserId } = req.body;
-      const result = await createInvoicePaymentIntent(invoiceId, payerUserId);
+      // Verify caller is associated with this invoice (homeowner or issuing provider)
+      if (!(await assertInvoiceAccess(req, invoiceId, res))) return;
+      // Never accept payerUserId from the request body — bind to the authenticated caller
+      const authUserId = req.authenticatedUserId!;
+      const result = await createInvoicePaymentIntent(invoiceId, authUserId);
       res.json(result);
     } catch (error: any) {
       console.error("Create payment intent error:", error);
@@ -5890,6 +5893,9 @@ Respond with JSON only:
 
       const { invoiceId } = req.body;
       if (!invoiceId) return res.status(400).json({ error: "invoiceId required" });
+
+      // Verify caller is associated with this invoice (homeowner or issuing provider)
+      if (!(await assertInvoiceAccess(req, invoiceId, res))) return;
 
       const [invoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
       if (!invoice) return res.status(404).json({ error: "Invoice not found" });

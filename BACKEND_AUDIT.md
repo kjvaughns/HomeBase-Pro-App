@@ -62,6 +62,8 @@
 | `server/routes.ts` | `PUT /api/clients/:id` — added `assertProviderOwnership` + explicit field allowlist (was passing raw `req.body` with no validation or ownership check) | Critical |
 | `server/routes.ts` | `PUT /api/jobs/:id` — added `assertProviderOwnership` + explicit field allowlist (was passing raw `req.body` with no validation or ownership check) | Critical |
 | `server/routes.ts` | `POST /api/invoices/create-and-send` — replaced `getProviderByUserId` ownership pattern with `assertProviderOwnership` | High |
+| `server/routes.ts` | `POST /api/invoices/:invoiceId/payment-intent` — added `assertInvoiceAccess` guard; removed body-supplied `payerUserId` (now bound strictly to `req.authenticatedUserId`) | Critical |
+| `server/routes.ts` | `POST /api/homeowner/payment-sheet` — added `assertInvoiceAccess` guard; prevents any authenticated user from triggering payment side-effects on invoices they don't own | Critical |
 | `server/dbMigrations.ts` | Orphan-provider cleanup: `DELETE FROM providers WHERE user_id IS NULL` runs at boot; removes rows made ownerless by cascaded user deletion | High |
 | `server/index.ts` | Orphan-provider cron job: daily cleanup at 3am removes any orphans created after startup | Medium |
 | `REQUIRED_ENV.md` | Environment variables documentation with production checklist and startup fail-fast inventory | Low |
@@ -370,7 +372,7 @@ All critical launch blockers resolved:
 - Payment flow verified correct
 - Notifications production-grade with delivery audit
 - Secrets enforced at startup: 4 hard-required env vars cause `process.exit(1)` in production
-- RBAC complete: all provider-scoped routes have `assertProviderOwnership()`; invoice financial routes protected by `assertInvoiceAccess()`; includes lead routes (cross-tenant) and invoice credit/checkout routes (financial fraud)
+- RBAC complete: all provider-scoped routes have `assertProviderOwnership()`; all invoice financial routes (create, pay, payment-intent, payment-sheet, apply-credits, checkout, mark-paid) protected by `assertInvoiceAccess()` or `assertProviderOwnership()`; includes lead routes (cross-tenant) and invoice credit/checkout routes (financial fraud)
 - Race conditions resolved: atomic client upsert + `SELECT FOR UPDATE` on intake acceptance
 - Financial integrity: `apply-credits` routes bind to `req.authenticatedUserId` (body-supplied userId attack vector closed)
 
