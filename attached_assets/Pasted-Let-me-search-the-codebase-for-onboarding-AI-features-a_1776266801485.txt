@@ -1,0 +1,46 @@
+Let me search the codebase for onboarding AI features and what endpoints they hit.Found it. The diagnosis is very clear. Here's what's happening:
+
+**Root cause:** The OpenAI client uses `AI_INTEGRATIONS_OPENAI_API_KEY` — a special env var that Replit **only injects in the dev workspace**, not in the deployed production server. So in the simulator (dev) it works, in TestFlight (production deployment) it's `undefined` and every AI call silently fails with a 500.
+
+Here's the exact Replit prompt to fix it — paste this into your Replit agent:
+
+---
+
+**Fix AI features broken in production deployment — onboarding and service setup**
+
+All 6 AI features in onboarding fail in the deployed app (`api.homebaseproapp.com`) because `server/openai.ts` uses `AI_INTEGRATIONS_OPENAI_API_KEY` and `AI_INTEGRATIONS_OPENAI_BASE_URL` — these are Replit workspace-only env vars that are NOT available in the autoscale deployment. The features work in the Replit dev preview but fail in production TestFlight builds.
+
+**Fix 1 — Update `server/openai.ts`** to fall back to a standard env var name:
+```typescript
+export const openai = new OpenAI({
+  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
+  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || process.env.OPENAI_BASE_URL,
+});
+```
+
+**Fix 2 — Add `OPENAI_API_KEY` as a Replit Secret** so it's available in both the workspace AND the autoscale deployment. Go to Replit Secrets and add:
+- Key: `OPENAI_API_KEY` — Value: same key as `AI_INTEGRATIONS_OPENAI_API_KEY`
+- Key: `OPENAI_BASE_URL` — Value: same value as `AI_INTEGRATIONS_OPENAI_BASE_URL`
+
+**Fix 3 — Add a guard in each broken AI endpoint** in `server/routes.ts` so instead of a confusing 500 error it returns a clear message when the API key is missing:
+
+The broken endpoints are:
+- `POST /api/ai/onboarding/suggest-business-names`
+- `POST /api/ai/onboarding/generate-bio`
+- `POST /api/ai/onboarding/polish-text`
+- `POST /api/ai/suggest-service-names`
+- `POST /api/ai/suggest-description`
+- `POST /api/ai/suggest-price`
+
+Add this guard at the top of each handler:
+```typescript
+if (!openai.apiKey) {
+  return res.status(503).json({ error: "AI features temporarily unavailable" });
+}
+```
+
+After making all changes, **redeploy (Republish)** so the autoscale server picks up the new Secrets. Then verify by hitting `POST /api/ai/onboarding/suggest-business-names` from a REST client or curl against `api.homebaseproapp.com`.
+
+---
+
+After the Replit agent applies these fixes and you hit Republish, your existing TestFlight build should start working without needing another rebuild.
