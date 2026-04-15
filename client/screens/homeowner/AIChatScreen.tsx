@@ -239,10 +239,17 @@ export default function AIChatScreen() {
           style={{ backgroundColor: theme.backgroundRoot }}
           contentContainerStyle={[
             styles.messagesContent,
-            {
-              paddingTop: headerHeight + Spacing.md,
-              paddingBottom: Spacing.xl,
-            },
+            messages.length > 0
+              ? {
+                  // Inverted list: visual top = list bottom; clear header there
+                  paddingTop: Spacing.md,
+                  paddingBottom: headerHeight + Spacing.md,
+                }
+              : {
+                  // Non-inverted empty state: clear header at the real top
+                  paddingTop: headerHeight + Spacing.md,
+                  paddingBottom: Spacing.xl,
+                },
           ]}
           ListEmptyComponent={renderEmptyState}
           showsVerticalScrollIndicator={false}
