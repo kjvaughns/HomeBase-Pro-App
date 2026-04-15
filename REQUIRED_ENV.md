@@ -32,7 +32,15 @@ Before going live, ensure these are configured in Replit deployment secrets:
 
 ## Startup Fail-Fast Behavior
 
-The following missing variables will cause the server to **hard-exit at startup** when `NODE_ENV=production`:
+The following missing variables will cause the server to **hard-exit at startup** when `NODE_ENV=production` (via `validateProductionEnv()`):
 
 1. `JWT_SECRET` — enforced in `server/auth.ts`
-2. `STRIPE_CONNECT_WEBHOOK_SECRET` — enforced in `server/index.ts` startup sequence
+2. `STRIPE_CONNECT_WEBHOOK_SECRET` — enforced in `server/index.ts`
+3. `STRIPE_SECRET_KEY` — enforced in `server/index.ts` (all payment features fail without it)
+4. `STRIPE_WEBHOOK_SECRET` — enforced in `server/index.ts` (primary webhook verification fails)
+5. `RESEND_API_KEY` — enforced in `server/index.ts` (transactional email silently fails without it)
+
+Variables that log WARNING in production but do not cause exit:
+
+- `SUPABASE_DATABASE_URL` — falls back to `DATABASE_URL`
+- `OPENAI_API_KEY` — AI features return 500 errors

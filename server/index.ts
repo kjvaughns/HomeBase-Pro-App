@@ -1018,18 +1018,18 @@ function validateProductionEnv() {
   const IS_PROD = process.env.NODE_ENV === "production";
 
   // These must be set in production — server refuses to start without them
+  // JWT_SECRET is separately enforced in server/auth.ts with process.exit(1)
   const hardRequired: Array<[string, string]> = [
-    ["STRIPE_CONNECT_WEBHOOK_SECRET", "Stripe Connect webhook signature verification will be disabled"],
-    // JWT_SECRET is separately enforced in server/auth.ts with process.exit(1)
+    ["STRIPE_CONNECT_WEBHOOK_SECRET", "Stripe Connect webhook events cannot be verified — payment state will be corrupted"],
+    ["STRIPE_SECRET_KEY", "All Stripe payment features are unavailable — invoicing, Connect, checkout all fail"],
+    ["STRIPE_WEBHOOK_SECRET", "Primary Stripe webhook events cannot be verified — payment state will be corrupted"],
+    ["RESEND_API_KEY", "Transactional email (invoices, booking confirmations, reminders) will silently fail"],
   ];
 
-  // These should be set in production — their absence causes silent feature degradation
+  // These degrade features gracefully but should still be configured
   const softRequired: Array<[string, string]> = [
-    ["SUPABASE_DATABASE_URL", "Falling back to DATABASE_URL — ensure it is set"],
-    ["RESEND_API_KEY", "Transactional email (invoices, reminders, booking confirmations) will fail silently"],
-    ["OPENAI_API_KEY", "All AI assistant features will return 500 errors"],
-    ["STRIPE_SECRET_KEY", "All Stripe payment features will be unavailable"],
-    ["STRIPE_WEBHOOK_SECRET", "Primary Stripe webhook signature verification will fail"],
+    ["SUPABASE_DATABASE_URL", "Falling back to DATABASE_URL — ensure it is set for production"],
+    ["OPENAI_API_KEY", "AI assistant features will return 500 errors"],
   ];
 
   if (IS_PROD) {

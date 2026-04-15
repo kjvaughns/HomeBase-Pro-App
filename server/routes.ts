@@ -6800,6 +6800,7 @@ Respond with JSON only:
   app.get("/api/providers/:providerId/leads", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
     try {
       const { providerId } = req.params;
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
       const rows = await db.select().from(leads)
         .where(eq(leads.providerId, providerId))
         .orderBy(desc(leads.createdAt));
@@ -6814,11 +6815,14 @@ Respond with JSON only:
   app.post("/api/providers/:providerId/leads", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
     try {
       const { providerId } = req.params;
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
       const { name, email, phone, service, message, status, source } = req.body;
-      if (!name) return res.status(400).json({ error: "Name is required" });
+      if (!name || typeof name !== "string" || !name.trim()) {
+        return res.status(400).json({ error: "Name is required" });
+      }
       const [lead] = await db.insert(leads).values({
         providerId,
-        name,
+        name: name.trim(),
         email: email || null,
         phone: phone || null,
         service: service || null,
@@ -6837,6 +6841,11 @@ Respond with JSON only:
   app.patch("/api/leads/:id", requireAuth, async (req: Request<{ id: string }>, res: Response) => {
     try {
       const { id } = req.params;
+      // Ownership: look up lead's providerId and verify caller owns that provider
+      const [existing] = await db.select({ providerId: leads.providerId }).from(leads).where(eq(leads.id, id)).limit(1);
+      if (!existing) return res.status(404).json({ error: "Lead not found" });
+      if (!(await assertProviderOwnership(req, existing.providerId, res))) return;
+
       const updates: Partial<typeof leads.$inferInsert> = {};
       const allowed = ["name", "email", "phone", "service", "message", "status", "source"] as const;
       for (const key of allowed) {

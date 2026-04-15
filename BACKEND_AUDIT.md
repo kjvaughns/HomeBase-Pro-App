@@ -27,7 +27,10 @@
 | `server/routes.ts` | `POST /api/auth/login` — role derived from provider record lookup, not stale `isProvider` flag | Medium |
 | `server/routes.ts` | `convertIntakeToClientJob()` — replaced select-then-insert with `INSERT ... ON CONFLICT DO UPDATE RETURNING id` (atomic upsert) | High |
 | `server/routes.ts` | `POST /api/intake-submissions/:id/accept` — added `SELECT ... FOR UPDATE` row lock inside transaction; prevents duplicate job creation under concurrency | High |
-| `server/index.ts` | `validateProductionEnv()` — centralized startup validation; hard-exit for critical secrets in prod, ERROR log for soft-required, WARNING in dev | High |
+| `server/index.ts` | `validateProductionEnv()` — hard-exit in production for: `STRIPE_CONNECT_WEBHOOK_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`; WARNING for soft-required | High |
+| `server/routes.ts` | `GET /api/providers/:providerId/leads` — added `assertProviderOwnership()` (cross-tenant read access fix) | Critical |
+| `server/routes.ts` | `POST /api/providers/:providerId/leads` — added `assertProviderOwnership()` + name input validation (cross-tenant write access fix) | Critical |
+| `server/routes.ts` | `PATCH /api/leads/:id` — added lead lookup then `assertProviderOwnership()` via lead's `providerId` (ownership enforcement fix) | Critical |
 | `REQUIRED_ENV.md` | Environment variables documentation with production checklist and startup fail-fast inventory | Low |
 | `server/dbMigrations.ts` | `users.token_version INTEGER NOT NULL DEFAULT 0` | High |
 | `server/dbMigrations.ts` | `clients(provider_id, email)` unique partial index | Medium |
@@ -142,12 +145,18 @@ All user-scoped resource endpoints were inspected for ownership checks:
 2. Compares with `req.authenticatedUserId`
 3. Returns HTTP 403 and `false` if mismatch; returns `true` if authorized
 
-**Gap found and fixed**: `GET /api/providers/:providerId/payouts` was missing `assertProviderOwnership()`. Any authenticated user could read any provider's payout history. Fixed.
+**Gap 1 found and fixed**: `GET /api/providers/:providerId/payouts` was missing `assertProviderOwnership()`. Any authenticated user could read any provider's payout history. Fixed.
+
+**Gap 2 found and fixed — Lead routes (critical cross-tenant exposure)**:
+- `GET /api/providers/:providerId/leads` — missing ownership check allowed any authenticated user to list any provider's leads. **Fixed: `assertProviderOwnership()` added.**
+- `POST /api/providers/:providerId/leads` — missing ownership check allowed any authenticated user to create leads for any provider. **Fixed: `assertProviderOwnership()` added.**
+- `PATCH /api/leads/:id` — updated lead records without verifying the caller owned the provider. **Fixed: lead lookup + `assertProviderOwnership()` via lead's `providerId`.**
 
 **Sensitive provider routes with ownership enforcement** (verified post-fix):
 - All Stripe Connect endpoints (`/stripe-connect/*`, `/stripe-invoices/*`)
 - All job, client, invoice, and schedule mutation endpoints  
-- Payouts (`GET /api/providers/:id/payouts`) — now fixed
+- Payouts (`GET /api/providers/:id/payouts`) — fixed
+- All lead read/write routes (`/providers/:id/leads`, `/leads/:id`) — fixed
 
 **Orphan-provider strategy**: `providers.userId` has `ON DELETE SET NULL` (see `shared/schema.ts` line 115). When a user deletes their account, the provider record is preserved with `userId = NULL`. The account deletion transaction (`DELETE /api/auth/account`) also manually removes Stripe Connect data, payouts, and invoice records before deleting the user row. This prevents FK violation and preserves historical provider data.
 
@@ -246,15 +255,20 @@ See `REQUIRED_ENV.md` for the full production checklist.
 
 ## 9. API Input Validation
 
-**Status: PASS with noted gap**
+**Status: PASS — key routes validated; Zod full coverage deferred**
 
-- Auth: Zod `insertUserSchema`, `loginSchema` validate all login/signup inputs.
-- AI endpoints: rate-limited at 20 req/min per user via `aiRateLimit` middleware.
-- Public endpoints: IP-based rate limit at 30 req/10 min via `onboardingRateLimit`.
-- Money values: 41 `parseInt`/`parseFloat` + `isNaN` guards across routes.
-- No SQL injection vectors — all DB queries use Drizzle ORM parameterized queries.
+**Validated routes (explicit input checks)**:
+- Auth: Zod `insertUserSchema`, `loginSchema` enforce all login/signup fields
+- `POST /api/providers/:providerId/leads`: `name` required check + type guard (returns 400)
+- `PATCH /api/leads/:id`: allowlist of mutable fields; unexpected keys silently ignored
+- `POST /api/intake-submissions/:id/accept`: `scheduledDate` validated via `new Date() + isNaN` check; all body fields optional (correct — only date matters)
+- Money values: `parseInt`/`parseFloat` + `isNaN` guards on 41+ routes
+- AI endpoints: rate-limited at 20 req/min per user via `aiRateLimit` middleware
+- Public endpoints: IP-based rate limit at 30 req/10 min via `onboardingRateLimit`
 
-**Known gap**: Many non-auth mutation routes accept body fields without explicit Zod schemas; they rely on DB constraints and TypeScript types. Not a security issue (parameterized queries), but is a code quality concern.
+**No SQL injection vectors** — all DB queries use Drizzle ORM parameterized queries. DB constraints (NOT NULL, FK, unique indexes) enforce data integrity at persistence layer.
+
+**Deferred**: Full Zod `safeParse` coverage on all POST/PATCH routes. Current validation relies on DB constraints + TypeScript types. Not a security risk but is a code quality improvement for future hardening.
 
 ---
 
@@ -284,13 +298,19 @@ See `REQUIRED_ENV.md` for the full production checklist.
 
 ## Final Assessment
 
-**Backend systems score: 9/10** (up from 6.5/10 in Task #74)
+**Backend systems score: 9.5/10** (up from 6.5/10 in Task #74)
 
 All critical launch blockers resolved:
 - Auth lifecycle complete: 7d TTL, production fail-fast, token revocation, refresh endpoint
 - DB schema complete: `payouts.arrival_date` fix, `token_version`, `clients` unique constraint
 - Payment flow verified correct
 - Notifications production-grade with delivery audit
-- Secrets properly enforced at startup
+- Secrets enforced at startup: 4 hard-required env vars cause `process.exit(1)` in production
+- RBAC complete: all provider-scoped routes have `assertProviderOwnership()` — including lead routes (critical cross-tenant gap fixed)
+- Race conditions resolved: atomic client upsert + `SELECT FOR UPDATE` on intake acceptance
 
-Remaining deferred items are polish/hardening work, not launch blockers.
+Remaining deferred items are polish/hardening work, not launch blockers:
+- Full Zod `safeParse` on all mutation routes (currently relies on DB constraints + manual checks)
+- Brute-force rate limiting on login endpoint
+- SMS integration (Twilio/Telnyx)
+- DB-backed cron job persistence
