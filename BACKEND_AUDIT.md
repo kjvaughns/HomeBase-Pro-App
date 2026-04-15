@@ -43,6 +43,18 @@
 | `server/routes.ts` | `POST /api/invoices` — added `assertProviderOwnership()` on body `providerId` | High |
 | `server/routes.ts` | `POST /api/stripe/connect/onboard/:providerId` — added `assertProviderOwnership()` | Critical |
 | `server/routes.ts` | `POST /api/stripe/connect/refresh-link/:providerId` — added `assertProviderOwnership()` | Critical |
+| `server/routes.ts` | `POST /api/connect/account-link` — body `providerId` now validated with `assertProviderOwnership()` | Critical |
+| `server/routes.ts` | `POST /api/connect/refresh-link` — body `providerId` now validated with `assertProviderOwnership()` | Critical |
+| `server/routes.ts` | `POST /api/providers/:providerId/plan` — added `assertProviderOwnership()` | Critical |
+| `server/routes.ts` | `GET /api/providers/:providerId/plan` — added `assertProviderOwnership()` | High |
+| `server/routes.ts` | `POST /api/invoices/create` — added `assertProviderOwnership()` on body `providerId` | Critical |
+| `server/routes.ts` | `GET /api/provider/:providerId/clients` — added `assertProviderOwnership()` | Critical |
+| `server/routes.ts` | `GET /api/provider/:providerId/jobs` — added `assertProviderOwnership()` | Critical |
+| `server/routes.ts` | `GET /api/provider/:providerId/payments` — added `assertProviderOwnership()` | Critical |
+| `server/routes.ts` | `GET /api/providers/:providerId/booking-links` — added `assertProviderOwnership()` | Critical |
+| `server/routes.ts` | `POST /api/providers/:providerId/booking-links` — added `assertProviderOwnership()` | Critical |
+| `server/routes.ts` | `GET /api/provider/:providerId/custom-services` — added conditional `assertProviderOwnership()` for non-published services (private drafts) | High |
+| `server/routes.ts` | All 8 messaging routes — replaced fragile `getProviderByUserId` + id comparison with canonical `assertProviderOwnership()` (fixes multi-provider edge case) | Critical |
 | `REQUIRED_ENV.md` | Environment variables documentation with production checklist and startup fail-fast inventory | Low |
 | `server/dbMigrations.ts` | `users.token_version INTEGER NOT NULL DEFAULT 0` | High |
 | `server/dbMigrations.ts` | `clients(provider_id, email)` unique partial index | Medium |

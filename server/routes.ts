@@ -3504,6 +3504,10 @@ Respond with JSON only:
   app.get("/api/provider/:providerId/custom-services", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
     try {
       const publishedOnly = req.query.publishedOnly === "true";
+      // Non-published services are private — require ownership when returning all services
+      if (!publishedOnly) {
+        if (!(await assertProviderOwnership(req, req.params.providerId, res))) return;
+      }
       const conditions = publishedOnly
         ? and(eq(providerCustomServices.providerId, req.params.providerId), eq(providerCustomServices.isPublished, true))
         : eq(providerCustomServices.providerId, req.params.providerId);
@@ -4100,6 +4104,7 @@ Respond with JSON only:
 
   app.get("/api/provider/:providerId/clients", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
     try {
+      if (!(await assertProviderOwnership(req, req.params.providerId, res))) return;
       const clients = await storage.getClients(req.params.providerId);
       res.json({ clients });
     } catch (error) {
@@ -4178,6 +4183,7 @@ Respond with JSON only:
 
   app.get("/api/provider/:providerId/jobs", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
     try {
+      if (!(await assertProviderOwnership(req, req.params.providerId, res))) return;
       const rawJobs = await storage.getJobs(req.params.providerId);
       // Enrich with isRecurring/recurringFrequency from linked appointment
       const enrichedJobs = await Promise.all(
@@ -4957,6 +4963,7 @@ Respond with JSON only:
 
   app.get("/api/provider/:providerId/payments", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
     try {
+      if (!(await assertProviderOwnership(req, req.params.providerId, res))) return;
       const payments = await storage.getPayments(req.params.providerId);
       res.json({ payments });
     } catch (error) {
@@ -5480,6 +5487,7 @@ Respond with JSON only:
       if (!providerId) {
         return res.status(400).json({ error: "providerId is required" });
       }
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
       const result = await createConnectAccountLink(providerId);
       res.json(result);
     } catch (error: any) {
@@ -5495,6 +5503,7 @@ Respond with JSON only:
       if (!providerId) {
         return res.status(400).json({ error: "providerId is required" });
       }
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
       const result = await refreshConnectAccountLink(providerId);
       res.json(result);
     } catch (error: any) {
@@ -5519,6 +5528,7 @@ Respond with JSON only:
   app.post("/api/providers/:providerId/plan", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
     try {
       const { providerId } = req.params;
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
       const { planTier, platformFeePercent, platformFeeFixedCents } = req.body;
 
       const [existing] = await db
@@ -5560,6 +5570,7 @@ Respond with JSON only:
   app.get("/api/providers/:providerId/plan", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
     try {
       const { providerId } = req.params;
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
       const plan = await getProviderPlan(providerId);
       res.json({ plan });
     } catch (error: any) {
@@ -5606,6 +5617,9 @@ Respond with JSON only:
       if (!providerId) {
         return res.status(400).json({ error: "providerId is required" });
       }
+
+      // Ownership: caller must own the provider they are creating an invoice for
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
 
       // Calculate subtotal from line items
       let subtotalCents = 0;
@@ -6221,6 +6235,7 @@ Respond with JSON only:
   app.get("/api/providers/:providerId/booking-links", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
     try {
       const { providerId } = req.params;
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
       const links = await storage.getBookingLinksByProvider(providerId);
       res.json({ bookingLinks: links });
     } catch (error: any) {
@@ -6233,6 +6248,7 @@ Respond with JSON only:
   app.post("/api/providers/:providerId/booking-links", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
     try {
       const { providerId } = req.params;
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
       const { slug, customTitle, customDescription, welcomeMessage, confirmationMessage, instantBooking, showPricing, depositRequired, depositAmount, depositPercentage, intakeQuestions, serviceCatalog, availabilityRules, brandColor, logoUrl } = req.body;
 
       if (!slug) {
@@ -7037,13 +7053,9 @@ Respond with JSON only:
   // POST /api/providers/:providerId/messages — send a message
   app.post("/api/providers/:providerId/messages", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
     try {
-      const authUserId = req.authenticatedUserId!;
       const { providerId } = req.params;
-
-      const providerRecord = await storage.getProviderByUserId(authUserId);
-      if (!providerRecord || providerRecord.id !== providerId) {
-        return res.status(403).json({ error: "Access denied" });
-      }
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
+      const providerRecord = await storage.getProvider(providerId);
 
       const { clientId, channel, subject, body, jobId, invoiceId } = req.body;
 
@@ -7136,13 +7148,9 @@ Respond with JSON only:
   // POST /api/providers/:providerId/messages/blast — send a message to multiple clients
   app.post("/api/providers/:providerId/messages/blast", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
     try {
-      const authUserId = req.authenticatedUserId!;
       const { providerId } = req.params;
-
-      const providerRecord = await storage.getProviderByUserId(authUserId);
-      if (!providerRecord || providerRecord.id !== providerId) {
-        return res.status(403).json({ error: "Access denied" });
-      }
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
+      const providerRecord = await storage.getProvider(providerId);
 
       const { clientIds, channel, subject, body } = req.body;
 
@@ -7233,13 +7241,8 @@ Respond with JSON only:
   // GET /api/providers/:providerId/clients/:clientId/messages — message history
   app.get("/api/providers/:providerId/clients/:clientId/messages", requireAuth, async (req: Request<{ providerId: string; clientId: string }>, res: Response) => {
     try {
-      const authUserId = req.authenticatedUserId!;
       const { providerId, clientId } = req.params;
-
-      const providerRecord = await storage.getProviderByUserId(authUserId);
-      if (!providerRecord || providerRecord.id !== providerId) {
-        return res.status(403).json({ error: "Access denied" });
-      }
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
 
       const messages = await db.select().from(providerMessages)
         .where(and(eq(providerMessages.providerId, providerId), eq(providerMessages.clientId, clientId)))
@@ -7255,13 +7258,8 @@ Respond with JSON only:
   // GET /api/providers/:providerId/message-templates — list templates
   app.get("/api/providers/:providerId/message-templates", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
     try {
-      const authUserId = req.authenticatedUserId!;
       const { providerId } = req.params;
-
-      const providerRecord = await storage.getProviderByUserId(authUserId);
-      if (!providerRecord || providerRecord.id !== providerId) {
-        return res.status(403).json({ error: "Access denied" });
-      }
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
 
       const templates = await db.select().from(messageTemplates)
         .where(eq(messageTemplates.providerId, providerId))
@@ -7277,13 +7275,8 @@ Respond with JSON only:
   // POST /api/providers/:providerId/message-templates — create template
   app.post("/api/providers/:providerId/message-templates", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
     try {
-      const authUserId = req.authenticatedUserId!;
       const { providerId } = req.params;
-
-      const providerRecord = await storage.getProviderByUserId(authUserId);
-      if (!providerRecord || providerRecord.id !== providerId) {
-        return res.status(403).json({ error: "Access denied" });
-      }
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
 
       const { name, channel, subject, body } = req.body;
       if (!name || !body) {
@@ -7308,13 +7301,8 @@ Respond with JSON only:
   // PATCH /api/providers/:providerId/message-templates/:templateId — update template
   app.patch("/api/providers/:providerId/message-templates/:templateId", requireAuth, async (req: Request<{ providerId: string; templateId: string }>, res: Response) => {
     try {
-      const authUserId = req.authenticatedUserId!;
       const { providerId, templateId } = req.params;
-
-      const providerRecord = await storage.getProviderByUserId(authUserId);
-      if (!providerRecord || providerRecord.id !== providerId) {
-        return res.status(403).json({ error: "Access denied" });
-      }
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
 
       const { name, channel, subject, body } = req.body;
       const updates: Record<string, unknown> = { updatedAt: new Date() };
@@ -7339,13 +7327,8 @@ Respond with JSON only:
   // DELETE /api/providers/:providerId/message-templates/:templateId — delete template
   app.delete("/api/providers/:providerId/message-templates/:templateId", requireAuth, async (req: Request<{ providerId: string; templateId: string }>, res: Response) => {
     try {
-      const authUserId = req.authenticatedUserId!;
       const { providerId, templateId } = req.params;
-
-      const providerRecord = await storage.getProviderByUserId(authUserId);
-      if (!providerRecord || providerRecord.id !== providerId) {
-        return res.status(403).json({ error: "Access denied" });
-      }
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
 
       const [deleted] = await db.delete(messageTemplates)
         .where(and(eq(messageTemplates.id, templateId), eq(messageTemplates.providerId, providerId)))
@@ -7362,13 +7345,8 @@ Respond with JSON only:
   // GET /api/providers/:providerId/clients/:clientId/last-message — get last message for client list
   app.get("/api/providers/:providerId/clients/last-messages", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
     try {
-      const authUserId = req.authenticatedUserId!;
       const { providerId } = req.params;
-
-      const providerRecord = await storage.getProviderByUserId(authUserId);
-      if (!providerRecord || providerRecord.id !== providerId) {
-        return res.status(403).json({ error: "Access denied" });
-      }
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
 
       // Get the most recent message per client
       const lastMessages = await db.execute(sql`
@@ -7395,13 +7373,9 @@ Respond with JSON only:
   // POST /api/providers/:providerId/communicate/individual — send to one client by userId
   app.post("/api/providers/:providerId/communicate/individual", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
     try {
-      const authUserId = req.authenticatedUserId!;
       const { providerId } = req.params;
-
-      const providerRecord = await storage.getProviderByUserId(authUserId);
-      if (!providerRecord || providerRecord.id !== providerId) {
-        return res.status(403).json({ error: "Access denied" });
-      }
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
+      const providerRecord = await storage.getProvider(providerId);
 
       const { clientId, subject, body, channels } = req.body;
       const VALID_CHANNELS = ["push", "email"];
@@ -7464,13 +7438,9 @@ Respond with JSON only:
   // POST /api/providers/:providerId/communicate/broadcast — send to all clients
   app.post("/api/providers/:providerId/communicate/broadcast", requireAuth, async (req: Request<ProviderIdParams>, res: Response) => {
     try {
-      const authUserId = req.authenticatedUserId!;
       const { providerId } = req.params;
-
-      const providerRecord = await storage.getProviderByUserId(authUserId);
-      if (!providerRecord || providerRecord.id !== providerId) {
-        return res.status(403).json({ error: "Access denied" });
-      }
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
+      const providerRecord = await storage.getProvider(providerId);
 
       const { subject, body, channels } = req.body;
       const VALID_CHANNELS_BROADCAST = ["push", "email"];
