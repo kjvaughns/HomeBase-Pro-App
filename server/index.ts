@@ -1014,16 +1014,52 @@ function setupErrorHandler(app: express.Application) {
   });
 }
 
+function validateProductionEnv() {
+  const IS_PROD = process.env.NODE_ENV === "production";
+
+  // These must be set in production — server refuses to start without them
+  const hardRequired: Array<[string, string]> = [
+    ["STRIPE_CONNECT_WEBHOOK_SECRET", "Stripe Connect webhook signature verification will be disabled"],
+    // JWT_SECRET is separately enforced in server/auth.ts with process.exit(1)
+  ];
+
+  // These should be set in production — their absence causes silent feature degradation
+  const softRequired: Array<[string, string]> = [
+    ["SUPABASE_DATABASE_URL", "Falling back to DATABASE_URL — ensure it is set"],
+    ["RESEND_API_KEY", "Transactional email (invoices, reminders, booking confirmations) will fail silently"],
+    ["OPENAI_API_KEY", "All AI assistant features will return 500 errors"],
+    ["STRIPE_SECRET_KEY", "All Stripe payment features will be unavailable"],
+    ["STRIPE_WEBHOOK_SECRET", "Primary Stripe webhook signature verification will fail"],
+  ];
+
+  if (IS_PROD) {
+    let fatal = false;
+    for (const [key, reason] of hardRequired) {
+      if (!process.env[key]) {
+        console.error(`[startup] FATAL: ${key} is required in production — ${reason}`);
+        fatal = true;
+      }
+    }
+    if (fatal) process.exit(1);
+
+    for (const [key, reason] of softRequired) {
+      if (!process.env[key]) {
+        console.error(`[startup] ERROR: ${key} is not set — ${reason}`);
+      }
+    }
+  } else {
+    for (const [key] of [...hardRequired, ...softRequired]) {
+      if (!process.env[key]) {
+        console.warn(`[startup] WARNING: ${key} is not set (required in production)`);
+      }
+    }
+  }
+}
+
 (async () => {
   await runBootMigrations();
 
-  // Production env hard-fail guards — must run before anything else
-  if (process.env.NODE_ENV === "production") {
-    if (!process.env.STRIPE_CONNECT_WEBHOOK_SECRET) {
-      console.error("[startup] FATAL: STRIPE_CONNECT_WEBHOOK_SECRET must be set in production");
-      process.exit(1);
-    }
-  }
+  validateProductionEnv(); // Hard-exit in production if critical secrets missing; warn in dev
 
   setupCors(app);
   setupMetroProxy(app);

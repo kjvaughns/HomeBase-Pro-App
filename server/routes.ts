@@ -6709,6 +6709,7 @@ Respond with JSON only:
         return res.status(403).json({ error: "Forbidden" });
       }
 
+      // Optimistic early check (outside transaction) — recheck with row lock inside transaction
       if (submission.status === "converted" || submission.status === "confirmed") {
         return res.status(400).json({ error: "Submission has already been accepted" });
       }
@@ -6732,8 +6733,20 @@ Respond with JSON only:
         }
       }
 
-      // Run conversion in a transaction using the shared helper
+      // Run conversion in a transaction using the shared helper.
+      // SELECT FOR UPDATE on the submission row serializes concurrent accept requests —
+      // the second request will see the updated status and abort idempotently.
+      let alreadyAccepted = false;
       const result = await db.transaction(async (tx) => {
+        const locked = await tx.execute(sql`
+          SELECT status FROM intake_submissions WHERE id = ${id} FOR UPDATE
+        `);
+        const lockedStatus = (locked.rows[0] as { status: string } | undefined)?.status;
+        if (lockedStatus === "converted" || lockedStatus === "confirmed") {
+          alreadyAccepted = true;
+          return null;
+        }
+
         const converted = await convertIntakeToClientJob(tx, {
           submissionId: id,
           providerId: submission.providerId,
@@ -6766,10 +6779,14 @@ Respond with JSON only:
         return converted;
       });
 
+      if (alreadyAccepted) {
+        return res.status(400).json({ error: "Submission has already been accepted" });
+      }
+
       res.status(201).json({
         message: "Booking accepted",
-        clientId: result.clientId,
-        job: result.job,
+        clientId: result!.clientId,
+        job: result!.job,
       });
     } catch (error: any) {
       console.error("Accept intake submission error:", error);

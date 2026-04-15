@@ -25,7 +25,9 @@
 | `server/routes.ts` | `GET /api/providers/:id/payouts` — added `assertProviderOwnership()` ownership check | High |
 | `server/routes.ts` | `POST /api/auth/refresh` — role derived from providers DB record; returns `{ token, role }` | Medium |
 | `server/routes.ts` | `POST /api/auth/login` — role derived from provider record lookup, not stale `isProvider` flag | Medium |
-| `server/routes.ts` | `convertIntakeToClientJob()` — replaced select-then-insert with `INSERT ... ON CONFLICT DO UPDATE RETURNING id` (atomic upsert; no race condition) | High |
+| `server/routes.ts` | `convertIntakeToClientJob()` — replaced select-then-insert with `INSERT ... ON CONFLICT DO UPDATE RETURNING id` (atomic upsert) | High |
+| `server/routes.ts` | `POST /api/intake-submissions/:id/accept` — added `SELECT ... FOR UPDATE` row lock inside transaction; prevents duplicate job creation under concurrency | High |
+| `server/index.ts` | `validateProductionEnv()` — centralized startup validation; hard-exit for critical secrets in prod, ERROR log for soft-required, WARNING in dev | High |
 | `REQUIRED_ENV.md` | Environment variables documentation with production checklist and startup fail-fast inventory | Low |
 | `server/dbMigrations.ts` | `users.token_version INTEGER NOT NULL DEFAULT 0` | High |
 | `server/dbMigrations.ts` | `clients(provider_id, email)` unique partial index | Medium |
@@ -180,13 +182,15 @@ All boot migration statements use `IF NOT EXISTS` / `DO $$ ... EXCEPTION WHEN du
 
 **Gap found**: `convertIntakeToClientJob()` used a select-then-insert pattern for client deduplication by `(provider_id, email)`. Two concurrent accept requests for the same submission could both see no existing client and both attempt insert — resulting in a constraint error or duplicate client depending on timing.
 
-**Fix**: Replaced with a single atomic `INSERT ... ON CONFLICT (provider_id, email) WHERE email IS NOT NULL DO UPDATE SET phone = COALESCE(...), updated_at = NOW() RETURNING id`. This is idempotent under concurrency — always returns the canonical client ID.
+**Fix 1 — client upsert**: Replaced select-then-insert with `INSERT ... ON CONFLICT (provider_id, email) WHERE email IS NOT NULL DO UPDATE SET phone = COALESCE(...), updated_at = NOW() RETURNING id`. Always returns the canonical client ID atomically.
+
+**Fix 2 — job creation idempotency** (`POST /api/intake-submissions/:id/accept`): Added `SELECT status FROM intake_submissions WHERE id = ? FOR UPDATE` inside the transaction. This row-level lock serializes concurrent accept requests for the same submission. The second concurrent request waits for the lock, sees status is already `"converted"`, and returns HTTP 400 `{ error: "Submission has already been accepted" }` — no duplicate job created.
 
 Additional verifications (no changes needed):
 - `POST /api/jobs` creates `appointments` row non-fatally (nullable `user_id`, `home_id`).
 - Instant booking auto-conversion creates client + job non-fatally, wrapped in try/catch.
-- Submission state machine: `submitted → confirmed` on accept, `declined` on decline.
-- Accept endpoint is itself wrapped in a DB transaction for atomicity.
+- Submission state machine: `submitted → converted` on accept, `declined` on decline.
+- Accept endpoint wraps all mutations in a single DB transaction for atomicity.
 
 ---
 
@@ -205,18 +209,25 @@ From `server/stripeConnectService.ts`:
 
 ## 7. Environment Variables & Secrets
 
-**Status: FIXED**
+**Status: FIXED — centralized `validateProductionEnv()` at startup**
 
-| Variable | Required | Enforcement |
+`validateProductionEnv()` (`server/index.ts`) runs at every startup and:
+- In **production**: calls `process.exit(1)` if any hard-required secret is missing; logs ERROR for soft-required secrets
+- In **development**: logs WARNING for any missing secret (so developers know what to configure)
+
+| Variable | Category | Production Enforcement |
 |---|---|---|
-| `JWT_SECRET` | Critical | **Production `process.exit(1)` if unset** (fixed in this audit) |
-| `SUPABASE_DATABASE_URL` | Critical | `db.ts` throws if neither DB URL set |
-| `STRIPE_SECRET_KEY` | Critical | Replit Stripe integration; `stripeConnectService.ts` throws on use |
-| `STRIPE_WEBHOOK_SECRET` | Critical | Used by `stripe-replit-sync`; webhook returns 400 on verify failure |
-| `RESEND_API_KEY` | Email required | Replit Resend integration; email fails gracefully if missing |
-| `OPENAI_API_KEY` | AI features | Replit AI integration; endpoints return 500 if missing |
-| `RAPIDAPI_KEY` | HouseFax optional | `fetchZillowPropertyData` returns `null` gracefully |
-| `GOOGLE_API_KEY` | HouseFax optional | Geocoding/places return `null`/`[]` gracefully |
+| `JWT_SECRET` | Hard-required | `process.exit(1)` via `server/auth.ts` |
+| `STRIPE_CONNECT_WEBHOOK_SECRET` | Hard-required | `process.exit(1)` via `validateProductionEnv()` |
+| `SUPABASE_DATABASE_URL` | Soft-required | ERROR log; falls back to `DATABASE_URL` |
+| `RESEND_API_KEY` | Soft-required | ERROR log; email fails silently without it |
+| `OPENAI_API_KEY` | Soft-required | ERROR log; AI endpoints return 500 |
+| `STRIPE_SECRET_KEY` | Soft-required | ERROR log; all payment features unavailable |
+| `STRIPE_WEBHOOK_SECRET` | Soft-required | ERROR log; primary webhook sig verification fails |
+| `RAPIDAPI_KEY` | Optional | Graceful null return in `fetchZillowPropertyData` |
+| `GOOGLE_API_KEY` | Optional | Graceful null/empty return in geocoding/places |
+
+See `REQUIRED_ENV.md` for the full production checklist.
 
 ---
 
