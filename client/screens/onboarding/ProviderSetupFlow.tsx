@@ -161,7 +161,7 @@ function Step1CreateService({
   useEffect(() => {
     if (!category) return;
     setLoadingSuggestions(true);
-    apiRequest("POST", "/api/ai/suggest-service-names", { category })
+    apiRequest("POST", "/api/ai/onboarding/suggest-service-names", { category })
       .then((res) => res.json())
       .then((json) => { if (Array.isArray(json.names)) setAiSuggestions(json.names.slice(0, 3)); })
       .catch(() => {})
@@ -173,7 +173,7 @@ function Step1CreateService({
     setLoadingDescription(true);
     setDescriptionError(null);
     try {
-      const res = await apiRequest("POST", "/api/ai/suggest-description", {
+      const res = await apiRequest("POST", "/api/ai/onboarding/suggest-description", {
         serviceName: serviceName.trim(),
         category,
       });
@@ -211,7 +211,7 @@ function Step1CreateService({
     priceDebounceRef.current = setTimeout(async () => {
       setLoadingPrice(true);
       try {
-        const res = await apiRequest("POST", "/api/ai/suggest-price", {
+        const res = await apiRequest("POST", "/api/ai/onboarding/suggest-price", {
           serviceName: data.serviceName.trim(),
           category,
           pricingType: "flat",

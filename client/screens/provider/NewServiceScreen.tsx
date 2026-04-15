@@ -158,14 +158,16 @@ export default function NewServiceScreen() {
   const { theme } = useTheme();
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute();
-  const { providerProfile } = useAuthStore();
+  const { providerProfile, sessionToken } = useAuthStore();
   const queryClient = useQueryClient();
   const providerId = providerProfile?.id;
+  const isAuthenticated = !!sessionToken;
 
-  const routeParams = route.params as RootStackParamList["EditService"] | undefined;
+  const routeParams = route.params as (RootStackParamList["EditService"] & { onboardingMode?: boolean }) | undefined;
   const editServiceId = routeParams?.serviceId;
   const editServiceData = routeParams?.service;
   const isEditMode = !!editServiceId;
+  const isOnboardingMode = !isAuthenticated || !!(routeParams as RootStackParamList["NewService"])?.onboardingMode;
 
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
@@ -261,7 +263,8 @@ export default function NewServiceScreen() {
   const fetchPriceSuggestion = useCallback(async (svcName: string, cat: string, pricing: PricingModel) => {
     if (!svcName.trim() || !cat) return;
     try {
-      const url = new URL("/api/ai/suggest-price", getApiUrl());
+      const pricePath = isOnboardingMode ? "/api/ai/onboarding/suggest-price" : "/api/ai/suggest-price";
+      const url = new URL(pricePath, getApiUrl());
       const response = await fetch(url.toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
@@ -280,7 +283,7 @@ export default function NewServiceScreen() {
         }
       }
     } catch {}
-  }, [providerProfile?.serviceArea]);
+  }, [providerProfile?.serviceArea, isOnboardingMode]);
 
   useEffect(() => {
     if (pricingModel === "quote") {
@@ -303,7 +306,8 @@ export default function NewServiceScreen() {
     setIsImprovingDescription(true);
     setDescriptionAiError(null);
     try {
-      const url = new URL("/api/ai/suggest-description", getApiUrl());
+      const descPath = isOnboardingMode ? "/api/ai/onboarding/suggest-description" : "/api/ai/suggest-description";
+      const url = new URL(descPath, getApiUrl());
       const response = await fetch(url.toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },

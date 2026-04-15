@@ -143,10 +143,11 @@ export default function ServiceBlueprintWizardScreen() {
   const { theme } = useTheme();
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute();
-  const { providerProfile } = useAuthStore();
+  const { providerProfile, sessionToken } = useAuthStore();
   const { setPendingOnboardingService } = useOnboardingStore();
   const queryClient = useQueryClient();
   const providerId = providerProfile?.id;
+  const isAuthenticated = !!sessionToken;
 
   // Edit mode - populated when navigated via EditService route
   const routeParams = route.params as (RootStackParamList["EditService"] & { onboardingMode?: boolean }) | undefined;
@@ -155,8 +156,9 @@ export default function ServiceBlueprintWizardScreen() {
   const isEditMode = !!editServiceId;
   // Quick-edit mode: opened from ServiceSummary at a specific step — save immediately on CTA
   const isQuickEdit = isEditMode && routeParams?.initialStep != null;
-  // Onboarding mode: skip API save, write to store instead
-  const isOnboardingMode = !!(routeParams as RootStackParamList["NewService"])?.onboardingMode;
+  // Onboarding mode: skip API save, write to store instead. Also treat unauthenticated
+  // access as onboarding mode so AI routes don't require auth.
+  const isOnboardingMode = !isAuthenticated || !!(routeParams as RootStackParamList["NewService"])?.onboardingMode;
 
   const [step, setStep] = useState(routeParams?.initialStep ?? 0);
 
@@ -266,6 +268,7 @@ export default function ServiceBlueprintWizardScreen() {
   };
 
   const fetchAIBlueprint = async (): Promise<AIBlueprint | null> => {
+    if (isOnboardingMode) return null;
     if (aiLoadedRef.current && aiBlueprint) return aiBlueprint;
     if (loadingAI) return null;
     setLoadingAI(true);
@@ -305,7 +308,8 @@ export default function ServiceBlueprintWizardScreen() {
     setGeneratingDesc(true);
     setDescAiError("");
     try {
-      const url = new URL("/api/ai/suggest-description", getApiUrl());
+      const descPath = isOnboardingMode ? "/api/ai/onboarding/suggest-description" : "/api/ai/suggest-description";
+      const url = new URL(descPath, getApiUrl());
       const resp = await fetch(url.toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
