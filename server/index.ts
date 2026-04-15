@@ -990,7 +990,23 @@ function setupReminderJobs(): void {
   cron.schedule('0 9 * * *', runInvoiceDueReminder);
   // 1-day-overdue invoice reminder — runs daily at 10am
   cron.schedule('0 10 * * *', runInvoiceOverdueReminder);
-  console.log('[cron] reminder jobs scheduled: 24h/2h booking reminders, 3d/1d invoice reminders');
+  // Orphan-provider cleanup — runs daily at 3am (removes providers whose user was deleted)
+  cron.schedule('0 3 * * *', async () => {
+    try {
+      const client = await pool.connect();
+      try {
+        const result = await client.query(`DELETE FROM providers WHERE user_id IS NULL`);
+        if (result.rowCount && result.rowCount > 0) {
+          console.log(`[cron:orphan-cleanup] Removed ${result.rowCount} orphaned provider record(s)`);
+        }
+      } finally {
+        client.release();
+      }
+    } catch (err: unknown) {
+      console.error('[cron:orphan-cleanup] error:', err);
+    }
+  });
+  console.log('[cron] reminder jobs scheduled: 24h/2h booking reminders, 3d/1d invoice reminders, daily orphan-provider cleanup');
 }
 
 function setupErrorHandler(app: express.Application) {

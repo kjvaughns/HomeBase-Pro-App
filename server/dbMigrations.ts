@@ -307,6 +307,22 @@ export async function runBootMigrations(): Promise<void> {
     }
 
     // ── Post-migration verification ───────────────────────────────────────
+    // ── Orphan-provider cleanup ────────────────────────────────────────────────
+    // When a user account is deleted, providers.user_id is set to NULL by FK
+    // onDelete: "set null". These orphaned rows can never be accessed or owned by
+    // any user — delete them to maintain referential integrity.
+    try {
+      const orphanResult = await client.query(`
+        DELETE FROM providers WHERE user_id IS NULL
+      `);
+      if (orphanResult.rowCount && orphanResult.rowCount > 0) {
+        console.log(`[boot-migration] Removed ${orphanResult.rowCount} orphaned provider record(s) (user_id IS NULL)`);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn("[boot-migration] Orphan-provider cleanup skipped:", msg);
+    }
+
     // Verify that the critical tables and columns required for app functionality exist.
     const verifications: Array<[string, string]> = [
       ["invoices.currency column",       `SELECT currency FROM invoices LIMIT 0`],

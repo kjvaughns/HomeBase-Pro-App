@@ -4160,7 +4160,23 @@ Respond with JSON only:
 
   app.put("/api/clients/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
-      const client = await storage.updateClient(req.params.id, req.body);
+      const existing = await storage.getClient(req.params.id);
+      if (!existing) return res.status(404).json({ error: "Client not found" });
+      // Ownership: verify the requesting user owns the provider that this client belongs to
+      if (!(await assertProviderOwnership(req, existing.providerId, res))) return;
+
+      // Allowlist mutable fields to prevent mass-assignment
+      const { firstName, lastName, email, phone, address, notes, tags } = req.body;
+      const update: Record<string, unknown> = {};
+      if (firstName !== undefined) update.firstName = firstName;
+      if (lastName !== undefined) update.lastName = lastName;
+      if (email !== undefined) update.email = email;
+      if (phone !== undefined) update.phone = phone;
+      if (address !== undefined) update.address = address;
+      if (notes !== undefined) update.notes = notes;
+      if (tags !== undefined) update.tags = tags;
+
+      const client = await storage.updateClient(req.params.id, update);
       if (!client) {
         return res.status(404).json({ error: "Client not found" });
       }
@@ -4348,13 +4364,31 @@ Respond with JSON only:
   app.put("/api/jobs/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
       const existing = await storage.getJob(req.params.id);
-      const job = await storage.updateJob(req.params.id, req.body);
+      if (!existing) return res.status(404).json({ error: "Job not found" });
+      // Ownership: verify the requesting user owns the provider that issued this job
+      if (!(await assertProviderOwnership(req, existing.providerId, res))) return;
+
+      // Allowlist mutable fields to prevent mass-assignment
+      const { title, description, status, scheduledDate, scheduledTime,
+        estimatedPrice, finalPrice, notes, address } = req.body;
+      const update: Record<string, unknown> = {};
+      if (title !== undefined) update.title = title;
+      if (description !== undefined) update.description = description;
+      if (status !== undefined) update.status = status;
+      if (scheduledDate !== undefined) update.scheduledDate = scheduledDate;
+      if (scheduledTime !== undefined) update.scheduledTime = scheduledTime;
+      if (estimatedPrice !== undefined) update.estimatedPrice = estimatedPrice;
+      if (finalPrice !== undefined) update.finalPrice = finalPrice;
+      if (notes !== undefined) update.notes = notes;
+      if (address !== undefined) update.address = address;
+
+      const job = await storage.updateJob(req.params.id, update);
       if (!job) {
         return res.status(404).json({ error: "Job not found" });
       }
       // Dispatch job.status_changed when status field changes
-      if (req.body.status && existing && req.body.status !== existing.status) {
-        dispatchJobStatusEmail(job, req.body.status).catch((e: unknown) => console.error('job.status_changed dispatch error:', e));
+      if (status && existing.status !== status) {
+        dispatchJobStatusEmail(job, status).catch((e: unknown) => console.error('job.status_changed dispatch error:', e));
       }
       res.json({ job });
     } catch (error) {
@@ -4559,12 +4593,10 @@ Respond with JSON only:
   // Create and immediately send invoice (one-step flow)
   app.post("/api/invoices/create-and-send", requireAuth, async (req: Request, res: Response) => {
     try {
-      const authUserId = req.authenticatedUserId!;
-      const authProviderRecord = await storage.getProviderByUserId(authUserId);
-      if (!authProviderRecord) return res.status(403).json({ error: "Provider profile not found" });
-      if (req.body.providerId && req.body.providerId !== authProviderRecord.id) {
-        return res.status(403).json({ error: "Access denied: you can only send invoices for your own provider account" });
-      }
+      const { providerId: bodyProviderId } = req.body;
+      if (!bodyProviderId) return res.status(400).json({ error: "providerId is required" });
+      if (!(await assertProviderOwnership(req, bodyProviderId, res))) return;
+      const authProviderRecord = await storage.getProvider(bodyProviderId);
 
       const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
 
@@ -4593,7 +4625,7 @@ Respond with JSON only:
 
       const subtotalCents = Math.round(amount * 100);
       const invoiceData = {
-        providerId: req.body.providerId,
+        providerId: bodyProviderId,
         clientId: req.body.clientId,
         jobId: req.body.jobId || null,
         invoiceNumber,
@@ -4683,16 +4715,25 @@ Respond with JSON only:
 
   app.put("/api/invoices/:id", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
-      const authUserId = req.authenticatedUserId!;
       const existing = await storage.getInvoice(req.params.id);
       if (!existing) {
         return res.status(404).json({ error: "Invoice not found" });
       }
-      const provider = await storage.getProviderByUserId(authUserId);
-      if (!provider || existing.providerId !== provider.id) {
-        return res.status(403).json({ error: "Access denied" });
+      // Ownership: only the issuing provider may update the invoice
+      if (!(await assertProviderOwnership(req, existing.providerId, res))) return;
+
+      // Validate update payload — only allow known mutable fields
+      const allowedFields = ["status", "notes", "dueDate", "lineItems", "amount", "total",
+        "subtotalCents", "taxCents", "discountCents", "totalCents", "paymentMethodsAllowed"] as const;
+      const update: Record<string, unknown> = {};
+      for (const field of allowedFields) {
+        if (req.body[field] !== undefined) update[field] = req.body[field];
       }
-      const invoice = await storage.updateInvoice(req.params.id, req.body);
+      if (Object.keys(update).length === 0) {
+        return res.status(400).json({ error: "No valid fields provided for update" });
+      }
+
+      const invoice = await storage.updateInvoice(req.params.id, update);
       if (!invoice) {
         return res.status(404).json({ error: "Invoice not found" });
       }

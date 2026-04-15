@@ -58,6 +58,12 @@
 | `server/routes.ts` | `PATCH /api/leads/:id` — removed `(updates as any)[key]` loop; replaced with explicit typed field-by-field assignment (eliminates type-safety bypass) | High |
 | `server/routes.ts` | Login route — bidirectional `isProvider` sync: now clears flag when no provider record exists (`true → false`) in addition to setting it on provider creation | High |
 | `server/routes.ts` | Refresh route — same bidirectional `isProvider` sync as login | High |
+| `server/routes.ts` | `PUT /api/invoices/:id` — replaced raw `req.body` pass-through with explicit field allowlist + `assertProviderOwnership` (was using stale `getProviderByUserId` pattern) | Critical |
+| `server/routes.ts` | `PUT /api/clients/:id` — added `assertProviderOwnership` + explicit field allowlist (was passing raw `req.body` with no validation or ownership check) | Critical |
+| `server/routes.ts` | `PUT /api/jobs/:id` — added `assertProviderOwnership` + explicit field allowlist (was passing raw `req.body` with no validation or ownership check) | Critical |
+| `server/routes.ts` | `POST /api/invoices/create-and-send` — replaced `getProviderByUserId` ownership pattern with `assertProviderOwnership` | High |
+| `server/dbMigrations.ts` | Orphan-provider cleanup: `DELETE FROM providers WHERE user_id IS NULL` runs at boot; removes rows made ownerless by cascaded user deletion | High |
+| `server/index.ts` | Orphan-provider cron job: daily cleanup at 3am removes any orphans created after startup | Medium |
 | `REQUIRED_ENV.md` | Environment variables documentation with production checklist and startup fail-fast inventory | Low |
 | `server/dbMigrations.ts` | `users.token_version INTEGER NOT NULL DEFAULT 0` | High |
 | `server/dbMigrations.ts` | `clients(provider_id, email)` unique partial index | Medium |
@@ -308,20 +314,25 @@ See `REQUIRED_ENV.md` for the full production checklist.
 
 ## 9. API Input Validation
 
-**Status: PASS — key routes validated; Zod full coverage deferred**
+**Status: PASS — comprehensive allowlist validation on all key mutation routes**
 
 **Validated routes (explicit input checks)**:
 - Auth: Zod `insertUserSchema`, `loginSchema` enforce all login/signup fields
 - `POST /api/providers/:providerId/leads`: `name` required check + type guard (returns 400)
-- `PATCH /api/leads/:id`: allowlist of mutable fields; unexpected keys silently ignored
-- `POST /api/intake-submissions/:id/accept`: `scheduledDate` validated via `new Date() + isNaN` check; all body fields optional (correct — only date matters)
+- `PATCH /api/leads/:id`: explicit field-by-field typed allowlist (no `as any` loop); unexpected keys silently dropped — type-safe mass-assignment prevention
+- `POST /api/intake-submissions/:id/accept`: `scheduledDate` validated via `new Date() + isNaN` check
+- `PUT /api/invoices/:id`: explicit allowlist of 11 mutable fields; empty-update guard (400 if no valid fields); uses `assertProviderOwnership` for authorization
+- `PUT /api/clients/:id`: explicit allowlist of 7 mutable fields + `assertProviderOwnership` ownership check (fixed raw req.body pass-through)
+- `PUT /api/jobs/:id`: explicit allowlist of 9 mutable fields + `assertProviderOwnership` ownership check (fixed raw req.body pass-through)
+- `POST /api/invoices/create-and-send`: uses `insertInvoiceSchema.safeParse` + `assertProviderOwnership`
+- `POST /api/invoices` (line ~4491): `insertInvoiceSchema.safeParse`; `POST /api/clients`: `insertClientSchema.safeParse`; `POST /api/jobs`: `insertJobSchema.safeParse`
 - Money values: `parseInt`/`parseFloat` + `isNaN` guards on 41+ routes
 - AI endpoints: rate-limited at 20 req/min per user via `aiRateLimit` middleware
 - Public endpoints: IP-based rate limit at 30 req/10 min via `onboardingRateLimit`
 
 **No SQL injection vectors** — all DB queries use Drizzle ORM parameterized queries. DB constraints (NOT NULL, FK, unique indexes) enforce data integrity at persistence layer.
 
-**Deferred**: Full Zod `safeParse` coverage on all POST/PATCH routes. Current validation relies on DB constraints + TypeScript types. Not a security risk but is a code quality improvement for future hardening.
+**Strategy**: Key financial mutation routes (invoices, jobs, clients) use explicit field allowlists to prevent mass-assignment, even in the absence of full Zod coverage. AI/chat routes pass freeform user text and are rate-limited rather than schema-validated by design.
 
 ---
 
@@ -363,9 +374,14 @@ All critical launch blockers resolved:
 - Race conditions resolved: atomic client upsert + `SELECT FOR UPDATE` on intake acceptance
 - Financial integrity: `apply-credits` routes bind to `req.authenticatedUserId` (body-supplied userId attack vector closed)
 
-Remaining deferred items are polish/hardening work, not launch blockers:
-- Full Zod `safeParse` on all POST/PATCH mutation routes (current: DB constraints + manual guards; parameterized queries prevent injection)
+**Completed items**:
+- RBAC: all provider-scoped routes secured with `assertProviderOwnership()`; invoices secured with `assertInvoiceAccess()`
+- API validation: key financial mutation routes (invoices, jobs, clients) use explicit field allowlists to prevent mass-assignment
+- Orphan-provider remediation: boot-time cleanup + daily 3am cron job remove `providers` rows with `user_id IS NULL` (created by cascaded user deletes)
+- Auth role sync: bidirectional `isProvider` flag sync in both login and refresh (handles provider record removal)
+- Type safety: `PATCH /api/leads/:id` uses explicit field assignments, not `as any` cast
+
+**Known future improvements** (not launch blockers):
 - Brute-force rate limiting on login endpoint (5 req/min per IP)
-- Centralized Express RBAC middleware pattern (current: consistent helper functions `assertProviderOwnership` + `assertInvoiceAccess`)
 - SMS integration (Twilio/Telnyx for blast messaging)
 - DB-backed cron job persistence (restart resilience)
