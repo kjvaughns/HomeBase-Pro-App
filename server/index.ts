@@ -47,6 +47,7 @@ function setupCors(app: express.Application) {
 
     origins.add("https://homebaseproapp.com");
     origins.add("https://api.homebaseproapp.com");
+    origins.add("https://home-base-pro-app.replit.app");
 
     const origin = req.header("origin");
 

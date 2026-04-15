@@ -5397,7 +5397,7 @@ async function registerRoutes(app2) {
           RESET_SECRET,
           { expiresIn: "1h" }
         );
-        const host = req.headers["x-forwarded-host"] || req.get("host") || "homebaseproapp.com";
+        const host = req.headers["x-forwarded-host"] || req.get("host") || "home-base-pro-app.replit.app";
         const protocol = req.headers["x-forwarded-proto"]?.split(",")[0]?.trim() || req.protocol || "https";
         const resetUrl = `${protocol}://${host}/reset-password?token=${resetToken}`;
         const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "there";
@@ -11338,6 +11338,7 @@ function setupCors(app2) {
     }
     origins.add("https://homebaseproapp.com");
     origins.add("https://api.homebaseproapp.com");
+    origins.add("https://home-base-pro-app.replit.app");
     const origin = req.header("origin");
     const isLocalhost = origin?.startsWith("http://localhost:") || origin?.startsWith("http://127.0.0.1:");
     if (origin && (origins.has(origin) || isLocalhost)) {

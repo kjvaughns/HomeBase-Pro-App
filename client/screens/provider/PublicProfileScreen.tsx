@@ -181,7 +181,7 @@ export default function PublicProfileScreen() {
   const providerReviews = reviewsData?.reviews ?? [];
   const activeLink = bookingLinksData?.bookingLinks?.find((l) => l.status === "active");
   const slug = activeLink?.slug;
-  const profileUrl = slug ? `https://homebaseproapp.com/providers/${slug}` : null;
+  const profileUrl = slug ? `https://home-base-pro-app.replit.app/providers/${slug}` : null;
 
   const provider = useMemo(() => {
     if (!rawProvider) return null;

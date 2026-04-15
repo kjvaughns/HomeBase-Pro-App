@@ -746,7 +746,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           RESET_SECRET,
           { expiresIn: "1h" }
         );
-        const host = (req.headers["x-forwarded-host"] || req.get("host") || "homebaseproapp.com") as string;
+        const host = (req.headers["x-forwarded-host"] || req.get("host") || "home-base-pro-app.replit.app") as string;
         const protocol = (req.headers["x-forwarded-proto"] as string | undefined)?.split(",")[0]?.trim() || req.protocol || "https";
         const resetUrl = `${protocol}://${host}/reset-password?token=${resetToken}`;
         const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "there";

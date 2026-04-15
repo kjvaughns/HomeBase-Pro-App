@@ -1007,7 +1007,7 @@ export default function BusinessHubScreen() {
                       <View style={{ flex: 1 }}>
                         <ThemedText style={styles.serviceName}>{link.customTitle || "Booking Page"}</ThemedText>
                         <ThemedText style={[styles.serviceCategory, { color: theme.textSecondary }]}>
-                          https://homebaseproapp.com/providers/{link.slug}
+                          https://home-base-pro-app.replit.app/providers/{link.slug}
                         </ThemedText>
                       </View>
                       <StatusPill

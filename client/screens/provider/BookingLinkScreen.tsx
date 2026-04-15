@@ -45,7 +45,7 @@ interface BookingLink {
 }
 
 function getPublicUrl(slug: string): string {
-  return `https://homebaseproapp.com/providers/${slug}`;
+  return `https://home-base-pro-app.replit.app/providers/${slug}`;
 }
 
 export default function BookingLinkScreen() {
