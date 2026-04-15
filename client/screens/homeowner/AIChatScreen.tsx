@@ -240,7 +240,7 @@ export default function AIChatScreen() {
           contentContainerStyle={[
             styles.messagesContent,
             {
-              paddingTop: Spacing.md,
+              paddingTop: headerHeight + Spacing.md,
               paddingBottom: Spacing.xl,
             },
           ]}
