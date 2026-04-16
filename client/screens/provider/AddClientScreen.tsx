@@ -48,9 +48,9 @@ export default function AddClientScreen() {
     setCity(data.city || "");
     setState(data.state || "");
     setZip(data.zipCode || "");
-    // Store enrichment payload if Zillow property data was returned
-    const hasPropertyData = data.bedrooms != null || data.bathrooms != null || data.squareFeet != null || data.yearBuilt != null;
-    setHousefaxData(hasPropertyData ? data : null);
+    // Store any enrichment payload (address-only enrichments still capture coordinates/placeId);
+    // only clear if the data object is completely empty
+    setHousefaxData(data.street || data.city || data.placeId ? data : null);
   };
 
   const createMutation = useMutation({
