@@ -11632,7 +11632,7 @@ function serveLandingPage({
 function setupMetroProxy(app2) {
   const METRO_PORT = 8081;
   const metroProxy = createProxyMiddleware({
-    pathFilter: (path3, req) => path3.startsWith("/_expo") || path3.startsWith("/index.bundle") || path3.startsWith("/index.map") || path3.startsWith("/__metro__") || path3.startsWith("/__hmr") || path3.startsWith("/hot") || path3.startsWith("/debugger-ui") || path3.startsWith("/client/") || path3.startsWith("/assets/") && !!(req.query?.platform || req.query?.hash || req.headers?.["expo-platform"] || req.headers?.referer?.includes("expo") || req.query?.resolver) || path3 === "/" && !!(req.headers && (req.headers["expo-platform"] || typeof req.headers.accept === "string" && req.headers.accept.includes("text/html"))),
+    pathFilter: (path3, req) => path3.startsWith("/_expo") || path3.startsWith("/index.bundle") || path3.startsWith("/index.map") || path3.startsWith("/__metro__") || path3.startsWith("/__hmr") || path3.startsWith("/hot") || path3.startsWith("/debugger-ui") || path3.startsWith("/client/") || path3.startsWith("/assets/") && !!(req.query?.platform || req.query?.hash || req.headers?.["expo-platform"] || req.headers?.referer?.includes("expo") || req.query?.resolver) || !path3.startsWith("/api/") && !!(req.headers && (req.headers["expo-platform"] || typeof req.headers.accept === "string" && req.headers.accept.includes("text/html"))),
     target: `http://localhost:${METRO_PORT}`,
     changeOrigin: true,
     ws: true,

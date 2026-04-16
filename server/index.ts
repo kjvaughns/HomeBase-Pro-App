@@ -374,7 +374,7 @@ function setupMetroProxy(app: express.Application) {
       path.startsWith("/debugger-ui") ||
       path.startsWith("/client/") ||
       (path.startsWith("/assets/") && !!(req.query?.platform || req.query?.hash || req.headers?.["expo-platform"] || req.headers?.referer?.includes("expo") || req.query?.resolver)) ||
-      (path === "/" && !!(req.headers && (
+      (!path.startsWith("/api/") && !!(req.headers && (
         req.headers["expo-platform"] ||
         (typeof req.headers.accept === "string" && req.headers.accept.includes("text/html"))
       ))),
