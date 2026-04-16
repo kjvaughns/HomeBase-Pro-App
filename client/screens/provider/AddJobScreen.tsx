@@ -293,6 +293,7 @@ export default function AddJobScreen() {
   const applyPricingSuggestion = () => {
     if (pricingSuggestion) {
       setEstimatedPrice(pricingSuggestion.suggestedPrice.toString());
+      setPriceManuallyEdited(true);
       setShowPricingAssistant(false);
     }
   };

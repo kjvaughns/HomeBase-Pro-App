@@ -1814,6 +1814,18 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
             const names = addonSuffix.split(',').map(s => s.trim()).filter(Boolean);
             return names.length > 0 ? names : undefined;
           }
+          // Final fallback: attempt to parse structured add-ons from appointment notes JSON
+          if (appointment.notes) {
+            try {
+              const notesData = JSON.parse(appointment.notes);
+              if (notesData.addOns && Array.isArray(notesData.addOns)) {
+                const names = notesData.addOns
+                  .map((a: unknown) => typeof a === 'string' ? a : (typeof a === 'object' && a !== null && 'name' in a ? String((a as { name: unknown }).name) : null))
+                  .filter((n: unknown): n is string => typeof n === 'string' && n.length > 0);
+                return names.length > 0 ? names : undefined;
+              }
+            } catch { /* notes is not JSON */ }
+          }
           return undefined;
         })();
 
