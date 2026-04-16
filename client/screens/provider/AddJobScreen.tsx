@@ -1,12 +1,13 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import {
   StyleSheet,
-  ScrollView,
   View,
-  Modal,
   Pressable,
   ActivityIndicator,
   TextInput,
+  Platform,
+  LayoutAnimation,
+  UIManager,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -22,13 +23,30 @@ import { ThemedText } from "@/components/ThemedText";
 import { TextField } from "@/components/TextField";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { SecondaryButton } from "@/components/SecondaryButton";
-import { GlassCard } from "@/components/GlassCard";
-import { FormSectionHeader } from "@/components/FormSectionHeader";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
-import { Spacing, Typography, Colors, BorderRadius } from "@/constants/theme";
+import {
+  Spacing,
+  Typography,
+  Colors,
+  BorderRadius,
+  Shadows,
+} from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useTheme } from "@/hooks/useTheme";
 import { apiRequest, getApiUrl, getAuthHeaders } from "@/lib/query-client";
+
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const animateTransition = () => {
+  if (Platform.OS !== "web") {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+  }
+};
 
 interface Client {
   id: string;
@@ -72,7 +90,8 @@ function getPriceDisplay(svc: CustomService): string {
     return `$${parseFloat(svc.basePrice).toFixed(0)}`;
   }
   if (p === "variable") {
-    if (svc.priceFrom && svc.priceTo) return `$${parseFloat(svc.priceFrom).toFixed(0)}–$${parseFloat(svc.priceTo).toFixed(0)}`;
+    if (svc.priceFrom && svc.priceTo)
+      return `$${parseFloat(svc.priceFrom).toFixed(0)}–$${parseFloat(svc.priceTo).toFixed(0)}`;
     if (svc.priceFrom) return `From $${parseFloat(svc.priceFrom).toFixed(0)}`;
   }
   return "Quote";
@@ -86,10 +105,24 @@ function getDurationLabel(mins: number): string {
   return `${m}m`;
 }
 
+function getPricingTypeLabel(t: string): string {
+  switch (t) {
+    case "fixed":
+      return "Flat Rate";
+    case "variable":
+      return "Variable";
+    case "service_call":
+      return "Service Call";
+    default:
+      return "By Quote";
+  }
+}
+
 export default function AddJobScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute();
   const queryClient = useQueryClient();
   const { providerProfile } = useAuthStore();
@@ -103,10 +136,17 @@ export default function AddJobScreen() {
     enabled: !!providerId,
   });
 
-  const { data: servicesData, isLoading: servicesLoading, isError: servicesError } = useQuery<{ services: CustomService[] }>({
+  const {
+    data: servicesData,
+    isLoading: servicesLoading,
+    isError: servicesError,
+  } = useQuery<{ services: CustomService[] }>({
     queryKey: ["/api/provider", providerId, "custom-services", "published"],
     queryFn: async () => {
-      const url = new URL(`/api/provider/${providerId}/custom-services?publishedOnly=true`, getApiUrl());
+      const url = new URL(
+        `/api/provider/${providerId}/custom-services?publishedOnly=true`,
+        getApiUrl(),
+      );
       const res = await fetch(url.toString(), {
         credentials: "include",
         headers: getAuthHeaders(),
@@ -120,8 +160,13 @@ export default function AddJobScreen() {
   const providerServices = servicesData?.services || [];
   const clients = clientsData?.clients || [];
 
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(preselectedClientId || null);
-  const [selectedService, setSelectedService] = useState<CustomService | null>(null);
+  // Form state
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(
+    preselectedClientId || null,
+  );
+  const [selectedService, setSelectedService] = useState<CustomService | null>(
+    null,
+  );
   const [serviceName, setServiceName] = useState("");
   const [description, setDescription] = useState("");
   const [scheduledDate, setScheduledDate] = useState(new Date());
@@ -131,20 +176,27 @@ export default function AddJobScreen() {
   const [priceManuallyEdited, setPriceManuallyEdited] = useState(false);
   const [selectedAddOns, setSelectedAddOns] = useState<ServiceAddOn[]>([]);
   const [serviceDescription, setServiceDescription] = useState<string>("");
-  const [notes, setNotes] = useState("");
+
+  // UI state — inline expansions (no modals)
+  const [clientExpanded, setClientExpanded] = useState(false);
+  const [serviceExpanded, setServiceExpanded] = useState(false);
+  const [showNewClientForm, setShowNewClientForm] = useState(false);
+  const [clientSearch, setClientSearch] = useState("");
+
+  // Picker sheets (native)
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [showServicePicker, setShowServicePicker] = useState(false);
-  const [showClientPicker, setShowClientPicker] = useState(false);
-  const [clientSearch, setClientSearch] = useState("");
-  const [showPricingAssistant, setShowPricingAssistant] = useState(false);
-  const [pricingSuggestion, setPricingSuggestion] = useState<PricingSuggestion | null>(null);
-  const [pricingLoading, setPricingLoading] = useState(false);
-  const [showNewClientForm, setShowNewClientForm] = useState(false);
+
+  // Inline new-client fields
   const [newClientFirstName, setNewClientFirstName] = useState("");
   const [newClientLastName, setNewClientLastName] = useState("");
   const [newClientPhone, setNewClientPhone] = useState("");
   const [newClientEmail, setNewClientEmail] = useState("");
+
+  // Pricing AI
+  const [pricingSuggestion, setPricingSuggestion] =
+    useState<PricingSuggestion | null>(null);
+  const [pricingLoading, setPricingLoading] = useState(false);
 
   const selectedClient = clients.find((c) => c.id === selectedClientId);
 
@@ -153,7 +205,9 @@ export default function AddJobScreen() {
     try {
       const parsed = JSON.parse(selectedService.addOnsJson);
       return Array.isArray(parsed) ? parsed : [];
-    } catch { return []; }
+    } catch {
+      return [];
+    }
   }, [selectedService]);
 
   const filteredClients = useMemo(() => {
@@ -164,9 +218,24 @@ export default function AddJobScreen() {
         c.firstName.toLowerCase().includes(search) ||
         c.lastName.toLowerCase().includes(search) ||
         c.email?.toLowerCase().includes(search) ||
-        c.phone?.includes(search)
+        c.phone?.includes(search),
     );
   }, [clients, clientSearch]);
+
+  const totalPriceNum = useMemo(() => {
+    const parsed = parseFloat(estimatedPrice);
+    return isNaN(parsed) ? 0 : parsed;
+  }, [estimatedPrice]);
+
+  // ==== Handlers ====
+
+  const handleSelectClient = (id: string) => {
+    setSelectedClientId(id);
+    setShowNewClientForm(false);
+    setClientSearch("");
+    animateTransition();
+    setClientExpanded(false);
+  };
 
   const handleSelectService = (svc: CustomService) => {
     setSelectedService(svc);
@@ -183,7 +252,9 @@ export default function AddJobScreen() {
     setBaseServicePriceNum(priceNum);
     setEstimatedPrice(priceNum > 0 ? priceNum.toFixed(2) : "");
     setPriceManuallyEdited(false);
-    setShowServicePicker(false);
+    setPricingSuggestion(null);
+    animateTransition();
+    setServiceExpanded(false);
   };
 
   const handleToggleAddOn = (addon: ServiceAddOn) => {
@@ -192,9 +263,11 @@ export default function AddJobScreen() {
       const next = isSelected
         ? prev.filter((a) => a.name !== addon.name)
         : [...prev, addon];
-      // Only auto-recalculate price when provider hasn't manually overridden it
       if (!priceManuallyEdited) {
-        const addonsTotal = next.reduce((sum, a) => sum + (Number(a.price) || 0), 0);
+        const addonsTotal = next.reduce(
+          (sum, a) => sum + (Number(a.price) || 0),
+          0,
+        );
         const total = baseServicePriceNum + addonsTotal;
         setEstimatedPrice(total > 0 ? total.toFixed(2) : "");
       }
@@ -208,8 +281,12 @@ export default function AddJobScreen() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "jobs"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "stats"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/provider", providerId, "jobs"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/provider", providerId, "stats"],
+      });
       navigation.goBack();
     },
     onError: (error) => {
@@ -223,7 +300,9 @@ export default function AddJobScreen() {
       return response.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "clients"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/provider", providerId, "clients"],
+      });
       if (data.client?.id) {
         setSelectedClientId(data.client.id);
       }
@@ -232,6 +311,8 @@ export default function AddJobScreen() {
       setNewClientLastName("");
       setNewClientPhone("");
       setNewClientEmail("");
+      animateTransition();
+      setClientExpanded(false);
     },
     onError: (error) => {
       console.error("Create client error:", error);
@@ -250,7 +331,6 @@ export default function AddJobScreen() {
       scheduledTime,
       estimatedDuration: selectedService?.duration || undefined,
       estimatedPrice: estimatedPrice.trim() || undefined,
-      notes: notes.trim() || undefined,
       pricingType: selectedService?.pricingType || undefined,
       serviceDescription: serviceDescription || undefined,
       selectedAddOns: selectedAddOns.length > 0 ? selectedAddOns : undefined,
@@ -258,7 +338,12 @@ export default function AddJobScreen() {
   };
 
   const handleCreateClient = () => {
-    if (!newClientFirstName.trim() || !newClientLastName.trim() || !providerId) return;
+    if (
+      !newClientFirstName.trim() ||
+      !newClientLastName.trim() ||
+      !providerId
+    )
+      return;
     createClientMutation.mutate({
       providerId,
       firstName: newClientFirstName.trim(),
@@ -280,8 +365,8 @@ export default function AddJobScreen() {
       });
       const data = await response.json();
       if (data.suggestion) {
+        animateTransition();
         setPricingSuggestion(data.suggestion);
-        setShowPricingAssistant(true);
       }
     } catch (error) {
       console.error("Pricing assistant error:", error);
@@ -290,16 +375,21 @@ export default function AddJobScreen() {
     }
   };
 
-  const applyPricingSuggestion = () => {
+  const applyPricingSuggestion = useCallback(() => {
     if (pricingSuggestion) {
       setEstimatedPrice(pricingSuggestion.suggestedPrice.toString());
       setPriceManuallyEdited(true);
-      setShowPricingAssistant(false);
+      animateTransition();
+      setPricingSuggestion(null);
     }
-  };
+  }, [pricingSuggestion]);
 
   const formatDate = (date: Date) =>
-    date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    date.toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
 
   const formatTime = (time: string) => {
     const [hours, minutes] = time.split(":");
@@ -309,326 +399,971 @@ export default function AddJobScreen() {
     return `${displayHour}:${minutes} ${ampm}`;
   };
 
-  const canSave = !!selectedClientId && !!serviceName.trim() && !createJobMutation.isPending;
+  const canSave =
+    !!selectedClientId &&
+    !!serviceName.trim() &&
+    !createJobMutation.isPending;
+
+  // ==== Reusable section card ====
+  const renderSection = (
+    title: string,
+    children: React.ReactNode,
+    rightAccessory?: React.ReactNode,
+  ) => (
+    <View
+      style={[
+        styles.section,
+        {
+          backgroundColor: theme.cardBackground,
+          borderColor: theme.borderLight,
+        },
+        Shadows.sm,
+      ]}
+    >
+      <View style={styles.sectionHeaderRow}>
+        <ThemedText style={styles.sectionTitle}>{title}</ThemedText>
+        {rightAccessory}
+      </View>
+      {children}
+    </View>
+  );
 
   return (
     <ThemedView style={styles.container}>
       <KeyboardAwareScrollViewCompat
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,
-          paddingBottom: insets.bottom + Spacing.xl,
+          paddingBottom: insets.bottom + Spacing["3xl"],
           paddingHorizontal: Spacing.screenPadding,
         }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Client */}
-        <GlassCard style={styles.section}>
-          <FormSectionHeader icon="users" title="Client" />
-          <Pressable
-            style={[styles.selectorRow, { backgroundColor: theme.backgroundSecondary }]}
-            onPress={() => setShowClientPicker(true)}
-            testID="selector-client"
-          >
-            {selectedClient ? (
-              <>
-                <View style={[styles.clientAvatar, { backgroundColor: Colors.accent }]}>
+        {/* ============ 1. CLIENT ============ */}
+        {renderSection(
+          "Client",
+          <>
+            {selectedClient && !clientExpanded ? (
+              <Pressable
+                style={[
+                  styles.identityRow,
+                  { backgroundColor: theme.backgroundSecondary },
+                ]}
+                onPress={() => {
+                  animateTransition();
+                  setClientExpanded(true);
+                }}
+                testID="selected-client-card"
+              >
+                <View
+                  style={[styles.avatar, { backgroundColor: Colors.accent }]}
+                >
                   <ThemedText style={styles.avatarText}>
-                    {selectedClient.firstName[0]}{selectedClient.lastName[0]}
+                    {selectedClient.firstName[0]}
+                    {selectedClient.lastName[0]}
                   </ThemedText>
                 </View>
-                <View style={styles.selectorBody}>
-                  <ThemedText style={styles.selectorValue}>
+                <View style={styles.identityBody}>
+                  <ThemedText style={styles.identityName}>
                     {selectedClient.firstName} {selectedClient.lastName}
                   </ThemedText>
-                  {selectedClient.address ? (
-                    <ThemedText style={[styles.selectorSub, { color: theme.textTertiary }]}>
-                      {selectedClient.address}
-                    </ThemedText>
-                  ) : null}
-                </View>
-              </>
-            ) : (
-              <>
-                <View style={[styles.clientAvatar, { backgroundColor: theme.backgroundTertiary }]}>
-                  <Feather name="user" size={16} color={theme.textTertiary} />
-                </View>
-                <ThemedText style={[styles.selectorPlaceholder, { color: theme.textTertiary }]}>
-                  Select a client
-                </ThemedText>
-              </>
-            )}
-            <Feather name="chevron-down" size={18} color={Colors.accent} />
-          </Pressable>
-        </GlassCard>
-
-        {/* Service */}
-        <GlassCard style={styles.section}>
-          <FormSectionHeader icon="tool" title="Service" />
-
-          {/* Service selector trigger */}
-          <Pressable
-            style={[styles.selectorRow, { backgroundColor: theme.backgroundSecondary }]}
-            onPress={() => setShowServicePicker(true)}
-            testID="selector-service"
-          >
-            <View style={[styles.serviceIconWrap, { backgroundColor: Colors.accentLight }]}>
-              <Feather name="tool" size={14} color={Colors.accent} />
-            </View>
-            <ThemedText
-              style={[
-                styles.selectorBody,
-                serviceName
-                  ? styles.selectorValue
-                  : [styles.selectorPlaceholder, { color: theme.textTertiary }],
-              ]}
-            >
-              {serviceName || "Select a service"}
-            </ThemedText>
-            <Feather name="chevron-down" size={18} color={Colors.accent} />
-          </Pressable>
-
-          {/* Selected service preview card */}
-          {selectedService ? (
-            <View style={[styles.servicePreview, { borderColor: Colors.accent, backgroundColor: Colors.accentLight }]}>
-              <View style={styles.servicePreviewRow}>
-                <View style={{ flex: 1 }}>
-                  <ThemedText style={[styles.servicePreviewName, { color: Colors.accent }]}>
-                    {selectedService.name}
-                  </ThemedText>
-                  {selectedService.description ? (
+                  {selectedClient.phone || selectedClient.email ? (
                     <ThemedText
-                      style={[styles.servicePreviewDesc, { color: theme.textSecondary }]}
-                      numberOfLines={2}
+                      style={[
+                        styles.identitySub,
+                        { color: theme.textTertiary },
+                      ]}
+                      numberOfLines={1}
                     >
-                      {selectedService.description}
+                      {selectedClient.phone || selectedClient.email}
                     </ThemedText>
                   ) : null}
-                  <View style={styles.serviceTagRow}>
-                    <View style={[styles.serviceTag, { backgroundColor: Colors.accent + "22" }]}>
-                      <ThemedText style={[styles.serviceTagText, { color: Colors.accent }]}>
-                        {selectedService.category}
-                      </ThemedText>
-                    </View>
-                    <View style={[styles.serviceTag, { backgroundColor: Colors.accent + "22" }]}>
-                      <ThemedText style={[styles.serviceTagText, { color: Colors.accent }]}>
-                        {selectedService.pricingType === "fixed" ? "Flat Rate"
-                          : selectedService.pricingType === "variable" ? "Variable"
-                          : selectedService.pricingType === "service_call" ? "Service Call"
-                          : "By Quote"}
-                      </ThemedText>
-                    </View>
-                  </View>
                 </View>
-                <View style={[styles.priceBadge, { backgroundColor: Colors.accent }]}>
-                  <ThemedText style={styles.priceBadgeText}>
-                    {getPriceDisplay(selectedService)}
-                  </ThemedText>
+                <ThemedText
+                  style={[styles.changeText, { color: Colors.accent }]}
+                >
+                  Change
+                </ThemedText>
+              </Pressable>
+            ) : (
+              <View>
+                <View
+                  style={[
+                    styles.searchBar,
+                    { backgroundColor: theme.backgroundSecondary },
+                  ]}
+                >
+                  <Feather
+                    name="search"
+                    size={15}
+                    color={theme.textTertiary}
+                  />
+                  <TextInput
+                    style={[styles.searchInput, { color: theme.text }]}
+                    placeholder="Search clients"
+                    placeholderTextColor={theme.textTertiary}
+                    value={clientSearch}
+                    onChangeText={setClientSearch}
+                    autoCorrect={false}
+                  />
                 </View>
-              </View>
-              {selectedService.duration ? (
-                <View style={styles.durationRow}>
-                  <Feather name="clock" size={11} color={Colors.accent} />
-                  <ThemedText style={[styles.durationText, { color: Colors.accent }]}>
-                    {getDurationLabel(selectedService.duration)} est.
-                  </ThemedText>
-                </View>
-              ) : null}
-            </View>
-          ) : null}
 
-          {/* Add-ons panel */}
-          {availableAddOns.length > 0 ? (
-            <>
-              <View style={[styles.divider, { backgroundColor: theme.separator }]} />
-              <ThemedText style={[styles.addOnsLabel, { color: theme.textSecondary }]}>Add-ons</ThemedText>
-              {availableAddOns.map((addon) => {
-                const isSelected = selectedAddOns.some((a) => a.name === addon.name);
-                return (
+                <View style={styles.inlineList}>
+                  {filteredClients.slice(0, 6).map((client) => {
+                    const isActive = selectedClientId === client.id;
+                    return (
+                      <Pressable
+                        key={client.id}
+                        style={[
+                          styles.listRow,
+                          isActive && {
+                            backgroundColor: Colors.accentLight,
+                          },
+                        ]}
+                        onPress={() => handleSelectClient(client.id)}
+                        testID={`client-row-${client.id}`}
+                      >
+                        <View
+                          style={[
+                            styles.avatarSmall,
+                            { backgroundColor: Colors.accent },
+                          ]}
+                        >
+                          <ThemedText style={styles.avatarTextSmall}>
+                            {client.firstName[0]}
+                            {client.lastName[0]}
+                          </ThemedText>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <ThemedText
+                            style={[
+                              styles.listRowTitle,
+                              isActive && { color: Colors.accent },
+                            ]}
+                          >
+                            {client.firstName} {client.lastName}
+                          </ThemedText>
+                          {client.phone ? (
+                            <ThemedText
+                              style={[
+                                styles.listRowSub,
+                                { color: theme.textTertiary },
+                              ]}
+                            >
+                              {client.phone}
+                            </ThemedText>
+                          ) : null}
+                        </View>
+                        {isActive ? (
+                          <Feather
+                            name="check"
+                            size={16}
+                            color={Colors.accent}
+                          />
+                        ) : null}
+                      </Pressable>
+                    );
+                  })}
+
+                  {filteredClients.length === 0 && !showNewClientForm ? (
+                    <ThemedText
+                      style={[
+                        styles.emptyHint,
+                        { color: theme.textTertiary },
+                      ]}
+                    >
+                      No matching clients
+                    </ThemedText>
+                  ) : null}
+                </View>
+
+                {!showNewClientForm ? (
                   <Pressable
-                    key={addon.name}
-                    style={[
-                      styles.addonRow,
-                      { borderColor: theme.separator },
-                      isSelected && { backgroundColor: Colors.accentLight },
-                    ]}
-                    onPress={() => handleToggleAddOn(addon)}
-                    testID={`addon-${addon.name.replace(/\s+/g, "-").toLowerCase()}`}
+                    style={styles.inlineActionRow}
+                    onPress={() => {
+                      animateTransition();
+                      setShowNewClientForm(true);
+                    }}
+                    testID="button-add-new-client"
                   >
-                    <View style={[styles.addonCheck, { borderColor: isSelected ? Colors.accent : theme.textTertiary }, isSelected && { backgroundColor: Colors.accent }]}>
-                      {isSelected ? <Feather name="check" size={11} color="#FFFFFF" /> : null}
+                    <View
+                      style={[
+                        styles.plusBadge,
+                        { backgroundColor: Colors.accentLight },
+                      ]}
+                    >
+                      <Feather name="plus" size={13} color={Colors.accent} />
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <ThemedText style={[styles.addonName, isSelected && { color: Colors.accent }]}>
-                        {addon.name}
-                      </ThemedText>
-                      {addon.description ? (
-                        <ThemedText style={[styles.addonDesc, { color: theme.textTertiary }]} numberOfLines={1}>
-                          {addon.description}
-                        </ThemedText>
-                      ) : null}
-                    </View>
-                    <ThemedText style={[styles.addonPrice, { color: Colors.accent }]}>
-                      +${(Number(addon.price) || 0).toFixed(0)}
+                    <ThemedText
+                      style={[styles.inlineActionText, { color: Colors.accent }]}
+                    >
+                      Add new client
                     </ThemedText>
                   </Pressable>
-                );
-              })}
-            </>
-          ) : null}
+                ) : (
+                  <View style={styles.inlineForm}>
+                    <View style={styles.row2}>
+                      <View style={{ flex: 1 }}>
+                        <TextField
+                          value={newClientFirstName}
+                          onChangeText={setNewClientFirstName}
+                          placeholder="First name"
+                          autoCapitalize="words"
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <TextField
+                          value={newClientLastName}
+                          onChangeText={setNewClientLastName}
+                          placeholder="Last name"
+                          autoCapitalize="words"
+                        />
+                      </View>
+                    </View>
+                    <TextField
+                      value={newClientPhone}
+                      onChangeText={setNewClientPhone}
+                      placeholder="Phone (required)"
+                      keyboardType="phone-pad"
+                    />
+                    <TextField
+                      value={newClientEmail}
+                      onChangeText={setNewClientEmail}
+                      placeholder="Email (recommended)"
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                    />
+                    <View style={styles.inlineFormButtons}>
+                      <Pressable
+                        onPress={() => {
+                          animateTransition();
+                          setShowNewClientForm(false);
+                        }}
+                        style={styles.textButton}
+                      >
+                        <ThemedText
+                          style={[
+                            styles.textButtonText,
+                            { color: theme.textSecondary },
+                          ]}
+                        >
+                          Cancel
+                        </ThemedText>
+                      </Pressable>
+                      <PrimaryButton
+                        onPress={handleCreateClient}
+                        loading={createClientMutation.isPending}
+                        disabled={
+                          !newClientFirstName.trim() ||
+                          !newClientLastName.trim() ||
+                          createClientMutation.isPending
+                        }
+                        style={styles.smallPrimary}
+                        testID="button-create-client"
+                      >
+                        Add Client
+                      </PrimaryButton>
+                    </View>
+                  </View>
+                )}
+              </View>
+            )}
+          </>,
+        )}
 
-          <View style={[styles.divider, { backgroundColor: theme.separator }]} />
-
-          {/* Service description — editable, pre-filled from service catalog */}
-          {serviceDescription.length > 0 ? (
-            <>
-              <View style={styles.fieldLabelRow}>
-                <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
-                  Service Description
-                </ThemedText>
-                <View style={[styles.emailBadge, { backgroundColor: Colors.accentLight }]}>
-                  <Feather name="mail" size={10} color={Colors.accent} />
-                  <ThemedText style={[styles.emailBadgeText, { color: Colors.accent }]}>
-                    In client email
+        {/* ============ 2. SERVICE ============ */}
+        {renderSection(
+          "Service",
+          <>
+            {selectedService && !serviceExpanded ? (
+              <Pressable
+                style={[
+                  styles.servicePreview,
+                  { backgroundColor: theme.backgroundSecondary },
+                ]}
+                onPress={() => {
+                  animateTransition();
+                  setServiceExpanded(true);
+                }}
+                testID="selected-service-card"
+              >
+                <View style={styles.servicePreviewTop}>
+                  <View style={{ flex: 1 }}>
+                    <ThemedText style={styles.servicePreviewName}>
+                      {selectedService.name}
+                    </ThemedText>
+                    <View style={styles.servicePreviewMeta}>
+                      <View
+                        style={[
+                          styles.metaPill,
+                          { backgroundColor: Colors.accentLight },
+                        ]}
+                      >
+                        <ThemedText
+                          style={[styles.metaPillText, { color: Colors.accent }]}
+                        >
+                          {selectedService.category}
+                        </ThemedText>
+                      </View>
+                      <View
+                        style={[
+                          styles.metaPill,
+                          {
+                            backgroundColor: theme.backgroundTertiary,
+                          },
+                        ]}
+                      >
+                        <ThemedText
+                          style={[
+                            styles.metaPillText,
+                            { color: theme.textSecondary },
+                          ]}
+                        >
+                          {getPricingTypeLabel(selectedService.pricingType)}
+                        </ThemedText>
+                      </View>
+                      {selectedService.duration ? (
+                        <View
+                          style={[
+                            styles.metaPill,
+                            {
+                              backgroundColor: theme.backgroundTertiary,
+                            },
+                          ]}
+                        >
+                          <ThemedText
+                            style={[
+                              styles.metaPillText,
+                              { color: theme.textSecondary },
+                            ]}
+                          >
+                            {getDurationLabel(selectedService.duration)}
+                          </ThemedText>
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
+                  <ThemedText
+                    style={[styles.changeText, { color: Colors.accent }]}
+                  >
+                    Change
                   </ThemedText>
                 </View>
+                {selectedService.description ? (
+                  <ThemedText
+                    style={[
+                      styles.servicePreviewDesc,
+                      { color: theme.textSecondary },
+                    ]}
+                    numberOfLines={2}
+                  >
+                    {selectedService.description}
+                  </ThemedText>
+                ) : null}
+              </Pressable>
+            ) : servicesLoading ? (
+              <View style={styles.stateBlock}>
+                <ActivityIndicator color={Colors.accent} />
+                <ThemedText
+                  style={[styles.stateText, { color: theme.textSecondary }]}
+                >
+                  Loading services
+                </ThemedText>
               </View>
-              <TextField
-                value={serviceDescription}
-                onChangeText={setServiceDescription}
-                placeholder="Service description for the client"
-                multiline
-                numberOfLines={2}
-                leftIcon="info"
-              />
-              <View style={[styles.divider, { backgroundColor: theme.separator }]} />
-            </>
-          ) : null}
+            ) : servicesError ? (
+              <View style={styles.stateBlock}>
+                <ThemedText style={styles.stateTitle}>
+                  Couldn't load services
+                </ThemedText>
+                <ThemedText
+                  style={[styles.stateText, { color: theme.textSecondary }]}
+                >
+                  Check your connection and try again.
+                </ThemedText>
+              </View>
+            ) : providerServices.length === 0 ? (
+              <View style={styles.stateBlock}>
+                <ThemedText style={styles.stateTitle}>
+                  No services yet
+                </ThemedText>
+                <ThemedText
+                  style={[styles.stateText, { color: theme.textSecondary }]}
+                >
+                  Create your service catalog to book jobs faster and include
+                  pricing in client emails.
+                </ThemedText>
+                <PrimaryButton
+                  onPress={() => navigation.navigate("Services")}
+                  style={styles.stateAction}
+                  testID="button-create-service"
+                >
+                  Create a Service
+                </PrimaryButton>
+              </View>
+            ) : (
+              <View style={styles.inlineList}>
+                {providerServices.map((svc) => {
+                  const isActive = selectedService?.id === svc.id;
+                  return (
+                    <Pressable
+                      key={svc.id}
+                      style={[
+                        styles.serviceCard,
+                        {
+                          backgroundColor: theme.backgroundSecondary,
+                          borderColor: isActive
+                            ? Colors.accent
+                            : "transparent",
+                        },
+                      ]}
+                      onPress={() => handleSelectService(svc)}
+                      testID={`service-card-${svc.id}`}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <ThemedText style={styles.serviceCardName}>
+                          {svc.name}
+                        </ThemedText>
+                        <View style={styles.serviceCardMeta}>
+                          <ThemedText
+                            style={[
+                              styles.serviceCardPrice,
+                              { color: Colors.accent },
+                            ]}
+                          >
+                            {getPriceDisplay(svc)}
+                          </ThemedText>
+                          {svc.duration ? (
+                            <ThemedText
+                              style={[
+                                styles.serviceCardDuration,
+                                { color: theme.textTertiary },
+                              ]}
+                            >
+                              {"  ·  "}
+                              {getDurationLabel(svc.duration)}
+                            </ThemedText>
+                          ) : null}
+                        </View>
+                      </View>
+                      {isActive ? (
+                        <Feather
+                          name="check"
+                          size={16}
+                          color={Colors.accent}
+                        />
+                      ) : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+          </>,
+        )}
 
-          <View style={styles.fieldLabelRow}>
-            <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
-              Client's Issue
+        {/* ============ 3. JOB DETAILS ============ */}
+        {renderSection(
+          "Job Details",
+          <>
+            <ThemedText
+              style={[styles.fieldLabel, { color: theme.textSecondary }]}
+            >
+              What's going on?
             </ThemedText>
-            <View style={[styles.emailBadge, { backgroundColor: Colors.accentLight }]}>
-              <Feather name="mail" size={10} color={Colors.accent} />
-              <ThemedText style={[styles.emailBadgeText, { color: Colors.accent }]}>
-                In client email
-              </ThemedText>
+            <TextField
+              value={description}
+              onChangeText={setDescription}
+              placeholder="Describe the issue or scope of work"
+              multiline
+              numberOfLines={4}
+              style={styles.bigTextarea}
+            />
+
+            {serviceDescription.length > 0 ? (
+              <View style={{ marginTop: Spacing.lg }}>
+                <View style={styles.fieldLabelRow}>
+                  <ThemedText
+                    style={[styles.fieldLabel, { color: theme.textSecondary }]}
+                  >
+                    Service Description
+                  </ThemedText>
+                  <View
+                    style={[
+                      styles.subtleBadge,
+                      { backgroundColor: theme.backgroundTertiary },
+                    ]}
+                  >
+                    <ThemedText
+                      style={[
+                        styles.subtleBadgeText,
+                        { color: theme.textSecondary },
+                      ]}
+                    >
+                      In client email
+                    </ThemedText>
+                  </View>
+                </View>
+                <TextField
+                  value={serviceDescription}
+                  onChangeText={setServiceDescription}
+                  placeholder="Service description shown to client"
+                  multiline
+                  numberOfLines={2}
+                />
+              </View>
+            ) : null}
+          </>,
+        )}
+
+        {/* ============ 4. SCHEDULE & PRICING ============ */}
+        {renderSection(
+          "Schedule & Pricing",
+          <>
+            <View style={styles.scheduleRow}>
+              <Pressable
+                style={[
+                  styles.schedulePill,
+                  { backgroundColor: theme.backgroundSecondary },
+                ]}
+                onPress={() => setShowDatePicker(true)}
+                testID="picker-date"
+              >
+                <ThemedText
+                  style={[styles.schedulePillLabel, { color: theme.textTertiary }]}
+                >
+                  Date
+                </ThemedText>
+                <ThemedText style={styles.schedulePillValue}>
+                  {formatDate(scheduledDate)}
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.schedulePill,
+                  { backgroundColor: theme.backgroundSecondary },
+                ]}
+                onPress={() => setShowTimePicker(true)}
+                testID="picker-time"
+              >
+                <ThemedText
+                  style={[styles.schedulePillLabel, { color: theme.textTertiary }]}
+                >
+                  Time
+                </ThemedText>
+                <ThemedText style={styles.schedulePillValue}>
+                  {formatTime(scheduledTime)}
+                </ThemedText>
+              </Pressable>
             </View>
-          </View>
-          <TextField
-            value={description}
-            onChangeText={setDescription}
-            placeholder="What did the client describe? (e.g. AC not cooling, leaking faucet)"
-            multiline
-            numberOfLines={3}
-            leftIcon="align-left"
-          />
-        </GlassCard>
 
-        {/* Schedule */}
-        <GlassCard style={styles.section}>
-          <FormSectionHeader icon="calendar" title="Schedule" />
-          <View style={styles.pillRow}>
-            <Pressable
-              style={[styles.pill, { backgroundColor: theme.backgroundSecondary }]}
-              onPress={() => setShowDatePicker(true)}
-              testID="picker-date"
+            {/* Pricing card */}
+            <View
+              style={[
+                styles.pricingCard,
+                { backgroundColor: theme.backgroundSecondary },
+              ]}
             >
-              <Feather name="calendar" size={15} color={Colors.accent} />
-              <ThemedText style={styles.pillText}>{formatDate(scheduledDate)}</ThemedText>
-            </Pressable>
-            <Pressable
-              style={[styles.pill, { backgroundColor: theme.backgroundSecondary }]}
-              onPress={() => setShowTimePicker(true)}
-              testID="picker-time"
-            >
-              <Feather name="clock" size={15} color={Colors.accent} />
-              <ThemedText style={styles.pillText}>{formatTime(scheduledTime)}</ThemedText>
-            </Pressable>
-          </View>
-        </GlassCard>
+              <View style={styles.pricingRow}>
+                <ThemedText
+                  style={[styles.pricingLabel, { color: theme.textSecondary }]}
+                >
+                  Base
+                </ThemedText>
+                <ThemedText style={styles.pricingValue}>
+                  ${baseServicePriceNum.toFixed(2)}
+                </ThemedText>
+              </View>
 
-        {/* Pricing */}
-        <GlassCard style={styles.section}>
-          <FormSectionHeader icon="dollar-sign" title="Pricing">
+              {availableAddOns.length > 0 ? (
+                <View
+                  style={[
+                    styles.addonsBlock,
+                    { borderTopColor: theme.separator },
+                  ]}
+                >
+                  {availableAddOns.map((addon) => {
+                    const isSelected = selectedAddOns.some(
+                      (a) => a.name === addon.name,
+                    );
+                    return (
+                      <Pressable
+                        key={addon.name}
+                        style={styles.addonRow}
+                        onPress={() => handleToggleAddOn(addon)}
+                        testID={`addon-${addon.name.replace(/\s+/g, "-").toLowerCase()}`}
+                      >
+                        <View
+                          style={[
+                            styles.checkbox,
+                            {
+                              borderColor: isSelected
+                                ? Colors.accent
+                                : theme.textTertiary,
+                              backgroundColor: isSelected
+                                ? Colors.accent
+                                : "transparent",
+                            },
+                          ]}
+                        >
+                          {isSelected ? (
+                            <Feather name="check" size={11} color="#FFFFFF" />
+                          ) : null}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <ThemedText
+                            style={[
+                              styles.addonName,
+                              isSelected && { color: Colors.accent },
+                            ]}
+                          >
+                            {addon.name}
+                          </ThemedText>
+                          {addon.description ? (
+                            <ThemedText
+                              style={[
+                                styles.addonDesc,
+                                { color: theme.textTertiary },
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {addon.description}
+                            </ThemedText>
+                          ) : null}
+                        </View>
+                        <ThemedText
+                          style={[
+                            styles.addonPrice,
+                            {
+                              color: isSelected
+                                ? Colors.accent
+                                : theme.textSecondary,
+                            },
+                          ]}
+                        >
+                          +${(Number(addon.price) || 0).toFixed(0)}
+                        </ThemedText>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
+
+              <View
+                style={[
+                  styles.totalRow,
+                  { borderTopColor: theme.separator },
+                ]}
+              >
+                <ThemedText style={styles.totalLabel}>Total</ThemedText>
+                <View style={styles.totalRight}>
+                  <ThemedText style={styles.totalCurrency}>$</ThemedText>
+                  <TextInput
+                    value={
+                      estimatedPrice ? estimatedPrice.replace(/^\$/, "") : ""
+                    }
+                    onChangeText={(val) => {
+                      setEstimatedPrice(val);
+                      setPriceManuallyEdited(true);
+                    }}
+                    placeholder="0.00"
+                    placeholderTextColor={theme.textTertiary}
+                    keyboardType="decimal-pad"
+                    style={[styles.totalInput, { color: Colors.accent }]}
+                    selectionColor={Colors.accent}
+                    testID="input-price"
+                  />
+                </View>
+              </View>
+            </View>
+
+            {/* AI suggest text-button */}
             <Pressable
-              style={[styles.aiChip, (pricingLoading || !serviceName.trim()) && styles.aiChipDisabled]}
               onPress={handleGetPricingSuggestion}
               disabled={pricingLoading || !serviceName.trim()}
+              style={styles.aiTextButton}
+              hitSlop={6}
               testID="button-ai-suggest"
             >
               {pricingLoading ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+                <ActivityIndicator size="small" color={Colors.accent} />
               ) : (
-                <>
-                  <Feather name="zap" size={12} color="#FFFFFF" />
-                  <ThemedText style={styles.aiChipText}>AI Suggest</ThemedText>
-                </>
+                <Feather name="zap" size={12} color={Colors.accent} />
               )}
+              <ThemedText
+                style={[
+                  styles.aiTextButtonText,
+                  { color: Colors.accent },
+                  (pricingLoading || !serviceName.trim()) && { opacity: 0.4 },
+                ]}
+              >
+                AI suggest a price
+              </ThemedText>
             </Pressable>
-          </FormSectionHeader>
 
-          <TextField
-            value={estimatedPrice}
-            onChangeText={(val) => {
-              setEstimatedPrice(val);
-              setPriceManuallyEdited(true);
-            }}
-            placeholder="0.00"
-            keyboardType="decimal-pad"
-            leftIcon="dollar-sign"
-            testID="input-price"
-          />
-
-          {selectedAddOns.length > 0 ? (
-            <View style={[styles.addOnsTotal, { borderTopColor: theme.separator }]}>
-              {selectedAddOns.map((a) => (
-                <View key={a.name} style={styles.addOnsTotalRow}>
-                  <ThemedText style={[styles.addOnsTotalLabel, { color: theme.textSecondary }]}>
-                    + {a.name}
+            {pricingSuggestion ? (
+              <View
+                style={[
+                  styles.suggestionCard,
+                  {
+                    backgroundColor: Colors.accentLight,
+                    borderColor: Colors.accent + "33",
+                  },
+                ]}
+              >
+                <View style={styles.suggestionHeader}>
+                  <ThemedText style={styles.suggestionLabel}>
+                    Suggested
                   </ThemedText>
-                  <ThemedText style={[styles.addOnsTotalPrice, { color: Colors.accent }]}>
-                    ${(Number(a.price) || 0).toFixed(0)}
+                  <ThemedText
+                    style={[
+                      styles.suggestionPrice,
+                      { color: Colors.accent },
+                    ]}
+                  >
+                    ${pricingSuggestion.suggestedPrice.toFixed(0)}
                   </ThemedText>
                 </View>
-              ))}
+                <ThemedText
+                  style={[
+                    styles.suggestionRange,
+                    { color: theme.textSecondary },
+                  ]}
+                >
+                  Range ${pricingSuggestion.minPrice.toFixed(0)} – $
+                  {pricingSuggestion.maxPrice.toFixed(0)}
+                </ThemedText>
+                {pricingSuggestion.reasoning ? (
+                  <ThemedText
+                    style={[
+                      styles.suggestionReason,
+                      { color: theme.textSecondary },
+                    ]}
+                  >
+                    {pricingSuggestion.reasoning}
+                  </ThemedText>
+                ) : null}
+                <View style={styles.suggestionActions}>
+                  <Pressable
+                    onPress={() => {
+                      animateTransition();
+                      setPricingSuggestion(null);
+                    }}
+                    style={styles.textButton}
+                  >
+                    <ThemedText
+                      style={[
+                        styles.textButtonText,
+                        { color: theme.textSecondary },
+                      ]}
+                    >
+                      Dismiss
+                    </ThemedText>
+                  </Pressable>
+                  <Pressable
+                    onPress={applyPricingSuggestion}
+                    style={[
+                      styles.useSuggestionBtn,
+                      { backgroundColor: Colors.accent },
+                    ]}
+                    testID="button-apply-price"
+                  >
+                    <ThemedText style={styles.useSuggestionText}>
+                      Use this price
+                    </ThemedText>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
+          </>,
+        )}
+
+        {/* ============ 5. REVIEW & CONFIRM ============ */}
+        {renderSection(
+          "Review",
+          <>
+            <View
+              style={[
+                styles.summaryCard,
+                {
+                  backgroundColor: theme.backgroundSecondary,
+                  borderColor: theme.borderLight,
+                },
+              ]}
+            >
+              <ThemedText
+                style={[
+                  styles.summaryEyebrow,
+                  { color: theme.textTertiary },
+                ]}
+              >
+                Email preview
+              </ThemedText>
+
+              <ThemedText style={styles.summaryHeadline}>
+                {selectedService?.name || serviceName || "—"}
+              </ThemedText>
+              <ThemedText
+                style={[styles.summaryDate, { color: theme.textSecondary }]}
+              >
+                {formatDate(scheduledDate)} · {formatTime(scheduledTime)}
+              </ThemedText>
+
+              <View
+                style={[
+                  styles.summaryDivider,
+                  { backgroundColor: theme.separator },
+                ]}
+              />
+
+              <View style={styles.summaryRow}>
+                <ThemedText
+                  style={[
+                    styles.summaryRowLabel,
+                    { color: theme.textTertiary },
+                  ]}
+                >
+                  Client
+                </ThemedText>
+                <ThemedText style={styles.summaryRowValue}>
+                  {selectedClient
+                    ? `${selectedClient.firstName} ${selectedClient.lastName}`
+                    : "—"}
+                </ThemedText>
+              </View>
+
+              {selectedService ? (
+                <View style={styles.summaryRow}>
+                  <ThemedText
+                    style={[
+                      styles.summaryRowLabel,
+                      { color: theme.textTertiary },
+                    ]}
+                  >
+                    Pricing
+                  </ThemedText>
+                  <ThemedText style={styles.summaryRowValue}>
+                    {getPricingTypeLabel(selectedService.pricingType)}
+                  </ThemedText>
+                </View>
+              ) : null}
+
+              {description.trim() ? (
+                <View style={styles.summaryBlock}>
+                  <ThemedText
+                    style={[
+                      styles.summaryBlockLabel,
+                      { color: theme.textTertiary },
+                    ]}
+                  >
+                    What's going on
+                  </ThemedText>
+                  <ThemedText style={styles.summaryBlockText}>
+                    {description.trim()}
+                  </ThemedText>
+                </View>
+              ) : null}
+
+              {selectedAddOns.length > 0 ? (
+                <View style={styles.summaryBlock}>
+                  <ThemedText
+                    style={[
+                      styles.summaryBlockLabel,
+                      { color: theme.textTertiary },
+                    ]}
+                  >
+                    Add-ons
+                  </ThemedText>
+                  {selectedAddOns.map((a) => (
+                    <View key={a.name} style={styles.summaryAddonRow}>
+                      <ThemedText style={styles.summaryBlockText}>
+                        {a.name}
+                      </ThemedText>
+                      <ThemedText
+                        style={[
+                          styles.summaryBlockText,
+                          { color: theme.textSecondary },
+                        ]}
+                      >
+                        +${(Number(a.price) || 0).toFixed(0)}
+                      </ThemedText>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
+              {serviceDescription.trim() ? (
+                <View style={styles.summaryBlock}>
+                  <ThemedText
+                    style={[
+                      styles.summaryBlockLabel,
+                      { color: theme.textTertiary },
+                    ]}
+                  >
+                    Service description
+                  </ThemedText>
+                  <ThemedText
+                    style={[
+                      styles.summaryBlockText,
+                      { color: theme.textSecondary },
+                    ]}
+                    numberOfLines={3}
+                  >
+                    {serviceDescription.trim()}
+                  </ThemedText>
+                </View>
+              ) : null}
+
+              <View
+                style={[
+                  styles.summaryDivider,
+                  { backgroundColor: theme.separator },
+                ]}
+              />
+
+              <View style={styles.summaryTotalRow}>
+                <ThemedText style={styles.summaryTotalLabel}>Total</ThemedText>
+                <ThemedText
+                  style={[
+                    styles.summaryTotalValue,
+                    { color: Colors.accent },
+                  ]}
+                >
+                  ${totalPriceNum.toFixed(2)}
+                </ThemedText>
+              </View>
             </View>
-          ) : null}
-        </GlassCard>
 
-        {/* Notes */}
-        <GlassCard style={styles.section}>
-          <FormSectionHeader icon="file-text" title="Notes" iconBg={undefined} />
-          <TextField
-            value={notes}
-            onChangeText={setNotes}
-            placeholder="Any additional notes"
-            multiline
-            numberOfLines={3}
-          />
-        </GlassCard>
+            {createJobMutation.isError ? (
+              <View
+                style={[
+                  styles.errorBanner,
+                  { backgroundColor: Colors.errorLight },
+                ]}
+              >
+                <Feather name="alert-circle" size={14} color={Colors.error} />
+                <ThemedText
+                  style={[styles.errorText, { color: Colors.error }]}
+                >
+                  Couldn't create the job. Please try again.
+                </ThemedText>
+              </View>
+            ) : null}
 
-        {createJobMutation.isError ? (
-          <View style={[styles.errorBanner, { backgroundColor: "#fef2f2" }]}>
-            <Feather name="alert-circle" size={14} color="#ef4444" />
-            <ThemedText style={styles.errorText}>Failed to create job. Please try again.</ThemedText>
-          </View>
-        ) : null}
-
-        <View style={styles.buttonRow}>
-          <SecondaryButton onPress={() => navigation.goBack()} style={styles.btnFlex}>
-            Cancel
-          </SecondaryButton>
-          <PrimaryButton
-            onPress={handleSave}
-            disabled={!canSave}
-            loading={createJobMutation.isPending}
-            style={styles.btnFlex}
-            testID="button-schedule-job"
-          >
-            Schedule Job
-          </PrimaryButton>
-        </View>
+            <PrimaryButton
+              onPress={handleSave}
+              disabled={!canSave}
+              loading={createJobMutation.isPending}
+              style={styles.ctaPrimary}
+              testID="button-schedule-job"
+            >
+              Schedule Job & Notify Client
+            </PrimaryButton>
+            <SecondaryButton
+              onPress={() => navigation.goBack()}
+              style={styles.ctaSecondary}
+            >
+              Cancel
+            </SecondaryButton>
+          </>,
+        )}
       </KeyboardAwareScrollViewCompat>
 
       <NativeDatePickerSheet
@@ -658,531 +1393,411 @@ export default function AddJobScreen() {
         }}
         onCancel={() => setShowTimePicker(false)}
       />
-
-      {/* Service Picker Modal */}
-      <Modal
-        visible={showServicePicker}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowServicePicker(false)}
-      >
-        <Pressable style={styles.modalOverlay} onPress={() => setShowServicePicker(false)}>
-          <View style={[styles.modalSheet, { backgroundColor: theme.backgroundElevated }]}>
-            <View style={styles.modalHandle} />
-            <View style={styles.modalHeader}>
-              <ThemedText style={styles.modalTitle}>Select Service</ThemedText>
-              <Pressable onPress={() => setShowServicePicker(false)} hitSlop={8}>
-                <Feather name="x" size={22} color={theme.textSecondary} />
-              </Pressable>
-            </View>
-
-            <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
-              {servicesLoading ? (
-                <View style={styles.modalEmptyState}>
-                  <ActivityIndicator color={Colors.accent} />
-                  <ThemedText style={[styles.modalEmptyText, { color: theme.textSecondary }]}>
-                    Loading services...
-                  </ThemedText>
-                </View>
-              ) : providerServices.length > 0 ? (
-                providerServices.map((svc) => {
-                  const isActive = selectedService?.id === svc.id;
-                  return (
-                    <Pressable
-                      key={svc.id}
-                      style={[styles.modalItem, isActive && { backgroundColor: Colors.accentLight }]}
-                      onPress={() => handleSelectService(svc)}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <ThemedText style={isActive ? { color: Colors.accent, fontWeight: "600" } : {}}>
-                          {svc.name}
-                        </ThemedText>
-                        {svc.description ? (
-                          <ThemedText
-                            style={[styles.modalItemDesc, { color: theme.textTertiary }]}
-                            numberOfLines={1}
-                          >
-                            {svc.description}
-                          </ThemedText>
-                        ) : null}
-                        <View style={styles.modalItemMeta}>
-                          <ThemedText style={[styles.modalItemPrice, { color: Colors.accent }]}>
-                            {getPriceDisplay(svc)}
-                          </ThemedText>
-                          {svc.duration ? (
-                            <ThemedText style={[styles.modalItemDuration, { color: theme.textTertiary }]}>
-                              · {getDurationLabel(svc.duration)}
-                            </ThemedText>
-                          ) : null}
-                        </View>
-                      </View>
-                      {isActive ? (
-                        <Feather name="check" size={18} color={Colors.accent} />
-                      ) : (
-                        <Feather name="chevron-right" size={16} color={theme.textTertiary} />
-                      )}
-                    </Pressable>
-                  );
-                })
-              ) : servicesError ? (
-                <View style={styles.modalEmptyState}>
-                  <View style={[styles.emptyIconWrap, { backgroundColor: "#fff0f0" }]}>
-                    <Feather name="alert-circle" size={28} color="#dc2626" />
-                  </View>
-                  <ThemedText style={[styles.modalEmptyTitle, { color: theme.text }]}>
-                    Could not load services
-                  </ThemedText>
-                  <ThemedText style={[styles.modalEmptyText, { color: theme.textSecondary }]}>
-                    There was a problem fetching your services. Please check your connection and try again.
-                  </ThemedText>
-                </View>
-              ) : (
-                <View style={styles.modalEmptyState}>
-                  <View style={[styles.emptyIconWrap, { backgroundColor: Colors.accentLight }]}>
-                    <Feather name="briefcase" size={28} color={Colors.accent} />
-                  </View>
-                  <ThemedText style={[styles.modalEmptyTitle, { color: theme.text }]}>
-                    No services yet
-                  </ThemedText>
-                  <ThemedText style={[styles.modalEmptyText, { color: theme.textSecondary }]}>
-                    Create your service catalog to book jobs faster and include pricing details in client emails.
-                  </ThemedText>
-                  <Pressable
-                    style={[styles.goToServicesBtn, { backgroundColor: Colors.accent }]}
-                    onPress={() => {
-                      setShowServicePicker(false);
-                      navigation.navigate("Services");
-                    }}
-                  >
-                    <Feather name="plus" size={15} color="#FFFFFF" />
-                    <ThemedText style={styles.goToServicesBtnText}>Create a Service</ThemedText>
-                  </Pressable>
-                </View>
-              )}
-            </ScrollView>
-          </View>
-        </Pressable>
-      </Modal>
-
-      {/* Client Picker Modal */}
-      <Modal
-        visible={showClientPicker}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowClientPicker(false)}
-      >
-        <Pressable style={styles.modalOverlay} onPress={() => setShowClientPicker(false)}>
-          <View style={[styles.modalSheet, { backgroundColor: theme.backgroundElevated }]}>
-            <View style={styles.modalHandle} />
-            <View style={styles.modalHeader}>
-              <ThemedText style={styles.modalTitle}>Select Client</ThemedText>
-              <Pressable onPress={() => setShowClientPicker(false)} hitSlop={8}>
-                <Feather name="x" size={22} color={theme.textSecondary} />
-              </Pressable>
-            </View>
-
-            <View style={[styles.searchBar, { backgroundColor: theme.backgroundSecondary }]}>
-              <Feather name="search" size={16} color={theme.textTertiary} />
-              <TextInput
-                style={[styles.searchInput, { color: theme.text }]}
-                placeholder="Search clients..."
-                placeholderTextColor={theme.textTertiary}
-                value={clientSearch}
-                onChangeText={setClientSearch}
-              />
-            </View>
-
-            <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
-              <Pressable
-                style={[styles.modalItem, styles.addNewItem]}
-                onPress={() => { setShowClientPicker(false); setShowNewClientForm(true); }}
-              >
-                <View style={[styles.addIcon, { backgroundColor: Colors.accent }]}>
-                  <Feather name="plus" size={16} color="#FFFFFF" />
-                </View>
-                <ThemedText style={{ color: Colors.accent, fontWeight: "600" }}>Add New Client</ThemedText>
-              </Pressable>
-
-              {filteredClients.map((client) => (
-                <Pressable
-                  key={client.id}
-                  style={[
-                    styles.modalItem,
-                    selectedClientId === client.id && { backgroundColor: Colors.accentLight },
-                  ]}
-                  onPress={() => { setSelectedClientId(client.id); setShowClientPicker(false); }}
-                >
-                  <View style={[styles.clientAvatar, { backgroundColor: Colors.accent }]}>
-                    <ThemedText style={styles.avatarText}>
-                      {client.firstName[0]}{client.lastName[0]}
-                    </ThemedText>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <ThemedText style={selectedClientId === client.id ? { color: Colors.accent, fontWeight: "600" } : {}}>
-                      {client.firstName} {client.lastName}
-                    </ThemedText>
-                    {client.phone ? (
-                      <ThemedText style={[styles.selectorSub, { color: theme.textTertiary }]}>
-                        {client.phone}
-                      </ThemedText>
-                    ) : null}
-                  </View>
-                  {selectedClientId === client.id ? (
-                    <Feather name="check" size={18} color={Colors.accent} />
-                  ) : null}
-                </Pressable>
-              ))}
-
-              {filteredClients.length === 0 ? (
-                <View style={styles.emptyModal}>
-                  <ThemedText style={{ color: theme.textSecondary }}>No clients found</ThemedText>
-                </View>
-              ) : null}
-            </ScrollView>
-          </View>
-        </Pressable>
-      </Modal>
-
-      {/* New Client Form Modal */}
-      <Modal
-        visible={showNewClientForm}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowNewClientForm(false)}
-      >
-        <Pressable style={styles.modalOverlay} onPress={() => setShowNewClientForm(false)}>
-          <View style={[styles.modalSheet, { backgroundColor: theme.backgroundElevated }]}>
-            <View style={styles.modalHandle} />
-            <View style={styles.modalHeader}>
-              <ThemedText style={styles.modalTitle}>New Client</ThemedText>
-              <Pressable onPress={() => setShowNewClientForm(false)} hitSlop={8}>
-                <Feather name="x" size={22} color={theme.textSecondary} />
-              </Pressable>
-            </View>
-            <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
-              <View style={styles.newClientForm}>
-                <TextField
-                  label="First Name"
-                  value={newClientFirstName}
-                  onChangeText={setNewClientFirstName}
-                  placeholder="John"
-                  leftIcon="user"
-                />
-                <TextField
-                  label="Last Name"
-                  value={newClientLastName}
-                  onChangeText={setNewClientLastName}
-                  placeholder="Smith"
-                  leftIcon="user"
-                />
-                <TextField
-                  label="Phone"
-                  value={newClientPhone}
-                  onChangeText={setNewClientPhone}
-                  placeholder="(555) 000-0000"
-                  keyboardType="phone-pad"
-                  leftIcon="phone"
-                />
-                <TextField
-                  label="Email"
-                  value={newClientEmail}
-                  onChangeText={setNewClientEmail}
-                  placeholder="john@example.com"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  leftIcon="mail"
-                />
-                <PrimaryButton
-                  onPress={handleCreateClient}
-                  loading={createClientMutation.isPending}
-                  disabled={!newClientFirstName.trim() || !newClientLastName.trim() || createClientMutation.isPending}
-                  testID="button-create-client"
-                >
-                  Add Client
-                </PrimaryButton>
-              </View>
-            </ScrollView>
-          </View>
-        </Pressable>
-      </Modal>
-
-      {/* Pricing Assistant Modal */}
-      <Modal
-        visible={showPricingAssistant}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowPricingAssistant(false)}
-      >
-        <Pressable style={styles.modalOverlay} onPress={() => setShowPricingAssistant(false)}>
-          <View style={[styles.pricingModal, { backgroundColor: theme.backgroundElevated }]}>
-            <View style={styles.modalHeader}>
-              <ThemedText style={styles.modalTitle}>AI Price Suggestion</ThemedText>
-              <Pressable onPress={() => setShowPricingAssistant(false)} hitSlop={8}>
-                <Feather name="x" size={22} color={theme.textSecondary} />
-              </Pressable>
-            </View>
-            {pricingSuggestion ? (
-              <>
-                <View style={[styles.pricingMainRow, { backgroundColor: Colors.accentLight }]}>
-                  <ThemedText style={[styles.pricingMainLabel, { color: Colors.accent }]}>Suggested Price</ThemedText>
-                  <ThemedText style={[styles.pricingMainValue, { color: Colors.accent }]}>
-                    ${pricingSuggestion.suggestedPrice.toFixed(0)}
-                  </ThemedText>
-                </View>
-                <View style={styles.pricingRangeRow}>
-                  <ThemedText style={[styles.pricingRangeText, { color: theme.textSecondary }]}>
-                    Range: ${pricingSuggestion.minPrice.toFixed(0)} – ${pricingSuggestion.maxPrice.toFixed(0)}
-                  </ThemedText>
-                </View>
-                <ThemedText style={[styles.pricingReasoning, { color: theme.textSecondary }]}>
-                  {pricingSuggestion.reasoning}
-                </ThemedText>
-                <PrimaryButton onPress={applyPricingSuggestion} testID="button-apply-price">
-                  Use This Price
-                </PrimaryButton>
-              </>
-            ) : null}
-          </View>
-        </Pressable>
-      </Modal>
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  section: { marginBottom: Spacing.md },
 
-  selectorRow: {
+  section: {
+    borderRadius: BorderRadius.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Spacing.lg,
+    marginBottom: Spacing.lg,
+  },
+  sectionHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    minHeight: 52,
-    gap: Spacing.sm,
+    justifyContent: "space-between",
+    marginBottom: Spacing.md,
   },
-  selectorBody: { flex: 1 },
-  selectorValue: { ...Typography.body, fontWeight: "500" },
-  selectorPlaceholder: { ...Typography.body },
-  selectorSub: { ...Typography.caption, marginTop: 2 },
+  sectionTitle: {
+    ...Typography.headline,
+    fontSize: 15,
+    fontWeight: "600",
+    letterSpacing: -0.2,
+  },
 
-  clientAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  // Identity (selected client/service)
+  identityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    paddingVertical: Spacing.sm + 2,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+  },
+  identityBody: { flex: 1 },
+  identityName: { ...Typography.body, fontWeight: "600" },
+  identitySub: { ...Typography.footnote, marginTop: 2 },
+  changeText: { ...Typography.subhead, fontWeight: "600" },
+
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: "center",
     alignItems: "center",
   },
   avatarText: { color: "#FFFFFF", fontWeight: "700", fontSize: 13 },
-
-  serviceIconWrap: {
+  avatarSmall: {
     width: 30,
     height: 30,
-    borderRadius: BorderRadius.sm,
+    borderRadius: 15,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarTextSmall: { color: "#FFFFFF", fontWeight: "700", fontSize: 11 },
+
+  // Search
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    height: 40,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    height: "100%",
+  },
+
+  // Inline list / rows
+  inlineList: { gap: 4 },
+  listRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+  },
+  listRowTitle: { ...Typography.body, fontWeight: "500" },
+  listRowSub: { ...Typography.footnote, marginTop: 1 },
+
+  emptyHint: {
+    ...Typography.footnote,
+    textAlign: "center",
+    paddingVertical: Spacing.md,
+  },
+
+  // Inline action button (e.g. "Add new client")
+  inlineActionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.sm,
+    marginTop: Spacing.xs,
+  },
+  inlineActionText: { ...Typography.subhead, fontWeight: "600" },
+  plusBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
   },
 
-  servicePreview: {
+  // Inline new-client form
+  inlineForm: {
+    gap: Spacing.sm,
     marginTop: Spacing.sm,
+  },
+  row2: { flexDirection: "row", gap: Spacing.sm },
+  inlineFormButtons: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: Spacing.md,
+    marginTop: Spacing.xs,
+  },
+  textButton: { paddingVertical: Spacing.sm, paddingHorizontal: Spacing.sm },
+  textButtonText: { ...Typography.subhead, fontWeight: "500" },
+  smallPrimary: {
+    height: 40,
+    paddingHorizontal: Spacing.lg,
+    minWidth: 120,
+  },
+
+  // Service preview (selected)
+  servicePreview: {
     borderRadius: BorderRadius.md,
-    borderWidth: 1,
     padding: Spacing.md,
   },
-  servicePreviewRow: { flexDirection: "row", alignItems: "flex-start", gap: Spacing.sm },
-  servicePreviewName: { ...Typography.bodyMedium, fontWeight: "600" },
-  servicePreviewDesc: { ...Typography.caption, marginTop: 3, lineHeight: 17 },
-  priceBadge: { borderRadius: BorderRadius.sm, paddingHorizontal: 8, paddingVertical: 4, alignSelf: "flex-start" },
-  priceBadgeText: { color: "#FFFFFF", fontSize: 12, fontWeight: "700" },
-  durationRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6 },
-  durationText: { fontSize: 11, fontWeight: "500" },
+  servicePreviewTop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.md,
+  },
+  servicePreviewName: { ...Typography.body, fontWeight: "600" },
+  servicePreviewMeta: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: Spacing.xs + 2,
+  },
+  metaPill: {
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  metaPillText: { fontSize: 11, fontWeight: "600" },
+  servicePreviewDesc: {
+    ...Typography.footnote,
+    lineHeight: 18,
+    marginTop: Spacing.sm,
+  },
 
-  serviceTagRow: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 5 },
-  serviceTag: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
-  serviceTagText: { fontSize: 10, fontWeight: "600" },
+  // Service card (in picker)
+  serviceCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm + 2,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+  },
+  serviceCardName: { ...Typography.body, fontWeight: "500" },
+  serviceCardMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 2,
+  },
+  serviceCardPrice: { ...Typography.footnote, fontWeight: "700" },
+  serviceCardDuration: { ...Typography.footnote },
 
-  divider: { height: 1, marginVertical: Spacing.md },
+  // Loading / error / empty state blocks
+  stateBlock: {
+    alignItems: "center",
+    paddingVertical: Spacing.lg,
+    paddingHorizontal: Spacing.md,
+    gap: Spacing.sm,
+  },
+  stateTitle: { ...Typography.body, fontWeight: "600" },
+  stateText: {
+    ...Typography.footnote,
+    textAlign: "center",
+    lineHeight: 18,
+  },
+  stateAction: { marginTop: Spacing.sm, alignSelf: "stretch" },
 
-  addOnsLabel: { ...Typography.caption, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: Spacing.sm },
+  // Job Details
+  fieldLabel: {
+    ...Typography.footnote,
+    fontWeight: "600",
+    marginBottom: Spacing.xs,
+  },
+  fieldLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.xs,
+  },
+  bigTextarea: {
+    minHeight: 96,
+    paddingTop: Spacing.sm,
+    textAlignVertical: "top",
+  },
+  subtleBadge: {
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  subtleBadgeText: { fontSize: 10, fontWeight: "600" },
+
+  // Schedule pills
+  scheduleRow: { flexDirection: "row", gap: Spacing.sm },
+  schedulePill: {
+    flex: 1,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm + 2,
+    borderRadius: BorderRadius.md,
+  },
+  schedulePillLabel: {
+    ...Typography.caption,
+    fontWeight: "500",
+    marginBottom: 2,
+  },
+  schedulePillValue: {
+    ...Typography.body,
+    fontWeight: "600",
+  },
+
+  // Pricing card
+  pricingCard: {
+    marginTop: Spacing.md,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm + 2,
+  },
+  pricingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: Spacing.sm,
+  },
+  pricingLabel: { ...Typography.subhead, fontWeight: "500" },
+  pricingValue: { ...Typography.subhead, fontWeight: "600" },
+
+  addonsBlock: { borderTopWidth: 1, paddingTop: Spacing.xs },
   addonRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.sm,
+    gap: Spacing.md,
     paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    marginBottom: 4,
-    borderWidth: 0,
   },
-  addonCheck: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 5,
     borderWidth: 1.5,
     justifyContent: "center",
     alignItems: "center",
   },
-  addonName: { ...Typography.body, fontWeight: "500" },
+  addonName: { ...Typography.subhead, fontWeight: "500" },
   addonDesc: { ...Typography.caption, marginTop: 1 },
-  addonPrice: { fontSize: 13, fontWeight: "600" },
+  addonPrice: { ...Typography.subhead, fontWeight: "600" },
 
-  addOnsTotal: { borderTopWidth: 1, marginTop: Spacing.sm, paddingTop: Spacing.sm },
-  addOnsTotalRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 2 },
-  addOnsTotalLabel: { ...Typography.caption },
-  addOnsTotalPrice: { ...Typography.caption, fontWeight: "600" },
-
-  fieldLabelRow: { flexDirection: "row", alignItems: "center", marginBottom: Spacing.xs },
-  fieldLabel: { ...Typography.caption, fontWeight: "600", flex: 1 },
-  emailBadge: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 3 },
-  emailBadgeText: { fontSize: 10, fontWeight: "600" },
-
-  pillRow: { flexDirection: "row", gap: Spacing.sm },
-  pill: {
-    flex: 1,
+  totalRow: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: Spacing.sm + 2,
+    paddingBottom: 2,
+    borderTopWidth: 1,
+    marginTop: Spacing.xs,
+  },
+  totalLabel: { ...Typography.body, fontWeight: "700" },
+  totalRight: { flexDirection: "row", alignItems: "center" },
+  totalCurrency: {
+    ...Typography.body,
+    fontWeight: "700",
+    color: Colors.accent,
+  },
+  totalInput: {
+    ...Typography.body,
+    fontWeight: "700",
+    minWidth: 70,
+    textAlign: "right",
+    paddingVertical: 0,
+    marginVertical: 0,
+  },
+
+  // AI text-button
+  aiTextButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-end",
+    marginTop: Spacing.sm,
+    paddingVertical: 4,
+  },
+  aiTextButtonText: { ...Typography.footnote, fontWeight: "600" },
+
+  // AI suggestion card
+  suggestionCard: {
+    marginTop: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    padding: Spacing.md,
     gap: Spacing.xs,
+  },
+  suggestionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  suggestionLabel: { ...Typography.footnote, fontWeight: "700" },
+  suggestionPrice: { fontSize: 22, fontWeight: "800" },
+  suggestionRange: { ...Typography.caption, fontWeight: "500" },
+  suggestionReason: { ...Typography.caption, lineHeight: 16 },
+  suggestionActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: Spacing.sm,
+    marginTop: Spacing.xs,
+  },
+  useSuggestionBtn: {
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.sm,
   },
-  pillText: { ...Typography.body, fontWeight: "500" },
+  useSuggestionText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "600",
+  },
 
-  aiChip: {
+  // Summary card (review)
+  summaryCard: {
+    borderRadius: BorderRadius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Spacing.lg,
+  },
+  summaryEyebrow: {
+    ...Typography.caption,
+    fontWeight: "700",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    marginBottom: Spacing.sm,
+  },
+  summaryHeadline: {
+    ...Typography.title3,
+    fontWeight: "700",
+    fontSize: 19,
+  },
+  summaryDate: { ...Typography.subhead, marginTop: 2 },
+  summaryDivider: {
+    height: 1,
+    marginVertical: Spacing.md,
+  },
+  summaryRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    paddingVertical: 4,
+  },
+  summaryRowLabel: { ...Typography.footnote, fontWeight: "500" },
+  summaryRowValue: { ...Typography.subhead, fontWeight: "600" },
+  summaryBlock: { marginTop: Spacing.md },
+  summaryBlockLabel: {
+    ...Typography.caption,
+    fontWeight: "700",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+    marginBottom: 4,
+  },
+  summaryBlockText: { ...Typography.subhead, lineHeight: 20 },
+  summaryAddonRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 2,
+  },
+  summaryTotalRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    backgroundColor: Colors.accent,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 5,
+    justifyContent: "space-between",
   },
-  aiChipDisabled: { opacity: 0.4 },
-  aiChipText: { color: "#FFFFFF", fontSize: 11, fontWeight: "600" },
+  summaryTotalLabel: { ...Typography.body, fontWeight: "700" },
+  summaryTotalValue: { fontSize: 22, fontWeight: "800" },
 
+  // CTAs
   errorBanner: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.xs,
     padding: Spacing.sm,
     borderRadius: BorderRadius.md,
-    marginBottom: Spacing.md,
+    marginTop: Spacing.md,
   },
-  errorText: { color: "#ef4444", fontSize: 13 },
-
-  buttonRow: { flexDirection: "row", gap: Spacing.sm, marginTop: Spacing.sm },
-  btnFlex: { flex: 1 },
-
-  // Modals
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "flex-end",
-  },
-  modalSheet: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: "80%",
-  },
-  modalHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "rgba(150,150,150,0.4)",
-    alignSelf: "center",
-    marginTop: 10,
-    marginBottom: 4,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-  },
-  modalTitle: { ...Typography.h3, fontWeight: "700" },
-  modalList: { paddingHorizontal: Spacing.md, paddingBottom: Spacing.xl },
-  modalItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    marginBottom: 2,
-    gap: Spacing.sm,
-  },
-  modalItemDesc: { ...Typography.caption, marginTop: 2 },
-  modalItemMeta: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 3 },
-  modalItemPrice: { fontSize: 12, fontWeight: "600" },
-  modalItemDuration: { fontSize: 12 },
-
-  modalEmptyState: {
-    alignItems: "center",
-    paddingVertical: Spacing.xl,
-    paddingHorizontal: Spacing.xl,
-    gap: Spacing.md,
-  },
-  emptyIconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalEmptyTitle: { ...Typography.h3, fontWeight: "700", textAlign: "center" },
-  modalEmptyText: { ...Typography.body, textAlign: "center", lineHeight: 22 },
-  goToServicesBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    marginTop: Spacing.xs,
-  },
-  goToServicesBtnText: { color: "#FFFFFF", fontWeight: "600", fontSize: 14 },
-
-  addNewItem: { gap: Spacing.sm },
-  addIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    marginHorizontal: Spacing.md,
-    marginBottom: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    height: 42,
-  },
-  searchInput: { flex: 1, fontSize: 15 },
-  emptyModal: { paddingVertical: Spacing.xl, alignItems: "center" },
-
-  newClientForm: { gap: Spacing.sm, padding: Spacing.sm },
-
-  pricingModal: {
-    margin: Spacing.lg,
-    borderRadius: 20,
-    padding: Spacing.lg,
-    gap: Spacing.md,
-  },
-  pricingMainRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-  },
-  pricingMainLabel: { ...Typography.body, fontWeight: "600" },
-  pricingMainValue: { fontSize: 28, fontWeight: "800" },
-  pricingRangeRow: { alignItems: "center" },
-  pricingRangeText: { ...Typography.caption },
-  pricingReasoning: { ...Typography.caption, lineHeight: 18 },
+  errorText: { fontSize: 13, fontWeight: "500" },
+  ctaPrimary: { marginTop: Spacing.lg },
+  ctaSecondary: { marginTop: Spacing.sm },
 });
