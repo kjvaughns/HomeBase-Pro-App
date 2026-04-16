@@ -258,6 +258,11 @@ export default function ServiceBlueprintWizardScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOnboardingMode]);
 
+  // Clear stale AI errors when the user navigates to a different wizard step
+  useEffect(() => {
+    setAiError("");
+  }, [step]);
+
   const buildBusinessContext = () => {
     const parts: string[] = [];
     if (providerProfile?.businessName) parts.push(`Business: ${providerProfile.businessName}`);
