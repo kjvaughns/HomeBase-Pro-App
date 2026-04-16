@@ -1845,8 +1845,13 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
             }
           } catch { /* ignore invalid JSON */ }
         }
+        // Secondary fallback: customer problem description
         if (!intakeAnswersSummary && parsed.data.description) {
           intakeAnswersSummary = parsed.data.description;
+        }
+        // Tertiary fallback: appointment notes (may contain additional context in alternate flows)
+        if (!intakeAnswersSummary && appointment.notes && appointment.notes !== 'Booked via homeowner portal.') {
+          intakeAnswersSummary = appointment.notes;
         }
 
         dispatch('booking.created', {

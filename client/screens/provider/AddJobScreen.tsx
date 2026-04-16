@@ -128,6 +128,7 @@ export default function AddJobScreen() {
   const [scheduledTime, setScheduledTime] = useState("09:00");
   const [estimatedPrice, setEstimatedPrice] = useState("");
   const [baseServicePriceNum, setBaseServicePriceNum] = useState(0);
+  const [priceManuallyEdited, setPriceManuallyEdited] = useState(false);
   const [selectedAddOns, setSelectedAddOns] = useState<ServiceAddOn[]>([]);
   const [serviceDescription, setServiceDescription] = useState<string>("");
   const [notes, setNotes] = useState("");
@@ -181,6 +182,7 @@ export default function AddJobScreen() {
     }
     setBaseServicePriceNum(priceNum);
     setEstimatedPrice(priceNum > 0 ? priceNum.toFixed(2) : "");
+    setPriceManuallyEdited(false);
     setShowServicePicker(false);
   };
 
@@ -190,9 +192,12 @@ export default function AddJobScreen() {
       const next = isSelected
         ? prev.filter((a) => a.name !== addon.name)
         : [...prev, addon];
-      const addonsTotal = next.reduce((sum, a) => sum + (a.price || 0), 0);
-      const total = baseServicePriceNum + addonsTotal;
-      setEstimatedPrice(total > 0 ? total.toFixed(2) : "");
+      // Only auto-recalculate price when provider hasn't manually overridden it
+      if (!priceManuallyEdited) {
+        const addonsTotal = next.reduce((sum, a) => sum + (a.price || 0), 0);
+        const total = baseServicePriceNum + addonsTotal;
+        setEstimatedPrice(total > 0 ? total.toFixed(2) : "");
+      }
       return next;
     });
   };
@@ -540,6 +545,7 @@ export default function AddJobScreen() {
             value={estimatedPrice}
             onChangeText={(val) => {
               setEstimatedPrice(val);
+              setPriceManuallyEdited(true);
             }}
             placeholder="0.00"
             keyboardType="decimal-pad"
