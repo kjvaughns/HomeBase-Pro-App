@@ -627,10 +627,13 @@ export async function sendProviderScheduledJobEmail(data: {
   pricingType?: string;
   addOns?: Array<{ name: string; price: number }>;
 }): Promise<SendResult> {
-  const priceLabel = data.pricingType === 'variable' ? 'Starting At' : data.pricingType === 'quote' ? 'Est. Quote' : 'Est. Price';
+  const priceLabel = data.pricingType === 'variable' ? 'Starting At' : data.pricingType === 'quote' || data.pricingType === 'by_quote' ? 'Pricing' : 'Est. Price';
+  const isQuoteType = data.pricingType === 'quote' || data.pricingType === 'by_quote';
   const priceRow = data.estimatedPrice
     ? infoRow(priceLabel, fmtUsd(typeof data.estimatedPrice === 'string' ? parseFloat(data.estimatedPrice) : data.estimatedPrice))
-    : '';
+    : isQuoteType
+      ? infoRow('Pricing', 'Quote provided after review')
+      : '';
   const issueSection = data.description
     ? `<div style="background:#f0fdf4;border-radius:8px;padding:16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
         <p style="color:#166534;font-weight:600;font-size:13px;margin:0 0 6px;">Your Issue / Request</p>

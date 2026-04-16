@@ -149,7 +149,10 @@ export default function AddJobScreen() {
 
   const availableAddOns = useMemo<ServiceAddOn[]>(() => {
     if (!selectedService?.addOnsJson) return [];
-    try { return JSON.parse(selectedService.addOnsJson); } catch { return []; }
+    try {
+      const parsed = JSON.parse(selectedService.addOnsJson);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch { return []; }
   }, [selectedService]);
 
   const filteredClients = useMemo(() => {

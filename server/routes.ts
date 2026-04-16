@@ -4674,12 +4674,24 @@ Respond with JSON only:
               }
 
               // Parse selected add-ons from req.body — frontend sends a structured array
-              let selectedAddOns: Array<{ name: string; price: number }> | undefined;
-              if (req.body.selectedAddOns && Array.isArray(req.body.selectedAddOns)) {
-                selectedAddOns = req.body.selectedAddOns as Array<{ name: string; price: number }>;
+              let rawAddOns: unknown[] | undefined;
+              if (Array.isArray(req.body.selectedAddOns)) {
+                rawAddOns = req.body.selectedAddOns;
               } else if (typeof req.body.selectedAddOns === 'string') {
-                try { selectedAddOns = JSON.parse(req.body.selectedAddOns); } catch { /* ignore */ }
+                try {
+                  const parsed = JSON.parse(req.body.selectedAddOns);
+                  if (Array.isArray(parsed)) rawAddOns = parsed;
+                } catch { /* ignore malformed JSON */ }
               }
+              const selectedAddOns: Array<{ name: string; price: number }> | undefined = rawAddOns
+                ? rawAddOns
+                    .filter((a): a is Record<string, unknown> => typeof a === 'object' && a !== null)
+                    .map(a => ({
+                      name: String(a.name ?? '').slice(0, 200),
+                      price: Math.max(0, Number(a.price ?? 0)),
+                    }))
+                    .filter(a => a.name.length > 0)
+                : undefined;
 
               // Use pricingType and serviceDescription from req.body if backend snapshot is unavailable
               const pricingTypeFromBody = req.body.pricingType as string | undefined;
