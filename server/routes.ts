@@ -4581,6 +4581,16 @@ Respond with JSON only:
         return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
       }
 
+      // Assert caller owns the provider account they are creating a job for
+      const authUserId = req.authenticatedUserId!;
+      const [callerProvider] = await db.select({ id: providers.id, userId: providers.userId })
+        .from(providers)
+        .where(eq(providers.id, parsed.data.providerId))
+        .catch(() => [null]);
+      if (!callerProvider || callerProvider.userId !== authUserId) {
+        return res.status(403).json({ error: "Forbidden: you do not own this provider account" });
+      }
+
       // Fetch custom service snapshot before transaction for description/price enrichment.
       // Ownership check: verify the service belongs to the same provider as the job being created.
       let svcSnapshot: { description: string | null; pricingType: string; basePrice: string | null; priceFrom: string | null } | null = null;
