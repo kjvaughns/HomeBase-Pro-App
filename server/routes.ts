@@ -27,6 +27,7 @@ import {
   createConnectAccountLink,
   refreshConnectAccountLink,
   getConnectStatus,
+  reonboardConnectAccount,
   getConnectAccount,
   createInvoicePaymentIntent,
   createStripeCheckoutSession,
@@ -5674,6 +5675,21 @@ Respond with JSON only:
     } catch (error: any) {
       console.error("Refresh connect link error:", error);
       res.status(500).json({ error: error.message || "Failed to refresh onboarding link" });
+    }
+  });
+
+  // Force re-onboarding — wipes the local Connect record and issues a fresh
+  // onboarding link. Used when a provider's existing account is test-mode and
+  // the platform has cut over to live mode.
+  app.post("/api/stripe/connect/reonboard/:providerId", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
+    try {
+      const { providerId } = req.params;
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
+      const result = await reonboardConnectAccount(providerId);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Re-onboard connect error:", error);
+      res.status(500).json({ error: error.message || "Failed to start re-onboarding" });
     }
   });
 

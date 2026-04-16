@@ -24,6 +24,8 @@ interface ConnectStatus {
   chargesEnabled: boolean;
   payoutsEnabled: boolean;
   detailsSubmitted: boolean;
+  livemode?: boolean;
+  needsReonboarding?: boolean;
 }
 
 interface Invoice {
@@ -121,6 +123,26 @@ export default function StripeConnectScreen() {
     },
     onError: (error: any) => {
       Alert.alert("Error", error.message || "Failed to start onboarding");
+    },
+  });
+
+  const reonboardMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", `/api/stripe/connect/reonboard/${providerId}`);
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to start re-onboarding");
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      if (data.onboardingUrl) {
+        Linking.openURL(data.onboardingUrl);
+      }
+      refetchStatus();
+    },
+    onError: (error: any) => {
+      Alert.alert("Re-onboarding failed", error.message || "Please try again");
     },
   });
 
@@ -282,7 +304,30 @@ export default function StripeConnectScreen() {
               </>
             ) : null}
 
-            {!connectStatus?.exists || connectStatus?.onboardingStatus !== "complete" ? (
+            {connectStatus?.needsReonboarding ? (
+              <View style={[styles.reonboardBanner, { borderColor: Colors.accent }]}>
+                <Feather name="alert-triangle" size={20} color={Colors.accent} />
+                <View style={{ flex: 1, marginLeft: Spacing.sm }}>
+                  <ThemedText style={{ fontWeight: "600", marginBottom: 4 }}>
+                    Re-connect Stripe for live payments
+                  </ThemedText>
+                  <ThemedText style={{ color: theme.textSecondary, fontSize: 13 }}>
+                    Your existing Stripe account was set up in test mode. To accept real payments from homeowners, you need to complete live Stripe onboarding. Past invoices are preserved.
+                  </ThemedText>
+                </View>
+              </View>
+            ) : null}
+
+            {connectStatus?.needsReonboarding ? (
+              <PrimaryButton
+                onPress={() => reonboardMutation.mutate()}
+                disabled={reonboardMutation.isPending}
+                style={styles.ctaButton}
+                testID="button-reonboard-stripe"
+              >
+                {reonboardMutation.isPending ? "Starting..." : "Re-connect Stripe (Live)"}
+              </PrimaryButton>
+            ) : !connectStatus?.exists || connectStatus?.onboardingStatus !== "complete" ? (
               <PrimaryButton
                 onPress={() => onboardMutation.mutate()}
                 disabled={onboardMutation.isPending}
@@ -538,6 +583,15 @@ const styles = StyleSheet.create({
   },
   ctaButton: {
     marginTop: Spacing.md,
+  },
+  reonboardBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    padding: Spacing.md,
+    marginTop: Spacing.md,
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+    backgroundColor: "rgba(255, 184, 0, 0.08)",
   },
   refreshRow: {
     flexDirection: "row",

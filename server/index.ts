@@ -123,7 +123,10 @@ function setupStripeConnectWebhook(app: express.Application) {
         return res.status(400).json({ error: "Webhook secret not configured" });
       }
 
-      const stripe = (await import("./stripeClient")).getStripe();
+      // Use the same Stripe client the Connect service uses so test/live mode
+      // selection is consistent. Importing lazily keeps the boot order intact.
+      const { getStripe } = await import("./stripeConnectService");
+      const stripe = getStripe();
       let event: any;
       try {
         event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);

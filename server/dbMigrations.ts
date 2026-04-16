@@ -68,6 +68,10 @@ export async function runBootMigrations(): Promise<void> {
     // ── refunds: Stripe charge ID (for matching refunds to charges) ───────
     await runSql("refunds.stripe_charge_id", `ALTER TABLE refunds ADD COLUMN IF NOT EXISTS stripe_charge_id TEXT`);
 
+    // ── stripe_connect_accounts: livemode flag for live-cutover detection ─
+    await runSql("stripe_connect_accounts.livemode",
+      `ALTER TABLE stripe_connect_accounts ADD COLUMN IF NOT EXISTS livemode BOOLEAN DEFAULT FALSE`);
+
     // ── payouts: missing columns ──────────────────────────────────────────
     await runSql("payouts.arrival_date",  `ALTER TABLE payouts ADD COLUMN IF NOT EXISTS arrival_date TIMESTAMP`);
     await runSql("payouts.amount_cents",  `ALTER TABLE payouts ADD COLUMN IF NOT EXISTS amount_cents INTEGER NOT NULL DEFAULT 0`);

@@ -311,6 +311,9 @@ export const stripeConnectAccounts = pgTable("stripe_connect_accounts", {
   chargesEnabled: boolean("charges_enabled").default(false),
   payoutsEnabled: boolean("payouts_enabled").default(false),
   detailsSubmitted: boolean("details_submitted").default(false),
+  // `true` if this Stripe account was created against live mode; `false` for test mode.
+  // Used to detect legacy test-mode accounts that must re-onboard before live payments.
+  livemode: boolean("livemode").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

@@ -24,15 +24,43 @@ import { dispatch } from "./notificationService";
 
 let stripe: Stripe | null = null;
 
+// In production the `STRIPE_TEST_SECRET_KEY` dev override is IGNORED — we always
+// use the platform secret key set in the deployment env. Locally (any non-prod
+// environment) the test-mode override is honored first so developers can run
+// against Stripe test mode without swapping their live secret.
 function getStripe(): Stripe {
   if (!stripe) {
-    const apiKey = process.env.STRIPE_TEST_SECRET_KEY || process.env.STRIPE_SECRET_KEY;
+    const isProd = process.env.NODE_ENV === "production";
+    const apiKey = isProd
+      ? process.env.STRIPE_SECRET_KEY
+      : process.env.STRIPE_TEST_SECRET_KEY || process.env.STRIPE_SECRET_KEY;
     if (!apiKey) {
-      throw new Error("STRIPE_TEST_SECRET_KEY is required. Please add it to your environment variables.");
+      throw new Error(
+        isProd
+          ? "STRIPE_SECRET_KEY is required in production. Set the live secret key in the deployment env."
+          : "STRIPE_TEST_SECRET_KEY or STRIPE_SECRET_KEY is required. Please add it to your environment variables."
+      );
+    }
+    if (isProd && !apiKey.startsWith("sk_live_")) {
+      console.warn(
+        `[stripe] WARNING: NODE_ENV=production but STRIPE_SECRET_KEY does not start with sk_live_. ` +
+        `The app will run in Stripe test mode — real payments will NOT be processed.`
+      );
     }
     stripe = new Stripe(apiKey);
   }
   return stripe;
+}
+
+// Exposed so routes/webhooks can inspect whether the active Stripe client is
+// talking to live mode — used to gate live-mode-only features (e.g. detecting
+// legacy test-mode Connect accounts that must re-onboard).
+export function isStripeLiveMode(): boolean {
+  const isProd = process.env.NODE_ENV === "production";
+  const apiKey = isProd
+    ? process.env.STRIPE_SECRET_KEY
+    : process.env.STRIPE_TEST_SECRET_KEY || process.env.STRIPE_SECRET_KEY;
+  return !!apiKey && apiKey.startsWith("sk_live_");
 }
 
 const APP_URL =
@@ -123,6 +151,7 @@ export async function createConnectAccountLink(providerId: string) {
         chargesEnabled: account.charges_enabled,
         payoutsEnabled: account.payouts_enabled,
         detailsSubmitted: account.details_submitted || false,
+        livemode: (account as any).livemode ?? isStripeLiveMode(),
       })
       .returning();
   }
@@ -172,10 +201,39 @@ export async function getConnectStatus(providerId: string) {
       chargesEnabled: false,
       payoutsEnabled: false,
       detailsSubmitted: false,
+      livemode: isStripeLiveMode(),
+      needsReonboarding: false,
     };
   }
 
-  const account = await getStripe().accounts.retrieve(connectAccount.stripeAccountId);
+  // If the platform is running in live mode but this Connect account belongs to
+  // test mode (or vice-versa), accounts.retrieve will 404 because test-mode
+  // account IDs are invalid under a live API key. Catch that case and flag it
+  // as a re-onboarding requirement instead of surfacing a 500.
+  let account: Stripe.Account;
+  try {
+    account = await getStripe().accounts.retrieve(connectAccount.stripeAccountId);
+  } catch (err: any) {
+    const code = err?.code || err?.raw?.code;
+    if (code === "account_invalid" || code === "resource_missing" || err?.statusCode === 404) {
+      console.warn(
+        `[stripe-connect] accounts.retrieve(${connectAccount.stripeAccountId}) failed — ` +
+        `likely a ${isStripeLiveMode() ? "test-mode" : "live-mode"} account under ` +
+        `${isStripeLiveMode() ? "live" : "test"} API key. Provider must re-onboard.`
+      );
+      return {
+        exists: true,
+        accountId: connectAccount.stripeAccountId,
+        onboardingStatus: "not_started" as const,
+        chargesEnabled: false,
+        payoutsEnabled: false,
+        detailsSubmitted: false,
+        livemode: isStripeLiveMode(),
+        needsReonboarding: true,
+      };
+    }
+    throw err;
+  }
 
   let onboardingStatus: "not_started" | "pending" | "complete" = "pending";
   if (account.charges_enabled && account.payouts_enabled && account.details_submitted) {
@@ -189,9 +247,13 @@ export async function getConnectStatus(providerId: string) {
       chargesEnabled: account.charges_enabled,
       payoutsEnabled: account.payouts_enabled,
       detailsSubmitted: account.details_submitted || false,
+      livemode: (account as any).livemode ?? isStripeLiveMode(),
       updatedAt: new Date(),
     })
     .where(eq(stripeConnectAccounts.id, connectAccount.id));
+
+  const accountLivemode = (account as any).livemode ?? isStripeLiveMode();
+  const needsReonboarding = isStripeLiveMode() && !accountLivemode;
 
   return {
     exists: true,
@@ -201,7 +263,19 @@ export async function getConnectStatus(providerId: string) {
     payoutsEnabled: account.payouts_enabled,
     detailsSubmitted: account.details_submitted,
     requirements: account.requirements,
+    livemode: accountLivemode,
+    needsReonboarding,
   };
+}
+
+// Force-create a fresh Connect account (used when a provider's existing account
+// is in the wrong mode — e.g. test-mode account under a live API key). Wipes
+// the local record's Stripe IDs and issues a new onboarding link.
+export async function reonboardConnectAccount(providerId: string) {
+  await db
+    .delete(stripeConnectAccounts)
+    .where(eq(stripeConnectAccounts.providerId, providerId));
+  return createConnectAccountLink(providerId);
 }
 
 export async function createInvoicePaymentIntent(invoiceId: string, payerUserId?: string) {
