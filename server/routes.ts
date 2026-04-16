@@ -13,7 +13,7 @@ import { getStripePublishableKey } from "./stripeClient";
 import { db } from "./db";
 import { sql, eq, and, desc, inArray, gte } from "drizzle-orm";
 import { appointments, maintenanceReminders, homes, reviews } from "@shared/schema";
-import { sendInvoiceEmail, sendProviderClientMessage, sendSupportTicketEmail, sendInvoiceReminderEmail } from "./emailService";
+import { sendInvoiceEmail, sendProviderClientMessage, sendSupportTicketEmail, sendInvoiceReminderEmail, sendProviderScheduledJobEmail } from "./emailService";
 import { dispatch, dispatchWithResult, dispatchNotification, sendPush } from "./notificationService";
 import { 
   searchPlaces, 
@@ -1807,6 +1807,7 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
           appointmentTime: parsed.data.scheduledTime,
           estimatedPrice: parsed.data.estimatedPrice ?? undefined,
           confirmationNumber: appointment.id,
+          description: parsed.data.description ?? undefined,
           relatedRecordType: 'appointment',
           relatedRecordId: appointment.id,
           recipientUserId: bookedUser.id,
@@ -4547,6 +4548,45 @@ Respond with JSON only:
 
         return { job: linkedJob, appointment: apptRow };
       });
+
+      // Fire client confirmation email (fire-and-forget) if client has an email on record
+      if (newJob.clientId) {
+        (async () => {
+          try {
+            const [jobClient] = await db.select().from(clients).where(eq(clients.id, newJob.clientId!)).catch(() => [null]);
+            const [jobProvider] = await db.select().from(providers).where(eq(providers.id, newJob.providerId)).catch(() => [null]);
+            if (jobClient?.email && jobProvider) {
+              const clientName = `${jobClient.firstName || ''} ${jobClient.lastName || ''}`.trim() || jobClient.email;
+              const scheduledDateStr = newJob.scheduledDate
+                ? new Date(newJob.scheduledDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+                : 'To be confirmed';
+              const scheduledTimeStr = newJob.scheduledTime
+                ? (() => {
+                    const [h, m] = newJob.scheduledTime.split(':');
+                    const hour = parseInt(h);
+                    const ampm = hour >= 12 ? 'PM' : 'AM';
+                    const displayHour = hour % 12 || 12;
+                    return `${displayHour}:${m} ${ampm}`;
+                  })()
+                : undefined;
+              await sendProviderScheduledJobEmail({
+                clientEmail: jobClient.email,
+                clientName,
+                providerName: jobProvider.businessName,
+                providerPhone: jobProvider.phone || undefined,
+                serviceName: newJob.title,
+                scheduledDate: scheduledDateStr,
+                scheduledTime: scheduledTimeStr,
+                address: newJob.address || jobClient.address || undefined,
+                estimatedPrice: newJob.estimatedPrice || undefined,
+                description: newJob.description || undefined,
+              });
+            }
+          } catch (emailErr) {
+            console.error('Provider job client email error (non-fatal):', emailErr);
+          }
+        })();
+      }
 
       return res.status(201).json({ job: newJob, appointment });
     } catch (error) {

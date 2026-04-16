@@ -198,10 +198,17 @@ interface BookingData {
   address?: string;
   estimatedPrice?: number;
   confirmationNumber?: string;
+  description?: string;
 }
 
 export async function sendBookingConfirmationEmail(data: BookingData): Promise<SendResult> {
   const priceRow = data.estimatedPrice ? infoRow('Est. Price', fmtUsd(data.estimatedPrice)) : '';
+  const issueSection = data.description
+    ? `<div style="background:#f0fdf4;border-radius:8px;padding:16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
+        <p style="color:#166534;font-weight:600;font-size:13px;margin:0 0 6px;">Your Issue</p>
+        <p style="color:#15803d;font-size:13px;margin:0;line-height:1.5;">${data.description}</p>
+      </div>`
+    : '';
   const body = greeting(data.clientName) +
     paragraph('Great news! Your service appointment has been confirmed. Here are your booking details:') +
     infoBox(
@@ -213,6 +220,7 @@ export async function sendBookingConfirmationEmail(data: BookingData): Promise<S
       (data.address ? infoRow('Location', data.address) : '') +
       priceRow
     ) +
+    issueSection +
     `<div style="background:#fffbeb;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #f59e0b;">
       <p style="color:#92400e;font-size:13px;margin:0;"><strong>Need to reschedule?</strong> Contact ${data.providerName} at least 24 hours before your appointment.</p>
     </div>` +
@@ -545,7 +553,14 @@ export async function sendProviderBookingNotificationEmail(data: {
   appointmentDate: string;
   appointmentTime: string;
   address?: string;
+  description?: string;
 }): Promise<SendResult> {
+  const issueSection = data.description
+    ? `<div style="background:#f0fdf4;border-radius:8px;padding:16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
+        <p style="color:#166534;font-weight:600;font-size:13px;margin:0 0 6px;">Client's Issue</p>
+        <p style="color:#15803d;font-size:13px;margin:0;line-height:1.5;">${data.description}</p>
+      </div>`
+    : '';
   const body = greeting(data.providerName) +
     paragraph(`${data.clientName} has booked a ${data.serviceName} with you. Here are the details:`) +
     infoBox(
@@ -554,11 +569,66 @@ export async function sendProviderBookingNotificationEmail(data: {
       infoRow('Date', data.appointmentDate) +
       infoRow('Time', data.appointmentTime) +
       (data.address ? infoRow('Location', data.address) : '')
-    );
+    ) +
+    issueSection;
   return sendEmail(
     data.providerEmail,
     `New Booking: ${data.serviceName} with ${data.clientName}`,
     buildEmailBase('New Booking', body, 'View in HomeBase', 'https://homebaseproapp.com')
+  );
+}
+
+export async function sendProviderScheduledJobEmail(data: {
+  clientEmail: string;
+  clientName: string;
+  providerName: string;
+  providerPhone?: string;
+  providerEmail?: string;
+  serviceName: string;
+  scheduledDate: string;
+  scheduledTime?: string;
+  address?: string;
+  estimatedPrice?: string | number;
+  description?: string;
+}): Promise<SendResult> {
+  const priceRow = data.estimatedPrice
+    ? infoRow('Est. Price', fmtUsd(typeof data.estimatedPrice === 'string' ? parseFloat(data.estimatedPrice) : data.estimatedPrice))
+    : '';
+  const issueSection = data.description
+    ? `<div style="background:#f0fdf4;border-radius:8px;padding:16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
+        <p style="color:#166534;font-weight:600;font-size:13px;margin:0 0 6px;">Your Issue</p>
+        <p style="color:#15803d;font-size:13px;margin:0;line-height:1.5;">${data.description}</p>
+      </div>`
+    : '';
+  const contactRows = [
+    data.providerPhone ? `<span style="color:#6b7280;font-size:13px;">${data.providerPhone}</span>` : '',
+    data.providerEmail ? `<span style="color:#6b7280;font-size:13px;">${data.providerEmail}</span>` : '',
+  ].filter(Boolean).join(' &bull; ');
+  const contactSection = contactRows
+    ? `<div style="background:#fffbeb;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #f59e0b;">
+        <p style="color:#92400e;font-size:13px;margin:0 0 4px;"><strong>Need to reschedule?</strong></p>
+        <p style="color:#92400e;font-size:13px;margin:0;">Contact ${data.providerName}: ${contactRows}</p>
+      </div>`
+    : `<div style="background:#fffbeb;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #f59e0b;">
+        <p style="color:#92400e;font-size:13px;margin:0;"><strong>Need to reschedule?</strong> Contact ${data.providerName} at least 24 hours before your appointment.</p>
+      </div>`;
+  const body = greeting(data.clientName) +
+    paragraph(`Your appointment has been confirmed by <strong>${data.providerName}</strong>. Here are the details:`) +
+    infoBox(
+      infoRow('Service', data.serviceName) +
+      infoRow('Provider', data.providerName) +
+      infoRow('Date', data.scheduledDate) +
+      (data.scheduledTime ? infoRow('Time', data.scheduledTime) : '') +
+      (data.address ? infoRow('Location', data.address) : '') +
+      priceRow
+    ) +
+    issueSection +
+    contactSection +
+    appDownloadSection();
+  return sendEmail(
+    data.clientEmail,
+    `Your ${data.serviceName} appointment is confirmed with ${data.providerName}`,
+    buildEmailBase('Appointment Confirmed', body)
   );
 }
 

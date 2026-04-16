@@ -303,10 +303,21 @@ export default function AddJobScreen() {
 
           <View style={[styles.divider, { backgroundColor: theme.separator }]} />
 
+          <View style={styles.fieldLabelRow}>
+            <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+              Client's Issue
+            </ThemedText>
+            <View style={[styles.emailBadge, { backgroundColor: Colors.accentLight }]}>
+              <Feather name="mail" size={10} color={Colors.accent} />
+              <ThemedText style={[styles.emailBadgeText, { color: Colors.accent }]}>
+                Included in client email
+              </ThemedText>
+            </View>
+          </View>
           <TextField
             value={description}
             onChangeText={setDescription}
-            placeholder="Brief job description (optional)"
+            placeholder="What did the client describe? (e.g. AC not cooling, leaking faucet)"
             multiline
             numberOfLines={3}
             leftIcon="align-left"
@@ -817,4 +828,21 @@ const styles = StyleSheet.create({
   priceRange: { ...Typography.subhead, marginTop: 4 },
   priceReasoning: { ...Typography.body, lineHeight: 22, marginBottom: Spacing.lg },
   servicePrice: { ...Typography.caption1, marginTop: 2 },
+  fieldLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.xs,
+    marginTop: Spacing.xs,
+  },
+  fieldLabel: { ...Typography.subhead, fontWeight: "600" },
+  emailBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+  },
+  emailBadgeText: { ...Typography.caption2, fontWeight: "600" },
 });
