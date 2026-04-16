@@ -478,6 +478,32 @@ export default function AddJobScreen() {
 
           <View style={[styles.divider, { backgroundColor: theme.separator }]} />
 
+          {/* Service description — editable, pre-filled from service catalog */}
+          {serviceDescription.length > 0 ? (
+            <>
+              <View style={styles.fieldLabelRow}>
+                <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+                  Service Description
+                </ThemedText>
+                <View style={[styles.emailBadge, { backgroundColor: Colors.accentLight }]}>
+                  <Feather name="mail" size={10} color={Colors.accent} />
+                  <ThemedText style={[styles.emailBadgeText, { color: Colors.accent }]}>
+                    In client email
+                  </ThemedText>
+                </View>
+              </View>
+              <TextField
+                value={serviceDescription}
+                onChangeText={setServiceDescription}
+                placeholder="Service description for the client"
+                multiline
+                numberOfLines={2}
+                leftIcon="info"
+              />
+              <View style={[styles.divider, { backgroundColor: theme.separator }]} />
+            </>
+          ) : null}
+
           <View style={styles.fieldLabelRow}>
             <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
               Client's Issue

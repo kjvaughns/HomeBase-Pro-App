@@ -1841,21 +1841,29 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
           ))
           .catch(() => [null]);
 
-        // Build intakeAnswers from answersJson (raw body field) with fallback to description
-        const rawAnswersJson = req.body.answersJson as string | undefined;
+        // Build intakeAnswers from answersJson (raw body field) — accept both string-encoded and object shapes
+        const rawAnswersJson = req.body.answersJson;
         let intakeAnswersSummary: string | undefined;
+        const formatAnswersObj = (obj: Record<string, unknown>): string | undefined => {
+          const lines = Object.entries(obj)
+            .filter(([, v]) => v != null && v !== '')
+            .map(([k, v]) => `${k}: ${v}`);
+          return lines.length > 0 ? lines.join('\n') : undefined;
+        };
         if (rawAnswersJson) {
-          try {
-            const answersObj = JSON.parse(rawAnswersJson);
-            if (typeof answersObj === 'object' && answersObj !== null) {
-              const lines = Object.entries(answersObj)
-                .filter(([, v]) => v != null && v !== '')
-                .map(([k, v]) => `${k}: ${v}`);
-              intakeAnswersSummary = lines.length > 0 ? lines.join('\n') : undefined;
-            } else if (typeof answersObj === 'string') {
-              intakeAnswersSummary = answersObj;
-            }
-          } catch { /* ignore invalid JSON */ }
+          if (typeof rawAnswersJson === 'object' && rawAnswersJson !== null && !Array.isArray(rawAnswersJson)) {
+            // Already parsed by express body-parser
+            intakeAnswersSummary = formatAnswersObj(rawAnswersJson as Record<string, unknown>);
+          } else if (typeof rawAnswersJson === 'string') {
+            try {
+              const answersObj = JSON.parse(rawAnswersJson);
+              if (typeof answersObj === 'object' && answersObj !== null && !Array.isArray(answersObj)) {
+                intakeAnswersSummary = formatAnswersObj(answersObj);
+              } else if (typeof answersObj === 'string') {
+                intakeAnswersSummary = answersObj;
+              }
+            } catch { /* ignore invalid JSON */ }
+          }
         }
         // Secondary fallback: customer problem description
         if (!intakeAnswersSummary && parsed.data.description) {
