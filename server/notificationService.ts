@@ -143,6 +143,7 @@ const EVENT_PREF_FIELD: Partial<Record<NotificationEvent, keyof typeof notificat
   'invoice.overdue_1d':   'emailInvoiceReminder',
   'invoice.paid':         'emailInvoicePaid',
   'invoice.payment_failed': 'emailPaymentFailed',
+  'job.status_changed':   'emailBookingConfirmation',
   'review.request':       'emailReviewRequest',
 };
 
@@ -485,6 +486,8 @@ async function _dispatch(event: NotificationEvent, payload: DispatchPayload): Pr
         } catch (err) {
           console.error(`[notification] job.status_changed(${newStatus}) push error:`, err);
         }
+      } else {
+        console.warn(`[notification] job.status_changed(${newStatus}) push skipped — client has no linked homeowner user (recipientUserId missing)`);
       }
       break;
     }
