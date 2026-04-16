@@ -1766,11 +1766,13 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
       // Create a provider job record linked to this appointment
       if (clientId) {
         try {
+          // Resolve customServiceId from body (provider_custom_services.id) — bypasses appointments schema
+          const apptCustomServiceId = typeof req.body.customServiceId === 'string' ? req.body.customServiceId : null;
           await db.insert(jobs).values({
             providerId: parsed.data.providerId,
             clientId,
             appointmentId: appointment.id,
-            serviceId: parsed.data.serviceId ?? null,
+            customServiceId: apptCustomServiceId,
             title: parsed.data.serviceName,
             description: parsed.data.description || null,
             scheduledDate: parsed.data.scheduledDate,
