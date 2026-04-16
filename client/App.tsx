@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { StyleSheet } from "react-native";
+import { Platform, StyleSheet } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
@@ -7,6 +7,9 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { StripeProviderWrapper } from "@/components/StripeProviderWrapper";
 import * as Updates from "expo-updates";
+import { useFonts } from "expo-font";
+import { Feather } from "@expo/vector-icons";
+import * as SplashScreen from "expo-splash-screen";
 
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/query-client";
@@ -40,10 +43,36 @@ function AppContent() {
   );
 }
 
+SplashScreen.preventAutoHideAsync();
+
 export default function App() {
   const hydrateTheme = useThemeStore((s) => s.hydrate);
   const hydrateOnboarding = useOnboardingStore((s) => s.hydrate);
   const [stripeKey, setStripeKey] = useState<string>("");
+  const [webFontReady, setWebFontReady] = useState(Platform.OS !== "web");
+
+  const [fontsLoaded, fontError] = useFonts(
+    Platform.OS !== "web" ? { ...Feather.font } : {}
+  );
+
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      const style = document.createElement("style");
+      style.textContent = `@font-face { font-family: "feather"; src: url("/assets/fonts/Feather.ttf") format("truetype"); font-display: block; }`;
+      document.head.appendChild(style);
+      setWebFontReady(true);
+    }
+  }, []);
+
+  const ready = Platform.OS === "web"
+    ? webFontReady
+    : fontsLoaded || !!fontError;
+
+  useEffect(() => {
+    if (ready) {
+      SplashScreen.hideAsync();
+    }
+  }, [ready]);
 
   useEffect(() => {
     hydrateTheme();
@@ -64,6 +93,10 @@ export default function App() {
     }
     downloadUpdateIfAvailable();
   }, []);
+
+  if (!ready) {
+    return null;
+  }
   
   return (
     <ErrorBoundary>
