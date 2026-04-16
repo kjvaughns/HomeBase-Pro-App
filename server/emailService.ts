@@ -199,6 +199,9 @@ interface BookingData {
   estimatedPrice?: number;
   confirmationNumber?: string;
   description?: string;
+  serviceDescription?: string;
+  addOns?: string[];
+  intakeAnswers?: string;
 }
 
 export async function sendBookingConfirmationEmail(data: BookingData): Promise<SendResult> {
@@ -209,6 +212,26 @@ export async function sendBookingConfirmationEmail(data: BookingData): Promise<S
         <p style="color:#15803d;font-size:13px;margin:0;line-height:1.5;">${data.description}</p>
       </div>`
     : '';
+  const addOnsSection = data.addOns && data.addOns.length > 0
+    ? `<div style="background:#f9fafb;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
+        <p style="color:#374151;font-weight:600;font-size:13px;margin:0 0 8px;">Add-ons Included</p>
+        ${data.addOns.map(a => `<div style="color:#6b7280;font-size:13px;padding:3px 0;">&bull; ${a}</div>`).join('')}
+      </div>`
+    : '';
+  const serviceDescSection = data.serviceDescription
+    ? `<div style="background:#f9fafb;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
+        <p style="color:#374151;font-weight:600;font-size:13px;margin:0 0 6px;">About This Service</p>
+        <p style="color:#6b7280;font-size:13px;margin:0;line-height:1.5;">${data.serviceDescription}</p>
+      </div>`
+    : '';
+  const nextStepsSection = `<div style="background:#f0fdf4;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
+    <p style="color:#166534;font-weight:600;font-size:13px;margin:0 0 8px;">What to Expect Next</p>
+    <div style="color:#15803d;font-size:13px;line-height:1.6;">
+      <div>&bull; Your provider will confirm the appointment shortly</div>
+      <div>&bull; You will receive a reminder 24 hours before your appointment</div>
+      <div>&bull; An invoice will be sent after the service is complete</div>
+    </div>
+  </div>`;
   const body = greeting(data.clientName) +
     paragraph('Great news! Your service appointment has been confirmed. Here are your booking details:') +
     infoBox(
@@ -221,6 +244,9 @@ export async function sendBookingConfirmationEmail(data: BookingData): Promise<S
       priceRow
     ) +
     issueSection +
+    addOnsSection +
+    serviceDescSection +
+    nextStepsSection +
     `<div style="background:#fffbeb;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #f59e0b;">
       <p style="color:#92400e;font-size:13px;margin:0;"><strong>Need to reschedule?</strong> Contact ${data.providerName} at least 24 hours before your appointment.</p>
     </div>` +
@@ -590,16 +616,40 @@ export async function sendProviderScheduledJobEmail(data: {
   address?: string;
   estimatedPrice?: string | number;
   description?: string;
+  serviceDescription?: string;
+  pricingType?: string;
+  addOns?: Array<{ name: string; price: number }>;
 }): Promise<SendResult> {
+  const priceLabel = data.pricingType === 'variable' ? 'Starting At' : data.pricingType === 'quote' ? 'Est. Quote' : 'Est. Price';
   const priceRow = data.estimatedPrice
-    ? infoRow('Est. Price', fmtUsd(typeof data.estimatedPrice === 'string' ? parseFloat(data.estimatedPrice) : data.estimatedPrice))
+    ? infoRow(priceLabel, fmtUsd(typeof data.estimatedPrice === 'string' ? parseFloat(data.estimatedPrice) : data.estimatedPrice))
     : '';
   const issueSection = data.description
     ? `<div style="background:#f0fdf4;border-radius:8px;padding:16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
-        <p style="color:#166534;font-weight:600;font-size:13px;margin:0 0 6px;">Your Issue</p>
+        <p style="color:#166534;font-weight:600;font-size:13px;margin:0 0 6px;">Your Issue / Request</p>
         <p style="color:#15803d;font-size:13px;margin:0;line-height:1.5;">${data.description}</p>
       </div>`
     : '';
+  const addOnsSection = data.addOns && data.addOns.length > 0
+    ? `<div style="background:#f9fafb;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
+        <p style="color:#374151;font-weight:600;font-size:13px;margin:0 0 8px;">Add-ons Included</p>
+        ${data.addOns.map(a => `<div style="display:flex;justify-content:space-between;color:#6b7280;font-size:13px;padding:3px 0;"><span>&bull; ${a.name}</span><span>${fmtUsd(a.price)}</span></div>`).join('')}
+      </div>`
+    : '';
+  const serviceDescSection = data.serviceDescription
+    ? `<div style="background:#f9fafb;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
+        <p style="color:#374151;font-weight:600;font-size:13px;margin:0 0 6px;">About This Service</p>
+        <p style="color:#6b7280;font-size:13px;margin:0;line-height:1.5;">${data.serviceDescription}</p>
+      </div>`
+    : '';
+  const nextSteps = `<div style="background:#f0fdf4;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
+    <p style="color:#166534;font-weight:600;font-size:13px;margin:0 0 8px;">What to Expect</p>
+    <div style="color:#15803d;font-size:13px;line-height:1.6;">
+      <div>&bull; Your provider will arrive at the scheduled time</div>
+      <div>&bull; An invoice will be sent after the service is complete</div>
+      <div>&bull; You can pay securely through HomeBase</div>
+    </div>
+  </div>`;
   const contactRows = [
     data.providerPhone ? `<span style="color:#6b7280;font-size:13px;">${data.providerPhone}</span>` : '',
     data.providerEmail ? `<span style="color:#6b7280;font-size:13px;">${data.providerEmail}</span>` : '',
@@ -623,6 +673,9 @@ export async function sendProviderScheduledJobEmail(data: {
       priceRow
     ) +
     issueSection +
+    addOnsSection +
+    serviceDescSection +
+    nextSteps +
     contactSection +
     appDownloadSection();
   return sendEmail(

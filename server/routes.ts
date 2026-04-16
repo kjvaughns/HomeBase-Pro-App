@@ -4569,6 +4569,26 @@ Respond with JSON only:
                     return `${displayHour}:${m} ${ampm}`;
                   })()
                 : undefined;
+
+              // Fetch custom service details for enriched email if customServiceId is set
+              let customSvcData: { description: string | null; pricingType: string; addOnsJson: string | null } | null = null;
+              if (newJob.customServiceId) {
+                const [svcRow] = await db.select({
+                  description: providerCustomServices.description,
+                  pricingType: providerCustomServices.pricingType,
+                  addOnsJson: providerCustomServices.addOnsJson,
+                }).from(providerCustomServices)
+                  .where(eq(providerCustomServices.id, newJob.customServiceId))
+                  .catch(() => [null]);
+                if (svcRow) customSvcData = svcRow;
+              }
+
+              // Parse selected add-ons from req.body (frontend sends which add-ons were chosen)
+              let selectedAddOns: Array<{ name: string; price: number }> | undefined;
+              if (req.body.selectedAddOnsJson) {
+                try { selectedAddOns = JSON.parse(req.body.selectedAddOnsJson); } catch { /* ignore */ }
+              }
+
               await sendProviderScheduledJobEmail({
                 clientEmail: jobClient.email,
                 clientName,
@@ -4581,6 +4601,9 @@ Respond with JSON only:
                 address: newJob.address || jobClient.address || undefined,
                 estimatedPrice: newJob.estimatedPrice || undefined,
                 description: newJob.description || undefined,
+                serviceDescription: customSvcData?.description || undefined,
+                pricingType: customSvcData?.pricingType || undefined,
+                addOns: selectedAddOns,
               });
             }
           } catch (emailErr) {

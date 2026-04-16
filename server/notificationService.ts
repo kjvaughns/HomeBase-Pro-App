@@ -61,6 +61,9 @@ export interface DispatchPayload {
   estimatedPrice?: number;
   confirmationNumber?: string;
   description?: string;
+  serviceDescription?: string;
+  addOns?: string[];
+  intakeAnswers?: string;
   oldDate?: string;
   oldTime?: string;
   reason?: string;
@@ -216,7 +219,7 @@ async function _dispatch(event: NotificationEvent, payload: DispatchPayload): Pr
     }
 
     case 'booking.created': {
-      const { clientEmail, clientName, providerEmail, providerName, serviceName, appointmentDate, appointmentTime, address, estimatedPrice, confirmationNumber, description } = payload;
+      const { clientEmail, clientName, providerEmail, providerName, serviceName, appointmentDate, appointmentTime, address, estimatedPrice, confirmationNumber, description, serviceDescription, addOns, intakeAnswers } = payload;
       // Client confirmation — gate on client's notification preferences
       if (clientEmail && clientName && providerName) {
         const clientEmailOk = await isEmailAllowed(event, payload.recipientUserId);
@@ -228,7 +231,7 @@ async function _dispatch(event: NotificationEvent, payload: DispatchPayload): Pr
             relatedRecordType: payload.relatedRecordType,
             relatedRecordId: payload.relatedRecordId,
           });
-          const result = await sendBookingConfirmationEmail({ clientEmail, clientName, providerName, serviceName, appointmentDate, appointmentTime, address, estimatedPrice, confirmationNumber, description });
+          const result = await sendBookingConfirmationEmail({ clientEmail, clientName, providerName, serviceName, appointmentDate, appointmentTime, address, estimatedPrice, confirmationNumber, description, serviceDescription, addOns, intakeAnswers });
           await updateDelivery(deliveryId, result.success ? 'sent' : 'failed', result.messageId, result.error);
         }
       }

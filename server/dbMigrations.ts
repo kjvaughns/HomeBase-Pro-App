@@ -381,6 +381,9 @@ export async function runBootMigrations(): Promise<void> {
     // ── jobs: AI-generated checklist column ───────────────────────────────
     await runSql("jobs.checklist", `ALTER TABLE jobs ADD COLUMN IF NOT EXISTS checklist JSONB`);
 
+    // ── jobs: link to provider_custom_services ────────────────────────────
+    await runSql("jobs.custom_service_id", `ALTER TABLE jobs ADD COLUMN IF NOT EXISTS custom_service_id VARCHAR REFERENCES provider_custom_services(id) ON DELETE SET NULL`);
+
     // ── clients: HouseFax enrichment columns ─────────────────────────────
     await runSql("clients.home_data", `ALTER TABLE clients ADD COLUMN IF NOT EXISTS home_data TEXT`);
     await runSql("clients.home_id",   `ALTER TABLE clients ADD COLUMN IF NOT EXISTS home_id VARCHAR REFERENCES homes(id) ON DELETE SET NULL`);

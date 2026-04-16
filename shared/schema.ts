@@ -443,6 +443,7 @@ export const jobs = pgTable("jobs", {
   clientId: varchar("client_id").references(() => clients.id, { onDelete: "set null" }),
   appointmentId: varchar("appointment_id").references(() => appointments.id, { onDelete: "set null" }),
   serviceId: varchar("service_id").references(() => services.id, { onDelete: "set null" }),
+  customServiceId: varchar("custom_service_id").references(() => providerCustomServices.id, { onDelete: "set null" }),
   title: text("title").notNull(),
   description: text("description"),
   scheduledDate: timestamp("scheduled_date").notNull(),
@@ -464,6 +465,7 @@ export const jobsRelations = relations(jobs, ({ one, many }) => ({
   client: one(clients, { fields: [jobs.clientId], references: [clients.id] }),
   appointment: one(appointments, { fields: [jobs.appointmentId], references: [appointments.id] }),
   service: one(services, { fields: [jobs.serviceId], references: [services.id] }),
+  customService: one(providerCustomServices, { fields: [jobs.customServiceId], references: [providerCustomServices.id] }),
   invoices: many(invoices),
 }));
 
