@@ -539,7 +539,7 @@ export default function AddJobScreen() {
                 </View>
 
                 <View style={styles.inlineList}>
-                  {filteredClients.slice(0, 6).map((client) => {
+                  {filteredClients.map((client) => {
                     const isActive = selectedClientId === client.id;
                     return (
                       <Pressable
