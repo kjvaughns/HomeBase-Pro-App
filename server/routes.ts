@@ -4388,8 +4388,15 @@ Respond with JSON only:
   // Generate or return cached AI checklist for a job
   app.post("/api/jobs/:id/generate-checklist", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
+      const authUserId = req.authenticatedUserId!;
       const job = await storage.getJob(req.params.id);
       if (!job) return res.status(404).json({ error: "Job not found" });
+
+      // Authorization: requester must own the provider account that owns this job
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      if (!providerRecord || job.providerId !== providerRecord.id) {
+        return res.status(403).json({ error: "Access denied" });
+      }
 
       // Return cached checklist if it exists
       const existingChecklist = job.checklist as { id: string; label: string; completed: boolean }[] | null;
@@ -4442,8 +4449,15 @@ Respond with JSON only:
   // Persist checklist toggle state
   app.patch("/api/jobs/:id/checklist-state", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
+      const authUserId = req.authenticatedUserId!;
       const job = await storage.getJob(req.params.id);
       if (!job) return res.status(404).json({ error: "Job not found" });
+
+      // Authorization: requester must own the provider account that owns this job
+      const providerRecord = await storage.getProviderByUserId(authUserId);
+      if (!providerRecord || job.providerId !== providerRecord.id) {
+        return res.status(403).json({ error: "Access denied" });
+      }
 
       const { checklist } = req.body as { checklist: { id: string; label: string; completed: boolean }[] };
       if (!Array.isArray(checklist)) return res.status(400).json({ error: "checklist must be an array" });

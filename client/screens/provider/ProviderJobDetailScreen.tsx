@@ -558,13 +558,31 @@ export default function ProviderJobDetailScreen() {
         <Animated.View entering={FadeInDown.delay(250).duration(400)}>
           <GlassCard style={styles.section}>
             <ThemedText type="label" style={{ color: theme.textSecondary, marginBottom: Spacing.sm }}>
+              WHAT YOU'RE HERE FOR
+            </ThemedText>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
+              <View style={[styles.serviceIconWrap, { backgroundColor: Colors.accent + "18" }]}>
+                <Feather name="tool" size={18} color={Colors.accent} />
+              </View>
+              <ThemedText type="body" style={{ fontWeight: "600", flex: 1 }}>{job.title}</ThemedText>
+            </View>
+          </GlassCard>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(300).duration(400)}>
+          <GlassCard style={styles.section}>
+            <ThemedText type="label" style={{ color: theme.textSecondary, marginBottom: Spacing.sm }}>
               CLIENT'S ISSUE
             </ThemedText>
-            <ThemedText type="body" style={{ lineHeight: 22 }}>
-              {job.description && job.description.trim().length > 0
-                ? job.description
-                : "No detailed intake description available."}
-            </ThemedText>
+            {(() => {
+              const desc = job.description?.trim() ?? "";
+              const isGeneric = desc.length === 0 || desc.length < 10 || desc.toLowerCase() === job.title.toLowerCase();
+              return (
+                <ThemedText type="body" style={{ lineHeight: 22, color: isGeneric ? theme.textSecondary : theme.text }}>
+                  {isGeneric ? "No detailed intake description available." : desc}
+                </ThemedText>
+              );
+            })()}
           </GlassCard>
         </Animated.View>
 
@@ -771,6 +789,13 @@ const styles = StyleSheet.create({
   recurringBadgeText: {
     fontSize: 11,
     fontWeight: "600",
+  },
+  serviceIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
   },
   checklistItem: { flexDirection: "row", alignItems: "center", paddingVertical: Spacing.sm },
   checkbox: {
