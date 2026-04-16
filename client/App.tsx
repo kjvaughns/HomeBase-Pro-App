@@ -53,17 +53,16 @@ export default function App() {
       .then((d) => { if (d.publishableKey) setStripeKey(d.publishableKey); })
       .catch(() => {});
 
-    async function applyUpdateIfAvailable() {
+    async function downloadUpdateIfAvailable() {
       if (__DEV__) return;
       try {
         const update = await Updates.checkForUpdateAsync();
         if (update.isAvailable) {
           await Updates.fetchUpdateAsync();
-          await Updates.reloadAsync();
         }
       } catch (_) {}
     }
-    applyUpdateIfAvailable();
+    downloadUpdateIfAvailable();
   }, []);
   
   return (
