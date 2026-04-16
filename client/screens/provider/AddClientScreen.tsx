@@ -41,17 +41,16 @@ export default function AddClientScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [housefaxData, setHousefaxData] = useState<EnrichmentData | null>(null);
 
+  // AddressAutocomplete is the canonical enrichment owner — it calls POST /api/housefax/enrich
+  // internally when a prediction is selected, then delivers the full EnrichmentData here.
   const handleAddressSelected = (data: EnrichmentData) => {
     setAddress(data.street || "");
     setCity(data.city || "");
     setState(data.state || "");
     setZip(data.zipCode || "");
-    // Store full enrichment data for HouseFax preview and save
-    if (data.bedrooms || data.bathrooms || data.squareFeet || data.yearBuilt) {
-      setHousefaxData(data);
-    } else {
-      setHousefaxData(null);
-    }
+    // Store enrichment payload if Zillow property data was returned
+    const hasPropertyData = data.bedrooms != null || data.bathrooms != null || data.squareFeet != null || data.yearBuilt != null;
+    setHousefaxData(hasPropertyData ? data : null);
   };
 
   const createMutation = useMutation({
@@ -66,7 +65,7 @@ export default function AddClientScreen() {
       state?: string;
       zip?: string;
       notes?: string;
-      homeData?: string;
+      housefaxData?: EnrichmentData;
     }) => {
       const response = await apiRequest("POST", "/api/clients", data);
       return response.json();
