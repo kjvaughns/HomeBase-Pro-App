@@ -1797,15 +1797,48 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
       const [bookedUser] = await db.select().from(users).where(eq(users.id, parsed.data.userId)).catch(() => [null]);
       const [bookedProvider] = await db.select().from(providers).where(eq(providers.id, parsed.data.providerId)).catch(() => [null]);
       if (bookedUser && bookedProvider) {
-        // Try to look up the matching custom service for enriched email
-        const [matchedSvc] = await db.select({ description: providerCustomServices.description })
+        // Extract base service name (before " + " add-on suffix) for DB lookup
+        const baseServiceName = parsed.data.serviceName.split(' + ')[0].trim();
+
+        // Derive add-on names from the service name suffix pattern ("Base + Addon1, Addon2")
+        const addonSuffix = parsed.data.serviceName.includes(' + ')
+          ? parsed.data.serviceName.split(' + ').slice(1).join(' + ')
+          : '';
+        const derivedAddOnNames: string[] | undefined = addonSuffix
+          ? addonSuffix.split(',').map(s => s.trim()).filter(Boolean)
+          : undefined;
+
+        // Look up custom service using base name for serviceDescription
+        const [matchedSvc] = await db.select({
+          description: providerCustomServices.description,
+        })
           .from(providerCustomServices)
           .where(and(
             eq(providerCustomServices.providerId, bookedProvider.id),
-            eq(providerCustomServices.name, parsed.data.serviceName),
+            eq(providerCustomServices.name, baseServiceName),
             eq(providerCustomServices.isPublished, true)
           ))
           .catch(() => [null]);
+
+        // Build intakeAnswers from answersJson (raw body field) with fallback to description
+        const rawAnswersJson = req.body.answersJson as string | undefined;
+        let intakeAnswersSummary: string | undefined;
+        if (rawAnswersJson) {
+          try {
+            const answersObj = JSON.parse(rawAnswersJson);
+            if (typeof answersObj === 'object' && answersObj !== null) {
+              const lines = Object.entries(answersObj)
+                .map(([k, v]) => `${k}: ${v}`)
+                .filter(([, v]) => v);
+              intakeAnswersSummary = lines.length > 0 ? lines.join('\n') : undefined;
+            } else if (typeof answersObj === 'string') {
+              intakeAnswersSummary = answersObj;
+            }
+          } catch { /* ignore invalid JSON */ }
+        }
+        if (!intakeAnswersSummary && parsed.data.description) {
+          intakeAnswersSummary = parsed.data.description;
+        }
 
         dispatch('booking.created', {
           clientEmail: bookedUser.email,
@@ -1819,17 +1852,8 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
           confirmationNumber: appointment.id,
           description: parsed.data.description ?? undefined,
           serviceDescription: matchedSvc?.description ?? undefined,
-          intakeAnswers: (() => {
-            const parts: string[] = [];
-            if (parsed.data.notes) parts.push(parsed.data.notes);
-            if (parsed.data.description && !parts.some(p => p.includes(parsed.data.description!))) {
-              parts.push(`Customer request: ${parsed.data.description}`);
-            }
-            return parts.length > 0 ? parts.join('\n') : undefined;
-          })(),
-          addOns: (req.body.addOns && Array.isArray(req.body.addOns))
-            ? (req.body.addOns as string[])
-            : undefined,
+          intakeAnswers: intakeAnswersSummary,
+          addOns: derivedAddOnNames,
           relatedRecordType: 'appointment',
           relatedRecordId: appointment.id,
           recipientUserId: bookedUser.id,
