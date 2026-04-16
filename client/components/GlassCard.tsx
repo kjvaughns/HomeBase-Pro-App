@@ -76,6 +76,7 @@ export function GlassCard({
           intensity={blurIntensity}
           tint={isDark ? "dark" : "light"}
           style={StyleSheet.absoluteFill}
+          pointerEvents="none"
         />
       ) : null}
       <View style={[styles.content, noPadding && styles.noPadding, contentStyle]}>

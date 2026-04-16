@@ -268,16 +268,21 @@ export default function ServiceBlueprintWizardScreen() {
   };
 
   const fetchAIBlueprint = async (): Promise<AIBlueprint | null> => {
-    if (isOnboardingMode) return null;
     if (aiLoadedRef.current && aiBlueprint) return aiBlueprint;
     if (loadingAI) return null;
     setLoadingAI(true);
     setAiError("");
     try {
-      const url = new URL("/api/ai/service-blueprint", getApiUrl());
+      const endpoint = isOnboardingMode
+        ? "/api/ai/onboarding/service-blueprint"
+        : "/api/ai/service-blueprint";
+      const url = new URL(endpoint, getApiUrl());
       const resp = await fetch(url.toString(), {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        headers: {
+          "Content-Type": "application/json",
+          ...(isOnboardingMode ? {} : getAuthHeaders()),
+        },
         body: JSON.stringify({
           businessDescription: buildBusinessContext(),
           serviceType: serviceName,

@@ -2894,6 +2894,67 @@ Respond ONLY with a JSON object:
     }
   });
 
+  app.post("/api/ai/onboarding/service-blueprint", onboardingRateLimit, async (req: Request, res: Response) => {
+    try {
+      const { businessDescription, serviceType, category, providerLocation } = req.body as {
+        businessDescription: string;
+        serviceType: string;
+        category: string;
+        providerLocation?: string;
+      };
+      if (!serviceType || !category) {
+        return res.status(400).json({ error: "serviceType and category are required" });
+      }
+
+      const prompt = `You are a home services business expert. Generate a complete service blueprint for a provider offering this service.
+
+Business: ${businessDescription || "Home service provider"}
+Service: ${serviceType}
+Category: ${category}
+Location: ${providerLocation || "local area"}
+
+Return a JSON object with exactly these fields:
+{
+  "pricingModel": {
+    "type": "flat" | "variable" | "service_call" | "quote",
+    "basePrice": number (null if quote),
+    "priceTiers": [{"label": string, "price": number}],
+    "unit": "per job" | "per hour" | "per sqft" | "per visit",
+    "description": "one sentence explaining the pricing logic"
+  },
+  "intakeQuestions": [
+    {"id": string, "question": string, "type": "text" | "select" | "number", "options": string[] | null, "required": boolean}
+  ],
+  "addOns": [
+    {"id": string, "name": string, "description": string, "price": number}
+  ],
+  "bookingMode": "instant" | "starts_at" | "quote_only",
+  "aiPricingInsight": "one sentence identifying a pricing opportunity for this service type"
+}
+
+Rules:
+- intakeQuestions: 3-5 questions specific to this exact service
+- addOns: 2-4 high-value add-ons with realistic prices
+- bookingMode: use "instant" for flat-rate, "starts_at" for variable, "quote_only" for complex jobs
+- priceTiers: only include if type is "variable"
+- All prices in USD as numbers only`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 800,
+        response_format: { type: "json_object" },
+      });
+
+      const raw = response.choices[0]?.message?.content?.trim() || "{}";
+      const blueprint = JSON.parse(raw);
+      res.json({ blueprint });
+    } catch (error) {
+      console.error("Onboarding service blueprint error:", error);
+      res.status(500).json({ error: "Failed to generate service blueprint" });
+    }
+  });
+
   app.post("/api/ai/onboarding/generate-bio", onboardingRateLimit, async (req: Request, res: Response) => {
     try {
       const { businessName, category, serviceName } = req.body as {

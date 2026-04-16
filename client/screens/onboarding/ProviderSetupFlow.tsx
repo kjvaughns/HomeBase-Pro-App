@@ -534,6 +534,7 @@ function Step2Availability({
                 key={day.id}
                 onPress={() => toggleDay(day.id)}
                 testID={`day-${day.id}`}
+                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                 style={[
                   styles.dayPill,
                   {
