@@ -378,6 +378,9 @@ export async function runBootMigrations(): Promise<void> {
       ["providers.is_public column",         `SELECT is_public FROM providers LIMIT 0`],
     ];
 
+    // ── jobs: AI-generated checklist column ───────────────────────────────
+    await runSql("jobs.checklist", `ALTER TABLE jobs ADD COLUMN IF NOT EXISTS checklist JSONB`);
+
     // ── clients: HouseFax enrichment columns ─────────────────────────────
     await runSql("clients.home_data", `ALTER TABLE clients ADD COLUMN IF NOT EXISTS home_data TEXT`);
     await runSql("clients.home_id",   `ALTER TABLE clients ADD COLUMN IF NOT EXISTS home_id VARCHAR REFERENCES homes(id) ON DELETE SET NULL`);

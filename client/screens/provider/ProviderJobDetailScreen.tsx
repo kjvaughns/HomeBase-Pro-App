@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { StyleSheet, View, ScrollView, Pressable, Linking, Alert, ActivityIndicator, Image, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -45,6 +45,7 @@ interface ApiJob {
   completedAt: string | null;
   isRecurring?: boolean;
   recurringFrequency?: string | null;
+  checklist?: JobChecklistItem[] | null;
 }
 
 interface ApiClient {
@@ -165,9 +166,10 @@ function StatusBanner({ status }: StatusBannerProps) {
 interface ChecklistSectionProps {
   checklist: JobChecklistItem[];
   onToggle: (id: string) => void;
+  loading?: boolean;
 }
 
-function ChecklistSection({ checklist, onToggle }: ChecklistSectionProps) {
+function ChecklistSection({ checklist, onToggle, loading }: ChecklistSectionProps) {
   const { theme } = useTheme();
   const completedCount = checklist.filter((item) => item.completed).length;
 
@@ -175,39 +177,55 @@ function ChecklistSection({ checklist, onToggle }: ChecklistSectionProps) {
     <GlassCard style={styles.section}>
       <View style={styles.sectionHeader}>
         <ThemedText type="label" style={{ color: theme.textSecondary }}>CHECKLIST</ThemedText>
-        <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-          {completedCount}/{checklist.length}
-        </ThemedText>
-      </View>
-      {checklist.map((item) => (
-        <Pressable
-          key={item.id}
-          style={styles.checklistItem}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            onToggle(item.id);
-          }}
-        >
-          <View
-            style={[
-              styles.checkbox,
-              item.completed && { backgroundColor: Colors.accent, borderColor: Colors.accent },
-              !item.completed && { borderColor: theme.textSecondary },
-            ]}
-          >
-            {item.completed ? <Feather name="check" size={14} color="#FFFFFF" /> : null}
-          </View>
-          <ThemedText
-            type="body"
-            style={[
-              { flex: 1 },
-              item.completed && { textDecorationLine: "line-through", color: theme.textSecondary },
-            ]}
-          >
-            {item.label}
+        {loading ? (
+          <ActivityIndicator size="small" color={Colors.accent} />
+        ) : (
+          <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+            {completedCount}/{checklist.length}
           </ThemedText>
-        </Pressable>
-      ))}
+        )}
+      </View>
+      {loading ? (
+        <View style={{ paddingVertical: Spacing.lg, alignItems: "center" }}>
+          <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+            Generating smart checklist...
+          </ThemedText>
+        </View>
+      ) : checklist.length > 0 ? (
+        checklist.map((item) => (
+          <Pressable
+            key={item.id}
+            style={styles.checklistItem}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              onToggle(item.id);
+            }}
+          >
+            <View
+              style={[
+                styles.checkbox,
+                item.completed && { backgroundColor: Colors.accent, borderColor: Colors.accent },
+                !item.completed && { borderColor: theme.textSecondary },
+              ]}
+            >
+              {item.completed ? <Feather name="check" size={14} color="#FFFFFF" /> : null}
+            </View>
+            <ThemedText
+              type="body"
+              style={[
+                { flex: 1 },
+                item.completed && { textDecorationLine: "line-through", color: theme.textSecondary },
+              ]}
+            >
+              {item.label}
+            </ThemedText>
+          </Pressable>
+        ))
+      ) : (
+        <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+          No checklist items
+        </ThemedText>
+      )}
     </GlassCard>
   );
 }
@@ -226,6 +244,8 @@ export default function ProviderJobDetailScreen() {
   const [displayStatus, setDisplayStatus] = useState<DisplayStatus | null>(null);
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
+  const [checklistLoading, setChecklistLoading] = useState(false);
+  const checklistFetched = useRef(false);
 
   const { data: jobData, isLoading } = useQuery<{ job: ApiJob }>({
     queryKey: ["/api/jobs", jobId],
@@ -245,20 +265,50 @@ export default function ProviderJobDetailScreen() {
     return job ? mapDbStatusToDisplay(job.status) : "scheduled";
   }, [displayStatus, job]);
 
-  const [localChecklist, setLocalChecklist] = useState<JobChecklistItem[]>([
-    { id: "1", label: "Arrived at location", completed: false },
-    { id: "2", label: "Assessed the issue", completed: false },
-    { id: "3", label: "Discussed scope with customer", completed: false },
-    { id: "4", label: "Completed main work", completed: false },
-    { id: "5", label: "Cleaned up area", completed: false },
-    { id: "6", label: "Walkthrough with customer", completed: false },
-  ]);
+  const [localChecklist, setLocalChecklist] = useState<JobChecklistItem[]>([]);
+
+  // Fetch (or generate) AI checklist on mount, once job is loaded
+  useEffect(() => {
+    if (!job || checklistFetched.current) return;
+    // If job already has a checklist from the server, use it immediately
+    if (job.checklist && Array.isArray(job.checklist) && job.checklist.length > 0) {
+      setLocalChecklist(job.checklist);
+      checklistFetched.current = true;
+      return;
+    }
+    checklistFetched.current = true;
+    setChecklistLoading(true);
+    const url = new URL(`/api/jobs/${jobId}/generate-checklist`, getApiUrl());
+    apiRequest("POST", url.toString(), {})
+      .then(r => r.json())
+      .then((data: { checklist?: JobChecklistItem[] }) => {
+        if (data.checklist && Array.isArray(data.checklist)) {
+          setLocalChecklist(data.checklist);
+        }
+      })
+      .catch(() => {
+        // Fallback to generic checklist on error
+        setLocalChecklist([
+          { id: "1", label: "Arrive at location", completed: false },
+          { id: "2", label: "Assess the issue", completed: false },
+          { id: "3", label: "Discuss scope with client", completed: false },
+          { id: "4", label: "Complete main work", completed: false },
+          { id: "5", label: "Clean up area", completed: false },
+          { id: "6", label: "Walkthrough with client", completed: false },
+        ]);
+      })
+      .finally(() => setChecklistLoading(false));
+  }, [job, jobId]);
 
   const handleToggleChecklist = useCallback((id: string) => {
-    setLocalChecklist((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, completed: !item.completed } : item))
-    );
-  }, []);
+    setLocalChecklist((prev) => {
+      const updated = prev.map((item) => (item.id === id ? { ...item, completed: !item.completed } : item));
+      // Fire-and-forget state persistence
+      const url = new URL(`/api/jobs/${jobId}/checklist-state`, getApiUrl());
+      apiRequest("PATCH", url.toString(), { checklist: updated }).catch(() => {});
+      return updated;
+    });
+  }, [jobId]);
 
   const updateJobMutation = useMutation({
     mutationFn: async (newStatus: DBJobStatus) => {
@@ -502,17 +552,25 @@ export default function ProviderJobDetailScreen() {
                 {job.scheduledTime ? ` at ${job.scheduledTime}` : ""}
               </ThemedText>
             </View>
-            {job.description ? (
-              <ThemedText type="body" style={{ color: theme.textSecondary, marginTop: Spacing.sm }}>
-                {job.description}
-              </ThemedText>
-            ) : null}
+          </GlassCard>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(250).duration(400)}>
+          <GlassCard style={styles.section}>
+            <ThemedText type="label" style={{ color: theme.textSecondary, marginBottom: Spacing.sm }}>
+              CLIENT'S ISSUE
+            </ThemedText>
+            <ThemedText type="body" style={{ lineHeight: 22 }}>
+              {job.description && job.description.trim().length > 0
+                ? job.description
+                : "No detailed intake description available."}
+            </ThemedText>
           </GlassCard>
         </Animated.View>
 
         {resolvedDisplayStatus !== "cancelled" && resolvedDisplayStatus !== "completed" ? (
           <Animated.View entering={FadeInDown.delay(400).duration(400)}>
-            <ChecklistSection checklist={localChecklist} onToggle={handleToggleChecklist} />
+            <ChecklistSection checklist={localChecklist} onToggle={handleToggleChecklist} loading={checklistLoading} />
           </Animated.View>
         ) : null}
 

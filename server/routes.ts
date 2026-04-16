@@ -4385,6 +4385,77 @@ Respond with JSON only:
     }
   });
 
+  // Generate or return cached AI checklist for a job
+  app.post("/api/jobs/:id/generate-checklist", requireAuth, async (req: Request<IdParams>, res: Response) => {
+    try {
+      const job = await storage.getJob(req.params.id);
+      if (!job) return res.status(404).json({ error: "Job not found" });
+
+      // Return cached checklist if it exists
+      const existingChecklist = job.checklist as { id: string; label: string; completed: boolean }[] | null;
+      if (existingChecklist && Array.isArray(existingChecklist) && existingChecklist.length > 0) {
+        return res.json({ checklist: existingChecklist });
+      }
+
+      // Generate checklist with OpenAI
+      const prompt = [
+        `You are a home services task manager. Generate a practical 6-8 step checklist for a service provider performing this job.`,
+        `Job type: ${job.title}`,
+        job.description ? `Client's issue: ${job.description}` : "",
+        `Return ONLY a valid JSON array of strings with no markdown, no extra keys, and no explanation. Each string is a clear, actionable step.`,
+        `Example: ["Arrive and introduce yourself", "Assess the issue", "Complete the repair", ...]`,
+      ].filter(Boolean).join("\n");
+
+      const aiResponse = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.4,
+        max_tokens: 400,
+      });
+
+      const raw = aiResponse.choices[0]?.message?.content?.trim() || "[]";
+      let labels: string[] = [];
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) labels = parsed.filter((s: unknown) => typeof s === "string");
+      } catch {
+        // Fallback if GPT returns non-JSON
+        labels = raw.split("\n").map(l => l.replace(/^[-\d.]+\s*/, "").trim()).filter(Boolean).slice(0, 8);
+      }
+
+      if (labels.length === 0) {
+        labels = ["Arrive at location", "Assess the issue", "Discuss scope with client", "Complete main work", "Clean up area", "Walkthrough with client"];
+      }
+
+      const checklist = labels.map((label, i) => ({ id: String(i + 1), label, completed: false }));
+
+      // Persist to DB
+      await db.update(jobs).set({ checklist }).where(eq(jobs.id, req.params.id));
+
+      res.json({ checklist });
+    } catch (error) {
+      console.error("Generate checklist error:", error);
+      res.status(500).json({ error: "Failed to generate checklist" });
+    }
+  });
+
+  // Persist checklist toggle state
+  app.patch("/api/jobs/:id/checklist-state", requireAuth, async (req: Request<IdParams>, res: Response) => {
+    try {
+      const job = await storage.getJob(req.params.id);
+      if (!job) return res.status(404).json({ error: "Job not found" });
+
+      const { checklist } = req.body as { checklist: { id: string; label: string; completed: boolean }[] };
+      if (!Array.isArray(checklist)) return res.status(400).json({ error: "checklist must be an array" });
+
+      await db.update(jobs).set({ checklist }).where(eq(jobs.id, req.params.id));
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Checklist state error:", error);
+      res.status(500).json({ error: "Failed to save checklist state" });
+    }
+  });
+
   // Get invoice linked to a job
   app.get("/api/jobs/:id/invoice", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
