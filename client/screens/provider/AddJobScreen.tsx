@@ -127,6 +127,7 @@ export default function AddJobScreen() {
   const [estimatedPrice, setEstimatedPrice] = useState("");
   const [baseServicePriceNum, setBaseServicePriceNum] = useState(0);
   const [selectedAddOns, setSelectedAddOns] = useState<ServiceAddOn[]>([]);
+  const [serviceDescription, setServiceDescription] = useState<string>("");
   const [notes, setNotes] = useState("");
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -164,6 +165,7 @@ export default function AddJobScreen() {
   const handleSelectService = (svc: CustomService) => {
     setSelectedService(svc);
     setServiceName(svc.name);
+    setServiceDescription(svc.description || "");
     setSelectedAddOns([]);
 
     let priceNum = 0;
@@ -239,7 +241,9 @@ export default function AddJobScreen() {
       estimatedDuration: selectedService?.duration || undefined,
       estimatedPrice: estimatedPrice.trim() || undefined,
       notes: notes.trim() || undefined,
-      selectedAddOnsJson: selectedAddOns.length > 0 ? JSON.stringify(selectedAddOns) : undefined,
+      pricingType: selectedService?.pricingType || undefined,
+      serviceDescription: serviceDescription || undefined,
+      selectedAddOns: selectedAddOns.length > 0 ? selectedAddOns : undefined,
     });
   };
 

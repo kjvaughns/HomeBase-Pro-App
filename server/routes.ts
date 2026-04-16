@@ -1819,7 +1819,17 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
           confirmationNumber: appointment.id,
           description: parsed.data.description ?? undefined,
           serviceDescription: matchedSvc?.description ?? undefined,
-          intakeAnswers: parsed.data.description ? `Customer's request: ${parsed.data.description}` : undefined,
+          intakeAnswers: (() => {
+            const parts: string[] = [];
+            if (parsed.data.notes) parts.push(parsed.data.notes);
+            if (parsed.data.description && !parts.some(p => p.includes(parsed.data.description!))) {
+              parts.push(`Customer request: ${parsed.data.description}`);
+            }
+            return parts.length > 0 ? parts.join('\n') : undefined;
+          })(),
+          addOns: (req.body.addOns && Array.isArray(req.body.addOns))
+            ? (req.body.addOns as string[])
+            : undefined,
           relatedRecordType: 'appointment',
           relatedRecordId: appointment.id,
           recipientUserId: bookedUser.id,
@@ -4620,11 +4630,17 @@ Respond with JSON only:
                 if (addOnRow) fullSvcData.addOnsJson = addOnRow.addOnsJson;
               }
 
-              // Parse selected add-ons from req.body (frontend sends which add-ons were chosen)
+              // Parse selected add-ons from req.body — frontend sends a structured array
               let selectedAddOns: Array<{ name: string; price: number }> | undefined;
-              if (req.body.selectedAddOnsJson) {
-                try { selectedAddOns = JSON.parse(req.body.selectedAddOnsJson); } catch { /* ignore */ }
+              if (req.body.selectedAddOns && Array.isArray(req.body.selectedAddOns)) {
+                selectedAddOns = req.body.selectedAddOns as Array<{ name: string; price: number }>;
+              } else if (typeof req.body.selectedAddOns === 'string') {
+                try { selectedAddOns = JSON.parse(req.body.selectedAddOns); } catch { /* ignore */ }
               }
+
+              // Use pricingType and serviceDescription from req.body if backend snapshot is unavailable
+              const pricingTypeFromBody = req.body.pricingType as string | undefined;
+              const serviceDescFromBody = req.body.serviceDescription as string | undefined;
 
               await sendProviderScheduledJobEmail({
                 clientEmail: jobClient.email,
@@ -4638,8 +4654,8 @@ Respond with JSON only:
                 address: newJob.address || jobClient.address || undefined,
                 estimatedPrice: newJob.estimatedPrice || undefined,
                 description: newJob.description || undefined,
-                serviceDescription: fullSvcData?.description || undefined,
-                pricingType: fullSvcData?.pricingType || undefined,
+                serviceDescription: fullSvcData?.description || serviceDescFromBody || undefined,
+                pricingType: fullSvcData?.pricingType || pricingTypeFromBody || undefined,
                 addOns: selectedAddOns,
               });
             }
