@@ -706,25 +706,77 @@ export async function sendJobStatusChangedEmail(data: {
 }): Promise<SendResult> {
   const statusLabel: Record<string, string> = {
     scheduled: 'Scheduled',
+    confirmed: 'Confirmed',
+    on_my_way: 'On The Way',
+    arrived: 'Arrived',
     in_progress: 'In Progress',
     completed: 'Completed',
     cancelled: 'Cancelled',
     on_hold: 'On Hold',
   };
+
+  type StepCopy = { subject: string; headline: string; lead: string; closing: string };
+  const stepCopy: Record<string, StepCopy> = {
+    confirmed: {
+      subject: `Your ${data.serviceName} appointment is confirmed`,
+      headline: 'Appointment Confirmed',
+      lead: `Good news — ${data.providerName} has confirmed your ${data.serviceName} appointment. We'll send you a heads-up when they're on their way.`,
+      closing: `You can view full details or reach out to ${data.providerName} any time from the HomeBase app.`,
+    },
+    on_my_way: {
+      subject: `${data.providerName} is on the way`,
+      headline: 'On The Way',
+      lead: `${data.providerName} has just left and is heading to your appointment for ${data.serviceName}. They should be with you shortly.`,
+      closing: `If you need to reach them before they arrive, you can message directly in the HomeBase app.`,
+    },
+    arrived: {
+      subject: `${data.providerName} has arrived`,
+      headline: 'Your Provider Has Arrived',
+      lead: `${data.providerName} has arrived for your ${data.serviceName} appointment.`,
+      closing: `If you're not at the property, you can reach them from the HomeBase app.`,
+    },
+    in_progress: {
+      subject: `Work has started on your ${data.serviceName}`,
+      headline: 'Work In Progress',
+      lead: `${data.providerName} has started working on your ${data.serviceName}. We'll let you know when the job is complete.`,
+      closing: `Any questions along the way? Reach out from the HomeBase app.`,
+    },
+    completed: {
+      subject: `Your ${data.serviceName} is complete`,
+      headline: 'Service Complete',
+      lead: `${data.providerName} has finished your ${data.serviceName}. Thank you for booking with HomeBase!`,
+      closing: `You can review the visit, pay any open invoice, or rebook ${data.providerName} any time from the HomeBase app.`,
+    },
+    cancelled: {
+      subject: `Your ${data.serviceName} appointment was cancelled`,
+      headline: 'Appointment Cancelled',
+      lead: `Your ${data.serviceName} appointment with ${data.providerName} has been cancelled.`,
+      closing: `If this wasn't expected, please reach out to ${data.providerName} through the HomeBase app.`,
+    },
+  };
+
+  const copy = stepCopy[data.newStatus];
   const label = statusLabel[data.newStatus] ?? data.newStatus;
+
+  const headline = copy?.headline ?? 'Job Status Update';
+  const subject = copy?.subject ?? `Job Update: ${data.serviceName} is now ${label}`;
+  const lead = copy?.lead ?? `The status of your ${data.serviceName} job with ${data.providerName} has been updated to ${label}.`;
+  const closing = copy?.closing ?? `If you have any questions, please reach out through the HomeBase app.`;
+
   const body = greeting(data.clientName) +
-    paragraph(`We wanted to let you know that the status of your ${data.serviceName} job with ${data.providerName} has been updated to <strong>${label}</strong>.`) +
+    paragraph(lead) +
     (data.scheduledDate || data.notes
       ? infoBox(
-          (data.scheduledDate ? infoRow('Scheduled Date', data.scheduledDate) : '') +
+          (data.scheduledDate ? infoRow('Scheduled', data.scheduledDate) : '') +
           (data.notes ? infoRow('Notes', data.notes) : '')
         )
       : '') +
-    paragraph(`If you have any questions, please reach out through the HomeBase app.`);
+    paragraph(closing);
+
   return sendEmail(
     data.clientEmail,
-    `Job Update: ${data.serviceName} is now ${label}`,
-    buildEmailBase('Job Status Update', body, 'View in HomeBase', 'https://homebaseproapp.com')
+    subject,
+    buildEmailBase(headline, body, 'View in HomeBase', 'https://homebaseproapp.com')
   );
 }
 

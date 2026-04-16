@@ -4593,10 +4593,13 @@ Respond with JSON only:
     if (!job.clientId || !job.providerId) return;
     const [client] = await db.select().from(clients).where(eq(clients.id, job.clientId)).catch(() => [null]);
     const [provider] = await db.select().from(providers).where(eq(providers.id, job.providerId)).catch(() => [null]);
-    if (!client || !provider || !client.email) return;
+    if (!client || !provider) return;
+    const clientEmail = client.email ?? undefined;
+    const clientName = `${client.firstName || ''} ${client.lastName || ''}`.trim() || clientEmail;
     await dispatch('job.status_changed', {
-      clientEmail: client.email,
-      clientName: `${client.firstName || ''} ${client.lastName || ''}`.trim() || client.email,
+      clientEmail,
+      clientName,
+      clientPhone: client.phone ?? undefined,
       providerName: provider.businessName,
       serviceName: job.title ?? 'your job',
       newStatus,
@@ -4815,12 +4818,17 @@ Respond with JSON only:
   app.post("/api/jobs/:id/complete", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
       const { finalPrice } = req.body;
+      const prior = await storage.getJob(req.params.id);
+      if (!prior) return res.status(404).json({ error: "Job not found" });
+      if (!(await assertProviderOwnership(req, prior.providerId, res))) return;
       const job = await storage.completeJob(req.params.id, finalPrice);
       if (!job) {
         return res.status(404).json({ error: "Job not found" });
       }
-      // Fire job status change email (fire-and-forget)
-      dispatchJobStatusEmail(job, 'completed').catch((e: unknown) => console.error('job.status_changed dispatch error:', e));
+      // Fire job status change email only if status actually transitioned (prevents duplicates)
+      if (prior?.status !== 'completed') {
+        dispatchJobStatusEmail(job, 'completed').catch((e: unknown) => console.error('job.status_changed dispatch error:', e));
+      }
       // Fire rebooking nudge push + email to homeowner (fire-and-forget)
       (async () => {
         try {
@@ -4867,12 +4875,17 @@ Respond with JSON only:
 
   app.post("/api/jobs/:id/start", requireAuth, async (req: Request<IdParams>, res: Response) => {
     try {
+      const prior = await storage.getJob(req.params.id);
+      if (!prior) return res.status(404).json({ error: "Job not found" });
+      if (!(await assertProviderOwnership(req, prior.providerId, res))) return;
       const job = await storage.updateJob(req.params.id, { status: "in_progress" });
       if (!job) {
         return res.status(404).json({ error: "Job not found" });
       }
-      // Fire job status change email (fire-and-forget)
-      dispatchJobStatusEmail(job, 'in_progress').catch((e: unknown) => console.error('job.status_changed dispatch error:', e));
+      // Fire job status change email only if status actually transitioned (prevents duplicates)
+      if (prior?.status !== 'in_progress') {
+        dispatchJobStatusEmail(job, 'in_progress').catch((e: unknown) => console.error('job.status_changed dispatch error:', e));
+      }
       res.json({ job });
     } catch (error) {
       console.error("Start job error:", error);

@@ -426,16 +426,66 @@ async function _dispatch(event: NotificationEvent, payload: DispatchPayload): Pr
 
     case 'job.status_changed': {
       const { clientEmail, clientName, providerName, serviceName, newStatus, scheduledDate, notes } = payload;
-      if (!clientEmail || !clientName || !providerName || !serviceName || !newStatus) break;
-      const deliveryId = await logDelivery({
-        channel: 'email', status: 'queued', eventType: event,
-        recipientEmail: clientEmail,
-        recipientUserId: payload.recipientUserId,
-        relatedRecordType: payload.relatedRecordType,
-        relatedRecordId: payload.relatedRecordId,
-      });
-      const result = await sendJobStatusChangedEmail({ clientEmail, clientName, providerName, serviceName, newStatus, scheduledDate, notes });
-      await updateDelivery(deliveryId, result.success ? 'sent' : 'failed', result.messageId, result.error);
+      if (!providerName || !serviceName || !newStatus) {
+        console.log('[notification] job.status_changed skipped — missing provider/service/status');
+        break;
+      }
+
+      // Step-specific push copy
+      type PushCopy = { title: string; body: string };
+      const pushCopy: Record<string, PushCopy> = {
+        confirmed:   { title: 'Appointment confirmed', body: `${providerName} confirmed your ${serviceName} appointment.` },
+        on_my_way:   { title: `${providerName} is on the way`, body: `Your ${serviceName} provider is heading to you now.` },
+        arrived:     { title: `${providerName} has arrived`, body: `Your provider just arrived for your ${serviceName} appointment.` },
+        in_progress: { title: 'Work has started', body: `${providerName} has started your ${serviceName}.` },
+        completed:   { title: 'Service complete', body: `${providerName} finished your ${serviceName}. Thank you!` },
+        cancelled:   { title: 'Appointment cancelled', body: `Your ${serviceName} with ${providerName} was cancelled.` },
+      };
+      const push = pushCopy[newStatus] ?? { title: 'Job update', body: `Your ${serviceName} status changed.` };
+
+      // Email — requires client email + name
+      if (clientEmail && clientName) {
+        const deliveryId = await logDelivery({
+          channel: 'email', status: 'queued', eventType: event,
+          recipientEmail: clientEmail,
+          recipientUserId: payload.recipientUserId,
+          relatedRecordType: payload.relatedRecordType,
+          relatedRecordId: payload.relatedRecordId,
+        });
+        try {
+          const result = await sendJobStatusChangedEmail({ clientEmail, clientName, providerName, serviceName, newStatus, scheduledDate, notes });
+          await updateDelivery(deliveryId, result.success ? 'sent' : 'failed', result.messageId, result.error);
+          console.log(`[notification] job.status_changed(${newStatus}) email ${result.success ? 'sent' : 'failed'} to ${clientEmail}`);
+        } catch (err: any) {
+          await updateDelivery(deliveryId, 'failed', undefined, err?.message);
+          console.error(`[notification] job.status_changed(${newStatus}) email error:`, err);
+        }
+      } else {
+        console.log(`[notification] job.status_changed(${newStatus}) email skipped — no client email/name`);
+      }
+
+      // Push — requires linked homeowner user
+      if (payload.recipientUserId) {
+        try {
+          await dispatchNotification(
+            payload.recipientUserId,
+            push.title,
+            push.body,
+            'job.status_changed',
+            {
+              jobId: payload.relatedRecordId,
+              newStatus,
+              providerName,
+              serviceName,
+              screen: 'ProviderJobDetail',
+            },
+            'bookings',
+          );
+          console.log(`[notification] job.status_changed(${newStatus}) push dispatched to user ${payload.recipientUserId}`);
+        } catch (err) {
+          console.error(`[notification] job.status_changed(${newStatus}) push error:`, err);
+        }
+      }
       break;
     }
 
