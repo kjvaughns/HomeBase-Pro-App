@@ -572,7 +572,7 @@ export default function ProviderJobDetailScreen() {
         <Animated.View entering={FadeInDown.delay(300).duration(400)}>
           <GlassCard style={styles.section}>
             <ThemedText type="label" style={{ color: theme.textSecondary, marginBottom: Spacing.sm }}>
-              CLIENT'S ISSUE
+              WHAT THE CLIENT NEEDS
             </ThemedText>
             {(() => {
               const desc = job.description?.trim() ?? "";
