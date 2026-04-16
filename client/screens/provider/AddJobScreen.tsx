@@ -388,6 +388,21 @@ export default function AddJobScreen() {
                       {selectedService.description}
                     </ThemedText>
                   ) : null}
+                  <View style={styles.serviceTagRow}>
+                    <View style={[styles.serviceTag, { backgroundColor: Colors.accent + "22" }]}>
+                      <ThemedText style={[styles.serviceTagText, { color: Colors.accent }]}>
+                        {selectedService.category}
+                      </ThemedText>
+                    </View>
+                    <View style={[styles.serviceTag, { backgroundColor: Colors.accent + "22" }]}>
+                      <ThemedText style={[styles.serviceTagText, { color: Colors.accent }]}>
+                        {selectedService.pricingType === "fixed" ? "Flat Rate"
+                          : selectedService.pricingType === "variable" ? "Variable"
+                          : selectedService.pricingType === "service_call" ? "Service Call"
+                          : "By Quote"}
+                      </ThemedText>
+                    </View>
+                  </View>
                 </View>
                 <View style={[styles.priceBadge, { backgroundColor: Colors.accent }]}>
                   <ThemedText style={styles.priceBadgeText}>
@@ -928,6 +943,10 @@ const styles = StyleSheet.create({
   priceBadgeText: { color: "#FFFFFF", fontSize: 12, fontWeight: "700" },
   durationRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6 },
   durationText: { fontSize: 11, fontWeight: "500" },
+
+  serviceTagRow: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 5 },
+  serviceTag: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
+  serviceTagText: { fontSize: 10, fontWeight: "600" },
 
   divider: { height: 1, marginVertical: Spacing.md },
 

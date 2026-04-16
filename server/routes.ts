@@ -1797,6 +1797,16 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
       const [bookedUser] = await db.select().from(users).where(eq(users.id, parsed.data.userId)).catch(() => [null]);
       const [bookedProvider] = await db.select().from(providers).where(eq(providers.id, parsed.data.providerId)).catch(() => [null]);
       if (bookedUser && bookedProvider) {
+        // Try to look up the matching custom service for enriched email
+        const [matchedSvc] = await db.select({ description: providerCustomServices.description })
+          .from(providerCustomServices)
+          .where(and(
+            eq(providerCustomServices.providerId, bookedProvider.id),
+            eq(providerCustomServices.name, parsed.data.serviceName),
+            eq(providerCustomServices.isPublished, true)
+          ))
+          .catch(() => [null]);
+
         dispatch('booking.created', {
           clientEmail: bookedUser.email,
           clientName: `${bookedUser.firstName || ''} ${bookedUser.lastName || ''}`.trim() || bookedUser.email,
@@ -1808,6 +1818,8 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
           estimatedPrice: parsed.data.estimatedPrice ?? undefined,
           confirmationNumber: appointment.id,
           description: parsed.data.description ?? undefined,
+          serviceDescription: matchedSvc?.description ?? undefined,
+          intakeAnswers: parsed.data.description ? `Customer's request: ${parsed.data.description}` : undefined,
           relatedRecordType: 'appointment',
           relatedRecordId: appointment.id,
           recipientUserId: bookedUser.id,
@@ -4521,18 +4533,43 @@ Respond with JSON only:
         return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
       }
 
+      // Fetch custom service snapshot before transaction for description/price enrichment
+      let svcSnapshot: { description: string | null; pricingType: string; basePrice: string | null; priceFrom: string | null } | null = null;
+      if (parsed.data.customServiceId) {
+        const [svcRow] = await db.select({
+          description: providerCustomServices.description,
+          pricingType: providerCustomServices.pricingType,
+          basePrice: providerCustomServices.basePrice,
+          priceFrom: providerCustomServices.priceFrom,
+        }).from(providerCustomServices)
+          .where(eq(providerCustomServices.id, parsed.data.customServiceId))
+          .catch(() => [null]);
+        if (svcRow) svcSnapshot = svcRow;
+      }
+
+      // Compute effective estimatedPrice: provider manual entry takes precedence, then service price
+      const effectivePrice = parsed.data.estimatedPrice
+        || (svcSnapshot?.pricingType === 'fixed' || svcSnapshot?.pricingType === 'service_call' ? svcSnapshot?.basePrice ?? undefined : undefined)
+        || (svcSnapshot?.pricingType === 'variable' ? svcSnapshot?.priceFrom ?? undefined : undefined);
+
       // Atomic transaction: create job and appointment together so booking data model is
       // always consistent. If appointment creation fails the job is rolled back too.
       const { job: newJob, appointment } = await db.transaction(async (tx) => {
-        const [job] = await tx.insert(jobs).values(parsed.data).returning();
+        const jobValues = {
+          ...parsed.data,
+          estimatedPrice: effectivePrice ?? parsed.data.estimatedPrice,
+        };
+        const [job] = await tx.insert(jobs).values(jobValues).returning();
 
         // Create a linked appointment row for every provider-added job so all booking
         // paths produce the same normalized structure (appointments → jobs → clients → invoices).
         // userId and homeId are optional because this is a provider-initiated entry.
+        // description: prefer provider-entered "client's issue", fall back to service description
+        const apptDescription = job.description || svcSnapshot?.description || undefined;
         const [apptRow] = await tx.insert(appointments).values({
           providerId: job.providerId,
           serviceName: job.title,
-          description: job.description || undefined,
+          description: apptDescription,
           scheduledDate: job.scheduledDate!,
           scheduledTime: job.scheduledTime || undefined,
           estimatedPrice: job.estimatedPrice || undefined,
@@ -4570,17 +4607,17 @@ Respond with JSON only:
                   })()
                 : undefined;
 
-              // Fetch custom service details for enriched email if customServiceId is set
-              let customSvcData: { description: string | null; pricingType: string; addOnsJson: string | null } | null = null;
-              if (newJob.customServiceId) {
-                const [svcRow] = await db.select({
-                  description: providerCustomServices.description,
-                  pricingType: providerCustomServices.pricingType,
-                  addOnsJson: providerCustomServices.addOnsJson,
-                }).from(providerCustomServices)
+              // Use already-fetched service snapshot (if customServiceId was set)
+              // also fetch addOnsJson which wasn't in the initial snapshot
+              let fullSvcData: { description: string | null; pricingType: string; addOnsJson: string | null } | null = svcSnapshot
+                ? { description: svcSnapshot.description, pricingType: svcSnapshot.pricingType, addOnsJson: null }
+                : null;
+              if (newJob.customServiceId && fullSvcData) {
+                const [addOnRow] = await db.select({ addOnsJson: providerCustomServices.addOnsJson })
+                  .from(providerCustomServices)
                   .where(eq(providerCustomServices.id, newJob.customServiceId))
                   .catch(() => [null]);
-                if (svcRow) customSvcData = svcRow;
+                if (addOnRow) fullSvcData.addOnsJson = addOnRow.addOnsJson;
               }
 
               // Parse selected add-ons from req.body (frontend sends which add-ons were chosen)
@@ -4601,8 +4638,8 @@ Respond with JSON only:
                 address: newJob.address || jobClient.address || undefined,
                 estimatedPrice: newJob.estimatedPrice || undefined,
                 description: newJob.description || undefined,
-                serviceDescription: customSvcData?.description || undefined,
-                pricingType: customSvcData?.pricingType || undefined,
+                serviceDescription: fullSvcData?.description || undefined,
+                pricingType: fullSvcData?.pricingType || undefined,
                 addOns: selectedAddOns,
               });
             }

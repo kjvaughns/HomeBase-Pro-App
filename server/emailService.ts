@@ -212,6 +212,12 @@ export async function sendBookingConfirmationEmail(data: BookingData): Promise<S
         <p style="color:#15803d;font-size:13px;margin:0;line-height:1.5;">${data.description}</p>
       </div>`
     : '';
+  const intakeSection = data.intakeAnswers
+    ? `<div style="background:#f0fdf4;border-radius:8px;padding:16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
+        <p style="color:#166534;font-weight:600;font-size:13px;margin:0 0 6px;">Your Request Details</p>
+        <p style="color:#15803d;font-size:13px;margin:0;line-height:1.5;">${data.intakeAnswers}</p>
+      </div>`
+    : '';
   const addOnsSection = data.addOns && data.addOns.length > 0
     ? `<div style="background:#f9fafb;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
         <p style="color:#374151;font-weight:600;font-size:13px;margin:0 0 8px;">Add-ons Included</p>
@@ -244,6 +250,7 @@ export async function sendBookingConfirmationEmail(data: BookingData): Promise<S
       priceRow
     ) +
     issueSection +
+    intakeSection +
     addOnsSection +
     serviceDescSection +
     nextStepsSection +
