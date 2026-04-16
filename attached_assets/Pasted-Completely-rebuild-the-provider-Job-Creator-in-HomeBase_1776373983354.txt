@@ -1,0 +1,273 @@
+Completely rebuild the provider Job Creator in HomeBase so it is fully aligned with:
+
+1. The Service Creator (single source of truth)
+2. The Homeowner booking flow (shared backend logic)
+3. Supabase as the real backend (no mock or disconnected data)
+
+This is NOT a UI tweak. This is a full system-level rebuild.
+
+---
+
+CORE PRODUCT PRINCIPLE
+
+Provider job creation is execution-driven, not discovery-driven.
+
+Flow must be:
+Client → Service → Job Details → Schedule → Review → Confirm → Automation
+
+NOT AI-led. AI is assistive only.
+
+---
+
+GOAL
+
+Allow providers to quickly schedule jobs for clients using their real services, while automatically handling:
+
+- pricing
+- job structure
+- communication
+- reminders
+- invoices / payments
+
+---
+
+SECTION 1: CLIENT
+
+- Select existing client from Supabase (filtered by provider_id)
+- Searchable list
+- Inline create client:
+  - name (required)
+  - phone (required)
+  - email (strongly encouraged)
+  - address (optional but supported)
+
+- If created:
+  → save to clients table
+  → link to provider
+
+---
+
+SECTION 2: SERVICE (CRITICAL)
+
+ONLY show services where:
+service.provider_id = current_provider
+
+NO fake/default services allowed.
+
+When selected:
+Hydrate the form with:
+
+- service_id
+- name
+- description
+- pricing_type (fixed, variable, custom)
+- base_price
+- duration
+- add_ons
+- intake_questions
+- payment_settings (deposit, full, card_on_file)
+
+---
+
+SECTION 3: JOB DETAILS
+
+This replaces homeowner intake.
+
+Show:
+- service intake questions (from service builder)
+- structured fields
+- issue summary (free text)
+- optional notes
+
+Provider fills in real job-specific info.
+
+---
+
+SECTION 4: PRICING
+
+Auto behavior:
+
+IF pricing_type = fixed:
+→ auto fill price
+
+IF variable:
+→ calculate from inputs
+
+IF custom:
+→ allow manual entry
+
+Always show:
+- base price
+- add-ons
+- total
+
+Allow:
+- manual override
+- AI suggestion (optional button)
+
+AI must NOT control price.
+
+---
+
+SECTION 5: SCHEDULE
+
+- date picker
+- time picker
+- duration auto from service
+- prevent conflicts (if possible)
+
+---
+
+SECTION 6: REVIEW (IMPORTANT)
+
+Show one clean summary card:
+
+- client
+- service
+- job summary (cleaned)
+- date/time
+- price
+- payment terms
+
+This must match EXACTLY what gets emailed.
+
+---
+
+SECTION 7: CONFIRM → AUTOMATION
+
+On submit, run atomic transaction:
+
+CREATE:
+- job
+- appointment
+
+Both must succeed or rollback.
+
+---
+
+JOB SNAPSHOT (IMPORTANT)
+
+Store snapshot fields:
+
+- service_name
+- service_description
+- base_price_at_time
+- selected_add_ons
+- intake_answers
+- issue_summary
+- final_price
+- scheduled_date_time
+
+DO NOT rely only on service_id.
+
+---
+
+APPOINTMENT LOGIC
+
+If provider creates job:
+→ status = confirmed
+
+If homeowner books:
+→ status = pending
+
+---
+
+AUTOMATION (REQUIRED)
+
+On provider-created job:
+
+1. Send email to client:
+   - provider name
+   - service
+   - job summary
+   - date/time
+   - price
+   - next steps
+
+2. Trigger reminders:
+   - 24h before
+   - X hours before
+
+3. Payment logic:
+   IF deposit_required:
+     → send payment link
+
+   IF card_on_file_required:
+     → send secure link
+
+   IF pay_after:
+     → generate invoice later
+
+---
+
+HOMEOWNER FLOW UPDATE
+
+Improve booking emails:
+
+Include:
+- service
+- add-ons
+- intake answers
+- job summary
+- date/time
+- estimated price
+- next steps
+
+---
+
+DATABASE REQUIREMENTS (SUPABASE)
+
+Ensure proper relationships:
+
+providers
+clients (linked to provider_id)
+services (linked to provider_id)
+service_add_ons
+service_questions
+jobs
+appointments
+
+Ensure:
+- no cross-provider leakage
+- all queries scoped by provider_id
+- no fake data
+
+---
+
+STRICT RULES
+
+- NO hardcoded services
+- NO mock data
+- NO disconnected UI
+- MUST use Supabase queries
+- MUST create real records
+- MUST link everything properly
+
+---
+
+OUTPUT REQUIRED
+
+1. Root cause of current issues
+2. Updated Supabase schema (if needed)
+3. Exact queries for:
+   - fetching services
+   - creating clients
+   - creating jobs + appointments
+4. Updated frontend logic
+5. Email trigger logic
+6. Final working implementation
+7. Full test checklist
+
+---
+
+FINAL CHECK
+
+Verify:
+
+- provider only sees their services
+- pricing comes from service data
+- job snapshot works
+- client gets email
+- reminders work
+- payment logic triggers correctly
+- jobs show in dashboard and calendar
