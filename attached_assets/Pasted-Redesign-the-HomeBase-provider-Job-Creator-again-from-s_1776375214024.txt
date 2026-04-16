@@ -1,0 +1,103 @@
+Redesign the HomeBase provider Job Creator again from scratch because the current version still feels ugly, clunky, and not premium enough.
+
+The current problems:
+1. The client picker is wrong. It should be a clean searchable dropdown or searchable selection field, not a large open client list taking up the screen.
+2. The screen feels like a generic admin form instead of a premium HomeBase feature.
+3. The spacing, hierarchy, and card styling have multiple UI bugs and feel visually awkward.
+4. The service section looks like placeholder cards instead of a polished service driven workflow.
+5. The pricing section looks unfinished and low quality.
+6. “Email Preview” is the wrong UX. I do not want an email preview. I want a clean job summary section.
+7. The overall feature does not match the premium, simple, efficient HomeBase feel.
+
+What I want instead:
+This should feel like a premium provider scheduling flow on iPhone.
+Simple, efficient, elegant, provider focused.
+
+Core UX structure:
+1. Client
+2. Service
+3. Job Details
+4. Schedule
+5. Price
+6. Job Summary
+7. Confirm
+
+Redesign requirements:
+
+CLIENT
+- Replace the current client list with a single searchable dropdown field
+- Tapping it should open a polished client search experience
+- Include a subtle “Add New Client” action
+- Do not let the client list permanently occupy the screen
+
+SERVICE
+- Use a searchable service selector
+- Only show the provider’s actual services
+- After service selection, show one compact premium service summary card
+- Show service name, duration, pricing type, and starting price in a polished way
+- Do not use ugly repeated list cards
+
+JOB DETAILS
+- This should be the main content area
+- Show the provider’s service specific intake questions here
+- Include a clean “What’s going on?” or “Job details” field for issue summary
+- Include optional notes
+- This should feel structured and useful, not like random text boxes
+
+SCHEDULE
+- Use a tight native feeling date and time layout
+- Cleaner spacing
+- Less bulky boxes
+
+PRICE
+- Show auto populated pricing from the selected service
+- Show add ons and adjusted total if applicable
+- Allow provider override when needed
+- AI assist should be subtle and secondary, not visually dominant
+
+JOB SUMMARY
+- Replace “Email Preview” with “Job Summary”
+- This should summarize:
+  - client
+  - service
+  - date and time
+  - final price
+  - issue summary
+  - payment terms if applicable
+- This is for provider review before confirming
+- Do not frame it as an email preview
+
+CTA
+- Primary button: Schedule Job
+- Secondary button: Cancel
+- Make the CTA area feel premium and confident
+
+VISUAL DESIGN DIRECTION
+- premium iOS quality
+- cleaner hierarchy
+- less visual clutter
+- tighter spacing
+- better typography
+- fewer giant cards
+- more elegant input styling
+- no awkward placeholder looking panels
+- no admin dashboard feel
+- dark mode should feel refined, not muddy
+- use HomeBase green as an accent, not everywhere
+
+HOMEBASE FEEL
+This feature should feel like:
+- a premium scheduling assistant for service pros
+- fast and trustworthy
+- aligned with the homeowner booking flow and service builder
+- AI assisted, not AI controlled
+
+Do not just tweak the current version.
+Rework the layout and styling so it actually feels like a polished HomeBase feature.
+
+Output:
+1. New layout structure
+2. New component hierarchy
+3. Exact design fixes
+4. UI bug fixes
+5. Final polished implementation
