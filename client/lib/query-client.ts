@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { Platform } from "react-native";
 import { useAuthStore } from "@/state/authStore";
 
 /**
@@ -6,6 +7,10 @@ import { useAuthStore } from "@/state/authStore";
  * EXPO_PUBLIC_DOMAIN may be set with or without a protocol prefix.
  * We always strip any existing prefix and rebuild with https:// to avoid
  * constructing a double-protocol URL like https://https//api.example.com.
+ *
+ * On web (browser simulation), we strip any explicit port because the
+ * Express backend is served through the standard port-80 proxy — using
+ * a raw `:5000` URL is blocked by external port rules and CORS.
  */
 export function getApiUrl(): string {
   let host = process.env.EXPO_PUBLIC_DOMAIN;
@@ -16,6 +21,12 @@ export function getApiUrl(): string {
 
   // Strip any existing http:// or https:// prefix before constructing the URL
   host = host.replace(/^https?:\/\//, "");
+
+  // On web, the Express API is accessible via the default port (80/443 proxy).
+  // Strip any explicit port (e.g. ":5000") so requests stay same-origin.
+  if (Platform.OS === "web") {
+    host = host.replace(/:\d+$/, "");
+  }
 
   const url = new URL(`https://${host}`);
 

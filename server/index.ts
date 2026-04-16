@@ -373,8 +373,11 @@ function setupMetroProxy(app: express.Application) {
       path.startsWith("/hot") ||
       path.startsWith("/debugger-ui") ||
       path.startsWith("/client/") ||
-      (path.startsWith("/assets/") && !!(req.query?.platform || req.query?.hash || req.headers?.["expo-platform"])) ||
-      (path === "/" && !!(req.headers && req.headers["expo-platform"])),
+      (path.startsWith("/assets/") && !!(req.query?.platform || req.query?.hash || req.headers?.["expo-platform"] || req.headers?.referer?.includes("expo") || req.query?.resolver)) ||
+      (path === "/" && !!(req.headers && (
+        req.headers["expo-platform"] ||
+        (typeof req.headers.accept === "string" && req.headers.accept.includes("text/html"))
+      ))),
     target: `http://localhost:${METRO_PORT}`,
     changeOrigin: true,
     ws: true,
