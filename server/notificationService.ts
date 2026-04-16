@@ -143,7 +143,6 @@ const EVENT_PREF_FIELD: Partial<Record<NotificationEvent, keyof typeof notificat
   'invoice.overdue_1d':   'emailInvoiceReminder',
   'invoice.paid':         'emailInvoicePaid',
   'invoice.payment_failed': 'emailPaymentFailed',
-  'job.status_changed':   'emailBookingConfirmation',
   'review.request':       'emailReviewRequest',
 };
 
@@ -444,22 +443,32 @@ async function _dispatch(event: NotificationEvent, payload: DispatchPayload): Pr
       };
       const push = pushCopy[newStatus] ?? { title: 'Job update', body: `Your ${serviceName} status changed.` };
 
-      // Email — requires client email + name
+      // Email — requires client email + name, and respects email opt-out (gated
+      // locally so that opting out of email still allows the push notification).
       if (clientEmail && clientName) {
-        const deliveryId = await logDelivery({
-          channel: 'email', status: 'queued', eventType: event,
-          recipientEmail: clientEmail,
-          recipientUserId: payload.recipientUserId,
-          relatedRecordType: payload.relatedRecordType,
-          relatedRecordId: payload.relatedRecordId,
-        });
-        try {
-          const result = await sendJobStatusChangedEmail({ clientEmail, clientName, providerName, serviceName, newStatus, scheduledDate, notes });
-          await updateDelivery(deliveryId, result.success ? 'sent' : 'failed', result.messageId, result.error);
-          console.log(`[notification] job.status_changed(${newStatus}) email ${result.success ? 'sent' : 'failed'} to ${clientEmail}`);
-        } catch (err: any) {
-          await updateDelivery(deliveryId, 'failed', undefined, err?.message);
-          console.error(`[notification] job.status_changed(${newStatus}) email error:`, err);
+        const [prefs] = payload.recipientUserId
+          ? await db.select().from(notificationPreferences).where(eq(notificationPreferences.userId, payload.recipientUserId)).catch(() => [null])
+          : [null];
+        const emailOptedOut = prefs?.emailBookingConfirmation === false;
+
+        if (emailOptedOut) {
+          console.log(`[notification] job.status_changed(${newStatus}) email skipped — user ${payload.recipientUserId} opted out`);
+        } else {
+          const deliveryId = await logDelivery({
+            channel: 'email', status: 'queued', eventType: event,
+            recipientEmail: clientEmail,
+            recipientUserId: payload.recipientUserId,
+            relatedRecordType: payload.relatedRecordType,
+            relatedRecordId: payload.relatedRecordId,
+          });
+          try {
+            const result = await sendJobStatusChangedEmail({ clientEmail, clientName, providerName, serviceName, newStatus, scheduledDate, notes });
+            await updateDelivery(deliveryId, result.success ? 'sent' : 'failed', result.messageId, result.error);
+            console.log(`[notification] job.status_changed(${newStatus}) email ${result.success ? 'sent' : 'failed'} to ${clientEmail}`);
+          } catch (err: any) {
+            await updateDelivery(deliveryId, 'failed', undefined, err?.message);
+            console.error(`[notification] job.status_changed(${newStatus}) email error:`, err);
+          }
         }
       } else {
         console.log(`[notification] job.status_changed(${newStatus}) email skipped — no client email/name`);
