@@ -1,0 +1,229 @@
+Completely redesign and rebuild the HomeBase provider side Job Creator so it is fully connected to Supabase, aligned with our newly built Service Creator, and aligned with the way homeowners currently book services.
+
+This is not a minor tweak. This needs to be a real rebuild of the provider job creation flow, data model usage, and notification behavior.
+
+Core problem to fix:
+The current Job Creator is not properly connected to the backend. It is showing services that were not created by the provider, pricing is not correctly tied to the selected service, and the flow does not feel aligned with either our Service Creator or our homeowner booking system. Right now it feels disconnected, generic, and unreliable.
+
+What I want:
+Create a provider focused job scheduling flow that uses the provider’s actual published services as the foundation, pulls real service data from Supabase, and allows the provider to schedule a job for a client in a way that feels like the provider version of the homeowner booking flow.
+
+The provider should be able to:
+1. Select an existing client or create a new client inline
+2. Select one of their real services from their own service catalog only
+3. Automatically inherit the service’s real pricing structure, duration, title, description, add ons, intake questions, and service metadata from Supabase
+4. Adjust or override pricing if needed
+5. Fill in a job specific problem description or scope summary for that particular booking
+6. Add internal notes
+7. Select date and time
+8. Create the job and linked appointment correctly in Supabase
+9. Trigger a professional confirmation email to the client with an accurate service summary, problem description, date, time, quote, and provider details
+
+Also update the homeowner booking notification flow so that when a homeowner books a provider, they also receive a much better job summary email with the real service details, chosen add ons, intake answers, date, time, estimated price, and next steps.
+
+Important product direction:
+The provider job creator should feel like the provider side version of the homeowner booking flow, not some random internal admin form. It should be clean, structured, and powered by the provider’s existing service setup. The provider should feel assisted, not forced. It should feel simple, premium, and operationally useful.
+
+Use this product logic:
+
+WORKFLOW 1. HOMEOWNER BOOKS A PROVIDER
+- Homeowner starts on provider public profile
+- Taps Book Now
+- Auth gate if needed
+- Service is chosen from provider’s real published service catalog
+- Add ons are selectable if applicable
+- Date and time are chosen from provider availability
+- Service intake questions are shown if configured on the service
+- Estimated total is calculated from service pricing plus add ons
+- On submit, backend creates:
+  - appointment record tied to homeowner user id and home address with status pending
+  - job record tied to a provider side client profile
+- If the homeowner does not already exist as a client in the provider’s system, create one automatically
+- Send email confirmation to homeowner with full job summary
+- Send notification and email to provider about the new booking
+- Create in app notification for homeowner
+- Redirect homeowner to success screen
+
+WORKFLOW 2. PROVIDER CREATES A JOB FOR A CLIENT
+- Provider opens Add Job from dashboard
+- Provider selects existing client or creates a new client inline
+- Provider selects one of their actual services from Supabase
+- The selected service should load:
+  - service name
+  - service category
+  - pricing model
+  - base price
+  - add ons
+  - duration
+  - intake questions or custom fields if applicable
+  - provider defined service description
+- Provider can then enter a job specific problem description or client request summary for this booking
+- Provider can optionally adjust quote or use AI price suggestion only as assistance, never as the default source of truth
+- Provider selects date and time
+- Provider can add internal notes
+- On submit, backend creates:
+  - job record
+  - linked appointment record
+- This should happen in one atomic transaction
+- Appointment status should be confirmed because the provider is scheduling it directly
+- Client should receive an email confirmation automatically with:
+  - provider business name
+  - service booked
+  - date and time
+  - quoted price
+  - problem summary
+  - what to expect next
+- Job should appear immediately in provider schedule and client history
+- Everything should be stored in Supabase and properly linked relationally
+
+Rebuild the Job Creator UX around these principles:
+1. It must only show the provider’s own real services from Supabase
+2. It must not show fake default service categories unless there is a real fallback strategy
+3. The selected service should auto populate key information and pricing structure
+4. The provider should not have to manually rebuild the service every time
+5. The screen should feel connected to our Service Creator and not like a separate random form
+6. The provider should still be able to customize this specific booking instance
+7. The flow should feel native, premium, simple, and trustworthy on iOS
+
+Redesign the actual screen and flow:
+Replace the current generic form with a smarter structured flow:
+
+SECTION 1. Client
+- Select existing client
+- Search clients
+- Add new client inline
+- Required fields for new client:
+  - full name
+  - phone
+  - email optional but strongly encouraged
+  - service address if needed
+
+SECTION 2. Service
+- Dropdown or searchable service picker showing only this provider’s real services
+- Show service card preview once selected
+- Auto load service details
+- Show add ons if the service supports them
+- Show service custom intake fields if configured
+- Allow provider to enter a booking specific problem description
+- Allow provider to edit quote only where appropriate
+
+SECTION 3. Schedule
+- Native iOS style date and time pickers
+- Respect provider working hours if availability rules exist
+- Prevent invalid scheduling where possible
+
+SECTION 4. Pricing
+- Show base service price
+- Show selected add ons
+- Show estimated subtotal
+- Allow manual override with audit trail or flag
+- AI pricing assistant can assist, but must not replace actual service pricing logic
+
+SECTION 5. Notes and Summary
+- Internal notes field
+- Final summary card before confirm
+- Confirm action should clearly state what email or notification gets sent
+
+Backend and data requirements:
+Audit and fix the full Supabase integration for this flow.
+
+Ensure these are all properly linked:
+- providers
+- provider_business_profiles
+- services
+- service_add_ons
+- service_questions or custom intake fields
+- clients
+- jobs
+- appointments
+- homeowner profiles if applicable
+- booking notifications
+- email events or outbound communication logs
+
+Fix all backend issues needed so:
+- the provider only sees their own services
+- service pricing is pulled from real service data
+- selected service data is attached to the job snapshot so future edits to the service do not corrupt historical bookings
+- jobs and appointments stay consistent
+- client records are created or linked correctly
+- homeowner to client conversion happens correctly
+- all writes are atomic where needed
+- there are no duplicate or orphaned records
+- all queries are scoped correctly by provider id
+
+Email requirements:
+Create or improve email templates for both flows.
+
+1. Homeowner booking confirmation email
+Include:
+- provider business name
+- service name
+- selected add ons
+- intake answers or service request summary
+- date and time
+- estimated price
+- address if applicable
+- status
+- next steps
+- support or contact info
+
+2. Provider created job confirmation email to client
+Include:
+- provider business name and branding
+- service name
+- job summary or client issue description
+- quoted price
+- date and time
+- what to expect
+- contact details
+- link to view booking if that exists
+
+Also ensure provider notifications still work correctly when a homeowner books.
+
+Technical tasks:
+1. Audit the current Job Creator frontend and remove incorrect hardcoded or mock service data
+2. Reconnect service selection to Supabase using the provider’s real service catalog
+3. Rebuild the state flow so selecting a service hydrates the booking form correctly
+4. Add support for booking specific problem descriptions and job summaries
+5. Create or update backend mutations for provider created jobs
+6. Ensure atomic creation of job plus appointment
+7. Implement or fix email triggers for both homeowner booked jobs and provider scheduled jobs
+8. Ensure all created records are queryable in dashboard, calendar, client history, and booking detail pages
+9. Make the final UI feel polished and aligned with our current design language and iOS quality expectations
+
+Design requirements:
+- match our new Service Creator system
+- feel premium and modern
+- use our HomeBase green correctly
+- clean card based layout
+- minimal clutter
+- clear hierarchy
+- no generic admin panel feel
+- no ugly bottom sheet forms unless extremely polished
+- provider should feel in control, not managed by AI
+- AI should be assistive only
+
+Output I want:
+1. Root cause analysis of why the current Job Creator is disconnected
+2. Proposed new UX and flow structure
+3. Updated Supabase schema relationships if needed
+4. Exact frontend files to update
+5. Exact backend logic to update
+6. Email template and trigger changes needed
+7. Final implementation
+8. A final test checklist covering:
+   - provider creates job for existing client
+   - provider creates job for new client
+   - homeowner books provider
+   - email sends correctly
+   - job and appointment records are both created correctly
+   - pricing is accurate
+   - service selection only shows correct provider services
+   - job appears correctly in schedule, client record, and booking history
+
+Important:
+- do not leave this as mock UI
+- do not use placeholder services
+- do not create a disconnected custom flow
+- make it real, fully linked, Supabase backed, and production minded
+- optimize for clean MVP execution, trust, and operational usefulness
