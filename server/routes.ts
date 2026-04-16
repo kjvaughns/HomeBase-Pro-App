@@ -1829,15 +1829,20 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
           return undefined;
         })();
 
-        // Look up custom service using base name for serviceDescription
+        // Look up custom service: prefer ID-based match (if serviceId sent), fall back to name
+        const bodyServiceId = typeof req.body.serviceId === 'string' ? req.body.serviceId : undefined;
         const [matchedSvc] = await db.select({
           description: providerCustomServices.description,
         })
           .from(providerCustomServices)
           .where(and(
             eq(providerCustomServices.providerId, bookedProvider.id),
-            eq(providerCustomServices.name, baseServiceName),
-            eq(providerCustomServices.isPublished, true)
+            bodyServiceId
+              ? eq(providerCustomServices.id, bodyServiceId)
+              : and(
+                  eq(providerCustomServices.name, baseServiceName),
+                  eq(providerCustomServices.isPublished, true)
+                )
           ))
           .catch(() => [null]);
 
