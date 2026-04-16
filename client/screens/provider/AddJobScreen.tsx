@@ -11,6 +11,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation, useRoute } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { NativeDatePickerSheet } from "@/components/NativeDatePickerSheet";
@@ -87,7 +89,7 @@ function getDurationLabel(mins: number): string {
 export default function AddJobScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute();
   const queryClient = useQueryClient();
   const { providerProfile } = useAuthStore();
@@ -701,7 +703,7 @@ export default function AddJobScreen() {
                     style={[styles.goToServicesBtn, { backgroundColor: Colors.accent }]}
                     onPress={() => {
                       setShowServicePicker(false);
-                      (navigation as any).navigate("Services");
+                      navigation.navigate("Services");
                     }}
                   >
                     <Feather name="plus" size={15} color="#FFFFFF" />

@@ -1800,13 +1800,22 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
         // Extract base service name (before " + " add-on suffix) for DB lookup
         const baseServiceName = parsed.data.serviceName.split(' + ')[0].trim();
 
-        // Derive add-on names from the service name suffix pattern ("Base + Addon1, Addon2")
-        const addonSuffix = parsed.data.serviceName.includes(' + ')
-          ? parsed.data.serviceName.split(' + ').slice(1).join(' + ')
-          : '';
-        const derivedAddOnNames: string[] | undefined = addonSuffix
-          ? addonSuffix.split(',').map(s => s.trim()).filter(Boolean)
-          : undefined;
+        // Resolve add-on names: explicit structured array takes priority over service-name suffix parsing
+        const explicitAddOns = req.body.addOns;
+        const derivedAddOnNames: string[] | undefined = (() => {
+          if (Array.isArray(explicitAddOns) && explicitAddOns.length > 0) {
+            return explicitAddOns.map((a: unknown) =>
+              typeof a === 'string' ? a : (typeof a === 'object' && a !== null && 'name' in a ? String((a as { name: unknown }).name) : null)
+            ).filter((n): n is string => Boolean(n));
+          }
+          // Fall back to parsing add-on suffix from service name ("Base + Addon1, Addon2")
+          if (parsed.data.serviceName.includes(' + ')) {
+            const addonSuffix = parsed.data.serviceName.split(' + ').slice(1).join(' + ');
+            const names = addonSuffix.split(',').map(s => s.trim()).filter(Boolean);
+            return names.length > 0 ? names : undefined;
+          }
+          return undefined;
+        })();
 
         // Look up custom service using base name for serviceDescription
         const [matchedSvc] = await db.select({
@@ -4567,8 +4576,10 @@ Respond with JSON only:
         return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
       }
 
-      // Fetch custom service snapshot before transaction for description/price enrichment
+      // Fetch custom service snapshot before transaction for description/price enrichment.
+      // Ownership check: verify the service belongs to the same provider as the job being created.
       let svcSnapshot: { description: string | null; pricingType: string; basePrice: string | null; priceFrom: string | null } | null = null;
+      let verifiedCustomServiceId: string | null = null;
       if (parsed.data.customServiceId) {
         const [svcRow] = await db.select({
           description: providerCustomServices.description,
@@ -4576,9 +4587,16 @@ Respond with JSON only:
           basePrice: providerCustomServices.basePrice,
           priceFrom: providerCustomServices.priceFrom,
         }).from(providerCustomServices)
-          .where(eq(providerCustomServices.id, parsed.data.customServiceId))
+          .where(and(
+            eq(providerCustomServices.id, parsed.data.customServiceId),
+            eq(providerCustomServices.providerId, parsed.data.providerId)
+          ))
           .catch(() => [null]);
-        if (svcRow) svcSnapshot = svcRow;
+        if (svcRow) {
+          svcSnapshot = svcRow;
+          verifiedCustomServiceId = parsed.data.customServiceId;
+        }
+        // If svcRow is null, the service doesn't belong to this provider — silently ignore it
       }
 
       // Compute effective estimatedPrice: provider manual entry takes precedence, then service price
@@ -4591,6 +4609,7 @@ Respond with JSON only:
       const { job: newJob, appointment } = await db.transaction(async (tx) => {
         const jobValues = {
           ...parsed.data,
+          customServiceId: verifiedCustomServiceId,
           estimatedPrice: effectivePrice ?? parsed.data.estimatedPrice,
         };
         const [job] = await tx.insert(jobs).values(jobValues).returning();
