@@ -103,7 +103,7 @@ export default function AddJobScreen() {
     enabled: !!providerId,
   });
 
-  const { data: servicesData, isLoading: servicesLoading } = useQuery<{ services: CustomService[] }>({
+  const { data: servicesData, isLoading: servicesLoading, isError: servicesError } = useQuery<{ services: CustomService[] }>({
     queryKey: ["/api/provider", providerId, "custom-services", "published"],
     queryFn: async () => {
       const url = new URL(`/api/provider/${providerId}/custom-services?publishedOnly=true`, getApiUrl());
@@ -697,6 +697,18 @@ export default function AddJobScreen() {
                     </Pressable>
                   );
                 })
+              ) : servicesError ? (
+                <View style={styles.modalEmptyState}>
+                  <View style={[styles.emptyIconWrap, { backgroundColor: "#fff0f0" }]}>
+                    <Feather name="alert-circle" size={28} color="#dc2626" />
+                  </View>
+                  <ThemedText style={[styles.modalEmptyTitle, { color: theme.text }]}>
+                    Could not load services
+                  </ThemedText>
+                  <ThemedText style={[styles.modalEmptyText, { color: theme.textSecondary }]}>
+                    There was a problem fetching your services. Please check your connection and try again.
+                  </ThemedText>
+                </View>
               ) : (
                 <View style={styles.modalEmptyState}>
                   <View style={[styles.emptyIconWrap, { backgroundColor: Colors.accentLight }]}>

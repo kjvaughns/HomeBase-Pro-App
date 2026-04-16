@@ -4698,9 +4698,12 @@ Respond with JSON only:
                     .filter(a => a.name.length > 0)
                 : undefined;
 
-              // Use pricingType and serviceDescription from req.body if backend snapshot is unavailable
-              const pricingTypeFromBody = req.body.pricingType as string | undefined;
-              const serviceDescFromBody = req.body.serviceDescription as string | undefined;
+              // Normalize email-enrichment fields from req.body (fallback when snapshot unavailable)
+              const ALLOWED_PRICING_TYPES = ['fixed', 'variable', 'service_call', 'quote', 'by_quote'];
+              const rawPricingType = typeof req.body.pricingType === 'string' ? req.body.pricingType : undefined;
+              const pricingTypeFromBody = rawPricingType && ALLOWED_PRICING_TYPES.includes(rawPricingType) ? rawPricingType : undefined;
+              const rawServiceDesc = typeof req.body.serviceDescription === 'string' ? req.body.serviceDescription.trim() : undefined;
+              const serviceDescFromBody = rawServiceDesc ? rawServiceDesc.slice(0, 1000) : undefined;
 
               await sendProviderScheduledJobEmail({
                 clientEmail: jobClient.email,
