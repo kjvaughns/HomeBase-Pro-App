@@ -194,7 +194,7 @@ export default function AddJobScreen() {
         : [...prev, addon];
       // Only auto-recalculate price when provider hasn't manually overridden it
       if (!priceManuallyEdited) {
-        const addonsTotal = next.reduce((sum, a) => sum + (a.price || 0), 0);
+        const addonsTotal = next.reduce((sum, a) => sum + (Number(a.price) || 0), 0);
         const total = baseServicePriceNum + addonsTotal;
         setEstimatedPrice(total > 0 ? total.toFixed(2) : "");
       }
@@ -467,7 +467,7 @@ export default function AddJobScreen() {
                       ) : null}
                     </View>
                     <ThemedText style={[styles.addonPrice, { color: Colors.accent }]}>
-                      +${addon.price.toFixed(0)}
+                      +${(Number(addon.price) || 0).toFixed(0)}
                     </ThemedText>
                   </Pressable>
                 );
@@ -561,7 +561,7 @@ export default function AddJobScreen() {
                     + {a.name}
                   </ThemedText>
                   <ThemedText style={[styles.addOnsTotalPrice, { color: Colors.accent }]}>
-                    ${a.price.toFixed(0)}
+                    ${(Number(a.price) || 0).toFixed(0)}
                   </ThemedText>
                 </View>
               ))}

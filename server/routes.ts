@@ -1837,8 +1837,8 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
             const answersObj = JSON.parse(rawAnswersJson);
             if (typeof answersObj === 'object' && answersObj !== null) {
               const lines = Object.entries(answersObj)
-                .map(([k, v]) => `${k}: ${v}`)
-                .filter(([, v]) => v);
+                .filter(([, v]) => v != null && v !== '')
+                .map(([k, v]) => `${k}: ${v}`);
               intakeAnswersSummary = lines.length > 0 ? lines.join('\n') : undefined;
             } else if (typeof answersObj === 'string') {
               intakeAnswersSummary = answersObj;
