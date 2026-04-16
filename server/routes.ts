@@ -1829,8 +1829,9 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
           return undefined;
         })();
 
-        // Look up custom service: prefer ID-based match (if serviceId sent), fall back to name
-        const bodyServiceId = typeof req.body.serviceId === 'string' ? req.body.serviceId : undefined;
+        // Look up custom service: prefer ID-based match (if customServiceId sent), fall back to name
+        // Note: req.body.customServiceId references provider_custom_services.id (not appointments.serviceId FK)
+        const bodyServiceId = typeof req.body.customServiceId === 'string' ? req.body.customServiceId : undefined;
         const [matchedSvc] = await db.select({
           description: providerCustomServices.description,
         })

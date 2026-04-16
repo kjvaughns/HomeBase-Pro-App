@@ -267,7 +267,7 @@ export default function SimpleBookingScreen() {
         isRecurring,
         recurringFrequency: isRecurring ? recurringFrequency : null,
         answersJson: intakeAnswersJson,
-        serviceId: selectedServiceId || undefined,
+        customServiceId: selectedServiceId || undefined,
       });
       return res.json();
     },
