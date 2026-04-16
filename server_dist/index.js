@@ -2621,8 +2621,8 @@ import { hash as bcryptHash } from "bcryptjs";
 // server/openai.ts
 import OpenAI from "openai";
 var openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || process.env.OPENAI_BASE_URL || void 0
+  apiKey: process.env.OPENAI_API_KEY || process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+  baseURL: process.env.OPENAI_BASE_URL || void 0
 });
 var HOMEBASE_SYSTEM_PROMPT = `You are HomeBase AI, a friendly and knowledgeable home services assistant. You help homeowners with:
 
@@ -12180,7 +12180,7 @@ function validateProductionEnv() {
   ];
   const softRequired = [
     ["SUPABASE_DATABASE_URL", "Falling back to DATABASE_URL \u2014 ensure it is set for production"],
-    [process.env.AI_INTEGRATIONS_OPENAI_API_KEY ? "AI_INTEGRATIONS_OPENAI_API_KEY" : "OPENAI_API_KEY", "AI assistant features will return 500 errors"]
+    [process.env.OPENAI_API_KEY ? "OPENAI_API_KEY" : "AI_INTEGRATIONS_OPENAI_API_KEY", "AI assistant features will return 500 errors"]
   ];
   if (IS_PROD2) {
     let fatal = false;
