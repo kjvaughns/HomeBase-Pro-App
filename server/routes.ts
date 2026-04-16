@@ -1766,8 +1766,19 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
       // Create a provider job record linked to this appointment
       if (clientId) {
         try {
-          // Resolve customServiceId from body (provider_custom_services.id) — bypasses appointments schema
-          const apptCustomServiceId = typeof req.body.customServiceId === 'string' ? req.body.customServiceId : null;
+          // Validate customServiceId belongs to this provider before persisting to jobs
+          const rawCustomSvcId = typeof req.body.customServiceId === 'string' ? req.body.customServiceId : null;
+          let apptCustomServiceId: string | null = null;
+          if (rawCustomSvcId) {
+            const [ownedSvc] = await db.select({ id: providerCustomServices.id })
+              .from(providerCustomServices)
+              .where(and(
+                eq(providerCustomServices.id, rawCustomSvcId),
+                eq(providerCustomServices.providerId, parsed.data.providerId)
+              ))
+              .catch(() => [null]);
+            if (ownedSvc) apptCustomServiceId = rawCustomSvcId;
+          }
           await db.insert(jobs).values({
             providerId: parsed.data.providerId,
             clientId,
