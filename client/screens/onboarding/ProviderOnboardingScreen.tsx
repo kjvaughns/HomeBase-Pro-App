@@ -1060,9 +1060,9 @@ function BioStep({
 
 function PricingStep({ theme }: { theme: ReturnType<typeof useTheme>["theme"] }) {
   const benefits = [
-    { icon: "link" as const, text: "Booking links and custom intake forms" },
-    { icon: "users" as const, text: "Client management and job tracking" },
-    { icon: "file-text" as const, text: "Invoicing and Stripe payments built in" },
+    { text: "Booking links and custom intake forms" },
+    { text: "Client management and job tracking" },
+    { text: "Invoicing and Stripe payments built in" },
   ];
 
   return (
@@ -1112,7 +1112,7 @@ function PricingStep({ theme }: { theme: ReturnType<typeof useTheme>["theme"] })
         {benefits.map((b) => (
           <View key={b.text} style={styles.pricingBenefitRow}>
             <View style={[styles.pricingBenefitIcon, { backgroundColor: Colors.accent + "15" }]}>
-              <Feather name={b.icon} size={14} color={Colors.accent} />
+              <Feather name="check" size={14} color={Colors.accent} />
             </View>
             <ThemedText style={[styles.pricingBenefitText, { color: theme.text }]}>{b.text}</ThemedText>
           </View>
