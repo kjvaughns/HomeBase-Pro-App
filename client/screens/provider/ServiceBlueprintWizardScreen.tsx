@@ -737,8 +737,7 @@ export default function ServiceBlueprintWizardScreen() {
         <Pressable
           onPress={handleSuggestPricing}
           disabled={loadingAI}
-          style={styles.aiAssistRow}
-          hitSlop={12}
+          style={[styles.aiDescBtn, { backgroundColor: Colors.accent + "10", borderColor: Colors.accent + "30" }]}
           testID="button-suggest-pricing"
         >
           {loadingAI ? (
@@ -746,7 +745,7 @@ export default function ServiceBlueprintWizardScreen() {
           ) : (
             <Feather name="cpu" size={13} color={Colors.accent} />
           )}
-          <ThemedText style={[styles.aiAssistText, { color: Colors.accent }]}>
+          <ThemedText style={[styles.aiDescBtnText, { color: Colors.accent }]}>
             {loadingAI ? "Getting suggestion..." : "Get AI pricing suggestion"}
           </ThemedText>
         </Pressable>
@@ -907,8 +906,7 @@ export default function ServiceBlueprintWizardScreen() {
           <Pressable
             onPress={handleSuggestQuestions}
             disabled={loadingAI}
-            style={styles.aiAssistRow}
-            hitSlop={12}
+            style={[styles.aiDescBtn, { backgroundColor: Colors.accent + "10", borderColor: Colors.accent + "30" }]}
             testID="button-suggest-questions"
           >
             {loadingAI ? (
@@ -916,7 +914,7 @@ export default function ServiceBlueprintWizardScreen() {
             ) : (
               <Feather name="cpu" size={13} color={Colors.accent} />
             )}
-            <ThemedText style={[styles.aiAssistText, { color: Colors.accent }]}>
+            <ThemedText style={[styles.aiDescBtnText, { color: Colors.accent }]}>
               {loadingAI ? "Getting suggestions..." : `Suggest questions for ${serviceName || "this service"}`}
             </ThemedText>
           </Pressable>
@@ -1080,8 +1078,7 @@ export default function ServiceBlueprintWizardScreen() {
           <Pressable
             onPress={handleSuggestAddons}
             disabled={loadingAI}
-            style={styles.aiAssistRow}
-            hitSlop={12}
+            style={[styles.aiDescBtn, { backgroundColor: Colors.accent + "10", borderColor: Colors.accent + "30" }]}
             testID="button-suggest-addons"
           >
             {loadingAI ? (
@@ -1089,7 +1086,7 @@ export default function ServiceBlueprintWizardScreen() {
             ) : (
               <Feather name="cpu" size={13} color={Colors.accent} />
             )}
-            <ThemedText style={[styles.aiAssistText, { color: Colors.accent }]}>
+            <ThemedText style={[styles.aiDescBtnText, { color: Colors.accent }]}>
               {loadingAI ? "Getting suggestions..." : `Suggest upgrades for ${serviceName || "this service"}`}
             </ThemedText>
           </Pressable>
