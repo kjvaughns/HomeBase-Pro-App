@@ -34,9 +34,9 @@ import { apiRequest, getApiUrl } from "@/lib/query-client";
 type Props = NativeStackScreenProps<RootStackParamList, "ProviderOnboarding">;
 
 // Step 0 = emotional hook (no progress dot)
-// Steps 1-6 = setup steps (6 progress dots)
-const TOTAL_STEPS = 7; // 0..6
-const SETUP_STEPS = 6; // 1..6 (shown in progress dots)
+// Steps 1-7 = setup steps (7 progress dots)
+const TOTAL_STEPS = 8; // 0..7
+const SETUP_STEPS = 7; // 1..7 (shown in progress dots)
 
 const SERVICE_CATEGORIES = [
   { id: "plumbing", label: "Plumbing", icon: "droplet" as const },
@@ -162,7 +162,8 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
       case 3: return true;
       case 4: return activeDays.length > 0;
       case 5: return true;
-      case 6: {
+      case 6: return true; // Pricing — read-only
+      case 7: {
         return (
           accountName.trim().length > 0 &&
           email.trim().length > 0 &&
@@ -418,7 +419,8 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
             serviceName={pendingOnboardingService?.name ?? ""}
           />
         )}
-        {step === 6 && (
+        {step === 6 && <PricingStep theme={theme} />}
+        {step === 7 && (
           <CreateAccountStep
             theme={theme}
             accountName={accountName}
@@ -500,39 +502,6 @@ function EmotionalHookStep({ theme }: { theme: ReturnType<typeof useTheme>["them
       <View style={styles.hookStats}>
         <HookPill icon="check-circle" label="Free until first booking" theme={theme} />
         <HookPill icon="clock" label="Setup in minutes" theme={theme} />
-      </View>
-
-      {/* Pricing card */}
-      <View style={[styles.hookPricingCard, { backgroundColor: Colors.accentLight, borderColor: Colors.accent + "30" }]}>
-        <View style={styles.hookPricingHeader}>
-          <Feather name="tag" size={15} color={Colors.accent} />
-          <ThemedText style={[styles.hookPricingTitle, { color: Colors.accent }]}>Simple, transparent pricing</ThemedText>
-        </View>
-
-        <View style={styles.hookPricingRow}>
-          <View style={styles.hookPricingMain}>
-            <ThemedText style={styles.hookPricingPrice}>$29.99<ThemedText style={[styles.hookPricingUnit, { color: theme.textSecondary }]}>/mo</ThemedText></ThemedText>
-            <View style={[styles.hookFreeBadge, { backgroundColor: Colors.accent }]}>
-              <ThemedText style={styles.hookFreeBadgeText}>FREE</ThemedText>
-            </View>
-          </View>
-          <ThemedText style={[styles.hookPricingFreeNote, { color: theme.textSecondary }]}>
-            until your first paid booking
-          </ThemedText>
-        </View>
-
-        <View style={[styles.hookPricingDivider, { backgroundColor: Colors.accent + "20" }]} />
-
-        <View style={styles.hookFeeRow}>
-          <Feather name="percent" size={12} color={theme.textSecondary} />
-          <ThemedText style={[styles.hookFeeText, { color: theme.textSecondary }]}>
-            3% HomeBase fee + 2.9% Stripe processing per payment
-          </ThemedText>
-        </View>
-
-        <ThemedText style={[styles.hookPricingNote, { color: theme.textTertiary }]}>
-          No contracts. Cancel anytime.
-        </ThemedText>
       </View>
     </ScrollView>
   );
@@ -1087,7 +1056,73 @@ function BioStep({
   );
 }
 
-// ─── Step 6: Create Account ───────────────────────────────────────────────────
+// ─── Step 6: Pricing ─────────────────────────────────────────────────────────
+
+function PricingStep({ theme }: { theme: ReturnType<typeof useTheme>["theme"] }) {
+  const benefits = [
+    { icon: "link" as const, text: "Booking links and custom intake forms" },
+    { icon: "users" as const, text: "Client management and job tracking" },
+    { icon: "file-text" as const, text: "Invoicing and Stripe payments built in" },
+  ];
+
+  return (
+    <ScrollView
+      style={styles.scrollView}
+      contentContainerStyle={styles.stepScrollContent}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.stepHeader}>
+        <ThemedText style={styles.stepTitle}>Simple, transparent pricing</ThemedText>
+        <ThemedText style={[styles.stepSubtitle, { color: theme.textSecondary }]}>
+          Know exactly what you are paying before you start.
+        </ThemedText>
+      </View>
+
+      <GlassCard style={[styles.pricingCard, { borderColor: Colors.accent + "30" }]}>
+        <View style={styles.pricingAmountRow}>
+          <View style={styles.pricingAmountLeft}>
+            <ThemedText style={styles.pricingAmount}>
+              $29.95<ThemedText style={[styles.pricingAmountUnit, { color: theme.textSecondary }]}>/mo</ThemedText>
+            </ThemedText>
+          </View>
+          <View style={[styles.pricingFreeBadge, { backgroundColor: Colors.accent }]}>
+            <ThemedText style={styles.pricingFreeBadgeText}>FREE TO START</ThemedText>
+          </View>
+        </View>
+
+        <ThemedText style={[styles.pricingFreeNote, { color: theme.textSecondary }]}>
+          Free until your first paid booking. No credit card required to sign up.
+        </ThemedText>
+
+        <View style={[styles.pricingDivider, { backgroundColor: theme.border }]} />
+
+        <View style={styles.pricingFeeRow}>
+          <Feather name="percent" size={13} color={theme.textSecondary} />
+          <ThemedText style={[styles.pricingFeeText, { color: theme.textSecondary }]}>
+            3% HomeBase fee + 2.9% Stripe processing per transaction
+          </ThemedText>
+        </View>
+
+        <ThemedText style={[styles.pricingCancelNote, { color: theme.textTertiary }]}>
+          No contracts. Cancel anytime.
+        </ThemedText>
+      </GlassCard>
+
+      <View style={styles.pricingBenefits}>
+        {benefits.map((b) => (
+          <View key={b.text} style={styles.pricingBenefitRow}>
+            <View style={[styles.pricingBenefitIcon, { backgroundColor: Colors.accent + "15" }]}>
+              <Feather name={b.icon} size={14} color={Colors.accent} />
+            </View>
+            <ThemedText style={[styles.pricingBenefitText, { color: theme.text }]}>{b.text}</ThemedText>
+          </View>
+        ))}
+      </View>
+    </ScrollView>
+  );
+}
+
+// ─── Step 7: Create Account ───────────────────────────────────────────────────
 
 function CreateAccountStep({
   theme,
@@ -1279,76 +1314,82 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   hookPillText: { fontSize: 12, fontWeight: "500" },
-  hookPricingCard: {
-    borderRadius: BorderRadius.card,
-    borderWidth: 1.5,
-    padding: Spacing.lg,
-    marginTop: Spacing.lg,
+  // Pricing step (Step 6)
+  pricingCard: {
+    padding: Spacing.xl,
+    marginBottom: Spacing.xl,
+  },
+  pricingAmountRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: Spacing.sm,
   },
-  hookPricingHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  hookPricingTitle: {
-    fontSize: 13,
-    fontWeight: "600",
-    letterSpacing: 0.2,
-  },
-  hookPricingRow: {
-    marginBottom: Spacing.md,
-  },
-  hookPricingMain: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-    marginBottom: 4,
-  },
-  hookPricingPrice: {
-    fontSize: 28,
+  pricingAmountLeft: {},
+  pricingAmount: {
+    fontSize: 40,
     fontWeight: "800",
-    letterSpacing: -0.5,
-    color: undefined,
+    letterSpacing: -1,
   },
-  hookPricingUnit: {
-    fontSize: 15,
+  pricingAmountUnit: {
+    fontSize: 18,
     fontWeight: "400",
   },
-  hookFreeBadge: {
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+  pricingFreeBadge: {
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
-  hookFreeBadgeText: {
+  pricingFreeBadgeText: {
     color: "#fff",
     fontSize: 11,
     fontWeight: "700",
-    letterSpacing: 1,
+    letterSpacing: 1.2,
   },
-  hookPricingFreeNote: {
+  pricingFreeNote: {
     fontSize: 13,
-    fontWeight: "400",
+    lineHeight: 19,
+    marginBottom: Spacing.lg,
   },
-  hookPricingDivider: {
+  pricingDivider: {
     height: 1,
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.lg,
   },
-  hookFeeRow: {
+  pricingFeeRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 6,
+    gap: 7,
     marginBottom: Spacing.sm,
   },
-  hookFeeText: {
+  pricingFeeText: {
     fontSize: 13,
-    lineHeight: 18,
+    lineHeight: 19,
     flex: 1,
   },
-  hookPricingNote: {
+  pricingCancelNote: {
     fontSize: 12,
     fontWeight: "400",
+    marginTop: Spacing.xs,
+  },
+  pricingBenefits: {
+    gap: Spacing.md,
+  },
+  pricingBenefitRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  pricingBenefitIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pricingBenefitText: {
+    fontSize: 15,
+    fontWeight: "500",
+    flex: 1,
   },
 
   // Steps
