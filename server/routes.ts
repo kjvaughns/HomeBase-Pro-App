@@ -4574,6 +4574,7 @@ Respond with JSON only:
                 clientName,
                 providerName: jobProvider.businessName,
                 providerPhone: jobProvider.phone || undefined,
+                providerEmail: jobProvider.email || undefined,
                 serviceName: newJob.title,
                 scheduledDate: scheduledDateStr,
                 scheduledTime: scheduledTimeStr,

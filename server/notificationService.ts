@@ -18,7 +18,6 @@ import {
   sendProviderBookingNotificationEmail,
   sendJobStatusChangedEmail,
   sendRebookingNudgeEmail,
-  sendProviderScheduledJobEmail,
 } from './emailService';
 
 export type NotificationEvent =
