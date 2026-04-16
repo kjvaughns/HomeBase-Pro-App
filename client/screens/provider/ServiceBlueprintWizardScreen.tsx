@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import type { ComponentProps } from "react";
@@ -515,8 +515,9 @@ export default function ServiceBlueprintWizardScreen() {
       style={styles.flex}
       contentContainerStyle={[styles.stepContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 120 }]}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="always"
     >
-      <Animated.View entering={FadeInDown.duration(300)} style={styles.stepInner}>
+      <View style={styles.stepInner}>
         <ThemedText type="h2" style={styles.stepHeading}>Name your service</ThemedText>
         <ThemedText style={[styles.stepSubheading, { color: theme.textSecondary }]}>
           Start with the basics. You can fine-tune everything next.
@@ -615,7 +616,7 @@ export default function ServiceBlueprintWizardScreen() {
           ) : null}
         </View>
 
-      </Animated.View>
+      </View>
     </KeyboardAwareScrollViewCompat>
   );
 
@@ -625,8 +626,9 @@ export default function ServiceBlueprintWizardScreen() {
       style={styles.flex}
       contentContainerStyle={[styles.stepContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 120 }]}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="always"
     >
-      <Animated.View entering={FadeInDown.duration(300)} style={styles.stepInner}>
+      <View style={styles.stepInner}>
         <Pressable onPress={() => setStep(0)} style={styles.backRow}>
           <Feather name="arrow-left" size={16} color={Colors.accent} />
           <ThemedText style={[styles.backText, { color: Colors.accent }]}>Back</ThemedText>
@@ -736,6 +738,7 @@ export default function ServiceBlueprintWizardScreen() {
           onPress={handleSuggestPricing}
           disabled={loadingAI}
           style={styles.aiAssistRow}
+          hitSlop={12}
           testID="button-suggest-pricing"
         >
           {loadingAI ? (
@@ -747,7 +750,7 @@ export default function ServiceBlueprintWizardScreen() {
             {loadingAI ? "Getting suggestion..." : "Get AI pricing suggestion"}
           </ThemedText>
         </Pressable>
-      </Animated.View>
+      </View>
     </KeyboardAwareScrollViewCompat>
   );
 
@@ -757,8 +760,9 @@ export default function ServiceBlueprintWizardScreen() {
       style={styles.flex}
       contentContainerStyle={[styles.stepContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 120 }]}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="always"
     >
-      <Animated.View entering={FadeInDown.duration(300)} style={styles.stepInner}>
+      <View style={styles.stepInner}>
         <Pressable onPress={() => setStep(1)} style={styles.backRow}>
           <Feather name="arrow-left" size={16} color={Colors.accent} />
           <ThemedText style={[styles.backText, { color: Colors.accent }]}>Back</ThemedText>
@@ -904,6 +908,7 @@ export default function ServiceBlueprintWizardScreen() {
             onPress={handleSuggestQuestions}
             disabled={loadingAI}
             style={styles.aiAssistRow}
+            hitSlop={12}
             testID="button-suggest-questions"
           >
             {loadingAI ? (
@@ -916,7 +921,7 @@ export default function ServiceBlueprintWizardScreen() {
             </ThemedText>
           </Pressable>
         ) : null}
-      </Animated.View>
+      </View>
     </KeyboardAwareScrollViewCompat>
   );
 
@@ -926,8 +931,9 @@ export default function ServiceBlueprintWizardScreen() {
       style={styles.flex}
       contentContainerStyle={[styles.stepContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 120 }]}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="always"
     >
-      <Animated.View entering={FadeInDown.duration(300)} style={styles.stepInner}>
+      <View style={styles.stepInner}>
         <Pressable onPress={() => setStep(2)} style={styles.backRow}>
           <Feather name="arrow-left" size={16} color={Colors.accent} />
           <ThemedText style={[styles.backText, { color: Colors.accent }]}>Back</ThemedText>
@@ -1075,6 +1081,7 @@ export default function ServiceBlueprintWizardScreen() {
             onPress={handleSuggestAddons}
             disabled={loadingAI}
             style={styles.aiAssistRow}
+            hitSlop={12}
             testID="button-suggest-addons"
           >
             {loadingAI ? (
@@ -1087,7 +1094,7 @@ export default function ServiceBlueprintWizardScreen() {
             </ThemedText>
           </Pressable>
         ) : null}
-      </Animated.View>
+      </View>
     </KeyboardAwareScrollViewCompat>
   );
 
@@ -1097,8 +1104,9 @@ export default function ServiceBlueprintWizardScreen() {
       style={styles.flex}
       contentContainerStyle={[styles.stepContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 120 }]}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="always"
     >
-      <Animated.View entering={FadeInDown.duration(300)} style={styles.stepInner}>
+      <View style={styles.stepInner}>
         <Pressable onPress={() => setStep(3)} style={styles.backRow}>
           <Feather name="arrow-left" size={16} color={Colors.accent} />
           <ThemedText style={[styles.backText, { color: Colors.accent }]}>Back</ThemedText>
@@ -1150,7 +1158,7 @@ export default function ServiceBlueprintWizardScreen() {
             );
           })}
         </View>
-      </Animated.View>
+      </View>
     </KeyboardAwareScrollViewCompat>
   );
 
@@ -1166,7 +1174,7 @@ export default function ServiceBlueprintWizardScreen() {
         contentContainerStyle={[styles.stepContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 140 }]}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View entering={FadeInDown.duration(300)} style={styles.stepInner}>
+        <View style={styles.stepInner}>
           <Pressable onPress={() => setStep(4)} style={styles.backRow}>
             <Feather name="arrow-left" size={16} color={Colors.accent} />
             <ThemedText style={[styles.backText, { color: Colors.accent }]}>Back</ThemedText>
@@ -1320,7 +1328,7 @@ export default function ServiceBlueprintWizardScreen() {
               </Pressable>
             )
           ) : null}
-        </Animated.View>
+        </View>
       </ScrollView>
     );
   };

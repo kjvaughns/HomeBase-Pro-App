@@ -72,11 +72,13 @@ export function GlassCard({
   const content = (
     <>
       {Platform.OS === "ios" ? (
-        <BlurView
-          intensity={blurIntensity}
-          tint={isDark ? "dark" : "light"}
-          style={[StyleSheet.absoluteFill, { pointerEvents: "none" }]}
-        />
+        <View style={[StyleSheet.absoluteFill, { pointerEvents: "none" }]}>
+          <BlurView
+            intensity={blurIntensity}
+            tint={isDark ? "dark" : "light"}
+            style={StyleSheet.absoluteFill}
+          />
+        </View>
       ) : null}
       <View style={[styles.content, noPadding && styles.noPadding, contentStyle]}>
         {children}
