@@ -4173,24 +4173,20 @@ Respond with JSON only:
       const jobs = await storage.getJobsByClient(req.params.id);
       const invoices = await storage.getInvoicesByClient(req.params.id);
 
-      // Parse HouseFax enrichment data if present
+      // Load linked home record (from homeId FK) and map to HomeDetailRecord shape
       let home = null;
-      if (client.homeData) {
-        try {
-          const enrichment = JSON.parse(client.homeData);
+      if (client.homeId) {
+        const [homeRow] = await db.select().from(homes).where(eq(homes.id, client.homeId)).limit(1);
+        if (homeRow) {
           home = {
-            beds: enrichment.bedrooms ?? null,
-            baths: enrichment.bathrooms ?? null,
-            sqft: enrichment.squareFeet ?? null,
-            yearBuilt: enrichment.yearBuilt ?? null,
-            estimatedValue: enrichment.estimatedValue ?? null,
-            lotSize: enrichment.lotSize ?? null,
-            lastSoldDate: enrichment.lastSoldDate ?? null,
-            lastSoldPrice: enrichment.lastSoldPrice ?? null,
-            propertyType: enrichment.propertyType ?? null,
+            beds: homeRow.bedrooms ?? null,
+            baths: homeRow.bathrooms ?? null,
+            sqft: homeRow.squareFeet ?? null,
+            yearBuilt: homeRow.yearBuilt ?? null,
+            estimatedValue: homeRow.estimatedValue ? parseFloat(homeRow.estimatedValue) : null,
+            propertyType: homeRow.propertyType ?? null,
+            formattedAddress: homeRow.formattedAddress ?? null,
           };
-        } catch {
-          // Invalid JSON — ignore
         }
       }
 
@@ -4203,7 +4199,10 @@ Respond with JSON only:
 
   app.post("/api/clients", requireAuth, async (req: Request, res: Response) => {
     try {
-      const parsed = insertClientSchema.safeParse(req.body);
+      // Extract housefaxData before schema validation (it's not a client field)
+      const { housefaxData, ...clientBody } = req.body;
+
+      const parsed = insertClientSchema.safeParse(clientBody);
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
       }
@@ -4216,8 +4215,51 @@ Respond with JSON only:
           return res.status(409).json({ error: "A client with this email already exists" });
         }
       }
+
+      // If HouseFax enrichment data was provided, create a homes record and link it
+      let homeId: string | undefined;
+      if (housefaxData && typeof housefaxData === "object" && req.authenticatedUserId) {
+        try {
+          const street = housefaxData.street || parsed.data.address || "Unknown";
+          const city = housefaxData.city || parsed.data.city || "Unknown";
+          const state = housefaxData.state || parsed.data.state || "Unknown";
+          const zip = housefaxData.zipCode || parsed.data.zip || "00000";
+          const clientName = `${parsed.data.firstName || ""} ${parsed.data.lastName || ""}`.trim();
+          const newHome = await storage.createHome({
+            userId: req.authenticatedUserId,
+            label: `${clientName}'s Home`,
+            street,
+            city,
+            state,
+            zip,
+            propertyType: housefaxData.propertyType || "single_family",
+            bedrooms: housefaxData.bedrooms ?? undefined,
+            bathrooms: housefaxData.bathrooms ?? undefined,
+            squareFeet: housefaxData.squareFeet ?? undefined,
+            yearBuilt: housefaxData.yearBuilt ?? undefined,
+            lotSize: housefaxData.lotSize ?? undefined,
+            estimatedValue: housefaxData.estimatedValue ? String(housefaxData.estimatedValue) : undefined,
+            zillowId: housefaxData.zillowId ?? undefined,
+            zillowUrl: housefaxData.zillowUrl ?? undefined,
+            taxAssessedValue: housefaxData.taxAssessedValue ? String(housefaxData.taxAssessedValue) : undefined,
+            lastSoldDate: housefaxData.lastSoldDate ?? undefined,
+            lastSoldPrice: housefaxData.lastSoldPrice ? String(housefaxData.lastSoldPrice) : undefined,
+            latitude: housefaxData.latitude ? String(housefaxData.latitude) : undefined,
+            longitude: housefaxData.longitude ? String(housefaxData.longitude) : undefined,
+            placeId: housefaxData.placeId ?? undefined,
+            formattedAddress: housefaxData.formattedAddress ?? undefined,
+            neighborhoodName: housefaxData.neighborhoodName ?? undefined,
+            countyName: housefaxData.countyName ?? undefined,
+            housefaxEnrichedAt: new Date(),
+          });
+          homeId = newHome.id;
+        } catch (homeErr) {
+          console.error("Failed to create home record from HouseFax data:", homeErr);
+          // Non-fatal — continue without home linkage
+        }
+      }
       
-      const client = await storage.createClient(parsed.data);
+      const client = await storage.createClient({ ...parsed.data, homeId });
       res.status(201).json({ client });
     } catch (error) {
       console.error("Create client error:", error);

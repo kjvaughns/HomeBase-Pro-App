@@ -106,7 +106,7 @@ export default function AddClientScreen() {
       state: state.trim() || undefined,
       zip: zip.trim() || undefined,
       notes: notes.trim() || undefined,
-      homeData: housefaxData ? JSON.stringify(housefaxData) : undefined,
+      housefaxData: housefaxData ?? undefined,
     });
   };
 

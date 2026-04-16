@@ -424,7 +424,8 @@ export const clients = pgTable("clients", {
   notes: text("notes"),
   stripeCustomerId: text("stripe_customer_id"),
   stripeConnectCustomerId: text("stripe_connect_customer_id"),
-  homeData: text("home_data"), // JSON: HouseFax/Zillow enrichment data stored when provider adds client address
+  homeData: text("home_data"), // JSON: legacy HouseFax cache (deprecated in favor of homeId)
+  homeId: varchar("home_id").references(() => homes.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
