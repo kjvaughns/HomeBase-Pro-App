@@ -6,6 +6,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { StripeProviderWrapper } from "@/components/StripeProviderWrapper";
+import * as Updates from "expo-updates";
 
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/query-client";
@@ -51,6 +52,18 @@ export default function App() {
       .then((r) => r.json())
       .then((d) => { if (d.publishableKey) setStripeKey(d.publishableKey); })
       .catch(() => {});
+
+    async function applyUpdateIfAvailable() {
+      if (__DEV__) return;
+      try {
+        const update = await Updates.checkForUpdateAsync();
+        if (update.isAvailable) {
+          await Updates.fetchUpdateAsync();
+          await Updates.reloadAsync();
+        }
+      } catch (_) {}
+    }
+    applyUpdateIfAvailable();
   }, []);
   
   return (
