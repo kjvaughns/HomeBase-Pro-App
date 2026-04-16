@@ -4665,18 +4665,10 @@ Respond with JSON only:
                   })()
                 : undefined;
 
-              // Use already-fetched service snapshot (if customServiceId was set)
-              // also fetch addOnsJson which wasn't in the initial snapshot
-              let fullSvcData: { description: string | null; pricingType: string; addOnsJson: string | null } | null = svcSnapshot
-                ? { description: svcSnapshot.description, pricingType: svcSnapshot.pricingType, addOnsJson: null }
+              // Use already-fetched service snapshot (if customServiceId was set and passed ownership check)
+              const fullSvcData: { description: string | null; pricingType: string } | null = svcSnapshot
+                ? { description: svcSnapshot.description, pricingType: svcSnapshot.pricingType }
                 : null;
-              if (newJob.customServiceId && fullSvcData) {
-                const [addOnRow] = await db.select({ addOnsJson: providerCustomServices.addOnsJson })
-                  .from(providerCustomServices)
-                  .where(eq(providerCustomServices.id, newJob.customServiceId))
-                  .catch(() => [null]);
-                if (addOnRow) fullSvcData.addOnsJson = addOnRow.addOnsJson;
-              }
 
               // Parse selected add-ons from req.body — frontend sends a structured array
               let rawAddOns: unknown[] | undefined;
