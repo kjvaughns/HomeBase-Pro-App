@@ -63,6 +63,14 @@ interface ServiceAddOn {
   description?: string;
 }
 
+interface IntakeQuestion {
+  id: string;
+  question: string;
+  required?: boolean;
+  type?: string;
+  options?: string[];
+}
+
 interface CustomService {
   id: string;
   name: string;
@@ -176,6 +184,7 @@ export default function AddJobScreen() {
   const [priceManuallyEdited, setPriceManuallyEdited] = useState(false);
   const [selectedAddOns, setSelectedAddOns] = useState<ServiceAddOn[]>([]);
   const [serviceDescription, setServiceDescription] = useState<string>("");
+  const [intakeAnswers, setIntakeAnswers] = useState<Record<string, string>>({});
 
   // UI state — inline expansions (no modals)
   const [clientExpanded, setClientExpanded] = useState(false);
@@ -199,6 +208,16 @@ export default function AddJobScreen() {
   const [pricingLoading, setPricingLoading] = useState(false);
 
   const selectedClient = clients.find((c) => c.id === selectedClientId);
+
+  const serviceIntakeQuestions = useMemo<IntakeQuestion[]>(() => {
+    if (!selectedService?.intakeQuestionsJson) return [];
+    try {
+      const parsed = JSON.parse(selectedService.intakeQuestionsJson);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }, [selectedService]);
 
   const availableAddOns = useMemo<ServiceAddOn[]>(() => {
     if (!selectedService?.addOnsJson) return [];
@@ -242,6 +261,7 @@ export default function AddJobScreen() {
     setServiceName(svc.name);
     setServiceDescription(svc.description || "");
     setSelectedAddOns([]);
+    setIntakeAnswers({});
 
     let priceNum = 0;
     if (svc.pricingType === "fixed" || svc.pricingType === "service_call") {
@@ -321,6 +341,15 @@ export default function AddJobScreen() {
 
   const handleSave = () => {
     if (!selectedClientId || !serviceName.trim() || !providerId) return;
+    const trimmedAnswers: Record<string, string> = {};
+    Object.entries(intakeAnswers).forEach(([k, v]) => {
+      const t = (v ?? "").trim();
+      if (t.length > 0) trimmedAnswers[k] = t;
+    });
+    const answersJson =
+      Object.keys(trimmedAnswers).length > 0
+        ? JSON.stringify(trimmedAnswers)
+        : undefined;
     createJobMutation.mutate({
       providerId,
       clientId: selectedClientId,
@@ -334,6 +363,8 @@ export default function AddJobScreen() {
       pricingType: selectedService?.pricingType || undefined,
       serviceDescription: serviceDescription || undefined,
       selectedAddOns: selectedAddOns.length > 0 ? selectedAddOns : undefined,
+      answersJson,
+      intakeAnswers: answersJson ? trimmedAnswers : undefined,
     });
   };
 
@@ -792,7 +823,7 @@ export default function AddJobScreen() {
                   pricing in client emails.
                 </ThemedText>
                 <PrimaryButton
-                  onPress={() => navigation.navigate("Services")}
+                  onPress={() => navigation.navigate("NewService")}
                   style={styles.stateAction}
                   testID="button-create-service"
                 >
@@ -876,6 +907,113 @@ export default function AddJobScreen() {
               numberOfLines={4}
               style={styles.bigTextarea}
             />
+
+            {serviceIntakeQuestions.length > 0 ? (
+              <View
+                style={[
+                  styles.intakeBlock,
+                  {
+                    backgroundColor: theme.backgroundSecondary,
+                    borderColor: theme.borderLight,
+                  },
+                ]}
+              >
+                <ThemedText
+                  style={[
+                    styles.intakeBlockTitle,
+                    { color: theme.textSecondary },
+                  ]}
+                >
+                  Service Intake Questions
+                </ThemedText>
+                {serviceIntakeQuestions.map((q, i) => (
+                  <View
+                    key={q.id}
+                    style={[
+                      styles.intakeQuestion,
+                      i > 0 && {
+                        borderTopWidth: StyleSheet.hairlineWidth,
+                        borderTopColor: theme.separator,
+                      },
+                    ]}
+                  >
+                    <ThemedText style={styles.intakeQuestionLabel}>
+                      {q.question}
+                      {q.required ? " *" : ""}
+                    </ThemedText>
+                    {q.options && q.options.length > 0 ? (
+                      <View style={styles.intakeOptions}>
+                        {q.options.map((opt) => {
+                          const isSelected = intakeAnswers[q.id] === opt;
+                          return (
+                            <Pressable
+                              key={opt}
+                              onPress={() =>
+                                setIntakeAnswers((prev) => ({
+                                  ...prev,
+                                  [q.id]: opt,
+                                }))
+                              }
+                              style={[
+                                styles.intakeOption,
+                                {
+                                  backgroundColor: isSelected
+                                    ? Colors.accentLight
+                                    : theme.backgroundElevated,
+                                  borderColor: isSelected
+                                    ? Colors.accent
+                                    : theme.borderLight,
+                                },
+                              ]}
+                              testID={`intake-option-${q.id}-${opt}`}
+                            >
+                              <ThemedText
+                                style={[
+                                  styles.intakeOptionText,
+                                  {
+                                    color: isSelected
+                                      ? Colors.accent
+                                      : theme.text,
+                                  },
+                                ]}
+                              >
+                                {opt}
+                              </ThemedText>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    ) : (
+                      <TextInput
+                        value={intakeAnswers[q.id] || ""}
+                        onChangeText={(text) =>
+                          setIntakeAnswers((prev) => ({
+                            ...prev,
+                            [q.id]: text,
+                          }))
+                        }
+                        placeholder={
+                          q.type === "number" ? "Enter a number" : "Answer"
+                        }
+                        placeholderTextColor={theme.textTertiary}
+                        keyboardType={
+                          q.type === "number" ? "numeric" : "default"
+                        }
+                        style={[
+                          styles.intakeInput,
+                          {
+                            color: theme.text,
+                            backgroundColor: theme.backgroundElevated,
+                            borderColor: theme.borderLight,
+                          },
+                        ]}
+                        testID={`intake-input-${q.id}`}
+                      />
+                    )}
+                  </View>
+                ))}
+              </View>
+            ) : null}
 
             {serviceDescription.length > 0 ? (
               <View style={{ marginTop: Spacing.lg }}>
@@ -1610,6 +1748,53 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   subtleBadgeText: { fontSize: 10, fontWeight: "600" },
+
+  intakeBlock: {
+    marginTop: Spacing.lg,
+    borderRadius: BorderRadius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  intakeBlockTitle: {
+    ...Typography.caption,
+    fontWeight: "700",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.xs,
+  },
+  intakeQuestion: {
+    paddingVertical: Spacing.sm + 2,
+  },
+  intakeQuestionLabel: {
+    ...Typography.subhead,
+    fontWeight: "600",
+    marginBottom: Spacing.xs + 2,
+  },
+  intakeOptions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  intakeOption: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+  },
+  intakeOptionText: {
+    ...Typography.footnote,
+    fontWeight: "600",
+  },
+  intakeInput: {
+    ...Typography.subhead,
+    borderRadius: BorderRadius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    minHeight: 40,
+  },
 
   // Schedule pills
   scheduleRow: { flexDirection: "row", gap: Spacing.sm },
