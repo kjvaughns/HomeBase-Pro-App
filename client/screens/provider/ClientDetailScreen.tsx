@@ -444,34 +444,43 @@ export default function ClientDetailScreen() {
           const isPaid = invoice.status === "paid";
           const total = invoice.total || invoice.amount;
           return (
-            <GlassCard key={invoice.id} style={styles.invoiceCard}>
-              <View style={styles.invoiceHeader}>
-                <ThemedText type="body" style={{ fontWeight: "600" }}>
-                  {invoice.invoiceNumber || `Invoice #${invoice.id?.slice(-6) || ""}`}
-                </ThemedText>
-                <View style={[
-                  styles.invoiceStatus,
-                  { backgroundColor: isPaid ? Colors.accent + "20" : "#EF4444" + "20" }
-                ]}>
-                  <ThemedText
-                    type="caption"
-                    style={{ color: isPaid ? Colors.accent : "#EF4444", fontWeight: "600" }}
-                  >
-                    {(invoice.status || "draft").toUpperCase()}
+            <Pressable
+              key={invoice.id}
+              onPress={() => navigation.navigate("InvoiceDetail", { invoiceId: invoice.id })}
+              style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+            >
+              <GlassCard style={styles.invoiceCard}>
+                <View style={styles.invoiceHeader}>
+                  <ThemedText type="body" style={{ fontWeight: "600" }}>
+                    {invoice.invoiceNumber || `Invoice #${invoice.id?.slice(-6) || ""}`}
                   </ThemedText>
+                  <View style={styles.invoiceHeaderRight}>
+                    <View style={[
+                      styles.invoiceStatus,
+                      { backgroundColor: isPaid ? Colors.accent + "20" : "#EF4444" + "20" }
+                    ]}>
+                      <ThemedText
+                        type="caption"
+                        style={{ color: isPaid ? Colors.accent : "#EF4444", fontWeight: "600" }}
+                      >
+                        {(invoice.status || "draft").toUpperCase()}
+                      </ThemedText>
+                    </View>
+                    <Feather name="chevron-right" size={14} color={theme.textTertiary} />
+                  </View>
                 </View>
-              </View>
-              <View style={styles.invoiceDetails}>
-                <ThemedText type="body" style={{ color: Colors.accent }}>
-                  {total ? formatCurrency(parseFloat(total)) : "TBD"}
-                </ThemedText>
-                {invoice.dueDate ? (
-                  <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-                    Due: {formatDate(invoice.dueDate)}
+                <View style={styles.invoiceDetails}>
+                  <ThemedText type="body" style={{ color: Colors.accent }}>
+                    {total ? formatCurrency(parseFloat(total)) : "TBD"}
                   </ThemedText>
-                ) : null}
-              </View>
-            </GlassCard>
+                  {invoice.dueDate ? (
+                    <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+                      Due: {formatDate(invoice.dueDate)}
+                    </ThemedText>
+                  ) : null}
+                </View>
+              </GlassCard>
+            </Pressable>
           );
         })
       ) : (
@@ -1071,6 +1080,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+  },
+  invoiceHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
   },
   invoiceStatus: {
     paddingHorizontal: Spacing.sm,

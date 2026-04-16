@@ -44,14 +44,22 @@ interface PricingSuggestion {
   reasoning: string;
 }
 
-const SERVICE_OPTIONS = [
+interface CustomService {
+  id: string;
+  name: string;
+  description: string | null;
+  basePrice: string | null;
+  pricingType: string;
+  category: string;
+}
+
+const FALLBACK_SERVICES = [
   "General Repair",
   "Installation",
   "Maintenance",
   "Inspection",
   "Emergency Service",
   "Consultation",
-  "Custom Service",
 ];
 
 export default function AddJobScreen() {
@@ -70,6 +78,14 @@ export default function AddJobScreen() {
     queryKey: ["/api/provider", providerId, "clients"],
     enabled: !!providerId,
   });
+
+  const { data: servicesData } = useQuery<{ services: CustomService[] }>({
+    queryKey: ["/api/provider", providerId, "custom-services"],
+    enabled: !!providerId,
+  });
+
+  const providerServices = servicesData?.services || [];
+  const hasRealServices = providerServices.length > 0;
 
   const clients = clientsData?.clients || [];
 
@@ -425,23 +441,56 @@ export default function AddJobScreen() {
               </Pressable>
             </View>
             <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
-              {SERVICE_OPTIONS.map((service) => (
-                <Pressable
-                  key={service}
-                  style={[
-                    styles.modalItem,
-                    serviceName === service && { backgroundColor: Colors.accentLight },
-                  ]}
-                  onPress={() => { setServiceName(service); setShowServicePicker(false); }}
-                >
-                  <ThemedText style={serviceName === service ? { color: Colors.accent, fontWeight: "600" } : {}}>
-                    {service}
-                  </ThemedText>
-                  {serviceName === service ? (
-                    <Feather name="check" size={18} color={Colors.accent} />
-                  ) : null}
-                </Pressable>
-              ))}
+              {hasRealServices ? (
+                providerServices.map((svc) => (
+                  <Pressable
+                    key={svc.id}
+                    style={[
+                      styles.modalItem,
+                      serviceName === svc.name && { backgroundColor: Colors.accentLight },
+                    ]}
+                    onPress={() => {
+                      setServiceName(svc.name);
+                      if (svc.basePrice && !estimatedPrice) {
+                        setEstimatedPrice(parseFloat(svc.basePrice).toString());
+                      }
+                      setShowServicePicker(false);
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <ThemedText style={serviceName === svc.name ? { color: Colors.accent, fontWeight: "600" } : {}}>
+                        {svc.name}
+                      </ThemedText>
+                      {svc.basePrice ? (
+                        <ThemedText style={[styles.servicePrice, { color: theme.textTertiary }]}>
+                          ${parseFloat(svc.basePrice).toFixed(0)}
+                        </ThemedText>
+                      ) : null}
+                    </View>
+                    {serviceName === svc.name ? (
+                      <Feather name="check" size={18} color={Colors.accent} />
+                    ) : null}
+                  </Pressable>
+                ))
+              ) : (
+                FALLBACK_SERVICES.map((service) => (
+                  <Pressable
+                    key={service}
+                    style={[
+                      styles.modalItem,
+                      serviceName === service && { backgroundColor: Colors.accentLight },
+                    ]}
+                    onPress={() => { setServiceName(service); setShowServicePicker(false); }}
+                  >
+                    <ThemedText style={serviceName === service ? { color: Colors.accent, fontWeight: "600" } : {}}>
+                      {service}
+                    </ThemedText>
+                    {serviceName === service ? (
+                      <Feather name="check" size={18} color={Colors.accent} />
+                    ) : null}
+                  </Pressable>
+                ))
+              )}
             </ScrollView>
             <View style={[styles.customRow, { borderTopColor: theme.separator }]}>
               <TextField
@@ -767,4 +816,5 @@ const styles = StyleSheet.create({
   priceAmount: { ...Typography.largeTitle, fontWeight: "800" },
   priceRange: { ...Typography.subhead, marginTop: 4 },
   priceReasoning: { ...Typography.body, lineHeight: 22, marginBottom: Spacing.lg },
+  servicePrice: { ...Typography.caption1, marginTop: 2 },
 });

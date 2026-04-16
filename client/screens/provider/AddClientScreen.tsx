@@ -39,12 +39,19 @@ export default function AddClientScreen() {
   const [zip, setZip] = useState("");
   const [notes, setNotes] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [housefaxData, setHousefaxData] = useState<EnrichmentData | null>(null);
 
   const handleAddressSelected = (data: EnrichmentData) => {
     setAddress(data.street || "");
     setCity(data.city || "");
     setState(data.state || "");
     setZip(data.zipCode || "");
+    // Store full enrichment data for HouseFax preview and save
+    if (data.bedrooms || data.bathrooms || data.squareFeet || data.yearBuilt) {
+      setHousefaxData(data);
+    } else {
+      setHousefaxData(null);
+    }
   };
 
   const createMutation = useMutation({
@@ -59,6 +66,7 @@ export default function AddClientScreen() {
       state?: string;
       zip?: string;
       notes?: string;
+      homeData?: string;
     }) => {
       const response = await apiRequest("POST", "/api/clients", data);
       return response.json();
@@ -98,6 +106,7 @@ export default function AddClientScreen() {
       state: state.trim() || undefined,
       zip: zip.trim() || undefined,
       notes: notes.trim() || undefined,
+      homeData: housefaxData ? JSON.stringify(housefaxData) : undefined,
     });
   };
 
@@ -196,6 +205,49 @@ export default function AddClientScreen() {
           </View>
         </GlassCard>
 
+        {/* HouseFax Preview */}
+        {housefaxData ? (
+          <GlassCard style={[styles.section, styles.housefaxCard]}>
+            <View style={styles.housefaxHeader}>
+              <View style={[styles.housefaxIconWrap, { backgroundColor: Colors.accentLight }]}>
+                <Feather name="home" size={14} color={Colors.accent} />
+              </View>
+              <ThemedText style={[styles.housefaxTitle, { color: Colors.accent }]}>Property Found</ThemedText>
+            </View>
+            <View style={styles.housefaxGrid}>
+              {housefaxData.bedrooms != null ? (
+                <View style={styles.housefaxStat}>
+                  <ThemedText style={styles.housefaxValue}>{housefaxData.bedrooms}</ThemedText>
+                  <ThemedText style={[styles.housefaxLabel, { color: theme.textSecondary }]}>Beds</ThemedText>
+                </View>
+              ) : null}
+              {housefaxData.bathrooms != null ? (
+                <View style={styles.housefaxStat}>
+                  <ThemedText style={styles.housefaxValue}>{housefaxData.bathrooms}</ThemedText>
+                  <ThemedText style={[styles.housefaxLabel, { color: theme.textSecondary }]}>Baths</ThemedText>
+                </View>
+              ) : null}
+              {housefaxData.squareFeet != null ? (
+                <View style={styles.housefaxStat}>
+                  <ThemedText style={styles.housefaxValue}>{housefaxData.squareFeet.toLocaleString()}</ThemedText>
+                  <ThemedText style={[styles.housefaxLabel, { color: theme.textSecondary }]}>Sq Ft</ThemedText>
+                </View>
+              ) : null}
+              {housefaxData.yearBuilt != null ? (
+                <View style={styles.housefaxStat}>
+                  <ThemedText style={styles.housefaxValue}>{housefaxData.yearBuilt}</ThemedText>
+                  <ThemedText style={[styles.housefaxLabel, { color: theme.textSecondary }]}>Built</ThemedText>
+                </View>
+              ) : null}
+            </View>
+            {housefaxData.estimatedValue != null ? (
+              <ThemedText style={[styles.housefaxEstimate, { color: theme.textSecondary }]}>
+                Zestimate: ${housefaxData.estimatedValue.toLocaleString()}
+              </ThemedText>
+            ) : null}
+          </GlassCard>
+        ) : null}
+
         {/* Notes */}
         <GlassCard style={styles.section}>
           <FormSectionHeader icon="message-circle" title="Notes" iconBg={undefined} />
@@ -275,5 +327,43 @@ const styles = StyleSheet.create({
   errorText: {
     ...Typography.subhead,
     flex: 1,
+  },
+  housefaxCard: {},
+  housefaxHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  housefaxIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: BorderRadius.sm,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  housefaxTitle: {
+    ...Typography.subhead,
+    fontWeight: "600",
+  },
+  housefaxGrid: {
+    flexDirection: "row",
+    gap: Spacing.lg,
+    marginBottom: Spacing.sm,
+  },
+  housefaxStat: {
+    alignItems: "center",
+  },
+  housefaxValue: {
+    ...Typography.h3,
+    fontWeight: "700",
+  },
+  housefaxLabel: {
+    ...Typography.caption1,
+    marginTop: 2,
+  },
+  housefaxEstimate: {
+    ...Typography.caption1,
+    marginTop: Spacing.xs,
   },
 });

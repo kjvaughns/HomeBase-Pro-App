@@ -4172,7 +4172,29 @@ Respond with JSON only:
       // Get client's jobs and invoices
       const jobs = await storage.getJobsByClient(req.params.id);
       const invoices = await storage.getInvoicesByClient(req.params.id);
-      res.json({ client, jobs, invoices });
+
+      // Parse HouseFax enrichment data if present
+      let home = null;
+      if (client.homeData) {
+        try {
+          const enrichment = JSON.parse(client.homeData);
+          home = {
+            beds: enrichment.bedrooms ?? null,
+            baths: enrichment.bathrooms ?? null,
+            sqft: enrichment.squareFeet ?? null,
+            yearBuilt: enrichment.yearBuilt ?? null,
+            estimatedValue: enrichment.estimatedValue ?? null,
+            lotSize: enrichment.lotSize ?? null,
+            lastSoldDate: enrichment.lastSoldDate ?? null,
+            lastSoldPrice: enrichment.lastSoldPrice ?? null,
+            propertyType: enrichment.propertyType ?? null,
+          };
+        } catch {
+          // Invalid JSON — ignore
+        }
+      }
+
+      res.json({ client: { ...client, home }, jobs, invoices });
     } catch (error) {
       console.error("Get client error:", error);
       res.status(500).json({ error: "Failed to get client" });

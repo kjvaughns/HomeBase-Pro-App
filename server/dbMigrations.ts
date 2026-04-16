@@ -378,6 +378,9 @@ export async function runBootMigrations(): Promise<void> {
       ["providers.is_public column",         `SELECT is_public FROM providers LIMIT 0`],
     ];
 
+    // ── clients: home_data column for HouseFax/Zillow enrichment ─────────
+    await runSql("clients.home_data", `ALTER TABLE clients ADD COLUMN IF NOT EXISTS home_data TEXT`);
+
     const verificationErrors: string[] = [];
     for (const [label, sql] of verifications) {
       try {
