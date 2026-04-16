@@ -8,6 +8,8 @@ import {
   Platform,
   LayoutAnimation,
   UIManager,
+  Modal,
+  ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -29,7 +31,6 @@ import {
   Typography,
   Colors,
   BorderRadius,
-  Shadows,
 } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useTheme } from "@/hooks/useTheme";
@@ -175,32 +176,32 @@ export default function AddJobScreen() {
   const [selectedService, setSelectedService] = useState<CustomService | null>(
     null,
   );
-  const [serviceName, setServiceName] = useState("");
   const [description, setDescription] = useState("");
+  const [notes, setNotes] = useState("");
   const [scheduledDate, setScheduledDate] = useState(new Date());
   const [scheduledTime, setScheduledTime] = useState("09:00");
   const [estimatedPrice, setEstimatedPrice] = useState("");
   const [baseServicePriceNum, setBaseServicePriceNum] = useState(0);
   const [priceManuallyEdited, setPriceManuallyEdited] = useState(false);
   const [selectedAddOns, setSelectedAddOns] = useState<ServiceAddOn[]>([]);
-  const [serviceDescription, setServiceDescription] = useState<string>("");
   const [intakeAnswers, setIntakeAnswers] = useState<Record<string, string>>({});
 
-  // UI state — inline expansions (no modals)
-  const [clientExpanded, setClientExpanded] = useState(false);
-  const [serviceExpanded, setServiceExpanded] = useState(false);
-  const [showNewClientForm, setShowNewClientForm] = useState(false);
-  const [clientSearch, setClientSearch] = useState("");
-
-  // Picker sheets (native)
+  // Picker sheets
+  const [showClientSheet, setShowClientSheet] = useState(false);
+  const [showServiceSheet, setShowServiceSheet] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
 
-  // Inline new-client fields
+  // Client sheet-local state
+  const [clientSearch, setClientSearch] = useState("");
+  const [showNewClientForm, setShowNewClientForm] = useState(false);
   const [newClientFirstName, setNewClientFirstName] = useState("");
   const [newClientLastName, setNewClientLastName] = useState("");
   const [newClientPhone, setNewClientPhone] = useState("");
   const [newClientEmail, setNewClientEmail] = useState("");
+
+  // Service sheet-local state
+  const [serviceSearch, setServiceSearch] = useState("");
 
   // Pricing AI
   const [pricingSuggestion, setPricingSuggestion] =
@@ -241,6 +242,17 @@ export default function AddJobScreen() {
     );
   }, [clients, clientSearch]);
 
+  const filteredServices = useMemo(() => {
+    if (!serviceSearch.trim()) return providerServices;
+    const s = serviceSearch.toLowerCase();
+    return providerServices.filter(
+      (svc) =>
+        svc.name.toLowerCase().includes(s) ||
+        svc.category.toLowerCase().includes(s) ||
+        svc.description?.toLowerCase().includes(s),
+    );
+  }, [providerServices, serviceSearch]);
+
   const totalPriceNum = useMemo(() => {
     const parsed = parseFloat(estimatedPrice);
     return isNaN(parsed) ? 0 : parsed;
@@ -248,18 +260,29 @@ export default function AddJobScreen() {
 
   // ==== Handlers ====
 
+  const openClientSheet = () => {
+    setClientSearch("");
+    setShowNewClientForm(false);
+    setShowClientSheet(true);
+  };
+
+  const closeClientSheet = () => {
+    setShowClientSheet(false);
+    setShowNewClientForm(false);
+  };
+
+  const openServiceSheet = () => {
+    setServiceSearch("");
+    setShowServiceSheet(true);
+  };
+
   const handleSelectClient = (id: string) => {
     setSelectedClientId(id);
-    setShowNewClientForm(false);
-    setClientSearch("");
-    animateTransition();
-    setClientExpanded(false);
+    closeClientSheet();
   };
 
   const handleSelectService = (svc: CustomService) => {
     setSelectedService(svc);
-    setServiceName(svc.name);
-    setServiceDescription(svc.description || "");
     setSelectedAddOns([]);
     setIntakeAnswers({});
 
@@ -273,8 +296,7 @@ export default function AddJobScreen() {
     setEstimatedPrice(priceNum > 0 ? priceNum.toFixed(2) : "");
     setPriceManuallyEdited(false);
     setPricingSuggestion(null);
-    animateTransition();
-    setServiceExpanded(false);
+    setShowServiceSheet(false);
   };
 
   const handleToggleAddOn = (addon: ServiceAddOn) => {
@@ -331,8 +353,7 @@ export default function AddJobScreen() {
       setNewClientLastName("");
       setNewClientPhone("");
       setNewClientEmail("");
-      animateTransition();
-      setClientExpanded(false);
+      closeClientSheet();
     },
     onError: (error) => {
       console.error("Create client error:", error);
@@ -340,7 +361,7 @@ export default function AddJobScreen() {
   });
 
   const handleSave = () => {
-    if (!selectedClientId || !serviceName.trim() || !providerId) return;
+    if (!selectedClientId || !selectedService || !providerId) return;
     const trimmedAnswers: Record<string, string> = {};
     Object.entries(intakeAnswers).forEach(([k, v]) => {
       const t = (v ?? "").trim();
@@ -353,15 +374,16 @@ export default function AddJobScreen() {
     createJobMutation.mutate({
       providerId,
       clientId: selectedClientId,
-      customServiceId: selectedService?.id || undefined,
-      title: serviceName,
+      customServiceId: selectedService.id,
+      title: selectedService.name,
       description: description.trim() || undefined,
+      notes: notes.trim() || undefined,
       scheduledDate: scheduledDate.toISOString(),
       scheduledTime,
-      estimatedDuration: selectedService?.duration || undefined,
+      estimatedDuration: selectedService.duration || undefined,
       estimatedPrice: estimatedPrice.trim() || undefined,
-      pricingType: selectedService?.pricingType || undefined,
-      serviceDescription: serviceDescription || undefined,
+      pricingType: selectedService.pricingType,
+      serviceDescription: selectedService.description || undefined,
       selectedAddOns: selectedAddOns.length > 0 ? selectedAddOns : undefined,
       answersJson,
       intakeAnswers: answersJson ? trimmedAnswers : undefined,
@@ -385,12 +407,12 @@ export default function AddJobScreen() {
   };
 
   const handleGetPricingSuggestion = async () => {
-    if (!serviceName.trim()) return;
+    if (!selectedService) return;
     setPricingLoading(true);
     try {
       const response = await apiRequest("POST", "/api/ai/pricing-assistant", {
         providerId,
-        serviceName,
+        serviceName: selectedService.name,
         description,
         clientId: selectedClientId,
       });
@@ -431,32 +453,55 @@ export default function AddJobScreen() {
   };
 
   const canSave =
-    !!selectedClientId &&
-    !!serviceName.trim() &&
-    !createJobMutation.isPending;
+    !!selectedClientId && !!selectedService && !createJobMutation.isPending;
 
-  // ==== Reusable section card ====
-  const renderSection = (
-    title: string,
-    children: React.ReactNode,
-    rightAccessory?: React.ReactNode,
-  ) => (
-    <View
-      style={[
-        styles.section,
-        {
-          backgroundColor: theme.cardBackground,
-          borderColor: theme.borderLight,
-        },
-        Shadows.sm,
-      ]}
-    >
-      <View style={styles.sectionHeaderRow}>
-        <ThemedText style={styles.sectionTitle}>{title}</ThemedText>
-        {rightAccessory}
+  // ==== Reusable section (title + card) ====
+  const Section = ({
+    title,
+    children,
+  }: {
+    title: string;
+    children: React.ReactNode;
+  }) => (
+    <View style={styles.sectionWrap}>
+      <ThemedText
+        style={[styles.sectionTitle, { color: theme.textTertiary }]}
+      >
+        {title}
+      </ThemedText>
+      <View
+        style={[
+          styles.sectionCard,
+          { backgroundColor: theme.cardBackground },
+        ]}
+      >
+        {children}
       </View>
-      {children}
     </View>
+  );
+
+  // ==== Tap row (used for Client & Service closed-state placeholders) ====
+  const TapRow = ({
+    placeholder,
+    onPress,
+    testID,
+  }: {
+    placeholder: string;
+    onPress: () => void;
+    testID?: string;
+  }) => (
+    <Pressable
+      onPress={onPress}
+      style={styles.tapRow}
+      testID={testID}
+    >
+      <ThemedText
+        style={[styles.tapRowPlaceholder, { color: theme.textTertiary }]}
+      >
+        {placeholder}
+      </ThemedText>
+      <Feather name="chevron-right" size={18} color={theme.textTertiary} />
+    </Pressable>
   );
 
   return (
@@ -470,814 +515,554 @@ export default function AddJobScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ============ 1. CLIENT ============ */}
-        {renderSection(
-          "Client",
-          <>
-            {selectedClient && !clientExpanded ? (
-              <Pressable
-                style={[
-                  styles.identityRow,
-                  { backgroundColor: theme.backgroundSecondary },
-                ]}
-                onPress={() => {
-                  animateTransition();
-                  setClientExpanded(true);
-                }}
-                testID="selected-client-card"
+        <Section title="Client">
+          {selectedClient ? (
+            <Pressable
+              style={styles.identityRow}
+              onPress={openClientSheet}
+              testID="selected-client-card"
+            >
+              <View
+                style={[styles.avatar, { backgroundColor: Colors.accent }]}
               >
-                <View
-                  style={[styles.avatar, { backgroundColor: Colors.accent }]}
-                >
-                  <ThemedText style={styles.avatarText}>
-                    {selectedClient.firstName[0]}
-                    {selectedClient.lastName[0]}
-                  </ThemedText>
-                </View>
-                <View style={styles.identityBody}>
-                  <ThemedText style={styles.identityName}>
-                    {selectedClient.firstName} {selectedClient.lastName}
-                  </ThemedText>
-                  {selectedClient.phone || selectedClient.email ? (
-                    <ThemedText
-                      style={[
-                        styles.identitySub,
-                        { color: theme.textTertiary },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {selectedClient.phone || selectedClient.email}
-                    </ThemedText>
-                  ) : null}
-                </View>
-                <ThemedText
-                  style={[styles.changeText, { color: Colors.accent }]}
-                >
-                  Change
+                <ThemedText style={styles.avatarText}>
+                  {selectedClient.firstName[0]}
+                  {selectedClient.lastName[0]}
                 </ThemedText>
-              </Pressable>
-            ) : (
-              <View>
-                <View
-                  style={[
-                    styles.searchBar,
-                    { backgroundColor: theme.backgroundSecondary },
-                  ]}
-                >
-                  <Feather
-                    name="search"
-                    size={15}
-                    color={theme.textTertiary}
-                  />
-                  <TextInput
-                    style={[styles.searchInput, { color: theme.text }]}
-                    placeholder="Search clients"
-                    placeholderTextColor={theme.textTertiary}
-                    value={clientSearch}
-                    onChangeText={setClientSearch}
-                    autoCorrect={false}
-                  />
-                </View>
-
-                <View style={styles.inlineList}>
-                  {filteredClients.map((client) => {
-                    const isActive = selectedClientId === client.id;
-                    return (
-                      <Pressable
-                        key={client.id}
-                        style={[
-                          styles.listRow,
-                          isActive && {
-                            backgroundColor: Colors.accentLight,
-                          },
-                        ]}
-                        onPress={() => handleSelectClient(client.id)}
-                        testID={`client-row-${client.id}`}
-                      >
-                        <View
-                          style={[
-                            styles.avatarSmall,
-                            { backgroundColor: Colors.accent },
-                          ]}
-                        >
-                          <ThemedText style={styles.avatarTextSmall}>
-                            {client.firstName[0]}
-                            {client.lastName[0]}
-                          </ThemedText>
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <ThemedText
-                            style={[
-                              styles.listRowTitle,
-                              isActive && { color: Colors.accent },
-                            ]}
-                          >
-                            {client.firstName} {client.lastName}
-                          </ThemedText>
-                          {client.phone ? (
-                            <ThemedText
-                              style={[
-                                styles.listRowSub,
-                                { color: theme.textTertiary },
-                              ]}
-                            >
-                              {client.phone}
-                            </ThemedText>
-                          ) : null}
-                        </View>
-                        {isActive ? (
-                          <Feather
-                            name="check"
-                            size={16}
-                            color={Colors.accent}
-                          />
-                        ) : null}
-                      </Pressable>
-                    );
-                  })}
-
-                  {filteredClients.length === 0 && !showNewClientForm ? (
-                    <ThemedText
-                      style={[
-                        styles.emptyHint,
-                        { color: theme.textTertiary },
-                      ]}
-                    >
-                      No matching clients
-                    </ThemedText>
-                  ) : null}
-                </View>
-
-                {!showNewClientForm ? (
-                  <Pressable
-                    style={styles.inlineActionRow}
-                    onPress={() => {
-                      animateTransition();
-                      setShowNewClientForm(true);
-                    }}
-                    testID="button-add-new-client"
+              </View>
+              <View style={styles.identityBody}>
+                <ThemedText style={styles.identityName}>
+                  {selectedClient.firstName} {selectedClient.lastName}
+                </ThemedText>
+                {selectedClient.phone || selectedClient.email ? (
+                  <ThemedText
+                    style={[
+                      styles.identitySub,
+                      { color: theme.textTertiary },
+                    ]}
+                    numberOfLines={1}
                   >
+                    {selectedClient.phone || selectedClient.email}
+                  </ThemedText>
+                ) : null}
+              </View>
+              <ThemedText style={[styles.changeText, { color: Colors.accent }]}>
+                Change
+              </ThemedText>
+            </Pressable>
+          ) : (
+            <TapRow
+              placeholder="Select a client"
+              onPress={openClientSheet}
+              testID="button-open-client-sheet"
+            />
+          )}
+        </Section>
+
+        {/* ============ 2. SERVICE ============ */}
+        <Section title="Service">
+          {selectedService ? (
+            <Pressable
+              style={styles.serviceSummary}
+              onPress={openServiceSheet}
+              testID="selected-service-card"
+            >
+              <View style={styles.serviceSummaryHeader}>
+                <View style={{ flex: 1 }}>
+                  <ThemedText style={styles.serviceSummaryName}>
+                    {selectedService.name}
+                  </ThemedText>
+                  <View style={styles.serviceSummaryMeta}>
                     <View
                       style={[
-                        styles.plusBadge,
+                        styles.metaPill,
                         { backgroundColor: Colors.accentLight },
                       ]}
                     >
-                      <Feather name="plus" size={13} color={Colors.accent} />
+                      <ThemedText
+                        style={[styles.metaPillText, { color: Colors.accent }]}
+                      >
+                        {selectedService.category}
+                      </ThemedText>
                     </View>
                     <ThemedText
-                      style={[styles.inlineActionText, { color: Colors.accent }]}
+                      style={[styles.metaDot, { color: theme.textTertiary }]}
                     >
-                      Add new client
+                      ·
                     </ThemedText>
-                  </Pressable>
-                ) : (
-                  <View style={styles.inlineForm}>
-                    <View style={styles.row2}>
-                      <View style={{ flex: 1 }}>
-                        <TextField
-                          value={newClientFirstName}
-                          onChangeText={setNewClientFirstName}
-                          placeholder="First name"
-                          autoCapitalize="words"
-                        />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <TextField
-                          value={newClientLastName}
-                          onChangeText={setNewClientLastName}
-                          placeholder="Last name"
-                          autoCapitalize="words"
-                        />
-                      </View>
-                    </View>
-                    <TextField
-                      value={newClientPhone}
-                      onChangeText={setNewClientPhone}
-                      placeholder="Phone (required)"
-                      keyboardType="phone-pad"
-                    />
-                    <TextField
-                      value={newClientEmail}
-                      onChangeText={setNewClientEmail}
-                      placeholder="Email (recommended)"
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                    />
-                    <View style={styles.inlineFormButtons}>
-                      <Pressable
-                        onPress={() => {
-                          animateTransition();
-                          setShowNewClientForm(false);
-                        }}
-                        style={styles.textButton}
-                      >
+                    <ThemedText
+                      style={[
+                        styles.serviceSummaryMetaText,
+                        { color: theme.textSecondary },
+                      ]}
+                    >
+                      {getPricingTypeLabel(selectedService.pricingType)}
+                    </ThemedText>
+                    {selectedService.duration ? (
+                      <>
                         <ThemedText
                           style={[
-                            styles.textButtonText,
+                            styles.metaDot,
+                            { color: theme.textTertiary },
+                          ]}
+                        >
+                          ·
+                        </ThemedText>
+                        <ThemedText
+                          style={[
+                            styles.serviceSummaryMetaText,
                             { color: theme.textSecondary },
                           ]}
                         >
-                          Cancel
+                          {getDurationLabel(selectedService.duration)}
                         </ThemedText>
-                      </Pressable>
-                      <PrimaryButton
-                        onPress={handleCreateClient}
-                        loading={createClientMutation.isPending}
-                        disabled={
-                          !newClientFirstName.trim() ||
-                          !newClientLastName.trim() ||
-                          createClientMutation.isPending
-                        }
-                        style={styles.smallPrimary}
-                        testID="button-create-client"
-                      >
-                        Add Client
-                      </PrimaryButton>
-                    </View>
+                      </>
+                    ) : null}
                   </View>
-                )}
-              </View>
-            )}
-          </>,
-        )}
-
-        {/* ============ 2. SERVICE ============ */}
-        {renderSection(
-          "Service",
-          <>
-            {selectedService && !serviceExpanded ? (
-              <Pressable
-                style={[
-                  styles.servicePreview,
-                  { backgroundColor: theme.backgroundSecondary },
-                ]}
-                onPress={() => {
-                  animateTransition();
-                  setServiceExpanded(true);
-                }}
-                testID="selected-service-card"
-              >
-                <View style={styles.servicePreviewTop}>
-                  <View style={{ flex: 1 }}>
-                    <ThemedText style={styles.servicePreviewName}>
-                      {selectedService.name}
-                    </ThemedText>
-                    <View style={styles.servicePreviewMeta}>
-                      <View
-                        style={[
-                          styles.metaPill,
-                          { backgroundColor: Colors.accentLight },
-                        ]}
-                      >
-                        <ThemedText
-                          style={[styles.metaPillText, { color: Colors.accent }]}
-                        >
-                          {selectedService.category}
-                        </ThemedText>
-                      </View>
-                      <View
-                        style={[
-                          styles.metaPill,
-                          {
-                            backgroundColor: theme.backgroundTertiary,
-                          },
-                        ]}
-                      >
-                        <ThemedText
-                          style={[
-                            styles.metaPillText,
-                            { color: theme.textSecondary },
-                          ]}
-                        >
-                          {getPricingTypeLabel(selectedService.pricingType)}
-                        </ThemedText>
-                      </View>
-                      {selectedService.duration ? (
-                        <View
-                          style={[
-                            styles.metaPill,
-                            {
-                              backgroundColor: theme.backgroundTertiary,
-                            },
-                          ]}
-                        >
-                          <ThemedText
-                            style={[
-                              styles.metaPillText,
-                              { color: theme.textSecondary },
-                            ]}
-                          >
-                            {getDurationLabel(selectedService.duration)}
-                          </ThemedText>
-                        </View>
-                      ) : null}
-                    </View>
-                  </View>
+                </View>
+                <View style={styles.serviceSummaryRight}>
+                  <ThemedText
+                    style={[styles.serviceSummaryPrice, { color: Colors.accent }]}
+                  >
+                    {getPriceDisplay(selectedService)}
+                  </ThemedText>
                   <ThemedText
                     style={[styles.changeText, { color: Colors.accent }]}
                   >
                     Change
                   </ThemedText>
                 </View>
-                {selectedService.description ? (
-                  <ThemedText
-                    style={[
-                      styles.servicePreviewDesc,
-                      { color: theme.textSecondary },
-                    ]}
-                    numberOfLines={2}
-                  >
-                    {selectedService.description}
-                  </ThemedText>
-                ) : null}
-              </Pressable>
-            ) : servicesLoading ? (
-              <View style={styles.stateBlock}>
-                <ActivityIndicator color={Colors.accent} />
-                <ThemedText
-                  style={[styles.stateText, { color: theme.textSecondary }]}
-                >
-                  Loading services
-                </ThemedText>
               </View>
-            ) : servicesError ? (
-              <View style={styles.stateBlock}>
-                <ThemedText style={styles.stateTitle}>
-                  Couldn't load services
-                </ThemedText>
-                <ThemedText
-                  style={[styles.stateText, { color: theme.textSecondary }]}
-                >
-                  Check your connection and try again.
-                </ThemedText>
-              </View>
-            ) : providerServices.length === 0 ? (
-              <View style={styles.stateBlock}>
-                <ThemedText style={styles.stateTitle}>
-                  No services yet
-                </ThemedText>
-                <ThemedText
-                  style={[styles.stateText, { color: theme.textSecondary }]}
-                >
-                  Create your service catalog to book jobs faster and include
-                  pricing in client emails.
-                </ThemedText>
-                <PrimaryButton
-                  onPress={() => navigation.navigate("NewService")}
-                  style={styles.stateAction}
-                  testID="button-create-service"
-                >
-                  Create a Service
-                </PrimaryButton>
-              </View>
-            ) : (
-              <View style={styles.inlineList}>
-                {providerServices.map((svc) => {
-                  const isActive = selectedService?.id === svc.id;
-                  return (
-                    <Pressable
-                      key={svc.id}
-                      style={[
-                        styles.serviceCard,
-                        {
-                          backgroundColor: theme.backgroundSecondary,
-                          borderColor: isActive
-                            ? Colors.accent
-                            : "transparent",
-                        },
-                      ]}
-                      onPress={() => handleSelectService(svc)}
-                      testID={`service-card-${svc.id}`}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <ThemedText style={styles.serviceCardName}>
-                          {svc.name}
-                        </ThemedText>
-                        <View style={styles.serviceCardMeta}>
-                          <ThemedText
-                            style={[
-                              styles.serviceCardPrice,
-                              { color: Colors.accent },
-                            ]}
-                          >
-                            {getPriceDisplay(svc)}
-                          </ThemedText>
-                          {svc.duration ? (
-                            <ThemedText
-                              style={[
-                                styles.serviceCardDuration,
-                                { color: theme.textTertiary },
-                              ]}
-                            >
-                              {"  ·  "}
-                              {getDurationLabel(svc.duration)}
-                            </ThemedText>
-                          ) : null}
-                        </View>
-                      </View>
-                      {isActive ? (
-                        <Feather
-                          name="check"
-                          size={16}
-                          color={Colors.accent}
-                        />
-                      ) : null}
-                    </Pressable>
-                  );
-                })}
-              </View>
-            )}
-          </>,
-        )}
+            </Pressable>
+          ) : servicesLoading ? (
+            <View style={styles.stateBlock}>
+              <ActivityIndicator color={Colors.accent} />
+              <ThemedText
+                style={[styles.stateText, { color: theme.textSecondary }]}
+              >
+                Loading services
+              </ThemedText>
+            </View>
+          ) : servicesError ? (
+            <View style={styles.stateBlock}>
+              <ThemedText style={styles.stateTitle}>
+                Couldn't load services
+              </ThemedText>
+              <ThemedText
+                style={[styles.stateText, { color: theme.textSecondary }]}
+              >
+                Check your connection and try again.
+              </ThemedText>
+            </View>
+          ) : providerServices.length === 0 ? (
+            <View style={styles.stateBlock}>
+              <ThemedText style={styles.stateTitle}>No services yet</ThemedText>
+              <ThemedText
+                style={[styles.stateText, { color: theme.textSecondary }]}
+              >
+                Create your service catalog to book jobs faster.
+              </ThemedText>
+              <PrimaryButton
+                onPress={() => navigation.navigate("NewService")}
+                style={styles.stateAction}
+                testID="button-create-service"
+              >
+                Create a Service
+              </PrimaryButton>
+            </View>
+          ) : (
+            <TapRow
+              placeholder="Select a service"
+              onPress={openServiceSheet}
+              testID="button-open-service-sheet"
+            />
+          )}
+        </Section>
 
         {/* ============ 3. JOB DETAILS ============ */}
-        {renderSection(
-          "Job Details",
-          <>
+        <Section title="Job Details">
+          <View style={styles.detailsBlock}>
             <ThemedText
               style={[styles.fieldLabel, { color: theme.textSecondary }]}
             >
               What's going on?
             </ThemedText>
-            <TextField
+            <TextInput
               value={description}
               onChangeText={setDescription}
-              placeholder="Describe the issue or scope of work"
+              placeholder="Brief issue summary or scope of work"
+              placeholderTextColor={theme.textTertiary}
               multiline
-              numberOfLines={4}
-              style={styles.bigTextarea}
+              style={[
+                styles.bareTextarea,
+                { color: theme.text, minHeight: 84 },
+              ]}
+              testID="input-description"
             />
+          </View>
 
-            {serviceIntakeQuestions.length > 0 ? (
-              <View
-                style={[
-                  styles.intakeBlock,
-                  {
-                    backgroundColor: theme.backgroundSecondary,
-                    borderColor: theme.borderLight,
-                  },
-                ]}
+          {serviceIntakeQuestions.length > 0 ? (
+            <View
+              style={[
+                styles.detailsBlock,
+                {
+                  borderTopWidth: StyleSheet.hairlineWidth,
+                  borderTopColor: theme.separator,
+                },
+              ]}
+            >
+              <ThemedText
+                style={[styles.fieldLabel, { color: theme.textSecondary }]}
               >
-                <ThemedText
+                Service Intake
+              </ThemedText>
+              {serviceIntakeQuestions.map((q, i) => (
+                <View
+                  key={q.id}
                   style={[
-                    styles.intakeBlockTitle,
-                    { color: theme.textSecondary },
+                    styles.intakeQuestion,
+                    i > 0 && { marginTop: Spacing.md },
                   ]}
                 >
-                  Service Intake Questions
-                </ThemedText>
-                {serviceIntakeQuestions.map((q, i) => (
-                  <View
-                    key={q.id}
+                  <ThemedText style={styles.intakeQuestionLabel}>
+                    {q.question}
+                    {q.required ? " *" : ""}
+                  </ThemedText>
+                  {q.options && q.options.length > 0 ? (
+                    <View style={styles.intakeOptions}>
+                      {q.options.map((opt) => {
+                        const isSelected = intakeAnswers[q.id] === opt;
+                        return (
+                          <Pressable
+                            key={opt}
+                            onPress={() =>
+                              setIntakeAnswers((prev) => ({
+                                ...prev,
+                                [q.id]: opt,
+                              }))
+                            }
+                            style={[
+                              styles.intakeOption,
+                              {
+                                backgroundColor: isSelected
+                                  ? Colors.accentLight
+                                  : theme.backgroundSecondary,
+                                borderColor: isSelected
+                                  ? Colors.accent
+                                  : "transparent",
+                              },
+                            ]}
+                            testID={`intake-option-${q.id}-${opt}`}
+                          >
+                            <ThemedText
+                              style={[
+                                styles.intakeOptionText,
+                                {
+                                  color: isSelected
+                                    ? Colors.accent
+                                    : theme.text,
+                                },
+                              ]}
+                            >
+                              {opt}
+                            </ThemedText>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  ) : (
+                    <TextInput
+                      value={intakeAnswers[q.id] || ""}
+                      onChangeText={(text) =>
+                        setIntakeAnswers((prev) => ({
+                          ...prev,
+                          [q.id]: text,
+                        }))
+                      }
+                      placeholder={
+                        q.type === "number" ? "Enter a number" : "Answer"
+                      }
+                      placeholderTextColor={theme.textTertiary}
+                      keyboardType={
+                        q.type === "number" ? "numeric" : "default"
+                      }
+                      style={[
+                        styles.intakeInput,
+                        {
+                          color: theme.text,
+                          backgroundColor: theme.backgroundSecondary,
+                        },
+                      ]}
+                      testID={`intake-input-${q.id}`}
+                    />
+                  )}
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          <View
+            style={[
+              styles.detailsBlock,
+              {
+                borderTopWidth: StyleSheet.hairlineWidth,
+                borderTopColor: theme.separator,
+              },
+            ]}
+          >
+            <ThemedText
+              style={[styles.fieldLabel, { color: theme.textSecondary }]}
+            >
+              Notes (optional)
+            </ThemedText>
+            <TextInput
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="Internal notes for your records"
+              placeholderTextColor={theme.textTertiary}
+              multiline
+              style={[
+                styles.bareTextarea,
+                { color: theme.text, minHeight: 56 },
+              ]}
+              testID="input-notes"
+            />
+          </View>
+        </Section>
+
+        {/* ============ 4. SCHEDULE ============ */}
+        <View style={styles.sectionWrap}>
+          <ThemedText
+            style={[styles.sectionTitle, { color: theme.textTertiary }]}
+          >
+            Schedule
+          </ThemedText>
+          <View style={styles.scheduleRow}>
+            <Pressable
+              style={[
+                styles.schedulePill,
+                { backgroundColor: theme.cardBackground },
+              ]}
+              onPress={() => setShowDatePicker(true)}
+              testID="picker-date"
+            >
+              <ThemedText
+                style={[
+                  styles.schedulePillLabel,
+                  { color: theme.textTertiary },
+                ]}
+              >
+                Date
+              </ThemedText>
+              <ThemedText style={styles.schedulePillValue}>
+                {formatDate(scheduledDate)}
+              </ThemedText>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.schedulePill,
+                { backgroundColor: theme.cardBackground },
+              ]}
+              onPress={() => setShowTimePicker(true)}
+              testID="picker-time"
+            >
+              <ThemedText
+                style={[
+                  styles.schedulePillLabel,
+                  { color: theme.textTertiary },
+                ]}
+              >
+                Time
+              </ThemedText>
+              <ThemedText style={styles.schedulePillValue}>
+                {formatTime(scheduledTime)}
+              </ThemedText>
+            </Pressable>
+          </View>
+        </View>
+
+        {/* ============ 5. PRICE ============ */}
+        <Section title="Price">
+          <View style={styles.priceRow}>
+            <ThemedText
+              style={[styles.priceLabel, { color: theme.textSecondary }]}
+            >
+              Base
+            </ThemedText>
+            <ThemedText style={styles.priceValue}>
+              ${baseServicePriceNum.toFixed(2)}
+            </ThemedText>
+          </View>
+
+          {availableAddOns.length > 0 ? (
+            <View
+              style={[
+                styles.priceGroup,
+                {
+                  borderTopWidth: StyleSheet.hairlineWidth,
+                  borderTopColor: theme.separator,
+                },
+              ]}
+            >
+              {availableAddOns.map((addon, idx) => {
+                const isSelected = selectedAddOns.some(
+                  (a) => a.name === addon.name,
+                );
+                return (
+                  <Pressable
+                    key={addon.name}
                     style={[
-                      styles.intakeQuestion,
-                      i > 0 && {
+                      styles.addonRow,
+                      idx > 0 && {
                         borderTopWidth: StyleSheet.hairlineWidth,
                         borderTopColor: theme.separator,
                       },
                     ]}
+                    onPress={() => handleToggleAddOn(addon)}
+                    testID={`addon-${addon.name.replace(/\s+/g, "-").toLowerCase()}`}
                   >
-                    <ThemedText style={styles.intakeQuestionLabel}>
-                      {q.question}
-                      {q.required ? " *" : ""}
-                    </ThemedText>
-                    {q.options && q.options.length > 0 ? (
-                      <View style={styles.intakeOptions}>
-                        {q.options.map((opt) => {
-                          const isSelected = intakeAnswers[q.id] === opt;
-                          return (
-                            <Pressable
-                              key={opt}
-                              onPress={() =>
-                                setIntakeAnswers((prev) => ({
-                                  ...prev,
-                                  [q.id]: opt,
-                                }))
-                              }
-                              style={[
-                                styles.intakeOption,
-                                {
-                                  backgroundColor: isSelected
-                                    ? Colors.accentLight
-                                    : theme.backgroundElevated,
-                                  borderColor: isSelected
-                                    ? Colors.accent
-                                    : theme.borderLight,
-                                },
-                              ]}
-                              testID={`intake-option-${q.id}-${opt}`}
-                            >
-                              <ThemedText
-                                style={[
-                                  styles.intakeOptionText,
-                                  {
-                                    color: isSelected
-                                      ? Colors.accent
-                                      : theme.text,
-                                  },
-                                ]}
-                              >
-                                {opt}
-                              </ThemedText>
-                            </Pressable>
-                          );
-                        })}
-                      </View>
-                    ) : (
-                      <TextInput
-                        value={intakeAnswers[q.id] || ""}
-                        onChangeText={(text) =>
-                          setIntakeAnswers((prev) => ({
-                            ...prev,
-                            [q.id]: text,
-                          }))
-                        }
-                        placeholder={
-                          q.type === "number" ? "Enter a number" : "Answer"
-                        }
-                        placeholderTextColor={theme.textTertiary}
-                        keyboardType={
-                          q.type === "number" ? "numeric" : "default"
-                        }
-                        style={[
-                          styles.intakeInput,
-                          {
-                            color: theme.text,
-                            backgroundColor: theme.backgroundElevated,
-                            borderColor: theme.borderLight,
-                          },
-                        ]}
-                        testID={`intake-input-${q.id}`}
-                      />
-                    )}
-                  </View>
-                ))}
-              </View>
-            ) : null}
-
-            {serviceDescription.length > 0 ? (
-              <View style={{ marginTop: Spacing.lg }}>
-                <View style={styles.fieldLabelRow}>
-                  <ThemedText
-                    style={[styles.fieldLabel, { color: theme.textSecondary }]}
-                  >
-                    Service Description
-                  </ThemedText>
-                  <View
-                    style={[
-                      styles.subtleBadge,
-                      { backgroundColor: theme.backgroundTertiary },
-                    ]}
-                  >
-                    <ThemedText
+                    <View
                       style={[
-                        styles.subtleBadgeText,
-                        { color: theme.textSecondary },
+                        styles.checkbox,
+                        {
+                          borderColor: isSelected
+                            ? Colors.accent
+                            : theme.textTertiary,
+                          backgroundColor: isSelected
+                            ? Colors.accent
+                            : "transparent",
+                        },
                       ]}
                     >
-                      In client email
-                    </ThemedText>
-                  </View>
-                </View>
-                <TextField
-                  value={serviceDescription}
-                  onChangeText={setServiceDescription}
-                  placeholder="Service description shown to client"
-                  multiline
-                  numberOfLines={2}
-                />
-              </View>
-            ) : null}
-          </>,
-        )}
-
-        {/* ============ 4. SCHEDULE & PRICING ============ */}
-        {renderSection(
-          "Schedule & Pricing",
-          <>
-            <View style={styles.scheduleRow}>
-              <Pressable
-                style={[
-                  styles.schedulePill,
-                  { backgroundColor: theme.backgroundSecondary },
-                ]}
-                onPress={() => setShowDatePicker(true)}
-                testID="picker-date"
-              >
-                <ThemedText
-                  style={[styles.schedulePillLabel, { color: theme.textTertiary }]}
-                >
-                  Date
-                </ThemedText>
-                <ThemedText style={styles.schedulePillValue}>
-                  {formatDate(scheduledDate)}
-                </ThemedText>
-              </Pressable>
-              <Pressable
-                style={[
-                  styles.schedulePill,
-                  { backgroundColor: theme.backgroundSecondary },
-                ]}
-                onPress={() => setShowTimePicker(true)}
-                testID="picker-time"
-              >
-                <ThemedText
-                  style={[styles.schedulePillLabel, { color: theme.textTertiary }]}
-                >
-                  Time
-                </ThemedText>
-                <ThemedText style={styles.schedulePillValue}>
-                  {formatTime(scheduledTime)}
-                </ThemedText>
-              </Pressable>
-            </View>
-
-            {/* Pricing card */}
-            <View
-              style={[
-                styles.pricingCard,
-                { backgroundColor: theme.backgroundSecondary },
-              ]}
-            >
-              <View style={styles.pricingRow}>
-                <ThemedText
-                  style={[styles.pricingLabel, { color: theme.textSecondary }]}
-                >
-                  Base
-                </ThemedText>
-                <ThemedText style={styles.pricingValue}>
-                  ${baseServicePriceNum.toFixed(2)}
-                </ThemedText>
-              </View>
-
-              {availableAddOns.length > 0 ? (
-                <View
-                  style={[
-                    styles.addonsBlock,
-                    { borderTopColor: theme.separator },
-                  ]}
-                >
-                  {availableAddOns.map((addon) => {
-                    const isSelected = selectedAddOns.some(
-                      (a) => a.name === addon.name,
-                    );
-                    return (
-                      <Pressable
-                        key={addon.name}
-                        style={styles.addonRow}
-                        onPress={() => handleToggleAddOn(addon)}
-                        testID={`addon-${addon.name.replace(/\s+/g, "-").toLowerCase()}`}
+                      {isSelected ? (
+                        <Feather name="check" size={11} color="#FFFFFF" />
+                      ) : null}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <ThemedText
+                        style={[
+                          styles.addonName,
+                          isSelected && { color: Colors.accent },
+                        ]}
                       >
-                        <View
-                          style={[
-                            styles.checkbox,
-                            {
-                              borderColor: isSelected
-                                ? Colors.accent
-                                : theme.textTertiary,
-                              backgroundColor: isSelected
-                                ? Colors.accent
-                                : "transparent",
-                            },
-                          ]}
-                        >
-                          {isSelected ? (
-                            <Feather name="check" size={11} color="#FFFFFF" />
-                          ) : null}
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <ThemedText
-                            style={[
-                              styles.addonName,
-                              isSelected && { color: Colors.accent },
-                            ]}
-                          >
-                            {addon.name}
-                          </ThemedText>
-                          {addon.description ? (
-                            <ThemedText
-                              style={[
-                                styles.addonDesc,
-                                { color: theme.textTertiary },
-                              ]}
-                              numberOfLines={1}
-                            >
-                              {addon.description}
-                            </ThemedText>
-                          ) : null}
-                        </View>
+                        {addon.name}
+                      </ThemedText>
+                      {addon.description ? (
                         <ThemedText
                           style={[
-                            styles.addonPrice,
-                            {
-                              color: isSelected
-                                ? Colors.accent
-                                : theme.textSecondary,
-                            },
+                            styles.addonDesc,
+                            { color: theme.textTertiary },
                           ]}
+                          numberOfLines={1}
                         >
-                          +${(Number(addon.price) || 0).toFixed(0)}
+                          {addon.description}
                         </ThemedText>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              ) : null}
-
-              <View
-                style={[
-                  styles.totalRow,
-                  { borderTopColor: theme.separator },
-                ]}
-              >
-                <ThemedText style={styles.totalLabel}>Total</ThemedText>
-                <View style={styles.totalRight}>
-                  <ThemedText style={styles.totalCurrency}>$</ThemedText>
-                  <TextInput
-                    value={
-                      estimatedPrice ? estimatedPrice.replace(/^\$/, "") : ""
-                    }
-                    onChangeText={(val) => {
-                      setEstimatedPrice(val);
-                      setPriceManuallyEdited(true);
-                    }}
-                    placeholder="0.00"
-                    placeholderTextColor={theme.textTertiary}
-                    keyboardType="decimal-pad"
-                    style={[styles.totalInput, { color: Colors.accent }]}
-                    selectionColor={Colors.accent}
-                    testID="input-price"
-                  />
-                </View>
-              </View>
+                      ) : null}
+                    </View>
+                    <ThemedText
+                      style={[
+                        styles.addonPrice,
+                        {
+                          color: isSelected
+                            ? Colors.accent
+                            : theme.textSecondary,
+                        },
+                      ]}
+                    >
+                      +${(Number(addon.price) || 0).toFixed(0)}
+                    </ThemedText>
+                  </Pressable>
+                );
+              })}
             </View>
+          ) : null}
 
-            {/* AI suggest text-button */}
-            <Pressable
-              onPress={handleGetPricingSuggestion}
-              disabled={pricingLoading || !serviceName.trim()}
-              style={styles.aiTextButton}
-              hitSlop={6}
-              testID="button-ai-suggest"
-            >
-              {pricingLoading ? (
-                <ActivityIndicator size="small" color={Colors.accent} />
-              ) : (
-                <Feather name="zap" size={12} color={Colors.accent} />
-              )}
-              <ThemedText
-                style={[
-                  styles.aiTextButtonText,
-                  { color: Colors.accent },
-                  (pricingLoading || !serviceName.trim()) && { opacity: 0.4 },
-                ]}
-              >
-                AI suggest a price
+          <View
+            style={[
+              styles.totalRow,
+              {
+                borderTopWidth: StyleSheet.hairlineWidth,
+                borderTopColor: theme.separator,
+              },
+            ]}
+          >
+            <ThemedText style={styles.totalLabel}>Total</ThemedText>
+            <View style={styles.totalRight}>
+              <ThemedText style={[styles.totalCurrency, { color: Colors.accent }]}>
+                $
               </ThemedText>
-            </Pressable>
+              <TextInput
+                value={estimatedPrice ? estimatedPrice.replace(/^\$/, "") : ""}
+                onChangeText={(val) => {
+                  setEstimatedPrice(val);
+                  setPriceManuallyEdited(true);
+                }}
+                placeholder="0.00"
+                placeholderTextColor={theme.textTertiary}
+                keyboardType="decimal-pad"
+                style={[styles.totalInput, { color: Colors.accent }]}
+                selectionColor={Colors.accent}
+                testID="input-price"
+              />
+            </View>
+          </View>
 
-            {pricingSuggestion ? (
-              <View
-                style={[
-                  styles.suggestionCard,
-                  {
-                    backgroundColor: Colors.accentLight,
-                    borderColor: Colors.accent + "33",
-                  },
-                ]}
-              >
-                <View style={styles.suggestionHeader}>
-                  <ThemedText style={styles.suggestionLabel}>
+          <Pressable
+            onPress={handleGetPricingSuggestion}
+            disabled={pricingLoading || !selectedService}
+            style={styles.aiTextLink}
+            hitSlop={6}
+            testID="button-ai-suggest"
+          >
+            {pricingLoading ? (
+              <ActivityIndicator size="small" color={theme.textSecondary} />
+            ) : (
+              <Feather name="zap" size={11} color={theme.textSecondary} />
+            )}
+            <ThemedText
+              style={[
+                styles.aiTextLinkText,
+                { color: theme.textSecondary },
+                (pricingLoading || !selectedService) && { opacity: 0.4 },
+              ]}
+            >
+              AI suggest a price
+            </ThemedText>
+          </Pressable>
+
+          {pricingSuggestion ? (
+            <View
+              style={[
+                styles.suggestionInline,
+                {
+                  borderTopWidth: StyleSheet.hairlineWidth,
+                  borderTopColor: theme.separator,
+                },
+              ]}
+            >
+              <View style={styles.suggestionHeader}>
+                <View style={{ flex: 1 }}>
+                  <ThemedText
+                    style={[
+                      styles.suggestionEyebrow,
+                      { color: theme.textTertiary },
+                    ]}
+                  >
                     Suggested
                   </ThemedText>
-                  <ThemedText
-                    style={[
-                      styles.suggestionPrice,
-                      { color: Colors.accent },
-                    ]}
-                  >
+                  <ThemedText style={styles.suggestionPrice}>
                     ${pricingSuggestion.suggestedPrice.toFixed(0)}
+                    <ThemedText
+                      style={[
+                        styles.suggestionRange,
+                        { color: theme.textTertiary },
+                      ]}
+                    >
+                      {"  "}${pricingSuggestion.minPrice.toFixed(0)}–$
+                      {pricingSuggestion.maxPrice.toFixed(0)}
+                    </ThemedText>
                   </ThemedText>
                 </View>
-                <ThemedText
-                  style={[
-                    styles.suggestionRange,
-                    { color: theme.textSecondary },
-                  ]}
-                >
-                  Range ${pricingSuggestion.minPrice.toFixed(0)} – $
-                  {pricingSuggestion.maxPrice.toFixed(0)}
-                </ThemedText>
-                {pricingSuggestion.reasoning ? (
-                  <ThemedText
-                    style={[
-                      styles.suggestionReason,
-                      { color: theme.textSecondary },
-                    ]}
-                  >
-                    {pricingSuggestion.reasoning}
-                  </ThemedText>
-                ) : null}
                 <View style={styles.suggestionActions}>
                   <Pressable
                     onPress={() => {
@@ -1304,205 +1089,465 @@ export default function AddJobScreen() {
                     testID="button-apply-price"
                   >
                     <ThemedText style={styles.useSuggestionText}>
-                      Use this price
+                      Use
                     </ThemedText>
                   </Pressable>
                 </View>
               </View>
-            ) : null}
-          </>,
-        )}
-
-        {/* ============ 5. REVIEW & CONFIRM ============ */}
-        {renderSection(
-          "Review",
-          <>
-            <View
-              style={[
-                styles.summaryCard,
-                {
-                  backgroundColor: theme.backgroundSecondary,
-                  borderColor: theme.borderLight,
-                },
-              ]}
-            >
-              <ThemedText
-                style={[
-                  styles.summaryEyebrow,
-                  { color: theme.textTertiary },
-                ]}
-              >
-                Email preview
-              </ThemedText>
-
-              <ThemedText style={styles.summaryHeadline}>
-                {selectedService?.name || serviceName || "—"}
-              </ThemedText>
-              <ThemedText
-                style={[styles.summaryDate, { color: theme.textSecondary }]}
-              >
-                {formatDate(scheduledDate)} · {formatTime(scheduledTime)}
-              </ThemedText>
-
-              <View
-                style={[
-                  styles.summaryDivider,
-                  { backgroundColor: theme.separator },
-                ]}
-              />
-
-              <View style={styles.summaryRow}>
+              {pricingSuggestion.reasoning ? (
                 <ThemedText
                   style={[
-                    styles.summaryRowLabel,
-                    { color: theme.textTertiary },
+                    styles.suggestionReason,
+                    { color: theme.textSecondary },
                   ]}
                 >
-                  Client
+                  {pricingSuggestion.reasoning}
                 </ThemedText>
-                <ThemedText style={styles.summaryRowValue}>
-                  {selectedClient
-                    ? `${selectedClient.firstName} ${selectedClient.lastName}`
-                    : "—"}
+              ) : null}
+            </View>
+          ) : null}
+        </Section>
+
+        {/* ============ 6. JOB SUMMARY ============ */}
+        <Section title="Job Summary">
+          <SummaryRow
+            label="Client"
+            value={
+              selectedClient
+                ? `${selectedClient.firstName} ${selectedClient.lastName}`
+                : "—"
+            }
+            theme={theme}
+          />
+          <SummaryRow
+            label="Service"
+            value={selectedService?.name || "—"}
+            theme={theme}
+            divider
+          />
+          <SummaryRow
+            label="Date & Time"
+            value={`${formatDate(scheduledDate)} · ${formatTime(scheduledTime)}`}
+            theme={theme}
+            divider
+          />
+          <SummaryRow
+            label="Final Price"
+            value={`$${totalPriceNum.toFixed(2)}`}
+            valueColor={Colors.accent}
+            valueBold
+            theme={theme}
+            divider
+          />
+          {description.trim() ? (
+            <SummaryBlock
+              label="Issue Summary"
+              text={description.trim()}
+              theme={theme}
+              divider
+            />
+          ) : null}
+          {notes.trim() ? (
+            <SummaryBlock
+              label="Notes"
+              text={notes.trim()}
+              theme={theme}
+              divider
+            />
+          ) : null}
+          {selectedService ? (
+            <SummaryBlock
+              label="Payment Terms"
+              text={getPricingTypeLabel(selectedService.pricingType)}
+              theme={theme}
+              divider
+            />
+          ) : null}
+        </Section>
+
+        {createJobMutation.isError ? (
+          <View
+            style={[
+              styles.errorBanner,
+              { backgroundColor: Colors.errorLight },
+            ]}
+          >
+            <Feather name="alert-circle" size={14} color={Colors.error} />
+            <ThemedText style={[styles.errorText, { color: Colors.error }]}>
+              Couldn't create the job. Please try again.
+            </ThemedText>
+          </View>
+        ) : null}
+
+        <View style={styles.ctaWrap}>
+          <PrimaryButton
+            onPress={handleSave}
+            disabled={!canSave}
+            loading={createJobMutation.isPending}
+            testID="button-schedule-job"
+          >
+            Schedule Job
+          </PrimaryButton>
+          <SecondaryButton
+            onPress={() => navigation.goBack()}
+            style={styles.ctaSecondary}
+          >
+            Cancel
+          </SecondaryButton>
+        </View>
+      </KeyboardAwareScrollViewCompat>
+
+      {/* ============ CLIENT PICKER SHEET ============ */}
+      <Modal
+        visible={showClientSheet}
+        transparent
+        animationType="slide"
+        onRequestClose={closeClientSheet}
+      >
+        <View style={styles.sheetOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={closeClientSheet}
+          />
+          <View
+            style={[
+              styles.sheetContainer,
+              {
+                backgroundColor: theme.backgroundRoot,
+                paddingBottom: Math.max(insets.bottom, Spacing.lg),
+              },
+            ]}
+          >
+            <View
+              style={[styles.sheetHandle, { backgroundColor: theme.separator }]}
+            />
+            <View style={styles.sheetHeader}>
+              <Pressable
+                onPress={closeClientSheet}
+                hitSlop={12}
+                style={styles.sheetHeaderBtn}
+              >
+                <ThemedText
+                  style={[
+                    styles.sheetCancelText,
+                    { color: theme.textSecondary },
+                  ]}
+                >
+                  Cancel
                 </ThemedText>
-              </View>
+              </Pressable>
+              <ThemedText style={styles.sheetTitle}>
+                {showNewClientForm ? "Add Client" : "Select Client"}
+              </ThemedText>
+              <View style={styles.sheetHeaderBtn} />
+            </View>
 
-              {selectedService ? (
-                <View style={styles.summaryRow}>
-                  <ThemedText
-                    style={[
-                      styles.summaryRowLabel,
-                      { color: theme.textTertiary },
-                    ]}
-                  >
-                    Pricing
-                  </ThemedText>
-                  <ThemedText style={styles.summaryRowValue}>
-                    {getPricingTypeLabel(selectedService.pricingType)}
-                  </ThemedText>
+            {showNewClientForm ? (
+              <ScrollView
+                contentContainerStyle={styles.sheetFormContent}
+                keyboardShouldPersistTaps="handled"
+              >
+                <View style={styles.row2}>
+                  <View style={{ flex: 1 }}>
+                    <TextField
+                      value={newClientFirstName}
+                      onChangeText={setNewClientFirstName}
+                      placeholder="First name"
+                      autoCapitalize="words"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <TextField
+                      value={newClientLastName}
+                      onChangeText={setNewClientLastName}
+                      placeholder="Last name"
+                      autoCapitalize="words"
+                    />
+                  </View>
                 </View>
-              ) : null}
-
-              {description.trim() ? (
-                <View style={styles.summaryBlock}>
-                  <ThemedText
-                    style={[
-                      styles.summaryBlockLabel,
-                      { color: theme.textTertiary },
-                    ]}
+                <TextField
+                  value={newClientPhone}
+                  onChangeText={setNewClientPhone}
+                  placeholder="Phone"
+                  keyboardType="phone-pad"
+                />
+                <TextField
+                  value={newClientEmail}
+                  onChangeText={setNewClientEmail}
+                  placeholder="Email"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+                <View style={styles.sheetFormActions}>
+                  <Pressable
+                    onPress={() => setShowNewClientForm(false)}
+                    style={styles.textButton}
                   >
-                    What's going on
-                  </ThemedText>
-                  <ThemedText style={styles.summaryBlockText}>
-                    {description.trim()}
-                  </ThemedText>
+                    <ThemedText
+                      style={[
+                        styles.textButtonText,
+                        { color: theme.textSecondary },
+                      ]}
+                    >
+                      Back
+                    </ThemedText>
+                  </Pressable>
+                  <PrimaryButton
+                    onPress={handleCreateClient}
+                    loading={createClientMutation.isPending}
+                    disabled={
+                      !newClientFirstName.trim() ||
+                      !newClientLastName.trim() ||
+                      createClientMutation.isPending
+                    }
+                    style={styles.smallPrimary}
+                    testID="button-create-client"
+                  >
+                    Add Client
+                  </PrimaryButton>
                 </View>
-              ) : null}
+              </ScrollView>
+            ) : (
+              <>
+                <View
+                  style={[
+                    styles.sheetSearch,
+                    { backgroundColor: theme.backgroundSecondary },
+                  ]}
+                >
+                  <Feather name="search" size={15} color={theme.textTertiary} />
+                  <TextInput
+                    style={[styles.sheetSearchInput, { color: theme.text }]}
+                    placeholder="Search clients"
+                    placeholderTextColor={theme.textTertiary}
+                    value={clientSearch}
+                    onChangeText={setClientSearch}
+                    autoCorrect={false}
+                    autoFocus={false}
+                  />
+                </View>
 
-              {selectedAddOns.length > 0 ? (
-                <View style={styles.summaryBlock}>
-                  <ThemedText
+                <ScrollView
+                  style={styles.sheetList}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {filteredClients.map((client) => {
+                    const isActive = selectedClientId === client.id;
+                    return (
+                      <Pressable
+                        key={client.id}
+                        style={[
+                          styles.sheetListRow,
+                          isActive && { backgroundColor: Colors.accentLight },
+                        ]}
+                        onPress={() => handleSelectClient(client.id)}
+                        testID={`client-row-${client.id}`}
+                      >
+                        <View
+                          style={[
+                            styles.avatarSmall,
+                            { backgroundColor: Colors.accent },
+                          ]}
+                        >
+                          <ThemedText style={styles.avatarTextSmall}>
+                            {client.firstName[0]}
+                            {client.lastName[0]}
+                          </ThemedText>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <ThemedText
+                            style={[
+                              styles.sheetListRowTitle,
+                              isActive && { color: Colors.accent },
+                            ]}
+                          >
+                            {client.firstName} {client.lastName}
+                          </ThemedText>
+                          {client.phone || client.email ? (
+                            <ThemedText
+                              style={[
+                                styles.sheetListRowSub,
+                                { color: theme.textTertiary },
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {client.phone || client.email}
+                            </ThemedText>
+                          ) : null}
+                        </View>
+                        {isActive ? (
+                          <Feather
+                            name="check"
+                            size={16}
+                            color={Colors.accent}
+                          />
+                        ) : null}
+                      </Pressable>
+                    );
+                  })}
+                  {filteredClients.length === 0 ? (
+                    <ThemedText
+                      style={[styles.emptyHint, { color: theme.textTertiary }]}
+                    >
+                      No matching clients
+                    </ThemedText>
+                  ) : null}
+                </ScrollView>
+
+                <Pressable
+                  style={[
+                    styles.sheetFooterAction,
+                    { borderTopColor: theme.separator },
+                  ]}
+                  onPress={() => setShowNewClientForm(true)}
+                  testID="button-add-new-client"
+                >
+                  <View
                     style={[
-                      styles.summaryBlockLabel,
-                      { color: theme.textTertiary },
+                      styles.plusBadge,
+                      { backgroundColor: Colors.accentLight },
                     ]}
                   >
-                    Add-ons
+                    <Feather name="plus" size={13} color={Colors.accent} />
+                  </View>
+                  <ThemedText
+                    style={[
+                      styles.sheetFooterActionText,
+                      { color: Colors.accent },
+                    ]}
+                  >
+                    Add New Client
                   </ThemedText>
-                  {selectedAddOns.map((a) => (
-                    <View key={a.name} style={styles.summaryAddonRow}>
-                      <ThemedText style={styles.summaryBlockText}>
-                        {a.name}
+                </Pressable>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ============ SERVICE PICKER SHEET ============ */}
+      <Modal
+        visible={showServiceSheet}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowServiceSheet(false)}
+      >
+        <View style={styles.sheetOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setShowServiceSheet(false)}
+          />
+          <View
+            style={[
+              styles.sheetContainer,
+              {
+                backgroundColor: theme.backgroundRoot,
+                paddingBottom: Math.max(insets.bottom, Spacing.lg),
+              },
+            ]}
+          >
+            <View
+              style={[styles.sheetHandle, { backgroundColor: theme.separator }]}
+            />
+            <View style={styles.sheetHeader}>
+              <Pressable
+                onPress={() => setShowServiceSheet(false)}
+                hitSlop={12}
+                style={styles.sheetHeaderBtn}
+              >
+                <ThemedText
+                  style={[
+                    styles.sheetCancelText,
+                    { color: theme.textSecondary },
+                  ]}
+                >
+                  Cancel
+                </ThemedText>
+              </Pressable>
+              <ThemedText style={styles.sheetTitle}>Select Service</ThemedText>
+              <View style={styles.sheetHeaderBtn} />
+            </View>
+
+            <View
+              style={[
+                styles.sheetSearch,
+                { backgroundColor: theme.backgroundSecondary },
+              ]}
+            >
+              <Feather name="search" size={15} color={theme.textTertiary} />
+              <TextInput
+                style={[styles.sheetSearchInput, { color: theme.text }]}
+                placeholder="Search services"
+                placeholderTextColor={theme.textTertiary}
+                value={serviceSearch}
+                onChangeText={setServiceSearch}
+                autoCorrect={false}
+              />
+            </View>
+
+            <ScrollView
+              style={styles.sheetList}
+              keyboardShouldPersistTaps="handled"
+            >
+              {filteredServices.map((svc) => {
+                const isActive = selectedService?.id === svc.id;
+                return (
+                  <Pressable
+                    key={svc.id}
+                    style={[
+                      styles.sheetListRow,
+                      isActive && { backgroundColor: Colors.accentLight },
+                    ]}
+                    onPress={() => handleSelectService(svc)}
+                    testID={`service-row-${svc.id}`}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <ThemedText
+                        style={[
+                          styles.sheetListRowTitle,
+                          isActive && { color: Colors.accent },
+                        ]}
+                      >
+                        {svc.name}
                       </ThemedText>
                       <ThemedText
                         style={[
-                          styles.summaryBlockText,
-                          { color: theme.textSecondary },
+                          styles.sheetListRowSub,
+                          { color: theme.textTertiary },
                         ]}
+                        numberOfLines={1}
                       >
-                        +${(Number(a.price) || 0).toFixed(0)}
+                        {svc.category}
+                        {svc.duration
+                          ? `  ·  ${getDurationLabel(svc.duration)}`
+                          : ""}
                       </ThemedText>
                     </View>
-                  ))}
-                </View>
-              ) : null}
-
-              {serviceDescription.trim() ? (
-                <View style={styles.summaryBlock}>
-                  <ThemedText
-                    style={[
-                      styles.summaryBlockLabel,
-                      { color: theme.textTertiary },
-                    ]}
-                  >
-                    Service description
-                  </ThemedText>
-                  <ThemedText
-                    style={[
-                      styles.summaryBlockText,
-                      { color: theme.textSecondary },
-                    ]}
-                    numberOfLines={3}
-                  >
-                    {serviceDescription.trim()}
-                  </ThemedText>
-                </View>
-              ) : null}
-
-              <View
-                style={[
-                  styles.summaryDivider,
-                  { backgroundColor: theme.separator },
-                ]}
-              />
-
-              <View style={styles.summaryTotalRow}>
-                <ThemedText style={styles.summaryTotalLabel}>Total</ThemedText>
+                    <ThemedText
+                      style={[
+                        styles.sheetListPrice,
+                        { color: isActive ? Colors.accent : theme.text },
+                      ]}
+                    >
+                      {getPriceDisplay(svc)}
+                    </ThemedText>
+                    {isActive ? (
+                      <Feather name="check" size={16} color={Colors.accent} />
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+              {filteredServices.length === 0 ? (
                 <ThemedText
-                  style={[
-                    styles.summaryTotalValue,
-                    { color: Colors.accent },
-                  ]}
+                  style={[styles.emptyHint, { color: theme.textTertiary }]}
                 >
-                  ${totalPriceNum.toFixed(2)}
+                  No matching services
                 </ThemedText>
-              </View>
-            </View>
-
-            {createJobMutation.isError ? (
-              <View
-                style={[
-                  styles.errorBanner,
-                  { backgroundColor: Colors.errorLight },
-                ]}
-              >
-                <Feather name="alert-circle" size={14} color={Colors.error} />
-                <ThemedText
-                  style={[styles.errorText, { color: Colors.error }]}
-                >
-                  Couldn't create the job. Please try again.
-                </ThemedText>
-              </View>
-            ) : null}
-
-            <PrimaryButton
-              onPress={handleSave}
-              disabled={!canSave}
-              loading={createJobMutation.isPending}
-              style={styles.ctaPrimary}
-              testID="button-schedule-job"
-            >
-              Schedule Job & Notify Client
-            </PrimaryButton>
-            <SecondaryButton
-              onPress={() => navigation.goBack()}
-              style={styles.ctaSecondary}
-            >
-              Cancel
-            </SecondaryButton>
-          </>,
-        )}
-      </KeyboardAwareScrollViewCompat>
+              ) : null}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       <NativeDatePickerSheet
         visible={showDatePicker}
@@ -1535,36 +1580,123 @@ export default function AddJobScreen() {
   );
 }
 
+// ==== Summary helpers ====
+
+function SummaryRow({
+  label,
+  value,
+  valueColor,
+  valueBold,
+  theme,
+  divider,
+}: {
+  label: string;
+  value: string;
+  valueColor?: string;
+  valueBold?: boolean;
+  theme: any;
+  divider?: boolean;
+}) {
+  return (
+    <View
+      style={[
+        styles.summaryRow,
+        divider && {
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: theme.separator,
+        },
+      ]}
+    >
+      <ThemedText
+        style={[styles.summaryRowLabel, { color: theme.textTertiary }]}
+      >
+        {label}
+      </ThemedText>
+      <ThemedText
+        style={[
+          styles.summaryRowValue,
+          valueBold && styles.summaryRowValueBold,
+          valueColor && { color: valueColor },
+        ]}
+      >
+        {value}
+      </ThemedText>
+    </View>
+  );
+}
+
+function SummaryBlock({
+  label,
+  text,
+  theme,
+  divider,
+}: {
+  label: string;
+  text: string;
+  theme: any;
+  divider?: boolean;
+}) {
+  return (
+    <View
+      style={[
+        styles.summaryBlock,
+        divider && {
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: theme.separator,
+        },
+      ]}
+    >
+      <ThemedText
+        style={[styles.summaryRowLabel, { color: theme.textTertiary }]}
+      >
+        {label}
+      </ThemedText>
+      <ThemedText style={[styles.summaryBlockText, { color: theme.text }]}>
+        {text}
+      </ThemedText>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
 
-  section: {
-    borderRadius: BorderRadius.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Spacing.lg,
-    marginBottom: Spacing.lg,
+  // Section (iOS grouped-list style)
+  sectionWrap: { marginBottom: Spacing.lg },
+  sectionTitle: {
+    ...Typography.caption,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    marginLeft: Spacing.md,
+    marginBottom: 6,
   },
-  sectionHeaderRow: {
+  sectionCard: {
+    borderRadius: BorderRadius.md,
+    overflow: "hidden",
+  },
+
+  // Tap row (empty placeholder for client / service)
+  tapRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md + 2,
+    minHeight: 52,
   },
-  sectionTitle: {
-    ...Typography.headline,
-    fontSize: 15,
-    fontWeight: "600",
-    letterSpacing: -0.2,
+  tapRowPlaceholder: {
+    ...Typography.body,
   },
 
-  // Identity (selected client/service)
+  // Identity (selected client)
   identityRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.md,
-    paddingVertical: Spacing.sm + 2,
     paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.md,
+    minHeight: 52,
   },
   identityBody: { flex: 1 },
   identityName: { ...Typography.body, fontWeight: "600" },
@@ -1588,133 +1720,43 @@ const styles = StyleSheet.create({
   },
   avatarTextSmall: { color: "#FFFFFF", fontWeight: "700", fontSize: 11 },
 
-  // Search
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
+  // Service summary (selected)
+  serviceSummary: {
     paddingHorizontal: Spacing.md,
-    height: 40,
-    borderRadius: BorderRadius.md,
-    marginBottom: Spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    height: "100%",
-  },
-
-  // Inline list / rows
-  inlineList: { gap: 4 },
-  listRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md,
-  },
-  listRowTitle: { ...Typography.body, fontWeight: "500" },
-  listRowSub: { ...Typography.footnote, marginTop: 1 },
-
-  emptyHint: {
-    ...Typography.footnote,
-    textAlign: "center",
     paddingVertical: Spacing.md,
   },
-
-  // Inline action button (e.g. "Add new client")
-  inlineActionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.sm,
-    marginTop: Spacing.xs,
-  },
-  inlineActionText: { ...Typography.subhead, fontWeight: "600" },
-  plusBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  // Inline new-client form
-  inlineForm: {
-    gap: Spacing.sm,
-    marginTop: Spacing.sm,
-  },
-  row2: { flexDirection: "row", gap: Spacing.sm },
-  inlineFormButtons: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    gap: Spacing.md,
-    marginTop: Spacing.xs,
-  },
-  textButton: { paddingVertical: Spacing.sm, paddingHorizontal: Spacing.sm },
-  textButtonText: { ...Typography.subhead, fontWeight: "500" },
-  smallPrimary: {
-    height: 40,
-    paddingHorizontal: Spacing.lg,
-    minWidth: 120,
-  },
-
-  // Service preview (selected)
-  servicePreview: {
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-  },
-  servicePreviewTop: {
+  serviceSummaryHeader: {
     flexDirection: "row",
     alignItems: "flex-start",
     gap: Spacing.md,
   },
-  servicePreviewName: { ...Typography.body, fontWeight: "600" },
-  servicePreviewMeta: {
+  serviceSummaryName: { ...Typography.body, fontWeight: "600" },
+  serviceSummaryMeta: {
     flexDirection: "row",
+    alignItems: "center",
     flexWrap: "wrap",
     gap: 6,
     marginTop: Spacing.xs + 2,
   },
+  serviceSummaryMetaText: { ...Typography.footnote, fontWeight: "500" },
+  metaDot: { fontSize: 12, fontWeight: "700" },
   metaPill: {
     borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
   },
   metaPillText: { fontSize: 11, fontWeight: "600" },
-  servicePreviewDesc: {
-    ...Typography.footnote,
-    lineHeight: 18,
-    marginTop: Spacing.sm,
+  serviceSummaryRight: {
+    alignItems: "flex-end",
+    gap: 4,
   },
+  serviceSummaryPrice: { ...Typography.body, fontWeight: "700" },
 
-  // Service card (in picker)
-  serviceCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm + 2,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1.5,
-  },
-  serviceCardName: { ...Typography.body, fontWeight: "500" },
-  serviceCardMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 2,
-  },
-  serviceCardPrice: { ...Typography.footnote, fontWeight: "700" },
-  serviceCardDuration: { ...Typography.footnote },
-
-  // Loading / error / empty state blocks
+  // State blocks
   stateBlock: {
     alignItems: "center",
-    paddingVertical: Spacing.lg,
-    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xl,
+    paddingHorizontal: Spacing.lg,
     gap: Spacing.sm,
   },
   stateTitle: { ...Typography.body, fontWeight: "600" },
@@ -1726,47 +1768,22 @@ const styles = StyleSheet.create({
   stateAction: { marginTop: Spacing.sm, alignSelf: "stretch" },
 
   // Job Details
+  detailsBlock: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+  },
   fieldLabel: {
     ...Typography.footnote,
     fontWeight: "600",
     marginBottom: Spacing.xs,
   },
-  fieldLabelRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: Spacing.xs,
-  },
-  bigTextarea: {
-    minHeight: 96,
-    paddingTop: Spacing.sm,
+  bareTextarea: {
+    ...Typography.body,
+    paddingTop: 0,
+    paddingHorizontal: 0,
     textAlignVertical: "top",
   },
-  subtleBadge: {
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  subtleBadgeText: { fontSize: 10, fontWeight: "600" },
-
-  intakeBlock: {
-    marginTop: Spacing.lg,
-    borderRadius: BorderRadius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-  },
-  intakeBlockTitle: {
-    ...Typography.caption,
-    fontWeight: "700",
-    letterSpacing: 0.4,
-    textTransform: "uppercase",
-    paddingTop: Spacing.xs,
-    paddingBottom: Spacing.xs,
-  },
-  intakeQuestion: {
-    paddingVertical: Spacing.sm + 2,
-  },
+  intakeQuestion: {},
   intakeQuestionLabel: {
     ...Typography.subhead,
     fontWeight: "600",
@@ -1779,7 +1796,7 @@ const styles = StyleSheet.create({
   },
   intakeOption: {
     paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: BorderRadius.sm,
     borderWidth: 1,
   },
@@ -1790,7 +1807,6 @@ const styles = StyleSheet.create({
   intakeInput: {
     ...Typography.subhead,
     borderRadius: BorderRadius.sm,
-    borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     minHeight: 40,
@@ -1814,28 +1830,25 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // Pricing card
-  pricingCard: {
-    marginTop: Spacing.md,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm + 2,
-  },
-  pricingRow: {
+  // Price
+  priceRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    minHeight: 44,
   },
-  pricingLabel: { ...Typography.subhead, fontWeight: "500" },
-  pricingValue: { ...Typography.subhead, fontWeight: "600" },
+  priceLabel: { ...Typography.subhead, fontWeight: "500" },
+  priceValue: { ...Typography.subhead, fontWeight: "600" },
+  priceGroup: {},
 
-  addonsBlock: { borderTopWidth: 1, paddingTop: Spacing.xs },
   addonRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm + 2,
   },
   checkbox: {
     width: 18,
@@ -1853,17 +1866,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingTop: Spacing.sm + 2,
-    paddingBottom: 2,
-    borderTopWidth: 1,
-    marginTop: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    minHeight: 48,
   },
   totalLabel: { ...Typography.body, fontWeight: "700" },
   totalRight: { flexDirection: "row", alignItems: "center" },
   totalCurrency: {
     ...Typography.body,
     fontWeight: "700",
-    color: Colors.accent,
   },
   totalInput: {
     ...Typography.body,
@@ -1874,41 +1885,59 @@ const styles = StyleSheet.create({
     marginVertical: 0,
   },
 
-  // AI text-button
-  aiTextButton: {
+  // AI suggest link
+  aiTextLink: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 5,
     alignSelf: "flex-end",
-    marginTop: Spacing.sm,
-    paddingVertical: 4,
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.sm,
+    paddingTop: 0,
   },
-  aiTextButtonText: { ...Typography.footnote, fontWeight: "600" },
+  aiTextLinkText: {
+    ...Typography.footnote,
+    fontWeight: "500",
+  },
 
-  // AI suggestion card
-  suggestionCard: {
-    marginTop: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    padding: Spacing.md,
+  // AI suggestion inline (under price card)
+  suggestionInline: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
     gap: Spacing.xs,
   },
   suggestionHeader: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: Spacing.sm,
   },
-  suggestionLabel: { ...Typography.footnote, fontWeight: "700" },
-  suggestionPrice: { fontSize: 22, fontWeight: "800" },
-  suggestionRange: { ...Typography.caption, fontWeight: "500" },
-  suggestionReason: { ...Typography.caption, lineHeight: 16 },
+  suggestionEyebrow: {
+    ...Typography.caption,
+    fontWeight: "600",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  suggestionPrice: {
+    ...Typography.title3,
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  suggestionRange: {
+    ...Typography.footnote,
+    fontWeight: "500",
+  },
+  suggestionReason: {
+    ...Typography.footnote,
+    lineHeight: 18,
+    marginTop: Spacing.xs,
+  },
   suggestionActions: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-end",
     gap: Spacing.sm,
-    marginTop: Spacing.xs,
   },
+  textButton: { paddingVertical: Spacing.xs, paddingHorizontal: Spacing.sm },
+  textButtonText: { ...Typography.subhead, fontWeight: "500" },
   useSuggestionBtn: {
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
@@ -1920,58 +1949,27 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // Summary card (review)
-  summaryCard: {
-    borderRadius: BorderRadius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Spacing.lg,
-  },
-  summaryEyebrow: {
-    ...Typography.caption,
-    fontWeight: "700",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-    marginBottom: Spacing.sm,
-  },
-  summaryHeadline: {
-    ...Typography.title3,
-    fontWeight: "700",
-    fontSize: 19,
-  },
-  summaryDate: { ...Typography.subhead, marginTop: 2 },
-  summaryDivider: {
-    height: 1,
-    marginVertical: Spacing.md,
-  },
+  // Job summary
   summaryRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    paddingVertical: 4,
-  },
-  summaryRowLabel: { ...Typography.footnote, fontWeight: "500" },
-  summaryRowValue: { ...Typography.subhead, fontWeight: "600" },
-  summaryBlock: { marginTop: Spacing.md },
-  summaryBlockLabel: {
-    ...Typography.caption,
-    fontWeight: "700",
-    letterSpacing: 0.4,
-    textTransform: "uppercase",
-    marginBottom: 4,
-  },
-  summaryBlockText: { ...Typography.subhead, lineHeight: 20 },
-  summaryAddonRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 2,
-  },
-  summaryTotalRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    minHeight: 44,
   },
-  summaryTotalLabel: { ...Typography.body, fontWeight: "700" },
-  summaryTotalValue: { fontSize: 22, fontWeight: "800" },
+  summaryRowLabel: { ...Typography.subhead, fontWeight: "500" },
+  summaryRowValue: { ...Typography.subhead, fontWeight: "600" },
+  summaryRowValueBold: { ...Typography.body, fontWeight: "700" },
+  summaryBlock: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+  },
+  summaryBlockText: {
+    ...Typography.subhead,
+    lineHeight: 21,
+    marginTop: 4,
+  },
 
   // CTAs
   errorBanner: {
@@ -1983,6 +1981,113 @@ const styles = StyleSheet.create({
     marginTop: Spacing.md,
   },
   errorText: { fontSize: 13, fontWeight: "500" },
-  ctaPrimary: { marginTop: Spacing.lg },
+  ctaWrap: {
+    marginTop: Spacing.sm,
+  },
   ctaSecondary: { marginTop: Spacing.sm },
+
+  // Sheet (client / service picker)
+  sheetOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.35)",
+  },
+  sheetContainer: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: Spacing.sm,
+    paddingHorizontal: Spacing.screenPadding,
+    maxHeight: "85%",
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: Spacing.sm,
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: Spacing.sm,
+    marginBottom: Spacing.xs,
+  },
+  sheetHeaderBtn: { minWidth: 60 },
+  sheetCancelText: { fontSize: 16, fontWeight: "400" },
+  sheetTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    textAlign: "center",
+    flex: 1,
+  },
+  sheetSearch: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    height: 40,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.sm,
+  },
+  sheetSearchInput: {
+    flex: 1,
+    fontSize: 15,
+    height: "100%",
+  },
+  sheetList: {
+    maxHeight: 420,
+  },
+  sheetListRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.sm + 2,
+    borderRadius: BorderRadius.md,
+  },
+  sheetListRowTitle: { ...Typography.body, fontWeight: "500" },
+  sheetListRowSub: { ...Typography.footnote, marginTop: 1 },
+  sheetListPrice: { ...Typography.subhead, fontWeight: "700" },
+  emptyHint: {
+    ...Typography.footnote,
+    textAlign: "center",
+    paddingVertical: Spacing.lg,
+  },
+  sheetFooterAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.sm,
+    marginTop: Spacing.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  sheetFooterActionText: { ...Typography.subhead, fontWeight: "600" },
+  plusBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  // Sheet: new-client form
+  sheetFormContent: {
+    gap: Spacing.sm,
+    paddingBottom: Spacing.lg,
+  },
+  row2: { flexDirection: "row", gap: Spacing.sm },
+  sheetFormActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: Spacing.md,
+    marginTop: Spacing.sm,
+  },
+  smallPrimary: {
+    height: 40,
+    paddingHorizontal: Spacing.lg,
+    minWidth: 120,
+  },
 });
