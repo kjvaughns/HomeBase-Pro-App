@@ -293,7 +293,7 @@ export default function SubscriptionScreen() {
       case "revenuecat_android":
         return "Google Play";
       case "stripe_web":
-        return "Web (Stripe)";
+        return useIAP ? null : "Web";
       default:
         return null;
     }
