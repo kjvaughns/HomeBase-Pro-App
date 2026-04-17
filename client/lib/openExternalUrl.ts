@@ -24,17 +24,32 @@ type UrlSource = string | (() => Promise<string>);
  */
 export async function openExternalUrl(source: UrlSource): Promise<void> {
   if (Platform.OS === "web") {
+    // IMPORTANT: do NOT pass "noopener" / "noreferrer" in the features arg —
+    // some browsers null out the returned handle when those flags are set,
+    // which would force us to fall back to `window.location.href` and get
+    // blocked by `X-Frame-Options: DENY` inside iframes (e.g. canvas
+    // preview). We need a usable handle so we can navigate the new tab
+    // after the URL resolves. We re-add `opener = null` after navigation
+    // for the same security guarantee.
     const tab =
-      typeof window !== "undefined"
-        ? window.open("about:blank", "_blank", "noopener,noreferrer")
-        : null;
+      typeof window !== "undefined" ? window.open("about:blank", "_blank") : null;
 
     try {
       const url = typeof source === "string" ? source : await source();
       if (tab) {
+        try {
+          tab.opener = null;
+        } catch {
+          // Some browsers throw on cross-origin opener writes — safe to ignore.
+        }
         tab.location.href = url;
       } else if (typeof window !== "undefined") {
+        // Last-resort fallback: popup blocker prevented the new tab AND we're
+        // not in an iframe (otherwise X-Frame-Options would silently kill
+        // this). Better than a fully-silent failure.
         window.location.href = url;
+      } else {
+        throw new Error("Unable to open external URL");
       }
     } catch (err) {
       if (tab && !tab.closed) tab.close();
