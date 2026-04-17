@@ -1594,7 +1594,7 @@ export default function AddJobScreen() {
         visible={showSubscriptionGate}
         onClose={() => setShowSubscriptionGate(false)}
         title="Subscribe to create jobs"
-        description="Your 7-day trial has ended. Subscribe at homebaseproapp.com to keep creating jobs and sending invoices. Your existing data is safe."
+        description="Your 7-day trial has ended. Subscribe to keep creating jobs and sending invoices. Your existing data is safe."
       />
     </ThemedView>
   );

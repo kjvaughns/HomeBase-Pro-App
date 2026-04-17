@@ -95,6 +95,10 @@ export async function runBootMigrations(): Promise<void> {
       ["provider_plans.subscription_status",    `ALTER TABLE provider_plans ADD COLUMN IF NOT EXISTS subscription_status TEXT`],
       ["provider_plans.subscription_started_at",`ALTER TABLE provider_plans ADD COLUMN IF NOT EXISTS subscription_started_at TIMESTAMP`],
       ["provider_plans.subscription_ended_at",  `ALTER TABLE provider_plans ADD COLUMN IF NOT EXISTS subscription_ended_at TIMESTAMP`],
+      // RevenueCat IAP fields (Task #132)
+      ["provider_plans.subscription_source",    `ALTER TABLE provider_plans ADD COLUMN IF NOT EXISTS subscription_source TEXT`],
+      ["provider_plans.revenuecat_product_id",  `ALTER TABLE provider_plans ADD COLUMN IF NOT EXISTS revenuecat_product_id TEXT`],
+      ["provider_plans.current_period_end",     `ALTER TABLE provider_plans ADD COLUMN IF NOT EXISTS current_period_end TIMESTAMP`],
     ];
     for (const [label, sql] of providerPlanAlters) {
       await runSql(label, sql);

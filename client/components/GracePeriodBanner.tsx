@@ -1,16 +1,16 @@
 import React from "react";
-import { StyleSheet, View, Pressable, Linking } from "react-native";
+import { StyleSheet, View, Pressable } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { BorderRadius, Spacing, Typography } from "@/constants/theme";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 
-const SUBSCRIBE_URL = "https://homebaseproapp.com/subscribe";
-
 export function GracePeriodBanner() {
   const { isInGrace, daysRemainingInGrace } = useSubscriptionStatus();
   const { isDark } = useTheme();
+  const navigation = useNavigation<any>();
 
   if (!isInGrace) return null;
 
@@ -18,17 +18,22 @@ export function GracePeriodBanner() {
   const isUrgent = days <= 2;
 
   const bg = isUrgent
-    ? isDark ? "#3a1f1f" : "#fef2f2"
-    : isDark ? "#3a2f1a" : "#fffbeb";
+    ? isDark
+      ? "#3a1f1f"
+      : "#fef2f2"
+    : isDark
+      ? "#3a2f1a"
+      : "#fffbeb";
   const border = isUrgent ? "#ef4444" : "#f59e0b";
   const accent = isUrgent ? "#dc2626" : "#b45309";
 
-  const title = days === 1 ? "1 day left in your trial" : `${days} days left in your trial`;
-  const subtitle = "Subscribe at homebaseproapp.com to keep going.";
+  const title =
+    days === 1 ? "1 day left in your trial" : `${days} days left in your trial`;
+  const subtitle = "Tap to subscribe and keep going.";
 
-  const handlePress = async () => {
+  const handlePress = () => {
     try {
-      await Linking.openURL(SUBSCRIBE_URL);
+      navigation.navigate("Subscription");
     } catch {}
   };
 
@@ -42,8 +47,12 @@ export function GracePeriodBanner() {
         <Feather name="clock" size={18} color={accent} />
       </View>
       <View style={styles.textCol}>
-        <ThemedText style={[styles.title, { color: accent }]}>{title}</ThemedText>
-        <ThemedText style={[styles.subtitle, { color: accent }]}>{subtitle}</ThemedText>
+        <ThemedText style={[styles.title, { color: accent }]}>
+          {title}
+        </ThemedText>
+        <ThemedText style={[styles.subtitle, { color: accent }]}>
+          {subtitle}
+        </ThemedText>
       </View>
       <Feather name="chevron-right" size={20} color={accent} />
     </Pressable>

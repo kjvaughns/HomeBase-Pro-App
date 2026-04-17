@@ -1,14 +1,8 @@
 import React from "react";
-import {
-  StyleSheet,
-  View,
-  Modal,
-  Pressable,
-  Linking,
-  Platform,
-} from "react-native";
+import { StyleSheet, View, Modal, Pressable, Platform } from "react-native";
 import { BlurView } from "expo-blur";
 import { Feather } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 
@@ -17,8 +11,6 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { SecondaryButton } from "@/components/SecondaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { BorderRadius, Spacing, Colors } from "@/constants/theme";
-
-const SUBSCRIBE_URL = "https://homebaseproapp.com/subscribe";
 
 interface SubscriptionGateModalProps {
   visible: boolean;
@@ -31,20 +23,24 @@ export function SubscriptionGateModal({
   visible,
   onClose,
   title = "Subscribe to continue",
-  description = "Your 7-day trial has ended. Subscribe at homebaseproapp.com to keep creating jobs and sending invoices. Your existing data is safe.",
+  description = "Your 7-day trial has ended. Subscribe to keep creating jobs and sending invoices. Your existing data is safe.",
 }: SubscriptionGateModalProps) {
   const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
 
   const handleClose = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onClose();
   };
 
-  const handleOpenWebsite = async () => {
+  const handleSubscribe = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    onClose();
+    // Navigate to in-app Subscription screen — Apple/Google IAP on native,
+    // Stripe Checkout on web (handled inside SubscriptionScreen).
     try {
-      await Linking.openURL(SUBSCRIBE_URL);
+      navigation.navigate("Subscription");
     } catch {}
   };
 
@@ -91,7 +87,12 @@ export function SubscriptionGateModal({
 
             <View style={styles.handle} />
 
-            <View style={[styles.iconCircle, { backgroundColor: Colors.accentLight }]}>
+            <View
+              style={[
+                styles.iconCircle,
+                { backgroundColor: Colors.accentLight },
+              ]}
+            >
               <Feather name="lock" size={32} color={Colors.accent} />
             </View>
 
@@ -108,15 +109,19 @@ export function SubscriptionGateModal({
 
             <View style={styles.actions}>
               <PrimaryButton
-                onPress={handleOpenWebsite}
-                icon={<Feather name="external-link" size={20} color="#FFFFFF" />}
+                onPress={handleSubscribe}
+                icon={<Feather name="arrow-right" size={20} color="#FFFFFF" />}
                 style={styles.button}
-                testID="button-open-subscribe-website"
+                testID="button-open-subscribe-screen"
               >
-                Subscribe at homebaseproapp.com
+                Subscribe
               </PrimaryButton>
 
-              <SecondaryButton onPress={onClose} style={styles.button} testID="button-not-now-subscribe">
+              <SecondaryButton
+                onPress={onClose}
+                style={styles.button}
+                testID="button-not-now-subscribe"
+              >
                 Not now
               </SecondaryButton>
             </View>

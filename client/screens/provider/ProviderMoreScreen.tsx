@@ -153,7 +153,7 @@ export default function ProviderMoreScreen() {
             />
             <ListRow
               title="Subscription & Plan"
-              subtitle="Manage at homebaseproapp.com"
+              subtitle="Manage your HomeBase Pro plan"
               leftIcon="credit-card"
               onPress={() => navigation.navigate("Subscription")}
             />

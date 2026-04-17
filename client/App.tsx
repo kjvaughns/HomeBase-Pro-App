@@ -17,7 +17,14 @@ import RootStackNavigator from "@/navigation/RootStackNavigator";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useThemeStore } from "@/state/themeStore";
 import { useOnboardingStore } from "@/state/onboardingStore";
+import { useAuthStore } from "@/state/authStore";
 import { useTheme } from "@/hooks/useTheme";
+import {
+  configurePurchases,
+  loginPurchasesUser,
+  logoutPurchasesUser,
+  isPurchasesAvailable,
+} from "@/lib/revenuecat";
 
 const linking = {
   prefixes: ["homebase://", "exp+homebase://"],
@@ -30,7 +37,7 @@ const linking = {
 
 function AppContent() {
   const { isDark } = useTheme();
-  
+
   return (
     <>
       <NavigationContainer linking={linking}>
@@ -49,7 +56,7 @@ export default function App() {
   const [webFontReady, setWebFontReady] = useState(Platform.OS !== "web");
 
   const [fontsLoaded, fontError] = useFonts(
-    Platform.OS !== "web" ? { ...Feather.font } : {}
+    Platform.OS !== "web" ? { ...Feather.font } : {},
   );
 
   useEffect(() => {
@@ -61,15 +68,34 @@ export default function App() {
     }
   }, []);
 
-  const ready = Platform.OS === "web"
-    ? webFontReady
-    : fontsLoaded || !!fontError;
+  const ready =
+    Platform.OS === "web" ? webFontReady : fontsLoaded || !!fontError;
 
   useEffect(() => {
     if (ready) {
       SplashScreen.hideAsync();
     }
   }, [ready]);
+
+  // Initialize RevenueCat once on launch (no-op on web), then sync the active
+  // appUserID to the current providerProfile so receipts attach to the right
+  // account on this device. Re-runs whenever auth or provider identity changes.
+  const providerId = useAuthStore((s) => s.providerProfile?.id ?? null);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
+  useEffect(() => {
+    if (!isPurchasesAvailable()) return;
+    configurePurchases(providerId ?? undefined);
+  }, []);
+
+  useEffect(() => {
+    if (!isPurchasesAvailable()) return;
+    if (isAuthenticated && providerId) {
+      loginPurchasesUser(providerId);
+    } else if (!isAuthenticated) {
+      logoutPurchasesUser();
+    }
+  }, [isAuthenticated, providerId]);
 
   useEffect(() => {
     hydrateTheme();
@@ -90,7 +116,7 @@ export default function App() {
   if (!ready) {
     return null;
   }
-  
+
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>

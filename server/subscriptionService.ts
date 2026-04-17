@@ -3,7 +3,11 @@ import { db } from "./db";
 import { eq } from "drizzle-orm";
 import { providerPlans, providers, users } from "@shared/schema";
 import type { ProviderPlan } from "@shared/schema";
-import { dispatch, dispatchNotification, hasDeliveryForRecord } from "./notificationService";
+import {
+  dispatch,
+  dispatchNotification,
+  hasDeliveryForRecord,
+} from "./notificationService";
 
 export const GRACE_PERIOD_DAYS = 7;
 
@@ -21,12 +25,14 @@ export interface SubscriptionStatusInfo {
   isSubscribed: boolean;
 }
 
-type PlanLike = Partial<
-  Pick<
-    ProviderPlan,
-    "isSubscribed" | "firstPaidBookingAt" | "gracePeriodEndsAt"
-  >
-> | null
+type PlanLike =
+  | Partial<
+      Pick<
+        ProviderPlan,
+        "isSubscribed" | "firstPaidBookingAt" | "gracePeriodEndsAt"
+      >
+    >
+  | null
   | undefined;
 
 export function computeSubscriptionStatus(
@@ -107,7 +113,7 @@ export async function checkSubscriptionGate(
   if (info.status === "expired") {
     res.status(403).json({
       error:
-        "Your HomeBase subscription is required to continue. Subscribe at homebaseproapp.com to unlock job and invoice creation.",
+        "Your HomeBase subscription is required to continue. Open the Subscription screen to subscribe and unlock job and invoice creation.",
       code: "SUBSCRIPTION_REQUIRED",
       subscriptionStatus: info,
     });
@@ -132,7 +138,9 @@ export async function maybeStartGracePeriod(providerId: string): Promise<void> {
     if (existing?.firstPaidBookingAt || existing?.isSubscribed) return;
 
     const now = new Date();
-    const graceEnd = new Date(now.getTime() + GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000);
+    const graceEnd = new Date(
+      now.getTime() + GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000,
+    );
 
     if (existing) {
       await db
@@ -172,21 +180,34 @@ async function getProviderUser(providerId: string) {
   return { provider, user };
 }
 
-export async function sendGraceStartNotification(providerId: string): Promise<void> {
+export async function sendGraceStartNotification(
+  providerId: string,
+): Promise<void> {
   const ctx = await getProviderUser(providerId);
   if (!ctx) return;
   const { provider, user } = ctx;
   const dedupKey = `${providerId}:grace_start`;
-  const already = await hasDeliveryForRecord("subscription.grace_start", dedupKey, "push");
+  const already = await hasDeliveryForRecord(
+    "subscription.grace_start",
+    dedupKey,
+    "push",
+  );
   if (already) return;
 
   const title = "Congrats on your first paid booking!";
-  const body = `Your 7-day HomeBase trial just started. After ${GRACE_PERIOD_DAYS} days, subscribe at homebaseproapp.com to keep growing.`;
+  const body = `Your 7-day HomeBase trial just started. Open the Subscription screen any time to subscribe and keep growing after the trial ends.`;
 
-  await dispatchNotification(user.id, title, body, "subscription.grace_start", {
-    providerId,
-    daysRemaining: GRACE_PERIOD_DAYS,
-  }, "reminders");
+  await dispatchNotification(
+    user.id,
+    title,
+    body,
+    "subscription.grace_start",
+    {
+      providerId,
+      daysRemaining: GRACE_PERIOD_DAYS,
+    },
+    "reminders",
+  );
 
   if (user.email) {
     await dispatch("subscription.grace_start", {
@@ -199,21 +220,35 @@ export async function sendGraceStartNotification(providerId: string): Promise<vo
   }
 }
 
-export async function sendGraceReminderNotification(providerId: string, daysRemaining: number): Promise<void> {
+export async function sendGraceReminderNotification(
+  providerId: string,
+  daysRemaining: number,
+): Promise<void> {
   const ctx = await getProviderUser(providerId);
   if (!ctx) return;
   const { provider, user } = ctx;
   const dedupKey = `${providerId}:grace_reminder`;
-  const already = await hasDeliveryForRecord("subscription.grace_reminder", dedupKey, "push");
+  const already = await hasDeliveryForRecord(
+    "subscription.grace_reminder",
+    dedupKey,
+    "push",
+  );
   if (already) return;
 
   const title = `${daysRemaining} day${daysRemaining === 1 ? "" : "s"} left in your trial`;
-  const body = `Subscribe at homebaseproapp.com before your HomeBase trial ends to keep creating jobs and invoices.`;
+  const body = `Open the Subscription screen and subscribe before your HomeBase trial ends to keep creating jobs and invoices.`;
 
-  await dispatchNotification(user.id, title, body, "subscription.grace_reminder", {
-    providerId,
-    daysRemaining,
-  }, "reminders");
+  await dispatchNotification(
+    user.id,
+    title,
+    body,
+    "subscription.grace_reminder",
+    {
+      providerId,
+      daysRemaining,
+    },
+    "reminders",
+  );
 
   if (user.email) {
     await dispatch("subscription.grace_reminder", {
@@ -227,20 +262,33 @@ export async function sendGraceReminderNotification(providerId: string, daysRema
   }
 }
 
-export async function sendGraceExpiredNotification(providerId: string): Promise<void> {
+export async function sendGraceExpiredNotification(
+  providerId: string,
+): Promise<void> {
   const ctx = await getProviderUser(providerId);
   if (!ctx) return;
   const { provider, user } = ctx;
   const dedupKey = `${providerId}:grace_expired`;
-  const already = await hasDeliveryForRecord("subscription.expired", dedupKey, "push");
+  const already = await hasDeliveryForRecord(
+    "subscription.expired",
+    dedupKey,
+    "push",
+  );
   if (already) return;
 
   const title = "Your HomeBase trial has ended";
-  const body = `Subscribe at homebaseproapp.com to continue creating jobs and sending invoices.`;
+  const body = `Open the Subscription screen in the HomeBase app to subscribe and continue creating jobs and sending invoices.`;
 
-  await dispatchNotification(user.id, title, body, "subscription.expired", {
-    providerId,
-  }, "reminders");
+  await dispatchNotification(
+    user.id,
+    title,
+    body,
+    "subscription.expired",
+    {
+      providerId,
+    },
+    "reminders",
+  );
 
   if (user.email) {
     await dispatch("subscription.expired", {

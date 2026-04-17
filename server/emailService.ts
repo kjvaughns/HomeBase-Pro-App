@@ -1,11 +1,13 @@
-import { Resend } from 'resend';
+import { Resend } from "resend";
 
 let connectionSettings: any;
 
 async function getCredentials() {
   // Try env var first (fastest path, works in all environments)
   const envApiKey = process.env.RESEND_API_KEY;
-  const envFromEmail = process.env.RESEND_FROM_EMAIL || 'HomeBase <noreply@updates.homebaseproapp.com>';
+  const envFromEmail =
+    process.env.RESEND_FROM_EMAIL ||
+    "HomeBase <noreply@updates.homebaseproapp.com>";
 
   if (envApiKey) {
     return { apiKey: envApiKey, fromEmail: envFromEmail };
@@ -13,28 +15,32 @@ async function getCredentials() {
 
   // Try Replit connectors API
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  const xReplitToken = process.env.REPL_IDENTITY 
-    ? 'repl ' + process.env.REPL_IDENTITY 
-    : process.env.WEB_REPL_RENEWAL 
-    ? 'depl ' + process.env.WEB_REPL_RENEWAL 
-    : null;
+  const xReplitToken = process.env.REPL_IDENTITY
+    ? "repl " + process.env.REPL_IDENTITY
+    : process.env.WEB_REPL_RENEWAL
+      ? "depl " + process.env.WEB_REPL_RENEWAL
+      : null;
 
   if (hostname && xReplitToken) {
     try {
       connectionSettings = await fetch(
-        'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=resend',
+        "https://" +
+          hostname +
+          "/api/v2/connection?include_secrets=true&connector_names=resend",
         {
           headers: {
-            'Accept': 'application/json',
-            'X-Replit-Token': xReplitToken
-          }
-        }
-      ).then(res => res.json()).then(data => data.items?.[0]);
+            Accept: "application/json",
+            "X-Replit-Token": xReplitToken,
+          },
+        },
+      )
+        .then((res) => res.json())
+        .then((data) => data.items?.[0]);
 
       if (connectionSettings?.settings?.api_key) {
         return {
           apiKey: connectionSettings.settings.api_key,
-          fromEmail: connectionSettings.settings.from_email || envFromEmail
+          fromEmail: connectionSettings.settings.from_email || envFromEmail,
         };
       }
     } catch (e) {
@@ -42,25 +48,36 @@ async function getCredentials() {
     }
   }
 
-  throw new Error('Resend not configured - set RESEND_API_KEY secret or connect the Resend integration');
+  throw new Error(
+    "Resend not configured - set RESEND_API_KEY secret or connect the Resend integration",
+  );
 }
 
 async function getResendClient() {
   const { apiKey, fromEmail } = await getCredentials();
   return {
     client: new Resend(apiKey),
-    fromEmail
+    fromEmail,
   };
 }
 
 function fmtUsd(amount: number): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(amount);
 }
 
-function buildEmailBase(title: string, body: string, ctaLabel?: string, ctaUrl?: string): string {
-  const ctaHtml = ctaLabel && ctaUrl
-    ? `<a href="${ctaUrl}" style="display:block;background:#38AE5F;color:#fff;text-align:center;padding:16px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;margin:24px 0;">${ctaLabel}</a>`
-    : '';
+function buildEmailBase(
+  title: string,
+  body: string,
+  ctaLabel?: string,
+  ctaUrl?: string,
+): string {
+  const ctaHtml =
+    ctaLabel && ctaUrl
+      ? `<a href="${ctaUrl}" style="display:block;background:#38AE5F;color:#fff;text-align:center;padding:16px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;margin:24px 0;">${ctaLabel}</a>`
+      : "";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -125,31 +142,41 @@ function appDownloadSection(): string {
 
 type SendResult = { success: boolean; messageId?: string; error?: string };
 
-async function sendEmail(to: string, subject: string, html: string): Promise<SendResult> {
+async function sendEmail(
+  to: string,
+  subject: string,
+  html: string,
+): Promise<SendResult> {
   try {
     const { client, fromEmail } = await getResendClient();
     const result = await client.emails.send({
-      from: fromEmail || 'HomeBase <noreply@resend.dev>',
+      from: fromEmail || "HomeBase <noreply@resend.dev>",
       to,
       subject,
       html,
     });
     if (result.error) {
-      console.error('Resend error:', result.error);
+      console.error("Resend error:", result.error);
       return { success: false, error: result.error.message };
     }
     return { success: true, messageId: result.data?.id };
   } catch (err: any) {
-    console.error('sendEmail error:', err);
-    return { success: false, error: err.message || 'Failed to send email' };
+    console.error("sendEmail error:", err);
+    return { success: false, error: err.message || "Failed to send email" };
   }
 }
 
 // ─── Account / Auth templates ──────────────────────────────────────────────────
 
-export async function sendWelcomeEmail(to: string, name: string): Promise<SendResult> {
-  const body = greeting(name) +
-    paragraph('Welcome to HomeBase! We\'re thrilled to have you. HomeBase helps you manage your home services, track invoices, and connect with trusted providers &mdash; all in one place.') +
+export async function sendWelcomeEmail(
+  to: string,
+  name: string,
+): Promise<SendResult> {
+  const body =
+    greeting(name) +
+    paragraph(
+      "Welcome to HomeBase! We're thrilled to have you. HomeBase helps you manage your home services, track invoices, and connect with trusted providers &mdash; all in one place.",
+    ) +
     `<h2 style="color:#111827;font-size:18px;margin:0 0 12px;">What you can do</h2>` +
     `<ul style="color:#6b7280;font-size:14px;line-height:1.8;padding-left:20px;margin:0 0 20px;">
       <li>Book local service providers</li>
@@ -158,32 +185,75 @@ export async function sendWelcomeEmail(to: string, name: string): Promise<SendRe
       <li>Get smart reminders for recurring services</li>
     </ul>` +
     appDownloadSection();
-  return sendEmail(to, 'Welcome to HomeBase!', buildEmailBase('Welcome to HomeBase', body, 'Open HomeBase', 'https://homebaseproapp.com'));
+  return sendEmail(
+    to,
+    "Welcome to HomeBase!",
+    buildEmailBase(
+      "Welcome to HomeBase",
+      body,
+      "Open HomeBase",
+      "https://homebaseproapp.com",
+    ),
+  );
 }
 
-export async function sendPasswordResetEmail(to: string, name: string, resetUrl: string): Promise<SendResult> {
-  const body = greeting(name) +
-    paragraph('You requested a password reset for your HomeBase account. Click the button below to set a new password. This link expires in 1 hour.') +
-    paragraph('If you did not request this, you can safely ignore this email. Your password will not change.');
-  return sendEmail(to, 'Reset your HomeBase password', buildEmailBase('Password Reset', body, 'Reset Password', resetUrl));
+export async function sendPasswordResetEmail(
+  to: string,
+  name: string,
+  resetUrl: string,
+): Promise<SendResult> {
+  const body =
+    greeting(name) +
+    paragraph(
+      "You requested a password reset for your HomeBase account. Click the button below to set a new password. This link expires in 1 hour.",
+    ) +
+    paragraph(
+      "If you did not request this, you can safely ignore this email. Your password will not change.",
+    );
+  return sendEmail(
+    to,
+    "Reset your HomeBase password",
+    buildEmailBase("Password Reset", body, "Reset Password", resetUrl),
+  );
 }
 
-export async function sendEmailVerificationEmail(to: string, name: string, verifyUrl: string): Promise<SendResult> {
-  const body = greeting(name) +
-    paragraph('Thanks for signing up! Please verify your email address to activate your HomeBase account.') +
-    paragraph('This verification link expires in 24 hours.');
-  return sendEmail(to, 'Verify your HomeBase email', buildEmailBase('Verify Email', body, 'Verify Email Address', verifyUrl));
+export async function sendEmailVerificationEmail(
+  to: string,
+  name: string,
+  verifyUrl: string,
+): Promise<SendResult> {
+  const body =
+    greeting(name) +
+    paragraph(
+      "Thanks for signing up! Please verify your email address to activate your HomeBase account.",
+    ) +
+    paragraph("This verification link expires in 24 hours.");
+  return sendEmail(
+    to,
+    "Verify your HomeBase email",
+    buildEmailBase("Verify Email", body, "Verify Email Address", verifyUrl),
+  );
 }
 
-export async function sendProviderOnboardingCompleteEmail(to: string, providerName: string): Promise<SendResult> {
-  const body = greeting(providerName) +
-    paragraph('Congratulations! Your HomeBase provider account is fully set up and active. You can now accept bookings, send invoices, and grow your business.') +
+export async function sendProviderOnboardingCompleteEmail(
+  to: string,
+  providerName: string,
+): Promise<SendResult> {
+  const body =
+    greeting(providerName) +
+    paragraph(
+      "Congratulations! Your HomeBase provider account is fully set up and active. You can now accept bookings, send invoices, and grow your business.",
+    ) +
     `<div style="background:#f0fdf4;border-radius:8px;padding:20px;margin-bottom:20px;border-left:4px solid #38AE5F;">
       <p style="color:#166534;font-weight:600;margin:0 0 6px;">You\'re ready to go</p>
       <p style="color:#15803d;font-size:13px;margin:0;">Share your booking link, manage your schedule, and get paid faster with HomeBase.</p>
     </div>` +
     appDownloadSection();
-  return sendEmail(to, 'Your HomeBase provider account is ready', buildEmailBase('Provider Account Ready', body));
+  return sendEmail(
+    to,
+    "Your HomeBase provider account is ready",
+    buildEmailBase("Provider Account Ready", body),
+  );
 }
 
 // ─── Booking templates ─────────────────────────────────────────────────────────
@@ -204,32 +274,37 @@ interface BookingData {
   intakeAnswers?: string;
 }
 
-export async function sendBookingConfirmationEmail(data: BookingData): Promise<SendResult> {
-  const priceRow = data.estimatedPrice ? infoRow('Est. Price', fmtUsd(data.estimatedPrice)) : '';
+export async function sendBookingConfirmationEmail(
+  data: BookingData,
+): Promise<SendResult> {
+  const priceRow = data.estimatedPrice
+    ? infoRow("Est. Price", fmtUsd(data.estimatedPrice))
+    : "";
   const issueSection = data.description
     ? `<div style="background:#f0fdf4;border-radius:8px;padding:16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
         <p style="color:#166534;font-weight:600;font-size:13px;margin:0 0 6px;">Your Issue</p>
         <p style="color:#15803d;font-size:13px;margin:0;line-height:1.5;">${data.description}</p>
       </div>`
-    : '';
+    : "";
   const intakeSection = data.intakeAnswers
     ? `<div style="background:#f0fdf4;border-radius:8px;padding:16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
         <p style="color:#166534;font-weight:600;font-size:13px;margin:0 0 6px;">Your Request Details</p>
         <p style="color:#15803d;font-size:13px;margin:0;line-height:1.5;">${data.intakeAnswers}</p>
       </div>`
-    : '';
-  const addOnsSection = data.addOns && data.addOns.length > 0
-    ? `<div style="background:#f9fafb;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
+    : "";
+  const addOnsSection =
+    data.addOns && data.addOns.length > 0
+      ? `<div style="background:#f9fafb;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
         <p style="color:#374151;font-weight:600;font-size:13px;margin:0 0 8px;">Add-ons Included</p>
-        ${data.addOns.map(a => `<div style="color:#6b7280;font-size:13px;padding:3px 0;">&bull; ${a}</div>`).join('')}
+        ${data.addOns.map((a) => `<div style="color:#6b7280;font-size:13px;padding:3px 0;">&bull; ${a}</div>`).join("")}
       </div>`
-    : '';
+      : "";
   const serviceDescSection = data.serviceDescription
     ? `<div style="background:#f9fafb;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
         <p style="color:#374151;font-weight:600;font-size:13px;margin:0 0 6px;">About This Service</p>
         <p style="color:#6b7280;font-size:13px;margin:0;line-height:1.5;">${data.serviceDescription}</p>
       </div>`
-    : '';
+    : "";
   const nextStepsSection = `<div style="background:#f0fdf4;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
     <p style="color:#166534;font-weight:600;font-size:13px;margin:0 0 8px;">What to Expect Next</p>
     <div style="color:#15803d;font-size:13px;line-height:1.6;">
@@ -238,16 +313,21 @@ export async function sendBookingConfirmationEmail(data: BookingData): Promise<S
       <div>&bull; An invoice will be sent after the service is complete</div>
     </div>
   </div>`;
-  const body = greeting(data.clientName) +
-    paragraph('Great news! Your service appointment has been confirmed. Here are your booking details:') +
+  const body =
+    greeting(data.clientName) +
+    paragraph(
+      "Great news! Your service appointment has been confirmed. Here are your booking details:",
+    ) +
     infoBox(
-      (data.confirmationNumber ? infoRow('Confirmation #', data.confirmationNumber) : '') +
-      infoRow('Service', data.serviceName) +
-      infoRow('Provider', data.providerName) +
-      infoRow('Date', data.appointmentDate) +
-      infoRow('Time', data.appointmentTime) +
-      (data.address ? infoRow('Location', data.address) : '') +
-      priceRow
+      (data.confirmationNumber
+        ? infoRow("Confirmation #", data.confirmationNumber)
+        : "") +
+        infoRow("Service", data.serviceName) +
+        infoRow("Provider", data.providerName) +
+        infoRow("Date", data.appointmentDate) +
+        infoRow("Time", data.appointmentTime) +
+        (data.address ? infoRow("Location", data.address) : "") +
+        priceRow,
     ) +
     issueSection +
     intakeSection +
@@ -261,65 +341,88 @@ export async function sendBookingConfirmationEmail(data: BookingData): Promise<S
   return sendEmail(
     data.clientEmail,
     `Booking Confirmed: ${data.serviceName} with ${data.providerName}`,
-    buildEmailBase('Booking Confirmed', body)
+    buildEmailBase("Booking Confirmed", body),
   );
 }
 
-export async function sendBookingReminderEmail(data: BookingData, hoursUntil: number): Promise<SendResult> {
-  const label = hoursUntil <= 2 ? 'in 2 hours' : 'tomorrow';
-  const body = greeting(data.clientName) +
-    paragraph(`This is a reminder that your appointment is coming up ${label}. Here are the details:`) +
+export async function sendBookingReminderEmail(
+  data: BookingData,
+  hoursUntil: number,
+): Promise<SendResult> {
+  const label = hoursUntil <= 2 ? "in 2 hours" : "tomorrow";
+  const body =
+    greeting(data.clientName) +
+    paragraph(
+      `This is a reminder that your appointment is coming up ${label}. Here are the details:`,
+    ) +
     infoBox(
-      infoRow('Service', data.serviceName) +
-      infoRow('Provider', data.providerName) +
-      infoRow('Date', data.appointmentDate) +
-      infoRow('Time', data.appointmentTime) +
-      (data.address ? infoRow('Location', data.address) : '')
+      infoRow("Service", data.serviceName) +
+        infoRow("Provider", data.providerName) +
+        infoRow("Date", data.appointmentDate) +
+        infoRow("Time", data.appointmentTime) +
+        (data.address ? infoRow("Location", data.address) : ""),
     ) +
     appDownloadSection();
   return sendEmail(
     data.clientEmail,
     `Reminder: ${data.serviceName} with ${data.providerName} ${label}`,
-    buildEmailBase('Appointment Reminder', body)
+    buildEmailBase("Appointment Reminder", body),
   );
 }
 
-export async function sendBookingCancelledEmail(data: BookingData, reason?: string): Promise<SendResult> {
-  const body = greeting(data.clientName) +
-    paragraph(`Your ${data.serviceName} appointment with ${data.providerName} has been cancelled.`) +
-    infoBox(
-      infoRow('Service', data.serviceName) +
-      infoRow('Provider', data.providerName) +
-      infoRow('Date', data.appointmentDate) +
-      infoRow('Time', data.appointmentTime) +
-      (reason ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb;"><span style="color:#6b7280;font-size:14px;">Reason: </span><span style="color:#111827;font-size:14px;">${reason}</span></div>` : '')
+export async function sendBookingCancelledEmail(
+  data: BookingData,
+  reason?: string,
+): Promise<SendResult> {
+  const body =
+    greeting(data.clientName) +
+    paragraph(
+      `Your ${data.serviceName} appointment with ${data.providerName} has been cancelled.`,
     ) +
-    paragraph('If you would like to rebook, please contact the provider or visit HomeBase to schedule a new appointment.') +
+    infoBox(
+      infoRow("Service", data.serviceName) +
+        infoRow("Provider", data.providerName) +
+        infoRow("Date", data.appointmentDate) +
+        infoRow("Time", data.appointmentTime) +
+        (reason
+          ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb;"><span style="color:#6b7280;font-size:14px;">Reason: </span><span style="color:#111827;font-size:14px;">${reason}</span></div>`
+          : ""),
+    ) +
+    paragraph(
+      "If you would like to rebook, please contact the provider or visit HomeBase to schedule a new appointment.",
+    ) +
     appDownloadSection();
   return sendEmail(
     data.clientEmail,
     `Booking Cancelled: ${data.serviceName} with ${data.providerName}`,
-    buildEmailBase('Booking Cancelled', body)
+    buildEmailBase("Booking Cancelled", body),
   );
 }
 
-export async function sendBookingRescheduledEmail(data: BookingData, oldDate: string, oldTime: string): Promise<SendResult> {
-  const body = greeting(data.clientName) +
-    paragraph(`Your ${data.serviceName} appointment with ${data.providerName} has been rescheduled.`) +
+export async function sendBookingRescheduledEmail(
+  data: BookingData,
+  oldDate: string,
+  oldTime: string,
+): Promise<SendResult> {
+  const body =
+    greeting(data.clientName) +
+    paragraph(
+      `Your ${data.serviceName} appointment with ${data.providerName} has been rescheduled.`,
+    ) +
     `<p style="color:#6b7280;font-size:13px;text-decoration:line-through;margin:0 0 4px;">Previously: ${oldDate} at ${oldTime}</p>` +
     infoBox(
       `<p style="color:#38AE5F;font-weight:600;font-size:13px;margin:0 0 12px;">New schedule</p>` +
-      infoRow('Service', data.serviceName) +
-      infoRow('Provider', data.providerName) +
-      infoRow('Date', data.appointmentDate) +
-      infoRow('Time', data.appointmentTime) +
-      (data.address ? infoRow('Location', data.address) : '')
+        infoRow("Service", data.serviceName) +
+        infoRow("Provider", data.providerName) +
+        infoRow("Date", data.appointmentDate) +
+        infoRow("Time", data.appointmentTime) +
+        (data.address ? infoRow("Location", data.address) : ""),
     ) +
     appDownloadSection();
   return sendEmail(
     data.clientEmail,
     `Rescheduled: ${data.serviceName} with ${data.providerName}`,
-    buildEmailBase('Appointment Rescheduled', body)
+    buildEmailBase("Appointment Rescheduled", body),
   );
 }
 
@@ -339,16 +442,25 @@ export async function sendBookingRequestReceivedEmail(data: {
         <p style="color:#166534;font-weight:600;font-size:13px;margin:0 0 6px;">Your Request</p>
         <p style="color:#15803d;font-size:13px;margin:0;line-height:1.5;">${data.description}</p>
       </div>`
-    : '';
-  const body = greeting(data.clientName) +
-    paragraph(`Thanks! We sent your booking request to ${data.providerName}. They will review the details and get back to you shortly to confirm.`) +
+    : "";
+  const body =
+    greeting(data.clientName) +
+    paragraph(
+      `Thanks! We sent your booking request to ${data.providerName}. They will review the details and get back to you shortly to confirm.`,
+    ) +
     infoBox(
-      (data.confirmationNumber ? infoRow('Reference #', data.confirmationNumber) : '') +
-      (data.serviceName ? infoRow('Service', data.serviceName) : '') +
-      infoRow('Provider', data.providerName) +
-      (data.preferredDate ? infoRow('Preferred Date', data.preferredDate) : '') +
-      (data.preferredTime ? infoRow('Preferred Time', data.preferredTime) : '') +
-      (data.address ? infoRow('Location', data.address) : '')
+      (data.confirmationNumber
+        ? infoRow("Reference #", data.confirmationNumber)
+        : "") +
+        (data.serviceName ? infoRow("Service", data.serviceName) : "") +
+        infoRow("Provider", data.providerName) +
+        (data.preferredDate
+          ? infoRow("Preferred Date", data.preferredDate)
+          : "") +
+        (data.preferredTime
+          ? infoRow("Preferred Time", data.preferredTime)
+          : "") +
+        (data.address ? infoRow("Location", data.address) : ""),
     ) +
     issueSection +
     `<div style="background:#fffbeb;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #f59e0b;">
@@ -358,7 +470,7 @@ export async function sendBookingRequestReceivedEmail(data: {
   return sendEmail(
     data.clientEmail,
     `Request sent to ${data.providerName}`,
-    buildEmailBase('Request Received', body)
+    buildEmailBase("Request Received", body),
   );
 }
 
@@ -371,28 +483,42 @@ interface InvoiceEmailData {
   invoiceNumber: string;
   amount: number;
   dueDate: string;
-  lineItems: { description: string; quantity: number; unitPrice: number; total: number }[];
+  lineItems: {
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+  }[];
   paymentLink?: string;
 }
 
-export async function sendInvoiceEmail(data: InvoiceEmailData): Promise<SendResult> {
-  const lineItemsHtml = data.lineItems.map(item => `
+export async function sendInvoiceEmail(
+  data: InvoiceEmailData,
+): Promise<SendResult> {
+  const lineItemsHtml = data.lineItems
+    .map(
+      (item) => `
     <tr>
       <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;color:#374151;font-size:13px;">${item.description}</td>
       <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:center;color:#374151;font-size:13px;">${item.quantity}</td>
       <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;color:#374151;font-size:13px;">$${item.unitPrice.toFixed(2)}</td>
       <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;color:#374151;font-size:13px;">$${item.total.toFixed(2)}</td>
-    </tr>`).join('');
+    </tr>`,
+    )
+    .join("");
 
-  const body = greeting(data.clientName) +
-    paragraph(`You have received a new invoice from <strong>${data.providerName}</strong>. Please find the details below.`) +
+  const body =
+    greeting(data.clientName) +
+    paragraph(
+      `You have received a new invoice from <strong>${data.providerName}</strong>. Please find the details below.`,
+    ) +
     infoBox(
-      infoRow('Invoice #', data.invoiceNumber) +
-      infoRow('Due Date', data.dueDate) +
-      `<div style="display:flex;justify-content:space-between;padding-top:12px;border-top:1px solid #e5e7eb;">
+      infoRow("Invoice #", data.invoiceNumber) +
+        infoRow("Due Date", data.dueDate) +
+        `<div style="display:flex;justify-content:space-between;padding-top:12px;border-top:1px solid #e5e7eb;">
         <span style="color:#6b7280;font-size:14px;">Total Amount</span>
         <span style="color:#38AE5F;font-weight:700;font-size:20px;">${fmtUsd(data.amount)}</span>
-      </div>`
+      </div>`,
     ) +
     `<table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
       <thead>
@@ -407,17 +533,19 @@ export async function sendInvoiceEmail(data: InvoiceEmailData): Promise<SendResu
     </table>` +
     (data.paymentLink
       ? `<a href="${data.paymentLink}" style="display:block;background:#38AE5F;color:#fff;text-align:center;padding:16px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;margin-bottom:24px;">Pay Now</a>`
-      : '') +
+      : "") +
     appDownloadSection();
 
   return sendEmail(
     data.clientEmail,
     `Invoice ${data.invoiceNumber} from ${data.providerName} &ndash; ${fmtUsd(data.amount)}`,
-    buildEmailBase(`Invoice from ${data.providerName}`, body)
+    buildEmailBase(`Invoice from ${data.providerName}`, body),
   );
 }
 
-export async function sendInvoiceCreatedEmail(data: InvoiceEmailData): Promise<SendResult> {
+export async function sendInvoiceCreatedEmail(
+  data: InvoiceEmailData,
+): Promise<SendResult> {
   return sendInvoiceEmail(data);
 }
 
@@ -434,32 +562,37 @@ export async function sendInvoiceReminderEmail(data: {
 }): Promise<SendResult> {
   const isOverdue = (data.daysOverdue ?? 0) > 0;
   const urgencyText = isOverdue
-    ? `Your invoice is <strong>${data.daysOverdue} day${data.daysOverdue === 1 ? '' : 's'} overdue</strong>. Please arrange payment as soon as possible to avoid any service interruptions.`
-    : `Your invoice is due in <strong>${data.daysUntilDue} day${data.daysUntilDue === 1 ? '' : 's'}</strong>. Please arrange payment before the due date.`;
+    ? `Your invoice is <strong>${data.daysOverdue} day${data.daysOverdue === 1 ? "" : "s"} overdue</strong>. Please arrange payment as soon as possible to avoid any service interruptions.`
+    : `Your invoice is due in <strong>${data.daysUntilDue} day${data.daysUntilDue === 1 ? "" : "s"}</strong>. Please arrange payment before the due date.`;
 
-  const body = greeting(data.clientName) +
-    `<div style="background:${isOverdue ? '#fef2f2' : '#fffbeb'};border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid ${isOverdue ? '#ef4444' : '#f59e0b'};">
-      <p style="color:${isOverdue ? '#991b1b' : '#92400e'};font-size:14px;margin:0;">${urgencyText}</p>
+  const body =
+    greeting(data.clientName) +
+    `<div style="background:${isOverdue ? "#fef2f2" : "#fffbeb"};border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid ${isOverdue ? "#ef4444" : "#f59e0b"};">
+      <p style="color:${isOverdue ? "#991b1b" : "#92400e"};font-size:14px;margin:0;">${urgencyText}</p>
     </div>` +
     infoBox(
-      infoRow('Invoice #', data.invoiceNumber) +
-      infoRow('Provider', data.providerName) +
-      infoRow('Due Date', data.dueDate) +
-      `<div style="display:flex;justify-content:space-between;padding-top:12px;border-top:1px solid #e5e7eb;">
+      infoRow("Invoice #", data.invoiceNumber) +
+        infoRow("Provider", data.providerName) +
+        infoRow("Due Date", data.dueDate) +
+        `<div style="display:flex;justify-content:space-between;padding-top:12px;border-top:1px solid #e5e7eb;">
         <span style="color:#6b7280;font-size:14px;">Amount Due</span>
-        <span style="color:${isOverdue ? '#ef4444' : '#38AE5F'};font-weight:700;font-size:20px;">${fmtUsd(data.amount)}</span>
-      </div>`
+        <span style="color:${isOverdue ? "#ef4444" : "#38AE5F"};font-weight:700;font-size:20px;">${fmtUsd(data.amount)}</span>
+      </div>`,
     ) +
     (data.paymentLink
       ? `<a href="${data.paymentLink}" style="display:block;background:#38AE5F;color:#fff;text-align:center;padding:16px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;margin-bottom:24px;">Pay Now</a>`
-      : '') +
+      : "") +
     appDownloadSection();
 
   const subject = isOverdue
     ? `Overdue: Invoice ${data.invoiceNumber} from ${data.providerName}`
-    : `Reminder: Invoice ${data.invoiceNumber} due in ${data.daysUntilDue} day${data.daysUntilDue === 1 ? '' : 's'}`;
+    : `Reminder: Invoice ${data.invoiceNumber} due in ${data.daysUntilDue} day${data.daysUntilDue === 1 ? "" : "s"}`;
 
-  return sendEmail(data.clientEmail, subject, buildEmailBase('Invoice Reminder', body));
+  return sendEmail(
+    data.clientEmail,
+    subject,
+    buildEmailBase("Invoice Reminder", body),
+  );
 }
 
 interface PaymentReceiptData {
@@ -472,36 +605,47 @@ interface PaymentReceiptData {
   paymentMethod?: string;
 }
 
-export async function sendPaymentReceiptEmail(data: PaymentReceiptData): Promise<SendResult> {
-  const body = greeting(data.clientName) +
+export async function sendPaymentReceiptEmail(
+  data: PaymentReceiptData,
+): Promise<SendResult> {
+  const body =
+    greeting(data.clientName) +
     `<div style="text-align:center;margin-bottom:24px;">
       <div style="width:60px;height:60px;background:#f0fdf4;border-radius:50%;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;">
         <div style="font-size:28px;color:#38AE5F;">&#10003;</div>
       </div>
       <p style="color:#166534;font-weight:600;margin:0;">Payment confirmed</p>
     </div>` +
-    paragraph('Thank you for your payment! This email confirms we\'ve received your payment for the following:') +
+    paragraph(
+      "Thank you for your payment! This email confirms we've received your payment for the following:",
+    ) +
     infoBox(
-      infoRow('Invoice #', data.invoiceNumber) +
-      infoRow('Payment Date', data.paymentDate) +
-      infoRow('Provider', data.providerName) +
-      (data.paymentMethod ? infoRow('Payment Method', data.paymentMethod) : '') +
-      `<div style="display:flex;justify-content:space-between;padding-top:12px;border-top:1px solid #e5e7eb;">
+      infoRow("Invoice #", data.invoiceNumber) +
+        infoRow("Payment Date", data.paymentDate) +
+        infoRow("Provider", data.providerName) +
+        (data.paymentMethod
+          ? infoRow("Payment Method", data.paymentMethod)
+          : "") +
+        `<div style="display:flex;justify-content:space-between;padding-top:12px;border-top:1px solid #e5e7eb;">
         <span style="color:#6b7280;font-size:14px;">Amount Paid</span>
         <span style="color:#38AE5F;font-weight:700;font-size:20px;">${fmtUsd(data.amount)}</span>
-      </div>`
+      </div>`,
     ) +
-    paragraph(`Keep this email as your receipt. If you have any questions about this payment, please contact ${data.providerName} directly.`) +
+    paragraph(
+      `Keep this email as your receipt. If you have any questions about this payment, please contact ${data.providerName} directly.`,
+    ) +
     appDownloadSection();
 
   return sendEmail(
     data.clientEmail,
     `Payment Receipt &ndash; ${fmtUsd(data.amount)} to ${data.providerName}`,
-    buildEmailBase('Payment Receipt', body)
+    buildEmailBase("Payment Receipt", body),
   );
 }
 
-export async function sendInvoicePaidEmail(data: PaymentReceiptData): Promise<SendResult> {
+export async function sendInvoicePaidEmail(
+  data: PaymentReceiptData,
+): Promise<SendResult> {
   return sendPaymentReceiptEmail(data);
 }
 
@@ -513,28 +657,31 @@ export async function sendPaymentFailedEmail(data: {
   amount: number;
   paymentLink?: string;
 }): Promise<SendResult> {
-  const body = greeting(data.clientName) +
+  const body =
+    greeting(data.clientName) +
     `<div style="background:#fef2f2;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #ef4444;">
       <p style="color:#991b1b;font-size:14px;margin:0;"><strong>Payment failed.</strong> We were unable to process your payment for invoice ${data.invoiceNumber}.</p>
     </div>` +
     infoBox(
-      infoRow('Invoice #', data.invoiceNumber) +
-      infoRow('Provider', data.providerName) +
-      `<div style="display:flex;justify-content:space-between;padding-top:12px;border-top:1px solid #e5e7eb;">
+      infoRow("Invoice #", data.invoiceNumber) +
+        infoRow("Provider", data.providerName) +
+        `<div style="display:flex;justify-content:space-between;padding-top:12px;border-top:1px solid #e5e7eb;">
         <span style="color:#6b7280;font-size:14px;">Amount Due</span>
         <span style="color:#ef4444;font-weight:700;font-size:20px;">${fmtUsd(data.amount)}</span>
-      </div>`
+      </div>`,
     ) +
-    paragraph('Please update your payment method and try again. If you need assistance, contact your service provider directly.') +
+    paragraph(
+      "Please update your payment method and try again. If you need assistance, contact your service provider directly.",
+    ) +
     (data.paymentLink
       ? `<a href="${data.paymentLink}" style="display:block;background:#38AE5F;color:#fff;text-align:center;padding:16px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;margin-bottom:24px;">Retry Payment</a>`
-      : '') +
+      : "") +
     appDownloadSection();
 
   return sendEmail(
     data.clientEmail,
     `Payment Failed: Invoice ${data.invoiceNumber} from ${data.providerName}`,
-    buildEmailBase('Payment Failed', body)
+    buildEmailBase("Payment Failed", body),
   );
 }
 
@@ -547,57 +694,108 @@ export async function sendReviewRequestEmail(data: {
   serviceName: string;
   reviewUrl?: string;
 }): Promise<SendResult> {
-  const body = greeting(data.clientName) +
-    paragraph(`Thank you for choosing ${data.providerName} for your ${data.serviceName}! We hope everything went smoothly. Your feedback helps other homeowners find great service providers.`) +
-    paragraph('Would you mind leaving a quick review? It only takes a minute and means a lot to your provider.') +
+  const body =
+    greeting(data.clientName) +
+    paragraph(
+      `Thank you for choosing ${data.providerName} for your ${data.serviceName}! We hope everything went smoothly. Your feedback helps other homeowners find great service providers.`,
+    ) +
+    paragraph(
+      "Would you mind leaving a quick review? It only takes a minute and means a lot to your provider.",
+    ) +
     appDownloadSection();
   return sendEmail(
     data.clientEmail,
     `How did your ${data.serviceName} go? Leave a review for ${data.providerName}`,
-    buildEmailBase('Leave a Review', body, data.reviewUrl ? 'Leave a Review' : undefined, data.reviewUrl)
+    buildEmailBase(
+      "Leave a Review",
+      body,
+      data.reviewUrl ? "Leave a Review" : undefined,
+      data.reviewUrl,
+    ),
   );
 }
 
 // ─── Platform alert templates ──────────────────────────────────────────────────
 
-export async function sendStripeOnboardingNeededEmail(to: string, providerName: string, onboardingUrl: string): Promise<SendResult> {
-  const body = greeting(providerName) +
-    paragraph('To start accepting online payments through HomeBase, you need to complete your Stripe payout account setup. This takes about 5 minutes.') +
+export async function sendStripeOnboardingNeededEmail(
+  to: string,
+  providerName: string,
+  onboardingUrl: string,
+): Promise<SendResult> {
+  const body =
+    greeting(providerName) +
+    paragraph(
+      "To start accepting online payments through HomeBase, you need to complete your Stripe payout account setup. This takes about 5 minutes.",
+    ) +
     `<ul style="color:#6b7280;font-size:14px;line-height:1.8;padding-left:20px;margin:0 0 20px;">
       <li>Accept card payments from clients</li>
       <li>Receive automatic payouts to your bank account</li>
       <li>Issue refunds directly from HomeBase</li>
     </ul>`;
-  return sendEmail(to, 'Complete your payout setup to get paid faster', buildEmailBase('Set Up Payouts', body, 'Set Up Stripe Payouts', onboardingUrl));
+  return sendEmail(
+    to,
+    "Complete your payout setup to get paid faster",
+    buildEmailBase(
+      "Set Up Payouts",
+      body,
+      "Set Up Stripe Payouts",
+      onboardingUrl,
+    ),
+  );
 }
 
-export async function sendStripeConnectedEmail(to: string, providerName: string): Promise<SendResult> {
-  const body = greeting(providerName) +
-    paragraph('Your Stripe payout account has been successfully connected to HomeBase. You can now accept online payments from clients and receive payouts directly to your bank account.') +
+export async function sendStripeConnectedEmail(
+  to: string,
+  providerName: string,
+): Promise<SendResult> {
+  const body =
+    greeting(providerName) +
+    paragraph(
+      "Your Stripe payout account has been successfully connected to HomeBase. You can now accept online payments from clients and receive payouts directly to your bank account.",
+    ) +
     `<div style="background:#f0fdf4;border-radius:8px;padding:16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
       <p style="color:#166534;font-weight:600;margin:0;">Payments are now active</p>
       <p style="color:#15803d;font-size:13px;margin:6px 0 0;">Send invoices with &ldquo;Pay Now&rdquo; links and get paid faster.</p>
     </div>` +
     appDownloadSection();
-  return sendEmail(to, 'Your Stripe payout account is connected', buildEmailBase('Payouts Connected', body));
+  return sendEmail(
+    to,
+    "Your Stripe payout account is connected",
+    buildEmailBase("Payouts Connected", body),
+  );
 }
 
 // ─── Subscription gating templates ─────────────────────────────────────────────
 
-const SUBSCRIBE_URL = 'https://homebaseproapp.com/subscribe';
+// Open the in-app Subscription screen via the app's deep-link scheme. Users
+// on iOS and Android subscribe in-app via Apple/Google IAP; users on the web
+// version subscribe via Stripe Checkout from the in-app subscribe page.
+const SUBSCRIBE_DEEP_LINK = "homebase://Subscription";
 
 export async function sendSubscriptionGraceStartEmail(data: {
   to: string;
   providerName: string;
 }): Promise<SendResult> {
-  const body = greeting(data.providerName) +
-    paragraph('Congratulations on your first paid booking through HomeBase! That moment is the start of a real business — and we are here to help you grow it.') +
+  const body =
+    greeting(data.providerName) +
+    paragraph(
+      "Congratulations on your first paid booking through HomeBase! That moment is the start of a real business — and we are here to help you grow it.",
+    ) +
     `<div style="background:#f0fdf4;border-radius:8px;padding:16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
       <p style="color:#166534;font-weight:600;margin:0 0 6px;">Your 7-day trial just started</p>
-      <p style="color:#15803d;font-size:13px;margin:0;">Keep using every feature for the next 7 days. Subscribe any time at homebaseproapp.com to keep creating jobs and sending invoices after that.</p>
+      <p style="color:#15803d;font-size:13px;margin:0;">Keep using every feature for the next 7 days. Open the HomeBase app any time to subscribe and keep creating jobs and sending invoices after that.</p>
     </div>` +
     appDownloadSection();
-  return sendEmail(data.to, 'Your first paid booking — your trial just started', buildEmailBase('Welcome to HomeBase Pro', body, 'Subscribe at homebaseproapp.com', SUBSCRIBE_URL));
+  return sendEmail(
+    data.to,
+    "Your first paid booking — your trial just started",
+    buildEmailBase(
+      "Welcome to HomeBase Pro",
+      body,
+      "Open HomeBase to subscribe",
+      SUBSCRIBE_DEEP_LINK,
+    ),
+  );
 }
 
 export async function sendSubscriptionGraceReminderEmail(data: {
@@ -605,24 +803,51 @@ export async function sendSubscriptionGraceReminderEmail(data: {
   providerName: string;
   daysRemaining: number;
 }): Promise<SendResult> {
-  const dayLabel = data.daysRemaining === 1 ? '1 day' : `${data.daysRemaining} days`;
-  const body = greeting(data.providerName) +
-    paragraph(`You have ${dayLabel} left in your HomeBase trial. After that, creating jobs and sending invoices will pause until you subscribe.`) +
+  const dayLabel =
+    data.daysRemaining === 1 ? "1 day" : `${data.daysRemaining} days`;
+  const body =
+    greeting(data.providerName) +
+    paragraph(
+      `You have ${dayLabel} left in your HomeBase trial. After that, creating jobs and sending invoices will pause until you subscribe.`,
+    ) +
     `<div style="background:#fffbeb;border-radius:8px;padding:16px;margin-bottom:20px;border-left:4px solid #f59e0b;">
       <p style="color:#92400e;font-weight:600;margin:0 0 6px;">Keep your business running</p>
-      <p style="color:#92400e;font-size:13px;margin:0;">Subscribe at homebaseproapp.com to keep using every HomeBase feature without interruption.</p>
+      <p style="color:#92400e;font-size:13px;margin:0;">Open the HomeBase app and subscribe to keep using every feature without interruption.</p>
     </div>`;
-  return sendEmail(data.to, `${dayLabel} left in your HomeBase trial`, buildEmailBase('Trial Ending Soon', body, 'Subscribe at homebaseproapp.com', SUBSCRIBE_URL));
+  return sendEmail(
+    data.to,
+    `${dayLabel} left in your HomeBase trial`,
+    buildEmailBase(
+      "Trial Ending Soon",
+      body,
+      "Open HomeBase to subscribe",
+      SUBSCRIBE_DEEP_LINK,
+    ),
+  );
 }
 
 export async function sendSubscriptionExpiredEmail(data: {
   to: string;
   providerName: string;
 }): Promise<SendResult> {
-  const body = greeting(data.providerName) +
-    paragraph('Your 7-day HomeBase trial has ended. Job and invoice creation are paused until you subscribe.') +
-    paragraph('Your existing data, clients, and bookings are safe — subscribing reactivates everything immediately.');
-  return sendEmail(data.to, 'Your HomeBase trial has ended', buildEmailBase('Subscribe to Continue', body, 'Subscribe at homebaseproapp.com', SUBSCRIBE_URL));
+  const body =
+    greeting(data.providerName) +
+    paragraph(
+      "Your 7-day HomeBase trial has ended. Job and invoice creation are paused until you subscribe.",
+    ) +
+    paragraph(
+      "Your existing data, clients, and bookings are safe — subscribing reactivates everything immediately.",
+    );
+  return sendEmail(
+    data.to,
+    "Your HomeBase trial has ended",
+    buildEmailBase(
+      "Subscribe to Continue",
+      body,
+      "Open HomeBase to subscribe",
+      SUBSCRIBE_DEEP_LINK,
+    ),
+  );
 }
 
 // ─── Provider notifications ────────────────────────────────────────────────────
@@ -638,25 +863,41 @@ interface IntakeSubmissionNotificationData {
   bookingLinkName?: string;
 }
 
-export async function sendIntakeSubmissionNotification(data: IntakeSubmissionNotificationData): Promise<SendResult> {
-  const body = greeting(data.providerName) +
-    paragraph(`You've received a new service request via ${data.bookingLinkName || 'your booking page'}! Here are the details:`) +
+export async function sendIntakeSubmissionNotification(
+  data: IntakeSubmissionNotificationData,
+): Promise<SendResult> {
+  const body =
+    greeting(data.providerName) +
+    paragraph(
+      `You've received a new service request via ${data.bookingLinkName || "your booking page"}! Here are the details:`,
+    ) +
     infoBox(
       `<div style="margin-bottom:14px;">
         <span style="color:#6b7280;font-size:11px;text-transform:uppercase;font-weight:500;">Client</span>
         <p style="color:#111827;font-weight:600;margin:3px 0 0;font-size:15px;">${data.clientName}</p>
       </div>` +
-      (data.clientEmail ? `<div style="margin-bottom:14px;"><span style="color:#6b7280;font-size:11px;text-transform:uppercase;font-weight:500;">Email</span><p style="color:#111827;margin:3px 0 0;"><a href="mailto:${data.clientEmail}" style="color:#38AE5F;">${data.clientEmail}</a></p></div>` : '') +
-      (data.clientPhone ? `<div style="margin-bottom:14px;"><span style="color:#6b7280;font-size:11px;text-transform:uppercase;font-weight:500;">Phone</span><p style="color:#111827;margin:3px 0 0;"><a href="tel:${data.clientPhone}" style="color:#38AE5F;">${data.clientPhone}</a></p></div>` : '') +
-      (data.address ? `<div style="margin-bottom:14px;"><span style="color:#6b7280;font-size:11px;text-transform:uppercase;font-weight:500;">Address</span><p style="color:#111827;margin:3px 0 0;">${data.address}</p></div>` : '') +
-      `<div><span style="color:#6b7280;font-size:11px;text-transform:uppercase;font-weight:500;">Problem Description</span><p style="color:#111827;margin:3px 0 0;line-height:1.5;">${data.problemDescription}</p></div>`
+        (data.clientEmail
+          ? `<div style="margin-bottom:14px;"><span style="color:#6b7280;font-size:11px;text-transform:uppercase;font-weight:500;">Email</span><p style="color:#111827;margin:3px 0 0;"><a href="mailto:${data.clientEmail}" style="color:#38AE5F;">${data.clientEmail}</a></p></div>`
+          : "") +
+        (data.clientPhone
+          ? `<div style="margin-bottom:14px;"><span style="color:#6b7280;font-size:11px;text-transform:uppercase;font-weight:500;">Phone</span><p style="color:#111827;margin:3px 0 0;"><a href="tel:${data.clientPhone}" style="color:#38AE5F;">${data.clientPhone}</a></p></div>`
+          : "") +
+        (data.address
+          ? `<div style="margin-bottom:14px;"><span style="color:#6b7280;font-size:11px;text-transform:uppercase;font-weight:500;">Address</span><p style="color:#111827;margin:3px 0 0;">${data.address}</p></div>`
+          : "") +
+        `<div><span style="color:#6b7280;font-size:11px;text-transform:uppercase;font-weight:500;">Problem Description</span><p style="color:#111827;margin:3px 0 0;line-height:1.5;">${data.problemDescription}</p></div>`,
     ) +
-    paragraph('Respond quickly to increase your chances of winning this job.');
+    paragraph("Respond quickly to increase your chances of winning this job.");
 
   return sendEmail(
     data.providerEmail,
-    `New Lead: ${data.clientName} &ndash; ${data.problemDescription.substring(0, 50)}${data.problemDescription.length > 50 ? '...' : ''}`,
-    buildEmailBase('New Lead Received', body, 'View in HomeBase', 'https://homebaseproapp.com')
+    `New Lead: ${data.clientName} &ndash; ${data.problemDescription.substring(0, 50)}${data.problemDescription.length > 50 ? "..." : ""}`,
+    buildEmailBase(
+      "New Lead Received",
+      body,
+      "View in HomeBase",
+      "https://homebaseproapp.com",
+    ),
   );
 }
 
@@ -675,21 +916,29 @@ export async function sendProviderBookingNotificationEmail(data: {
         <p style="color:#166534;font-weight:600;font-size:13px;margin:0 0 6px;">Client's Issue</p>
         <p style="color:#15803d;font-size:13px;margin:0;line-height:1.5;">${data.description}</p>
       </div>`
-    : '';
-  const body = greeting(data.providerName) +
-    paragraph(`${data.clientName} has booked a ${data.serviceName} with you. Here are the details:`) +
+    : "";
+  const body =
+    greeting(data.providerName) +
+    paragraph(
+      `${data.clientName} has booked a ${data.serviceName} with you. Here are the details:`,
+    ) +
     infoBox(
-      infoRow('Client', data.clientName) +
-      infoRow('Service', data.serviceName) +
-      infoRow('Date', data.appointmentDate) +
-      infoRow('Time', data.appointmentTime) +
-      (data.address ? infoRow('Location', data.address) : '')
+      infoRow("Client", data.clientName) +
+        infoRow("Service", data.serviceName) +
+        infoRow("Date", data.appointmentDate) +
+        infoRow("Time", data.appointmentTime) +
+        (data.address ? infoRow("Location", data.address) : ""),
     ) +
     issueSection;
   return sendEmail(
     data.providerEmail,
     `New Booking: ${data.serviceName} with ${data.clientName}`,
-    buildEmailBase('New Booking', body, 'View in HomeBase', 'https://homebaseproapp.com')
+    buildEmailBase(
+      "New Booking",
+      body,
+      "View in HomeBase",
+      "https://homebaseproapp.com",
+    ),
   );
 }
 
@@ -707,33 +956,47 @@ export async function sendProviderScheduledJobEmail(data: {
   description?: string;
   serviceDescription?: string;
   pricingType?: string;
-  addOns?: Array<{ name: string; price: number }>;
+  addOns?: { name: string; price: number }[];
 }): Promise<SendResult> {
-  const priceLabel = data.pricingType === 'variable' ? 'Starting At' : data.pricingType === 'quote' || data.pricingType === 'by_quote' ? 'Pricing' : 'Est. Price';
-  const isQuoteType = data.pricingType === 'quote' || data.pricingType === 'by_quote';
+  const priceLabel =
+    data.pricingType === "variable"
+      ? "Starting At"
+      : data.pricingType === "quote" || data.pricingType === "by_quote"
+        ? "Pricing"
+        : "Est. Price";
+  const isQuoteType =
+    data.pricingType === "quote" || data.pricingType === "by_quote";
   const priceRow = data.estimatedPrice
-    ? infoRow(priceLabel, fmtUsd(typeof data.estimatedPrice === 'string' ? parseFloat(data.estimatedPrice) : data.estimatedPrice))
+    ? infoRow(
+        priceLabel,
+        fmtUsd(
+          typeof data.estimatedPrice === "string"
+            ? parseFloat(data.estimatedPrice)
+            : data.estimatedPrice,
+        ),
+      )
     : isQuoteType
-      ? infoRow('Pricing', 'Quote provided after review')
-      : '';
+      ? infoRow("Pricing", "Quote provided after review")
+      : "";
   const issueSection = data.description
     ? `<div style="background:#f0fdf4;border-radius:8px;padding:16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
         <p style="color:#166534;font-weight:600;font-size:13px;margin:0 0 6px;">Your Issue / Request</p>
         <p style="color:#15803d;font-size:13px;margin:0;line-height:1.5;">${data.description}</p>
       </div>`
-    : '';
-  const addOnsSection = data.addOns && data.addOns.length > 0
-    ? `<div style="background:#f9fafb;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
+    : "";
+  const addOnsSection =
+    data.addOns && data.addOns.length > 0
+      ? `<div style="background:#f9fafb;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
         <p style="color:#374151;font-weight:600;font-size:13px;margin:0 0 8px;">Add-ons Included</p>
-        ${data.addOns.map(a => `<div style="display:flex;justify-content:space-between;color:#6b7280;font-size:13px;padding:3px 0;"><span>&bull; ${a.name}</span><span>${fmtUsd(a.price)}</span></div>`).join('')}
+        ${data.addOns.map((a) => `<div style="display:flex;justify-content:space-between;color:#6b7280;font-size:13px;padding:3px 0;"><span>&bull; ${a.name}</span><span>${fmtUsd(a.price)}</span></div>`).join("")}
       </div>`
-    : '';
+      : "";
   const serviceDescSection = data.serviceDescription
     ? `<div style="background:#f9fafb;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
         <p style="color:#374151;font-weight:600;font-size:13px;margin:0 0 6px;">About This Service</p>
         <p style="color:#6b7280;font-size:13px;margin:0;line-height:1.5;">${data.serviceDescription}</p>
       </div>`
-    : '';
+    : "";
   const nextSteps = `<div style="background:#f0fdf4;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
     <p style="color:#166534;font-weight:600;font-size:13px;margin:0 0 8px;">What to Expect</p>
     <div style="color:#15803d;font-size:13px;line-height:1.6;">
@@ -743,9 +1006,15 @@ export async function sendProviderScheduledJobEmail(data: {
     </div>
   </div>`;
   const contactRows = [
-    data.providerPhone ? `<span style="color:#6b7280;font-size:13px;">${data.providerPhone}</span>` : '',
-    data.providerEmail ? `<span style="color:#6b7280;font-size:13px;">${data.providerEmail}</span>` : '',
-  ].filter(Boolean).join(' &bull; ');
+    data.providerPhone
+      ? `<span style="color:#6b7280;font-size:13px;">${data.providerPhone}</span>`
+      : "",
+    data.providerEmail
+      ? `<span style="color:#6b7280;font-size:13px;">${data.providerEmail}</span>`
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" &bull; ");
   const contactSection = contactRows
     ? `<div style="background:#fffbeb;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #f59e0b;">
         <p style="color:#92400e;font-size:13px;margin:0 0 4px;"><strong>Need to reschedule?</strong></p>
@@ -754,15 +1023,18 @@ export async function sendProviderScheduledJobEmail(data: {
     : `<div style="background:#fffbeb;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #f59e0b;">
         <p style="color:#92400e;font-size:13px;margin:0;"><strong>Need to reschedule?</strong> Contact ${data.providerName} at least 24 hours before your appointment.</p>
       </div>`;
-  const body = greeting(data.clientName) +
-    paragraph(`Your appointment has been confirmed by <strong>${data.providerName}</strong>. Here are the details:`) +
+  const body =
+    greeting(data.clientName) +
+    paragraph(
+      `Your appointment has been confirmed by <strong>${data.providerName}</strong>. Here are the details:`,
+    ) +
     infoBox(
-      infoRow('Service', data.serviceName) +
-      infoRow('Provider', data.providerName) +
-      infoRow('Date', data.scheduledDate) +
-      (data.scheduledTime ? infoRow('Time', data.scheduledTime) : '') +
-      (data.address ? infoRow('Location', data.address) : '') +
-      priceRow
+      infoRow("Service", data.serviceName) +
+        infoRow("Provider", data.providerName) +
+        infoRow("Date", data.scheduledDate) +
+        (data.scheduledTime ? infoRow("Time", data.scheduledTime) : "") +
+        (data.address ? infoRow("Location", data.address) : "") +
+        priceRow,
     ) +
     issueSection +
     addOnsSection +
@@ -773,7 +1045,7 @@ export async function sendProviderScheduledJobEmail(data: {
   return sendEmail(
     data.clientEmail,
     `Your ${data.serviceName} appointment is confirmed with ${data.providerName}`,
-    buildEmailBase('Appointment Confirmed', body)
+    buildEmailBase("Appointment Confirmed", body),
   );
 }
 
@@ -787,51 +1059,56 @@ export async function sendJobStatusChangedEmail(data: {
   notes?: string;
 }): Promise<SendResult> {
   const statusLabel: Record<string, string> = {
-    scheduled: 'Scheduled',
-    confirmed: 'Confirmed',
-    on_my_way: 'On The Way',
-    arrived: 'Arrived',
-    in_progress: 'In Progress',
-    completed: 'Completed',
-    cancelled: 'Cancelled',
-    on_hold: 'On Hold',
+    scheduled: "Scheduled",
+    confirmed: "Confirmed",
+    on_my_way: "On The Way",
+    arrived: "Arrived",
+    in_progress: "In Progress",
+    completed: "Completed",
+    cancelled: "Cancelled",
+    on_hold: "On Hold",
   };
 
-  type StepCopy = { subject: string; headline: string; lead: string; closing: string };
+  type StepCopy = {
+    subject: string;
+    headline: string;
+    lead: string;
+    closing: string;
+  };
   const stepCopy: Record<string, StepCopy> = {
     confirmed: {
       subject: `Your ${data.serviceName} appointment is confirmed`,
-      headline: 'Appointment Confirmed',
+      headline: "Appointment Confirmed",
       lead: `Good news — ${data.providerName} has confirmed your ${data.serviceName} appointment. We'll send you a heads-up when they're on their way.`,
       closing: `You can view full details or reach out to ${data.providerName} any time from the HomeBase app.`,
     },
     on_my_way: {
       subject: `${data.providerName} is on the way`,
-      headline: 'On The Way',
+      headline: "On The Way",
       lead: `${data.providerName} has just left and is heading to your appointment for ${data.serviceName}. They should be with you shortly.`,
       closing: `If you need to reach them before they arrive, you can message directly in the HomeBase app.`,
     },
     arrived: {
       subject: `${data.providerName} has arrived`,
-      headline: 'Your Provider Has Arrived',
+      headline: "Your Provider Has Arrived",
       lead: `${data.providerName} has arrived for your ${data.serviceName} appointment.`,
       closing: `If you're not at the property, you can reach them from the HomeBase app.`,
     },
     in_progress: {
       subject: `Work has started on your ${data.serviceName}`,
-      headline: 'Work In Progress',
+      headline: "Work In Progress",
       lead: `${data.providerName} has started working on your ${data.serviceName}. We'll let you know when the job is complete.`,
       closing: `Any questions along the way? Reach out from the HomeBase app.`,
     },
     completed: {
       subject: `Your ${data.serviceName} is complete`,
-      headline: 'Service Complete',
+      headline: "Service Complete",
       lead: `${data.providerName} has finished your ${data.serviceName}. Thank you for booking with HomeBase!`,
       closing: `You can review the visit, pay any open invoice, or rebook ${data.providerName} any time from the HomeBase app.`,
     },
     cancelled: {
       subject: `Your ${data.serviceName} appointment was cancelled`,
-      headline: 'Appointment Cancelled',
+      headline: "Appointment Cancelled",
       lead: `Your ${data.serviceName} appointment with ${data.providerName} has been cancelled.`,
       closing: `If this wasn't expected, please reach out to ${data.providerName} through the HomeBase app.`,
     },
@@ -840,25 +1117,36 @@ export async function sendJobStatusChangedEmail(data: {
   const copy = stepCopy[data.newStatus];
   const label = statusLabel[data.newStatus] ?? data.newStatus;
 
-  const headline = copy?.headline ?? 'Job Status Update';
-  const subject = copy?.subject ?? `Job Update: ${data.serviceName} is now ${label}`;
-  const lead = copy?.lead ?? `The status of your ${data.serviceName} job with ${data.providerName} has been updated to ${label}.`;
-  const closing = copy?.closing ?? `If you have any questions, please reach out through the HomeBase app.`;
+  const headline = copy?.headline ?? "Job Status Update";
+  const subject =
+    copy?.subject ?? `Job Update: ${data.serviceName} is now ${label}`;
+  const lead =
+    copy?.lead ??
+    `The status of your ${data.serviceName} job with ${data.providerName} has been updated to ${label}.`;
+  const closing =
+    copy?.closing ??
+    `If you have any questions, please reach out through the HomeBase app.`;
 
-  const body = greeting(data.clientName) +
+  const body =
+    greeting(data.clientName) +
     paragraph(lead) +
     (data.scheduledDate || data.notes
       ? infoBox(
-          (data.scheduledDate ? infoRow('Scheduled', data.scheduledDate) : '') +
-          (data.notes ? infoRow('Notes', data.notes) : '')
+          (data.scheduledDate ? infoRow("Scheduled", data.scheduledDate) : "") +
+            (data.notes ? infoRow("Notes", data.notes) : ""),
         )
-      : '') +
+      : "") +
     paragraph(closing);
 
   return sendEmail(
     data.clientEmail,
     subject,
-    buildEmailBase(headline, body, 'View in HomeBase', 'https://homebaseproapp.com')
+    buildEmailBase(
+      headline,
+      body,
+      "View in HomeBase",
+      "https://homebaseproapp.com",
+    ),
   );
 }
 
@@ -877,13 +1165,23 @@ export async function sendRebookingNudgeEmail(data: {
   serviceName: string;
   rebookLink?: string;
 }): Promise<SendResult> {
-  const body = greeting(data.clientName) +
-    paragraph(`Great news — your ${data.serviceName} with ${data.providerName} is complete! Ready to schedule your next visit?`) +
-    paragraph(`Keeping up with regular maintenance can save you money in the long run. Book ${data.providerName} again in just a few taps.`);
+  const body =
+    greeting(data.clientName) +
+    paragraph(
+      `Great news — your ${data.serviceName} with ${data.providerName} is complete! Ready to schedule your next visit?`,
+    ) +
+    paragraph(
+      `Keeping up with regular maintenance can save you money in the long run. Book ${data.providerName} again in just a few taps.`,
+    );
   return sendEmail(
     data.clientEmail,
     `Your service is complete — book ${data.providerName} again?`,
-    buildEmailBase('Service Complete', body, 'Book Again', data.rebookLink || 'https://homebaseproapp.com')
+    buildEmailBase(
+      "Service Complete",
+      body,
+      "Book Again",
+      data.rebookLink || "https://homebaseproapp.com",
+    ),
   );
 }
 
@@ -900,51 +1198,61 @@ export async function sendSupportTicketEmail(data: {
   try {
     const { client, fromEmail } = await getResendClient();
 
-    const body = greeting(data.name) +
-      paragraph(`Thank you for reaching out to HomeBase support. We've received your message and will respond within 24 hours. Here's a copy of your submission:`) +
-      infoBox(
-        infoRow('Ticket ID', data.ticketId.slice(0, 8).toUpperCase()) +
-        infoRow('Name', data.name) +
-        infoRow('Email', data.email) +
-        infoRow('Category', data.category) +
-        infoRow('Subject', data.subject) +
-        `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb;">
-          <span style="color:#6b7280;font-size:14px;">Message</span>
-          <p style="color:#111827;font-size:14px;line-height:1.6;margin:6px 0 0;">${data.message.replace(/\n/g, '<br/>')}</p>
-        </div>`
+    const body =
+      greeting(data.name) +
+      paragraph(
+        `Thank you for reaching out to HomeBase support. We've received your message and will respond within 24 hours. Here's a copy of your submission:`,
       ) +
-      paragraph('Our support team will review your request and reply to this email address. If your issue is urgent, please include "URGENT" in any follow-up replies.') +
+      infoBox(
+        infoRow("Ticket ID", data.ticketId.slice(0, 8).toUpperCase()) +
+          infoRow("Name", data.name) +
+          infoRow("Email", data.email) +
+          infoRow("Category", data.category) +
+          infoRow("Subject", data.subject) +
+          `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb;">
+          <span style="color:#6b7280;font-size:14px;">Message</span>
+          <p style="color:#111827;font-size:14px;line-height:1.6;margin:6px 0 0;">${data.message.replace(/\n/g, "<br/>")}</p>
+        </div>`,
+      ) +
+      paragraph(
+        'Our support team will review your request and reply to this email address. If your issue is urgent, please include "URGENT" in any follow-up replies.',
+      ) +
       `<div style="background:#f0fdf4;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
         <p style="color:#166534;font-size:13px;margin:0;"><strong>Support email:</strong> support@homebaseproapp.com</p>
       </div>`;
 
-    const html = buildEmailBase('Support Request Received', body);
+    const html = buildEmailBase("Support Request Received", body);
 
     const result = await client.emails.send({
-      from: fromEmail || 'HomeBase <noreply@resend.dev>',
-      to: 'support@homebaseproapp.com',
+      from: fromEmail || "HomeBase <noreply@resend.dev>",
+      to: "support@homebaseproapp.com",
       cc: data.email,
       subject: `[Support #${data.ticketId.slice(0, 8).toUpperCase()}] ${data.category}: ${data.subject}`,
       html,
     });
 
     if (result.error) {
-      console.error('Resend error:', result.error);
+      console.error("Resend error:", result.error);
       return { success: false, error: result.error.message };
     }
 
     return { success: true, messageId: result.data?.id };
   } catch (err: any) {
-    console.error('sendSupportTicketEmail error:', err);
-    return { success: false, error: err.message || 'Failed to send support email' };
+    console.error("sendSupportTicketEmail error:", err);
+    return {
+      success: false,
+      error: err.message || "Failed to send support email",
+    };
   }
 }
 
-export async function sendProviderClientMessage(data: ProviderClientMessageData): Promise<{ success: boolean; messageId?: string; error?: string }> {
+export async function sendProviderClientMessage(
+  data: ProviderClientMessageData,
+): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
     const { client, fromEmail } = await getResendClient();
 
-    const bodyHtml = data.body.replace(/\n/g, '<br/>');
+    const bodyHtml = data.body.replace(/\n/g, "<br/>");
 
     const html = `
       <!DOCTYPE html>
@@ -989,20 +1297,20 @@ export async function sendProviderClientMessage(data: ProviderClientMessageData)
     `;
 
     const result = await client.emails.send({
-      from: fromEmail || 'HomeBase <noreply@resend.dev>',
+      from: fromEmail || "HomeBase <noreply@resend.dev>",
       to: data.clientEmail,
       subject: data.subject || `Message from ${data.providerName}`,
-      html
+      html,
     });
 
     if (result.error) {
-      console.error('Resend error:', result.error);
+      console.error("Resend error:", result.error);
       return { success: false, error: result.error.message };
     }
 
     return { success: true, messageId: result.data?.id };
   } catch (error: any) {
-    console.error('Send provider client message error:', error);
-    return { success: false, error: error.message || 'Failed to send message' };
+    console.error("Send provider client message error:", error);
+    return { success: false, error: error.message || "Failed to send message" };
   }
 }

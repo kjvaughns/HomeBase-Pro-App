@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   StyleSheet,
   View,
@@ -7,6 +7,8 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Linking,
+  Platform,
 } from "react-native";
 import { openExternalUrl } from "@/lib/openExternalUrl";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -19,26 +21,146 @@ import { useTheme } from "@/hooks/useTheme";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 import { apiRequest } from "@/lib/query-client";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
+import {
+  isPurchasesAvailable,
+  getProOffering,
+  purchasePackage,
+  restorePurchases,
+  getManageSubscriptionUrl,
+  isProEntitled,
+  type PurchasesOffering,
+  type PurchasesPackage,
+} from "@/lib/revenuecat";
 
-interface StateContent {
+const PRIVACY_URL = "https://homebaseproapp.com/privacy";
+const TERMS_URL = "https://homebaseproapp.com/terms";
+
+type StateKey = "free" | "grace_period" | "expired" | "subscribed";
+
+interface CopyForState {
   iconName: keyof typeof Feather.glyphMap;
   iconBg: string;
   iconColor: string;
   title: string;
   body: string;
-  cta: string;
   caption?: string;
-  action: "subscribe" | "manage";
 }
 
 export default function SubscriptionScreen() {
   const { theme, isDark } = useTheme();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
-  const { data, isLoading, refetch, isFetching, status, daysRemainingInGrace } =
-    useSubscriptionStatus();
+  const {
+    data,
+    isLoading,
+    refetch,
+    isFetching,
+    status,
+    daysRemainingInGrace,
+    isSubscribed,
+  } = useSubscriptionStatus();
   const [busy, setBusy] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [offering, setOffering] = useState<PurchasesOffering | null>(null);
+  const [offeringError, setOfferingError] = useState<string | null>(null);
+  const [loadingOffering, setLoadingOffering] = useState(false);
 
+  const useIAP = isPurchasesAvailable();
+
+  // Load the current RevenueCat offering on mount (native only).
+  useEffect(() => {
+    if (!useIAP) return;
+    let cancelled = false;
+    setLoadingOffering(true);
+    getProOffering()
+      .then((current) => {
+        if (cancelled) return;
+        setOffering(current);
+        if (!current) {
+          setOfferingError(
+            "Subscriptions are temporarily unavailable. Please try again in a moment.",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingOffering(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [useIAP]);
+
+  const proPackage: PurchasesPackage | null =
+    offering?.monthly ?? offering?.availablePackages?.[0] ?? null;
+  const priceLabel = proPackage?.product?.priceString || "$29.99/mo";
+
+  // ─── Native (iOS/Android) IAP actions ────────────────────────────────────────
+  const handleNativeSubscribe = useCallback(async () => {
+    if (busy) return;
+    if (!proPackage) {
+      Alert.alert(
+        "Subscriptions unavailable",
+        "We couldn't load the subscription. Please check your connection and try again.",
+      );
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await purchasePackage(proPackage);
+      if (result.success && isProEntitled(result.customerInfo)) {
+        Alert.alert("Subscription active", "Welcome to HomeBase Pro!");
+      } else if (!result.success && !result.userCancelled) {
+        Alert.alert(
+          "Purchase failed",
+          result.errorMessage ||
+            "We couldn't complete the purchase. Please try again.",
+        );
+      }
+    } finally {
+      setBusy(false);
+      refetch();
+    }
+  }, [busy, proPackage, refetch]);
+
+  const handleRestore = useCallback(async () => {
+    if (restoring) return;
+    setRestoring(true);
+    try {
+      const result = await restorePurchases();
+      if (result.success && isProEntitled(result.customerInfo)) {
+        Alert.alert("Restored", "Your subscription has been restored.");
+      } else if (result.success) {
+        Alert.alert(
+          "No purchases found",
+          "We didn't find an active subscription on this account.",
+        );
+      } else {
+        Alert.alert(
+          "Restore failed",
+          result.errorMessage ||
+            "We couldn't restore your purchases. Please try again.",
+        );
+      }
+    } finally {
+      setRestoring(false);
+      refetch();
+    }
+  }, [restoring, refetch]);
+
+  const handleManageNative = useCallback(async () => {
+    try {
+      await Linking.openURL(getManageSubscriptionUrl());
+    } catch {
+      Alert.alert(
+        "Couldn't open settings",
+        Platform.OS === "ios"
+          ? "Open the Settings app to manage your Apple subscription."
+          : "Open the Play Store to manage your subscription.",
+      );
+    }
+  }, []);
+
+  // ─── Web (Stripe) actions ────────────────────────────────────────────────────
   const openStripeFlow = useCallback(
     async (action: "subscribe" | "manage") => {
       if (busy) return;
@@ -56,7 +178,9 @@ export default function SubscriptionScreen() {
         });
       } catch (err: any) {
         Alert.alert(
-          action === "subscribe" ? "Subscription error" : "Billing portal error",
+          action === "subscribe"
+            ? "Subscription error"
+            : "Billing portal error",
           err?.message || "Something went wrong. Please try again.",
         );
       } finally {
@@ -67,18 +191,21 @@ export default function SubscriptionScreen() {
     [busy, refetch],
   );
 
-  const content: StateContent = (() => {
-    switch (status) {
+  const stateKey: StateKey = (status as StateKey) ?? "free";
+  const copy: CopyForState = (() => {
+    switch (stateKey) {
       case "subscribed":
         return {
           iconName: "check-circle",
           iconBg: isDark ? "#1C2E24" : "#F0FAF4",
           iconColor: Colors.accent,
           title: "Subscription active",
-          body: "You're all set. Manage your card, download invoices, or cancel anytime.",
-          cta: "Manage subscription",
-          caption: "Thanks for being a HomeBase Pro.",
-          action: "manage",
+          body: "You're all set. Thanks for being a HomeBase Pro.",
+          caption: useIAP
+            ? Platform.OS === "ios"
+              ? "Manage or cancel anytime in your Apple ID subscription settings."
+              : "Manage or cancel anytime in the Google Play subscriptions screen."
+            : "Manage your card or cancel anytime from the billing portal.",
         };
       case "grace_period": {
         const days = daysRemainingInGrace ?? 7;
@@ -86,11 +213,12 @@ export default function SubscriptionScreen() {
           iconName: "clock",
           iconBg: isDark ? "#3a2f1a" : "#fffbeb",
           iconColor: "#b45309",
-          title: days === 1 ? "1 day left in your trial" : `${days} days left in your trial`,
+          title:
+            days === 1
+              ? "1 day left in your trial"
+              : `${days} days left in your trial`,
           body: "Subscribe to keep creating jobs and sending invoices after your trial ends.",
-          cta: "Subscribe — $29.99/mo",
           caption: "Your trial started with your first paid booking.",
-          action: "subscribe",
         };
       }
       case "expired":
@@ -100,8 +228,6 @@ export default function SubscriptionScreen() {
           iconColor: "#dc2626",
           title: "Trial ended",
           body: "Subscribe to reactivate job and invoice creation. Your existing data, clients, and bookings are safe.",
-          cta: "Subscribe — $29.99/mo",
-          action: "subscribe",
         };
       case "free":
       default:
@@ -110,12 +236,16 @@ export default function SubscriptionScreen() {
           iconBg: isDark ? "#1C2E24" : "#F0FAF4",
           iconColor: Colors.accent,
           title: "HomeBase is free until your first paid booking",
-          body: "Use every feature with no charge. Once you collect your first invoice, your 7-day trial begins.",
-          cta: "Subscribe early — $29.99/mo",
-          action: "subscribe",
+          body: "Use every feature with no charge. Once you collect your first invoice, your 7-day trial begins. Subscribe early any time.",
         };
     }
   })();
+
+  const showSubscribeButton = !isSubscribed;
+  const subscribeLabel =
+    stateKey === "free"
+      ? `Subscribe early — ${priceLabel}`
+      : `Subscribe — ${priceLabel}`;
 
   return (
     <ThemedView style={styles.container}>
@@ -143,75 +273,188 @@ export default function SubscriptionScreen() {
             style={[
               styles.card,
               {
-                backgroundColor: content.iconBg,
-                borderColor: content.iconColor + "40",
+                backgroundColor: copy.iconBg,
+                borderColor: copy.iconColor + "40",
               },
             ]}
-            testID={`subscription-card-${status ?? "unknown"}`}
+            testID={`subscription-card-${stateKey}`}
           >
-            <View style={[styles.iconCircle, { backgroundColor: content.iconColor + "22" }]}>
-              <Feather name={content.iconName} size={28} color={content.iconColor} />
+            <View
+              style={[
+                styles.iconCircle,
+                { backgroundColor: copy.iconColor + "22" },
+              ]}
+            >
+              <Feather name={copy.iconName} size={28} color={copy.iconColor} />
             </View>
 
-            <ThemedText style={styles.title}>{content.title}</ThemedText>
+            <ThemedText style={styles.title}>{copy.title}</ThemedText>
 
             <ThemedText style={[styles.body, { color: theme.textSecondary }]}>
-              {content.body}
+              {copy.body}
             </ThemedText>
 
-            <Pressable
-              style={({ pressed }) => [
-                styles.button,
-                { backgroundColor: pressed ? Colors.accentPressed : Colors.accent },
-              ]}
-              onPress={() => openStripeFlow(content.action)}
-              disabled={busy}
-              testID={
-                content.action === "subscribe"
-                  ? "button-subscribe"
-                  : "button-manage-subscription"
-              }
-            >
-              {busy ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <>
-                  <Feather
-                    name={content.action === "subscribe" ? "credit-card" : "external-link"}
-                    size={16}
-                    color="#fff"
-                  />
-                  <ThemedText style={styles.buttonText}>{content.cta}</ThemedText>
-                </>
-              )}
-            </Pressable>
+            {/* Primary action */}
+            {showSubscribeButton ? (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.button,
+                  {
+                    backgroundColor: pressed
+                      ? Colors.accentPressed
+                      : Colors.accent,
+                    opacity: busy || (useIAP && !proPackage) ? 0.6 : 1,
+                  },
+                ]}
+                onPress={
+                  useIAP
+                    ? handleNativeSubscribe
+                    : () => openStripeFlow("subscribe")
+                }
+                disabled={busy || loadingOffering || (useIAP && !proPackage)}
+                testID="button-subscribe"
+              >
+                {busy || loadingOffering ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Feather name="credit-card" size={16} color="#fff" />
+                    <ThemedText style={styles.buttonText}>
+                      {subscribeLabel}
+                    </ThemedText>
+                  </>
+                )}
+              </Pressable>
+            ) : (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.button,
+                  {
+                    backgroundColor: pressed
+                      ? Colors.accentPressed
+                      : Colors.accent,
+                  },
+                ]}
+                onPress={
+                  useIAP ? handleManageNative : () => openStripeFlow("manage")
+                }
+                disabled={busy}
+                testID="button-manage-subscription"
+              >
+                {busy ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Feather name="external-link" size={16} color="#fff" />
+                    <ThemedText style={styles.buttonText}>
+                      Manage subscription
+                    </ThemedText>
+                  </>
+                )}
+              </Pressable>
+            )}
 
-            {/* Subscribed users get a secondary subscribe button is not needed; offer
-                billing-history shortcut to all subscribers via the same manage flow. */}
-            {content.action === "subscribe" && status !== "free" ? (
+            {/* Restore purchases — required by App Store reviewers */}
+            {useIAP ? (
+              <Pressable
+                onPress={handleRestore}
+                disabled={restoring || busy}
+                style={styles.secondaryButton}
+                testID="button-restore-purchases"
+              >
+                {restoring ? (
+                  <ActivityIndicator size="small" color={Colors.accent} />
+                ) : (
+                  <ThemedText
+                    style={[
+                      styles.secondaryButtonText,
+                      { color: Colors.accent },
+                    ]}
+                  >
+                    Restore purchases
+                  </ThemedText>
+                )}
+              </Pressable>
+            ) : showSubscribeButton ? null : (
               <Pressable
                 onPress={() => openStripeFlow("manage")}
                 disabled={busy}
                 style={styles.secondaryButton}
                 testID="button-open-portal"
               >
-                <ThemedText style={[styles.secondaryButtonText, { color: Colors.accent }]}>
+                <ThemedText
+                  style={[styles.secondaryButtonText, { color: Colors.accent }]}
+                >
                   View billing history
                 </ThemedText>
               </Pressable>
+            )}
+
+            {copy.caption ? (
+              <ThemedText
+                style={[styles.caption, { color: theme.textTertiary }]}
+              >
+                {copy.caption}
+              </ThemedText>
             ) : null}
 
-            {content.caption ? (
-              <ThemedText style={[styles.caption, { color: theme.textTertiary }]}>
-                {content.caption}
+            {offeringError && useIAP && showSubscribeButton ? (
+              <ThemedText style={[styles.caption, { color: "#dc2626" }]}>
+                {offeringError}
               </ThemedText>
             ) : null}
           </View>
         )}
 
+        {/* Apple-required renewal disclosure + legal links (native only when
+            offering subscription, but always shown to keep copy honest). */}
+        {showSubscribeButton ? (
+          <View style={styles.disclosureBlock}>
+            <ThemedText
+              style={[styles.disclosure, { color: theme.textTertiary }]}
+            >
+              {useIAP
+                ? Platform.OS === "ios"
+                  ? `HomeBase Pro is an auto-renewing subscription billed at ${priceLabel}. Payment is charged to your Apple ID at confirmation. Your subscription renews automatically unless auto-renew is turned off at least 24 hours before the end of the current period. You can manage and cancel your subscription in your Apple ID account settings after purchase.`
+                  : `HomeBase Pro is an auto-renewing subscription billed at ${priceLabel}. Payment is charged to your Google Play account at confirmation. Your subscription renews automatically unless cancelled at least 24 hours before the end of the current period. You can manage and cancel your subscription in your Google Play subscriptions settings after purchase.`
+                : `HomeBase Pro is an auto-renewing subscription billed at ${priceLabel} via Stripe. Manage or cancel anytime from the billing portal.`}
+            </ThemedText>
+            <View style={styles.legalRow}>
+              <Pressable
+                onPress={() => Linking.openURL(TERMS_URL).catch(() => {})}
+                hitSlop={8}
+                testID="link-terms"
+              >
+                <ThemedText
+                  style={[styles.legalLink, { color: Colors.accent }]}
+                >
+                  Terms of Use (EULA)
+                </ThemedText>
+              </Pressable>
+              <ThemedText
+                style={[styles.legalSep, { color: theme.textTertiary }]}
+              >
+                ·
+              </ThemedText>
+              <Pressable
+                onPress={() => Linking.openURL(PRIVACY_URL).catch(() => {})}
+                hitSlop={8}
+                testID="link-privacy"
+              >
+                <ThemedText
+                  style={[styles.legalLink, { color: Colors.accent }]}
+                >
+                  Privacy Policy
+                </ThemedText>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+
         {data?.firstPaidBookingAt ? (
           <ThemedText style={[styles.meta, { color: theme.textTertiary }]}>
-            First paid booking: {new Date(data.firstPaidBookingAt).toLocaleDateString()}
+            First paid booking:{" "}
+            {new Date(data.firstPaidBookingAt).toLocaleDateString()}
           </ThemedText>
         ) : null}
       </ScrollView>
@@ -275,6 +518,29 @@ const styles = StyleSheet.create({
     ...Typography.caption1,
     textAlign: "center",
     marginTop: Spacing.md,
+  },
+  disclosureBlock: {
+    marginTop: Spacing.lg,
+    paddingHorizontal: Spacing.sm,
+  },
+  disclosure: {
+    ...Typography.caption2,
+    lineHeight: 16,
+    textAlign: "center",
+  },
+  legalRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: Spacing.xs,
+    marginTop: Spacing.md,
+  },
+  legalLink: {
+    ...Typography.caption1,
+    fontWeight: "600",
+  },
+  legalSep: {
+    ...Typography.caption1,
   },
   meta: {
     ...Typography.caption2,
