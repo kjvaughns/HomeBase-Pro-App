@@ -152,7 +152,12 @@ export default function ProviderProfileScreen() {
     toggleSavedProvider(providerId);
   };
 
+  const hasProvider = !!(apiData?.provider || passedProvider);
   useLayoutEffect(() => {
+    if (!hasProvider) {
+      navigation.setOptions({ headerRight: undefined });
+      return;
+    }
     navigation.setOptions({
       headerRight: () => (
         <HeaderButton
@@ -168,7 +173,7 @@ export default function ProviderProfileScreen() {
       ),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navigation, isSaved, providerId]);
+  }, [navigation, isSaved, providerId, hasProvider]);
 
   if (isApiLoading && !passedProvider && !apiData) {
     return (
