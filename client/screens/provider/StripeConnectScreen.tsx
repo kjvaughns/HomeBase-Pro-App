@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { StyleSheet, ScrollView, View, ActivityIndicator, Pressable, Linking, Alert, AppState } from "react-native";
+import { StyleSheet, ScrollView, View, ActivityIndicator, Pressable, Alert, AppState } from "react-native";
+import { openExternalUrl } from "@/lib/openExternalUrl";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -112,13 +113,16 @@ export default function StripeConnectScreen() {
 
   const onboardMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", `/api/stripe/connect/onboard/${providerId}`);
-      return response.json();
+      let captured: any = null;
+      await openExternalUrl(async () => {
+        const response = await apiRequest("POST", `/api/stripe/connect/onboard/${providerId}`);
+        captured = await response.json();
+        if (!captured?.onboardingUrl) throw new Error("Missing onboarding URL");
+        return captured.onboardingUrl as string;
+      });
+      return captured;
     },
-    onSuccess: (data) => {
-      if (data.onboardingUrl) {
-        Linking.openURL(data.onboardingUrl);
-      }
+    onSuccess: () => {
       refetchStatus();
     },
     onError: (error: any) => {
@@ -128,17 +132,20 @@ export default function StripeConnectScreen() {
 
   const reonboardMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", `/api/stripe/connect/reonboard/${providerId}`);
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to start re-onboarding");
-      }
-      return response.json();
+      let captured: any = null;
+      await openExternalUrl(async () => {
+        const response = await apiRequest("POST", `/api/stripe/connect/reonboard/${providerId}`);
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || "Failed to start re-onboarding");
+        }
+        captured = await response.json();
+        if (!captured?.onboardingUrl) throw new Error("Missing onboarding URL");
+        return captured.onboardingUrl as string;
+      });
+      return captured;
     },
-    onSuccess: (data) => {
-      if (data.onboardingUrl) {
-        Linking.openURL(data.onboardingUrl);
-      }
+    onSuccess: () => {
       refetchStatus();
     },
     onError: (error: any) => {
@@ -190,21 +197,22 @@ export default function StripeConnectScreen() {
 
   const payInvoiceMutation = useMutation({
     mutationFn: async (invoiceId: string) => {
-      const response = await apiRequest("POST", `/api/stripe/invoices/${invoiceId}/checkout`);
-      const data = await response.json();
-      if (!response.ok) {
-        if (response.status === 402 || data.error === "stripe_not_ready") {
-          throw new Error("Complete Stripe onboarding first to accept payments.");
+      let captured: any = null;
+      await openExternalUrl(async () => {
+        const response = await apiRequest("POST", `/api/stripe/invoices/${invoiceId}/checkout`);
+        captured = await response.json();
+        if (!response.ok) {
+          if (response.status === 402 || captured?.error === "stripe_not_ready") {
+            throw new Error("Complete Stripe onboarding first to accept payments.");
+          }
+          throw new Error(captured?.error || "Failed to create checkout session");
         }
-        throw new Error(data.error || "Failed to create checkout session");
-      }
-      return data;
+        if (!captured?.url) throw new Error("Missing checkout URL");
+        return captured.url as string;
+      });
+      return captured;
     },
-    onSuccess: (data) => {
-      if (data.url) {
-        Linking.openURL(data.url);
-      }
-    },
+    onSuccess: () => {},
     onError: (error: any) => {
       Alert.alert("Payment Setup Required", error.message || "Failed to create checkout session");
     },

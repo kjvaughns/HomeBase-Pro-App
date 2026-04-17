@@ -4,11 +4,11 @@ import {
   View,
   ScrollView,
   Pressable,
-  Linking,
   ActivityIndicator,
   RefreshControl,
   Alert,
 } from "react-native";
+import { openExternalUrl } from "@/lib/openExternalUrl";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -48,12 +48,12 @@ export default function SubscriptionScreen() {
           action === "subscribe"
             ? "/api/subscriptions/create-checkout"
             : "/api/subscriptions/portal";
-        const res = await apiRequest("POST", route);
-        const json = (await res.json()) as { url?: string };
-        if (!json.url) throw new Error("Missing billing URL");
-        const supported = await Linking.canOpenURL(json.url);
-        if (!supported) throw new Error("Unable to open billing page");
-        await Linking.openURL(json.url);
+        await openExternalUrl(async () => {
+          const res = await apiRequest("POST", route);
+          const json = (await res.json()) as { url?: string };
+          if (!json.url) throw new Error("Missing billing URL");
+          return json.url;
+        });
       } catch (err: any) {
         Alert.alert(
           action === "subscribe" ? "Subscription error" : "Billing portal error",

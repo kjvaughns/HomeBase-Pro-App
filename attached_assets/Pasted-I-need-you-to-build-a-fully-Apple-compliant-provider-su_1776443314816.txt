@@ -1,0 +1,57 @@
+I need you to build a fully Apple compliant provider subscription flow for HomeBase on iOS.
+
+Context:
+HomeBase is a platform for homeowners and home service providers.
+There are two different payment categories and they must stay clearly separated:
+
+1. Provider membership subscription
+This unlocks premium business software features inside the app for service providers.
+This must use Apple In App Purchase on iOS.
+
+2. Real world service payments
+These are payments from homeowners to providers for actual home services like cleaning, lawn care, repairs, and similar offline services.
+These should continue using Stripe and Stripe Connect, not Apple IAP.
+
+What I need:
+Create a clean subscribe page for providers that is App Review safe and premium in design.
+
+Requirements for the provider subscription page:
+Use Apple IAP as the only in app purchase option for the provider membership on iOS
+Do not include external Stripe checkout links, buttons, or language that pushes users to buy the same membership outside the app
+Clearly explain what features are included in the provider membership
+Show plan name, billing period, price, and renewal terms clearly
+Include restore purchases
+Include manage subscription guidance for Apple subscriptions
+Include loading, success, cancel, failed purchase, and expired subscription states
+Handle entitlement updates correctly after purchase
+Handle trial messaging clearly if applicable
+Show privacy policy and terms links
+Make the page feel native to iOS and App Review ready
+
+Requirements for real world payments:
+Keep Stripe and Stripe Connect for homeowner to provider payments, invoices, payouts, and marketplace transaction processing
+Make sure these flows are clearly separated from the provider membership subscription logic
+Do not mix real world job payments with the Apple IAP membership flow
+Use correct labels so Apple reviewers can easily understand the difference
+
+Also implement:
+A billing settings page for providers
+Subscription status display
+Current plan
+Renewal date if available
+Restore purchases
+Manage subscription button or guidance
+Fallback states if App Store product data fails to load
+Account deletion access
+Support contact
+Reviewer friendly labels and notes
+
+If there is existing code that routes provider subscriptions through Stripe on iOS, remove or disable that path for the iOS app.
+If there is a website with external billing, do not surface it as an alternative purchase path inside the iOS subscribe screen.
+
+Output:
+1. What you changed
+2. Any App Review risks you removed
+3. Any remaining manual App Store Connect setup steps
+4. Exact reviewer notes I can paste into App Store Connect
+5. Final verdict on whether this subscription flow is Apple review ready

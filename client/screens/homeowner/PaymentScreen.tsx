@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from "react";
-import { StyleSheet, View, ScrollView, ActivityIndicator, Pressable, Linking, Platform } from "react-native";
+import { StyleSheet, View, ScrollView, ActivityIndicator, Pressable, Platform } from "react-native";
+import { openExternalUrl } from "@/lib/openExternalUrl";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, useNavigation, useFocusEffect, RouteProp, CommonActions } from "@react-navigation/native";
@@ -90,13 +91,10 @@ export default function PaymentScreen() {
       const { url: checkoutUrl } = await res.json();
       if (!checkoutUrl) throw new Error("No checkout URL received");
 
-      const canOpen = await Linking.canOpenURL(checkoutUrl);
-      if (!canOpen) throw new Error("Unable to open payment page");
-
-      // Use Linking.openURL to launch the device's default external browser
-      // (Safari on iOS, Chrome on Android), NOT an in-app browser. App Store
-      // guidelines require homeowner payments happen outside the app.
-      await Linking.openURL(checkoutUrl);
+      // On native, this calls Linking.openURL which launches the system browser
+      // (Safari/Chrome) — NOT an in-app browser — as required by App Store
+      // guidelines. On web, it opens a new tab (Stripe Checkout blocks iframes).
+      await openExternalUrl(checkoutUrl);
       setOpenedExternal(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Payment failed";

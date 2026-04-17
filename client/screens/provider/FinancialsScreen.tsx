@@ -7,10 +7,10 @@ import {
   RefreshControl,
   Pressable,
   ActivityIndicator,
-  Linking,
   Alert,
   Dimensions,
 } from "react-native";
+import { openExternalUrl } from "@/lib/openExternalUrl";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
@@ -865,11 +865,16 @@ export default function FinancialsScreen() {
 
   const onboardMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", `/api/stripe/connect/onboard/${providerId}`);
-      return response.json();
+      let captured: any = null;
+      await openExternalUrl(async () => {
+        const response = await apiRequest("POST", `/api/stripe/connect/onboard/${providerId}`);
+        captured = await response.json();
+        if (!captured?.onboardingUrl) throw new Error("Missing onboarding URL");
+        return captured.onboardingUrl as string;
+      });
+      return captured;
     },
-    onSuccess: (data) => {
-      if (data.onboardingUrl) Linking.openURL(data.onboardingUrl);
+    onSuccess: () => {
       refetchStripeStatus();
     },
     onError: (error: unknown) => {
