@@ -20,6 +20,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
+import { useProviderStore } from "@/state/providerStore";
 
 interface ProviderStats {
   revenueMTD: number;
@@ -106,6 +107,8 @@ export default function ProviderHomeScreen() {
     retry: false,
   });
 
+  const hydrateAvailableForWork = useProviderStore((s) => s.hydrateAvailableForWork);
+
   useEffect(() => {
     if (fetchedProviderData?.provider && !providerId) {
       const p = fetchedProviderData.provider;
@@ -119,9 +122,21 @@ export default function ProviderHomeScreen() {
         reviewCount: p.reviewCount || 0,
         completedJobs: p.completedJobs || 0,
         serviceArea: p.serviceArea,
+        isActive: p.isActive ?? true,
       });
+      if (p.isActive !== null && p.isActive !== undefined) {
+        hydrateAvailableForWork(p.isActive);
+      }
     }
-  }, [fetchedProviderData, providerId]);
+  }, [fetchedProviderData, providerId, createProviderProfile, hydrateAvailableForWork]);
+
+  // Bootstrap "Available for Work" toggle from server-derived providerProfile
+  // on every visit to the provider home, so persisted local state can't go stale.
+  useEffect(() => {
+    if (providerProfile?.isActive !== undefined && providerProfile?.isActive !== null) {
+      hydrateAvailableForWork(providerProfile.isActive);
+    }
+  }, [providerProfile?.isActive, hydrateAvailableForWork]);
 
   const { data: statsData, isLoading: statsLoading, refetch: refetchStats } = useQuery<{ stats: ProviderStats }>({
     queryKey: ["/api/provider", providerId, "stats"],

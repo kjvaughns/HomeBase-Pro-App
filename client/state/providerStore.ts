@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { apiRequest } from "@/lib/query-client";
+import { apiRequest, queryClient } from "@/lib/query-client";
 
 // ============================================
 // TYPES
@@ -799,6 +799,13 @@ export const useProviderStore = create<ProviderState>()(
           await apiRequest("PATCH", `/api/provider/${providerId}`, {
             isActive: value,
           });
+          // Invalidate caches so provider profile + discovery lists reflect
+          // the new availability immediately on this device.
+          queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId] });
+          queryClient.invalidateQueries({ queryKey: ["/api/provider/user"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/providers"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/marketplace/providers"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/search/providers"] });
         } catch (error) {
           set({ availableForWork: previous });
           throw error;

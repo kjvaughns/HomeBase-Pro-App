@@ -46,11 +46,12 @@ export default function ProviderMoreScreen() {
     setAvailabilitySaving(true);
     try {
       await syncAvailableForWork(next, providerProfile.id);
-    } catch (err: any) {
-      Alert.alert(
-        "Couldn't update availability",
-        err?.message || "Please check your connection and try again.",
-      );
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Please check your connection and try again.";
+      Alert.alert("Couldn't update availability", message);
     } finally {
       setAvailabilitySaving(false);
     }
