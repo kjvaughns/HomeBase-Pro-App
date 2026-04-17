@@ -147,6 +147,29 @@ export default function ProviderProfileScreen() {
   const [activeTab, setActiveTab] = useState<TabType>("about");
   const [showAccountGate, setShowAccountGate] = useState(false);
 
+  const handleToggleSave = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    toggleSavedProvider(providerId);
+  };
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <HeaderButton
+          onPress={handleToggleSave}
+          accessibilityLabel={isSaved ? "Remove from saved" : "Save provider"}
+        >
+          <Feather
+            name="heart"
+            size={22}
+            color={isSaved ? Colors.accent : undefined}
+          />
+        </HeaderButton>
+      ),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigation, isSaved, providerId]);
+
   if (isApiLoading && !passedProvider && !apiData) {
     return (
       <ThemedView style={[styles.container, styles.loadingContainer]}>
@@ -204,28 +227,6 @@ export default function ProviderProfileScreen() {
     setShowAccountGate(false);
     navigation.navigate("SignUp");
   };
-
-  const handleToggleSave = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    toggleSavedProvider(providerId);
-  };
-
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <HeaderButton
-          onPress={handleToggleSave}
-          accessibilityLabel={isSaved ? "Remove from saved" : "Save provider"}
-        >
-          <Feather
-            name="heart"
-            size={22}
-            color={isSaved ? Colors.accent : undefined}
-          />
-        </HeaderButton>
-      ),
-    });
-  }, [navigation, isSaved, handleToggleSave]);
 
   const handleCall = async () => {
     const phoneNumber = provider.phone || "5551234567";
