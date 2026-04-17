@@ -1262,9 +1262,9 @@ export default function BusinessHubScreen() {
           </View>
         ) : reviews.length === 0 ? (
           <EmptyState
-            icon="star"
+            image={require("../../../assets/images/empty-bookings.png")}
             title="No reviews yet"
-            subtitle="Reviews from completed bookings will appear here. Deliver great service and they'll come!"
+            description="Reviews from completed bookings will appear here. Deliver great service and they'll come!"
           />
         ) : (
           reviews.map((review, index) => (
@@ -1434,6 +1434,54 @@ const styles = StyleSheet.create({
   tabContent: {
     padding: Spacing.screenPadding,
     gap: Spacing.md,
+  },
+  reviewsSummary: {
+    padding: Spacing.lg,
+  },
+  reviewsSummaryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.lg,
+  },
+  reviewsBigRating: {
+    ...Typography.largeTitle,
+    fontWeight: "700",
+  },
+  reviewsSummaryInfo: {
+    flex: 1,
+    gap: Spacing.xs,
+  },
+  reviewsStars: {
+    flexDirection: "row",
+    gap: 2,
+  },
+  reviewsCountText: {
+    ...Typography.footnote,
+  },
+  reviewsLoading: {
+    padding: Spacing.xl,
+    alignItems: "center",
+  },
+  reviewCard: {
+    padding: Spacing.lg,
+    borderRadius: 16,
+    gap: Spacing.xs,
+  },
+  reviewCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  reviewerName: {
+    ...Typography.body,
+    fontWeight: "600",
+  },
+  reviewDate: {
+    ...Typography.caption1,
+  },
+  reviewComment: {
+    ...Typography.subhead,
+    marginTop: Spacing.xs,
   },
   emptyContainer: {
     flexGrow: 1,
