@@ -18,6 +18,8 @@ import {
   sendProviderBookingNotificationEmail,
   sendJobStatusChangedEmail,
   sendRebookingNudgeEmail,
+  sendBookingRequestReceivedEmail,
+  sendIntakeSubmissionNotification,
 } from './emailService';
 
 export type NotificationEvent =
@@ -28,6 +30,8 @@ export type NotificationEvent =
   | 'booking.rescheduled'
   | 'booking.reminder_24h'
   | 'booking.reminder_2h'
+  | 'booking.request_received'
+  | 'booking.request_provider'
   | 'invoice.created'
   | 'invoice.sent'
   | 'invoice.reminder_3d'
@@ -67,6 +71,10 @@ export interface DispatchPayload {
   oldDate?: string;
   oldTime?: string;
   reason?: string;
+  preferredDate?: string;
+  preferredTime?: string;
+  bookingLinkName?: string;
+  problemDescription?: string;
   // Invoice fields
   invoiceNumber?: string;
   amount?: number;
@@ -138,6 +146,8 @@ const EVENT_PREF_FIELD: Partial<Record<NotificationEvent, keyof typeof notificat
   'booking.rescheduled':  'emailBookingConfirmation',
   'booking.reminder_24h': 'emailBookingReminder',
   'booking.reminder_2h':  'emailBookingReminder',
+  'booking.request_received': 'emailBookingConfirmation',
+  'booking.request_provider': 'emailBookingConfirmation',
   'invoice.sent':         'emailInvoiceCreated',
   'invoice.reminder_3d':  'emailInvoiceReminder',
   'invoice.overdue_1d':   'emailInvoiceReminder',
@@ -179,9 +189,14 @@ export async function dispatchWithResult(event: NotificationEvent, payload: Disp
 
 async function _dispatch(event: NotificationEvent, payload: DispatchPayload): Promise<{ emailSent: boolean; emailError?: string } | null> {
   // Check user notification preferences before dispatching email.
-  // booking.created is exempt from the global gate because it sends to multiple recipients
-  // (client + provider) and each must be gated independently inside the case block.
-  if (event !== 'booking.created') {
+  // Some events are exempt from the global gate because they use a non-default
+  // recipient (e.g. providerUserId) or send to multiple recipients (client +
+  // provider) and must be gated per-recipient inside the case block.
+  const PER_RECIPIENT_GATED: NotificationEvent[] = [
+    'booking.created',
+    'booking.request_provider',
+  ];
+  if (!PER_RECIPIENT_GATED.includes(event)) {
     const emailOk = await isEmailAllowed(event, payload.recipientUserId);
     if (!emailOk) {
       console.log(`[notification] Skipped ${event} for user ${payload.recipientUserId} (preference opt-out)`);
@@ -498,6 +513,61 @@ async function _dispatch(event: NotificationEvent, payload: DispatchPayload): Pr
       } else {
         console.warn(`[notification] job.status_changed(${newStatus}) push skipped — client has no linked homeowner user (recipientUserId missing)`);
       }
+      break;
+    }
+
+    case 'booking.request_received': {
+      const { clientEmail, clientName, providerName, serviceName, preferredDate, preferredTime, address, problemDescription } = payload;
+      if (!clientEmail || !clientName || !providerName) break;
+      const deliveryId = await logDelivery({
+        channel: 'email', status: 'queued', eventType: event,
+        recipientEmail: clientEmail,
+        recipientUserId: payload.recipientUserId,
+        relatedRecordType: payload.relatedRecordType,
+        relatedRecordId: payload.relatedRecordId,
+      });
+      const result = await sendBookingRequestReceivedEmail({
+        clientEmail,
+        clientName,
+        providerName,
+        serviceName,
+        preferredDate,
+        preferredTime,
+        address,
+        description: problemDescription,
+        confirmationNumber: payload.relatedRecordId,
+      });
+      await updateDelivery(deliveryId, result.success ? 'sent' : 'failed', result.messageId, result.error);
+      break;
+    }
+
+    case 'booking.request_provider': {
+      const { providerEmail, providerName, clientName, clientEmail, clientPhone, address, problemDescription, bookingLinkName } = payload;
+      if (!providerEmail || !providerName || !clientName || !problemDescription) break;
+      // Gate on the provider's own preferences (uses providerUserId, not recipientUserId)
+      const providerEmailOk = await isEmailAllowed(event, payload.providerUserId);
+      if (!providerEmailOk) {
+        console.log(`[notification] Skipped ${event} for provider user ${payload.providerUserId} (preference opt-out)`);
+        break;
+      }
+      const deliveryId = await logDelivery({
+        channel: 'email', status: 'queued', eventType: event,
+        recipientEmail: providerEmail,
+        recipientUserId: payload.providerUserId,
+        relatedRecordType: payload.relatedRecordType,
+        relatedRecordId: payload.relatedRecordId,
+      });
+      const result = await sendIntakeSubmissionNotification({
+        providerEmail,
+        providerName,
+        clientName,
+        clientEmail,
+        clientPhone,
+        address,
+        problemDescription,
+        bookingLinkName,
+      });
+      await updateDelivery(deliveryId, result.success ? 'sent' : 'failed', result.messageId, result.error);
       break;
     }
 

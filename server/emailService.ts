@@ -323,6 +323,45 @@ export async function sendBookingRescheduledEmail(data: BookingData, oldDate: st
   );
 }
 
+export async function sendBookingRequestReceivedEmail(data: {
+  clientEmail: string;
+  clientName: string;
+  providerName: string;
+  serviceName?: string;
+  preferredDate?: string;
+  preferredTime?: string;
+  address?: string;
+  description?: string;
+  confirmationNumber?: string;
+}): Promise<SendResult> {
+  const issueSection = data.description
+    ? `<div style="background:#f0fdf4;border-radius:8px;padding:16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
+        <p style="color:#166534;font-weight:600;font-size:13px;margin:0 0 6px;">Your Request</p>
+        <p style="color:#15803d;font-size:13px;margin:0;line-height:1.5;">${data.description}</p>
+      </div>`
+    : '';
+  const body = greeting(data.clientName) +
+    paragraph(`Thanks! We sent your booking request to ${data.providerName}. They will review the details and get back to you shortly to confirm.`) +
+    infoBox(
+      (data.confirmationNumber ? infoRow('Reference #', data.confirmationNumber) : '') +
+      (data.serviceName ? infoRow('Service', data.serviceName) : '') +
+      infoRow('Provider', data.providerName) +
+      (data.preferredDate ? infoRow('Preferred Date', data.preferredDate) : '') +
+      (data.preferredTime ? infoRow('Preferred Time', data.preferredTime) : '') +
+      (data.address ? infoRow('Location', data.address) : '')
+    ) +
+    issueSection +
+    `<div style="background:#fffbeb;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #f59e0b;">
+      <p style="color:#92400e;font-size:13px;margin:0;">${data.providerName} typically responds within a few hours. You will receive a confirmation email once your booking is accepted.</p>
+    </div>` +
+    appDownloadSection();
+  return sendEmail(
+    data.clientEmail,
+    `Request sent to ${data.providerName}`,
+    buildEmailBase('Request Received', body)
+  );
+}
+
 // ─── Invoice templates ─────────────────────────────────────────────────────────
 
 interface InvoiceEmailData {

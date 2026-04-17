@@ -240,23 +240,27 @@ async function convertIntakeToClientJob(
     estimatedPrice?: string | null;
     notes?: string | null;
     targetStatus?: "converted" | "confirmed";
+    appointmentId?: string | null;
+    serviceName?: string | null;
   }
 ): Promise<{ clientId: string; job: typeof jobs.$inferSelect }> {
   const {
     submissionId, providerId, clientName, clientEmail, clientPhone, address,
     problemDescription, scheduledDate, scheduledTime, estimatedPrice, notes,
-    targetStatus = "converted",
+    targetStatus = "converted", appointmentId, serviceName,
   } = params;
 
   const nameParts = (clientName || "").trim().split(" ");
   const firstName = nameParts[0] || "Unknown";
   const lastName = nameParts.slice(1).join(" ") || "";
 
-  // Upsert client by provider+email using ON CONFLICT to prevent race conditions.
-  // Uses the partial unique index: clients(provider_id, email) WHERE email IS NOT NULL.
-  // On conflict, updates contact info so the record reflects the latest submission.
+  // Match an existing client by (provider, email) first, then fall back to
+  // (provider, phone) so repeat marketplace bookings from the same household
+  // — even if they leave email blank but reuse a phone number — link to the
+  // existing client record instead of creating a duplicate.
   let clientId: string;
   if (clientEmail) {
+    // Upsert by provider+email using ON CONFLICT (race-safe via partial unique index).
     const result = await tx.execute(sql`
       INSERT INTO clients (id, provider_id, first_name, last_name, email, phone, address, created_at, updated_at)
       VALUES (gen_random_uuid(), ${providerId}, ${firstName}, ${lastName || null}, ${clientEmail}, ${clientPhone || null}, ${address || null}, NOW(), NOW())
@@ -268,23 +272,44 @@ async function convertIntakeToClientJob(
       RETURNING id
     `);
     clientId = (result.rows[0] as { id: string }).id;
+  } else if (clientPhone) {
+    // Fall back to provider+phone match.
+    const existing = await tx
+      .select({ id: clients.id })
+      .from(clients)
+      .where(and(eq(clients.providerId, providerId), eq(clients.phone, clientPhone)))
+      .limit(1);
+    if (existing.length > 0) {
+      clientId = existing[0].id;
+      await tx
+        .update(clients)
+        .set({ address: address || undefined, updatedAt: new Date() })
+        .where(eq(clients.id, clientId));
+    } else {
+      const [newC] = await tx
+        .insert(clients)
+        .values({ providerId, firstName, lastName: lastName || null, email: null, phone: clientPhone, address: address || null })
+        .returning({ id: clients.id });
+      clientId = newC.id;
+    }
   } else {
-    // No email — cannot deduplicate; always insert a new record
+    // No identifier at all — cannot dedup; insert a fresh record.
     const [newC] = await tx
       .insert(clients)
-      .values({ providerId, firstName, lastName: lastName || null, email: null, phone: clientPhone || null, address: address || null })
+      .values({ providerId, firstName, lastName: lastName || null, email: null, phone: null, address: address || null })
       .returning({ id: clients.id });
     clientId = newC.id;
   }
 
-  // Create job
+  // Create job (linked to appointment when provided, matching portal flow)
   const jobDate = scheduledDate ?? new Date();
   const [newJob] = await tx
     .insert(jobs)
     .values({
       providerId,
       clientId,
-      title: problemDescription?.slice(0, 100) || "Service Request",
+      appointmentId: appointmentId || null,
+      title: serviceName || problemDescription?.slice(0, 100) || "Service Request",
       description: problemDescription || null,
       scheduledDate: jobDate,
       scheduledTime: scheduledTime || null,
@@ -303,6 +328,255 @@ async function convertIntakeToClientJob(
     .where(eq(intakeSubmissions.id, submissionId));
 
   return { clientId, job: newJob };
+}
+
+/**
+ * Shared marketplace booking handler.
+ *
+ * Used by both the public `/api/providers/:slug/submit` and `/api/booking/:slug`
+ * endpoints so a marketplace booking always: writes an intake submission,
+ * upserts a lead, dispatches notifications to both sides, and (when the
+ * provider has instant booking enabled) creates the client + job atomically
+ * — matching the homeowner portal's `/api/appointments` automations.
+ */
+async function handleMarketplaceBooking(params: {
+  slug: string;
+  clientName: string;
+  clientPhone?: string | null;
+  clientEmail?: string | null;
+  address?: string | null;
+  problemDescription: string;
+  answersJson?: unknown;
+  photosJson?: unknown;
+  preferredTimesJson?: unknown;
+  categoryId?: string | null;
+  homeownerUserId?: string | null;
+}): Promise<
+  | { ok: false; status: number; error: string }
+  | {
+      ok: true;
+      submission: typeof intakeSubmissions.$inferSelect;
+      clientId?: string;
+      job?: typeof jobs.$inferSelect;
+      appointmentId?: string;
+      instantBooking: boolean;
+    }
+> {
+  const {
+    slug, clientName, clientPhone, clientEmail, address,
+    problemDescription, answersJson, photosJson, preferredTimesJson,
+    categoryId, homeownerUserId,
+  } = params;
+
+  if (!clientName || !problemDescription) {
+    return { ok: false, status: 400, error: "Name and problem description are required" };
+  }
+
+  const [link] = await db.select().from(bookingLinks).where(eq(bookingLinks.slug, slug)).limit(1);
+  if (!link || link.isActive === false || link.status !== "active") {
+    return { ok: false, status: 404, error: "Booking page not found" };
+  }
+
+  const isInstant = link.instantBooking === true;
+
+  // Resolve preferred date/time once, used for both job creation and notifications.
+  // Tolerate either an array or a JSON-encoded string from the client.
+  let preferredTimes: string[] = [];
+  let parsedPreferred: unknown = preferredTimesJson;
+  if (typeof parsedPreferred === "string") {
+    try { parsedPreferred = JSON.parse(parsedPreferred); } catch { /* leave as-is */ }
+  }
+  if (Array.isArray(parsedPreferred)) {
+    preferredTimes = (parsedPreferred as unknown[]).filter((s): s is string => typeof s === "string");
+  }
+  const firstPreferredDate = preferredTimes[0] ? new Date(preferredTimes[0]) : undefined;
+  const validPreferredDate = firstPreferredDate && !isNaN(firstPreferredDate.getTime()) ? firstPreferredDate : undefined;
+
+  // Persist submission (+ appointment/client/job when instant) atomically
+  let submission!: typeof intakeSubmissions.$inferSelect;
+  let clientId: string | undefined;
+  let job: typeof jobs.$inferSelect | undefined;
+  let appointmentId: string | undefined;
+
+  await db.transaction(async (tx) => {
+    const [sub] = await tx
+      .insert(intakeSubmissions)
+      .values({
+        bookingLinkId: link.id,
+        providerId: link.providerId,
+        homeownerUserId: homeownerUserId || null,
+        clientName,
+        clientPhone: clientPhone || null,
+        clientEmail: clientEmail || null,
+        address: address || null,
+        problemDescription,
+        categoryId: categoryId || null,
+        answersJson: answersJson != null ? (typeof answersJson === "string" ? answersJson : JSON.stringify(answersJson)) : null,
+        photosJson: photosJson != null ? (typeof photosJson === "string" ? photosJson : JSON.stringify(photosJson)) : null,
+        preferredTimesJson: preferredTimesJson != null ? (typeof preferredTimesJson === "string" ? preferredTimesJson : JSON.stringify(preferredTimesJson)) : null,
+        status: isInstant ? ("confirmed" as const) : ("submitted" as const),
+      })
+      .returning();
+    submission = sub;
+
+    // Upsert lead (dedup by provider+email; only one open lead per email)
+    if (clientEmail) {
+      const existing = await tx
+        .select({ id: leads.id })
+        .from(leads)
+        .where(and(eq(leads.providerId, link.providerId), eq(leads.email, clientEmail)))
+        .limit(1);
+      if (existing.length === 0) {
+        await tx.insert(leads).values({
+          providerId: link.providerId,
+          name: clientName,
+          email: clientEmail,
+          phone: clientPhone || null,
+          service: null,
+          message: problemDescription,
+          status: isInstant ? "won" : "new",
+          source: "booking_page",
+        });
+      } else if (isInstant) {
+        await tx.update(leads).set({ status: "won", updatedAt: new Date() }).where(eq(leads.id, existing[0].id));
+      }
+    } else {
+      await tx.insert(leads).values({
+        providerId: link.providerId,
+        name: clientName,
+        email: null,
+        phone: clientPhone || null,
+        service: null,
+        message: problemDescription,
+        status: isInstant ? "won" : "new",
+        source: "booking_page",
+      });
+    }
+
+    // Instant booking: create appointment + client + job (matching portal flow)
+    if (isInstant) {
+      const apptDate = validPreferredDate ?? new Date();
+      const [appt] = await tx
+        .insert(appointments)
+        .values({
+          userId: homeownerUserId || null,
+          providerId: link.providerId,
+          serviceName: link.customTitle ?? "Home Service",
+          description: problemDescription,
+          scheduledDate: apptDate,
+          status: "confirmed",
+        })
+        .returning();
+
+      const converted = await convertIntakeToClientJob(tx, {
+        submissionId: sub.id,
+        providerId: link.providerId,
+        clientName,
+        clientEmail,
+        clientPhone,
+        address,
+        problemDescription,
+        scheduledDate: validPreferredDate,
+        targetStatus: "confirmed",
+        appointmentId: appt.id,
+        serviceName: link.customTitle ?? null,
+      });
+      clientId = converted.clientId;
+      job = converted.job;
+      appointmentId = appt.id;
+    }
+  });
+
+  // ── Notifications (fire-and-forget) ───────────────────────────────────────
+  // Provider: in-app notification + push (always); email handled per-mode below
+  const [providerRow] = await db
+    .select({ userId: providers.userId, businessName: providers.businessName, email: providers.email })
+    .from(providers)
+    .where(eq(providers.id, link.providerId))
+    .limit(1);
+
+  const providerName = providerRow?.businessName ?? link.customTitle ?? "Your Provider";
+  const bookingLinkName = link.customTitle ?? providerName;
+  const preferredDateStr = validPreferredDate ? validPreferredDate.toLocaleDateString() : undefined;
+  const preferredTimeStr = validPreferredDate
+    ? validPreferredDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : undefined;
+
+  if (providerRow?.userId) {
+    const inAppTitle = isInstant ? "New Booking Confirmed" : "New Booking Request";
+    const inAppMessage = isInstant
+      ? `${clientName} booked ${link.customTitle ?? "a service"}. View details in Schedule.`
+      : `${clientName} submitted a new booking request. Review it in Intake Submissions.`;
+    dispatchNotification(
+      providerRow.userId,
+      inAppTitle,
+      inAppMessage,
+      isInstant ? "booking_confirmed" : "booking_request",
+      {
+        intakeSubmissionId: submission.id,
+        clientName,
+        ...(job ? { jobId: job.id } : {}),
+        screen: isInstant ? "ProviderJobDetail" : "ProviderIntakeSubmissions",
+      },
+      "bookings",
+    ).catch((e: unknown) => console.error("provider in-app/push dispatch error:", e));
+  }
+
+  if (isInstant) {
+    // Match the portal flow: client confirmation + provider booking notification email
+    if (clientEmail || providerRow?.email) {
+      dispatch("booking.created", {
+        clientEmail: clientEmail || undefined,
+        clientName,
+        providerEmail: providerRow?.email ?? undefined,
+        providerName,
+        providerUserId: providerRow?.userId ?? undefined,
+        recipientUserId: homeownerUserId || undefined,
+        serviceName: link.customTitle ?? "Home Service",
+        appointmentDate: preferredDateStr ?? "To be confirmed",
+        appointmentTime: preferredTimeStr ?? "",
+        address: address || undefined,
+        description: problemDescription,
+        confirmationNumber: appointmentId ?? submission.id,
+        relatedRecordType: appointmentId ? "appointment" : (job ? "job" : "intake_submission"),
+        relatedRecordId: appointmentId ?? job?.id ?? submission.id,
+      }).catch((e: unknown) => console.error("booking.created dispatch error:", e));
+    }
+  } else {
+    // Request mode: notify provider of new lead, confirm receipt to homeowner
+    if (providerRow?.email) {
+      dispatch("booking.request_provider", {
+        providerEmail: providerRow.email,
+        providerName,
+        providerUserId: providerRow.userId ?? undefined,
+        clientName,
+        clientEmail: clientEmail || undefined,
+        clientPhone: clientPhone || undefined,
+        address: address || undefined,
+        problemDescription,
+        bookingLinkName,
+        relatedRecordType: "intake_submission",
+        relatedRecordId: submission.id,
+      }).catch((e: unknown) => console.error("booking.request_provider dispatch error:", e));
+    }
+    if (clientEmail) {
+      dispatch("booking.request_received", {
+        clientEmail,
+        clientName,
+        providerName,
+        recipientUserId: homeownerUserId || undefined,
+        serviceName: link.customTitle ?? undefined,
+        preferredDate: preferredDateStr,
+        preferredTime: preferredTimeStr,
+        address: address || undefined,
+        problemDescription,
+        relatedRecordType: "intake_submission",
+        relatedRecordId: submission.id,
+      }).catch((e: unknown) => console.error("booking.request_received dispatch error:", e));
+    }
+  }
+
+  return { ok: true, submission, clientId, job, appointmentId, instantBooking: isInstant };
 }
 
 // ─── HouseFax Category Mapper ────────────────────────────────────────────────
@@ -6872,58 +7146,35 @@ Respond with JSON only:
   app.post("/api/providers/:slug/submit", async (req: Request<{ slug: string }>, res: Response) => {
     try {
       const { slug } = req.params;
-      const { clientName, clientPhone, clientEmail, address, problemDescription, answersJson, photosJson, preferredTimesJson, homeownerUserId } = req.body;
+      const { clientName, clientPhone, clientEmail, address, problemDescription, answersJson, photosJson, preferredTimesJson, homeownerUserId, categoryId } = req.body;
 
-      if (!clientName || !problemDescription) {
-        return res.status(400).json({ error: "Name and problem description are required" });
-      }
-
-      const link = await storage.getBookingLinkBySlug(slug);
-      if (!link || link.status !== "active") {
-        return res.status(404).json({ error: "Booking page not found" });
-      }
-
-      const submission = await storage.createIntakeSubmission({
-        bookingLinkId: link.id,
-        providerId: link.providerId,
-        homeownerUserId: homeownerUserId || null,
+      const result = await handleMarketplaceBooking({
+        slug,
         clientName,
         clientPhone,
         clientEmail,
         address,
         problemDescription,
-        answersJson: answersJson ? JSON.stringify(answersJson) : null,
-        photosJson: photosJson ? JSON.stringify(photosJson) : null,
-        preferredTimesJson: preferredTimesJson ? JSON.stringify(preferredTimesJson) : null,
+        answersJson,
+        photosJson,
+        preferredTimesJson,
+        categoryId,
+        homeownerUserId,
       });
 
-      // Auto-create a lead for the provider if one doesn't already exist for this email
-      try {
-        const existingLeads = clientEmail
-          ? await db.select().from(leads)
-              .where(and(
-                eq(leads.providerId, link.providerId),
-                eq(leads.email, clientEmail)
-              ))
-              .limit(1)
-          : [];
-        if (existingLeads.length === 0) {
-          await db.insert(leads).values({
-            providerId: link.providerId,
-            name: clientName,
-            email: clientEmail || null,
-            phone: clientPhone || null,
-            service: null,
-            message: problemDescription || null,
-            status: "new",
-            source: "booking_page",
-          });
-        }
-      } catch (leadErr) {
-        console.error("Lead auto-create error (non-fatal):", leadErr);
+      if (!result.ok) {
+        return res.status(result.status).json({ error: result.error });
       }
 
-      res.status(201).json({ submission, message: "Your request has been submitted!" });
+      res.status(201).json({
+        submission: result.submission,
+        ...(result.clientId ? { clientId: result.clientId } : {}),
+        ...(result.job ? { job: result.job } : {}),
+        ...(result.appointmentId ? { appointmentId: result.appointmentId } : {}),
+        message: result.instantBooking
+          ? "Your booking has been confirmed!"
+          : "Your request has been submitted!",
+      });
     } catch (error: any) {
       console.error("Submit intake error:", error);
       res.status(500).json({ error: error.message || "Failed to submit request" });
@@ -7054,144 +7305,34 @@ Respond with JSON only:
         preferredTimesJson,
         categoryId,
         answersJson,
+        photosJson,
+        homeownerUserId,
       } = req.body;
 
-      if (!clientName || !problemDescription) {
-        return res.status(400).json({ error: "clientName and problemDescription are required" });
-      }
+      const result = await handleMarketplaceBooking({
+        slug,
+        clientName,
+        clientPhone,
+        clientEmail,
+        address,
+        problemDescription,
+        answersJson,
+        photosJson,
+        preferredTimesJson,
+        categoryId,
+        homeownerUserId,
+      });
 
-      const [link] = await db
-        .select()
-        .from(bookingLinks)
-        .where(eq(bookingLinks.slug, slug))
-        .limit(1);
-
-      if (!link || link.isActive === false || link.status !== "active") {
-        return res.status(404).json({ error: "Booking page not found" });
-      }
-
-      // For instant bookings: create submission + client + job atomically in a single transaction
-      let submission: typeof intakeSubmissions.$inferSelect;
-      let instantClientId: string | undefined;
-      let instantJob: (typeof jobs.$inferSelect) | undefined;
-
-      if (link.instantBooking) {
-        const txResult = await db.transaction(async (tx) => {
-          // Insert submission first with "confirmed" status
-          const [sub] = await tx
-            .insert(intakeSubmissions)
-            .values({
-              bookingLinkId: link.id,
-              providerId: link.providerId,
-              homeownerUserId: null,
-              clientName,
-              clientPhone: clientPhone || null,
-              clientEmail: clientEmail || null,
-              address: address || null,
-              problemDescription,
-              categoryId: categoryId || null,
-              answersJson: answersJson ? JSON.stringify(answersJson) : null,
-              preferredTimesJson: preferredTimesJson ? JSON.stringify(preferredTimesJson) : null,
-              status: "confirmed" as const,
-            })
-            .returning();
-
-          // Use shared helper to upsert client, create job, and stamp conversion fields
-          const preferredDate = preferredTimesJson?.[0] ? new Date(preferredTimesJson[0]) : undefined;
-          const converted = await convertIntakeToClientJob(tx, {
-            submissionId: sub.id,
-            providerId: link.providerId,
-            clientName,
-            clientEmail,
-            clientPhone,
-            address,
-            problemDescription,
-            scheduledDate: preferredDate,
-            targetStatus: "confirmed",
-          });
-
-          return { sub, clientId: converted.clientId, job: converted.job };
-        });
-
-        submission = txResult.sub;
-        instantClientId = txResult.clientId;
-        instantJob = txResult.job;
-      } else {
-        const [sub] = await db
-          .insert(intakeSubmissions)
-          .values({
-            bookingLinkId: link.id,
-            providerId: link.providerId,
-            homeownerUserId: null,
-            clientName,
-            clientPhone: clientPhone || null,
-            clientEmail: clientEmail || null,
-            address: address || null,
-            problemDescription,
-            categoryId: categoryId || null,
-            answersJson: answersJson ? JSON.stringify(answersJson) : null,
-            preferredTimesJson: preferredTimesJson ? JSON.stringify(preferredTimesJson) : null,
-            status: "submitted" as const,
-          })
-          .returning();
-        submission = sub;
-      }
-
-      // Notify the provider's linked user and (for instant bookings) send confirmation email to client
-      try {
-        const [providerRow] = await db
-          .select({ userId: providers.userId, businessName: providers.businessName, email: providers.email })
-          .from(providers)
-          .where(eq(providers.id, link.providerId))
-          .limit(1);
-
-        if (providerRow?.userId) {
-          const notificationTitle = link.instantBooking
-            ? "New Booking Confirmed"
-            : "New Booking Request";
-          const notificationMessage = link.instantBooking
-            ? `${clientName} has booked an appointment. Check your intake submissions for details.`
-            : `${clientName} submitted a new booking request. Review it in your intake submissions.`;
-
-          await db.insert(notifications).values({
-            userId: providerRow.userId,
-            title: notificationTitle,
-            message: notificationMessage,
-            type: "booking_request",
-            isRead: false,
-            data: JSON.stringify({ intakeSubmissionId: submission.id, clientName }),
-          });
-
-          // For instant bookings, send a booking confirmation email to the client
-          if (link.instantBooking && clientEmail) {
-            const preferredDateStr = preferredTimesJson?.[0]
-              ? new Date(preferredTimesJson[0]).toLocaleDateString()
-              : "To be confirmed";
-            dispatch("booking.created", {
-              clientEmail,
-              clientName,
-              providerEmail: providerRow.email ?? undefined,
-              providerName: providerRow.businessName ?? link.title ?? "Your Provider",
-              serviceName: link.title ?? "Home Service",
-              appointmentDate: preferredDateStr,
-              appointmentTime: preferredTimesJson?.[0]
-                ? new Date(preferredTimesJson[0]).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                : undefined,
-              confirmationNumber: submission.id,
-              relatedRecordType: "intake_submission",
-              relatedRecordId: submission.id,
-            }).catch((e: unknown) => console.error("Instant booking email dispatch error:", e));
-          }
-        }
-      } catch (notifyErr) {
-        console.error("Notification create error (non-fatal):", notifyErr);
+      if (!result.ok) {
+        return res.status(result.status).json({ error: result.error });
       }
 
       res.status(201).json({
-        submission,
-        ...(instantClientId ? { clientId: instantClientId } : {}),
-        ...(instantJob ? { job: instantJob } : {}),
-        message: link.instantBooking
+        submission: result.submission,
+        ...(result.clientId ? { clientId: result.clientId } : {}),
+        ...(result.job ? { job: result.job } : {}),
+        ...(result.appointmentId ? { appointmentId: result.appointmentId } : {}),
+        message: result.instantBooking
           ? "Your booking has been confirmed!"
           : "Your request has been submitted!",
       });
@@ -7346,6 +7487,55 @@ Respond with JSON only:
 
       if (alreadyAccepted) {
         return res.status(400).json({ error: "Submission has already been accepted" });
+      }
+
+      // Fire booking confirmation notifications now that the request is accepted —
+      // mirrors the instant-booking dispatch so the homeowner gets a confirmation
+      // email and the provider's portal updates with the same booking.created event.
+      try {
+        const [providerRow] = await db
+          .select({ userId: providers.userId, businessName: providers.businessName, email: providers.email })
+          .from(providers)
+          .where(eq(providers.id, submission.providerId))
+          .limit(1);
+        const providerName = providerRow?.businessName ?? "Your Provider";
+        const job = result!.job;
+        const apptDate = job.scheduledDate ? new Date(job.scheduledDate) : new Date();
+        const apptDateStr = apptDate.toLocaleDateString();
+        const apptTimeStr = job.scheduledTime
+          || apptDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+        if (submission.clientEmail || providerRow?.email) {
+          dispatch("booking.created", {
+            clientEmail: submission.clientEmail || undefined,
+            clientName: submission.clientName,
+            providerEmail: providerRow?.email ?? undefined,
+            providerName,
+            providerUserId: providerRow?.userId ?? undefined,
+            recipientUserId: submission.homeownerUserId || undefined,
+            serviceName: job.title || "Home Service",
+            appointmentDate: apptDateStr,
+            appointmentTime: apptTimeStr,
+            address: submission.address || undefined,
+            description: submission.problemDescription,
+            confirmationNumber: job.id,
+            relatedRecordType: "job",
+            relatedRecordId: job.id,
+          }).catch((e: unknown) => console.error("Accept submission booking.created dispatch error:", e));
+        }
+
+        if (submission.homeownerUserId) {
+          dispatchNotification(
+            submission.homeownerUserId,
+            "Booking Confirmed",
+            `${providerName} confirmed your booking. View it in your appointments.`,
+            "booking_confirmed",
+            { jobId: job.id, screen: "AppointmentDetail" },
+            "bookings",
+          ).catch((e: unknown) => console.error("Accept homeowner push error:", e));
+        }
+      } catch (notifyErr) {
+        console.error("Accept submission notification error (non-fatal):", notifyErr);
       }
 
       res.status(201).json({
