@@ -126,7 +126,7 @@ export function ProviderCard({
                 </ThemedText>
                 <Feather name="map-pin" size={12} color={theme.textSecondary} style={{ marginLeft: Spacing.xs }} />
                 <ThemedText type="small" style={{ color: theme.textSecondary, marginLeft: 2 }}>
-                  {distance.toFixed(1)} mi
+                  {distance.toFixed(1)} mi away
                 </ThemedText>
               </>
             ) : null}

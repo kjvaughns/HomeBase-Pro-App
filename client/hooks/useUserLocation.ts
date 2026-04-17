@@ -60,7 +60,7 @@ export function useDetectUserLocation() {
           // reverse-geocode failed (common on web); fall through
         }
         if (!geocoded) {
-          label = "Nearby — tap to set city";
+          label = "Detect failed — tap to set";
         }
 
         if (cancelled) return;
