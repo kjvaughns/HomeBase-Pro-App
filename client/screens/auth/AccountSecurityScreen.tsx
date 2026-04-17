@@ -13,15 +13,36 @@ import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollV
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Typography, BorderRadius, Colors } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
-import { apiRequest } from "@/lib/query-client";
+import { apiRequest, queryClient } from "@/lib/query-client";
 
 type ActiveSheet = "email" | "password" | null;
+
+/**
+ * Parse the error thrown by `apiRequest`. The helper rejects with
+ * `${status}: ${responseText}` where responseText is typically a JSON body
+ * like `{"error":"…"}`. We map well-known status codes to friendly copy.
+ */
+function parseApiError(err: unknown, fallback: string): { status: number | null; message: string } {
+  if (!(err instanceof Error)) return { status: null, message: fallback };
+  const match = err.message.match(/^(\d{3}):\s*(.*)$/s);
+  if (!match) return { status: null, message: err.message || fallback };
+  const status = Number(match[1]);
+  let serverMsg: string | null = null;
+  try {
+    const parsed = JSON.parse(match[2]);
+    if (parsed && typeof parsed.error === "string") serverMsg = parsed.error;
+  } catch {
+    // not JSON — fall through to raw text
+    serverMsg = match[2] || null;
+  }
+  return { status, message: serverMsg || fallback };
+}
 
 export default function AccountSecurityScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { theme } = useTheme();
-  const { user, updateUser } = useAuthStore();
+  const { user, updateUser, setSessionToken } = useAuthStore();
 
   const [active, setActive] = useState<ActiveSheet>(null);
 
@@ -74,7 +95,8 @@ export default function AccountSecurityScreen() {
           onClose={() => setActive(null)}
           onSuccess={(newEmail) => {
             updateUser({ email: newEmail });
-            setActive(null);
+            // Refresh any cached server data tied to this user account.
+            queryClient.invalidateQueries();
           }}
         />
       </Modal>
@@ -85,7 +107,15 @@ export default function AccountSecurityScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setActive(null)}
       >
-        <ChangePasswordSheet onClose={() => setActive(null)} onSuccess={() => setActive(null)} />
+        <ChangePasswordSheet
+          onClose={() => setActive(null)}
+          onSuccess={(newToken) => {
+            // Server bumped tokenVersion + reissued JWT. Persist the new bearer
+            // token so subsequent requests don't 401 with the stale token.
+            if (newToken) setSessionToken(newToken);
+            queryClient.invalidateQueries();
+          }}
+        />
       </Modal>
     </ThemedView>
   );
@@ -141,7 +171,15 @@ function Row({
   );
 }
 
-function SheetHeader({ title, onClose, theme }: { title: string; onClose: () => void; theme: ReturnType<typeof useTheme>["theme"] }) {
+function SheetHeader({
+  title,
+  onClose,
+  theme,
+}: {
+  title: string;
+  onClose: () => void;
+  theme: ReturnType<typeof useTheme>["theme"];
+}) {
   return (
     <View style={[styles.sheetHeader, { borderBottomColor: theme.border }]}>
       <Pressable onPress={onClose} hitSlop={12} testID="button-close-sheet">
@@ -149,6 +187,17 @@ function SheetHeader({ title, onClose, theme }: { title: string; onClose: () => 
       </Pressable>
       <ThemedText style={styles.sheetTitle}>{title}</ThemedText>
       <View style={{ width: 60 }} />
+    </View>
+  );
+}
+
+function SuccessBanner({ message }: { message: string }) {
+  return (
+    <View style={[styles.successBanner, { backgroundColor: Colors.accent + "1A", borderColor: Colors.accent }]}>
+      <Feather name="check-circle" size={18} color={Colors.accent} />
+      <ThemedText style={[styles.successText, { color: Colors.accent }]} testID="text-success">
+        {message}
+      </ThemedText>
     </View>
   );
 }
@@ -166,13 +215,19 @@ function ChangeEmailSheet({
   const { theme } = useTheme();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newEmail, setNewEmail] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [emailFieldError, setEmailFieldError] = useState<string | null>(null);
+  const [passwordFieldError, setPasswordFieldError] = useState<string | null>(null);
+  const [generalError, setGeneralError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const canSubmit = currentPassword.length > 0 && newEmail.trim().length > 0 && !saving;
+  const canSubmit =
+    currentPassword.length > 0 && newEmail.trim().length > 0 && !saving && !success;
 
   const handleSave = async () => {
-    setError(null);
+    setEmailFieldError(null);
+    setPasswordFieldError(null);
+    setGeneralError(null);
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
@@ -181,15 +236,29 @@ function ChangeEmailSheet({
         newEmail: newEmail.trim(),
       });
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data?.error || "Failed to change email");
-      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setSuccess(true);
       onSuccess(data.email || newEmail.trim().toLowerCase());
+      setTimeout(() => onClose(), 1200);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Something went wrong";
-      setError(message);
+      const { status, message } = parseApiError(err, "Couldn't update email. Please try again.");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      if (status === 401) {
+        setPasswordFieldError("Current password is incorrect");
+      } else if (status === 409) {
+        setEmailFieldError("That email is already in use");
+      } else if (status === 400) {
+        // Server validation message is user-friendly enough to surface inline.
+        if (/email/i.test(message)) {
+          setEmailFieldError(message);
+        } else if (/password/i.test(message)) {
+          setPasswordFieldError(message);
+        } else {
+          setGeneralError(message);
+        }
+      } else {
+        setGeneralError(message);
+      }
     } finally {
       setSaving(false);
     }
@@ -205,9 +274,13 @@ function ChangeEmailSheet({
           gap: Spacing.lg,
         }}
       >
+        {success ? <SuccessBanner message="Email updated" /> : null}
+
         <View style={styles.field}>
           <ThemedText style={styles.label}>Current email</ThemedText>
-          <ThemedText style={[styles.readonly, { color: theme.textSecondary }]}>{currentEmail}</ThemedText>
+          <ThemedText style={[styles.readonly, { color: theme.textSecondary }]}>
+            {currentEmail}
+          </ThemedText>
         </View>
 
         <View style={styles.field}>
@@ -215,12 +288,20 @@ function ChangeEmailSheet({
           <TextField
             placeholder="you@example.com"
             value={newEmail}
-            onChangeText={setNewEmail}
+            onChangeText={(v) => {
+              setNewEmail(v);
+              if (emailFieldError) setEmailFieldError(null);
+            }}
             leftIcon="mail"
             autoCapitalize="none"
             keyboardType="email-address"
             testID="input-new-email"
           />
+          {emailFieldError ? (
+            <ThemedText style={styles.fieldError} testID="text-email-field-error">
+              {emailFieldError}
+            </ThemedText>
+          ) : null}
         </View>
 
         <View style={styles.field}>
@@ -228,22 +309,40 @@ function ChangeEmailSheet({
           <TextField
             placeholder="Enter your password"
             value={currentPassword}
-            onChangeText={setCurrentPassword}
+            onChangeText={(v) => {
+              setCurrentPassword(v);
+              if (passwordFieldError) setPasswordFieldError(null);
+            }}
             leftIcon="lock"
             secureTextEntry
             testID="input-current-password-email"
           />
+          {passwordFieldError ? (
+            <ThemedText style={styles.fieldError} testID="text-password-field-error">
+              {passwordFieldError}
+            </ThemedText>
+          ) : null}
         </View>
 
-        {error ? (
-          <ThemedText style={[styles.errorText, { color: "#D43838" }]} testID="text-email-error">
-            {error}
+        {generalError ? (
+          <ThemedText style={styles.errorText} testID="text-email-error">
+            {generalError}
           </ThemedText>
         ) : null}
       </KeyboardAwareScrollViewCompat>
 
-      <View style={[styles.sheetFooter, { paddingBottom: insets.bottom + Spacing.md, backgroundColor: theme.backgroundDefault }]}>
-        <PrimaryButton onPress={handleSave} disabled={!canSubmit} loading={saving} testID="button-save-email">
+      <View
+        style={[
+          styles.sheetFooter,
+          { paddingBottom: insets.bottom + Spacing.md, backgroundColor: theme.backgroundDefault },
+        ]}
+      >
+        <PrimaryButton
+          onPress={handleSave}
+          disabled={!canSubmit}
+          loading={saving}
+          testID="button-save-email"
+        >
           Save Email
         </PrimaryButton>
       </View>
@@ -251,25 +350,40 @@ function ChangeEmailSheet({
   );
 }
 
-function ChangePasswordSheet({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+function ChangePasswordSheet({
+  onClose,
+  onSuccess,
+}: {
+  onClose: () => void;
+  onSuccess: (newToken: string | null) => void;
+}) {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [currentFieldError, setCurrentFieldError] = useState<string | null>(null);
+  const [newFieldError, setNewFieldError] = useState<string | null>(null);
+  const [confirmFieldError, setConfirmFieldError] = useState<string | null>(null);
+  const [generalError, setGeneralError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const canSubmit =
     currentPassword.length > 0 &&
     newPassword.length >= 8 &&
     confirmPassword.length > 0 &&
-    !saving;
+    !saving &&
+    !success;
 
   const handleSave = async () => {
-    setError(null);
+    setCurrentFieldError(null);
+    setNewFieldError(null);
+    setConfirmFieldError(null);
+    setGeneralError(null);
+
     if (newPassword !== confirmPassword) {
-      setError("New passwords don't match");
+      setConfirmFieldError("New passwords don't match");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
@@ -281,15 +395,29 @@ function ChangePasswordSheet({ onClose, onSuccess }: { onClose: () => void; onSu
         newPassword,
       });
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data?.error || "Failed to change password");
-      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      onSuccess();
+      setSuccess(true);
+      onSuccess(typeof data?.token === "string" ? data.token : null);
+      setTimeout(() => onClose(), 1200);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Something went wrong";
-      setError(message);
+      const { status, message } = parseApiError(
+        err,
+        "Couldn't update password. Please try again.",
+      );
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      if (status === 401) {
+        setCurrentFieldError("Current password is incorrect");
+      } else if (status === 400) {
+        if (/at least/i.test(message) || /new password/i.test(message)) {
+          setNewFieldError(message);
+        } else if (/current/i.test(message)) {
+          setCurrentFieldError(message);
+        } else {
+          setGeneralError(message);
+        }
+      } else {
+        setGeneralError(message);
+      }
     } finally {
       setSaving(false);
     }
@@ -305,16 +433,26 @@ function ChangePasswordSheet({ onClose, onSuccess }: { onClose: () => void; onSu
           gap: Spacing.lg,
         }}
       >
+        {success ? <SuccessBanner message="Password updated" /> : null}
+
         <View style={styles.field}>
           <ThemedText style={styles.label}>Current password</ThemedText>
           <TextField
             placeholder="Enter your current password"
             value={currentPassword}
-            onChangeText={setCurrentPassword}
+            onChangeText={(v) => {
+              setCurrentPassword(v);
+              if (currentFieldError) setCurrentFieldError(null);
+            }}
             leftIcon="lock"
             secureTextEntry
             testID="input-current-password"
           />
+          {currentFieldError ? (
+            <ThemedText style={styles.fieldError} testID="text-current-password-error">
+              {currentFieldError}
+            </ThemedText>
+          ) : null}
         </View>
 
         <View style={styles.field}>
@@ -322,11 +460,19 @@ function ChangePasswordSheet({ onClose, onSuccess }: { onClose: () => void; onSu
           <TextField
             placeholder="At least 8 characters"
             value={newPassword}
-            onChangeText={setNewPassword}
+            onChangeText={(v) => {
+              setNewPassword(v);
+              if (newFieldError) setNewFieldError(null);
+            }}
             leftIcon="lock"
             secureTextEntry
             testID="input-new-password"
           />
+          {newFieldError ? (
+            <ThemedText style={styles.fieldError} testID="text-new-password-error">
+              {newFieldError}
+            </ThemedText>
+          ) : null}
         </View>
 
         <View style={styles.field}>
@@ -334,16 +480,24 @@ function ChangePasswordSheet({ onClose, onSuccess }: { onClose: () => void; onSu
           <TextField
             placeholder="Re-enter new password"
             value={confirmPassword}
-            onChangeText={setConfirmPassword}
+            onChangeText={(v) => {
+              setConfirmPassword(v);
+              if (confirmFieldError) setConfirmFieldError(null);
+            }}
             leftIcon="lock"
             secureTextEntry
             testID="input-confirm-password"
           />
+          {confirmFieldError ? (
+            <ThemedText style={styles.fieldError} testID="text-confirm-password-error">
+              {confirmFieldError}
+            </ThemedText>
+          ) : null}
         </View>
 
-        {error ? (
-          <ThemedText style={[styles.errorText, { color: "#D43838" }]} testID="text-password-error">
-            {error}
+        {generalError ? (
+          <ThemedText style={styles.errorText} testID="text-password-error">
+            {generalError}
           </ThemedText>
         ) : null}
 
@@ -352,8 +506,18 @@ function ChangePasswordSheet({ onClose, onSuccess }: { onClose: () => void; onSu
         </ThemedText>
       </KeyboardAwareScrollViewCompat>
 
-      <View style={[styles.sheetFooter, { paddingBottom: insets.bottom + Spacing.md, backgroundColor: theme.backgroundDefault }]}>
-        <PrimaryButton onPress={handleSave} disabled={!canSubmit} loading={saving} testID="button-save-password">
+      <View
+        style={[
+          styles.sheetFooter,
+          { paddingBottom: insets.bottom + Spacing.md, backgroundColor: theme.backgroundDefault },
+        ]}
+      >
+        <PrimaryButton
+          onPress={handleSave}
+          disabled={!canSubmit}
+          loading={saving}
+          testID="button-save-password"
+        >
           Save Password
         </PrimaryButton>
       </View>
@@ -411,7 +575,28 @@ const styles = StyleSheet.create({
   field: { gap: Spacing.xs },
   label: { ...Typography.subhead, fontWeight: "600" },
   readonly: { ...Typography.body, paddingVertical: Spacing.sm },
-  errorText: { ...Typography.subhead, textAlign: "center" },
+  fieldError: {
+    ...Typography.caption1,
+    color: "#D43838",
+    marginTop: Spacing.xs,
+  },
+  errorText: {
+    ...Typography.subhead,
+    color: "#D43838",
+    textAlign: "center",
+  },
+  successBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  successText: {
+    ...Typography.subhead,
+    fontWeight: "600",
+  },
   sheetFooter: {
     position: "absolute",
     bottom: 0,
