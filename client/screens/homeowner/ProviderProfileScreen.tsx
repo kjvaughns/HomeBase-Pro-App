@@ -282,14 +282,14 @@ export default function ProviderProfileScreen() {
 
   const rawProvider = apiData?.provider;
   const businessHours = rawProvider?.businessHours;
-  const serviceZipCodes = rawProvider?.serviceZipCodes ?? [];
   const serviceCities = rawProvider?.serviceCities ?? [];
   const providerEmail = rawProvider?.email ?? null;
   const providerSlug = rawProvider?.slug ?? null;
-  const serviceAreaChips = [
-    ...serviceCities,
-    ...serviceZipCodes,
-  ].filter(Boolean);
+  const serviceAreaChips = serviceCities.filter(Boolean);
+  const serviceAreaFallback =
+    serviceAreaChips.length === 0 && rawProvider?.serviceArea
+      ? rawProvider.serviceArea
+      : null;
   const bookingUrl = providerSlug ? `https://homebaseproapp.com/providers/${providerSlug}` : null;
 
   const renderAboutTab = () => (
@@ -367,6 +367,13 @@ export default function ProviderProfileScreen() {
               </View>
             ))}
           </View>
+        </View>
+      ) : serviceAreaFallback ? (
+        <View style={styles.detailSection}>
+          <ThemedText style={[styles.detailSectionTitle, { color: theme.text }]}>Service Area</ThemedText>
+          <ThemedText style={[styles.serviceAreaText, { color: theme.textSecondary }]}>
+            {serviceAreaFallback}
+          </ThemedText>
         </View>
       ) : null}
 

@@ -359,22 +359,23 @@ export default function PublicProfileScreen() {
           </View>
         )}
 
-        {((rawProvider?.serviceCities && rawProvider.serviceCities.length > 0) ||
-          (rawProvider?.serviceZipCodes && rawProvider.serviceZipCodes.length > 0)) ? (
+        {rawProvider?.serviceCities && rawProvider.serviceCities.length > 0 ? (
           <View style={styles.subSection}>
             <ThemedText style={[styles.subSectionTitle, { color: theme.text }]}>Service Area</ThemedText>
             <View style={styles.chipWrap}>
-              {(rawProvider.serviceCities ?? []).map((city) => (
+              {rawProvider.serviceCities.map((city) => (
                 <View key={city} style={[styles.chip, { backgroundColor: theme.backgroundSecondary }]}>
                   <ThemedText style={[styles.chipText, { color: theme.textSecondary }]}>{city}</ThemedText>
                 </View>
               ))}
-              {(rawProvider.serviceZipCodes ?? []).map((zip) => (
-                <View key={zip} style={[styles.chip, { backgroundColor: theme.backgroundSecondary }]}>
-                  <ThemedText style={[styles.chipText, { color: theme.textTertiary }]}>{zip}</ThemedText>
-                </View>
-              ))}
             </View>
+          </View>
+        ) : rawProvider?.serviceArea ? (
+          <View style={styles.subSection}>
+            <ThemedText style={[styles.subSectionTitle, { color: theme.text }]}>Service Area</ThemedText>
+            <ThemedText style={[styles.infoText, { color: theme.textSecondary }]}>
+              {rawProvider.serviceArea}
+            </ThemedText>
           </View>
         ) : null}
 
