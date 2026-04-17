@@ -1022,8 +1022,8 @@ function Step6ValuePaywall({ onContinue }: { onContinue: () => void }) {
     >
       <StepHeader
         stepNum={6}
-        title="Start free, upgrade when you grow"
-        subtitle="Everything you need to build a professional business"
+        title="Everything you need to grow your business"
+        subtitle="The tools to get booked, stay organized, and get paid"
       />
 
       <GlassCard style={[styles.card, { marginBottom: Spacing.lg }]}>
@@ -1050,19 +1050,11 @@ function Step6ValuePaywall({ onContinue }: { onContinue: () => void }) {
         <GlassCard
           style={[styles.paywallCard, { borderColor: Colors.accent + "40" }]}
         >
-          <View style={styles.paywallHeader}>
-            <View style={[styles.paywallBadge, { backgroundColor: Colors.accent + "15" }]}>
-              <ThemedText type="caption" style={{ color: Colors.accent, fontWeight: "700" }}>
-                FREE FOR 14 DAYS
-              </ThemedText>
-            </View>
-          </View>
-
           <ThemedText type="h3" style={styles.paywallTitle}>
             HomeBase Pro
           </ThemedText>
           <ThemedText type="caption" style={[styles.paywallPrice, { color: theme.textSecondary }]}>
-            Then $29/month — cancel anytime
+            Get the tools to run a professional service business. Manage your account at homebaseproapp.com.
           </ThemedText>
 
           <PrimaryButton
@@ -1071,9 +1063,9 @@ function Step6ValuePaywall({ onContinue }: { onContinue: () => void }) {
               onContinue();
             }}
             style={{ marginTop: Spacing.lg }}
-            testID="button-start-trial"
+            testID="button-continue-setup"
           >
-            Start free trial
+            Continue
           </PrimaryButton>
 
           <Pressable

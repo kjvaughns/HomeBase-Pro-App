@@ -147,7 +147,7 @@ export default function ProviderMoreScreen() {
           <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
             <ListRow
               title="Subscription & Plan"
-              subtitle="$29.99/mo · Free until first booking"
+              subtitle="Manage at homebaseproapp.com"
               leftIcon="credit-card"
               onPress={() => navigation.navigate("Subscription")}
               isFirst

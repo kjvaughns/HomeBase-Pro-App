@@ -1,0 +1,415 @@
+# Replit Prompt — Stripe Subscription Checkout & Portal
+
+Paste this entire prompt into Replit agent.
+
+---
+
+You are wiring up Stripe subscription billing for HomeBase providers. The business model is: providers subscribe to HomeBase for a monthly fee, billed through Stripe. They subscribe via a Stripe Checkout page (not in-app purchase). After paying, their `isSubscribed` field is set to `true` in the database.
+
+The existing Stripe setup uses Replit's Stripe integration (`stripeClient.ts`, `stripeService.ts`). The StripeService class already has `createCheckoutSession()` and `createCustomerPortalSession()` methods. There are already routes at `/api/stripe/create-checkout-session` (line 5866) and `/api/stripe/customer-portal` (line 5885). The Connect webhook already handles `checkout.session.completed`.
+
+Your job is to wire all of this together for subscriptions specifically. Work through every step below.
+
+---
+
+## STEP 1 — Create the Stripe subscription product
+
+In the Stripe dashboard (do NOT create this in code — tell me to do this manually):
+
+Tell the user:
+> "Before running this code, go to your Stripe Dashboard → Products → Create Product. Name it 'HomeBase Pro'. Add a recurring price of $29.99/month. Copy the Price ID (starts with price_) and add it as a Replit secret called STRIPE_SUBSCRIPTION_PRICE_ID."
+
+Then add `STRIPE_SUBSCRIPTION_PRICE_ID` to the list of checked environment variables at server startup.
+
+---
+
+## STEP 2 — Add a provider-specific subscription checkout endpoint
+
+File: `server/routes.ts`
+
+Find the existing `/api/stripe/create-checkout-session` route (around line 5866). Read what it currently does. Then add a NEW dedicated subscription endpoint right below it:
+
+```typescript
+// POST /api/subscriptions/create-checkout
+// Creates a Stripe Checkout session for provider monthly subscription
+app.post('/api/subscriptions/create-checkout', requireAuth, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    const { providerId } = req.body;
+
+    if (!providerId) {
+      return res.status(400).json({ error: 'providerId is required' });
+    }
+
+    // Verify the provider belongs to this user
+    const provider = await storage.getProviderByUserId(userId);
+    if (!provider || provider.id !== providerId) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const priceId = process.env.STRIPE_SUBSCRIPTION_PRICE_ID;
+    if (!priceId) {
+      return res.status(500).json({ error: 'Subscription pricing not configured' });
+    }
+
+    // Get or create Stripe customer for this user
+    const user = await storage.getUser(userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const stripeClient = await getUncachableStripeClient();
+    
+    // Look up existing customer or create one
+    let customerId: string | undefined;
+    if (user.stripeCustomerId) {
+      customerId = user.stripeCustomerId;
+    } else {
+      const customer = await stripeClient.customers.create({
+        email: user.email,
+        name: `${user.firstName} ${user.lastName}`.trim(),
+        metadata: { userId, providerId }
+      });
+      customerId = customer.id;
+      // Save customer ID to user record
+      await storage.updateUser(userId, { stripeCustomerId: customerId });
+    }
+
+    // Create Stripe Checkout session for subscription
+    const session = await stripeClient.checkout.sessions.create({
+      customer: customerId,
+      payment_method_types: ['card'],
+      mode: 'subscription',
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      success_url: `https://homebaseproapp.com?subscribed=true`,
+      cancel_url: `https://homebaseproapp.com?subscribed=false`,
+      metadata: {
+        providerId,
+        userId,
+        type: 'homebase_subscription'
+      },
+      subscription_data: {
+        metadata: {
+          providerId,
+          userId,
+          type: 'homebase_subscription'
+        }
+      },
+      allow_promotion_codes: true,
+    });
+
+    return res.json({ url: session.url, sessionId: session.id });
+  } catch (err: any) {
+    console.error('Subscription checkout error:', err);
+    return res.status(500).json({ error: 'Failed to create checkout session', details: err.message });
+  }
+});
+```
+
+---
+
+## STEP 3 — Add a subscription customer portal endpoint
+
+File: `server/routes.ts`
+
+Add this endpoint right after the one in Step 2:
+
+```typescript
+// POST /api/subscriptions/portal
+// Creates a Stripe Customer Portal session for managing subscription
+app.post('/api/subscriptions/portal', requireAuth, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    const user = await storage.getUser(userId);
+    
+    if (!user?.stripeCustomerId) {
+      return res.status(400).json({ error: 'No subscription found. Please subscribe first.' });
+    }
+
+    const stripeClient = await getUncachableStripeClient();
+    
+    const session = await stripeClient.billingPortal.sessions.create({
+      customer: user.stripeCustomerId,
+      return_url: `https://homebaseproapp.com`,
+    });
+
+    return res.json({ url: session.url });
+  } catch (err: any) {
+    console.error('Customer portal error:', err);
+    return res.status(500).json({ error: 'Failed to open billing portal', details: err.message });
+  }
+});
+```
+
+---
+
+## STEP 4 — Handle subscription events in the webhook
+
+File: `server/stripeConnectService.ts`
+
+Find the `handleCheckoutSessionCompleted()` function (it's referenced in the webhook switch statement). Read its current implementation. Then update it to handle HomeBase subscription checkouts specifically:
+
+In the existing `handleCheckoutSessionCompleted()` function, add this logic at the beginning (before any existing logic):
+
+```typescript
+// Handle HomeBase Pro subscription checkout
+if (session.metadata?.type === 'homebase_subscription' && session.metadata?.providerId) {
+  const providerId = session.metadata.providerId;
+  const userId = session.metadata.userId;
+  
+  try {
+    // Mark provider as subscribed
+    await db.update(providerPlans)
+      .set({ 
+        isSubscribed: true, 
+        planTier: 'professional',
+        updatedAt: new Date()
+      })
+      .where(eq(providerPlans.providerId, providerId));
+    
+    console.log(`[Subscription] Provider ${providerId} activated subscription via checkout ${session.id}`);
+    
+    // Send success push notification
+    if (userId) {
+      await sendPush(userId, {
+        title: "You're subscribed! 🎉",
+        body: "Your HomeBase subscription is now active. All features are unlocked.",
+        data: { type: "subscription_activated", screen: "Subscription" }
+      }).catch(() => {});
+    }
+  } catch (err) {
+    console.error('[Subscription] Error activating subscription after checkout:', err);
+  }
+  
+  return; // Don't process as a regular checkout
+}
+```
+
+Also find the webhook switch statement and add a handler for subscription cancellations. In the switch block, add:
+
+```typescript
+case 'customer.subscription.deleted':
+  await handleSubscriptionCancelled(event.data.object as Stripe.Subscription);
+  break;
+
+case 'customer.subscription.updated':
+  await handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
+  break;
+
+case 'invoice.payment_failed':
+  // Already handled — make sure subscription gate responds to failed payments
+  await handleSubscriptionPaymentFailed(event.data.object as Stripe.Invoice);
+  break;
+```
+
+Then add these handler functions in `stripeConnectService.ts`:
+
+```typescript
+async function handleSubscriptionCancelled(subscription: Stripe.Subscription) {
+  try {
+    const providerId = subscription.metadata?.providerId;
+    if (!providerId) return;
+    
+    await db.update(providerPlans)
+      .set({ isSubscribed: false, planTier: 'free', updatedAt: new Date() })
+      .where(eq(providerPlans.providerId, providerId));
+    
+    console.log(`[Subscription] Provider ${providerId} subscription cancelled`);
+    
+    const userId = subscription.metadata?.userId;
+    if (userId) {
+      await sendPush(userId, {
+        title: "Subscription cancelled",
+        body: "Your HomeBase subscription has been cancelled. You can resubscribe anytime at homebaseproapp.com.",
+        data: { type: "subscription_cancelled", screen: "Subscription" }
+      }).catch(() => {});
+    }
+  } catch (err) {
+    console.error('[Subscription] Error handling cancellation:', err);
+  }
+}
+
+async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
+  try {
+    const providerId = subscription.metadata?.providerId;
+    if (!providerId) return;
+    
+    const isActive = subscription.status === 'active' || subscription.status === 'trialing';
+    
+    await db.update(providerPlans)
+      .set({ 
+        isSubscribed: isActive, 
+        planTier: isActive ? 'professional' : 'free',
+        updatedAt: new Date()
+      })
+      .where(eq(providerPlans.providerId, providerId));
+    
+    console.log(`[Subscription] Provider ${providerId} subscription updated — status: ${subscription.status}`);
+  } catch (err) {
+    console.error('[Subscription] Error handling subscription update:', err);
+  }
+}
+
+async function handleSubscriptionPaymentFailed(invoice: Stripe.Invoice) {
+  try {
+    // Only handle subscription invoices (not regular HomeBase invoices)
+    if (!invoice.subscription) return;
+    
+    const subscription = await (await getUncachableStripeClient()).subscriptions.retrieve(
+      invoice.subscription as string
+    );
+    
+    const providerId = subscription.metadata?.providerId;
+    const userId = subscription.metadata?.userId;
+    
+    if (!providerId) return;
+    
+    console.log(`[Subscription] Payment failed for provider ${providerId}`);
+    
+    if (userId) {
+      await sendPush(userId, {
+        title: "Payment failed",
+        body: "Your HomeBase subscription payment failed. Update your billing info at homebaseproapp.com.",
+        data: { type: "subscription_payment_failed", screen: "Subscription" }
+      }).catch(() => {});
+    }
+  } catch (err) {
+    console.error('[Subscription] Error handling payment failure:', err);
+  }
+}
+```
+
+---
+
+## STEP 5 — Update the client SubscriptionScreen to call these endpoints
+
+File: `client/screens/provider/SubscriptionScreen.tsx`
+
+In the SubscriptionScreen (which was rewritten in the previous prompt to be App Store compliant), update the `handleSubscribe` and `handleManage` functions to call the new API endpoints instead of hardcoded URLs:
+
+```typescript
+import { apiRequest } from '../../lib/queryClient';
+import { useAuthStore } from '../../state/authStore';
+
+// Inside component:
+const { providerProfile } = useAuthStore();
+const [isLoadingCheckout, setIsLoadingCheckout] = useState(false);
+
+const handleSubscribe = async () => {
+  try {
+    setIsLoadingCheckout(true);
+    const { url } = await apiRequest('/api/subscriptions/create-checkout', {
+      method: 'POST',
+      body: JSON.stringify({ providerId: providerProfile?.id }),
+    });
+    if (url) {
+      await Linking.openURL(url);
+    }
+  } catch (err) {
+    Alert.alert('Error', 'Could not open subscription page. Please try again.');
+  } finally {
+    setIsLoadingCheckout(false);
+  }
+};
+
+const handleManage = async () => {
+  try {
+    setIsLoadingCheckout(true);
+    const { url } = await apiRequest('/api/subscriptions/portal', {
+      method: 'POST',
+    });
+    if (url) {
+      await Linking.openURL(url);
+    }
+  } catch (err) {
+    Alert.alert('Error', 'Could not open billing portal. Please try again.');
+  } finally {
+    setIsLoadingCheckout(false);
+  }
+};
+```
+
+Update the Subscribe button to show a loading indicator while the URL is being fetched:
+
+```typescript
+<TouchableOpacity
+  style={[styles.button, { backgroundColor: theme.colors.primary, opacity: isLoadingCheckout ? 0.7 : 1 }]}
+  onPress={status === 'subscribed' ? handleManage : handleSubscribe}
+  disabled={isLoadingCheckout}
+>
+  {isLoadingCheckout 
+    ? <ActivityIndicator color="#fff" />
+    : <Text style={styles.buttonText}>{config.buttonLabel}</Text>
+  }
+</TouchableOpacity>
+```
+
+---
+
+## STEP 6 — Add app resume listener to refresh subscription status
+
+File: `client/hooks/useSubscriptionStatus.ts`
+
+When a provider comes back to the app after going through Stripe Checkout, the subscription status needs to refresh automatically. Add an AppState listener:
+
+```typescript
+import { AppState } from 'react-native';
+import { useEffect, useRef } from 'react';
+
+// Inside the useSubscriptionStatus hook, add:
+const appState = useRef(AppState.currentState);
+
+useEffect(() => {
+  const subscription = AppState.addEventListener('change', nextAppState => {
+    if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+      // App came to foreground — refetch subscription status in case they just subscribed
+      query.refetch();
+    }
+    appState.current = nextAppState;
+  });
+
+  return () => subscription.remove();
+}, []);
+```
+
+---
+
+## STEP 7 — Add stripeCustomerId to users table if missing
+
+File: `shared/schema.ts`
+
+Check if the `users` table has a `stripeCustomerId` column. If not, add it:
+
+```typescript
+stripeCustomerId: text("stripe_customer_id"),
+```
+
+Then run the migration.
+
+---
+
+## STEP 8 — Configure Stripe Customer Portal in dashboard
+
+Tell the user:
+> "Go to your Stripe Dashboard → Settings → Customer Portal. Enable it and configure:
+> - Allow customers to cancel subscriptions: YES
+> - Allow customers to update payment methods: YES  
+> - Allow customers to view invoice history: YES
+> - Save the settings. The portal URL will be generated automatically by the API."
+
+---
+
+## STEP 9 — Final verification checklist
+
+After implementing everything, verify:
+
+1. `STRIPE_SUBSCRIPTION_PRICE_ID` is set in Replit secrets
+2. The webhook endpoint receives `checkout.session.completed` events — make sure the Stripe webhook in the dashboard is configured to send this event to `https://api.homebaseproapp.com/api/webhooks/stripe-connect`  
+3. The `provider_plans` table has `isSubscribed`, `firstPaidBookingAt`, and `gracePeriodEndsAt` columns (from previous prompt)
+4. Search the codebase for `"29.99"` — make sure this string does NOT appear in any client-side screen (App Store compliance)
+5. Test end to end: call `/api/subscriptions/create-checkout` → get URL → open in browser → complete with Stripe test card 4242 4242 4242 4242 → verify webhook fires → verify `isSubscribed` is set to true in database
+
+DO NOT touch: booking URLs, EXPO_PUBLIC_DOMAIN, eas.json, any existing invoice or Connect payment flows.

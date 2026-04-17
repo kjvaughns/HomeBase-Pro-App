@@ -535,7 +535,6 @@ function EmotionalHookStep({ theme }: { theme: ReturnType<typeof useTheme>["them
       </ThemedText>
 
       <View style={styles.hookStats}>
-        <HookPill icon="check-circle" label="Free until first booking" theme={theme} />
         <HookPill icon="clock" label="Setup in minutes" theme={theme} />
       </View>
     </ScrollView>
@@ -1120,41 +1119,11 @@ function PricingStep({ theme }: { theme: ReturnType<typeof useTheme>["theme"] })
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.stepHeader}>
-        <ThemedText style={styles.stepTitle}>Simple, transparent pricing</ThemedText>
+        <ThemedText style={styles.stepTitle}>Everything you need to run your business</ThemedText>
         <ThemedText style={[styles.stepSubtitle, { color: theme.textSecondary }]}>
-          Know exactly what you are paying before you start.
+          The tools to get booked, stay organized, and get paid — all in one place.
         </ThemedText>
       </View>
-
-      <GlassCard style={[styles.pricingCard, { borderColor: Colors.accent + "30" }]}>
-        <View style={styles.pricingAmountRow}>
-          <View style={styles.pricingAmountLeft}>
-            <ThemedText style={styles.pricingAmount}>
-              $29.95<ThemedText style={[styles.pricingAmountUnit, { color: theme.textSecondary }]}>/mo</ThemedText>
-            </ThemedText>
-          </View>
-          <View style={[styles.pricingFreeBadge, { backgroundColor: Colors.accent }]}>
-            <ThemedText style={styles.pricingFreeBadgeText}>FREE TO START</ThemedText>
-          </View>
-        </View>
-
-        <ThemedText style={[styles.pricingFreeNote, { color: theme.textSecondary }]}>
-          Free until your first paid booking. No credit card required to sign up.
-        </ThemedText>
-
-        <View style={[styles.pricingDivider, { backgroundColor: theme.border }]} />
-
-        <View style={styles.pricingFeeRow}>
-          <Feather name="percent" size={13} color={theme.textSecondary} />
-          <ThemedText style={[styles.pricingFeeText, { color: theme.textSecondary }]}>
-            3% HomeBase fee + 2.9% Stripe processing per transaction
-          </ThemedText>
-        </View>
-
-        <ThemedText style={[styles.pricingCancelNote, { color: theme.textTertiary }]}>
-          No contracts. Cancel anytime.
-        </ThemedText>
-      </GlassCard>
 
       <View style={styles.pricingBenefits}>
         {benefits.map((b) => (
