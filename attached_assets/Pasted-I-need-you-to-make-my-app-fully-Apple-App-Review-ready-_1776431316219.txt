@@ -1,0 +1,143 @@
+I need you to make my app fully Apple App Review ready for iOS release. Act like a senior iOS product engineer, QA lead, and App Store compliance reviewer at the same time.
+
+App name: HomeBase
+App type: marketplace and business software for homeowners and home service providers
+Main goal: make the app stable, polished, compliant, and easy for Apple reviewers to test without confusion
+
+Your job is to audit and improve the entire app so it is ready for App Store review submission right now.
+
+What I need from you:
+
+1. Full App Review readiness audit
+Go through every screen, every flow, every permission, every button, every form, every payment path, every onboarding step, every error state, every blank state, every navigation route, and every provider and homeowner experience.
+Find and fix anything that could cause rejection, confusion, broken functionality, poor UX, missing disclosures, or incomplete flows.
+
+2. Fix all broken or suspicious functionality
+Identify and fix:
+broken buttons
+dead links
+unfinished screens
+placeholder text
+test data showing where it should not
+UI bugs
+navigation bugs
+payment bugs
+auth bugs
+provider onboarding bugs
+homeowner booking bugs
+booking link bugs
+invoice bugs
+notification bugs
+email bugs
+settings bugs
+account creation issues
+missing loading states
+missing empty states
+bad error messages
+inconsistent branding
+poor spacing or typography
+anything that feels unfinished or misleading
+
+3. Apple guideline compliance pass
+Review the app against likely App Store rejection risks, especially:
+apps that feel unfinished
+apps with misleading or non functional core features
+broken login or signup flows
+missing account deletion
+unclear subscriptions or pricing
+features promised but not working
+paywalls that block reviewer access with no explanation
+placeholder content
+generic web app feel with poor mobile polish
+confusing navigation
+permissions requested without clear reason
+poor handling of external payments
+weak privacy explanations
+missing legal pages
+spammy or low value screens
+thin content
+crashes or visual glitches
+
+4. Build a reviewer friendly experience
+Make the app extremely easy for Apple reviewers to understand and test.
+Add or improve:
+clear onboarding
+clean demo or test mode if needed
+reviewer instructions screen if appropriate
+visible sample data where needed
+simple explanations for provider vs homeowner flow
+clear labels for core features
+frictionless navigation
+stable test credentials area if needed
+obvious primary actions
+clear success and error messaging
+
+5. Payments and subscription review
+Audit the whole monetization system.
+HomeBase has a subscription for providers and also transaction based revenue.
+Make sure the app handles this in a way that will not confuse App Review.
+Check:
+whether in app purchase is required anywhere
+whether external payment links are placed incorrectly
+whether service payments and marketplace transaction fees are clearly separated from digital subscription logic
+whether free until first paid booking messaging is clear and compliant
+whether card on file or billing flows are clearly explained
+whether subscription terms, renewal terms, and billing info are visible where needed
+
+6. Account and policy readiness
+Make sure the app includes and properly surfaces:
+privacy policy
+terms of service
+support contact
+account deletion
+report a problem flow if needed
+manage subscription guidance if relevant
+clear business identity and app purpose
+explanations for data use if collecting personal or home information
+
+7. iPhone quality pass
+Make the app feel truly iOS ready, not just like a rough web wrapper.
+Improve:
+safe area handling
+keyboard behavior
+sheet and modal behavior
+touch target sizes
+scroll behavior
+loading states
+visual hierarchy
+mobile spacing
+native feel
+performance
+responsive layouts across iPhone sizes
+dark mode handling if supported
+consistent headers and back behavior
+
+8. QA execution
+Create a full Apple review QA checklist and test the app against it.
+Simulate a real reviewer using the app for the first time.
+For each bug or risk found, fix it and explain:
+issue
+why it matters
+what you changed
+what still needs manual input from me if anything
+
+9. Final output format
+When done, give me:
+A. App Review risk summary with highest priority issues first
+B. Everything you fixed
+C. Anything still blocking submission
+D. Exact reviewer notes I can paste into App Store Connect
+E. Exact test credentials format if needed
+F. Any remaining manual steps for me in plain English
+G. Final verdict: Ready for Review or Not Ready for Review
+
+Important context:
+This app has two sides, homeowners and service providers.
+The app must feel premium, trustworthy, and production ready.
+Do not leave fake or half built experiences in place.
+If a feature is not ready, either finish it properly or hide it from release.
+Prioritize stability, clarity, compliance, and polish over adding extra features.
+Do not just give suggestions. Actually implement the fixes.
+Think like Apple. Be strict.
+
+Start with the highest rejection risk areas first, especially auth, onboarding, subscriptions, core booking flow, provider setup, payments, broken UI, and account management.
