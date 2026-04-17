@@ -88,6 +88,7 @@ function SuccessBanner({ message, topOffset }: { message: SuccessBannerMessage; 
         Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
       ]).start();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-existing; cleanup tracked in Task #107
   }, [message]);
 
   return (
@@ -616,6 +617,7 @@ function ActionButton({
         Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 200, friction: 10 }),
       ]).start();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-existing; cleanup tracked in Task #107
   }, [done]);
 
   const bg = done ? "#16A34A" : theme.backgroundSecondary;

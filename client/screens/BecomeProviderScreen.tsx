@@ -75,6 +75,7 @@ export default function BecomeProviderScreen() {
       setCheckingExisting(false);
     }
     detectExistingProvider();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-existing; cleanup tracked in Task #107
   }, [user?.id]);
 
   const [businessName, setBusinessName] = useState("");

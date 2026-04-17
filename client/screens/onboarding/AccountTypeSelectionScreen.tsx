@@ -77,6 +77,7 @@ export default function AccountTypeSelectionScreen({ navigation }: Props) {
         useNativeDriver: false,
       }),
     ]).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-existing; cleanup tracked in Task #107
   }, []);
 
   const handleHomeowner = () => {

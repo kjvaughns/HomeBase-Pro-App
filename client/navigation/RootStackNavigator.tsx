@@ -192,6 +192,7 @@ export default function RootStackNavigator() {
       }
       setNeedsRoleSelection(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-existing; cleanup tracked in Task #107
   }, [isAuthenticated, needsRoleSelection]);
 
   // canAccessProviderMode checks for an approved provider profile (existing providers).

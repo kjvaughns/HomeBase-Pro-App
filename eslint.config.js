@@ -18,7 +18,7 @@ module.exports = defineConfig([
     files: ["**/*.{js,jsx,ts,tsx}"],
     rules: {
       "react-hooks/rules-of-hooks": "error",
-      "react-hooks/exhaustive-deps": "warn",
+      "react-hooks/exhaustive-deps": "error",
     },
   },
 ]);

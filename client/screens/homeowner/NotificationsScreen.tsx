@@ -125,6 +125,7 @@ export default function NotificationsScreen() {
     enabled: !!user?.id,
   });
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-existing; cleanup tracked in Task #107
   const notifications = data?.notifications || [];
   const sections = useMemo(() => groupByDate(notifications), [notifications]);
   const unreadCount = useMemo(() => notifications.filter((n) => !n.isRead).length, [notifications]);

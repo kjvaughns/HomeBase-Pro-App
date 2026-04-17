@@ -196,6 +196,7 @@ function WeekStrip({ selectedDate, jobs, onDateSelect }: WeekStripProps) {
       result.push(new Date(today.getFullYear(), today.getMonth(), today.getDate() + i));
     }
     return result;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-existing; cleanup tracked in Task #107
   }, []);
 
   const jobCountByDate = useMemo(() => {
@@ -650,7 +651,9 @@ export default function ScheduleScreen() {
     enabled: !!providerId,
   });
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-existing; cleanup tracked in Task #107
   const jobs = jobsData?.jobs || [];
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-existing; cleanup tracked in Task #107
   const clients = clientsData?.clients || [];
 
   const getClientName = useCallback(

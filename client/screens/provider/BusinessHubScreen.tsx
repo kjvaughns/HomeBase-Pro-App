@@ -208,6 +208,7 @@ export default function BusinessHubScreen() {
     }
     // Always invalidate/refetch the main provider query with the recovered ID
     queryClient.invalidateQueries({ queryKey: ["/api/provider", recovered.id] });
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-existing; cleanup tracked in Task #107
   }, [recoveredProviderData]);
 
   // Profile tab state

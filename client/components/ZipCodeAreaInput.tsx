@@ -67,6 +67,7 @@ export function ZipCodeAreaInput({ value, onChange, label, optional, testID }: P
     } else {
       onChange("");
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-existing; cleanup tracked in Task #107
   }, [zip, selected]);
 
   const toggleChip = (z: string) => {

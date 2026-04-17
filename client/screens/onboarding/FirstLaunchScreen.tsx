@@ -36,6 +36,7 @@ export default function FirstLaunchScreen({ navigation }: Props) {
     ]).start(() => {
       navigation.navigate("AccountTypeSelection");
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-existing; cleanup tracked in Task #107
   }, []);
 
   return (

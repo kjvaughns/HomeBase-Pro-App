@@ -82,6 +82,7 @@ export default function MoneyScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<InvoiceFilter>("all");
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-existing; cleanup tracked in Task #107
   const invoices = invoicesData?.invoices || [];
   const clients = clientsData?.clients || [];
   const stats = statsData?.stats || { revenueMTD: 0, jobsCompleted: 0, activeClients: 0, upcomingJobs: 0 };

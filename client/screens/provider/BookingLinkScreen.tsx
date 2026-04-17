@@ -89,6 +89,7 @@ export default function BookingLinkScreen() {
     } else if (!isLoading) {
       setMode("create");
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-existing; cleanup tracked in Task #107
   }, [bookingLink, isLoading]);
 
   const resetFormFromLink = useCallback((link: BookingLink) => {

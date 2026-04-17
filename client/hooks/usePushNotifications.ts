@@ -102,6 +102,7 @@ export function usePushNotifications() {
         apiRequest("DELETE", "/api/push-tokens", { token: currentToken }).catch(() => {});
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-existing; cleanup tracked in Task #107
   }, [user?.id, sessionToken]);
 }
 
