@@ -15,6 +15,7 @@ import { Avatar } from "@/components/Avatar";
 import { GlassCard } from "@/components/GlassCard";
 import { JobCard } from "@/components/JobCard";
 import { SectionHeader } from "@/components/SectionHeader";
+import { GracePeriodBanner } from "@/components/GracePeriodBanner";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
@@ -300,6 +301,10 @@ export default function ProviderHomeScreen() {
           />
         }
       >
+        <View style={{ marginHorizontal: -Spacing.screenPadding }}>
+          <GracePeriodBanner />
+        </View>
+
         <Animated.View entering={FadeInDown.delay(100).duration(400)}>
           <GlassCard style={styles.greetingCard}>
             <View style={styles.greetingContent}>

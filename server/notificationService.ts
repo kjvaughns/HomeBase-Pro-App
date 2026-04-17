@@ -20,6 +20,9 @@ import {
   sendRebookingNudgeEmail,
   sendBookingRequestReceivedEmail,
   sendIntakeSubmissionNotification,
+  sendSubscriptionGraceStartEmail,
+  sendSubscriptionGraceReminderEmail,
+  sendSubscriptionExpiredEmail,
 } from './emailService';
 
 export type NotificationEvent =
@@ -42,7 +45,10 @@ export type NotificationEvent =
   | 'review.request'
   | 'rebook.prompt'
   | 'stripe.onboarding_needed'
-  | 'stripe.connected';
+  | 'stripe.connected'
+  | 'subscription.grace_start'
+  | 'subscription.grace_reminder'
+  | 'subscription.expired';
 
 export interface DispatchPayload {
   recipientUserId?: string;
@@ -583,6 +589,77 @@ async function _dispatch(event: NotificationEvent, payload: DispatchPayload): Pr
       });
       const result = await sendRebookingNudgeEmail({ clientEmail, clientName, providerName, serviceName, rebookLink });
       await updateDelivery(deliveryId, result.success ? 'sent' : 'failed', result.messageId, result.error);
+      break;
+    }
+
+    case 'subscription.grace_start': {
+      if (!payload.recipientEmail) break;
+      const deliveryId = await logDelivery({
+        channel: 'email', status: 'queued', eventType: event,
+        recipientUserId: payload.recipientUserId,
+        recipientEmail: payload.recipientEmail,
+        relatedRecordType: payload.relatedRecordType,
+        relatedRecordId: payload.relatedRecordId,
+      });
+      const result = await sendSubscriptionGraceStartEmail({
+        to: payload.recipientEmail,
+        providerName: payload.providerName || 'there',
+      });
+      await updateDelivery(deliveryId, result.success ? 'sent' : 'failed', result.messageId, result.error);
+      // Also log a push delivery row for dedup against hasDeliveryForRecord(..., 'push')
+      await logDelivery({
+        channel: 'push', status: 'sent', eventType: event,
+        recipientUserId: payload.recipientUserId,
+        relatedRecordType: payload.relatedRecordType,
+        relatedRecordId: payload.relatedRecordId,
+      });
+      break;
+    }
+
+    case 'subscription.grace_reminder': {
+      if (!payload.recipientEmail) break;
+      const deliveryId = await logDelivery({
+        channel: 'email', status: 'queued', eventType: event,
+        recipientUserId: payload.recipientUserId,
+        recipientEmail: payload.recipientEmail,
+        relatedRecordType: payload.relatedRecordType,
+        relatedRecordId: payload.relatedRecordId,
+      });
+      const result = await sendSubscriptionGraceReminderEmail({
+        to: payload.recipientEmail,
+        providerName: payload.providerName || 'there',
+        daysRemaining: payload.daysUntilDue ?? 2,
+      });
+      await updateDelivery(deliveryId, result.success ? 'sent' : 'failed', result.messageId, result.error);
+      await logDelivery({
+        channel: 'push', status: 'sent', eventType: event,
+        recipientUserId: payload.recipientUserId,
+        relatedRecordType: payload.relatedRecordType,
+        relatedRecordId: payload.relatedRecordId,
+      });
+      break;
+    }
+
+    case 'subscription.expired': {
+      if (!payload.recipientEmail) break;
+      const deliveryId = await logDelivery({
+        channel: 'email', status: 'queued', eventType: event,
+        recipientUserId: payload.recipientUserId,
+        recipientEmail: payload.recipientEmail,
+        relatedRecordType: payload.relatedRecordType,
+        relatedRecordId: payload.relatedRecordId,
+      });
+      const result = await sendSubscriptionExpiredEmail({
+        to: payload.recipientEmail,
+        providerName: payload.providerName || 'there',
+      });
+      await updateDelivery(deliveryId, result.success ? 'sent' : 'failed', result.messageId, result.error);
+      await logDelivery({
+        channel: 'push', status: 'sent', eventType: event,
+        recipientUserId: payload.recipientUserId,
+        relatedRecordType: payload.relatedRecordType,
+        relatedRecordId: payload.relatedRecordId,
+      });
       break;
     }
 

@@ -582,6 +582,49 @@ export async function sendStripeConnectedEmail(to: string, providerName: string)
   return sendEmail(to, 'Your Stripe payout account is connected', buildEmailBase('Payouts Connected', body));
 }
 
+// ─── Subscription gating templates ─────────────────────────────────────────────
+
+const SUBSCRIBE_URL = 'https://homebaseproapp.com/subscribe';
+
+export async function sendSubscriptionGraceStartEmail(data: {
+  to: string;
+  providerName: string;
+}): Promise<SendResult> {
+  const body = greeting(data.providerName) +
+    paragraph('Congratulations on your first paid booking through HomeBase! That moment is the start of a real business — and we are here to help you grow it.') +
+    `<div style="background:#f0fdf4;border-radius:8px;padding:16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
+      <p style="color:#166534;font-weight:600;margin:0 0 6px;">Your 7-day trial just started</p>
+      <p style="color:#15803d;font-size:13px;margin:0;">Keep using every feature for the next 7 days. Subscribe any time at homebaseproapp.com to keep creating jobs and sending invoices after that.</p>
+    </div>` +
+    appDownloadSection();
+  return sendEmail(data.to, 'Your first paid booking — your trial just started', buildEmailBase('Welcome to HomeBase Pro', body, 'Subscribe at homebaseproapp.com', SUBSCRIBE_URL));
+}
+
+export async function sendSubscriptionGraceReminderEmail(data: {
+  to: string;
+  providerName: string;
+  daysRemaining: number;
+}): Promise<SendResult> {
+  const dayLabel = data.daysRemaining === 1 ? '1 day' : `${data.daysRemaining} days`;
+  const body = greeting(data.providerName) +
+    paragraph(`You have ${dayLabel} left in your HomeBase trial. After that, creating jobs and sending invoices will pause until you subscribe.`) +
+    `<div style="background:#fffbeb;border-radius:8px;padding:16px;margin-bottom:20px;border-left:4px solid #f59e0b;">
+      <p style="color:#92400e;font-weight:600;margin:0 0 6px;">Keep your business running</p>
+      <p style="color:#92400e;font-size:13px;margin:0;">Subscribe at homebaseproapp.com to keep using every HomeBase feature without interruption.</p>
+    </div>`;
+  return sendEmail(data.to, `${dayLabel} left in your HomeBase trial`, buildEmailBase('Trial Ending Soon', body, 'Subscribe at homebaseproapp.com', SUBSCRIBE_URL));
+}
+
+export async function sendSubscriptionExpiredEmail(data: {
+  to: string;
+  providerName: string;
+}): Promise<SendResult> {
+  const body = greeting(data.providerName) +
+    paragraph('Your 7-day HomeBase trial has ended. Job and invoice creation are paused until you subscribe.') +
+    paragraph('Your existing data, clients, and bookings are safe — subscribing reactivates everything immediately.');
+  return sendEmail(data.to, 'Your HomeBase trial has ended', buildEmailBase('Subscribe to Continue', body, 'Subscribe at homebaseproapp.com', SUBSCRIBE_URL));
+}
+
 // ─── Provider notifications ────────────────────────────────────────────────────
 
 interface IntakeSubmissionNotificationData {

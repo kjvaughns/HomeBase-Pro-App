@@ -19,6 +19,8 @@ import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { NativeDatePickerSheet } from "@/components/NativeDatePickerSheet";
+import { SubscriptionGateModal } from "@/components/SubscriptionGateModal";
+import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
@@ -317,6 +319,9 @@ export default function AddJobScreen() {
     });
   };
 
+  const [showSubscriptionGate, setShowSubscriptionGate] = useState(false);
+  const { isGated: subscriptionGated } = useSubscriptionStatus();
+
   const createJobMutation = useMutation({
     mutationFn: async (data: any) => {
       const response = await apiRequest("POST", "/api/jobs", data);
@@ -331,7 +336,12 @@ export default function AddJobScreen() {
       });
       navigation.goBack();
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      const msg = String(error?.message ?? "");
+      if (msg.includes("SUBSCRIPTION_REQUIRED") || msg.startsWith("403")) {
+        setShowSubscriptionGate(true);
+        return;
+      }
       console.error("Create job error:", error);
     },
   });
@@ -362,6 +372,10 @@ export default function AddJobScreen() {
 
   const handleSave = () => {
     if (!selectedClientId || !selectedService || !providerId) return;
+    if (subscriptionGated) {
+      setShowSubscriptionGate(true);
+      return;
+    }
     const trimmedAnswers: Record<string, string> = {};
     Object.entries(intakeAnswers).forEach(([k, v]) => {
       const t = (v ?? "").trim();
@@ -1575,6 +1589,12 @@ export default function AddJobScreen() {
           setShowTimePicker(false);
         }}
         onCancel={() => setShowTimePicker(false)}
+      />
+      <SubscriptionGateModal
+        visible={showSubscriptionGate}
+        onClose={() => setShowSubscriptionGate(false)}
+        title="Subscribe to create jobs"
+        description="Your 7-day trial has ended. Subscribe at homebaseproapp.com to keep creating jobs and sending invoices. Your existing data is safe."
       />
     </ThemedView>
   );

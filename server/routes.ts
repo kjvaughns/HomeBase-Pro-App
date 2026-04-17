@@ -43,6 +43,11 @@ import {
   getStripe,
 } from "./stripeConnectService";
 import {
+  checkSubscriptionGate,
+  getProviderSubscriptionStatus,
+  maybeStartGracePeriod,
+} from "./subscriptionService";
+import {
   invoices,
   invoiceLineItems,
   providerPlans,
@@ -4930,6 +4935,9 @@ Respond with JSON only:
         return res.status(403).json({ error: "Forbidden: you do not own this provider account" });
       }
 
+      // Subscription gate — block job creation if grace period has expired
+      if (!(await checkSubscriptionGate(parsed.data.providerId, res))) return;
+
       // Fetch custom service snapshot before transaction for description/price enrichment.
       // Ownership check: verify the service belongs to the same provider as the job being created.
       let svcSnapshot: { description: string | null; pricingType: string; basePrice: string | null; priceFrom: string | null } | null = null;
@@ -5254,6 +5262,9 @@ Respond with JSON only:
       // Ownership: caller must own the provider they are creating an invoice for
       if (req.body.providerId && !(await assertProviderOwnership(req, req.body.providerId, res))) return;
 
+      // Subscription gate — block invoice creation if grace period has expired
+      if (req.body.providerId && !(await checkSubscriptionGate(req.body.providerId, res))) return;
+
       // Calculate total from line items if provided
       const lineItemsInput: any[] = Array.isArray(req.body.lineItems) ? req.body.lineItems : [];
       let total = parseFloat(req.body.amount || "0");
@@ -5321,6 +5332,7 @@ Respond with JSON only:
       const { providerId: bodyProviderId } = req.body;
       if (!bodyProviderId) return res.status(400).json({ error: "providerId is required" });
       if (!(await assertProviderOwnership(req, bodyProviderId, res))) return;
+      if (!(await checkSubscriptionGate(bodyProviderId, res))) return;
       const authProviderRecord = await storage.getProvider(bodyProviderId);
 
       const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
@@ -5595,6 +5607,14 @@ Respond with JSON only:
       }
       const invoice = await storage.markInvoicePaid(req.params.id);
       res.json({ invoice });
+
+      // First-paid trigger — start the 7-day grace period if this is the
+      // provider's first paid invoice. Wrapped to never break invoice payment.
+      if (invoice) {
+        maybeStartGracePeriod(invoice.providerId).catch((e) =>
+          console.error("[subscription] grace start failed:", e),
+        );
+      }
 
       // Dispatch paid notification (fire-and-forget)
       if (invoice && invoice.clientId) {
@@ -6037,6 +6057,7 @@ Respond with JSON only:
 
       // Ownership: caller must own the provider they are creating an invoice for
       if (!(await assertProviderOwnership(req, providerId, res))) return;
+      if (!(await checkSubscriptionGate(providerId, res))) return;
 
       // Calculate subtotal from line items
       let subtotalCents = 0;
@@ -6365,6 +6386,52 @@ Respond with JSON only:
     }
   });
 
+  // ============================================
+  // SUBSCRIPTION GATE ENDPOINTS
+  // ============================================
+
+  // Get subscription status for a provider
+  app.get("/api/providers/:providerId/subscription-status", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
+    try {
+      const { providerId } = req.params;
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
+      const status = await getProviderSubscriptionStatus(providerId);
+      res.json(status);
+    } catch (error: any) {
+      console.error("Get subscription status error:", error);
+      res.status(500).json({ error: error.message || "Failed to get subscription status" });
+    }
+  });
+
+  // Mark provider as subscribed (called when activation flow completes via website)
+  app.post("/api/providers/:providerId/activate-subscription", requireAuth, async (req: Request<{ providerId: string }>, res: Response) => {
+    try {
+      const { providerId } = req.params;
+      if (!(await assertProviderOwnership(req, providerId, res))) return;
+      const [existing] = await db
+        .select()
+        .from(providerPlans)
+        .where(eq(providerPlans.providerId, providerId));
+      if (existing) {
+        await db
+          .update(providerPlans)
+          .set({ isSubscribed: true, planTier: "professional", updatedAt: new Date() })
+          .where(eq(providerPlans.id, existing.id));
+      } else {
+        await db.insert(providerPlans).values({
+          providerId,
+          planTier: "professional",
+          isSubscribed: true,
+        });
+      }
+      const status = await getProviderSubscriptionStatus(providerId);
+      res.json(status);
+    } catch (error: any) {
+      console.error("Activate subscription error:", error);
+      res.status(500).json({ error: error.message || "Failed to activate subscription" });
+    }
+  });
+
   // Preview platform fee for a given amount
   app.post("/api/connect/fee-preview", requireAuth, async (req: Request, res: Response) => {
     try {
@@ -6406,6 +6473,7 @@ Respond with JSON only:
 
       // Ownership: caller must own the provider they are creating an invoice for
       if (!(await assertProviderOwnership(req, providerId, res))) return;
+      if (!(await checkSubscriptionGate(providerId, res))) return;
 
       // Calculate subtotal from line items
       let subtotalCents = 0;

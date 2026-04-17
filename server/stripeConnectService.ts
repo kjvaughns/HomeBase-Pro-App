@@ -837,6 +837,16 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
     .where(eq(invoices.id, invoiceId))
     .returning();
 
+  // First-paid trigger — start the 7-day grace period if applicable.
+  if (updatedInvoice) {
+    try {
+      const { maybeStartGracePeriod } = await import("./subscriptionService");
+      await maybeStartGracePeriod(updatedInvoice.providerId);
+    } catch (e) {
+      console.error("[subscription] grace start failed (webhook):", e);
+    }
+  }
+
   // Dispatch invoice.paid notification via webhook
   if (updatedInvoice) {
     try {

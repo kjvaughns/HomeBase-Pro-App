@@ -385,6 +385,20 @@ export async function runBootMigrations(): Promise<void> {
     // ── jobs: AI-generated checklist column ───────────────────────────────
     await runSql("jobs.checklist", `ALTER TABLE jobs ADD COLUMN IF NOT EXISTS checklist JSONB`);
 
+    // ── provider_plans: subscription gating columns ───────────────────────
+    await runSql(
+      "provider_plans.first_paid_booking_at",
+      `ALTER TABLE provider_plans ADD COLUMN IF NOT EXISTS first_paid_booking_at TIMESTAMP`,
+    );
+    await runSql(
+      "provider_plans.grace_period_ends_at",
+      `ALTER TABLE provider_plans ADD COLUMN IF NOT EXISTS grace_period_ends_at TIMESTAMP`,
+    );
+    await runSql(
+      "provider_plans.is_subscribed",
+      `ALTER TABLE provider_plans ADD COLUMN IF NOT EXISTS is_subscribed BOOLEAN NOT NULL DEFAULT FALSE`,
+    );
+
     // ── jobs: link to provider_custom_services ────────────────────────────
     await runSql("jobs.custom_service_id", `ALTER TABLE jobs ADD COLUMN IF NOT EXISTS custom_service_id VARCHAR REFERENCES provider_custom_services(id) ON DELETE SET NULL`);
 

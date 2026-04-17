@@ -294,6 +294,11 @@ export const providerPlans = pgTable("provider_plans", {
   planTier: providerPlanTierEnum("plan_tier").default("free"),
   platformFeePercent: decimal("platform_fee_percent", { precision: 5, scale: 2 }).default("10.00"), // 10% default
   platformFeeFixedCents: integer("platform_fee_fixed_cents").default(0), // additional fixed fee in cents
+  // Subscription gating: providers use the app free until first invoice is paid,
+  // then enter a 7-day grace period, then must subscribe to keep creating jobs/invoices.
+  firstPaidBookingAt: timestamp("first_paid_booking_at"),
+  gracePeriodEndsAt: timestamp("grace_period_ends_at"),
+  isSubscribed: boolean("is_subscribed").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

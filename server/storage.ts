@@ -204,8 +204,21 @@ export class DatabaseStorage implements IStorage {
       if (allProviderIds.length === 0) return [];
 
       const uniqueIds = [...new Set(allProviderIds)];
+      // Bulk-load expired-subscription provider IDs once.
+      const expiredRows = await db
+        .select({ providerId: providerPlans.providerId })
+        .from(providerPlans)
+        .where(
+          and(
+            eq(providerPlans.isSubscribed, false),
+            sql`${providerPlans.gracePeriodEndsAt} IS NOT NULL`,
+            sql`${providerPlans.gracePeriodEndsAt} < NOW()`,
+          ),
+        );
+      const expiredSet = new Set(expiredRows.map((r) => r.providerId));
       const results: Provider[] = [];
       for (const id of uniqueIds) {
+        if (expiredSet.has(id)) continue;
         const [provider] = await db.select().from(providers).where(eq(providers.id, id));
         if (provider && provider.isActive && provider.isPublic && provider.userId) {
           results.push(provider);
@@ -214,11 +227,13 @@ export class DatabaseStorage implements IStorage {
       return results;
     }
     // No filter — return only providers that are active, public, and owned by a real user.
+    // Also exclude providers whose subscription grace period has expired.
     return db.select().from(providers).where(
       and(
         eq(providers.isActive, true),
         eq(providers.isPublic, true),
-        sql`${providers.userId} IS NOT NULL`
+        sql`${providers.userId} IS NOT NULL`,
+        sql`NOT EXISTS (SELECT 1 FROM provider_plans pp WHERE pp.provider_id = ${providers.id} AND COALESCE(pp.is_subscribed, false) = false AND pp.grace_period_ends_at IS NOT NULL AND pp.grace_period_ends_at < NOW())`
       )
     );
   }

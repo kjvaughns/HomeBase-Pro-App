@@ -1019,7 +1019,59 @@ function setupReminderJobs(): void {
       console.error('[cron:orphan-cleanup] error:', err);
     }
   });
-  console.log('[cron] reminder jobs scheduled: 24h/2h booking reminders, 3d/1d invoice reminders, daily orphan-provider cleanup');
+  // Subscription grace-period reminders — 09:00 daily (≤2 days remaining)
+  cron.schedule('0 9 * * *', runSubscriptionGraceReminder);
+  // Subscription expired notice — 10:00 daily (expired within last 24h)
+  cron.schedule('0 10 * * *', runSubscriptionExpiredNotice);
+  console.log('[cron] reminder jobs scheduled: 24h/2h booking reminders, 3d/1d invoice reminders, daily orphan-provider cleanup, subscription grace/expired notices');
+}
+
+async function runSubscriptionGraceReminder(): Promise<void> {
+  try {
+    const { sendGraceReminderNotification } = await import('./subscriptionService');
+    const result = await pool.query(`
+      SELECT provider_id, grace_period_ends_at FROM provider_plans
+      WHERE COALESCE(is_subscribed, false) = false
+        AND grace_period_ends_at IS NOT NULL
+        AND grace_period_ends_at > NOW()
+        AND grace_period_ends_at <= NOW() + INTERVAL '2 days'
+    `);
+    for (const row of result.rows) {
+      const ends = new Date(row.grace_period_ends_at);
+      const daysRemaining = Math.max(1, Math.ceil((ends.getTime() - Date.now()) / 86400000));
+      try {
+        await sendGraceReminderNotification(row.provider_id, daysRemaining);
+      } catch (e) {
+        console.error('[cron:subscription-grace-reminder] per-provider error:', e);
+      }
+    }
+    console.log(`[cron:subscription-grace-reminder] processed ${result.rows.length} provider(s)`);
+  } catch (err) {
+    console.error('[cron:subscription-grace-reminder] error:', err);
+  }
+}
+
+async function runSubscriptionExpiredNotice(): Promise<void> {
+  try {
+    const { sendGraceExpiredNotification } = await import('./subscriptionService');
+    const result = await pool.query(`
+      SELECT provider_id FROM provider_plans
+      WHERE COALESCE(is_subscribed, false) = false
+        AND grace_period_ends_at IS NOT NULL
+        AND grace_period_ends_at <= NOW()
+        AND grace_period_ends_at > NOW() - INTERVAL '24 hours'
+    `);
+    for (const row of result.rows) {
+      try {
+        await sendGraceExpiredNotification(row.provider_id);
+      } catch (e) {
+        console.error('[cron:subscription-expired-notice] per-provider error:', e);
+      }
+    }
+    console.log(`[cron:subscription-expired-notice] processed ${result.rows.length} provider(s)`);
+  } catch (err) {
+    console.error('[cron:subscription-expired-notice] error:', err);
+  }
 }
 
 function setupErrorHandler(app: express.Application) {

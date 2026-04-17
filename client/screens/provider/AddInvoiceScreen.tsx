@@ -14,6 +14,8 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { NativeDatePickerSheet } from "@/components/NativeDatePickerSheet";
+import { SubscriptionGateModal } from "@/components/SubscriptionGateModal";
+import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
@@ -198,6 +200,14 @@ export default function AddInvoiceScreen() {
     sendImmediately,
   });
 
+  const [showSubscriptionGate, setShowSubscriptionGate] = useState(false);
+  const { isGated: subscriptionGated } = useSubscriptionStatus();
+
+  const isSubscriptionError = (err: any) => {
+    const msg = String(err?.message ?? "");
+    return msg.includes("SUBSCRIPTION_REQUIRED") || msg.startsWith("403");
+  };
+
   const createMutation = useMutation({
     mutationFn: async (data: ReturnType<typeof buildPayload>) => {
       const response = await apiRequest("POST", "/api/invoices/create-and-send", data);
@@ -209,7 +219,11 @@ export default function AddInvoiceScreen() {
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "stats"] });
       navigation.goBack();
     },
-    onError: () => {
+    onError: (err) => {
+      if (isSubscriptionError(err)) {
+        setShowSubscriptionGate(true);
+        return;
+      }
       setFormError("Failed to create invoice. Please try again.");
     },
   });
@@ -224,7 +238,11 @@ export default function AddInvoiceScreen() {
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "invoices"] });
       navigation.goBack();
     },
-    onError: () => {
+    onError: (err) => {
+      if (isSubscriptionError(err)) {
+        setShowSubscriptionGate(true);
+        return;
+      }
       setFormError("Failed to save invoice. Please try again.");
     },
   });
@@ -240,11 +258,19 @@ export default function AddInvoiceScreen() {
 
   const handleCreateAndSend = () => {
     if (!validateForm()) return;
+    if (subscriptionGated) {
+      setShowSubscriptionGate(true);
+      return;
+    }
     createMutation.mutate(buildPayload(true));
   };
 
   const handleSaveDraft = () => {
     if (!validateForm()) return;
+    if (subscriptionGated) {
+      setShowSubscriptionGate(true);
+      return;
+    }
     saveDraftMutation.mutate(buildPayload(false));
   };
 
@@ -597,6 +623,12 @@ export default function AddInvoiceScreen() {
           insets={insets}
         />
       </Modal>
+      <SubscriptionGateModal
+        visible={showSubscriptionGate}
+        onClose={() => setShowSubscriptionGate(false)}
+        title="Subscribe to send invoices"
+        description="Your 7-day trial has ended. Subscribe at homebaseproapp.com to keep creating jobs and sending invoices. Your existing data is safe."
+      />
     </ThemedView>
   );
 }
