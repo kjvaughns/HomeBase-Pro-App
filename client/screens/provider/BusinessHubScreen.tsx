@@ -38,7 +38,7 @@ import { useProviderStore } from "@/state/providerStore";
 import { apiRequest, getApiUrl, getAuthHeaders } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
-type HubTab = "profile" | "services" | "booking" | "policies";
+type HubTab = "profile" | "services" | "booking" | "policies" | "reviews";
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type FeatherName = ComponentProps<typeof Feather>["name"];
 type DayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
@@ -68,6 +68,7 @@ const TABS: { key: HubTab; label: string; icon: FeatherName }[] = [
   { key: "services", label: "Services", icon: "tool" },
   { key: "booking", label: "Booking", icon: "link" },
   { key: "policies", label: "Policies", icon: "file-text" },
+  { key: "reviews", label: "Reviews", icon: "star" },
 ];
 
 const DAYS: { key: DayKey; short: string }[] = [
@@ -114,6 +115,14 @@ interface BookingLink {
   isActive: boolean;
   slug: string;
   status: "active" | "paused" | "disabled";
+}
+
+interface ReviewItem {
+  id: string;
+  reviewerName: string;
+  rating: number;
+  createdAt: string;
+  comment?: string;
 }
 
 interface ProviderRecord {
@@ -253,9 +262,14 @@ export default function BusinessHubScreen() {
     queryKey: ["/api/providers", providerId, "booking-links"],
     enabled: !!providerId && activeTab === "booking",
   });
+  const { data: reviewsData, isLoading: reviewsLoading } = useQuery<{ reviews: ReviewItem[] }>({
+    queryKey: ["/api/provider", providerId, "reviews"],
+    enabled: !!providerId && activeTab === "reviews",
+  });
 
   const services = servicesData?.services || [];
   const bookingLinks = bookingLinksData?.bookingLinks || [];
+  const reviews = reviewsData?.reviews || [];
 
   // Populate profile state from API data
   useEffect(() => {
@@ -1206,6 +1220,92 @@ export default function BusinessHubScreen() {
     )
   );
 
+  const renderReviewsTab = () => {
+    const avgRating = provider?.rating ? Number(provider.rating) : 0;
+    const totalReviews = provider?.reviewCount ?? reviews.length;
+
+    return (
+      <ScrollView
+        contentContainerStyle={styles.tabContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View entering={FadeInDown.duration(250)}>
+          <GlassCard style={styles.reviewsSummary}>
+            <View style={styles.reviewsSummaryRow}>
+              <ThemedText style={styles.reviewsBigRating}>
+                {avgRating > 0 ? avgRating.toFixed(1) : "—"}
+              </ThemedText>
+              <View style={styles.reviewsSummaryInfo}>
+                <View style={styles.reviewsStars}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Feather
+                      key={star}
+                      name="star"
+                      size={16}
+                      color={star <= Math.round(avgRating) ? Colors.warning : theme.backgroundTertiary}
+                    />
+                  ))}
+                </View>
+                <ThemedText style={[styles.reviewsCountText, { color: theme.textSecondary }]}>
+                  {totalReviews > 0
+                    ? `Based on ${totalReviews} review${totalReviews !== 1 ? "s" : ""}`
+                    : "No reviews yet"}
+                </ThemedText>
+              </View>
+            </View>
+          </GlassCard>
+        </Animated.View>
+
+        {reviewsLoading ? (
+          <View style={styles.reviewsLoading}>
+            <ActivityIndicator size="small" color={Colors.accent} />
+          </View>
+        ) : reviews.length === 0 ? (
+          <EmptyState
+            icon="star"
+            title="No reviews yet"
+            subtitle="Reviews from completed bookings will appear here. Deliver great service and they'll come!"
+          />
+        ) : (
+          reviews.map((review, index) => (
+            <Animated.View
+              key={review.id}
+              entering={FadeInDown.delay(index * 40).duration(250)}
+            >
+              <View style={[styles.reviewCard, { backgroundColor: theme.cardBackground }]}>
+                <View style={styles.reviewCardHeader}>
+                  <ThemedText style={styles.reviewerName}>{review.reviewerName}</ThemedText>
+                  <View style={styles.reviewsStars}>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <Feather
+                        key={star}
+                        name="star"
+                        size={12}
+                        color={star <= review.rating ? Colors.warning : theme.backgroundTertiary}
+                      />
+                    ))}
+                  </View>
+                </View>
+                <ThemedText style={[styles.reviewDate, { color: theme.textTertiary }]}>
+                  {new Date(review.createdAt).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                </ThemedText>
+                {review.comment ? (
+                  <ThemedText style={[styles.reviewComment, { color: theme.textSecondary }]}>
+                    {review.comment}
+                  </ThemedText>
+                ) : null}
+              </View>
+            </Animated.View>
+          ))
+        )}
+      </ScrollView>
+    );
+  };
+
   return (
     <ThemedView style={styles.container}>
       <View style={[styles.tabBar, { paddingTop: headerHeight + Spacing.sm }]}>
@@ -1284,6 +1384,7 @@ export default function BusinessHubScreen() {
             {activeTab === "services" ? renderServicesTab() : null}
             {activeTab === "booking" ? renderBookingTab() : null}
             {activeTab === "policies" ? renderPoliciesTab() : null}
+            {activeTab === "reviews" ? renderReviewsTab() : null}
           </>
         )}
       </View>

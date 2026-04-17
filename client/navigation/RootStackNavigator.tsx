@@ -409,7 +409,7 @@ export default function RootStackNavigator() {
         name="AccountSecurity"
         component={AccountSecurityScreen}
         options={{
-          headerTitle: "Email & Password",
+          headerTitle: "Account & Security",
         }}
       />
       <Stack.Screen

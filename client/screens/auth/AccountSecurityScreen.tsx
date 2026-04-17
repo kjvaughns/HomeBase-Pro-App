@@ -1,7 +1,9 @@
 import React, { useState } from "react";
-import { Modal, Pressable, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 
@@ -13,7 +15,9 @@ import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollV
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Typography, BorderRadius, Colors } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
+import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 import { apiRequest, queryClient } from "@/lib/query-client";
+import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type ActiveSheet = "email" | "password" | null;
 
@@ -42,9 +46,35 @@ export default function AccountSecurityScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { theme } = useTheme();
-  const { user, updateUser, setSessionToken } = useAuthStore();
+  const { user, activeRole, updateUser, setSessionToken, logout } = useAuthStore();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
+  const isProvider = activeRole === "provider";
+  const { isSubscribed, isInGrace, daysRemainingInGrace, status } = useSubscriptionStatus();
+  const subscriptionSubtitle = isSubscribed
+    ? "Active — manage your HomeBase Pro plan"
+    : isInGrace
+      ? `${daysRemainingInGrace ?? 7} days left in trial`
+      : status === "expired"
+        ? "Trial ended — subscribe to reactivate"
+        : "Free until your first paid booking";
 
   const [active, setActive] = useState<ActiveSheet>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const handleDeleteAccount = async () => {
+    setDeleteLoading(true);
+    try {
+      await apiRequest("DELETE", "/api/auth/account", undefined);
+      logout();
+    } catch (err) {
+      console.error("Delete account error:", err);
+    } finally {
+      setDeleteLoading(false);
+      setShowDeleteModal(false);
+    }
+  };
 
   return (
     <ThemedView style={styles.container}>
@@ -82,6 +112,59 @@ export default function AccountSecurityScreen() {
         <ThemedText style={[styles.helperText, { color: theme.textTertiary }]}>
           Changing your password signs you out of all other devices.
         </ThemedText>
+
+        {isProvider ? (
+          <>
+            <ThemedText
+              style={[styles.sectionTitle, { color: theme.textSecondary, marginTop: Spacing.xl }]}
+            >
+              Subscription
+            </ThemedText>
+            <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
+              <Row
+                label="Subscription & Plan"
+                value={subscriptionSubtitle}
+                icon="credit-card"
+                onPress={() => navigation.navigate("Subscription")}
+                theme={theme}
+                isFirst
+                isLast
+                testID="row-subscription"
+              />
+            </View>
+          </>
+        ) : null}
+
+        <ThemedText
+          style={[styles.sectionTitle, { color: theme.textSecondary, marginTop: Spacing.xl }]}
+        >
+          Danger Zone
+        </ThemedText>
+        <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
+          <Pressable
+            onPress={() => setShowDeleteModal(true)}
+            style={({ pressed }) => [
+              styles.row,
+              {
+                opacity: pressed ? 0.6 : 1,
+                borderRadius: BorderRadius.lg,
+              },
+            ]}
+            testID="button-delete-account"
+          >
+            <View style={[styles.rowIcon, { backgroundColor: "#FF3B3014" }]}>
+              <Feather name="trash-2" size={18} color="#FF3B30" />
+            </View>
+            <View style={styles.rowText}>
+              <ThemedText style={[styles.rowLabel, { color: "#FF3B30" }]}>
+                Delete Account
+              </ThemedText>
+              <ThemedText style={[styles.rowValue, { color: theme.textSecondary }]}>
+                Permanently remove your account and data
+              </ThemedText>
+            </View>
+          </Pressable>
+        </View>
       </KeyboardAwareScrollViewCompat>
 
       <Modal
@@ -116,6 +199,47 @@ export default function AccountSecurityScreen() {
             queryClient.invalidateQueries();
           }}
         />
+      </Modal>
+
+      <Modal
+        visible={showDeleteModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDeleteModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: theme.cardBackground }]}>
+            <View style={[styles.modalIconWrap, { backgroundColor: "#FF3B3014" }]}>
+              <Feather name="trash-2" size={28} color="#FF3B30" />
+            </View>
+            <ThemedText style={styles.modalTitle}>Delete Account</ThemedText>
+            <ThemedText style={[styles.modalBody, { color: theme.textSecondary }]}>
+              {isProvider
+                ? "This will permanently delete your provider account and all associated data including your clients, jobs, invoices, and business profile. This action cannot be undone."
+                : "This will permanently delete your account and all associated data. This action cannot be undone."}
+            </ThemedText>
+            <Pressable
+              style={[styles.modalDeleteBtn, deleteLoading && { opacity: 0.7 }]}
+              onPress={handleDeleteAccount}
+              disabled={deleteLoading}
+              testID="button-confirm-delete"
+            >
+              {deleteLoading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <ThemedText style={styles.modalDeleteText}>Delete My Account</ThemedText>
+              )}
+            </Pressable>
+            <Pressable
+              style={[styles.modalCancelBtn, { backgroundColor: theme.backgroundSecondary }]}
+              onPress={() => setShowDeleteModal(false)}
+              disabled={deleteLoading}
+              testID="button-cancel-delete"
+            >
+              <ThemedText style={[styles.modalCancelText, { color: theme.text }]}>Cancel</ThemedText>
+            </Pressable>
+          </View>
+        </View>
       </Modal>
     </ThemedView>
   );
@@ -606,5 +730,63 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "rgba(0,0,0,0.1)",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: Spacing.xl,
+  },
+  modalCard: {
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.xl,
+    width: "100%",
+    alignItems: "center",
+  },
+  modalIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.lg,
+  },
+  modalTitle: {
+    ...Typography.title2,
+    fontWeight: "700",
+    marginBottom: Spacing.sm,
+    textAlign: "center",
+  },
+  modalBody: {
+    ...Typography.body,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: Spacing.xl,
+  },
+  modalDeleteBtn: {
+    backgroundColor: "#FF3B30",
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.md,
+    width: "100%",
+    alignItems: "center",
+    marginBottom: Spacing.sm,
+    minHeight: 48,
+    justifyContent: "center",
+  },
+  modalDeleteText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  modalCancelBtn: {
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.md,
+    width: "100%",
+    alignItems: "center",
+  },
+  modalCancelText: {
+    fontWeight: "600",
+    fontSize: 16,
   },
 });
