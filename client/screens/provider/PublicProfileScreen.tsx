@@ -28,6 +28,7 @@ import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { getApiUrl, getAuthHeaders } from "@/lib/query-client";
 import { mapApiProvider } from "@/lib/providerUtils";
+import { formatServiceAreaSubtitle } from "@/lib/formatServiceArea";
 
 type TabType = "about" | "services" | "reviews";
 
@@ -646,11 +647,17 @@ export default function PublicProfileScreen() {
                 <ThemedText style={styles.providerName}>
                   {provider?.name ?? provider?.businessName ?? "Your Business"}
                 </ThemedText>
-                {rawProvider?.serviceArea ? (
-                  <ThemedText style={[styles.serviceAreaText, { color: theme.textSecondary }]}>
-                    {rawProvider.serviceArea}
-                  </ThemedText>
-                ) : null}
+                {(() => {
+                  const subtitle = formatServiceAreaSubtitle(
+                    rawProvider?.serviceCities,
+                    rawProvider?.serviceArea
+                  );
+                  return subtitle ? (
+                    <ThemedText style={[styles.serviceAreaText, { color: theme.textSecondary }]}>
+                      {subtitle}
+                    </ThemedText>
+                  ) : null;
+                })()}
                 <View style={styles.ratingRow}>
                   {renderStars(safeRating)}
                   <ThemedText style={styles.ratingText}>

@@ -24,6 +24,7 @@ import { AccountGateModal } from "@/components/AccountGateModal";
 import { getApiUrl, getAuthHeaders } from "@/lib/query-client";
 import { Provider } from "@/state/types";
 import { mapApiProvider, ApiServiceItem } from "@/lib/providerUtils";
+import { formatServiceAreaSubtitle } from "@/lib/formatServiceArea";
 
 type ScreenRouteProp = RouteProp<RootStackParamList, "ProviderProfile">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -569,11 +570,17 @@ export default function ProviderProfileScreen() {
                 <ThemedText style={styles.providerName}>
                   {provider.name || provider.businessName}
                 </ThemedText>
-                {rawProvider?.serviceArea ? (
-                  <ThemedText style={[styles.serviceAreaText, { color: theme.textSecondary }]}>
-                    {rawProvider.serviceArea}
-                  </ThemedText>
-                ) : null}
+                {(() => {
+                  const subtitle = formatServiceAreaSubtitle(
+                    rawProvider?.serviceCities,
+                    rawProvider?.serviceArea
+                  );
+                  return subtitle ? (
+                    <ThemedText style={[styles.serviceAreaText, { color: theme.textSecondary }]}>
+                      {subtitle}
+                    </ThemedText>
+                  ) : null;
+                })()}
                 <View style={styles.ratingRow}>
                   {renderStars(safeRating)}
                   <ThemedText style={styles.ratingText}>
