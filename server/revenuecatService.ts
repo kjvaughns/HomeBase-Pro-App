@@ -96,6 +96,26 @@ async function upsertPlan(
   return { wasSubscribed, isSubscribed };
 }
 
+async function notifyDeactivated(providerId: string) {
+  try {
+    const [provider] = await db
+      .select()
+      .from(providers)
+      .where(eq(providers.id, providerId));
+    if (!provider?.userId) return;
+    await dispatchNotification(
+      provider.userId,
+      "Subscription ended",
+      "Your HomeBase Pro subscription has ended. Resubscribe anytime to restore Pro features.",
+      "subscription.cancelled",
+      { providerId },
+      "reminders",
+    );
+  } catch (err) {
+    console.error("[revenuecat] notifyDeactivated error:", err);
+  }
+}
+
 async function notifyActivated(providerId: string) {
   try {
     const [provider] = await db
@@ -198,7 +218,7 @@ export async function handleRevenueCatWebhook(
         expiresAt !== null &&
         expiresAt.getTime() > Date.now();
 
-      await upsertPlan(providerId, {
+      const { wasSubscribed, isSubscribed } = await upsertPlan(providerId, {
         isSubscribed: stillEntitled ? true : false,
         subscriptionStatus: stillEntitled
           ? "cancel_at_period_end"
@@ -206,6 +226,8 @@ export async function handleRevenueCatWebhook(
         subscriptionEndedAt: stillEntitled ? null : new Date(),
         currentPeriodEnd: expiresAt,
       });
+      // Mirror activation behavior: only fire on a true flip subscribed→unsubscribed.
+      if (wasSubscribed && !isSubscribed) await notifyDeactivated(providerId);
     } else {
       // Other event types (TEST, NON_RENEWING_PURCHASE, etc.) — log and ack.
       console.log(`[revenuecat] received ${eventType} (no-op)`);

@@ -31,6 +31,7 @@ const linking = {
   config: {
     screens: {
       SimpleBooking: "SimpleBooking",
+      Subscription: "Subscription",
     },
   },
 };
