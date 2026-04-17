@@ -217,10 +217,15 @@ export default function MoreScreen() {
               </ThemedText>
               <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
                 <ListRow
+                  title="Email & Password"
+                  leftIcon="lock"
+                  onPress={() => navigation.navigate("AccountSecurity")}
+                  isFirst
+                />
+                <ListRow
                   title="Notifications"
                   leftIcon="bell"
                   onPress={() => navigation.navigate("Notifications")}
-                  isFirst
                   badge={unreadCount > 0 ? unreadCount : undefined}
                 />
                 <ListRow

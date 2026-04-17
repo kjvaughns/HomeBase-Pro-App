@@ -146,11 +146,16 @@ export default function ProviderMoreScreen() {
           </ThemedText>
           <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
             <ListRow
+              title="Email & Password"
+              leftIcon="lock"
+              onPress={() => navigation.navigate("AccountSecurity")}
+              isFirst
+            />
+            <ListRow
               title="Subscription & Plan"
               subtitle="Manage at homebaseproapp.com"
               leftIcon="credit-card"
               onPress={() => navigation.navigate("Subscription")}
-              isFirst
             />
             <ListRow
               title="Reviews"

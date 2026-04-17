@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "node:http";
 import * as fs from "fs";
 import * as path from "path";
-import { hash as bcryptHash } from "bcryptjs";
+import { hash as bcryptHash, compare as bcryptCompare } from "bcryptjs";
 const BCRYPT_SALT_ROUNDS = 10;
 import { openai, HOMEBASE_SYSTEM_PROMPT, PROVIDER_ASSISTANT_PROMPT } from "./openai";
 import { storage } from "./storage";
@@ -1073,6 +1073,108 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Reset password error:", error);
       res.status(500).json({ error: "Failed to reset password" });
+    }
+  });
+
+  app.post("/api/auth/change-password", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.authenticatedUserId!;
+      const { currentPassword, newPassword } = req.body ?? {};
+
+      if (!currentPassword || typeof currentPassword !== "string") {
+        return res.status(400).json({ error: "Current password is required" });
+      }
+      if (!newPassword || typeof newPassword !== "string") {
+        return res.status(400).json({ error: "New password is required" });
+      }
+      if (newPassword.length < 8) {
+        return res.status(400).json({ error: "New password must be at least 8 characters" });
+      }
+      if (newPassword === currentPassword) {
+        return res.status(400).json({ error: "New password must be different from current password" });
+      }
+
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const valid = await bcryptCompare(currentPassword, user.password);
+      if (!valid) {
+        return res.status(401).json({ error: "Current password is incorrect" });
+      }
+
+      const hashed = await bcryptHash(newPassword, BCRYPT_SALT_ROUNDS);
+
+      // Update password and bump tokenVersion to invalidate other sessions
+      await db
+        .update(users)
+        .set({ password: hashed, tokenVersion: sql`token_version + 1`, updatedAt: new Date() })
+        .where(eq(users.id, userId));
+
+      // Issue a fresh token for the current session so it keeps working
+      const refreshed = await storage.getUser(userId);
+      const role = (await storage.getProviderByUserId(userId)) ? "provider" : "homeowner";
+      const newToken = generateToken(userId, role, refreshed?.tokenVersion ?? 0);
+      res.cookie("token", newToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+
+      res.json({ success: true, token: newToken });
+    } catch (error) {
+      console.error("Change password error:", error);
+      res.status(500).json({ error: "Failed to change password" });
+    }
+  });
+
+  app.post("/api/auth/change-email", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.authenticatedUserId!;
+      const { currentPassword, newEmail } = req.body ?? {};
+
+      if (!currentPassword || typeof currentPassword !== "string") {
+        return res.status(400).json({ error: "Current password is required" });
+      }
+      if (!newEmail || typeof newEmail !== "string") {
+        return res.status(400).json({ error: "New email is required" });
+      }
+      const cleaned = newEmail.trim().toLowerCase();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(cleaned)) {
+        return res.status(400).json({ error: "Please enter a valid email address" });
+      }
+
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      if (cleaned === user.email.toLowerCase()) {
+        return res.status(400).json({ error: "That is already your email address" });
+      }
+
+      const valid = await bcryptCompare(currentPassword, user.password);
+      if (!valid) {
+        return res.status(401).json({ error: "Current password is incorrect" });
+      }
+
+      const existing = await storage.getUserByEmail(cleaned);
+      if (existing && existing.id !== userId) {
+        return res.status(409).json({ error: "That email is already in use" });
+      }
+
+      const [updated] = await db
+        .update(users)
+        .set({ email: cleaned, updatedAt: new Date() })
+        .where(eq(users.id, userId))
+        .returning();
+
+      res.json({ success: true, email: updated.email });
+    } catch (error) {
+      console.error("Change email error:", error);
+      res.status(500).json({ error: "Failed to change email" });
     }
   });
 

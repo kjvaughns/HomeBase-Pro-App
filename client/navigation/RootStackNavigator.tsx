@@ -34,6 +34,7 @@ import AppointmentDetailScreen from "@/screens/homeowner/AppointmentDetailScreen
 import PaymentScreen from "@/screens/homeowner/PaymentScreen";
 import ReviewScreen from "@/screens/homeowner/ReviewScreen";
 import ProfileEditScreen from "@/screens/homeowner/ProfileEditScreen";
+import AccountSecurityScreen from "@/screens/auth/AccountSecurityScreen";
 import AddressesScreen from "@/screens/homeowner/AddressesScreen";
 import NotificationsScreen from "@/screens/homeowner/NotificationsScreen";
 import NotificationPreferencesScreen from "@/screens/homeowner/NotificationPreferencesScreen";
@@ -125,6 +126,7 @@ export type RootStackParamList = {
   Payment: { jobId: string; invoiceId: string };
   Review: { jobId: string };
   ProfileEdit: undefined;
+  AccountSecurity: undefined;
   Addresses: undefined;
   Notifications: undefined;
   NotificationPreferences: undefined;
@@ -401,6 +403,13 @@ export default function RootStackNavigator() {
         component={ProfileEditScreen}
         options={{
           headerTitle: "Edit Profile",
+        }}
+      />
+      <Stack.Screen
+        name="AccountSecurity"
+        component={AccountSecurityScreen}
+        options={{
+          headerTitle: "Email & Password",
         }}
       />
       <Stack.Screen
