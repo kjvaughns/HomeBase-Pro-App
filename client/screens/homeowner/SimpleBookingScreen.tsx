@@ -302,9 +302,36 @@ export default function SimpleBookingScreen() {
   });
 
   const handleBook = () => {
-    if (!canBook) {
+    if (!defaultHome) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("Missing Info", "Please select a date and time");
+      Alert.alert(
+        "Add a Home Address",
+        "We need a home address to send the provider. Add one now to continue.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Add Address", onPress: () => navigation.navigate("Addresses" as never) },
+        ]
+      );
+      return;
+    }
+    if (!selectedServiceId) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        "Select a Service",
+        primaryServices.length === 0
+          ? "This provider hasn't published any services yet. Please choose another provider."
+          : "Please choose a service to continue."
+      );
+      return;
+    }
+    if (!selectedDate) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("Select a Date", "Please pick a date for your appointment.");
+      return;
+    }
+    if (!selectedTime) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("Select a Time", "Please pick a time slot for your appointment.");
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -569,9 +596,17 @@ export default function SimpleBookingScreen() {
               <View style={styles.alertRow}>
                 <Feather name="alert-circle" size={18} color="#F59E0B" />
                 <ThemedText style={{ marginLeft: Spacing.sm, flex: 1 }}>
-                  Please add your home address in the app settings before booking.
+                  Add a home address so the provider knows where to come.
                 </ThemedText>
               </View>
+              <Pressable
+                onPress={() => navigation.navigate("Addresses" as never)}
+                style={{ marginTop: Spacing.sm, alignSelf: "flex-start" }}
+              >
+                <ThemedText style={{ color: Colors.accent, fontWeight: "600" }}>
+                  Add Address
+                </ThemedText>
+              </Pressable>
             </GlassCard>
           </Animated.View>
         ) : null}
