@@ -13,7 +13,8 @@ import {
 import { openExternalUrl } from "@/lib/openExternalUrl";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation } from "@react-navigation/native";
-import type { NavigationProp, ParamListBase } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 
@@ -53,7 +54,8 @@ export default function SubscriptionScreen() {
   const { theme, isDark } = useTheme();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const {
     data,
     isLoading,
@@ -107,10 +109,7 @@ export default function SubscriptionScreen() {
   }, [loadOffering]);
 
   const handleDeleteAccount = useCallback(() => {
-    navigation.navigate(
-      "ProviderTabs" as never,
-      { screen: "ProviderMore" } as never,
-    );
+    navigation.navigate("AccountSecurity");
   }, [navigation]);
 
   const handleContactSupport = useCallback(() => {
