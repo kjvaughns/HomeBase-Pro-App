@@ -1,0 +1,733 @@
+# Replit Prompt — Subscription Gate Implementation
+
+Paste this entire prompt into Replit agent.
+
+---
+
+You are implementing the HomeBase provider subscription gate system. The business model is: **providers use the app completely free until their first invoice is paid by a client. After that, they get a 7-day grace period, then their revenue-generating features lock until they subscribe via the website.**
+
+This is the full implementation. Work through every step. Do not skip anything.
+
+---
+
+## STEP 1 — Update the database schema
+
+File: `shared/schema.ts`
+
+Find the `provider_plans` table (around line 291). Add these three new columns to it:
+
+```typescript
+firstPaidBookingAt: timestamp("first_paid_booking_at"),
+gracePeriodEndsAt: timestamp("grace_period_ends_at"),
+isSubscribed: boolean("is_subscribed").default(false).notNull(),
+```
+
+Then run the migration to apply these columns to the database. Use drizzle to push the schema change.
+
+---
+
+## STEP 2 — Add a subscription status helper function to server
+
+File: `server/storage.ts` (or create `server/subscriptionUtils.ts`)
+
+Add this helper function that computes a provider's current subscription state:
+
+```typescript
+export type SubscriptionStatus = 'free' | 'grace_period' | 'expired' | 'subscribed';
+
+export function computeSubscriptionStatus(plan: {
+  isSubscribed: boolean;
+  firstPaidBookingAt: Date | null;
+  gracePeriodEndsAt: Date | null;
+}): {
+  status: SubscriptionStatus;
+  daysRemainingInGrace: number | null;
+  firstPaidBookingAt: Date | null;
+  gracePeriodEndsAt: Date | null;
+} {
+  if (plan.isSubscribed) {
+    return { status: 'subscribed', daysRemainingInGrace: null, firstPaidBookingAt: plan.firstPaidBookingAt, gracePeriodEndsAt: plan.gracePeriodEndsAt };
+  }
+  if (!plan.firstPaidBookingAt) {
+    return { status: 'free', daysRemainingInGrace: null, firstPaidBookingAt: null, gracePeriodEndsAt: null };
+  }
+  const now = new Date();
+  if (plan.gracePeriodEndsAt && now < plan.gracePeriodEndsAt) {
+    const msRemaining = plan.gracePeriodEndsAt.getTime() - now.getTime();
+    const daysRemaining = Math.ceil(msRemaining / (1000 * 60 * 60 * 24));
+    return { status: 'grace_period', daysRemainingInGrace: daysRemaining, firstPaidBookingAt: plan.firstPaidBookingAt, gracePeriodEndsAt: plan.gracePeriodEndsAt };
+  }
+  return { status: 'expired', daysRemainingInGrace: 0, firstPaidBookingAt: plan.firstPaidBookingAt, gracePeriodEndsAt: plan.gracePeriodEndsAt };
+}
+```
+
+---
+
+## STEP 3 — Trigger the grace period when first invoice is paid
+
+File: `server/routes.ts`
+
+Find the `POST /api/invoices/:id/mark-paid` endpoint (around line 5580). After the invoice is marked paid and the notification is dispatched, add this logic:
+
+```typescript
+// After marking invoice paid — check if this is provider's first paid booking
+try {
+  const invoice = await storage.getInvoice(invoiceId);
+  if (invoice?.providerId) {
+    // Get or create provider plan
+    let plan = await storage.getProviderPlan(invoice.providerId);
+    if (!plan) {
+      await storage.createProviderPlan({ providerId: invoice.providerId });
+      plan = await storage.getProviderPlan(invoice.providerId);
+    }
+    
+    // Only trigger if this is their first paid booking
+    if (plan && !plan.firstPaidBookingAt && !plan.isSubscribed) {
+      const now = new Date();
+      const gracePeriodEndsAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
+      
+      await db.update(providerPlans)
+        .set({ 
+          firstPaidBookingAt: now,
+          gracePeriodEndsAt: gracePeriodEndsAt
+        })
+        .where(eq(providerPlans.providerId, invoice.providerId));
+      
+      // Get provider's userId for notifications
+      const provider = await storage.getProviderById(invoice.providerId);
+      if (provider?.userId) {
+        // Send push notification
+        await sendPush(provider.userId, {
+          title: "You got your first paid booking! 🎉",
+          body: "You have 7 days to subscribe at homebaseproapp.com to keep your business running.",
+          data: { type: "subscription_grace_start", screen: "Subscription" }
+        }).catch(() => {});
+        
+        // Send email
+        await dispatch('subscription.grace_start', {
+          recipientUserId: provider.userId,
+          recipientEmail: provider.email || '',
+          data: {
+            providerName: provider.businessName,
+            gracePeriodEndsAt: gracePeriodEndsAt.toISOString(),
+            subscribeUrl: 'https://homebaseproapp.com/subscribe'
+          }
+        }).catch(() => {});
+      }
+    }
+  }
+} catch (err) {
+  console.error('Error triggering subscription grace period:', err);
+  // Non-fatal — don't fail the invoice payment
+}
+```
+
+Also find the Stripe webhook handler that processes `invoice.payment_succeeded` or `payment_intent.succeeded` (if one exists) and add the same logic there.
+
+---
+
+## STEP 4 — Add scheduled reminders for grace period
+
+File: `server/index.ts`
+
+Add two new cron jobs near the existing cron jobs (around line 987):
+
+```typescript
+// Grace period reminder — day 5 (2 days left warning)
+cron.schedule('0 9 * * *', async () => {
+  try {
+    const twoDaysFromNow = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+    const twoDaysFromNowEnd = new Date(twoDaysFromNow.getTime() + 24 * 60 * 60 * 1000);
+    
+    // Find providers whose grace period ends in ~2 days and are not subscribed
+    const expiringProviders = await db
+      .select()
+      .from(providerPlans)
+      .where(
+        and(
+          gte(providerPlans.gracePeriodEndsAt, twoDaysFromNow),
+          lte(providerPlans.gracePeriodEndsAt, twoDaysFromNowEnd),
+          eq(providerPlans.isSubscribed, false)
+        )
+      );
+    
+    for (const plan of expiringProviders) {
+      const provider = await storage.getProviderById(plan.providerId);
+      if (provider?.userId) {
+        const alreadySent = await hasDeliveryForRecord('subscription.grace_reminder', plan.id);
+        if (!alreadySent) {
+          await sendPush(provider.userId, {
+            title: "2 days left on your free period",
+            body: "Subscribe at homebaseproapp.com to keep booking and invoicing clients.",
+            data: { type: "subscription_reminder", screen: "Subscription" }
+          }).catch(() => {});
+          
+          await dispatch('subscription.grace_reminder', {
+            recipientUserId: provider.userId,
+            recipientEmail: provider.email || '',
+            relatedRecordType: 'provider_plan',
+            relatedRecordId: plan.id,
+            data: {
+              providerName: provider.businessName,
+              daysRemaining: 2,
+              subscribeUrl: 'https://homebaseproapp.com/subscribe'
+            }
+          }).catch(() => {});
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Grace period reminder cron error:', err);
+  }
+});
+
+// Grace period expired notification
+cron.schedule('0 10 * * *', async () => {
+  try {
+    const now = new Date();
+    
+    // Find providers whose grace period just expired (within last 24h) and are not subscribed
+    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    
+    const expiredProviders = await db
+      .select()
+      .from(providerPlans)
+      .where(
+        and(
+          lte(providerPlans.gracePeriodEndsAt, now),
+          gte(providerPlans.gracePeriodEndsAt, oneDayAgo),
+          eq(providerPlans.isSubscribed, false)
+        )
+      );
+    
+    for (const plan of expiredProviders) {
+      const provider = await storage.getProviderById(plan.providerId);
+      if (provider?.userId) {
+        const alreadySent = await hasDeliveryForRecord('subscription.grace_expired', plan.id);
+        if (!alreadySent) {
+          await sendPush(provider.userId, {
+            title: "Your free period has ended",
+            body: "Subscribe at homebaseproapp.com to continue creating jobs and invoices.",
+            data: { type: "subscription_expired", screen: "Subscription" }
+          }).catch(() => {});
+          
+          await dispatch('subscription.grace_expired', {
+            recipientUserId: provider.userId,
+            recipientEmail: provider.email || '',
+            relatedRecordType: 'provider_plan',
+            relatedRecordId: plan.id,
+            data: {
+              providerName: provider.businessName,
+              subscribeUrl: 'https://homebaseproapp.com/subscribe'
+            }
+          }).catch(() => {});
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Grace period expired cron error:', err);
+  }
+});
+```
+
+---
+
+## STEP 5 — Add subscription status API endpoint
+
+File: `server/routes.ts`
+
+Add this new endpoint near the existing plan endpoints (around line 6356):
+
+```typescript
+// GET provider subscription status
+app.get('/api/providers/:providerId/subscription-status', requireAuth, async (req, res) => {
+  try {
+    const { providerId } = req.params;
+    
+    let plan = await storage.getProviderPlan(providerId);
+    if (!plan) {
+      // No plan record yet = still free
+      return res.json({
+        status: 'free',
+        daysRemainingInGrace: null,
+        firstPaidBookingAt: null,
+        gracePeriodEndsAt: null,
+        isSubscribed: false
+      });
+    }
+    
+    const result = computeSubscriptionStatus(plan);
+    return res.json(result);
+  } catch (err) {
+    console.error('Error fetching subscription status:', err);
+    return res.status(500).json({ error: 'Failed to fetch subscription status' });
+  }
+});
+
+// POST mark provider as subscribed (called when they subscribe via website and return to app)
+app.post('/api/providers/:providerId/activate-subscription', requireAuth, async (req, res) => {
+  try {
+    const { providerId } = req.params;
+    
+    await db.update(providerPlans)
+      .set({ isSubscribed: true, planTier: 'professional' })
+      .where(eq(providerPlans.providerId, providerId));
+    
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('Error activating subscription:', err);
+    return res.status(500).json({ error: 'Failed to activate subscription' });
+  }
+});
+```
+
+---
+
+## STEP 6 — Add subscription gate middleware for gated routes
+
+File: `server/routes.ts`
+
+Create a helper function near the top of routes.ts:
+
+```typescript
+async function checkSubscriptionGate(providerId: string): Promise<{ blocked: boolean; reason: string }> {
+  try {
+    const plan = await storage.getProviderPlan(providerId);
+    if (!plan) return { blocked: false, reason: '' }; // No plan = still free
+    
+    const { status } = computeSubscriptionStatus(plan);
+    
+    if (status === 'expired') {
+      return { 
+        blocked: true, 
+        reason: 'Your free period has ended. Subscribe at homebaseproapp.com to continue.' 
+      };
+    }
+    
+    return { blocked: false, reason: '' };
+  } catch {
+    return { blocked: false, reason: '' }; // Never block on error
+  }
+}
+```
+
+Then add the gate check to these three endpoints:
+
+1. `POST /api/jobs` — at the start of the handler, after getting providerId from the request body:
+```typescript
+const gate = await checkSubscriptionGate(req.body.providerId);
+if (gate.blocked) return res.status(403).json({ error: gate.reason, code: 'SUBSCRIPTION_REQUIRED' });
+```
+
+2. `POST /api/invoices` — same pattern using providerId from request:
+```typescript
+const gate = await checkSubscriptionGate(req.body.providerId);
+if (gate.blocked) return res.status(403).json({ error: gate.reason, code: 'SUBSCRIPTION_REQUIRED' });
+```
+
+3. `POST /api/appointments` — this is homeowner-initiated booking. Find the provider from the appointmentData and gate it:
+```typescript
+const gate = await checkSubscriptionGate(appointmentData.providerId);
+if (gate.blocked) {
+  // Don't block homeowner with a confusing error — provider just won't appear in search
+  // Only block direct booking attempts
+}
+```
+Note: For homeowner bookings, don't return a confusing error. Instead, providers with expired subscriptions should be hidden from the marketplace. Find where providers are fetched for search/listing and add a filter to exclude providers with expired status.
+
+---
+
+## STEP 7 — Create the useSubscriptionStatus hook
+
+File: `client/hooks/useSubscriptionStatus.ts` (create new file)
+
+```typescript
+import { useQuery } from '@tanstack/react-query';
+import { useAuthStore } from '../state/authStore';
+import { apiRequest } from '../lib/queryClient';
+
+export type SubscriptionStatus = 'free' | 'grace_period' | 'expired' | 'subscribed';
+
+export interface SubscriptionStatusData {
+  status: SubscriptionStatus;
+  daysRemainingInGrace: number | null;
+  firstPaidBookingAt: string | null;
+  gracePeriodEndsAt: string | null;
+  isSubscribed: boolean;
+}
+
+export function useSubscriptionStatus() {
+  const { providerProfile } = useAuthStore();
+  const providerId = providerProfile?.id;
+
+  const query = useQuery<SubscriptionStatusData>({
+    queryKey: ['/api/providers', providerId, 'subscription-status'],
+    queryFn: () => apiRequest(`/api/providers/${providerId}/subscription-status`),
+    enabled: !!providerId,
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+    refetchOnWindowFocus: true,
+  });
+
+  const isGated = query.data?.status === 'expired';
+  const isInGrace = query.data?.status === 'grace_period';
+  const isFree = query.data?.status === 'free';
+  const isSubscribed = query.data?.status === 'subscribed';
+
+  return {
+    ...query,
+    status: query.data?.status ?? 'free',
+    daysRemainingInGrace: query.data?.daysRemainingInGrace ?? null,
+    isGated,
+    isInGrace,
+    isFree,
+    isSubscribed,
+  };
+}
+```
+
+---
+
+## STEP 8 — Create the SubscriptionGateModal component
+
+File: `client/components/SubscriptionGateModal.tsx` (create new file)
+
+This modal appears when a provider tries to do something that requires a subscription:
+
+```typescript
+import React from 'react';
+import { View, Text, Modal, TouchableOpacity, Linking, StyleSheet } from 'react-native';
+import { useTheme } from '../hooks/useTheme';
+
+interface Props {
+  visible: boolean;
+  onClose: () => void;
+  action?: string; // e.g. "create a job", "send an invoice"
+}
+
+export function SubscriptionGateModal({ visible, onClose, action = 'continue' }: Props) {
+  const { theme } = useTheme();
+
+  const handleSubscribe = () => {
+    Linking.openURL('https://homebaseproapp.com/subscribe');
+    onClose();
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.overlay}>
+        <View style={[styles.card, { backgroundColor: theme.colors.background }]}>
+          <Text style={[styles.emoji]}>🔒</Text>
+          <Text style={[styles.title, { color: theme.colors.text }]}>
+            Subscription Required
+          </Text>
+          <Text style={[styles.body, { color: theme.colors.textSecondary }]}>
+            Your free period has ended. Subscribe to {action} and keep your business running on HomeBase.
+          </Text>
+          <TouchableOpacity
+            style={[styles.primaryButton, { backgroundColor: theme.colors.primary }]}
+            onPress={handleSubscribe}
+          >
+            <Text style={styles.primaryButtonText}>Subscribe at homebaseproapp.com</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.secondaryButton} onPress={onClose}>
+            <Text style={[styles.secondaryButtonText, { color: theme.colors.textSecondary }]}>
+              Not now
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  card: {
+    borderRadius: 16,
+    padding: 28,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 360,
+  },
+  emoji: { fontSize: 40, marginBottom: 12 },
+  title: { fontSize: 20, fontWeight: '700', marginBottom: 8, textAlign: 'center' },
+  body: { fontSize: 15, textAlign: 'center', lineHeight: 22, marginBottom: 24 },
+  primaryButton: {
+    width: '100%',
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  secondaryButton: { paddingVertical: 10 },
+  secondaryButtonText: { fontSize: 15 },
+});
+```
+
+---
+
+## STEP 9 — Create the GracePeriodBanner component
+
+File: `client/components/GracePeriodBanner.tsx` (create new file)
+
+This banner shows at the top of the provider home screen during the 7-day grace period:
+
+```typescript
+import React from 'react';
+import { View, Text, TouchableOpacity, Linking, StyleSheet } from 'react-native';
+import { useSubscriptionStatus } from '../hooks/useSubscriptionStatus';
+
+export function GracePeriodBanner() {
+  const { isInGrace, daysRemainingInGrace } = useSubscriptionStatus();
+
+  if (!isInGrace) return null;
+
+  const handleSubscribe = () => {
+    Linking.openURL('https://homebaseproapp.com/subscribe');
+  };
+
+  const urgentStyle = (daysRemainingInGrace ?? 7) <= 2;
+
+  return (
+    <View style={[styles.banner, urgentStyle ? styles.urgent : styles.normal]}>
+      <Text style={styles.text}>
+        {urgentStyle ? '⚠️ ' : '🎉 '}
+        {daysRemainingInGrace === 1
+          ? 'Last day of your free period!'
+          : `${daysRemainingInGrace} days left in your free period`}
+      </Text>
+      <TouchableOpacity onPress={handleSubscribe}>
+        <Text style={styles.link}>Subscribe →</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  banner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  normal: { backgroundColor: '#ECFDF5' },
+  urgent: { backgroundColor: '#FEF2F2' },
+  text: { fontSize: 13, fontWeight: '500', color: '#1F2937', flex: 1 },
+  link: { fontSize: 13, fontWeight: '700', color: '#2563EB', marginLeft: 8 },
+});
+```
+
+---
+
+## STEP 10 — Add the banner to the provider home screen
+
+File: `client/screens/provider/ProviderHomeScreen.tsx`
+
+Import `GracePeriodBanner` and add it near the top of the screen content, below the header and above the stats cards:
+
+```typescript
+import { GracePeriodBanner } from '../../components/GracePeriodBanner';
+
+// Inside the return JSX, near the top of the scrollable content:
+<GracePeriodBanner />
+```
+
+---
+
+## STEP 11 — Add gate check to AddJobScreen
+
+File: `client/screens/provider/AddJobScreen.tsx`
+
+Import and use the subscription gate:
+
+```typescript
+import { useSubscriptionStatus } from '../../hooks/useSubscriptionStatus';
+import { SubscriptionGateModal } from '../../components/SubscriptionGateModal';
+
+// Inside the component:
+const { isGated } = useSubscriptionStatus();
+const [showGate, setShowGate] = useState(false);
+
+// In the submit handler, before the API call:
+if (isGated) {
+  setShowGate(true);
+  return;
+}
+
+// In the JSX:
+<SubscriptionGateModal
+  visible={showGate}
+  onClose={() => setShowGate(false)}
+  action="create new jobs"
+/>
+```
+
+---
+
+## STEP 12 — Add gate check to AddInvoiceScreen
+
+File: `client/screens/provider/AddInvoiceScreen.tsx`
+
+Same pattern as AddJobScreen:
+
+```typescript
+import { useSubscriptionStatus } from '../../hooks/useSubscriptionStatus';
+import { SubscriptionGateModal } from '../../components/SubscriptionGateModal';
+
+const { isGated } = useSubscriptionStatus();
+const [showGate, setShowGate] = useState(false);
+
+// In submit handler before API call:
+if (isGated) {
+  setShowGate(true);
+  return;
+}
+
+// In JSX:
+<SubscriptionGateModal
+  visible={showGate}
+  onClose={() => setShowGate(false)}
+  action="send invoices"
+/>
+```
+
+---
+
+## STEP 13 — Rewrite SubscriptionScreen
+
+File: `client/screens/provider/SubscriptionScreen.tsx`
+
+Replace the entire file content with this — NO pricing shown (App Store compliant):
+
+```typescript
+import React from 'react';
+import { View, Text, TouchableOpacity, Linking, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import { useTheme } from '../../hooks/useTheme';
+import { useSubscriptionStatus } from '../../hooks/useSubscriptionStatus';
+
+export default function SubscriptionScreen() {
+  const { theme } = useTheme();
+  const { status, daysRemainingInGrace, isLoading } = useSubscriptionStatus();
+
+  const handleSubscribe = () => {
+    Linking.openURL('https://homebaseproapp.com/subscribe');
+  };
+
+  const handleManage = () => {
+    Linking.openURL('https://homebaseproapp.com/account/billing');
+  };
+
+  if (isLoading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
+
+  const statusConfig = {
+    free: {
+      emoji: '🎉',
+      title: 'You\'re on the free plan',
+      description: 'HomeBase is completely free until you receive your first paid booking. No credit card required.',
+      buttonLabel: null,
+    },
+    grace_period: {
+      emoji: '⏳',
+      title: `${daysRemainingInGrace} day${daysRemainingInGrace === 1 ? '' : 's'} remaining`,
+      description: 'You received your first paid booking — congrats! Subscribe now to keep your business running after your free period ends.',
+      buttonLabel: 'Subscribe at homebaseproapp.com',
+    },
+    expired: {
+      emoji: '🔒',
+      title: 'Subscription required',
+      description: 'Your free period has ended. Subscribe to continue creating jobs, sending invoices, and accepting new bookings.',
+      buttonLabel: 'Subscribe at homebaseproapp.com',
+    },
+    subscribed: {
+      emoji: '✅',
+      title: 'You\'re subscribed',
+      description: 'Your HomeBase subscription is active. Manage your billing and plan details on the website.',
+      buttonLabel: 'Manage billing at homebaseproapp.com',
+    },
+  };
+
+  const config = statusConfig[status];
+
+  return (
+    <ScrollView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+      <View style={styles.container}>
+        <Text style={styles.emoji}>{config.emoji}</Text>
+        <Text style={[styles.title, { color: theme.colors.text }]}>{config.title}</Text>
+        <Text style={[styles.description, { color: theme.colors.textSecondary }]}>
+          {config.description}
+        </Text>
+
+        {config.buttonLabel && (
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: theme.colors.primary }]}
+            onPress={status === 'subscribed' ? handleManage : handleSubscribe}
+          >
+            <Text style={styles.buttonText}>{config.buttonLabel}</Text>
+          </TouchableOpacity>
+        )}
+
+        <View style={[styles.divider, { borderColor: theme.colors.border }]} />
+
+        <View style={styles.featureList}>
+          {[
+            'Unlimited clients & jobs',
+            'Professional invoicing',
+            'AI booking & scheduling tools',
+            'Automated reminders & follow-ups',
+            'Instant payments via Stripe',
+            'Client CRM & job history',
+          ].map((feature) => (
+            <View key={feature} style={styles.featureRow}>
+              <Text style={[styles.featureCheck, { color: theme.colors.primary }]}>✓</Text>
+              <Text style={[styles.featureText, { color: theme.colors.text }]}>{feature}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  container: { padding: 28, alignItems: 'center' },
+  emoji: { fontSize: 52, marginBottom: 16, marginTop: 24 },
+  title: { fontSize: 24, fontWeight: '700', textAlign: 'center', marginBottom: 12 },
+  description: { fontSize: 15, textAlign: 'center', lineHeight: 22, marginBottom: 28, maxWidth: 320 },
+  button: { width: '100%', paddingVertical: 15, borderRadius: 12, alignItems: 'center', marginBottom: 8 },
+  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  divider: { width: '100%', borderTopWidth: 1, marginVertical: 28 },
+  featureList: { width: '100%' },
+  featureRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
+  featureCheck: { fontSize: 16, fontWeight: '700', marginRight: 10 },
+  featureText: { fontSize: 15 },
+});
+```
+
+---
+
+## STEP 14 — Final checks
+
+After implementing all steps above:
+
+1. Make sure the Drizzle schema migration ran successfully and the three new columns exist on provider_plans
+2. Make sure the `computeSubscriptionStatus` function is imported wherever it's used
+3. Make sure no screen shows `$29.99` or any price — search the entire codebase for "29.99" and remove any that appear in client-facing UI
+4. Search for "Manage Subscription" text and make sure it's only in the new SubscriptionScreen pointing to the website URL
+5. Test the full flow: mark an invoice as paid → check that firstPaidBookingAt gets set → verify grace period countdown appears on home screen → verify gate modal appears when trying to add a job after grace expires
+
+Do NOT touch: booking URLs, EXPO_PUBLIC_DOMAIN, eas.json, or any server auth/JWT code.
