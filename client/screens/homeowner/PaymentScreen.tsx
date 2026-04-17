@@ -74,27 +74,33 @@ export default function PaymentScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      const url = new URL(`/api/invoices/${invoiceId}/checkout`, getApiUrl());
-      const res = await fetch(url.toString(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-        credentials: "include",
-        body: JSON.stringify({}),
-      });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({ error: "Payment setup failed" }));
-        if (res.status === 402 || errBody.error === "stripe_not_ready") {
-          throw new Error("This provider has not yet completed payment setup. Please contact them directly.");
+      // On web, openExternalUrl opens a blank tab synchronously inside the
+      // user-gesture call stack, then resolves the destination URL via this
+      // callback (which can await network calls). This survives popup blockers.
+      // On native it calls Linking.openURL once the URL is ready.
+      await openExternalUrl(async () => {
+        const url = new URL(`/api/invoices/${invoiceId}/checkout`, getApiUrl());
+        const res = await fetch(url.toString(), {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+          credentials: "include",
+          body: JSON.stringify({}),
+        });
+        if (!res.ok) {
+          const errBody: { error?: string } = await res
+            .json()
+            .catch(() => ({ error: "Payment setup failed" }));
+          if (res.status === 402 || errBody.error === "stripe_not_ready") {
+            throw new Error(
+              "This provider has not yet completed payment setup. Please contact them directly.",
+            );
+          }
+          throw new Error(errBody.error || "Failed to start payment");
         }
-        throw new Error(errBody.error || "Failed to start payment");
-      }
-      const { url: checkoutUrl } = await res.json();
-      if (!checkoutUrl) throw new Error("No checkout URL received");
-
-      // On native, this calls Linking.openURL which launches the system browser
-      // (Safari/Chrome) — NOT an in-app browser — as required by App Store
-      // guidelines. On web, it opens a new tab (Stripe Checkout blocks iframes).
-      await openExternalUrl(checkoutUrl);
+        const body: { url?: string } = await res.json();
+        if (!body.url) throw new Error("No checkout URL received");
+        return body.url;
+      });
       setOpenedExternal(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Payment failed";

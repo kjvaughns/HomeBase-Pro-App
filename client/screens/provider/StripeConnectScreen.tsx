@@ -113,14 +113,12 @@ export default function StripeConnectScreen() {
 
   const onboardMutation = useMutation({
     mutationFn: async () => {
-      let captured: any = null;
       await openExternalUrl(async () => {
         const response = await apiRequest("POST", `/api/stripe/connect/onboard/${providerId}`);
-        captured = await response.json();
-        if (!captured?.onboardingUrl) throw new Error("Missing onboarding URL");
-        return captured.onboardingUrl as string;
+        const data: { onboardingUrl?: string } = await response.json();
+        if (!data.onboardingUrl) throw new Error("Missing onboarding URL");
+        return data.onboardingUrl;
       });
-      return captured;
     },
     onSuccess: () => {
       refetchStatus();
@@ -132,18 +130,16 @@ export default function StripeConnectScreen() {
 
   const reonboardMutation = useMutation({
     mutationFn: async () => {
-      let captured: any = null;
       await openExternalUrl(async () => {
         const response = await apiRequest("POST", `/api/stripe/connect/reonboard/${providerId}`);
         if (!response.ok) {
-          const data = await response.json().catch(() => ({}));
-          throw new Error(data.error || "Failed to start re-onboarding");
+          const errBody: { error?: string } = await response.json().catch(() => ({}));
+          throw new Error(errBody.error || "Failed to start re-onboarding");
         }
-        captured = await response.json();
-        if (!captured?.onboardingUrl) throw new Error("Missing onboarding URL");
-        return captured.onboardingUrl as string;
+        const data: { onboardingUrl?: string } = await response.json();
+        if (!data.onboardingUrl) throw new Error("Missing onboarding URL");
+        return data.onboardingUrl;
       });
-      return captured;
     },
     onSuccess: () => {
       refetchStatus();
@@ -197,20 +193,18 @@ export default function StripeConnectScreen() {
 
   const payInvoiceMutation = useMutation({
     mutationFn: async (invoiceId: string) => {
-      let captured: any = null;
       await openExternalUrl(async () => {
         const response = await apiRequest("POST", `/api/stripe/invoices/${invoiceId}/checkout`);
-        captured = await response.json();
+        const data: { url?: string; error?: string } = await response.json();
         if (!response.ok) {
-          if (response.status === 402 || captured?.error === "stripe_not_ready") {
+          if (response.status === 402 || data.error === "stripe_not_ready") {
             throw new Error("Complete Stripe onboarding first to accept payments.");
           }
-          throw new Error(captured?.error || "Failed to create checkout session");
+          throw new Error(data.error || "Failed to create checkout session");
         }
-        if (!captured?.url) throw new Error("Missing checkout URL");
-        return captured.url as string;
+        if (!data.url) throw new Error("Missing checkout URL");
+        return data.url;
       });
-      return captured;
     },
     onSuccess: () => {},
     onError: (error: any) => {

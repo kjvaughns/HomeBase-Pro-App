@@ -865,14 +865,12 @@ export default function FinancialsScreen() {
 
   const onboardMutation = useMutation({
     mutationFn: async () => {
-      let captured: any = null;
       await openExternalUrl(async () => {
         const response = await apiRequest("POST", `/api/stripe/connect/onboard/${providerId}`);
-        captured = await response.json();
-        if (!captured?.onboardingUrl) throw new Error("Missing onboarding URL");
-        return captured.onboardingUrl as string;
+        const data: { onboardingUrl?: string } = await response.json();
+        if (!data.onboardingUrl) throw new Error("Missing onboarding URL");
+        return data.onboardingUrl;
       });
-      return captured;
     },
     onSuccess: () => {
       refetchStripeStatus();
