@@ -18,6 +18,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useProviderStore } from "@/state/providerStore";
+import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 import { useThemeStore } from "@/state/themeStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { apiRequest } from "@/lib/query-client";
@@ -33,6 +34,16 @@ export default function ProviderMoreScreen() {
 
   const availableForWork = useProviderStore((s) => s.availableForWork);
   const setAvailableForWork = useProviderStore((s) => s.setAvailableForWork);
+
+  const { isSubscribed, isInGrace, daysRemainingInGrace, status } =
+    useSubscriptionStatus();
+  const subscriptionSubtitle = isSubscribed
+    ? "Active — manage your HomeBase Pro plan"
+    : isInGrace
+      ? `${daysRemainingInGrace ?? 7} days left in trial`
+      : status === "expired"
+        ? "Trial ended — subscribe to reactivate"
+        : "Free until your first paid booking";
 
   const { setActiveRole, setNeedsRoleSelection } = useAuthStore();
 
@@ -153,7 +164,7 @@ export default function ProviderMoreScreen() {
             />
             <ListRow
               title="Subscription & Plan"
-              subtitle="Manage your HomeBase Pro plan"
+              subtitle={subscriptionSubtitle}
               leftIcon="credit-card"
               onPress={() => navigation.navigate("Subscription")}
             />
