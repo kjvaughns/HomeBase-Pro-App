@@ -3,7 +3,9 @@ import { StyleSheet, View, Modal, Pressable, Platform } from "react-native";
 import { BlurView } from "expo-blur";
 import { Feather } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "@/components/ThemedText";
@@ -27,7 +29,8 @@ export function SubscriptionGateModal({
 }: SubscriptionGateModalProps) {
   const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation<any>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const handleClose = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

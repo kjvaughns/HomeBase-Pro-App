@@ -2,15 +2,18 @@ import React from "react";
 import { StyleSheet, View, Pressable } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { BorderRadius, Spacing, Typography } from "@/constants/theme";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
+import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 export function GracePeriodBanner() {
   const { isInGrace, daysRemainingInGrace } = useSubscriptionStatus();
   const { isDark } = useTheme();
-  const navigation = useNavigation<any>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   if (!isInGrace) return null;
 
