@@ -1,0 +1,83 @@
+I reviewed the repo as a code and config audit, not a live device test.
+
+My verdict: **not App Store ready yet**.
+
+Biggest risks first:
+
+1. **Your subscription architecture still looks mixed and that is dangerous**
+
+   You have RevenueCat wired for in app purchases, including purchase, restore, and subscription status checks. 
+   But the backend still exposes Stripe checkout and customer portal flows, plus provider plan endpoints that look like a separate subscription system. That includes `/api/stripe/create-checkout-session`, `/api/stripe/customer-portal`, and `/api/providers/:providerId/plan`. 
+   For App Review, if your provider membership unlocks app features and any iPhone flow still points users to Stripe for that same membership, that is a real rejection risk.
+
+2. **You have at least one likely broken navigation path reviewers could hit**
+
+   In the homeowner More screen, `handleSwitchToProvider` resets navigation to `ProviderTabs`, but your root navigator defines `Main`, not `ProviderTabs`.
+   That is the kind of thing that makes an app feel unfinished fast.
+
+3. **Your provider subscription UX does not look review safe yet**
+
+   The provider More screen shows a hardcoded line that says `$29.99/mo · Free until first booking`, but I did not see restore purchases or manage subscription surfaced there. 
+   RevenueCat supports restore in code, but that only helps if the UI clearly exposes it. 
+   Apple reviewers care about what the user can actually do on device, not just what helper functions exist.
+
+4. **Your legal and support surface is uneven**
+
+   Homeowner More includes Terms of Service, Privacy Policy, Contact Us, Help Center, and Delete Account.
+   Provider More has Contact Support and Delete Account, but I did not see Terms or Privacy links there. 
+   That is fixable, but right now it is inconsistent.
+
+5. **Some permission usage looks broader than what you want reviewers noticing**
+
+   Your iOS config requests camera, photo library, microphone, location, and contacts access. 
+   Location and photos make sense for your product. Contacts and microphone are riskier unless the flows are obvious, polished, and clearly useful at first review. If those prompts appear without strong context, that can hurt you.
+
+6. **Your deletion flow exists, which is good, but failure UX is weak**
+
+   You do have a real in app Delete Account button on both homeowner and provider sides, and a real backend delete route that removes user and provider related data.
+   But both screens just log errors on failure and close the modal. There is no user facing failure message.
+   Apple mainly wants deletion present, but bad failure handling still makes the app feel rough.
+
+7. **You have backend authorization holes that are not App Review guideline text issues, but they are real product risk**
+
+   In `server/routes.ts`, some destructive routes appear to lack ownership checks, including deleting clients, deleting jobs, cancelling invoices, deleting leads, and updating or deleting booking links. 
+   Even if App Review never spots that directly, it is not something I’d launch with.
+
+What looks good:
+
+1. **You do have real account deletion**
+
+   Both UI and backend are there.
+
+2. **You do surface privacy info**
+
+   `privacyPolicyUrl` is set in `app.json`, and the homeowner More screen links to Privacy Policy and Terms.
+
+3. **You separated real world payments from app membership in the codebase at least partially**
+
+   Stripe Connect, invoices, payouts, and homeowner payment flows are all built around real world services, which is the right lane for Stripe.
+
+4. **You have solid core app breadth**
+
+   Auth, onboarding, booking, jobs, invoices, notifications, support tickets, public booking pages, and provider tools are all present.
+
+My blunt call:
+
+**Main blocker is payments and subscription clarity.**
+If provider membership on iOS is supposed to be Apple IAP, you need to remove or fully hide every Stripe based purchase path for that same membership from the iOS experience. Right now the repo still looks like both worlds are alive.
+
+Fastest fixes before submission:
+
+1. Make provider membership **Apple IAP only** on iOS UI.
+2. Add **Restore Purchases** and **Manage Subscription** clearly on the provider subscription screen.
+3. Fix the `ProviderTabs` navigation bug.
+4. Add Terms and Privacy links to the provider side too.
+5. Remove any unnecessary permissions before review, especially Contacts and Microphone if they are not central. 
+6. Patch the insecure destructive routes in the backend. 
+7. Fix version mismatch since screens say `1.0.0` while config says `1.1.0`.
+
+One more honest note:
+
+Your app is **closer than I expected**, but not at the “submit and pray” stage. It is at the “tighten the risky stuff first” stage.
+
+If you want, I’ll turn this into a **hard line App Store compliance checklist** for your repo with exact files and fixes.
