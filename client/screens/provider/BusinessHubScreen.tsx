@@ -117,14 +117,6 @@ interface BookingLink {
   status: "active" | "paused" | "disabled";
 }
 
-interface ReviewItem {
-  id: string;
-  reviewerName: string;
-  rating: number;
-  createdAt: string;
-  comment?: string;
-}
-
 interface ProviderRecord {
   id: string;
   userId: string;
@@ -262,14 +254,9 @@ export default function BusinessHubScreen() {
     queryKey: ["/api/providers", providerId, "booking-links"],
     enabled: !!providerId && activeTab === "booking",
   });
-  const { data: reviewsData, isLoading: reviewsLoading } = useQuery<{ reviews: ReviewItem[] }>({
-    queryKey: ["/api/provider", providerId, "reviews"],
-    enabled: !!providerId && activeTab === "reviews",
-  });
 
   const services = servicesData?.services || [];
   const bookingLinks = bookingLinksData?.bookingLinks || [];
-  const reviews = reviewsData?.reviews || [];
 
   // Populate profile state from API data
   useEffect(() => {
@@ -301,6 +288,10 @@ export default function BusinessHubScreen() {
 
   const handleTabPress = (tab: HubTab) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (tab === "reviews") {
+      navigation.navigate("Reviews");
+      return;
+    }
     setActiveTab(tab);
   };
 
@@ -1220,92 +1211,6 @@ export default function BusinessHubScreen() {
     )
   );
 
-  const renderReviewsTab = () => {
-    const avgRating = provider?.rating ? Number(provider.rating) : 0;
-    const totalReviews = provider?.reviewCount ?? reviews.length;
-
-    return (
-      <ScrollView
-        contentContainerStyle={styles.tabContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <Animated.View entering={FadeInDown.duration(250)}>
-          <GlassCard style={styles.reviewsSummary}>
-            <View style={styles.reviewsSummaryRow}>
-              <ThemedText style={styles.reviewsBigRating}>
-                {avgRating > 0 ? avgRating.toFixed(1) : "—"}
-              </ThemedText>
-              <View style={styles.reviewsSummaryInfo}>
-                <View style={styles.reviewsStars}>
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <Feather
-                      key={star}
-                      name="star"
-                      size={16}
-                      color={star <= Math.round(avgRating) ? Colors.warning : theme.backgroundTertiary}
-                    />
-                  ))}
-                </View>
-                <ThemedText style={[styles.reviewsCountText, { color: theme.textSecondary }]}>
-                  {totalReviews > 0
-                    ? `Based on ${totalReviews} review${totalReviews !== 1 ? "s" : ""}`
-                    : "No reviews yet"}
-                </ThemedText>
-              </View>
-            </View>
-          </GlassCard>
-        </Animated.View>
-
-        {reviewsLoading ? (
-          <View style={styles.reviewsLoading}>
-            <ActivityIndicator size="small" color={Colors.accent} />
-          </View>
-        ) : reviews.length === 0 ? (
-          <EmptyState
-            image={require("../../../assets/images/empty-bookings.png")}
-            title="No reviews yet"
-            description="Reviews from completed bookings will appear here. Deliver great service and they'll come!"
-          />
-        ) : (
-          reviews.map((review, index) => (
-            <Animated.View
-              key={review.id}
-              entering={FadeInDown.delay(index * 40).duration(250)}
-            >
-              <View style={[styles.reviewCard, { backgroundColor: theme.cardBackground }]}>
-                <View style={styles.reviewCardHeader}>
-                  <ThemedText style={styles.reviewerName}>{review.reviewerName}</ThemedText>
-                  <View style={styles.reviewsStars}>
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <Feather
-                        key={star}
-                        name="star"
-                        size={12}
-                        color={star <= review.rating ? Colors.warning : theme.backgroundTertiary}
-                      />
-                    ))}
-                  </View>
-                </View>
-                <ThemedText style={[styles.reviewDate, { color: theme.textTertiary }]}>
-                  {new Date(review.createdAt).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
-                </ThemedText>
-                {review.comment ? (
-                  <ThemedText style={[styles.reviewComment, { color: theme.textSecondary }]}>
-                    {review.comment}
-                  </ThemedText>
-                ) : null}
-              </View>
-            </Animated.View>
-          ))
-        )}
-      </ScrollView>
-    );
-  };
-
   return (
     <ThemedView style={styles.container}>
       <View style={[styles.tabBar, { paddingTop: headerHeight + Spacing.sm }]}>
@@ -1384,7 +1289,6 @@ export default function BusinessHubScreen() {
             {activeTab === "services" ? renderServicesTab() : null}
             {activeTab === "booking" ? renderBookingTab() : null}
             {activeTab === "policies" ? renderPoliciesTab() : null}
-            {activeTab === "reviews" ? renderReviewsTab() : null}
           </>
         )}
       </View>
@@ -1434,54 +1338,6 @@ const styles = StyleSheet.create({
   tabContent: {
     padding: Spacing.screenPadding,
     gap: Spacing.md,
-  },
-  reviewsSummary: {
-    padding: Spacing.lg,
-  },
-  reviewsSummaryRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.lg,
-  },
-  reviewsBigRating: {
-    ...Typography.largeTitle,
-    fontWeight: "700",
-  },
-  reviewsSummaryInfo: {
-    flex: 1,
-    gap: Spacing.xs,
-  },
-  reviewsStars: {
-    flexDirection: "row",
-    gap: 2,
-  },
-  reviewsCountText: {
-    ...Typography.footnote,
-  },
-  reviewsLoading: {
-    padding: Spacing.xl,
-    alignItems: "center",
-  },
-  reviewCard: {
-    padding: Spacing.lg,
-    borderRadius: 16,
-    gap: Spacing.xs,
-  },
-  reviewCardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  reviewerName: {
-    ...Typography.body,
-    fontWeight: "600",
-  },
-  reviewDate: {
-    ...Typography.caption1,
-  },
-  reviewComment: {
-    ...Typography.subhead,
-    marginTop: Spacing.xs,
   },
   emptyContainer: {
     flexGrow: 1,
