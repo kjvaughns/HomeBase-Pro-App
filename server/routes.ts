@@ -5727,6 +5727,7 @@ Respond with JSON only:
           "serviceZipCodes",
           "serviceCities",
           "isPublic",
+          "isActive",
         ];
         for (const field of directFields) {
           if (body[field] !== undefined) update[field] = body[field];
@@ -5778,22 +5779,9 @@ Respond with JSON only:
               ? JSON.parse(body.businessHours)
               : body.businessHours;
         }
-        if (body.availability !== undefined) {
-          // Store availability merged into bookingPolicies to keep schema simple
-          const existing = await storage.getProvider(id);
-          let existingPolicies: Record<string, any> = {};
-          if (existing?.bookingPolicies) {
-            existingPolicies =
-              typeof existing.bookingPolicies === "string"
-                ? JSON.parse(existing.bookingPolicies as string)
-                : (existing.bookingPolicies as Record<string, any>) || {};
-          }
-          const availability =
-            typeof body.availability === "string"
-              ? JSON.parse(body.availability)
-              : body.availability;
-          update.bookingPolicies = { ...existingPolicies, availability };
-        }
+        // Note: legacy `availability` payload is intentionally ignored here.
+        // The "Available for Work" toggle is the top-level `isActive` column.
+        // Hours/availability JSON is managed via `bookingPolicies` / `businessHours`.
 
         if (Object.keys(update).length === 0) {
           return res.status(400).json({ error: "No valid fields to update" });

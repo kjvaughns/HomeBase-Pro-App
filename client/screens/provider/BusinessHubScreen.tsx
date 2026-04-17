@@ -10,6 +10,7 @@ import {
   TextInput,
   Image,
   Platform,
+  Alert,
 } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
@@ -133,6 +134,7 @@ interface ProviderRecord {
   businessHours: Record<DayKey, BusinessHoursDay> | null;
   bookingPolicies: BookingPoliciesData | null;
   isPublic: boolean | null;
+  isActive: boolean | null;
   instantBooking: boolean | null;
   licenseNumber: string | null;
   rating: string | null;
@@ -157,7 +159,9 @@ export default function BusinessHubScreen() {
   const { user, providerProfile, createProviderProfile } = useAuthStore();
   const queryClient = useQueryClient();
   const availableForWork = useProviderStore((s) => s.availableForWork);
-  const setAvailableForWork = useProviderStore((s) => s.setAvailableForWork);
+  const syncAvailableForWork = useProviderStore((s) => s.syncAvailableForWork);
+  const hydrateAvailableForWork = useProviderStore((s) => s.hydrateAvailableForWork);
+  const [availabilitySaving, setAvailabilitySaving] = useState(false);
 
   const [activeTab, setActiveTab] = useState<HubTab>("profile");
 
@@ -271,7 +275,10 @@ export default function BusinessHubScreen() {
     setZipCodes(provider.serviceZipCodes?.length ? provider.serviceZipCodes.join(", ") : "");
     setCities(provider.serviceCities?.length ? provider.serviceCities.join(", ") : "");
     setHours(provider.businessHours ? { ...DEFAULT_HOURS, ...provider.businessHours } : DEFAULT_HOURS);
-  }, [provider, user]);
+    if (provider.isActive !== null && provider.isActive !== undefined) {
+      hydrateAvailableForWork(provider.isActive);
+    }
+  }, [provider, user, hydrateAvailableForWork]);
 
   // Populate policies from API data (once only)
   useEffect(() => {
@@ -719,7 +726,21 @@ export default function BusinessHubScreen() {
             </View>
             <Switch
               value={availableForWork}
-              onValueChange={setAvailableForWork}
+              disabled={availabilitySaving || !providerId}
+              onValueChange={async (next) => {
+                if (!providerId) return;
+                setAvailabilitySaving(true);
+                try {
+                  await syncAvailableForWork(next, providerId);
+                } catch (err: any) {
+                  Alert.alert(
+                    "Couldn't update availability",
+                    err?.message || "Please check your connection and try again.",
+                  );
+                } finally {
+                  setAvailabilitySaving(false);
+                }
+              }}
               trackColor={{ false: theme.backgroundTertiary, true: Colors.accent }}
               thumbColor="#FFFFFF"
             />

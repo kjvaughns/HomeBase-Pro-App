@@ -29,6 +29,7 @@ export interface ProviderProfile {
   capabilityTags?: string[];
   yearsExperience?: number;
   specialty?: string;
+  isActive?: boolean;
 }
 
 interface AuthState {

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { apiRequest } from "@/lib/query-client";
 
 // ============================================
 // TYPES
@@ -610,6 +611,8 @@ interface ProviderState {
   
   // Settings actions
   setAvailableForWork: (value: boolean) => void;
+  syncAvailableForWork: (value: boolean, providerId: string) => Promise<void>;
+  hydrateAvailableForWork: (value: boolean) => void;
   setNotificationsEnabled: (value: boolean) => void;
   setBookingPolicies: (policies: BookingPolicies) => void;
   
@@ -788,6 +791,19 @@ export const useProviderStore = create<ProviderState>()(
       
       // Settings actions
       setAvailableForWork: (value) => set({ availableForWork: value }),
+      hydrateAvailableForWork: (value) => set({ availableForWork: value }),
+      syncAvailableForWork: async (value, providerId) => {
+        const previous = get().availableForWork;
+        set({ availableForWork: value });
+        try {
+          await apiRequest("PATCH", `/api/provider/${providerId}`, {
+            isActive: value,
+          });
+        } catch (error) {
+          set({ availableForWork: previous });
+          throw error;
+        }
+      },
       setNotificationsEnabled: (value) => set({ notificationsEnabled: value }),
       setBookingPolicies: (policies) => set({ bookingPolicies: policies }),
       

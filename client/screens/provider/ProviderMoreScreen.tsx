@@ -1,5 +1,5 @@
-import React from "react";
-import { StyleSheet, View, ScrollView, Switch } from "react-native";
+import React, { useEffect, useState } from "react";
+import { StyleSheet, View, ScrollView, Switch, Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
@@ -31,7 +31,30 @@ export default function ProviderMoreScreen() {
   const toggleDarkMode = useThemeStore((s) => s.toggleDarkMode);
 
   const availableForWork = useProviderStore((s) => s.availableForWork);
-  const setAvailableForWork = useProviderStore((s) => s.setAvailableForWork);
+  const syncAvailableForWork = useProviderStore((s) => s.syncAvailableForWork);
+  const hydrateAvailableForWork = useProviderStore((s) => s.hydrateAvailableForWork);
+  const [availabilitySaving, setAvailabilitySaving] = useState(false);
+
+  useEffect(() => {
+    if (providerProfile?.isActive !== undefined && providerProfile?.isActive !== null) {
+      hydrateAvailableForWork(providerProfile.isActive);
+    }
+  }, [providerProfile?.isActive, hydrateAvailableForWork]);
+
+  const handleToggleAvailability = async (next: boolean) => {
+    if (!providerProfile?.id) return;
+    setAvailabilitySaving(true);
+    try {
+      await syncAvailableForWork(next, providerProfile.id);
+    } catch (err: any) {
+      Alert.alert(
+        "Couldn't update availability",
+        err?.message || "Please check your connection and try again.",
+      );
+    } finally {
+      setAvailabilitySaving(false);
+    }
+  };
 
   const { setActiveRole, setNeedsRoleSelection } = useAuthStore();
 
@@ -101,7 +124,8 @@ export default function ProviderMoreScreen() {
               <View style={styles.switchContainer}>
                 <Switch
                   value={availableForWork}
-                  onValueChange={setAvailableForWork}
+                  disabled={availabilitySaving || !providerProfile?.id}
+                  onValueChange={handleToggleAvailability}
                   trackColor={{ false: theme.backgroundTertiary, true: Colors.accent }}
                   thumbColor="#FFFFFF"
                 />
