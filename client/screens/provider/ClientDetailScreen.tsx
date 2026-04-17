@@ -258,6 +258,27 @@ export default function ClientDetailScreen() {
   const activities: { id: string; description: string; timestamp: string }[] = [];
   const notes: { id: string; content: string; createdAt: string; isInternal?: boolean; createdBy?: string }[] = [];
 
+  const clientStatus = client?.status || "active";
+
+  const statusColor = useMemo(() => {
+    switch (clientStatus) {
+      case "active": return Colors.accent;
+      case "lead": return "#3B82F6";
+      case "inactive": return theme.textSecondary;
+      default: return theme.textSecondary;
+    }
+  }, [clientStatus, theme]);
+
+  const statusLabel = useMemo(() => {
+    switch (clientStatus) {
+      case "active": return "Active";
+      case "lead": return "Lead";
+      case "inactive": return "Inactive";
+      case "archived": return "Archived";
+      default: return clientStatus || "Active";
+    }
+  }, [clientStatus]);
+
   if (isLoading) {
     return (
       <ThemedView style={styles.container}>
@@ -300,27 +321,6 @@ export default function ClientDetailScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     navigation.navigate("AddInvoice", { clientId: client.id });
   };
-
-  const clientStatus = client.status || "active";
-  
-  const statusColor = useMemo(() => {
-    switch (clientStatus) {
-      case "active": return Colors.accent;
-      case "lead": return "#3B82F6";
-      case "inactive": return theme.textSecondary;
-      default: return theme.textSecondary;
-    }
-  }, [clientStatus, theme]);
-
-  const statusLabel = useMemo(() => {
-    switch (clientStatus) {
-      case "active": return "Active";
-      case "lead": return "Lead";
-      case "inactive": return "Inactive";
-      case "archived": return "Archived";
-      default: return clientStatus || "Active";
-    }
-  }, [clientStatus]);
 
   const renderOverview = () => (
     <Animated.View entering={FadeInDown.delay(100).duration(400)}>

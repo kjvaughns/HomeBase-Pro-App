@@ -35,6 +35,9 @@ The application consists of a client-side React Native Expo app (SDK 55, React N
 - **Forgot Password URL**: Fixed reset URL to use the request's own host rather than a hardcoded localhost.
 - **Reset Password HTML**: Created `server/templates/reset-password.html` — a styled in-app form that extracts the token from query params and POSTs to `/api/auth/reset-password`.
 
+## Code Quality Conventions
+- **React Rules of Hooks (lint enforced)**: `eslint.config.js` pins `react-hooks/rules-of-hooks` to `error` (and keeps `react-hooks/exhaustive-deps` at `warn`). All React hooks (`useEffect`, `useLayoutEffect`, `useMemo`, etc.) must be declared at the top level of the component — BEFORE any early `return` for loading/empty/not-found states. Putting a hook after an early return changes hook order between renders, which throws "Invalid hook call" at runtime and gets swallowed by the ErrorBoundary as a generic crash (regression history: Task #103, ProviderProfileScreen; Task #104, ClientDetailScreen). Run `npm run lint` to verify before shipping.
+
 ## External Dependencies
 - **Supabase**: PostgreSQL database hosting.
 - **Drizzle ORM**: Type-safe database interaction.
