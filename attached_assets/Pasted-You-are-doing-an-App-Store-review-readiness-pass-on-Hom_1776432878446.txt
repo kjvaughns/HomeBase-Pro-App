@@ -1,0 +1,62 @@
+You are doing an App Store review readiness pass on HomeBase. Do NOT touch any booking URLs, provider profile URLs, or the EXPO_PUBLIC_DOMAIN setting. Fix only what is listed below.
+
+Work through these in order. Fix all of them in a single session.
+
+---
+
+CRITICAL FIXES (Must fix or app will be rejected):
+
+1. SavedProvidersScreen.tsx — Remove the MOCK_SAVED_PROVIDERS hardcoded array entirely. Replace the screen content with a proper empty state: show a message like "You haven't saved any providers yet" with a button that navigates to the Find screen. Do not show any hardcoded fake business names.
+
+2. app.json — In the infoPlist section, add this entry:
+"NSUserNotificationsUsageDescription": "HomeBase sends you appointment reminders, booking confirmations, and service updates."
+Also REMOVE these three entries that are declared but never used anywhere in the codebase:
+- NSCameraUsageDescription
+- NSMicrophoneUsageDescription  
+- NSContactsUsageDescription
+
+3. SubscriptionScreen.tsx — The current screen shows "$29.99/mo" pricing and a "Manage Subscription" button with no actual purchase mechanism. Apple will reject this. Do one of the following (I will tell you which after seeing the options, but for now do Option B):
+Option B: Hide the subscription pricing UI entirely. Replace SubscriptionScreen with a simple screen that says "Manage your HomeBase subscription at homebaseproapp.com" with a button that opens that URL in the browser. Remove all "$29.99" and pricing language from this screen. Do not add any IAP code.
+
+4. ProviderOnboardingScreen.tsx — Find the AI business name suggestion API call. It has a .catch(() => {}) that silently swallows errors. Replace it with a .catch that sets an error state and shows the user a message like "Couldn't load suggestions — you can continue and add your business name manually." Make sure the user can always proceed even if the AI fails.
+
+5. SignUpScreen.tsx — At the bottom of the signup form, before the submit button, add a small line of text: "By signing up, you agree to our Terms of Service and Privacy Policy." Make "Terms of Service" and "Privacy Policy" tappable links that open https://homebaseproapp.com/terms and https://homebaseproapp.com/privacy respectively in the browser using Linking.openURL or WebBrowser.openBrowserAsync.
+
+Do the same for the provider onboarding flow — find wherever the final "Create Account" or "Get Started" button is in provider signup and add the same Terms + Privacy line above it.
+
+---
+
+HIGH PRIORITY FIXES:
+
+6. PaymentScreen.tsx — Find where paymentError state is set. Currently it's set but never shown in the UI. Add an error message display below the payment button that shows the error text when paymentError is not null.
+
+7. AIChatScreen.tsx — Find the "Find Pro" button. It has a hardcoded color="#fff". Replace with a theme-appropriate color that works in both light and dark mode (use the existing theme.colors system already in the codebase).
+
+8. NotificationPreferencesScreen.tsx — If the preferences query fails or is in error state, currently the screen spins forever. Add an error state: if the query has an error, show a message "Couldn't load notification preferences. Please try again." with a retry button.
+
+9. FindScreen.tsx — If the provider list is empty (no results), show an empty state with a message like "No providers found in your area yet. Check back soon!" Don't just show a blank list.
+
+10. ManageScreen.tsx (homeowner appointments screen) — Add an empty state for when there are no appointments: "You don't have any appointments yet. Book a provider to get started." Also add a basic error state if the API call fails.
+
+---
+
+CLEANUP:
+
+11. ModalScreen.tsx — If this file exists and is just a stub/empty screen, delete it or replace it with a redirect to the home screen. If it's connected to navigation, add a placeholder that says "Coming Soon" with a back button.
+
+12. ProfileScreen.tsx (if it's a blank/empty stub) — same as above, either complete it or remove it.
+
+---
+
+DO NOT touch:
+- Any booking URLs (homebaseproapp.com/providers/...)
+- EXPO_PUBLIC_DOMAIN
+- eas.json
+- server/auth.ts JWT changes
+- server/openai.ts OpenAI key changes
+- Any screen that is working correctly
+
+After making all fixes, do a final check:
+- Make sure no screen is completely blank/empty with no content
+- Make sure no screen has the text "TODO", "PLACEHOLDER", "MOCK", "TEST DATA", or "Coming Soon" unless it's intentional
+- Make sure the app can be navigated from signup through booking and through provider onboarding without hitting a dead end
