@@ -12,6 +12,8 @@ import {
 } from "react-native";
 import { openExternalUrl } from "@/lib/openExternalUrl";
 import { useHeaderHeight } from "@react-navigation/elements";
+import { useNavigation } from "@react-navigation/native";
+import type { NavigationProp, ParamListBase } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 
@@ -51,6 +53,7 @@ export default function SubscriptionScreen() {
   const { theme, isDark } = useTheme();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const {
     data,
     isLoading,
@@ -105,6 +108,16 @@ export default function SubscriptionScreen() {
     const cleanup = loadOffering();
     return cleanup;
   }, [loadOffering]);
+
+  const handleDeleteAccount = useCallback(() => {
+    // Account deletion lives in the More tab where the confirmation modal is
+    // already wired up. Surface a quick link from the billing context so
+    // reviewers can find it from this screen.
+    navigation.navigate(
+      "ProviderTabs" as never,
+      { screen: "ProviderMore" } as never,
+    );
+  }, [navigation]);
 
   const handleContactSupport = useCallback(() => {
     Linking.openURL(SUPPORT_URL).catch(() => {
@@ -543,6 +556,18 @@ export default function SubscriptionScreen() {
           >
             <ThemedText style={[styles.legalLink, { color: Colors.accent }]}>
               Contact support
+            </ThemedText>
+          </Pressable>
+          <ThemedText style={[styles.legalSep, { color: theme.textTertiary }]}>
+            ·
+          </ThemedText>
+          <Pressable
+            onPress={handleDeleteAccount}
+            hitSlop={8}
+            testID="link-delete-account"
+          >
+            <ThemedText style={[styles.legalLink, { color: Colors.accent }]}>
+              Delete account
             </ThemedText>
           </Pressable>
         </View>

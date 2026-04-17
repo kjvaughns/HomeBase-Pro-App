@@ -84,17 +84,20 @@ export default function App() {
   const providerId = useAuthStore((s) => s.providerProfile?.id ?? null);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
-  useEffect(() => {
-    if (!isPurchasesAvailable()) return;
-    void configurePurchases(providerId ?? undefined);
-  }, []);
-
+  // Defer RevenueCat SDK configuration until the provider identity is
+  // resolved. Configuring with a null/anonymous appUserID would create a
+  // throwaway anonymous user and detach receipts from the real provider on
+  // login — strictly disallowed in production. We re-login on identity
+  // changes and only log out when the user signs out.
   useEffect(() => {
     if (!isPurchasesAvailable()) return;
     if (isAuthenticated && providerId) {
-      loginPurchasesUser(providerId);
+      void (async () => {
+        await configurePurchases(providerId);
+        await loginPurchasesUser(providerId);
+      })();
     } else if (!isAuthenticated) {
-      logoutPurchasesUser();
+      void logoutPurchasesUser();
     }
   }, [isAuthenticated, providerId]);
 
