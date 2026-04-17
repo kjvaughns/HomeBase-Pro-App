@@ -88,6 +88,18 @@ export async function runBootMigrations(): Promise<void> {
     // ── providers: is_public (public profile visibility flag) ─────────────
     await runSql("providers.is_public", `ALTER TABLE providers ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE`);
 
+    // ── provider_plans: HomeBase subscription billing fields (Task #124) ──
+    const providerPlanAlters: Array<[string, string]> = [
+      ["provider_plans.is_subscribed",          `ALTER TABLE provider_plans ADD COLUMN IF NOT EXISTS is_subscribed BOOLEAN NOT NULL DEFAULT FALSE`],
+      ["provider_plans.stripe_subscription_id", `ALTER TABLE provider_plans ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT`],
+      ["provider_plans.subscription_status",    `ALTER TABLE provider_plans ADD COLUMN IF NOT EXISTS subscription_status TEXT`],
+      ["provider_plans.subscription_started_at",`ALTER TABLE provider_plans ADD COLUMN IF NOT EXISTS subscription_started_at TIMESTAMP`],
+      ["provider_plans.subscription_ended_at",  `ALTER TABLE provider_plans ADD COLUMN IF NOT EXISTS subscription_ended_at TIMESTAMP`],
+    ];
+    for (const [label, sql] of providerPlanAlters) {
+      await runSql(label, sql);
+    }
+
     // ── services: is_public (platform-level service visibility) ──────────
     await runSql("services.is_public", `ALTER TABLE services ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT TRUE`);
 

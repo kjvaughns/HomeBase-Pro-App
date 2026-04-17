@@ -41,6 +41,8 @@ import {
   getProviderPlan,
   calculatePlatformFee,
   getStripe,
+  createSubscriptionCheckoutSession,
+  createSubscriptionPortalSession,
 } from "./stripeConnectService";
 import {
   checkSubscriptionGate,
@@ -5918,6 +5920,53 @@ Respond with JSON only:
       res.status(500).json({ error: "Failed to create customer portal session" });
     }
   });
+
+  // ============================================
+  // HOMEBASE PRO PROVIDER SUBSCRIPTIONS (Task #124)
+  // ============================================
+  app.post("/api/subscriptions/create-checkout", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).user?.id as string;
+      if (!userId) return res.status(401).json({ error: "unauthorized" });
+
+      const [provider] = await db
+        .select({ id: providers.id })
+        .from(providers)
+        .where(eq(providers.userId, userId))
+        .limit(1);
+      if (!provider) {
+        return res.status(403).json({ error: "Only providers can subscribe to HomeBase Pro" });
+      }
+
+      const { url, sessionId } = await createSubscriptionCheckoutSession({
+        userId,
+        providerId: provider.id,
+      });
+      res.json({ url, sessionId });
+    } catch (error: any) {
+      console.error("[subscriptions] create-checkout error:", error);
+      const status = error?.code === "forbidden" ? 403 : 500;
+      res.status(status).json({ error: error?.message || "Failed to create subscription checkout" });
+    }
+  });
+
+  app.post("/api/subscriptions/portal", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).user?.id as string;
+      if (!userId) return res.status(401).json({ error: "unauthorized" });
+
+      const { url } = await createSubscriptionPortalSession({ userId });
+      res.json({ url });
+    } catch (error: any) {
+      console.error("[subscriptions] portal error:", error);
+      const status = error?.code === "no_subscription" ? 404 : 500;
+      res.status(status).json({ error: error?.message || "Failed to open billing portal" });
+    }
+  });
+
+  // Note: subscription status reads go through the existing
+  // GET /api/providers/:providerId/subscription-status endpoint, which returns
+  // the rich free/grace_period/expired/subscribed state from subscriptionService.
 
   // ============================================
   // STRIPE CONNECT RETURN PAGES (after Stripe redirects the browser back)

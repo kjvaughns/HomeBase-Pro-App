@@ -764,17 +764,45 @@ export async function handleStripeWebhook(event: Stripe.Event) {
       await handlePayoutFailed(event.data.object as Stripe.Payout, event.account ?? null);
       break;
 
-    case "checkout.session.completed":
-      await handleCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session);
+    case "checkout.session.completed": {
+      const session = event.data.object as Stripe.Checkout.Session;
+      // HomeBase Pro subscription Checkouts are tagged with metadata.subscriptionType
+      // and run in subscription mode. Branch them to the dedicated handler so they
+      // don't fall through to Connect/booking invoice logic.
+      if (
+        session.mode === "subscription" ||
+        session.metadata?.subscriptionType === "homebase_pro"
+      ) {
+        await handleSubscriptionCheckoutCompleted(session);
+      } else {
+        await handleCheckoutSessionCompleted(session);
+      }
+      break;
+    }
+
+    case "customer.subscription.updated":
+      await handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
+      break;
+
+    case "customer.subscription.deleted":
+      await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
       break;
 
     case "invoice.paid":
       await handleStripeInvoicePaid(event.data.object as Stripe.Invoice);
       break;
 
-    case "invoice.payment_failed":
-      await handleStripeInvoicePaymentFailed(event.data.object as Stripe.Invoice);
+    case "invoice.payment_failed": {
+      const inv = event.data.object as Stripe.Invoice;
+      // Subscription invoices have no homebaseInvoiceId metadata — branch them
+      // to the subscription-specific handler that pushes the user to update billing.
+      if ((inv as any).subscription || inv.billing_reason === "subscription_cycle" || inv.billing_reason === "subscription_create") {
+        await handleSubscriptionInvoicePaymentFailed(inv);
+      } else {
+        await handleStripeInvoicePaymentFailed(inv);
+      }
       break;
+    }
 
     default:
       console.log(`Unhandled webhook event type: ${event.type}`);
@@ -1453,6 +1481,259 @@ export async function sendPlatformStripeInvoice(invoiceId: string): Promise<{
     .where(eq(invoices.id, invoiceId));
 
   return { stripeInvoiceId: finalized.id, hostedInvoiceUrl };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HomeBase Pro provider subscription billing (Task #124)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SUBSCRIPTION_RETURN_BASE =
+  process.env.SUBSCRIPTION_RETURN_URL || "https://homebaseproapp.com";
+
+/**
+ * Find or create the Stripe customer for a user, persisting `users.stripeCustomerId`.
+ * Re-used so each user has at most one platform Stripe customer across all flows.
+ */
+async function getOrCreateUserStripeCustomer(userId: string): Promise<string> {
+  const [user] = await db.select().from(users).where(eq(users.id, userId));
+  if (!user) throw new Error("User not found");
+
+  const stripe = getStripe();
+
+  if (user.stripeCustomerId) {
+    try {
+      const existing = await stripe.customers.retrieve(user.stripeCustomerId);
+      if (!(existing as any).deleted) return user.stripeCustomerId;
+    } catch {
+      // fall through and create a fresh one
+    }
+  }
+
+  const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ") || undefined;
+  const customer = await stripe.customers.create({
+    email: user.email,
+    name: fullName,
+    metadata: { userId, source: "homebase_pro_subscription" },
+  });
+
+  await db
+    .update(users)
+    .set({ stripeCustomerId: customer.id, updatedAt: new Date() })
+    .where(eq(users.id, userId));
+
+  return customer.id;
+}
+
+/**
+ * Create a Stripe Checkout Session for a HomeBase Pro provider subscription.
+ * Returns the hosted Checkout URL the app opens via Linking.
+ */
+export async function createSubscriptionCheckoutSession(opts: {
+  userId: string;
+  providerId: string;
+}): Promise<{ url: string; sessionId: string }> {
+  const priceId = process.env.STRIPE_SUBSCRIPTION_PRICE_ID;
+  if (!priceId) {
+    throw new Error("STRIPE_SUBSCRIPTION_PRICE_ID is not configured");
+  }
+
+  // Verify the provider belongs to the caller
+  const [provider] = await db
+    .select()
+    .from(providers)
+    .where(eq(providers.id, opts.providerId));
+  if (!provider) throw new Error("Provider not found");
+  if (provider.userId !== opts.userId) {
+    const err = new Error("forbidden") as Error & { code?: string };
+    err.code = "forbidden";
+    throw err;
+  }
+
+  const customerId = await getOrCreateUserStripeCustomer(opts.userId);
+
+  const session = await getStripe().checkout.sessions.create({
+    mode: "subscription",
+    customer: customerId,
+    line_items: [{ price: priceId, quantity: 1 }],
+    allow_promotion_codes: true,
+    success_url: `${SUBSCRIPTION_RETURN_BASE}/?subscription=success`,
+    cancel_url: `${SUBSCRIPTION_RETURN_BASE}/?subscription=cancelled`,
+    metadata: {
+      subscriptionType: "homebase_pro",
+      userId: opts.userId,
+      providerId: opts.providerId,
+    },
+    subscription_data: {
+      metadata: {
+        subscriptionType: "homebase_pro",
+        userId: opts.userId,
+        providerId: opts.providerId,
+      },
+    },
+  });
+
+  if (!session.url) throw new Error("Stripe did not return a Checkout URL");
+  return { url: session.url, sessionId: session.id };
+}
+
+/**
+ * Create a Stripe Billing Portal session so the provider can manage card,
+ * download invoices, and cancel.
+ */
+export async function createSubscriptionPortalSession(opts: {
+  userId: string;
+}): Promise<{ url: string }> {
+  const [user] = await db.select().from(users).where(eq(users.id, opts.userId));
+  if (!user) throw new Error("User not found");
+  if (!user.stripeCustomerId) {
+    const err = new Error("no_subscription") as Error & { code?: string };
+    err.code = "no_subscription";
+    throw err;
+  }
+
+  const session = await getStripe().billingPortal.sessions.create({
+    customer: user.stripeCustomerId,
+    return_url: `${SUBSCRIPTION_RETURN_BASE}/?subscription=managed`,
+  });
+
+  return { url: session.url };
+}
+
+function planTierForStatus(status: string | null | undefined): "free" | "professional" {
+  if (!status) return "free";
+  return status === "active" || status === "trialing" ? "professional" : "free";
+}
+
+async function upsertProviderPlanSubscription(
+  providerId: string,
+  patch: Partial<typeof providerPlans.$inferInsert>
+) {
+  const existing = await db
+    .select()
+    .from(providerPlans)
+    .where(eq(providerPlans.providerId, providerId));
+
+  if (existing.length === 0) {
+    await db.insert(providerPlans).values({
+      providerId,
+      planTier: patch.planTier ?? "free",
+      ...patch,
+    } as any);
+  } else {
+    await db
+      .update(providerPlans)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(providerPlans.providerId, providerId));
+  }
+}
+
+async function notifyProviderUser(providerId: string, title: string, message: string, type: string) {
+  try {
+    const [provider] = await db.select().from(providers).where(eq(providers.id, providerId));
+    if (!provider?.userId) return;
+    const { dispatchNotification } = await import("./notificationService");
+    await dispatchNotification(
+      provider.userId,
+      title,
+      message,
+      type,
+      { providerId },
+      "invoices"
+    );
+  } catch (err) {
+    console.error("[subscription] notifyProviderUser error:", err);
+  }
+}
+
+async function handleSubscriptionCheckoutCompleted(session: Stripe.Checkout.Session) {
+  const providerId = session.metadata?.providerId;
+  const subscriptionId = session.subscription?.toString();
+  if (!providerId) {
+    console.warn("[subscription] checkout.session.completed missing providerId metadata");
+    return;
+  }
+
+  await upsertProviderPlanSubscription(providerId, {
+    planTier: "professional",
+    isSubscribed: true,
+    stripeSubscriptionId: subscriptionId ?? null,
+    subscriptionStatus: "active",
+    subscriptionStartedAt: new Date(),
+    subscriptionEndedAt: null,
+  } as any);
+
+  await notifyProviderUser(
+    providerId,
+    "You're subscribed",
+    "Welcome to HomeBase Pro — your subscription is active.",
+    "subscription.activated"
+  );
+}
+
+async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
+  const providerId = subscription.metadata?.providerId;
+  if (!providerId) return;
+
+  const status = subscription.status; // active | trialing | past_due | canceled | unpaid | incomplete...
+  const isActive = status === "active" || status === "trialing";
+
+  await upsertProviderPlanSubscription(providerId, {
+    planTier: planTierForStatus(status),
+    isSubscribed: isActive,
+    stripeSubscriptionId: subscription.id,
+    subscriptionStatus: status,
+    subscriptionEndedAt: isActive ? null : new Date(),
+  } as any);
+}
+
+async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
+  const providerId = subscription.metadata?.providerId;
+  if (!providerId) return;
+
+  await upsertProviderPlanSubscription(providerId, {
+    planTier: "free",
+    isSubscribed: false,
+    stripeSubscriptionId: subscription.id,
+    subscriptionStatus: "canceled",
+    subscriptionEndedAt: new Date(),
+  } as any);
+
+  await notifyProviderUser(
+    providerId,
+    "Subscription cancelled",
+    "Your HomeBase Pro subscription has been cancelled. You can resubscribe anytime.",
+    "subscription.cancelled"
+  );
+}
+
+async function handleSubscriptionInvoicePaymentFailed(stripeInvoice: Stripe.Invoice) {
+  const subscriptionId = (stripeInvoice as any).subscription?.toString();
+  if (!subscriptionId) return;
+
+  // Look up the subscription via metadata or via our stored stripe_subscription_id
+  let providerId = stripeInvoice.subscription_details?.metadata?.providerId;
+  if (!providerId) {
+    const [plan] = await db
+      .select()
+      .from(providerPlans)
+      .where(eq(providerPlans.stripeSubscriptionId, subscriptionId));
+    providerId = plan?.providerId;
+  }
+  if (!providerId) {
+    console.warn("[subscription] invoice.payment_failed could not resolve providerId for subscription", subscriptionId);
+    return;
+  }
+
+  await upsertProviderPlanSubscription(providerId, {
+    subscriptionStatus: "past_due",
+  } as any);
+
+  await notifyProviderUser(
+    providerId,
+    "Payment failed",
+    "We couldn't charge your card for HomeBase Pro. Please update your billing info to keep your subscription active.",
+    "subscription.payment_failed"
+  );
 }
 
 export { getStripe };

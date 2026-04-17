@@ -1104,6 +1104,7 @@ function validateProductionEnv() {
     ["STRIPE_CONNECT_WEBHOOK_SECRET", "Stripe Connect webhook events cannot be verified — payment state will be corrupted"],
     ["STRIPE_SECRET_KEY", "All Stripe payment features are unavailable — invoicing, Connect, checkout all fail"],
     ["STRIPE_WEBHOOK_SECRET", "Primary Stripe webhook events cannot be verified — payment state will be corrupted"],
+    ["STRIPE_SUBSCRIPTION_PRICE_ID", "HomeBase Pro provider subscription Checkout cannot be created — providers cannot subscribe"],
     ["RESEND_API_KEY", "Transactional email (invoices, booking confirmations, reminders) will silently fail"],
   ];
 

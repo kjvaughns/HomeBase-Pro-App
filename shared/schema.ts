@@ -299,6 +299,11 @@ export const providerPlans = pgTable("provider_plans", {
   firstPaidBookingAt: timestamp("first_paid_booking_at"),
   gracePeriodEndsAt: timestamp("grace_period_ends_at"),
   isSubscribed: boolean("is_subscribed").default(false).notNull(),
+  // Real Stripe billing fields (Task #124)
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  subscriptionStatus: text("subscription_status"),
+  subscriptionStartedAt: timestamp("subscription_started_at"),
+  subscriptionEndedAt: timestamp("subscription_ended_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
