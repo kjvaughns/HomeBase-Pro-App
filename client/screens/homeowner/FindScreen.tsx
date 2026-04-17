@@ -615,6 +615,20 @@ export default function FindScreen() {
           </ThemedText>
         </View>
       ) : null}
+
+      {!isSearching && !providersLoading && featuredProviders.length === 0 ? (
+        <View style={styles.emptyState} testID="empty-no-providers">
+          <Feather name="map-pin" size={40} color={theme.textSecondary} />
+          <ThemedText style={[styles.emptyTitle, { color: theme.text }]}>
+            No providers nearby yet
+          </ThemedText>
+          <ThemedText
+            style={[styles.emptySubtitle, { color: theme.textSecondary }]}
+          >
+            No providers found in your area yet. Check back soon!
+          </ThemedText>
+        </View>
+      ) : null}
     </View>
   );
 

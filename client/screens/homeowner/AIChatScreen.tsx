@@ -173,10 +173,11 @@ export default function AIChatScreen() {
             <Pressable
               onPress={() => handleFindPro(item.category, item.problemSummary)}
               style={styles.findProButton}
+              testID="button-find-pro"
             >
-              <Feather name="users" size={16} color="#fff" />
-              <ThemedText style={styles.findProText}>Find a Pro</ThemedText>
-              <Feather name="chevron-right" size={16} color="#fff" />
+              <Feather name="users" size={16} color={theme.buttonText} />
+              <ThemedText style={[styles.findProText, { color: theme.buttonText }]}>Find a Pro</ThemedText>
+              <Feather name="chevron-right" size={16} color={theme.buttonText} />
             </Pressable>
           ) : null}
         </View>
@@ -374,7 +375,6 @@ const styles = StyleSheet.create({
   },
   findProText: {
     ...Typography.subhead,
-    color: "#fff",
     fontWeight: "600",
     flex: 1,
   },

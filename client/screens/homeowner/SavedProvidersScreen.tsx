@@ -39,13 +39,6 @@ interface SavedProviderDisplay {
   savedAt: string;
 }
 
-const MOCK_SAVED_PROVIDERS: SavedProviderDisplay[] = [
-  { id: "p-1", name: "Bay Area HVAC Pros", category: "HVAC", rating: 4.9, reviewCount: 127, serviceArea: "San Francisco Bay Area", startingPrice: 125, tags: ["Vetted", "Fast Response", "Top Rated"], savedAt: "2026-01-15" },
-  { id: "p-2", name: "Quick Fix Plumbing", category: "Plumbing", rating: 4.7, reviewCount: 89, serviceArea: "San Francisco", startingPrice: 85, tags: ["Vetted", "24/7 Available"], savedAt: "2026-01-10" },
-  { id: "p-3", name: "CleanPro Services", category: "Cleaning", rating: 4.8, reviewCount: 203, serviceArea: "SF Bay Area", startingPrice: 75, tags: ["Popular", "Eco-Friendly"], savedAt: "2025-12-20" },
-  { id: "p-4", name: "Volt Electric", category: "Electrical", rating: 4.9, reviewCount: 156, serviceArea: "Bay Area", startingPrice: 150, tags: ["Licensed", "Insured", "Top Rated"], savedAt: "2025-12-15" },
-];
-
 type SortOption = "recent" | "rating" | "booked" | "closest";
 
 const SORT_OPTIONS: { id: SortOption; label: string }[] = [
@@ -66,7 +59,7 @@ export default function SavedProvidersScreen() {
   const [sortBy, setSortBy] = useState<SortOption>("recent");
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [providers, setProviders] = useState(MOCK_SAVED_PROVIDERS);
+  const [providers, setProviders] = useState<SavedProviderDisplay[]>([]);
 
   const filteredProviders = providers
     .filter((p) => {
@@ -183,9 +176,10 @@ export default function SavedProvidersScreen() {
       </ThemedText>
       <Pressable
         style={[styles.browseButton, { backgroundColor: Colors.accent }]}
-        onPress={() => navigation.goBack()}
+        onPress={() => navigation.navigate("Main", { screen: "FindTab" })}
+        testID="button-browse-providers"
       >
-        <ThemedText style={styles.browseButtonText}>Browse Providers</ThemedText>
+        <ThemedText style={styles.browseButtonText}>Find a Pro</ThemedText>
       </Pressable>
     </View>
   );

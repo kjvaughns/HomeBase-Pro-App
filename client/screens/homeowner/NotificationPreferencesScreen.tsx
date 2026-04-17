@@ -1,5 +1,6 @@
 import React, { useCallback } from "react";
-import { StyleSheet, View, ScrollView, Switch, ActivityIndicator } from "react-native";
+import { StyleSheet, View, ScrollView, Switch, ActivityIndicator, Pressable } from "react-native";
+import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
@@ -59,7 +60,7 @@ export default function NotificationPreferencesScreen() {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery<{ preferences: NotificationPreferences }>({
+  const { data, isLoading, isError, refetch, isFetching } = useQuery<{ preferences: NotificationPreferences }>({
     queryKey: ["/api/notification-preferences", user?.id],
     queryFn: async () => {
       if (!user?.id) return { preferences: {} as NotificationPreferences };
@@ -92,6 +93,31 @@ export default function NotificationPreferencesScreen() {
     return (
       <ThemedView style={[styles.container, styles.centered]}>
         <ActivityIndicator color={Colors.accent} />
+      </ThemedView>
+    );
+  }
+
+  if (isError) {
+    return (
+      <ThemedView style={[styles.container, styles.centered]}>
+        <View style={styles.errorBox}>
+          <View style={[styles.errorIconCircle, { backgroundColor: Colors.errorLight }]}>
+            <Feather name="alert-circle" size={28} color={Colors.error} />
+          </View>
+          <ThemedText style={styles.errorTitle}>Couldn't load notification preferences. Please try again.</ThemedText>
+          <Pressable
+            onPress={() => refetch()}
+            disabled={isFetching}
+            style={[styles.retryButton, { backgroundColor: Colors.accent, opacity: isFetching ? 0.6 : 1 }]}
+            testID="button-retry-preferences"
+          >
+            {isFetching ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <ThemedText style={styles.retryButtonText}>Try again</ThemedText>
+            )}
+          </Pressable>
+        </View>
       </ThemedView>
     );
   }
@@ -184,5 +210,35 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     justifyContent: "center",
+  },
+  errorBox: {
+    alignItems: "center",
+    paddingHorizontal: Spacing.xl,
+    gap: Spacing.md,
+  },
+  errorIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.sm,
+  },
+  errorTitle: {
+    ...Typography.body,
+    textAlign: "center",
+    marginBottom: Spacing.sm,
+  },
+  retryButton: {
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.button,
+    minWidth: 140,
+    alignItems: "center",
+  },
+  retryButtonText: {
+    color: "#fff",
+    ...Typography.callout,
+    fontWeight: "700",
   },
 });

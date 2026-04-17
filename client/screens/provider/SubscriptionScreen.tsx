@@ -15,23 +15,23 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
-import { useAuthStore } from "@/state/authStore";
+
+const MANAGE_URL = "https://homebaseproapp.com";
 
 export default function SubscriptionScreen() {
   const { theme, isDark } = useTheme();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
-  const { providerProfile } = useAuthStore();
   const [loading, setLoading] = useState(false);
 
-  const isFree = (providerProfile?.completedJobs ?? 0) === 0;
-
-  const handleManage = useCallback(async () => {
+  const handleOpen = useCallback(async () => {
     setLoading(true);
     try {
-      await Linking.openURL("https://apps.apple.com/account/subscriptions");
+      await Linking.openURL(MANAGE_URL);
     } catch {}
-    finally { setLoading(false); }
+    finally {
+      setLoading(false);
+    }
   }, []);
 
   return (
@@ -53,45 +53,31 @@ export default function SubscriptionScreen() {
             },
           ]}
         >
-          <View style={styles.header}>
-            <View style={styles.titleRow}>
-              <View style={[styles.badge, { backgroundColor: Colors.accent }]}>
-                <ThemedText style={styles.badgeText}>PRO</ThemedText>
-              </View>
-              <ThemedText style={styles.planName}>HomeBase Pro</ThemedText>
-            </View>
-            <View style={styles.priceRow}>
-              <ThemedText style={styles.price}>$29.99</ThemedText>
-              <ThemedText style={[styles.priceUnit, { color: theme.textSecondary }]}>/mo</ThemedText>
-            </View>
+          <View style={[styles.iconCircle, { backgroundColor: Colors.accentLight }]}>
+            <Feather name="external-link" size={22} color={Colors.accent} />
           </View>
 
-          <View style={[styles.statusBanner, { backgroundColor: Colors.accentLight }]}>
-            <Feather
-              name={isFree ? "gift" : "check-circle"}
-              size={15}
-              color={Colors.accent}
-            />
-            <ThemedText style={[styles.statusText, { color: Colors.accent }]}>
-              {isFree ? "Free until your first paid booking" : "Plan active — billed monthly"}
-            </ThemedText>
-          </View>
+          <ThemedText style={styles.title}>Manage on the web</ThemedText>
+
+          <ThemedText style={[styles.body, { color: theme.textSecondary }]}>
+            Manage your HomeBase subscription at homebaseproapp.com
+          </ThemedText>
 
           <Pressable
             style={({ pressed }) => [
               styles.button,
               { backgroundColor: pressed ? Colors.accentPressed : Colors.accent },
             ]}
-            onPress={handleManage}
+            onPress={handleOpen}
             disabled={loading}
-            testID="button-manage-subscription"
+            testID="button-open-subscription-portal"
           >
             {loading ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
               <>
-                <Feather name="settings" size={16} color="#fff" />
-                <ThemedText style={styles.buttonText}>Manage Subscription</ThemedText>
+                <Feather name="external-link" size={16} color="#fff" />
+                <ThemedText style={styles.buttonText}>Open homebaseproapp.com</ThemedText>
               </>
             )}
           </Pressable>
@@ -107,58 +93,27 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.card,
     borderWidth: 1.5,
     padding: Spacing.lg,
-  },
-  header: {
-    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+  },
+  iconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: Spacing.md,
   },
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-  },
-  badge: {
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  badgeText: {
-    color: "#fff",
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 1,
-  },
-  planName: {
+  title: {
     ...Typography.headline,
     fontWeight: "700",
+    marginBottom: Spacing.sm,
+    textAlign: "center",
   },
-  priceRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-  },
-  price: {
-    fontSize: 26,
-    fontWeight: "800",
-    letterSpacing: -0.5,
-  },
-  priceUnit: {
+  body: {
     ...Typography.subhead,
-    marginLeft: 2,
-  },
-  statusBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    textAlign: "center",
     marginBottom: Spacing.lg,
-  },
-  statusText: {
-    ...Typography.subhead,
-    fontWeight: "600",
+    lineHeight: 22,
   },
   button: {
     flexDirection: "row",
@@ -167,6 +122,8 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     borderRadius: BorderRadius.button,
     paddingVertical: 14,
+    paddingHorizontal: Spacing.xl,
+    alignSelf: "stretch",
   },
   buttonText: {
     color: "#fff",

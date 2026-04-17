@@ -82,6 +82,7 @@ export default function ManageScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showAccountGate, setShowAccountGate] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  const [loadError, setLoadError] = useState(false);
 
   const fetchAppointments = useCallback(async () => {
     if (!user?.id) {
@@ -89,11 +90,13 @@ export default function ManageScreen() {
       return;
     }
     try {
+      setLoadError(false);
       const response = await apiRequest("GET", `/api/users/${user.id}/appointments`);
       const data = await response.json();
       setAppointments(data.appointments || []);
     } catch (error) {
       console.error("Failed to fetch appointments:", error);
+      setLoadError(true);
     } finally {
       setIsLoading(false);
     }
@@ -270,11 +273,28 @@ export default function ManageScreen() {
       );
     }
 
+    if (loadError) {
+      return (
+        <EmptyState
+          image={require("../../../assets/images/empty-bookings.png")}
+          title="Couldn't load appointments"
+          description="Something went wrong loading your appointments. Please try again."
+          primaryAction={{
+            label: "Try again",
+            onPress: () => {
+              setIsLoading(true);
+              fetchAppointments();
+            },
+          }}
+        />
+      );
+    }
+
     return (
       <EmptyState
         image={require("../../../assets/images/empty-bookings.png")}
         title="No appointments yet"
-        description="When you book a service, it will appear here. Start by finding a pro!"
+        description="You don't have any appointments yet. Book a provider to get started."
         primaryAction={{
           label: "Find a Pro",
           onPress: () => navigation.navigate("Main"),

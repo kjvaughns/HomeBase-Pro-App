@@ -8,6 +8,7 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
@@ -442,6 +443,9 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
 
       {/* Footer button */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.lg }]}>
+        {step === TOTAL_STEPS - 1 ? (
+          <LegalLine theme={theme} />
+        ) : null}
         <PrimaryButton
           onPress={handleNext}
           disabled={!canContinue() || loading}
@@ -452,6 +456,37 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
         </PrimaryButton>
       </View>
     </ThemedView>
+  );
+}
+
+// ─── Legal links line (Terms + Privacy) ─────────────────────────────────────
+
+function LegalLine({ theme }: { theme: ReturnType<typeof useTheme>["theme"] }) {
+  const open = (url: string) => {
+    Linking.openURL(url).catch(() => {});
+  };
+  return (
+    <View style={styles.legalRow}>
+      <ThemedText style={[styles.legalText, { color: theme.textSecondary }]}>
+        By signing up, you agree to our{" "}
+        <ThemedText
+          style={[styles.legalLink, { color: Colors.accent }]}
+          onPress={() => open("https://homebaseproapp.com/terms")}
+          testID="link-terms"
+        >
+          Terms of Service
+        </ThemedText>
+        {" "}and{" "}
+        <ThemedText
+          style={[styles.legalLink, { color: Colors.accent }]}
+          onPress={() => open("https://homebaseproapp.com/privacy")}
+          testID="link-privacy"
+        >
+          Privacy Policy
+        </ThemedText>
+        .
+      </ThemedText>
+    </View>
   );
 }
 
@@ -524,15 +559,19 @@ function BusinessStep({
 }) {
   const [nameSuggestions, setNameSuggestions] = useState<string[]>([]);
   const [loadingNames, setLoadingNames] = useState(false);
+  const [suggestionsError, setSuggestionsError] = useState("");
 
   useEffect(() => {
-    if (!category) { setNameSuggestions([]); return; }
+    if (!category) { setNameSuggestions([]); setSuggestionsError(""); return; }
     setLoadingNames(true);
     setNameSuggestions([]);
+    setSuggestionsError("");
     apiRequest("POST", "/api/ai/onboarding/suggest-business-names", { category })
       .then((r) => r.json())
       .then((json) => { if (Array.isArray(json.names)) setNameSuggestions(json.names.slice(0, 3)); })
-      .catch(() => {})
+      .catch(() => {
+        setSuggestionsError("Couldn't load suggestions — you can continue and add your business name manually.");
+      })
       .finally(() => setLoadingNames(false));
   }, [category]);
 
@@ -572,6 +611,15 @@ function BusinessStep({
           testID="input-business-name"
         />
       </View>
+
+      {suggestionsError.length > 0 ? (
+        <ThemedText
+          style={[styles.captionText, { color: theme.textSecondary, marginTop: Spacing.sm }]}
+          testID="text-suggestions-error"
+        >
+          {suggestionsError}
+        </ThemedText>
+      ) : null}
 
       {(loadingNames || nameSuggestions.length > 0) ? (
         <View style={styles.aiSuggestionRow}>
@@ -1558,6 +1606,20 @@ const styles = StyleSheet.create({
   footer: {
     paddingHorizontal: Spacing.screenPadding,
     paddingTop: Spacing.md,
+  },
+
+  legalRow: {
+    marginBottom: Spacing.md,
+    paddingHorizontal: Spacing.xs,
+  },
+  legalText: {
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "center",
+  },
+  legalLink: {
+    fontWeight: "600",
+    textDecorationLine: "underline",
   },
 
   // ServiceBuilderStep

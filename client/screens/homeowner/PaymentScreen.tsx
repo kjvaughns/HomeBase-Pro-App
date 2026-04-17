@@ -226,12 +226,6 @@ export default function PaymentScreen() {
           </View>
         )}
 
-        {paymentError ? (
-          <View style={[styles.errorBox, { borderColor: "#EF4444" }]}>
-            <Feather name="alert-circle" size={16} color="#EF4444" />
-            <ThemedText style={styles.errorBoxText}>{paymentError}</ThemedText>
-          </View>
-        ) : null}
       </ScrollView>
 
       <View style={[styles.bottomBar, { backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.md }]}>
@@ -245,6 +239,12 @@ export default function PaymentScreen() {
             ? `Reopen Stripe to Pay $${parseFloat(totalAmount).toFixed(2)}`
             : `Pay $${parseFloat(totalAmount).toFixed(2)} on Stripe`}
         </PrimaryButton>
+        {paymentError ? (
+          <View style={[styles.errorBox, { borderColor: "#EF4444", marginTop: Spacing.sm }]} testID="text-payment-error">
+            <Feather name="alert-circle" size={16} color="#EF4444" />
+            <ThemedText style={styles.errorBoxText}>{paymentError}</ThemedText>
+          </View>
+        ) : null}
         <Pressable
           onPress={() => refetch()}
           disabled={isFetching}

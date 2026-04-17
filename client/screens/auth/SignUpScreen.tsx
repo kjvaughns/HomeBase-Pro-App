@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, View, Pressable, Alert } from "react-native";
+import { StyleSheet, View, Pressable, Alert, Linking } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -213,6 +213,28 @@ export default function SignUpScreen({ navigation }: Props) {
         </View>
 
         <View style={styles.footer}>
+          <View style={styles.legalRow}>
+            <ThemedText style={[styles.legalText, { color: theme.textSecondary }]}>
+              By signing up, you agree to our{" "}
+              <ThemedText
+                style={[styles.legalLink, { color: Colors.accent }]}
+                onPress={() => Linking.openURL("https://homebaseproapp.com/terms").catch(() => {})}
+                testID="link-terms"
+              >
+                Terms of Service
+              </ThemedText>
+              {" "}and{" "}
+              <ThemedText
+                style={[styles.legalLink, { color: Colors.accent }]}
+                onPress={() => Linking.openURL("https://homebaseproapp.com/privacy").catch(() => {})}
+                testID="link-privacy"
+              >
+                Privacy Policy
+              </ThemedText>
+              .
+            </ThemedText>
+          </View>
+
           <PrimaryButton
             onPress={handleSignUp}
             loading={loading}
@@ -275,5 +297,17 @@ const styles = StyleSheet.create({
   loginLink: {
     ...Typography.callout,
     fontWeight: "600",
+  },
+  legalRow: {
+    paddingHorizontal: Spacing.xs,
+  },
+  legalText: {
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "center",
+  },
+  legalLink: {
+    fontWeight: "600",
+    textDecorationLine: "underline",
   },
 });

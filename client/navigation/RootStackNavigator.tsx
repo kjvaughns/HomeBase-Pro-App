@@ -1,9 +1,10 @@
 import React, { useEffect } from "react";
 import { Platform } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import type { NavigatorScreenParams } from "@react-navigation/native";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 
-import HomeownerTabNavigator from "@/navigation/HomeownerTabNavigator";
+import HomeownerTabNavigator, { type HomeownerTabParamList } from "@/navigation/HomeownerTabNavigator";
 import ProviderTabNavigator from "@/navigation/ProviderTabNavigator";
 import RoleSwitchConfirmationScreen from "@/screens/RoleSwitchConfirmationScreen";
 import BecomeProviderScreen from "@/screens/BecomeProviderScreen";
@@ -77,7 +78,7 @@ export type RootStackParamList = {
   SignUp: undefined;
   ForgotPassword: undefined;
   Onboarding: undefined;
-  Main: undefined;
+  Main: NavigatorScreenParams<HomeownerTabParamList> | undefined;
   RoleSwitchConfirmation: { targetRole: UserRole };
   BecomeProvider: undefined;
   AIChat: undefined;
