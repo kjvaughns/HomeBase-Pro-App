@@ -3,7 +3,11 @@ import { AppState, AppStateStatus } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/state/authStore";
 
-export type SubscriptionStatus = "free" | "grace_period" | "expired" | "subscribed";
+export type SubscriptionStatus =
+  | "free"
+  | "grace_period"
+  | "expired"
+  | "subscribed";
 
 export interface SubscriptionStatusInfo {
   status: SubscriptionStatus;
@@ -11,6 +15,8 @@ export interface SubscriptionStatusInfo {
   firstPaidBookingAt: string | null;
   gracePeriodEndsAt: string | null;
   isSubscribed: boolean;
+  subscriptionSource: string | null;
+  currentPeriodEnd: string | null;
 }
 
 export function useSubscriptionStatus() {
@@ -18,7 +24,11 @@ export function useSubscriptionStatus() {
   const providerId = providerProfile?.id;
   const queryClient = useQueryClient();
 
-  const queryKey = ["/api/providers", providerId, "subscription-status"] as const;
+  const queryKey = [
+    "/api/providers",
+    providerId,
+    "subscription-status",
+  ] as const;
 
   const query = useQuery<SubscriptionStatusInfo>({
     queryKey,
@@ -31,7 +41,11 @@ export function useSubscriptionStatus() {
   useEffect(() => {
     let lastState: AppStateStatus = AppState.currentState;
     const sub = AppState.addEventListener("change", (next) => {
-      if (lastState.match(/inactive|background/) && next === "active" && providerId) {
+      if (
+        lastState.match(/inactive|background/) &&
+        next === "active" &&
+        providerId
+      ) {
         queryClient.invalidateQueries({ queryKey });
       }
       lastState = next;

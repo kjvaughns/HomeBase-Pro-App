@@ -32,7 +32,9 @@ interface RevenueCatEvent {
   entitlement_id?: string;
 }
 
-function sourceForStore(store?: string): string {
+function sourceForStore(
+  store?: string,
+): "revenuecat_ios" | "revenuecat_android" | null {
   switch ((store || "").toUpperCase()) {
     case "APP_STORE":
     case "MAC_APP_STORE":
@@ -40,7 +42,7 @@ function sourceForStore(store?: string): string {
     case "PLAY_STORE":
       return "revenuecat_android";
     default:
-      return "revenuecat";
+      return null;
   }
 }
 

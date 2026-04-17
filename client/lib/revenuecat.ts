@@ -1,10 +1,13 @@
 import { Platform } from "react-native";
-import Purchases, {
-  LOG_LEVEL,
-  type CustomerInfo,
-  type PurchasesOffering,
-  type PurchasesPackage,
-} from "react-native-purchases";
+
+// react-native-purchases is iOS/Android only. Importing it eagerly on the
+// web build can break the bundler (it pulls in native-only modules). We
+// lazy-load it only when running on a native platform.
+type PurchasesModule = typeof import("react-native-purchases");
+type PurchasesNamespace = PurchasesModule["default"];
+type CustomerInfo = import("react-native-purchases").CustomerInfo;
+type PurchasesOffering = import("react-native-purchases").PurchasesOffering;
+type PurchasesPackage = import("react-native-purchases").PurchasesPackage;
 
 const REVENUECAT_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY || "";
 
@@ -14,9 +17,29 @@ export const PRO_ENTITLEMENT_ID = "pro";
 
 let configured = false;
 let currentAppUserId: string | null = null;
+let purchasesPromise: Promise<PurchasesNamespace | null> | null = null;
 
+/**
+ * RevenueCat IAP only runs on iOS and Android. The web build keeps using
+ * Stripe Checkout. We do **not** key this off the API key — native builds
+ * must always take the IAP code path so they never display Stripe/website
+ * subscription copy (Apple compliance).
+ */
 export function isPurchasesAvailable(): boolean {
-  return Platform.OS !== "web" && !!REVENUECAT_API_KEY;
+  return Platform.OS === "ios" || Platform.OS === "android";
+}
+
+async function loadPurchases(): Promise<PurchasesNamespace | null> {
+  if (!isPurchasesAvailable()) return null;
+  if (!purchasesPromise) {
+    purchasesPromise = import("react-native-purchases")
+      .then((m) => m.default)
+      .catch((err) => {
+        console.error("[revenuecat] failed to load native module:", err);
+        return null;
+      });
+  }
+  return purchasesPromise;
 }
 
 /**
@@ -24,10 +47,21 @@ export function isPurchasesAvailable(): boolean {
  * times — subsequent calls after configuration are no-ops. On web this is a
  * no-op since IAP is iOS/Android only (web subscribers use Stripe).
  */
-export function configurePurchases(appUserId?: string | null) {
+export async function configurePurchases(
+  appUserId?: string | null,
+): Promise<void> {
   if (!isPurchasesAvailable()) return;
+  if (!REVENUECAT_API_KEY) {
+    console.warn(
+      "[revenuecat] EXPO_PUBLIC_REVENUECAT_API_KEY not set — IAP disabled",
+    );
+    return;
+  }
   if (configured) return;
+  const Purchases = await loadPurchases();
+  if (!Purchases) return;
   try {
+    const { LOG_LEVEL } = await import("react-native-purchases");
     Purchases.setLogLevel(LOG_LEVEL.WARN);
     Purchases.configure({
       apiKey: REVENUECAT_API_KEY,
@@ -43,10 +77,12 @@ export function configurePurchases(appUserId?: string | null) {
 export async function loginPurchasesUser(appUserId: string): Promise<void> {
   if (!isPurchasesAvailable()) return;
   if (!configured) {
-    configurePurchases(appUserId);
+    await configurePurchases(appUserId);
     return;
   }
   if (currentAppUserId === appUserId) return;
+  const Purchases = await loadPurchases();
+  if (!Purchases) return;
   try {
     await Purchases.logIn(appUserId);
     currentAppUserId = appUserId;
@@ -58,6 +94,8 @@ export async function loginPurchasesUser(appUserId: string): Promise<void> {
 export async function logoutPurchasesUser(): Promise<void> {
   if (!isPurchasesAvailable()) return;
   if (!configured) return;
+  const Purchases = await loadPurchases();
+  if (!Purchases) return;
   try {
     await Purchases.logOut();
     currentAppUserId = null;
@@ -69,6 +107,8 @@ export async function logoutPurchasesUser(): Promise<void> {
 
 export async function getProOffering(): Promise<PurchasesOffering | null> {
   if (!isPurchasesAvailable()) return null;
+  const Purchases = await loadPurchases();
+  if (!Purchases) return null;
   try {
     const offerings = await Purchases.getOfferings();
     return offerings.current ?? null;
@@ -94,6 +134,13 @@ export async function purchasePackage(
       errorMessage: "Purchases unavailable on this platform",
     };
   }
+  const Purchases = await loadPurchases();
+  if (!Purchases) {
+    return {
+      success: false,
+      errorMessage: "In-app purchases failed to load. Please try again.",
+    };
+  }
   try {
     const { customerInfo } = await Purchases.purchasePackage(pkg);
     return { success: true, customerInfo };
@@ -111,6 +158,13 @@ export async function restorePurchases(): Promise<PurchaseResult> {
       errorMessage: "Purchases unavailable on this platform",
     };
   }
+  const Purchases = await loadPurchases();
+  if (!Purchases) {
+    return {
+      success: false,
+      errorMessage: "In-app purchases failed to load. Please try again.",
+    };
+  }
   try {
     const customerInfo = await Purchases.restorePurchases();
     return { success: true, customerInfo };
@@ -122,6 +176,8 @@ export async function restorePurchases(): Promise<PurchaseResult> {
 
 export async function getCustomerInfo(): Promise<CustomerInfo | null> {
   if (!isPurchasesAvailable()) return null;
+  const Purchases = await loadPurchases();
+  if (!Purchases) return null;
   try {
     return await Purchases.getCustomerInfo();
   } catch (err) {
@@ -148,7 +204,7 @@ export function getManageSubscriptionUrl(): string {
   if (Platform.OS === "android") {
     return "https://play.google.com/store/account/subscriptions";
   }
-  return "https://homebaseproapp.com/subscribe";
+  return "";
 }
 
 export type { CustomerInfo, PurchasesOffering, PurchasesPackage };

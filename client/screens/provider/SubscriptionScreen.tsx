@@ -65,7 +65,11 @@ export default function SubscriptionScreen() {
   const [offeringError, setOfferingError] = useState<string | null>(null);
   const [loadingOffering, setLoadingOffering] = useState(false);
 
+  // Native (iOS/Android) builds always take the IAP path so they never show
+  // any external/Stripe purchase copy in-app — required for App Store review.
+  // Web keeps the existing Stripe Checkout flow.
   const useIAP = isPurchasesAvailable();
+  void isPurchasesAvailable; // keep import alive for tree-shaking
 
   // Load the current RevenueCat offering on mount (native only).
   useEffect(() => {
@@ -92,7 +96,11 @@ export default function SubscriptionScreen() {
 
   const proPackage: PurchasesPackage | null =
     offering?.monthly ?? offering?.availablePackages?.[0] ?? null;
-  const priceLabel = proPackage?.product?.priceString || "$29.99/mo";
+  // On native we MUST display the localized price from the App Store /
+  // Play Store offering — never a hardcoded value (Apple compliance).
+  // On web we use the Stripe marketing price.
+  const nativePriceLabel = proPackage?.product?.priceString ?? null;
+  const priceLabel = useIAP ? nativePriceLabel : "$29.99/mo";
 
   // ─── Native (iOS/Android) IAP actions ────────────────────────────────────────
   const handleNativeSubscribe = useCallback(async () => {
@@ -242,10 +250,31 @@ export default function SubscriptionScreen() {
   })();
 
   const showSubscribeButton = !isSubscribed;
-  const subscribeLabel =
-    stateKey === "free"
+  const subscribeLabel = priceLabel
+    ? stateKey === "free"
       ? `Subscribe early — ${priceLabel}`
-      : `Subscribe — ${priceLabel}`;
+      : `Subscribe — ${priceLabel}`
+    : "Subscribe";
+
+  // Render the renewal disclosure only when we have a real localized price
+  // (native) or the marketing price (web). No fabricated values.
+  const showDisclosure = !!priceLabel;
+
+  const sourceLabel = (() => {
+    switch (data?.subscriptionSource) {
+      case "revenuecat_ios":
+        return "Apple App Store";
+      case "revenuecat_android":
+        return "Google Play";
+      case "stripe_web":
+        return "Web (Stripe)";
+      default:
+        return null;
+    }
+  })();
+  const renewalDate = data?.currentPeriodEnd
+    ? new Date(data.currentPeriodEnd).toLocaleDateString()
+    : null;
 
   return (
     <ThemedView style={styles.container}>
@@ -406,9 +435,9 @@ export default function SubscriptionScreen() {
           </View>
         )}
 
-        {/* Apple-required renewal disclosure + legal links (native only when
-            offering subscription, but always shown to keep copy honest). */}
-        {showSubscribeButton ? (
+        {/* Apple-required renewal disclosure + legal links. Only render when
+            we have a real localized price (or the marketing price on web). */}
+        {showSubscribeButton && showDisclosure ? (
           <View style={styles.disclosureBlock}>
             <ThemedText
               style={[styles.disclosure, { color: theme.textTertiary }]}
@@ -448,6 +477,28 @@ export default function SubscriptionScreen() {
                 </ThemedText>
               </Pressable>
             </View>
+          </View>
+        ) : null}
+
+        {/* Billing details surfaced for subscribed providers. */}
+        {isSubscribed && (sourceLabel || renewalDate) ? (
+          <View style={styles.metaBlock}>
+            {sourceLabel ? (
+              <ThemedText
+                style={[styles.meta, { color: theme.textTertiary }]}
+                testID="text-subscription-source"
+              >
+                Billed through: {sourceLabel}
+              </ThemedText>
+            ) : null}
+            {renewalDate ? (
+              <ThemedText
+                style={[styles.meta, { color: theme.textTertiary }]}
+                testID="text-subscription-renewal"
+              >
+                Renews on: {renewalDate}
+              </ThemedText>
+            ) : null}
           </View>
         ) : null}
 
@@ -546,5 +597,10 @@ const styles = StyleSheet.create({
     ...Typography.caption2,
     textAlign: "center",
     marginTop: Spacing.lg,
+  },
+  metaBlock: {
+    marginTop: Spacing.lg,
+    gap: Spacing.xs,
+    alignItems: "center",
   },
 });

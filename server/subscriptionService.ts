@@ -23,13 +23,19 @@ export interface SubscriptionStatusInfo {
   firstPaidBookingAt: string | null;
   gracePeriodEndsAt: string | null;
   isSubscribed: boolean;
+  subscriptionSource: string | null;
+  currentPeriodEnd: string | null;
 }
 
 type PlanLike =
   | Partial<
       Pick<
         ProviderPlan,
-        "isSubscribed" | "firstPaidBookingAt" | "gracePeriodEndsAt"
+        | "isSubscribed"
+        | "firstPaidBookingAt"
+        | "gracePeriodEndsAt"
+        | "subscriptionSource"
+        | "currentPeriodEnd"
       >
     >
   | null
@@ -46,6 +52,10 @@ export function computeSubscriptionStatus(
   const graceEndsAt = plan?.gracePeriodEndsAt
     ? new Date(plan.gracePeriodEndsAt)
     : null;
+  const subscriptionSource = plan?.subscriptionSource ?? null;
+  const currentPeriodEnd = plan?.currentPeriodEnd
+    ? new Date(plan.currentPeriodEnd).toISOString()
+    : null;
 
   if (isSubscribed) {
     return {
@@ -54,6 +64,8 @@ export function computeSubscriptionStatus(
       firstPaidBookingAt: firstPaidAt ? firstPaidAt.toISOString() : null,
       gracePeriodEndsAt: graceEndsAt ? graceEndsAt.toISOString() : null,
       isSubscribed: true,
+      subscriptionSource,
+      currentPeriodEnd,
     };
   }
 
@@ -64,6 +76,8 @@ export function computeSubscriptionStatus(
       firstPaidBookingAt: null,
       gracePeriodEndsAt: null,
       isSubscribed: false,
+      subscriptionSource,
+      currentPeriodEnd,
     };
   }
 
@@ -75,6 +89,8 @@ export function computeSubscriptionStatus(
       firstPaidBookingAt: firstPaidAt.toISOString(),
       gracePeriodEndsAt: graceEndsAt.toISOString(),
       isSubscribed: false,
+      subscriptionSource,
+      currentPeriodEnd,
     };
   }
 
@@ -88,6 +104,8 @@ export function computeSubscriptionStatus(
     firstPaidBookingAt: firstPaidAt.toISOString(),
     gracePeriodEndsAt: graceEndsAt.toISOString(),
     isSubscribed: false,
+    subscriptionSource,
+    currentPeriodEnd,
   };
 }
 

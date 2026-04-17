@@ -85,7 +85,7 @@ export default function App() {
 
   useEffect(() => {
     if (!isPurchasesAvailable()) return;
-    configurePurchases(providerId ?? undefined);
+    void configurePurchases(providerId ?? undefined);
   }, []);
 
   useEffect(() => {

@@ -38,13 +38,13 @@ function getStripe(): Stripe {
       throw new Error(
         isProd
           ? "STRIPE_SECRET_KEY is required in production. Set the live secret key in the deployment env."
-          : "STRIPE_TEST_SECRET_KEY or STRIPE_SECRET_KEY is required. Please add it to your environment variables."
+          : "STRIPE_TEST_SECRET_KEY or STRIPE_SECRET_KEY is required. Please add it to your environment variables.",
       );
     }
     if (isProd && !apiKey.startsWith("sk_live_")) {
       console.warn(
         `[stripe] WARNING: NODE_ENV=production but STRIPE_SECRET_KEY does not start with sk_live_. ` +
-        `The app will run in Stripe test mode — real payments will NOT be processed.`
+          `The app will run in Stripe test mode — real payments will NOT be processed.`,
       );
     }
     stripe = new Stripe(apiKey);
@@ -80,7 +80,7 @@ export async function getProviderPlan(providerId: string) {
     .select()
     .from(providerPlans)
     .where(eq(providerPlans.providerId, providerId));
-  
+
   if (!plan) {
     return {
       id: null,
@@ -96,9 +96,10 @@ export async function getProviderPlan(providerId: string) {
 export function calculatePlatformFee(
   totalCents: number,
   feePercent: string | number,
-  fixedCents: number = 0
+  fixedCents: number = 0,
 ): PlatformFee {
-  const percent = typeof feePercent === "string" ? parseFloat(feePercent) : feePercent;
+  const percent =
+    typeof feePercent === "string" ? parseFloat(feePercent) : feePercent;
   const percentFee = Math.round(totalCents * (percent / 100));
   return {
     percent,
@@ -172,7 +173,7 @@ export async function createConnectAccountLink(providerId: string) {
 
 export async function refreshConnectAccountLink(providerId: string) {
   const connectAccount = await getConnectAccount(providerId);
-  
+
   if (!connectAccount) {
     throw new Error("Connect account not found. Create one first.");
   }
@@ -193,7 +194,7 @@ export async function refreshConnectAccountLink(providerId: string) {
 
 export async function getConnectStatus(providerId: string) {
   const connectAccount = await getConnectAccount(providerId);
-  
+
   if (!connectAccount) {
     return {
       exists: false,
@@ -212,14 +213,20 @@ export async function getConnectStatus(providerId: string) {
   // as a re-onboarding requirement instead of surfacing a 500.
   let account: Stripe.Account;
   try {
-    account = await getStripe().accounts.retrieve(connectAccount.stripeAccountId);
+    account = await getStripe().accounts.retrieve(
+      connectAccount.stripeAccountId,
+    );
   } catch (err: any) {
     const code = err?.code || err?.raw?.code;
-    if (code === "account_invalid" || code === "resource_missing" || err?.statusCode === 404) {
+    if (
+      code === "account_invalid" ||
+      code === "resource_missing" ||
+      err?.statusCode === 404
+    ) {
       console.warn(
         `[stripe-connect] accounts.retrieve(${connectAccount.stripeAccountId}) failed — ` +
-        `likely a ${isStripeLiveMode() ? "test-mode" : "live-mode"} account under ` +
-        `${isStripeLiveMode() ? "live" : "test"} API key. Provider must re-onboard.`
+          `likely a ${isStripeLiveMode() ? "test-mode" : "live-mode"} account under ` +
+          `${isStripeLiveMode() ? "live" : "test"} API key. Provider must re-onboard.`,
       );
       return {
         exists: true,
@@ -236,7 +243,11 @@ export async function getConnectStatus(providerId: string) {
   }
 
   let onboardingStatus: "not_started" | "pending" | "complete" = "pending";
-  if (account.charges_enabled && account.payouts_enabled && account.details_submitted) {
+  if (
+    account.charges_enabled &&
+    account.payouts_enabled &&
+    account.details_submitted
+  ) {
     onboardingStatus = "complete";
   }
 
@@ -278,7 +289,10 @@ export async function reonboardConnectAccount(providerId: string) {
   return createConnectAccountLink(providerId);
 }
 
-export async function createInvoicePaymentIntent(invoiceId: string, payerUserId?: string) {
+export async function createInvoicePaymentIntent(
+  invoiceId: string,
+  payerUserId?: string,
+) {
   const [invoice] = await db
     .select()
     .from(invoices)
@@ -340,8 +354,13 @@ export async function createInvoicePaymentIntent(invoiceId: string, payerUserId?
   };
 }
 
-export async function createStripeInvoice(invoiceId: string): Promise<{ stripeInvoiceId: string; hostedInvoiceUrl: string }> {
-  const [invoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+export async function createStripeInvoice(
+  invoiceId: string,
+): Promise<{ stripeInvoiceId: string; hostedInvoiceUrl: string }> {
+  const [invoice] = await db
+    .select()
+    .from(invoices)
+    .where(eq(invoices.id, invoiceId));
   if (!invoice) throw new Error("Invoice not found");
 
   // ── Idempotency: return existing Stripe invoice if already created ───────
@@ -351,10 +370,15 @@ export async function createStripeInvoice(invoiceId: string): Promise<{ stripeIn
       if (connectAccount?.stripeAccountId) {
         const existing = await getStripe().invoices.retrieve(
           invoice.stripeInvoiceId,
-          { stripeAccount: connectAccount.stripeAccountId }
+          { stripeAccount: connectAccount.stripeAccountId },
         );
-        if (existing && existing.status !== "void" && existing.status !== "uncollectible") {
-          const hostedInvoiceUrl = existing.hosted_invoice_url || invoice.hostedInvoiceUrl;
+        if (
+          existing &&
+          existing.status !== "void" &&
+          existing.status !== "uncollectible"
+        ) {
+          const hostedInvoiceUrl =
+            existing.hosted_invoice_url || invoice.hostedInvoiceUrl;
           return { stripeInvoiceId: invoice.stripeInvoiceId, hostedInvoiceUrl };
         }
       }
@@ -364,12 +388,16 @@ export async function createStripeInvoice(invoiceId: string): Promise<{ stripeIn
   }
 
   const connectAccount = await getConnectAccount(invoice.providerId);
-  if (!connectAccount?.stripeAccountId) throw new Error("Provider Stripe account not connected");
+  if (!connectAccount?.stripeAccountId)
+    throw new Error("Provider Stripe account not connected");
 
   const connectId = connectAccount.stripeAccountId;
 
   if (!invoice.clientId) throw new Error("Invoice has no client");
-  const [client] = await db.select().from(clients).where(eq(clients.id, invoice.clientId));
+  const [client] = await db
+    .select()
+    .from(clients)
+    .where(eq(clients.id, invoice.clientId));
   if (!client) throw new Error("Client not found");
 
   // ── 1. Find or create Stripe Customer on the connected account ──────────
@@ -380,7 +408,7 @@ export async function createStripeInvoice(invoiceId: string): Promise<{ stripeIn
     try {
       const existingCustomer = await getStripe().customers.retrieve(
         stripeCustomerId,
-        { stripeAccount: connectId }
+        { stripeAccount: connectId },
       );
       if ((existingCustomer as any).deleted) {
         stripeCustomerId = null; // Deleted — recreate below
@@ -391,18 +419,24 @@ export async function createStripeInvoice(invoiceId: string): Promise<{ stripeIn
   }
 
   if (!stripeCustomerId) {
-    const customerName = [client.firstName, client.lastName].filter(Boolean).join(" ") || undefined;
+    const customerName =
+      [client.firstName, client.lastName].filter(Boolean).join(" ") ||
+      undefined;
     const customer = await getStripe().customers.create(
       {
         email: client.email || undefined,
         name: customerName,
         phone: client.phone || undefined,
-        metadata: { homebaseClientId: client.id, providerId: invoice.providerId },
+        metadata: {
+          homebaseClientId: client.id,
+          providerId: invoice.providerId,
+        },
       },
-      { stripeAccount: connectId }
+      { stripeAccount: connectId },
     );
     stripeCustomerId = customer.id;
-    await db.update(clients)
+    await db
+      .update(clients)
       .set({ stripeConnectCustomerId: stripeCustomerId, updatedAt: new Date() })
       .where(eq(clients.id, client.id));
   }
@@ -410,13 +444,20 @@ export async function createStripeInvoice(invoiceId: string): Promise<{ stripeIn
   // ── 2. Create Stripe Invoice Items ──────────────────────────────────────
   const rawItems = invoice.lineItems;
   const lineItems: any[] = rawItems
-    ? (Array.isArray(rawItems) ? rawItems : JSON.parse(rawItems as string))
+    ? Array.isArray(rawItems)
+      ? rawItems
+      : JSON.parse(rawItems as string)
     : [];
 
   if (lineItems.length > 0) {
     for (const item of lineItems) {
-      const unitAmountCents = Math.round(parseFloat(item.unitPrice?.toString() || "0") * 100);
-      const qty = Math.max(1, Math.round(parseFloat(item.quantity?.toString() || "1")));
+      const unitAmountCents = Math.round(
+        parseFloat(item.unitPrice?.toString() || "0") * 100,
+      );
+      const qty = Math.max(
+        1,
+        Math.round(parseFloat(item.quantity?.toString() || "1")),
+      );
       await getStripe().invoiceItems.create(
         {
           customer: stripeCustomerId,
@@ -425,12 +466,13 @@ export async function createStripeInvoice(invoiceId: string): Promise<{ stripeIn
           currency: invoice.currency || "usd",
           description: item.description || item.name || "Service",
         },
-        { stripeAccount: connectId }
+        { stripeAccount: connectId },
       );
     }
   } else {
-    const totalCents = invoice.totalCents
-      || Math.round(parseFloat(invoice.total?.toString() || "0") * 100);
+    const totalCents =
+      invoice.totalCents ||
+      Math.round(parseFloat(invoice.total?.toString() || "0") * 100);
     await getStripe().invoiceItems.create(
       {
         customer: stripeCustomerId,
@@ -438,14 +480,19 @@ export async function createStripeInvoice(invoiceId: string): Promise<{ stripeIn
         currency: invoice.currency || "usd",
         description: invoice.notes || `Invoice ${invoice.invoiceNumber}`,
       },
-      { stripeAccount: connectId }
+      { stripeAccount: connectId },
     );
   }
 
   // ── 3. Create and finalise the Stripe Invoice ───────────────────────────
   const platformFeeCents = invoice.platformFeeCents || 0;
   const daysUntilDue = invoice.dueDate
-    ? Math.max(1, Math.ceil((new Date(invoice.dueDate).getTime() - Date.now()) / 86_400_000))
+    ? Math.max(
+        1,
+        Math.ceil(
+          (new Date(invoice.dueDate).getTime() - Date.now()) / 86_400_000,
+        ),
+      )
     : 30;
 
   const stripeInvoice = await getStripe().invoices.create(
@@ -453,25 +500,32 @@ export async function createStripeInvoice(invoiceId: string): Promise<{ stripeIn
       customer: stripeCustomerId,
       collection_method: "send_invoice",
       days_until_due: daysUntilDue,
-      ...(platformFeeCents > 0 ? { application_fee_amount: platformFeeCents } : {}),
+      ...(platformFeeCents > 0
+        ? { application_fee_amount: platformFeeCents }
+        : {}),
       metadata: {
         homebaseInvoiceId: invoice.id,
         providerId: invoice.providerId,
       },
     },
-    { stripeAccount: connectId }
+    { stripeAccount: connectId },
   );
 
   const finalized = await getStripe().invoices.finalizeInvoice(
     stripeInvoice.id,
-    { stripeAccount: connectId }
+    { stripeAccount: connectId },
   );
 
   const hostedInvoiceUrl = finalized.hosted_invoice_url || "";
 
   // ── 4. Persist Stripe IDs on our invoice row ────────────────────────────
-  await db.update(invoices)
-    .set({ stripeInvoiceId: finalized.id, hostedInvoiceUrl, updatedAt: new Date() })
+  await db
+    .update(invoices)
+    .set({
+      stripeInvoiceId: finalized.id,
+      hostedInvoiceUrl,
+      updatedAt: new Date(),
+    })
     .where(eq(invoices.id, invoiceId));
 
   return { stripeInvoiceId: finalized.id, hostedInvoiceUrl };
@@ -576,41 +630,59 @@ export async function createDirectCheckoutSession(
   invoiceId: string,
   reqHost?: string,
 ): Promise<{ checkoutUrl: string; sessionId: string }> {
-  const [invoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+  const [invoice] = await db
+    .select()
+    .from(invoices)
+    .where(eq(invoices.id, invoiceId));
   if (!invoice) throw new Error("Invoice not found");
 
   const rawItems = invoice.lineItems;
   const lineItems: any[] = rawItems
-    ? (Array.isArray(rawItems) ? rawItems : JSON.parse(rawItems as string))
+    ? Array.isArray(rawItems)
+      ? rawItems
+      : JSON.parse(rawItems as string)
     : [];
 
-  const stripeLineItems = lineItems.length > 0
-    ? lineItems.map((item: any) => ({
-        price_data: {
-          currency: invoice.currency || "usd",
-          product_data: {
-            name: (item.description || item.name || "Service").slice(0, 200),
+  const stripeLineItems =
+    lineItems.length > 0
+      ? lineItems.map((item: any) => ({
+          price_data: {
+            currency: invoice.currency || "usd",
+            product_data: {
+              name: (item.description || item.name || "Service").slice(0, 200),
+            },
+            unit_amount: Math.max(
+              1,
+              Math.round(parseFloat(item.unitPrice?.toString() || "0") * 100),
+            ),
           },
-          unit_amount: Math.max(1, Math.round(parseFloat(item.unitPrice?.toString() || "0") * 100)),
-        },
-        quantity: Math.max(1, Math.round(parseFloat(item.quantity?.toString() || "1"))),
-      }))
-    : [{
-        price_data: {
-          currency: invoice.currency || "usd",
-          product_data: {
-            name: `Invoice ${invoice.invoiceNumber || invoice.id.slice(0, 8)}`,
-            ...(invoice.notes ? { description: invoice.notes } : {}),
-          },
-          unit_amount: Math.max(
-            100,
-            invoice.totalCents || Math.round(parseFloat(invoice.total?.toString() || "0") * 100)
+          quantity: Math.max(
+            1,
+            Math.round(parseFloat(item.quantity?.toString() || "1")),
           ),
-        },
-        quantity: 1,
-      }];
+        }))
+      : [
+          {
+            price_data: {
+              currency: invoice.currency || "usd",
+              product_data: {
+                name: `Invoice ${invoice.invoiceNumber || invoice.id.slice(0, 8)}`,
+                ...(invoice.notes ? { description: invoice.notes } : {}),
+              },
+              unit_amount: Math.max(
+                100,
+                invoice.totalCents ||
+                  Math.round(
+                    parseFloat(invoice.total?.toString() || "0") * 100,
+                  ),
+              ),
+            },
+            quantity: 1,
+          },
+        ];
 
-  const domain = reqHost || process.env.REPLIT_DEV_DOMAIN || "homebase.replit.app";
+  const domain =
+    reqHost || process.env.REPLIT_DEV_DOMAIN || "homebase.replit.app";
   const baseUrl = `https://${domain}`;
 
   const session = await getStripe().checkout.sessions.create({
@@ -624,8 +696,13 @@ export async function createDirectCheckoutSession(
     },
   });
 
-  await db.update(invoices)
-    .set({ stripeCheckoutSessionId: session.id, hostedInvoiceUrl: session.url, updatedAt: new Date() })
+  await db
+    .update(invoices)
+    .set({
+      stripeCheckoutSessionId: session.id,
+      hostedInvoiceUrl: session.url,
+      updatedAt: new Date(),
+    })
     .where(eq(invoices.id, invoiceId));
 
   return { checkoutUrl: session.url!, sessionId: session.id };
@@ -634,7 +711,7 @@ export async function createDirectCheckoutSession(
 export async function applyCreditsToInvoice(
   invoiceId: string,
   userId: string,
-  amountCents: number
+  amountCents: number,
 ) {
   const [invoice] = await db
     .select()
@@ -713,7 +790,9 @@ async function getPaidAmount(invoiceId: string): Promise<number> {
   const allPayments = await db
     .select()
     .from(payments)
-    .where(and(eq(payments.invoiceId, invoiceId), eq(payments.status, "succeeded")));
+    .where(
+      and(eq(payments.invoiceId, invoiceId), eq(payments.status, "succeeded")),
+    );
 
   return allPayments.reduce((sum, p) => sum + (p.amountCents || 0), 0);
 }
@@ -741,11 +820,15 @@ export async function handleStripeWebhook(event: Stripe.Event) {
       break;
 
     case "payment_intent.succeeded":
-      await handlePaymentIntentSucceeded(event.data.object as Stripe.PaymentIntent);
+      await handlePaymentIntentSucceeded(
+        event.data.object as Stripe.PaymentIntent,
+      );
       break;
 
     case "payment_intent.payment_failed":
-      await handlePaymentIntentFailed(event.data.object as Stripe.PaymentIntent);
+      await handlePaymentIntentFailed(
+        event.data.object as Stripe.PaymentIntent,
+      );
       break;
 
     case "charge.refunded":
@@ -753,15 +836,24 @@ export async function handleStripeWebhook(event: Stripe.Event) {
       break;
 
     case "payout.created":
-      await handlePayoutCreated(event.data.object as Stripe.Payout, event.account ?? null);
+      await handlePayoutCreated(
+        event.data.object as Stripe.Payout,
+        event.account ?? null,
+      );
       break;
 
     case "payout.paid":
-      await handlePayoutPaid(event.data.object as Stripe.Payout, event.account ?? null);
+      await handlePayoutPaid(
+        event.data.object as Stripe.Payout,
+        event.account ?? null,
+      );
       break;
 
     case "payout.failed":
-      await handlePayoutFailed(event.data.object as Stripe.Payout, event.account ?? null);
+      await handlePayoutFailed(
+        event.data.object as Stripe.Payout,
+        event.account ?? null,
+      );
       break;
 
     case "checkout.session.completed": {
@@ -796,7 +888,11 @@ export async function handleStripeWebhook(event: Stripe.Event) {
       const inv = event.data.object as Stripe.Invoice;
       // Subscription invoices have no homebaseInvoiceId metadata — branch them
       // to the subscription-specific handler that pushes the user to update billing.
-      if ((inv as any).subscription || inv.billing_reason === "subscription_cycle" || inv.billing_reason === "subscription_create") {
+      if (
+        (inv as any).subscription ||
+        inv.billing_reason === "subscription_cycle" ||
+        inv.billing_reason === "subscription_create"
+      ) {
         await handleSubscriptionInvoicePaymentFailed(inv);
       } else {
         await handleStripeInvoicePaymentFailed(inv);
@@ -820,7 +916,11 @@ async function handleAccountUpdated(account: Stripe.Account) {
   if (!connectAccount) return;
 
   let onboardingStatus: "not_started" | "pending" | "complete" = "pending";
-  if (account.charges_enabled && account.payouts_enabled && account.details_submitted) {
+  if (
+    account.charges_enabled &&
+    account.payouts_enabled &&
+    account.details_submitted
+  ) {
     onboardingStatus = "complete";
   }
 
@@ -836,7 +936,9 @@ async function handleAccountUpdated(account: Stripe.Account) {
     .where(eq(stripeConnectAccounts.id, connectAccount.id));
 }
 
-async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent) {
+async function handlePaymentIntentSucceeded(
+  paymentIntent: Stripe.PaymentIntent,
+) {
   const invoiceId = paymentIntent.metadata?.invoiceId;
   if (!invoiceId) return;
 
@@ -878,33 +980,51 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
   // Dispatch invoice.paid notification via webhook
   if (updatedInvoice) {
     try {
-      const [provider] = await db.select().from(providers).where(eq(providers.id, updatedInvoice.providerId));
+      const [provider] = await db
+        .select()
+        .from(providers)
+        .where(eq(providers.id, updatedInvoice.providerId));
       let clientEmail: string | undefined;
       let clientName: string | undefined;
       if (updatedInvoice.homeownerUserId) {
-        const [homeowner] = await db.select().from(users).where(eq(users.id, updatedInvoice.homeownerUserId));
+        const [homeowner] = await db
+          .select()
+          .from(users)
+          .where(eq(users.id, updatedInvoice.homeownerUserId));
         if (homeowner) {
           clientEmail = homeowner.email;
-          clientName = `${homeowner.firstName || ''} ${homeowner.lastName || ''}`.trim() || homeowner.email;
+          clientName =
+            `${homeowner.firstName || ""} ${homeowner.lastName || ""}`.trim() ||
+            homeowner.email;
         }
       } else if (updatedInvoice.clientId) {
-        const [client] = await db.select().from(clients).where(eq(clients.id, updatedInvoice.clientId));
+        const [client] = await db
+          .select()
+          .from(clients)
+          .where(eq(clients.id, updatedInvoice.clientId));
         if (client) {
           clientEmail = client.email ?? undefined;
-          clientName = `${client.firstName || ''} ${client.lastName || ''}`.trim() || clientEmail;
+          clientName =
+            `${client.firstName || ""} ${client.lastName || ""}`.trim() ||
+            clientEmail;
         }
       }
       if (clientEmail && provider) {
-        dispatch('invoice.paid', {
+        dispatch("invoice.paid", {
           clientEmail,
           clientName: clientName ?? clientEmail,
           providerName: provider.businessName,
           invoiceNumber: updatedInvoice.invoiceNumber,
-          amount: typeof updatedInvoice.total === 'string' ? parseFloat(updatedInvoice.total) : (updatedInvoice.total ?? 0),
+          amount:
+            typeof updatedInvoice.total === "string"
+              ? parseFloat(updatedInvoice.total)
+              : (updatedInvoice.total ?? 0),
           paymentDate: new Date().toLocaleDateString(),
-          relatedRecordType: 'invoice',
+          relatedRecordType: "invoice",
           relatedRecordId: invoiceId,
-        }).catch((e: unknown) => console.error('invoice.paid dispatch error (webhook):', e));
+        }).catch((e: unknown) =>
+          console.error("invoice.paid dispatch error (webhook):", e),
+        );
       }
 
       // HouseFax: update costCents on the housefax entry for the invoice's linked job (if any)
@@ -915,29 +1035,43 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
           if (!jobId) return; // Only enrich when invoice is directly linked to a job
 
           const costCents = updatedInvoice.total
-            ? Math.round((typeof updatedInvoice.total === 'string' ? parseFloat(updatedInvoice.total) : updatedInvoice.total) * 100)
+            ? Math.round(
+                (typeof updatedInvoice.total === "string"
+                  ? parseFloat(updatedInvoice.total)
+                  : updatedInvoice.total) * 100,
+              )
             : 0;
           if (costCents <= 0) return;
 
           const [entry] = await db
-            .select({ id: housefaxEntries.id, costCents: housefaxEntries.costCents })
+            .select({
+              id: housefaxEntries.id,
+              costCents: housefaxEntries.costCents,
+            })
             .from(housefaxEntries)
             .where(eq(housefaxEntries.jobId, jobId));
 
           if (entry) {
             // Update cost on existing entry
-            await db.update(housefaxEntries)
+            await db
+              .update(housefaxEntries)
               .set({ costCents })
               .where(eq(housefaxEntries.id, entry.id));
-            console.log(`[HouseFax] Updated cost for job ${jobId} to ${costCents} cents via payment webhook`);
+            console.log(
+              `[HouseFax] Updated cost for job ${jobId} to ${costCents} cents via payment webhook`,
+            );
           } else {
             // No entry yet - create HouseFax entry inline using job data + confirmed payment cost
-            const [job] = await db.select().from(jobs).where(eq(jobs.id, jobId));
-            if (job && job.status === 'completed') {
+            const [job] = await db
+              .select()
+              .from(jobs)
+              .where(eq(jobs.id, jobId));
+            if (job && job.status === "completed") {
               // Find homeId from the client
               let homeId: string | null = null;
               if (job.appointmentId) {
-                const [appt] = await db.select({ homeId: appointments.homeId })
+                const [appt] = await db
+                  .select({ homeId: appointments.homeId })
                   .from(appointments)
                   .where(eq(appointments.id, job.appointmentId));
                 if (appt) homeId = appt.homeId;
@@ -949,7 +1083,8 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
                   .from(invoices)
                   .where(eq(invoices.jobId, job.id));
                 if (inv?.homeownerUserId) {
-                  const [home] = await db.select({ id: homes.id })
+                  const [home] = await db
+                    .select({ id: homes.id })
                     .from(homes)
                     .where(eq(homes.userId, inv.homeownerUserId));
                   if (home) homeId = home.id;
@@ -957,18 +1092,22 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
               }
               if (homeId) {
                 // Double-check no entry was created concurrently
-                const [existing] = await db.select({ id: housefaxEntries.id })
+                const [existing] = await db
+                  .select({ id: housefaxEntries.id })
                   .from(housefaxEntries)
                   .where(eq(housefaxEntries.jobId, job.id));
                 if (!existing) {
                   const [provider] = job.providerId
-                    ? await db.select({ businessName: providers.businessName }).from(providers).where(eq(providers.id, job.providerId))
+                    ? await db
+                        .select({ businessName: providers.businessName })
+                        .from(providers)
+                        .where(eq(providers.id, job.providerId))
                     : [null];
                   await db.insert(housefaxEntries).values({
                     homeId,
                     jobId: job.id,
                     appointmentId: job.appointmentId || null,
-                    serviceCategory: 'General',
+                    serviceCategory: "General",
                     serviceName: job.title,
                     providerId: job.providerId || null,
                     providerName: provider?.businessName || null,
@@ -976,20 +1115,22 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
                     costCents,
                     aiSummary: null,
                     photos: [],
-                    systemAffected: 'General',
+                    systemAffected: "General",
                     notes: job.notes || null,
                   });
-                  console.log(`[HouseFax] Created entry for job ${jobId} with cost ${costCents} cents via payment webhook`);
+                  console.log(
+                    `[HouseFax] Created entry for job ${jobId} with cost ${costCents} cents via payment webhook`,
+                  );
                 }
               }
             }
           }
         } catch (e) {
-          console.error('[HouseFax] Payment webhook cost update error:', e);
+          console.error("[HouseFax] Payment webhook cost update error:", e);
         }
       })();
     } catch (err) {
-      console.error('Failed to dispatch invoice.paid from webhook:', err);
+      console.error("Failed to dispatch invoice.paid from webhook:", err);
     }
   }
 }
@@ -1012,38 +1153,62 @@ async function handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent) {
   // Dispatch payment_failed notification
   if (invoiceId) {
     try {
-      const [failedInvoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+      const [failedInvoice] = await db
+        .select()
+        .from(invoices)
+        .where(eq(invoices.id, invoiceId));
       if (failedInvoice) {
-        const [provider] = await db.select().from(providers).where(eq(providers.id, failedInvoice.providerId));
+        const [provider] = await db
+          .select()
+          .from(providers)
+          .where(eq(providers.id, failedInvoice.providerId));
         let clientEmail: string | undefined;
         let clientName: string | undefined;
         if (failedInvoice.homeownerUserId) {
-          const [homeowner] = await db.select().from(users).where(eq(users.id, failedInvoice.homeownerUserId));
+          const [homeowner] = await db
+            .select()
+            .from(users)
+            .where(eq(users.id, failedInvoice.homeownerUserId));
           if (homeowner) {
             clientEmail = homeowner.email;
-            clientName = `${homeowner.firstName || ''} ${homeowner.lastName || ''}`.trim() || homeowner.email;
+            clientName =
+              `${homeowner.firstName || ""} ${homeowner.lastName || ""}`.trim() ||
+              homeowner.email;
           }
         } else if (failedInvoice.clientId) {
-          const [client] = await db.select().from(clients).where(eq(clients.id, failedInvoice.clientId));
+          const [client] = await db
+            .select()
+            .from(clients)
+            .where(eq(clients.id, failedInvoice.clientId));
           if (client) {
             clientEmail = client.email ?? undefined;
-            clientName = `${client.firstName || ''} ${client.lastName || ''}`.trim() || clientEmail;
+            clientName =
+              `${client.firstName || ""} ${client.lastName || ""}`.trim() ||
+              clientEmail;
           }
         }
         if (clientEmail && provider) {
-          dispatch('invoice.payment_failed', {
+          dispatch("invoice.payment_failed", {
             clientEmail,
             clientName: clientName ?? clientEmail,
             providerName: provider.businessName,
             invoiceNumber: failedInvoice.invoiceNumber,
-            amount: typeof failedInvoice.total === 'string' ? parseFloat(failedInvoice.total) : (failedInvoice.total ?? 0),
-            relatedRecordType: 'invoice',
+            amount:
+              typeof failedInvoice.total === "string"
+                ? parseFloat(failedInvoice.total)
+                : (failedInvoice.total ?? 0),
+            relatedRecordType: "invoice",
             relatedRecordId: invoiceId,
-          }).catch((e: unknown) => console.error('invoice.payment_failed dispatch error:', e));
+          }).catch((e: unknown) =>
+            console.error("invoice.payment_failed dispatch error:", e),
+          );
         }
       }
     } catch (err) {
-      console.error('Failed to dispatch invoice.payment_failed from webhook:', err);
+      console.error(
+        "Failed to dispatch invoice.payment_failed from webhook:",
+        err,
+      );
     }
   }
 }
@@ -1061,36 +1226,60 @@ async function handleStripeInvoicePaid(stripeInvoice: Stripe.Invoice) {
   if (!updatedInvoice) return;
 
   try {
-    const [provider] = await db.select().from(providers).where(eq(providers.id, updatedInvoice.providerId));
+    const [provider] = await db
+      .select()
+      .from(providers)
+      .where(eq(providers.id, updatedInvoice.providerId));
     let clientEmail: string | undefined;
     let clientName: string | undefined;
     if (updatedInvoice.clientId) {
-      const [client] = await db.select().from(clients).where(eq(clients.id, updatedInvoice.clientId));
+      const [client] = await db
+        .select()
+        .from(clients)
+        .where(eq(clients.id, updatedInvoice.clientId));
       if (client) {
         clientEmail = client.email ?? undefined;
-        clientName = `${client.firstName || ''} ${client.lastName || ''}`.trim() || clientEmail;
+        clientName =
+          `${client.firstName || ""} ${client.lastName || ""}`.trim() ||
+          clientEmail;
       }
     } else if (updatedInvoice.homeownerUserId) {
-      const [homeowner] = await db.select().from(users).where(eq(users.id, updatedInvoice.homeownerUserId));
+      const [homeowner] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, updatedInvoice.homeownerUserId));
       if (homeowner) {
         clientEmail = homeowner.email;
-        clientName = `${homeowner.firstName || ''} ${homeowner.lastName || ''}`.trim() || homeowner.email;
+        clientName =
+          `${homeowner.firstName || ""} ${homeowner.lastName || ""}`.trim() ||
+          homeowner.email;
       }
     }
     if (clientEmail && provider) {
-      dispatch('invoice.paid', {
+      dispatch("invoice.paid", {
         clientEmail,
         clientName: clientName ?? clientEmail,
         providerName: provider.businessName,
         invoiceNumber: updatedInvoice.invoiceNumber,
-        amount: typeof updatedInvoice.total === 'string' ? parseFloat(updatedInvoice.total) : (updatedInvoice.total ?? 0),
+        amount:
+          typeof updatedInvoice.total === "string"
+            ? parseFloat(updatedInvoice.total)
+            : (updatedInvoice.total ?? 0),
         paymentDate: new Date().toLocaleDateString(),
-        relatedRecordType: 'invoice',
+        relatedRecordType: "invoice",
         relatedRecordId: homebaseInvoiceId,
-      }).catch((e: unknown) => console.error('invoice.paid dispatch error (stripe invoice webhook):', e));
+      }).catch((e: unknown) =>
+        console.error(
+          "invoice.paid dispatch error (stripe invoice webhook):",
+          e,
+        ),
+      );
     }
   } catch (err) {
-    console.error('Failed to dispatch invoice.paid from stripe invoice webhook:', err);
+    console.error(
+      "Failed to dispatch invoice.paid from stripe invoice webhook:",
+      err,
+    );
   }
 }
 
@@ -1099,37 +1288,64 @@ async function handleStripeInvoicePaymentFailed(stripeInvoice: Stripe.Invoice) {
   if (!homebaseInvoiceId) return;
 
   try {
-    const [invoice] = await db.select().from(invoices).where(eq(invoices.id, homebaseInvoiceId));
+    const [invoice] = await db
+      .select()
+      .from(invoices)
+      .where(eq(invoices.id, homebaseInvoiceId));
     if (!invoice) return;
-    const [provider] = await db.select().from(providers).where(eq(providers.id, invoice.providerId));
+    const [provider] = await db
+      .select()
+      .from(providers)
+      .where(eq(providers.id, invoice.providerId));
     let clientEmail: string | undefined;
     let clientName: string | undefined;
     if (invoice.clientId) {
-      const [client] = await db.select().from(clients).where(eq(clients.id, invoice.clientId));
+      const [client] = await db
+        .select()
+        .from(clients)
+        .where(eq(clients.id, invoice.clientId));
       if (client) {
         clientEmail = client.email ?? undefined;
-        clientName = `${client.firstName || ''} ${client.lastName || ''}`.trim() || clientEmail;
+        clientName =
+          `${client.firstName || ""} ${client.lastName || ""}`.trim() ||
+          clientEmail;
       }
     } else if (invoice.homeownerUserId) {
-      const [homeowner] = await db.select().from(users).where(eq(users.id, invoice.homeownerUserId));
+      const [homeowner] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, invoice.homeownerUserId));
       if (homeowner) {
         clientEmail = homeowner.email;
-        clientName = `${homeowner.firstName || ''} ${homeowner.lastName || ''}`.trim() || homeowner.email;
+        clientName =
+          `${homeowner.firstName || ""} ${homeowner.lastName || ""}`.trim() ||
+          homeowner.email;
       }
     }
     if (clientEmail && provider) {
-      dispatch('invoice.payment_failed', {
+      dispatch("invoice.payment_failed", {
         clientEmail,
         clientName: clientName ?? clientEmail,
         providerName: provider.businessName,
         invoiceNumber: invoice.invoiceNumber,
-        amount: typeof invoice.total === 'string' ? parseFloat(invoice.total) : (invoice.total ?? 0),
-        relatedRecordType: 'invoice',
+        amount:
+          typeof invoice.total === "string"
+            ? parseFloat(invoice.total)
+            : (invoice.total ?? 0),
+        relatedRecordType: "invoice",
         relatedRecordId: homebaseInvoiceId,
-      }).catch((e: unknown) => console.error('invoice.payment_failed dispatch error (stripe invoice webhook):', e));
+      }).catch((e: unknown) =>
+        console.error(
+          "invoice.payment_failed dispatch error (stripe invoice webhook):",
+          e,
+        ),
+      );
     }
   } catch (err) {
-    console.error('Failed to dispatch invoice.payment_failed from stripe invoice webhook:', err);
+    console.error(
+      "Failed to dispatch invoice.payment_failed from stripe invoice webhook:",
+      err,
+    );
   }
 }
 
@@ -1184,12 +1400,24 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
             stripeChargeId: charge.id,
             amountCents: stripeRefund.amount,
             reason: stripeRefund.reason ?? null,
-            status: (stripeRefund.status as "pending" | "succeeded" | "failed" | "canceled") ?? "pending",
+            status:
+              (stripeRefund.status as
+                | "pending"
+                | "succeeded"
+                | "failed"
+                | "canceled") ?? "pending",
           });
         } else {
           await db
             .update(refunds)
-            .set({ status: (stripeRefund.status as "pending" | "succeeded" | "failed" | "canceled") ?? "pending" })
+            .set({
+              status:
+                (stripeRefund.status as
+                  | "pending"
+                  | "succeeded"
+                  | "failed"
+                  | "canceled") ?? "pending",
+            })
             .where(eq(refunds.stripeRefundId, stripeRefund.id));
         }
       }
@@ -1197,7 +1425,9 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
   }
 }
 
-async function resolveProviderFromConnectAccount(connectedAccountId: string | null): Promise<string | null> {
+async function resolveProviderFromConnectAccount(
+  connectedAccountId: string | null,
+): Promise<string | null> {
   if (!connectedAccountId) return null;
   const [connectAccount] = await db
     .select({ providerId: stripeConnectAccounts.providerId })
@@ -1206,41 +1436,66 @@ async function resolveProviderFromConnectAccount(connectedAccountId: string | nu
   return connectAccount?.providerId ?? null;
 }
 
-async function handlePayoutCreated(payout: Stripe.Payout, connectedAccountId: string | null) {
-  const providerId = await resolveProviderFromConnectAccount(connectedAccountId);
+async function handlePayoutCreated(
+  payout: Stripe.Payout,
+  connectedAccountId: string | null,
+) {
+  const providerId =
+    await resolveProviderFromConnectAccount(connectedAccountId);
   if (!providerId) {
-    console.warn(`handlePayoutCreated: no provider found for account ${connectedAccountId}`);
+    console.warn(
+      `handlePayoutCreated: no provider found for account ${connectedAccountId}`,
+    );
     return;
   }
 
-  const arrivalDate = payout.arrival_date ? new Date(payout.arrival_date * 1000) : null;
+  const arrivalDate = payout.arrival_date
+    ? new Date(payout.arrival_date * 1000)
+    : null;
 
   const [existingPayout] = await db
     .select()
     .from(payouts)
     .where(eq(payouts.stripePayoutId, payout.id));
 
-  const stripeStatus = payout.status as "paid" | "pending" | "in_transit" | "canceled" | "failed";
+  const stripeStatus = payout.status as
+    | "paid"
+    | "pending"
+    | "in_transit"
+    | "canceled"
+    | "failed";
 
   if (!existingPayout) {
-    await db.insert(payouts).values({
-      providerId,
-      amountCents: payout.amount,
-      status: stripeStatus,
-      stripePayoutId: payout.id,
-      arrivalDate,
-      description: payout.description ?? null,
-    }).onConflictDoNothing();
+    await db
+      .insert(payouts)
+      .values({
+        providerId,
+        amountCents: payout.amount,
+        status: stripeStatus,
+        stripePayoutId: payout.id,
+        arrivalDate,
+        description: payout.description ?? null,
+      })
+      .onConflictDoNothing();
   } else {
     await db
       .update(payouts)
-      .set({ status: stripeStatus, arrivalDate, description: payout.description ?? null })
+      .set({
+        status: stripeStatus,
+        arrivalDate,
+        description: payout.description ?? null,
+      })
       .where(eq(payouts.id, existingPayout.id));
   }
 }
 
-async function handlePayoutPaid(payout: Stripe.Payout, connectedAccountId: string | null) {
-  const arrivalDate = payout.arrival_date ? new Date(payout.arrival_date * 1000) : null;
+async function handlePayoutPaid(
+  payout: Stripe.Payout,
+  connectedAccountId: string | null,
+) {
+  const arrivalDate = payout.arrival_date
+    ? new Date(payout.arrival_date * 1000)
+    : null;
 
   const [existingPayout] = await db
     .select()
@@ -1258,21 +1513,28 @@ async function handlePayoutPaid(payout: Stripe.Payout, connectedAccountId: strin
       .where(eq(payouts.id, existingPayout.id));
   } else {
     // Payout created outside our system — create the record now
-    const providerId = await resolveProviderFromConnectAccount(connectedAccountId);
+    const providerId =
+      await resolveProviderFromConnectAccount(connectedAccountId);
     if (providerId) {
-      await db.insert(payouts).values({
-        providerId,
-        amountCents: payout.amount,
-        status: "paid",
-        stripePayoutId: payout.id,
-        arrivalDate,
-        description: payout.description ?? null,
-      }).onConflictDoNothing();
+      await db
+        .insert(payouts)
+        .values({
+          providerId,
+          amountCents: payout.amount,
+          status: "paid",
+          stripePayoutId: payout.id,
+          arrivalDate,
+          description: payout.description ?? null,
+        })
+        .onConflictDoNothing();
     }
   }
 }
 
-async function handlePayoutFailed(payout: Stripe.Payout, _connectedAccountId: string | null) {
+async function handlePayoutFailed(
+  payout: Stripe.Payout,
+  _connectedAccountId: string | null,
+) {
   const [existingPayout] = await db
     .select()
     .from(payouts)
@@ -1286,7 +1548,9 @@ async function handlePayoutFailed(payout: Stripe.Payout, _connectedAccountId: st
   }
 }
 
-async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
+async function handleCheckoutSessionCompleted(
+  session: Stripe.Checkout.Session,
+) {
   const invoiceId = session.metadata?.invoiceId;
   if (!invoiceId) return;
 
@@ -1320,12 +1584,15 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
   }
 }
 
-export async function calculateFeePreview(providerId: string, totalCents: number) {
+export async function calculateFeePreview(
+  providerId: string,
+  totalCents: number,
+) {
   const plan = await getProviderPlan(providerId);
   const fee = calculatePlatformFee(
     totalCents,
     plan.platformFeePercent || "3.00",
-    plan.platformFeeFixedCents || 0
+    plan.platformFeeFixedCents || 0,
   );
 
   return {
@@ -1342,18 +1609,27 @@ export async function calculateFeePreview(providerId: string, totalCents: number
  * After finalizing, calls stripe.invoices.sendInvoice so Stripe emails the
  * client a hosted payment page directly.
  */
-export async function sendStripeInvoiceEmail(invoiceId: string): Promise<{ stripeInvoiceId: string; hostedInvoiceUrl: string }> {
+export async function sendStripeInvoiceEmail(
+  invoiceId: string,
+): Promise<{ stripeInvoiceId: string; hostedInvoiceUrl: string }> {
   // Create + finalize (idempotent — returns existing if already done)
-  const { stripeInvoiceId, hostedInvoiceUrl } = await createStripeInvoice(invoiceId);
+  const { stripeInvoiceId, hostedInvoiceUrl } =
+    await createStripeInvoice(invoiceId);
 
   // Look up the connected account so we can send on behalf of it
-  const [inv] = await db.select({ providerId: invoices.providerId }).from(invoices).where(eq(invoices.id, invoiceId));
+  const [inv] = await db
+    .select({ providerId: invoices.providerId })
+    .from(invoices)
+    .where(eq(invoices.id, invoiceId));
   if (!inv) throw new Error("Invoice not found");
   const connectAccount = await getConnectAccount(inv.providerId);
-  if (!connectAccount?.stripeAccountId) throw new Error("Provider Stripe account not found");
+  if (!connectAccount?.stripeAccountId)
+    throw new Error("Provider Stripe account not found");
 
   // This makes Stripe email the client a branded hosted payment page
-  await getStripe().invoices.sendInvoice(stripeInvoiceId, { stripeAccount: connectAccount.stripeAccountId });
+  await getStripe().invoices.sendInvoice(stripeInvoiceId, {
+    stripeAccount: connectAccount.stripeAccountId,
+  });
 
   return { stripeInvoiceId, hostedInvoiceUrl };
 }
@@ -1375,17 +1651,27 @@ export async function sendPlatformStripeInvoice(invoiceId: string): Promise<{
   const stripe = getStripe();
 
   // Load our invoice
-  const [invoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+  const [invoice] = await db
+    .select()
+    .from(invoices)
+    .where(eq(invoices.id, invoiceId));
   if (!invoice) throw new Error("Invoice not found");
   if (!invoice.clientId) throw new Error("Invoice has no client attached");
 
   // Load the client
-  const [client] = await db.select().from(clients).where(eq(clients.id, invoice.clientId));
+  const [client] = await db
+    .select()
+    .from(clients)
+    .where(eq(clients.id, invoice.clientId));
   if (!client) throw new Error("Client not found");
-  if (!client.email) throw new Error("Client has no email address — add the client's email first");
+  if (!client.email)
+    throw new Error(
+      "Client has no email address — add the client's email first",
+    );
 
   // ── 1. Find or create Stripe Customer on the platform account ─────────────
-  let stripeCustomerId: string | null = (client as any).stripeCustomerId || null;
+  let stripeCustomerId: string | null =
+    (client as any).stripeCustomerId || null;
 
   if (stripeCustomerId) {
     try {
@@ -1398,16 +1684,24 @@ export async function sendPlatformStripeInvoice(invoiceId: string): Promise<{
 
   if (!stripeCustomerId) {
     // Search by email to avoid duplicates
-    const byEmail = await stripe.customers.list({ email: client.email, limit: 1 });
+    const byEmail = await stripe.customers.list({
+      email: client.email,
+      limit: 1,
+    });
     if (byEmail.data.length > 0) {
       stripeCustomerId = byEmail.data[0].id;
     } else {
-      const customerName = [client.firstName, client.lastName].filter(Boolean).join(" ") || undefined;
+      const customerName =
+        [client.firstName, client.lastName].filter(Boolean).join(" ") ||
+        undefined;
       const newCustomer = await stripe.customers.create({
         email: client.email,
         name: customerName,
         phone: client.phone || undefined,
-        metadata: { homebaseClientId: client.id, providerId: invoice.providerId },
+        metadata: {
+          homebaseClientId: client.id,
+          providerId: invoice.providerId,
+        },
       });
       stripeCustomerId = newCustomer.id;
     }
@@ -1419,7 +1713,12 @@ export async function sendPlatformStripeInvoice(invoiceId: string): Promise<{
   }
 
   const daysUntilDue = invoice.dueDate
-    ? Math.max(1, Math.ceil((new Date(invoice.dueDate).getTime() - Date.now()) / 86_400_000))
+    ? Math.max(
+        1,
+        Math.ceil(
+          (new Date(invoice.dueDate).getTime() - Date.now()) / 86_400_000,
+        ),
+      )
     : 30;
 
   // ── 2. Create the Stripe Invoice ──────────────────────────────────────────
@@ -1436,15 +1735,22 @@ export async function sendPlatformStripeInvoice(invoiceId: string): Promise<{
   // ── 3. Add each line item to the Stripe Invoice ───────────────────────────
   const rawItems = invoice.lineItems;
   const lineItems: any[] = rawItems
-    ? Array.isArray(rawItems) ? rawItems : JSON.parse(rawItems as string)
+    ? Array.isArray(rawItems)
+      ? rawItems
+      : JSON.parse(rawItems as string)
     : [];
 
   if (lineItems.length > 0) {
     for (const item of lineItems) {
       const unitAmountCents = Math.round(
-        parseFloat(item.unitPrice?.toString() || item.price?.toString() || "0") * 100
+        parseFloat(
+          item.unitPrice?.toString() || item.price?.toString() || "0",
+        ) * 100,
       );
-      const qty = Math.max(1, Math.round(parseFloat(item.quantity?.toString() || "1")));
+      const qty = Math.max(
+        1,
+        Math.round(parseFloat(item.quantity?.toString() || "1")),
+      );
       const currency = (invoice.currency || "usd").toLowerCase();
       await stripe.invoiceItems.create({
         customer: stripeCustomerId,
@@ -1457,7 +1763,8 @@ export async function sendPlatformStripeInvoice(invoiceId: string): Promise<{
   } else {
     // Fallback: single line item for the total
     const totalCents =
-      invoice.totalCents || Math.round(parseFloat(invoice.total?.toString() || "0") * 100);
+      invoice.totalCents ||
+      Math.round(parseFloat(invoice.total?.toString() || "0") * 100);
     await stripe.invoiceItems.create({
       customer: stripeCustomerId,
       invoice: stripeInvoice.id,
@@ -1477,7 +1784,11 @@ export async function sendPlatformStripeInvoice(invoiceId: string): Promise<{
   // ── 6. Persist stripeInvoiceId + hosted_invoice_url to our DB ─────────────
   await db
     .update(invoices)
-    .set({ stripeInvoiceId: finalized.id, hostedInvoiceUrl, updatedAt: new Date() })
+    .set({
+      stripeInvoiceId: finalized.id,
+      hostedInvoiceUrl,
+      updatedAt: new Date(),
+    })
     .where(eq(invoices.id, invoiceId));
 
   return { stripeInvoiceId: finalized.id, hostedInvoiceUrl };
@@ -1509,7 +1820,8 @@ async function getOrCreateUserStripeCustomer(userId: string): Promise<string> {
     }
   }
 
-  const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ") || undefined;
+  const fullName =
+    [user.firstName, user.lastName].filter(Boolean).join(" ") || undefined;
   const customer = await stripe.customers.create({
     email: user.email,
     name: fullName,
@@ -1599,14 +1911,16 @@ export async function createSubscriptionPortalSession(opts: {
   return { url: session.url };
 }
 
-function planTierForStatus(status: string | null | undefined): "free" | "professional" {
+function planTierForStatus(
+  status: string | null | undefined,
+): "free" | "professional" {
   if (!status) return "free";
   return status === "active" || status === "trialing" ? "professional" : "free";
 }
 
 async function upsertProviderPlanSubscription(
   providerId: string,
-  patch: Partial<typeof providerPlans.$inferInsert>
+  patch: Partial<typeof providerPlans.$inferInsert>,
 ) {
   const existing = await db
     .select()
@@ -1627,9 +1941,17 @@ async function upsertProviderPlanSubscription(
   }
 }
 
-async function notifyProviderUser(providerId: string, title: string, message: string, type: string) {
+async function notifyProviderUser(
+  providerId: string,
+  title: string,
+  message: string,
+  type: string,
+) {
   try {
-    const [provider] = await db.select().from(providers).where(eq(providers.id, providerId));
+    const [provider] = await db
+      .select()
+      .from(providers)
+      .where(eq(providers.id, providerId));
     if (!provider?.userId) return;
     const { dispatchNotification } = await import("./notificationService");
     await dispatchNotification(
@@ -1638,18 +1960,22 @@ async function notifyProviderUser(providerId: string, title: string, message: st
       message,
       type,
       { providerId },
-      "invoices"
+      "invoices",
     );
   } catch (err) {
     console.error("[subscription] notifyProviderUser error:", err);
   }
 }
 
-async function handleSubscriptionCheckoutCompleted(session: Stripe.Checkout.Session) {
+async function handleSubscriptionCheckoutCompleted(
+  session: Stripe.Checkout.Session,
+) {
   const providerId = session.metadata?.providerId;
   const subscriptionId = session.subscription?.toString();
   if (!providerId) {
-    console.warn("[subscription] checkout.session.completed missing providerId metadata");
+    console.warn(
+      "[subscription] checkout.session.completed missing providerId metadata",
+    );
     return;
   }
 
@@ -1660,13 +1986,14 @@ async function handleSubscriptionCheckoutCompleted(session: Stripe.Checkout.Sess
     subscriptionStatus: "active",
     subscriptionStartedAt: new Date(),
     subscriptionEndedAt: null,
+    subscriptionSource: "stripe_web",
   } as any);
 
   await notifyProviderUser(
     providerId,
     "You're subscribed",
     "Welcome to HomeBase Pro — your subscription is active.",
-    "subscription.activated"
+    "subscription.activated",
   );
 }
 
@@ -1677,12 +2004,18 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
   const status = subscription.status; // active | trialing | past_due | canceled | unpaid | incomplete...
   const isActive = status === "active" || status === "trialing";
 
+  const periodEndUnix = (subscription as any).current_period_end;
+  const currentPeriodEnd =
+    typeof periodEndUnix === "number" ? new Date(periodEndUnix * 1000) : null;
+
   await upsertProviderPlanSubscription(providerId, {
     planTier: planTierForStatus(status),
     isSubscribed: isActive,
     stripeSubscriptionId: subscription.id,
     subscriptionStatus: status,
     subscriptionEndedAt: isActive ? null : new Date(),
+    subscriptionSource: "stripe_web",
+    currentPeriodEnd,
   } as any);
 }
 
@@ -1696,17 +2029,20 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
     stripeSubscriptionId: subscription.id,
     subscriptionStatus: "canceled",
     subscriptionEndedAt: new Date(),
+    subscriptionSource: "stripe_web",
   } as any);
 
   await notifyProviderUser(
     providerId,
     "Subscription cancelled",
     "Your HomeBase Pro subscription has been cancelled. You can resubscribe anytime.",
-    "subscription.cancelled"
+    "subscription.cancelled",
   );
 }
 
-async function handleSubscriptionInvoicePaymentFailed(stripeInvoice: Stripe.Invoice) {
+async function handleSubscriptionInvoicePaymentFailed(
+  stripeInvoice: Stripe.Invoice,
+) {
   const subscriptionId = (stripeInvoice as any).subscription?.toString();
   if (!subscriptionId) return;
 
@@ -1720,7 +2056,10 @@ async function handleSubscriptionInvoicePaymentFailed(stripeInvoice: Stripe.Invo
     providerId = plan?.providerId;
   }
   if (!providerId) {
-    console.warn("[subscription] invoice.payment_failed could not resolve providerId for subscription", subscriptionId);
+    console.warn(
+      "[subscription] invoice.payment_failed could not resolve providerId for subscription",
+      subscriptionId,
+    );
     return;
   }
 
@@ -1732,7 +2071,7 @@ async function handleSubscriptionInvoicePaymentFailed(stripeInvoice: Stripe.Invo
     providerId,
     "Payment failed",
     "We couldn't charge your card for HomeBase Pro. Please update your billing info to keep your subscription active.",
-    "subscription.payment_failed"
+    "subscription.payment_failed",
   );
 }
 
