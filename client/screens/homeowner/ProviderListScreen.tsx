@@ -20,6 +20,7 @@ import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { Provider } from "@/state/types";
 import { getApiUrl } from "@/lib/query-client";
+import { useLocationStore } from "@/state/locationStore";
 
 type ScreenRouteProp = RouteProp<RootStackParamList, "ProviderList">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -59,11 +60,17 @@ export default function ProviderListScreen() {
   const { theme, isDark } = useTheme();
   const { categoryId } = route.params;
 
+  const userCoords = useLocationStore((s) => s.coords);
+
   const { data: apiData, isLoading: providersLoading } = useQuery<{ providers: any[] }>({
-    queryKey: ["/api/providers", categoryId],
+    queryKey: ["/api/providers", categoryId, userCoords?.lat, userCoords?.lng],
     queryFn: async () => {
       const url = new URL("/api/providers", getApiUrl());
       if (categoryId) url.searchParams.set("categoryId", categoryId);
+      if (userCoords) {
+        url.searchParams.set("lat", String(userCoords.lat));
+        url.searchParams.set("lng", String(userCoords.lng));
+      }
       const res = await fetch(url.toString());
       if (!res.ok) throw new Error("Failed to fetch providers");
       return res.json();
@@ -482,6 +489,7 @@ export default function ProviderListScreen() {
         services={item.services}
         hourlyRate={item.hourlyRate}
         verified={item.verified}
+        distance={item.distance ?? null}
         onPress={() => handleProviderPress(item)}
         testID={`provider-${item.id}`}
       />

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
   StyleSheet,
   View,
@@ -36,8 +36,13 @@ import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useHomeownerStore } from "@/state/homeownerStore";
 import { Provider, ServiceCategory } from "@/state/types";
 import { getApiUrl } from "@/lib/query-client";
+import { useLocationStore } from "@/state/locationStore";
+import {
+  useDetectUserLocation,
+  setManualLocation,
+} from "@/hooks/useUserLocation";
 
-type SortOption = "rating" | "price_low" | "price_high" | "reviews";
+type SortOption = "rating" | "price_low" | "price_high" | "reviews" | "distance";
 
 interface Filters {
   sortBy: SortOption;
@@ -52,6 +57,7 @@ const DEFAULT_FILTERS: Filters = {
 };
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: "distance", label: "Nearest" },
   { value: "rating", label: "Highest Rated" },
   { value: "reviews", label: "Most Reviews" },
   { value: "price_low", label: "Price: Low to High" },
@@ -128,10 +134,22 @@ export default function FindScreen() {
     return getSavedProviders();
   }, [isAuthenticated, getSavedProviders]);
 
-  const { data: apiData, isLoading: providersLoading, refetch: refetchProviders } = useQuery<{ providers: any[] }>({
-    queryKey: ["/api/providers"],
+  useDetectUserLocation();
+  const userCoords = useLocationStore((s) => s.coords);
+  const userLocationLabel = useLocationStore((s) => s.label);
+
+  const {
+    data: apiData,
+    isLoading: providersLoading,
+    refetch: refetchProviders,
+  } = useQuery<{ providers: any[] }>({
+    queryKey: ["/api/providers", userCoords?.lat, userCoords?.lng],
     queryFn: async () => {
       const url = new URL("/api/providers", getApiUrl());
+      if (userCoords) {
+        url.searchParams.set("lat", String(userCoords.lat));
+        url.searchParams.set("lng", String(userCoords.lng));
+      }
       const res = await fetch(url.toString());
       if (!res.ok) throw new Error("Failed to fetch providers");
       return res.json();
@@ -140,31 +158,35 @@ export default function FindScreen() {
 
   const providers: Provider[] = useMemo(() => {
     if (!apiData?.providers) return [];
-    return apiData.providers.map((p: any): Provider => ({
-      id: p.id,
-      name: p.businessName ?? p.name ?? "",
-      businessName: p.businessName ?? "",
-      avatarUrl: p.avatarUrl ?? p.profilePhotoUrl ?? undefined,
-      rating: parseFloat(p.averageRating ?? p.rating ?? "0") || 0,
-      reviewCount: p.reviewCount ?? 0,
-      services: Array.isArray(p.services)
-        ? p.services.map((s: any) => (typeof s === "string" ? s : s.name ?? ""))
-        : [],
-      categoryIds: Array.isArray(p.categoryIds) ? p.categoryIds : [],
-      hourlyRate: parseFloat(p.hourlyRate ?? "0") || 0,
-      verified: p.isVerified ?? p.verified ?? false,
-      description: p.description ?? "",
-      yearsExperience: p.yearsExperience ?? p.yearsInBusiness ?? 0,
-      completedJobs: p.completedJobs ?? 0,
-      responseTime: p.responseTime ?? "< 1 hour",
-      distance: p.distance ?? undefined,
-      gallery: Array.isArray(p.gallery) ? p.gallery : [],
-      phone: p.phone ?? undefined,
-    }));
+    return apiData.providers.map(
+      (p: any): Provider => ({
+        id: p.id,
+        name: p.businessName ?? p.name ?? "",
+        businessName: p.businessName ?? "",
+        avatarUrl: p.avatarUrl ?? p.profilePhotoUrl ?? undefined,
+        rating: parseFloat(p.averageRating ?? p.rating ?? "0") || 0,
+        reviewCount: p.reviewCount ?? 0,
+        services: Array.isArray(p.services)
+          ? p.services.map((s: any) =>
+              typeof s === "string" ? s : (s.name ?? ""),
+            )
+          : [],
+        categoryIds: Array.isArray(p.categoryIds) ? p.categoryIds : [],
+        hourlyRate: parseFloat(p.hourlyRate ?? "0") || 0,
+        verified: p.isVerified ?? p.verified ?? false,
+        description: p.description ?? "",
+        yearsExperience: p.yearsExperience ?? p.yearsInBusiness ?? 0,
+        completedJobs: p.completedJobs ?? 0,
+        responseTime: p.responseTime ?? "< 1 hour",
+        distance: p.distance ?? undefined,
+        gallery: Array.isArray(p.gallery) ? p.gallery : [],
+        phone: p.phone ?? undefined,
+      }),
+    );
   }, [apiData]);
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [locationLabel, setLocationLabel] = useState("San Francisco, CA");
+  const locationLabel = userLocationLabel;
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [customLocation, setCustomLocation] = useState("");
   const [refreshing, setRefreshing] = useState(false);
@@ -172,6 +194,15 @@ export default function FindScreen() {
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [tempFilters, setTempFilters] = useState<Filters>(DEFAULT_FILTERS);
+  const sortAutoSwitched = useRef(false);
+
+  useEffect(() => {
+    if (sortAutoSwitched.current) return;
+    if (userCoords && filters.sortBy === "rating") {
+      sortAutoSwitched.current = true;
+      setFilters((prev) => ({ ...prev, sortBy: "distance" }));
+    }
+  }, [userCoords, filters.sortBy]);
 
   const isSearching = searchQuery.trim().length > 0;
 
@@ -192,7 +223,7 @@ export default function FindScreen() {
         (p) =>
           p.businessName?.toLowerCase().includes(q) ||
           p.name?.toLowerCase().includes(q) ||
-          p.services?.some((s) => s.toLowerCase().includes(q))
+          p.services?.some((s) => s.toLowerCase().includes(q)),
       );
       result.sort((a, b) => b.rating - a.rating);
       return result;
@@ -207,6 +238,13 @@ export default function FindScreen() {
     }
 
     switch (filters.sortBy) {
+      case "distance":
+        result.sort((a, b) => {
+          const da = a.distance ?? Number.POSITIVE_INFINITY;
+          const db = b.distance ?? Number.POSITIVE_INFINITY;
+          return da - db;
+        });
+        break;
       case "rating":
         result.sort((a, b) => b.rating - a.rating);
         break;
@@ -295,9 +333,9 @@ export default function FindScreen() {
   };
 
   const selectLocation = (loc: string) => {
-    setLocationLabel(loc);
     setShowLocationModal(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    void setManualLocation(loc);
   };
 
   const confirmCustomLocation = () => {
@@ -350,17 +388,30 @@ export default function FindScreen() {
                   { backgroundColor: Colors.accentLight },
                 ]}
               >
-                <Feather name="message-circle" size={24} color={Colors.accent} />
+                <Feather
+                  name="message-circle"
+                  size={24}
+                  color={Colors.accent}
+                />
               </View>
               <View style={styles.aiCardContent}>
-                <ThemedText style={styles.aiCardTitle}>Ask HomeBase AI</ThemedText>
+                <ThemedText style={styles.aiCardTitle}>
+                  Ask HomeBase AI
+                </ThemedText>
                 <ThemedText
-                  style={[styles.aiCardSubtitle, { color: theme.textSecondary }]}
+                  style={[
+                    styles.aiCardSubtitle,
+                    { color: theme.textSecondary },
+                  ]}
                 >
                   Get instant answers or find the right pro
                 </ThemedText>
               </View>
-              <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+              <Feather
+                name="chevron-right"
+                size={20}
+                color={theme.textSecondary}
+              />
             </Pressable>
           </Animated.View>
 
@@ -419,7 +470,11 @@ export default function FindScreen() {
           ) : null}
 
           <Animated.View entering={FadeInDown.delay(200).duration(400)}>
-            <SectionHeader title="Services" actionLabel="See All" onAction={() => {}} />
+            <SectionHeader
+              title="Services"
+              actionLabel="See All"
+              onAction={() => {}}
+            />
           </Animated.View>
 
           <Animated.View
@@ -449,7 +504,11 @@ export default function FindScreen() {
               : "Featured Pros"}
           </ThemedText>
           {providersLoading && !isSearching ? (
-            <ActivityIndicator size="small" color={Colors.accent} style={{ marginRight: Spacing.sm }} />
+            <ActivityIndicator
+              size="small"
+              color={Colors.accent}
+              style={{ marginRight: Spacing.sm }}
+            />
           ) : null}
           {isSearching ? null : (
             <Pressable
@@ -458,7 +517,9 @@ export default function FindScreen() {
                 styles.filterButtonLarge,
                 {
                   backgroundColor:
-                    activeFilterCount > 0 ? Colors.accent : theme.cardBackground,
+                    activeFilterCount > 0
+                      ? Colors.accent
+                      : theme.cardBackground,
                   borderColor:
                     activeFilterCount > 0 ? Colors.accent : theme.borderLight,
                 },
@@ -476,7 +537,9 @@ export default function FindScreen() {
                   { color: activeFilterCount > 0 ? "#fff" : theme.text },
                 ]}
               >
-                {activeFilterCount > 0 ? `Filters (${activeFilterCount})` : "Filter"}
+                {activeFilterCount > 0
+                  ? `Filters (${activeFilterCount})`
+                  : "Filter"}
               </ThemedText>
             </Pressable>
           )}
@@ -491,9 +554,14 @@ export default function FindScreen() {
           {filters.sortBy !== "rating" ? (
             <Pressable
               onPress={() => clearFilter("sortBy")}
-              style={[styles.activeFilterChip, { backgroundColor: Colors.accentLight }]}
+              style={[
+                styles.activeFilterChip,
+                { backgroundColor: Colors.accentLight },
+              ]}
             >
-              <ThemedText style={[styles.activeFilterText, { color: Colors.accent }]}>
+              <ThemedText
+                style={[styles.activeFilterText, { color: Colors.accent }]}
+              >
                 {SORT_OPTIONS.find((o) => o.value === filters.sortBy)?.label}
               </ThemedText>
               <Feather name="x" size={14} color={Colors.accent} />
@@ -502,9 +570,14 @@ export default function FindScreen() {
           {filters.minRating > 0 ? (
             <Pressable
               onPress={() => clearFilter("minRating")}
-              style={[styles.activeFilterChip, { backgroundColor: Colors.accentLight }]}
+              style={[
+                styles.activeFilterChip,
+                { backgroundColor: Colors.accentLight },
+              ]}
             >
-              <ThemedText style={[styles.activeFilterText, { color: Colors.accent }]}>
+              <ThemedText
+                style={[styles.activeFilterText, { color: Colors.accent }]}
+              >
                 {filters.minRating}+ Stars
               </ThemedText>
               <Feather name="x" size={14} color={Colors.accent} />
@@ -513,9 +586,14 @@ export default function FindScreen() {
           {filters.verifiedOnly ? (
             <Pressable
               onPress={() => clearFilter("verifiedOnly")}
-              style={[styles.activeFilterChip, { backgroundColor: Colors.accentLight }]}
+              style={[
+                styles.activeFilterChip,
+                { backgroundColor: Colors.accentLight },
+              ]}
             >
-              <ThemedText style={[styles.activeFilterText, { color: Colors.accent }]}>
+              <ThemedText
+                style={[styles.activeFilterText, { color: Colors.accent }]}
+              >
                 Verified Only
               </ThemedText>
               <Feather name="x" size={14} color={Colors.accent} />
@@ -530,7 +608,9 @@ export default function FindScreen() {
           <ThemedText style={[styles.emptyTitle, { color: theme.text }]}>
             No results found
           </ThemedText>
-          <ThemedText style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
+          <ThemedText
+            style={[styles.emptySubtitle, { color: theme.textSecondary }]}
+          >
             Try a different search term or browse by category
           </ThemedText>
         </View>
@@ -589,7 +669,9 @@ export default function FindScreen() {
                           ? Colors.accentLight
                           : theme.cardBackground,
                       borderColor:
-                        locationLabel === loc ? Colors.accent : theme.borderLight,
+                        locationLabel === loc
+                          ? Colors.accent
+                          : theme.borderLight,
                     },
                   ]}
                   testID={`location-option-${loc}`}
@@ -597,12 +679,19 @@ export default function FindScreen() {
                   <Feather
                     name="map-pin"
                     size={16}
-                    color={locationLabel === loc ? Colors.accent : theme.textSecondary}
+                    color={
+                      locationLabel === loc
+                        ? Colors.accent
+                        : theme.textSecondary
+                    }
                   />
                   <ThemedText
                     style={[
                       styles.locationOptionText,
-                      { color: locationLabel === loc ? Colors.accent : theme.text },
+                      {
+                        color:
+                          locationLabel === loc ? Colors.accent : theme.text,
+                      },
                     ]}
                   >
                     {loc}
@@ -624,7 +713,10 @@ export default function FindScreen() {
               <View
                 style={[
                   styles.customLocationRow,
-                  { borderColor: theme.borderLight, backgroundColor: theme.cardBackground },
+                  {
+                    borderColor: theme.borderLight,
+                    backgroundColor: theme.cardBackground,
+                  },
                 ]}
               >
                 <Feather name="edit-2" size={16} color={theme.textSecondary} />
@@ -640,7 +732,11 @@ export default function FindScreen() {
                 />
                 {customLocation.trim().length > 0 ? (
                   <Pressable onPress={confirmCustomLocation}>
-                    <Feather name="arrow-right" size={18} color={Colors.accent} />
+                    <Feather
+                      name="arrow-right"
+                      size={18}
+                      color={Colors.accent}
+                    />
                   </Pressable>
                 ) : null}
               </View>
@@ -684,7 +780,10 @@ export default function FindScreen() {
             </Pressable>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            style={styles.modalScroll}
+          >
             <View style={styles.filterSection}>
               <ThemedText style={styles.filterLabel}>Sort By</ThemedText>
               <View style={styles.optionsRow}>
@@ -692,7 +791,10 @@ export default function FindScreen() {
                   <Pressable
                     key={option.value}
                     onPress={() =>
-                      setTempFilters((prev) => ({ ...prev, sortBy: option.value }))
+                      setTempFilters((prev) => ({
+                        ...prev,
+                        sortBy: option.value,
+                      }))
                     }
                     style={[
                       styles.optionChip,
@@ -713,7 +815,9 @@ export default function FindScreen() {
                         styles.optionText,
                         {
                           color:
-                            tempFilters.sortBy === option.value ? "#fff" : theme.text,
+                            tempFilters.sortBy === option.value
+                              ? "#fff"
+                              : theme.text,
                         },
                       ]}
                     >
@@ -751,7 +855,9 @@ export default function FindScreen() {
                       <Feather
                         name="star"
                         size={14}
-                        color={tempFilters.minRating === rating ? "#fff" : theme.text}
+                        color={
+                          tempFilters.minRating === rating ? "#fff" : theme.text
+                        }
                         style={{ marginRight: 4 }}
                       />
                     ) : null}
@@ -760,7 +866,9 @@ export default function FindScreen() {
                         styles.optionText,
                         {
                           color:
-                            tempFilters.minRating === rating ? "#fff" : theme.text,
+                            tempFilters.minRating === rating
+                              ? "#fff"
+                              : theme.text,
                         },
                       ]}
                     >
@@ -817,12 +925,16 @@ export default function FindScreen() {
               onPress={resetFilters}
               style={[styles.resetButton, { borderColor: theme.borderLight }]}
             >
-              <ThemedText style={[styles.resetButtonText, { color: theme.text }]}>
+              <ThemedText
+                style={[styles.resetButtonText, { color: theme.text }]}
+              >
                 Reset
               </ThemedText>
             </Pressable>
             <View style={styles.applyButtonContainer}>
-              <PrimaryButton onPress={applyFilters}>Apply Filters</PrimaryButton>
+              <PrimaryButton onPress={applyFilters}>
+                Apply Filters
+              </PrimaryButton>
             </View>
           </View>
         </View>
@@ -847,6 +959,7 @@ export default function FindScreen() {
         services={item.services}
         hourlyRate={item.hourlyRate}
         verified={item.verified}
+        distance={item.distance ?? null}
         onPress={() => handleProviderCardPress(item.id)}
         testID={`provider-${item.id}`}
       />

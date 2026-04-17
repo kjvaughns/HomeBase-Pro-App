@@ -15,6 +15,7 @@ import { sql, eq, and, desc, inArray, gte } from "drizzle-orm";
 import { appointments, maintenanceReminders, homes, reviews } from "@shared/schema";
 import { sendInvoiceEmail, sendProviderClientMessage, sendSupportTicketEmail, sendInvoiceReminderEmail, sendProviderScheduledJobEmail } from "./emailService";
 import { dispatch, dispatchWithResult, dispatchNotification, sendPush } from "./notificationService";
+import { haversineMiles } from "./lib/distance";
 import { 
   searchPlaces, 
   getPlaceDetails, 
@@ -1913,8 +1914,29 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
   app.get("/api/providers", async (req: Request, res: Response) => {
     try {
       const categoryId = req.query.categoryId as string | undefined;
-      const providers = await storage.getProviders(categoryId);
-      res.json({ providers });
+      const latRaw = req.query.lat as string | undefined;
+      const lngRaw = req.query.lng as string | undefined;
+      const userLat = latRaw !== undefined ? parseFloat(latRaw) : NaN;
+      const userLng = lngRaw !== undefined ? parseFloat(lngRaw) : NaN;
+      const hasUserCoords = Number.isFinite(userLat) && Number.isFinite(userLng);
+
+      const providersList = await storage.getProviders(categoryId);
+
+      if (!hasUserCoords) {
+        return res.json({ providers: providersList });
+      }
+
+      const enriched = providersList.map((p: any) => {
+        const pLat = p.latitude !== null && p.latitude !== undefined ? parseFloat(p.latitude) : NaN;
+        const pLng = p.longitude !== null && p.longitude !== undefined ? parseFloat(p.longitude) : NaN;
+        if (!Number.isFinite(pLat) || !Number.isFinite(pLng)) {
+          return { ...p, distance: null };
+        }
+        const miles = haversineMiles(userLat, userLng, pLat, pLng);
+        return { ...p, distance: Math.round(miles * 10) / 10 };
+      });
+
+      res.json({ providers: enriched });
     } catch (error) {
       console.error("Get providers error:", error);
       res.status(500).json({ error: "Failed to get providers" });

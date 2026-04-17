@@ -25,6 +25,7 @@ interface ProviderCardProps {
   services: string[];
   hourlyRate: number;
   verified: boolean;
+  distance?: number | null;
   onPress: () => void;
   testID?: string;
 }
@@ -40,6 +41,7 @@ export function ProviderCard({
   services,
   hourlyRate,
   verified,
+  distance,
   onPress,
   testID,
 }: ProviderCardProps) {
@@ -117,6 +119,17 @@ export function ProviderCard({
             <ThemedText type="small" style={{ color: theme.textSecondary }}>
               ({reviewCount})
             </ThemedText>
+            {typeof distance === "number" ? (
+              <>
+                <ThemedText type="small" style={{ color: theme.textTertiary, marginLeft: Spacing.sm }}>
+                  •
+                </ThemedText>
+                <Feather name="map-pin" size={12} color={theme.textSecondary} style={{ marginLeft: Spacing.xs }} />
+                <ThemedText type="small" style={{ color: theme.textSecondary, marginLeft: 2 }}>
+                  {distance.toFixed(1)} mi
+                </ThemedText>
+              </>
+            ) : null}
           </View>
 
           <View style={styles.priceContainer}>
