@@ -281,17 +281,23 @@ export default function SimpleBookingScreen() {
       let friendly = raw.replace(/^\d+:\s*/, "");
       try {
         const parsed = JSON.parse(friendly);
-        const pickString = (v: any): string | null => {
+        const pickString = (v: unknown): string | null => {
           if (typeof v === "string" && v.trim()) return v;
-          if (v && typeof v === "object" && typeof v.message === "string") return v.message;
+          if (v && typeof v === "object") {
+            const msg = (v as { message?: unknown }).message;
+            if (typeof msg === "string" && msg.trim()) return msg;
+          }
           return null;
         };
+        const obj = (parsed && typeof parsed === "object" ? parsed : {}) as Record<string, unknown>;
+        const errors = Array.isArray(obj.errors) ? obj.errors : null;
+        const details = Array.isArray(obj.details) ? obj.details : null;
         const candidate =
-          pickString(parsed?.error) ||
-          pickString(parsed?.message) ||
-          pickString(parsed?.detail) ||
-          (Array.isArray(parsed?.errors) ? pickString(parsed.errors[0]) : null) ||
-          (Array.isArray(parsed?.details) ? pickString(parsed.details[0]) : null);
+          pickString(obj.error) ||
+          pickString(obj.message) ||
+          pickString(obj.detail) ||
+          (errors ? pickString(errors[0]) : null) ||
+          (details ? pickString(details[0]) : null);
         if (candidate) friendly = candidate;
       } catch {}
       Alert.alert(
