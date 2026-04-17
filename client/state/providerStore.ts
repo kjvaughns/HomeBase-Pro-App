@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiRequest, queryClient } from "@/lib/query-client";
+import { useAuthStore } from "./authStore";
 
 // ============================================
 // TYPES
@@ -799,6 +800,9 @@ export const useProviderStore = create<ProviderState>()(
           await apiRequest("PATCH", `/api/provider/${providerId}`, {
             isActive: value,
           });
+          // Keep authStore.providerProfile in sync so persisted hydration
+          // doesn't overwrite the freshly-toggled value on remount.
+          useAuthStore.getState().updateProviderProfile({ isActive: value });
           // Invalidate caches so provider profile + discovery lists reflect
           // the new availability immediately on this device.
           queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId] });

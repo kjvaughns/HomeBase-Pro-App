@@ -53,6 +53,7 @@ interface AuthState {
   setSessionToken: (token: string | null) => void;
   createProviderProfile: (profile: ProviderProfile) => void;
   updateProviderStatus: (status: ProviderStatus) => void;
+  updateProviderProfile: (updates: Partial<ProviderProfile>) => void;
   hasProviderProfile: () => boolean;
   canAccessProviderMode: () => boolean;
   hydrate: () => Promise<void>;
@@ -161,6 +162,16 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     if (providerProfile) {
       set({
         providerProfile: { ...providerProfile, status },
+      });
+      saveToStorage(get());
+    }
+  },
+
+  updateProviderProfile: (updates: Partial<ProviderProfile>) => {
+    const { providerProfile } = get();
+    if (providerProfile) {
+      set({
+        providerProfile: { ...providerProfile, ...updates },
       });
       saveToStorage(get());
     }

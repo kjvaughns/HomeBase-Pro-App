@@ -95,7 +95,7 @@ export default function ProviderHomeScreen() {
   const tabBarHeight = useFloatingTabBarHeight();
   const navigation = useNavigation<any>();
   const { theme } = useTheme();
-  const { user, providerProfile, createProviderProfile } = useAuthStore();
+  const { user, providerProfile, createProviderProfile, updateProviderProfile } = useAuthStore();
   const queryClient = useQueryClient();
 
   const providerId = providerProfile?.id;
@@ -130,8 +130,28 @@ export default function ProviderHomeScreen() {
     }
   }, [fetchedProviderData, providerId, createProviderProfile, hydrateAvailableForWork]);
 
-  // Bootstrap "Available for Work" toggle from server-derived providerProfile
-  // on every visit to the provider home, so persisted local state can't go stale.
+  // Guaranteed server hydration on app start: even when providerId is already
+  // in the persisted authStore, refetch the profile so isActive (and other
+  // fields) reflect server truth and don't drift from local storage.
+  const { data: freshProviderData } = useQuery<{ provider: any }>({
+    queryKey: ["/api/provider", providerId],
+    enabled: !!providerId,
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    const p = freshProviderData?.provider;
+    if (p && typeof p.isActive === "boolean") {
+      hydrateAvailableForWork(p.isActive);
+      if (providerProfile && providerProfile.isActive !== p.isActive) {
+        updateProviderProfile({ isActive: p.isActive });
+      }
+    }
+  }, [freshProviderData, hydrateAvailableForWork, updateProviderProfile, providerProfile]);
+
+  // Bootstrap "Available for Work" toggle from persisted providerProfile
+  // immediately on mount so the UI shows the last-known value while the
+  // server refresh is in-flight.
   useEffect(() => {
     if (providerProfile?.isActive !== undefined && providerProfile?.isActive !== null) {
       hydrateAvailableForWork(providerProfile.isActive);
