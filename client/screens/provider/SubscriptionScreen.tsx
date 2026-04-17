@@ -34,6 +34,7 @@ import {
 
 const PRIVACY_URL = "https://homebaseproapp.com/privacy";
 const TERMS_URL = "https://homebaseproapp.com/terms";
+const SUPPORT_URL = "mailto:support@homebaseproapp.com";
 
 type StateKey = "free" | "grace_period" | "expired" | "subscribed";
 
@@ -69,12 +70,11 @@ export default function SubscriptionScreen() {
   // any external/Stripe purchase copy in-app — required for App Store review.
   // Web keeps the existing Stripe Checkout flow.
   const useIAP = isPurchasesAvailable();
-  void isPurchasesAvailable; // keep import alive for tree-shaking
 
-  // Load the current RevenueCat offering on mount (native only).
-  useEffect(() => {
+  const loadOffering = useCallback(() => {
     if (!useIAP) return;
     let cancelled = false;
+    setOfferingError(null);
     setLoadingOffering(true);
     getProOffering()
       .then((current) => {
@@ -86,6 +86,12 @@ export default function SubscriptionScreen() {
           );
         }
       })
+      .catch(() => {
+        if (cancelled) return;
+        setOfferingError(
+          "Subscriptions are temporarily unavailable. Please try again in a moment.",
+        );
+      })
       .finally(() => {
         if (!cancelled) setLoadingOffering(false);
       });
@@ -93,6 +99,21 @@ export default function SubscriptionScreen() {
       cancelled = true;
     };
   }, [useIAP]);
+
+  // Load the current RevenueCat offering on mount (native only).
+  useEffect(() => {
+    const cleanup = loadOffering();
+    return cleanup;
+  }, [loadOffering]);
+
+  const handleContactSupport = useCallback(() => {
+    Linking.openURL(SUPPORT_URL).catch(() => {
+      Alert.alert(
+        "Couldn't open mail",
+        "Please email support@homebaseproapp.com.",
+      );
+    });
+  }, []);
 
   const proPackage: PurchasesPackage | null =
     offering?.monthly ?? offering?.availablePackages?.[0] ?? null;
@@ -184,12 +205,16 @@ export default function SubscriptionScreen() {
           if (!json.url) throw new Error("Missing billing URL");
           return json.url;
         });
-      } catch (err: any) {
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Something went wrong. Please try again.";
         Alert.alert(
           action === "subscribe"
             ? "Subscription error"
             : "Billing portal error",
-          err?.message || "Something went wrong. Please try again.",
+          message,
         );
       } finally {
         setBusy(false);
@@ -428,15 +453,48 @@ export default function SubscriptionScreen() {
             ) : null}
 
             {offeringError && useIAP && showSubscribeButton ? (
-              <ThemedText style={[styles.caption, { color: "#dc2626" }]}>
-                {offeringError}
-              </ThemedText>
+              <View style={styles.errorBlock}>
+                <ThemedText style={[styles.caption, { color: "#dc2626" }]}>
+                  {offeringError}
+                </ThemedText>
+                <View style={styles.errorActions}>
+                  <Pressable
+                    onPress={loadOffering}
+                    disabled={loadingOffering}
+                    style={styles.secondaryButton}
+                    testID="button-retry-offering"
+                  >
+                    <ThemedText
+                      style={[
+                        styles.secondaryButtonText,
+                        { color: Colors.accent },
+                      ]}
+                    >
+                      Retry
+                    </ThemedText>
+                  </Pressable>
+                  <Pressable
+                    onPress={handleContactSupport}
+                    style={styles.secondaryButton}
+                    testID="button-contact-support-error"
+                  >
+                    <ThemedText
+                      style={[
+                        styles.secondaryButtonText,
+                        { color: Colors.accent },
+                      ]}
+                    >
+                      Contact support
+                    </ThemedText>
+                  </Pressable>
+                </View>
+              </View>
             ) : null}
           </View>
         )}
 
-        {/* Apple-required renewal disclosure + legal links. Only render when
-            we have a real localized price (or the marketing price on web). */}
+        {/* Apple-required renewal disclosure — only when we have a real
+            localized price (or the marketing price on web). */}
         {showSubscribeButton && showDisclosure ? (
           <View style={styles.disclosureBlock}>
             <ThemedText
@@ -448,37 +506,46 @@ export default function SubscriptionScreen() {
                   : `HomeBase Pro is an auto-renewing subscription billed at ${priceLabel}. Payment is charged to your Google Play account at confirmation. Your subscription renews automatically unless cancelled at least 24 hours before the end of the current period. You can manage and cancel your subscription in your Google Play subscriptions settings after purchase.`
                 : `HomeBase Pro is an auto-renewing subscription billed at ${priceLabel} via Stripe. Manage or cancel anytime from the billing portal.`}
             </ThemedText>
-            <View style={styles.legalRow}>
-              <Pressable
-                onPress={() => Linking.openURL(TERMS_URL).catch(() => {})}
-                hitSlop={8}
-                testID="link-terms"
-              >
-                <ThemedText
-                  style={[styles.legalLink, { color: Colors.accent }]}
-                >
-                  Terms of Use (EULA)
-                </ThemedText>
-              </Pressable>
-              <ThemedText
-                style={[styles.legalSep, { color: theme.textTertiary }]}
-              >
-                ·
-              </ThemedText>
-              <Pressable
-                onPress={() => Linking.openURL(PRIVACY_URL).catch(() => {})}
-                hitSlop={8}
-                testID="link-privacy"
-              >
-                <ThemedText
-                  style={[styles.legalLink, { color: Colors.accent }]}
-                >
-                  Privacy Policy
-                </ThemedText>
-              </Pressable>
-            </View>
           </View>
         ) : null}
+
+        {/* Legal + support quick links — ALWAYS visible on the Subscription
+            screen so reviewers and users can find them in every state. */}
+        <View style={styles.legalRow}>
+          <Pressable
+            onPress={() => Linking.openURL(TERMS_URL).catch(() => {})}
+            hitSlop={8}
+            testID="link-terms"
+          >
+            <ThemedText style={[styles.legalLink, { color: Colors.accent }]}>
+              Terms of Use (EULA)
+            </ThemedText>
+          </Pressable>
+          <ThemedText style={[styles.legalSep, { color: theme.textTertiary }]}>
+            ·
+          </ThemedText>
+          <Pressable
+            onPress={() => Linking.openURL(PRIVACY_URL).catch(() => {})}
+            hitSlop={8}
+            testID="link-privacy"
+          >
+            <ThemedText style={[styles.legalLink, { color: Colors.accent }]}>
+              Privacy Policy
+            </ThemedText>
+          </Pressable>
+          <ThemedText style={[styles.legalSep, { color: theme.textTertiary }]}>
+            ·
+          </ThemedText>
+          <Pressable
+            onPress={handleContactSupport}
+            hitSlop={8}
+            testID="link-contact-support"
+          >
+            <ThemedText style={[styles.legalLink, { color: Colors.accent }]}>
+              Contact support
+            </ThemedText>
+          </Pressable>
+        </View>
 
         {/* Billing details surfaced for subscribed providers. */}
         {isSubscribed && (sourceLabel || renewalDate) ? (
@@ -602,5 +669,14 @@ const styles = StyleSheet.create({
     marginTop: Spacing.lg,
     gap: Spacing.xs,
     alignItems: "center",
+  },
+  errorBlock: {
+    marginTop: Spacing.md,
+    alignItems: "center",
+  },
+  errorActions: {
+    flexDirection: "row",
+    gap: Spacing.lg,
+    marginTop: Spacing.xs,
   },
 });
