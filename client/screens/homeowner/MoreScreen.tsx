@@ -229,11 +229,6 @@ export default function MoreScreen() {
                   onPress={() => navigation.navigate("NotificationPreferences")}
                 />
                 <ListRow
-                  title="Payment Methods"
-                  leftIcon="credit-card"
-                  onPress={() => navigation.navigate("PaymentMethods")}
-                />
-                <ListRow
                   title="Addresses"
                   leftIcon="map-pin"
                   onPress={() => navigation.navigate("Addresses")}

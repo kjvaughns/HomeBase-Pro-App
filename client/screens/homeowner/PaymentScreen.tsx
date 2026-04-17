@@ -1,14 +1,12 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
-import { StyleSheet, View, ScrollView, ActivityIndicator, Pressable } from "react-native";
+import React, { useState, useCallback } from "react";
+import { StyleSheet, View, ScrollView, ActivityIndicator, Pressable, Linking, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
-import { useRoute, useNavigation, RouteProp, CommonActions } from "@react-navigation/native";
+import { useRoute, useNavigation, useFocusEffect, RouteProp, CommonActions } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import * as WebBrowser from "expo-web-browser";
-import { useStripe } from "@/lib/useStripePayment";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -18,7 +16,6 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { getApiUrl, getAuthHeaders } from "@/lib/query-client";
-import { useAuthStore } from "@/state/authStore";
 
 type ScreenRouteProp = RouteProp<RootStackParamList, "Payment">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -37,23 +34,6 @@ interface InvoiceRecord {
   hostedInvoiceUrl?: string | null;
 }
 
-interface SavedCard {
-  id: string;
-  brand: string;
-  last4: string;
-  expMonth?: number;
-  expYear?: number;
-  isDefault: boolean;
-}
-
-function brandLabel(brand: string) {
-  const labels: Record<string, string> = {
-    visa: "Visa", mastercard: "Mastercard", amex: "Amex",
-    discover: "Discover", jcb: "JCB",
-  };
-  return labels[brand] ?? brand.charAt(0).toUpperCase() + brand.slice(1);
-}
-
 export default function PaymentScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
@@ -62,15 +42,12 @@ export default function PaymentScreen() {
   const { theme } = useTheme();
   const queryClient = useQueryClient();
   const { jobId, invoiceId } = route.params;
-  const { sessionToken } = useAuthStore();
-  const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
-  const [paymentSuccess, setPaymentSuccess] = useState(false);
-  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [openedExternal, setOpenedExternal] = useState(false);
 
-  const { data, isLoading, isError, refetch } = useQuery<{ invoice: InvoiceRecord; payments: unknown[] }>({
+  const { data, isLoading, isError, refetch, isFetching } = useQuery<{ invoice: InvoiceRecord; payments: unknown[] }>({
     queryKey: ["/api/invoices", invoiceId],
     queryFn: async () => {
       const url = new URL(`/api/invoices/${invoiceId}`, getApiUrl());
@@ -81,104 +58,16 @@ export default function PaymentScreen() {
     enabled: !!invoiceId,
   });
 
-  const { data: pmData } = useQuery<{ paymentMethods: SavedCard[]; defaultPaymentMethodId: string | null }>({
-    queryKey: ["/api/homeowner/payment-methods"],
-    queryFn: async () => {
-      const url = new URL("/api/homeowner/payment-methods", getApiUrl());
-      const res = await fetch(url.toString(), { headers: getAuthHeaders(), credentials: "include" });
-      if (!res.ok) return { paymentMethods: [], defaultPaymentMethodId: null };
-      return res.json();
-    },
-  });
+  // Refresh invoice status whenever the screen regains focus (e.g., after the
+  // homeowner returns from the external Stripe browser session).
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+    }, [refetch, queryClient])
+  );
 
-  const defaultCard = pmData?.paymentMethods?.find((c) => c.isDefault) ?? pmData?.paymentMethods?.[0] ?? null;
-
-  useEffect(() => {
-    return () => { if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current); };
-  }, []);
-
-  const stopPolling = useCallback(() => {
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
-    }
-  }, []);
-
-  const startPolling = useCallback((onPaid: () => void) => {
-    const authHeaders: Record<string, string> = sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {};
-    pollingIntervalRef.current = setInterval(async () => {
-      try {
-        const url = new URL(`/api/invoices/${invoiceId}`, getApiUrl());
-        const res = await fetch(url.toString(), { headers: authHeaders, credentials: "include" });
-        if (res.ok) {
-          const d = await res.json();
-          if (d?.invoice?.status === "paid") { stopPolling(); onPaid(); }
-        }
-      } catch {}
-    }, 3000);
-  }, [invoiceId, sessionToken, stopPolling]);
-
-  const markSuccess = useCallback(() => {
-    setPaymentSuccess(true);
-    queryClient.invalidateQueries({ queryKey: ["/api/invoices", invoiceId] });
-    queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [queryClient, invoiceId]);
-
-  const handlePayWithSavedCard = async () => {
-    setIsProcessing(true);
-    setPaymentError(null);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    try {
-      const url = new URL("/api/homeowner/payment-sheet", getApiUrl());
-      const res = await fetch(url.toString(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-        credentials: "include",
-        body: JSON.stringify({ invoiceId }),
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({ error: "Payment setup failed" }));
-        if (res.status === 402 || body.error === "stripe_not_ready") {
-          throw new Error("This provider has not yet completed payment setup. Please contact them directly.");
-        }
-        throw new Error(body.error || "Failed to start payment");
-      }
-
-      const { paymentIntentClientSecret, ephemeralKeySecret, customerId } = await res.json();
-
-      const { error: initError } = await initPaymentSheet({
-        merchantDisplayName: "HomeBase Pro",
-        customerId,
-        customerEphemeralKeySecret: ephemeralKeySecret,
-        paymentIntentClientSecret,
-        defaultBillingDetails: {},
-        allowsDelayedPaymentMethods: false,
-        appearance: { colors: { primary: Colors.accent } },
-      });
-
-      if (initError) throw new Error(initError.message);
-
-      const { error: presentError } = await presentPaymentSheet();
-      if (presentError) {
-        if (presentError.code === "Canceled") return;
-        throw new Error(presentError.message);
-      }
-
-      markSuccess();
-    } catch (err) {
-      stopPolling();
-      const message = err instanceof Error ? err.message : "Payment failed";
-      setPaymentError(message);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handlePayWithHostedCheckout = async () => {
+  const handlePayInvoice = async () => {
     setIsProcessing(true);
     setPaymentError(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -201,23 +90,15 @@ export default function PaymentScreen() {
       const { url: checkoutUrl } = await res.json();
       if (!checkoutUrl) throw new Error("No checkout URL received");
 
-      startPolling(() => {
-        WebBrowser.dismissBrowser();
-        markSuccess();
-      });
+      const canOpen = await Linking.canOpenURL(checkoutUrl);
+      if (!canOpen) throw new Error("Unable to open payment page");
 
-      await WebBrowser.openBrowserAsync(checkoutUrl);
-      stopPolling();
-
-      const refreshed = await refetch();
-      const status = (refreshed.data as any)?.invoice?.status;
-      if (status === "paid") {
-        markSuccess();
-      } else {
-        navigation.dispatch(CommonActions.reset({ index: 1, routes: [{ name: "Main" }, { name: "JobDetail", params: { jobId } }] }));
-      }
+      // Use Linking.openURL to launch the device's default external browser
+      // (Safari on iOS, Chrome on Android), NOT an in-app browser. App Store
+      // guidelines require homeowner payments happen outside the app.
+      await Linking.openURL(checkoutUrl);
+      setOpenedExternal(true);
     } catch (err) {
-      stopPolling();
       const message = err instanceof Error ? err.message : "Payment failed";
       setPaymentError(message);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -248,9 +129,9 @@ export default function PaymentScreen() {
 
   const invoice = data.invoice;
   const totalAmount = invoice.total || invoice.amount || "0.00";
-  const isPaid = invoice.status === "paid" || paymentSuccess;
+  const isPaid = invoice.status === "paid";
 
-  if (paymentSuccess || isPaid) {
+  if (isPaid) {
     return (
       <ThemedView style={[styles.container, styles.centered]}>
         <View style={[styles.successIconCircle, { backgroundColor: "#D1FAE5" }]}>
@@ -263,6 +144,7 @@ export default function PaymentScreen() {
         <PrimaryButton
           onPress={() => navigation.dispatch(CommonActions.reset({ index: 1, routes: [{ name: "Main" }, { name: "JobDetail", params: { jobId } }] }))}
           style={styles.successBtn}
+          testID="button-view-job"
         >
           View Job
         </PrimaryButton>
@@ -320,26 +202,26 @@ export default function PaymentScreen() {
           </View>
         </GlassCard>
 
-        {defaultCard ? (
-          <View style={[styles.savedCardBanner, { backgroundColor: theme.cardBackground, borderColor: Colors.accent + "40" }]}>
-            <View style={[styles.savedCardIcon, { backgroundColor: Colors.accentLight }]}>
-              <Feather name="credit-card" size={18} color={Colors.accent} />
+        {openedExternal ? (
+          <View style={[styles.waitingBox, { backgroundColor: theme.cardBackground, borderColor: Colors.accent + "40" }]}>
+            <View style={[styles.waitingIcon, { backgroundColor: Colors.accentLight }]}>
+              <Feather name="external-link" size={18} color={Colors.accent} />
             </View>
             <View style={{ flex: 1 }}>
-              <ThemedText style={styles.savedCardLabel}>
-                {brandLabel(defaultCard.brand)} ••••{defaultCard.last4}
+              <ThemedText style={styles.waitingTitle}>Finishing payment in your browser</ThemedText>
+              <ThemedText style={[styles.waitingSub, { color: theme.textSecondary }]}>
+                Complete payment on Stripe, then return to the app. We'll update this invoice as soon as Stripe confirms.
               </ThemedText>
-              <ThemedText style={[styles.savedCardSub, { color: theme.textSecondary }]}>
-                Card on file — tap to pay instantly
-              </ThemedText>
+              {isFetching ? (
+                <ActivityIndicator size="small" color={Colors.accent} style={{ marginTop: Spacing.sm, alignSelf: "flex-start" }} />
+              ) : null}
             </View>
-            <Feather name="check-circle" size={18} color={Colors.accent} />
           </View>
         ) : (
           <View style={styles.infoBox}>
-            <Feather name="lock" size={16} color={theme.textSecondary} />
+            <Feather name="external-link" size={16} color={theme.textSecondary} />
             <ThemedText style={[styles.infoText, { color: theme.textSecondary }]}>
-              Secure payment powered by Stripe.
+              You'll be sent to Stripe in {Platform.OS === "android" ? "Chrome" : "Safari"} to complete payment securely. Return to the app when you're done.
             </ThemedText>
           </View>
         )}
@@ -353,37 +235,26 @@ export default function PaymentScreen() {
       </ScrollView>
 
       <View style={[styles.bottomBar, { backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.md }]}>
-        {defaultCard ? (
-          <>
-            <PrimaryButton
-              onPress={handlePayWithSavedCard}
-              disabled={isProcessing}
-              loading={isProcessing}
-              testID="button-pay-saved-card"
-            >
-              {`Pay $${parseFloat(totalAmount).toFixed(2)} with ${brandLabel(defaultCard.brand)} ••••${defaultCard.last4}`}
-            </PrimaryButton>
-            <Pressable
-              onPress={handlePayWithHostedCheckout}
-              disabled={isProcessing}
-              style={styles.altPayLink}
-              testID="button-pay-other-method"
-            >
-              <ThemedText style={[styles.altPayText, { color: theme.textSecondary }]}>
-                Use a different card
-              </ThemedText>
-            </Pressable>
-          </>
-        ) : (
-          <PrimaryButton
-            onPress={handlePayWithSavedCard}
-            disabled={isProcessing}
-            loading={isProcessing}
-            testID="button-pay-invoice"
-          >
-            {`Pay $${parseFloat(totalAmount).toFixed(2)}`}
-          </PrimaryButton>
-        )}
+        <PrimaryButton
+          onPress={handlePayInvoice}
+          disabled={isProcessing}
+          loading={isProcessing}
+          testID="button-pay-invoice"
+        >
+          {openedExternal
+            ? `Reopen Stripe to Pay $${parseFloat(totalAmount).toFixed(2)}`
+            : `Pay $${parseFloat(totalAmount).toFixed(2)} on Stripe`}
+        </PrimaryButton>
+        <Pressable
+          onPress={() => refetch()}
+          disabled={isFetching}
+          style={styles.altPayLink}
+          testID="button-refresh-status"
+        >
+          <ThemedText style={[styles.altPayText, { color: theme.textSecondary }]}>
+            {isFetching ? "Checking..." : "Check payment status"}
+          </ThemedText>
+        </Pressable>
       </View>
     </ThemedView>
   );
@@ -411,24 +282,24 @@ const styles = StyleSheet.create({
   totalRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   totalLabel: { ...Typography.headline },
   totalAmount: { ...Typography.title1, fontWeight: "700", color: Colors.accent },
-  savedCardBanner: {
+  waitingBox: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: Spacing.md,
     borderRadius: BorderRadius.card,
     borderWidth: 1.5,
     padding: Spacing.md,
     marginBottom: Spacing.md,
   },
-  savedCardIcon: {
+  waitingIcon: {
     width: 40,
     height: 40,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
-  savedCardLabel: { ...Typography.subhead, fontWeight: "600" },
-  savedCardSub: { ...Typography.caption1 },
+  waitingTitle: { ...Typography.subhead, fontWeight: "600", marginBottom: 4 },
+  waitingSub: { ...Typography.caption1, lineHeight: 18 },
   infoBox: { flexDirection: "row", gap: Spacing.sm, alignItems: "flex-start", paddingHorizontal: Spacing.xs, marginBottom: Spacing.md },
   infoText: { ...Typography.body, flex: 1 },
   errorBox: { flexDirection: "row", gap: Spacing.sm, alignItems: "flex-start", padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, backgroundColor: "#FEF2F2" },

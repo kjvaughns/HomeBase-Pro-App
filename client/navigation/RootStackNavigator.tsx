@@ -34,7 +34,6 @@ import PaymentScreen from "@/screens/homeowner/PaymentScreen";
 import ReviewScreen from "@/screens/homeowner/ReviewScreen";
 import ProfileEditScreen from "@/screens/homeowner/ProfileEditScreen";
 import AddressesScreen from "@/screens/homeowner/AddressesScreen";
-import PaymentMethodsScreen from "@/screens/homeowner/PaymentMethodsScreen";
 import NotificationsScreen from "@/screens/homeowner/NotificationsScreen";
 import NotificationPreferencesScreen from "@/screens/homeowner/NotificationPreferencesScreen";
 import ClientDetailScreen from "@/screens/provider/ClientDetailScreen";
@@ -126,7 +125,6 @@ export type RootStackParamList = {
   Review: { jobId: string };
   ProfileEdit: undefined;
   Addresses: undefined;
-  PaymentMethods: undefined;
   Notifications: undefined;
   NotificationPreferences: undefined;
   ClientDetail: { clientId: string };
@@ -409,13 +407,6 @@ export default function RootStackNavigator() {
         component={AddressesScreen}
         options={{
           headerTitle: "My Addresses",
-        }}
-      />
-      <Stack.Screen
-        name="PaymentMethods"
-        component={PaymentMethodsScreen}
-        options={{
-          headerTitle: "Payment Methods",
         }}
       />
       <Stack.Screen
