@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from "react";
-import { StyleSheet, View, FlatList, RefreshControl, ScrollView, Pressable } from "react-native";
+import { StyleSheet, View, RefreshControl, ScrollView, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
@@ -286,16 +286,18 @@ export default function ManageScreen() {
   if (isLoading) {
     return (
       <ThemedView style={styles.container}>
-        <FlatList
-          data={[1, 2, 3]}
-          renderItem={() => <SkeletonCard />}
-          keyExtractor={(item) => item.toString()}
+        <ScrollView
           contentContainerStyle={{
             paddingTop: headerHeight + Spacing.lg,
             paddingBottom: tabBarHeight + Spacing.xl,
             paddingHorizontal: Spacing.screenPadding,
           }}
-        />
+          showsVerticalScrollIndicator={false}
+        >
+          {[1, 2, 3].map((i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </ScrollView>
       </ThemedView>
     );
   }

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { StyleSheet, View, ScrollView, Pressable, FlatList, Alert, ActivityIndicator, Switch, TextInput } from "react-native";
+import { StyleSheet, View, ScrollView, Pressable, Alert, ActivityIndicator, Switch, TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
@@ -277,7 +277,27 @@ export default function SimpleBookingScreen() {
       navigation.navigate("BookingSuccess", { jobId: appointmentId });
     },
     onError: (error: Error) => {
-      Alert.alert("Booking Failed", error?.message || "Could not create your appointment. Please try again.");
+      const raw = error?.message || "";
+      let friendly = raw.replace(/^\d+:\s*/, "");
+      try {
+        const parsed = JSON.parse(friendly);
+        const pickString = (v: any): string | null => {
+          if (typeof v === "string" && v.trim()) return v;
+          if (v && typeof v === "object" && typeof v.message === "string") return v.message;
+          return null;
+        };
+        const candidate =
+          pickString(parsed?.error) ||
+          pickString(parsed?.message) ||
+          pickString(parsed?.detail) ||
+          (Array.isArray(parsed?.errors) ? pickString(parsed.errors[0]) : null) ||
+          (Array.isArray(parsed?.details) ? pickString(parsed.details[0]) : null);
+        if (candidate) friendly = candidate;
+      } catch {}
+      Alert.alert(
+        "Booking Failed",
+        friendly || "Could not create your appointment. Please try again."
+      );
     },
   });
 
@@ -291,13 +311,14 @@ export default function SimpleBookingScreen() {
     bookMutation.mutate();
   };
 
-  const renderDateItem = ({ item }: { item: DateItem }) => {
+  const renderDateItem = (item: DateItem) => {
     const isSelected = selectedDate === item.dateStr;
     const d = new Date(item.dateStr + "T12:00:00Z");
     const dayOfWeek = d.getUTCDay();
     const isUnavailable = !workingDays.includes(dayOfWeek);
     return (
       <Pressable
+        key={item.dateStr}
         onPress={() => {
           if (isUnavailable) return;
           Haptics.selectionAsync();
@@ -557,14 +578,13 @@ export default function SimpleBookingScreen() {
 
         <Animated.View entering={FadeInDown.delay(300)}>
           <ThemedText style={styles.sectionTitle}>Select Date</ThemedText>
-          <FlatList
+          <ScrollView
             horizontal
-            data={dates}
-            renderItem={renderDateItem}
-            keyExtractor={(item) => item.dateStr}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.dateList}
-          />
+          >
+            {dates.map(renderDateItem)}
+          </ScrollView>
         </Animated.View>
 
         {selectedDate ? (

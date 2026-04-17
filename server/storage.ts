@@ -207,14 +207,20 @@ export class DatabaseStorage implements IStorage {
       const results: Provider[] = [];
       for (const id of uniqueIds) {
         const [provider] = await db.select().from(providers).where(eq(providers.id, id));
-        if (provider && provider.isActive) {
+        if (provider && provider.isActive && provider.isPublic && provider.userId) {
           results.push(provider);
         }
       }
       return results;
     }
-    // No filter — return all active providers (both catalog and custom-service providers)
-    return db.select().from(providers).where(eq(providers.isActive, true));
+    // No filter — return only providers that are active, public, and owned by a real user.
+    return db.select().from(providers).where(
+      and(
+        eq(providers.isActive, true),
+        eq(providers.isPublic, true),
+        sql`${providers.userId} IS NOT NULL`
+      )
+    );
   }
 
   async getProvider(id: string): Promise<Provider | undefined> {
