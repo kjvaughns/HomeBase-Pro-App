@@ -123,7 +123,6 @@ export default function LeadsScreen() {
     },
   });
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-existing; cleanup tracked in Task #107
   const leads: Lead[] = data?.leads ?? [];
   const submissions: IntakeSubmission[] = (submissionsData?.submissions ?? []).filter(
     (s) => s.status === "submitted"

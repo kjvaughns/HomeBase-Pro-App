@@ -92,7 +92,6 @@ export default function App() {
       } catch (_) {}
     }
     downloadUpdateIfAvailable();
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-existing; cleanup tracked in Task #107
   }, []);
 
   if (!ready) {

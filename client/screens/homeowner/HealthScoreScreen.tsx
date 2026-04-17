@@ -216,7 +216,6 @@ function ScoreRing({ score, size = 120, strokeWidth = 10, animating = false }: {
     } else {
       progress.value = score / 100;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-existing; cleanup tracked in Task #107
   }, [score, animating]);
 
   const animatedProps = useAnimatedProps(() => ({

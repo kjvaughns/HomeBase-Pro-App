@@ -182,7 +182,6 @@ export default function SimpleBookingScreen() {
         setSelectedServiceId(primaryServices[0].id);
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-existing; cleanup tracked in Task #107
   }, [allServices.length, params.intakeData?.recommendedService]);
 
   const selectedService = primaryServices.find((s) => s.id === selectedServiceId);

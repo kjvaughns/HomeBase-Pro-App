@@ -113,7 +113,6 @@ export default function AIChatScreen() {
     } finally {
       setIsLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-existing; cleanup tracked in Task #107
   }, [isLoading, messages]);
   
   const handleFindPro = (category?: string | null, problemSummary?: string | null) => {

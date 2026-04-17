@@ -200,7 +200,6 @@ function Step1CreateService({
     return () => {
       if (descDebounceRef.current) clearTimeout(descDebounceRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-existing; cleanup tracked in Task #107
   }, [data.serviceName, category]);
 
   useEffect(() => {

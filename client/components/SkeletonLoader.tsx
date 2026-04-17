@@ -36,7 +36,6 @@ export function SkeletonLoader({
       -1,
       true
     );
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-existing; cleanup tracked in Task #107
   }, []);
 
   const animatedStyle = useAnimatedStyle(() => ({

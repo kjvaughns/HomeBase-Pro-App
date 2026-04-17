@@ -70,7 +70,6 @@ export default function BookingPoliciesScreen() {
         }
       } catch {}
     })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-existing; cleanup tracked in Task #107
   }, [providerId]);
 
   const handleSave = useCallback(async () => {

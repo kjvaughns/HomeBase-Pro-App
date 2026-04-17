@@ -88,7 +88,6 @@ export default function ProviderAIAssistantScreen() {
       cancelAnimation(pulseScale);
       pulseScale.value = withTiming(1, { duration: 200 });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-existing; cleanup tracked in Task #107
   }, [isListening]);
   
   const pulseStyle = useAnimatedStyle(() => ({

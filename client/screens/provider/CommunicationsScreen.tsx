@@ -100,7 +100,6 @@ export default function CommunicationsScreen() {
     },
   });
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-existing; cleanup tracked in Task #107
   const allClients = clientsData?.clients || [];
 
   const filteredClients = useMemo(() => {
