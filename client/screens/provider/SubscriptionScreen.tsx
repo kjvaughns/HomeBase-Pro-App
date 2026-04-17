@@ -69,9 +69,6 @@ export default function SubscriptionScreen() {
   const [offeringError, setOfferingError] = useState<string | null>(null);
   const [loadingOffering, setLoadingOffering] = useState(false);
 
-  // Native (iOS/Android) builds always take the IAP path so they never show
-  // any external/Stripe purchase copy in-app — required for App Store review.
-  // Web keeps the existing Stripe Checkout flow.
   const useIAP = isPurchasesAvailable();
 
   const loadOffering = useCallback(() => {
@@ -110,9 +107,6 @@ export default function SubscriptionScreen() {
   }, [loadOffering]);
 
   const handleDeleteAccount = useCallback(() => {
-    // Account deletion lives in the More tab where the confirmation modal is
-    // already wired up. Surface a quick link from the billing context so
-    // reviewers can find it from this screen.
     navigation.navigate(
       "ProviderTabs" as never,
       { screen: "ProviderMore" } as never,
@@ -130,9 +124,6 @@ export default function SubscriptionScreen() {
 
   const proPackage: PurchasesPackage | null =
     offering?.monthly ?? offering?.availablePackages?.[0] ?? null;
-  // On native we MUST display the localized price from the App Store /
-  // Play Store offering — never a hardcoded value (Apple compliance).
-  // On web we use the Stripe marketing price.
   const nativePriceLabel = proPackage?.product?.priceString ?? null;
   const priceLabel = useIAP ? nativePriceLabel : "$29.99/mo";
 
@@ -294,8 +285,6 @@ export default function SubscriptionScreen() {
       : `Subscribe — ${priceLabel}`
     : "Subscribe";
 
-  // Render the renewal disclosure only when we have a real localized price
-  // (native) or the marketing price (web). No fabricated values.
   const showDisclosure = !!priceLabel;
 
   const sourceLabel = (() => {

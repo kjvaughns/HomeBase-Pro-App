@@ -8083,7 +8083,8 @@ Respond with JSON only:
     requireAuth,
     async (req: Request, res: Response) => {
       try {
-        const userId = (req as any).user?.id as string;
+        const userId =
+          (req as any).authenticatedUserId ?? (req as any).user?.id;
         if (!userId) return res.status(401).json({ error: "unauthorized" });
 
         const [provider] = await db
@@ -8117,7 +8118,8 @@ Respond with JSON only:
     requireAuth,
     async (req: Request, res: Response) => {
       try {
-        const userId = (req as any).user?.id as string;
+        const userId =
+          (req as any).authenticatedUserId ?? (req as any).user?.id;
         if (!userId) return res.status(401).json({ error: "unauthorized" });
 
         const { url } = await createSubscriptionPortalSession({ userId });
