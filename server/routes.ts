@@ -6281,9 +6281,10 @@ Respond with JSON only:
             const baseUrl =
               process.env.PUBLIC_BASE_URL ||
               (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "https://homebaseproapp.com");
-            const reviewUrl = loaded.provider.slug
-              ? `${baseUrl}/providers/${loaded.provider.slug}#reviews`
-              : baseUrl;
+            // Deep-link the homeowner back to their own review screen via /open-app
+            // (which falls back to the App Store on desktop). The Review route
+            // takes the appointment id as `jobId`.
+            const reviewUrl = `${baseUrl}/open-app?path=review&jobId=${encodeURIComponent(loaded.review.appointmentId)}`;
             if (homeowner) {
               const clientName = `${homeowner.firstName || ""} ${homeowner.lastName || ""}`.trim() || homeowner.email;
               dispatch("review.reply", {
