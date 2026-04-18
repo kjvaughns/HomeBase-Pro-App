@@ -81,9 +81,19 @@ interface ProviderService {
   priceTiersJson: string | null;
   duration: number | null;
   isAddon: boolean;
+  addOnsJson: string | null;
   intakeQuestionsJson: string | null;
   bookingMode: string | null;
 }
+
+interface JsonAddOn {
+  id: string;
+  name: string;
+  description?: string | null;
+  price: number;
+}
+
+const JSON_ADDON_PREFIX = "json:";
 
 type ServiceIntakeQuestion = IntakeQuestionDef;
 
@@ -182,6 +192,64 @@ export default function SimpleBookingScreen() {
 
   const selectedService = primaryServices.find((s) => s.id === selectedServiceId);
 
+  // Parse JSON-embedded upgrades attached to the selected service.
+  // Providers using the AI Service Blueprint Wizard (and the Service Summary
+  // editor) save their upgrades as a JSON array on the parent service rather
+  // than as standalone isAddon=true rows, so we surface both shapes here.
+  const jsonAddons = useMemo<JsonAddOn[]>(() => {
+    if (!selectedService?.addOnsJson) return [];
+    try {
+      const parsed = JSON.parse(selectedService.addOnsJson);
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .map((entry, idx): JsonAddOn | null => {
+          if (!entry || typeof entry !== "object") return null;
+          const name = typeof entry.name === "string" ? entry.name.trim() : "";
+          if (!name) return null;
+          const rawPrice = (entry as { price?: unknown }).price;
+          const price =
+            typeof rawPrice === "number"
+              ? rawPrice
+              : typeof rawPrice === "string"
+                ? parseFloat(rawPrice)
+                : 0;
+          const description =
+            typeof (entry as { description?: unknown }).description === "string"
+              ? ((entry as { description: string }).description)
+              : null;
+          return {
+            id: `${JSON_ADDON_PREFIX}${selectedService.id}:${idx}`,
+            name,
+            description,
+            price: Number.isFinite(price) ? price : 0,
+          };
+        })
+        .filter((x): x is JsonAddOn => x !== null);
+    } catch {
+      return [];
+    }
+  }, [selectedService]);
+
+  // When the primary service changes, drop only stale JSON-upgrade selections
+  // (those are scoped to a specific parent service). Standalone add-on
+  // services are independent rows so their selections persist.
+  useEffect(() => {
+    setSelectedAddonIds((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      const validJsonIds = new Set(jsonAddons.map((a) => a.id));
+      for (const id of prev) {
+        if (id.startsWith(JSON_ADDON_PREFIX)) {
+          if (validJsonIds.has(id)) next.add(id);
+          else changed = true;
+        } else {
+          next.add(id);
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [selectedServiceId, jsonAddons]);
+
   const serviceIntakeQuestions: ServiceIntakeQuestion[] = parseIntakeQuestions(
     selectedService?.intakeQuestionsJson,
   );
@@ -211,17 +279,19 @@ export default function SimpleBookingScreen() {
   const canBook = selectedDate && selectedTime && defaultHome && selectedServiceId;
 
   const selectedAddons = addonServices.filter((s) => selectedAddonIds.has(s.id));
+  const selectedJsonAddons = jsonAddons.filter((a) => selectedAddonIds.has(a.id));
 
   const totalEstimatedPrice = useMemo((): string | null => {
     if (!selectedService) return null;
     let total = getBasePrice(selectedService);
     selectedAddons.forEach((a) => { total += getBasePrice(a); });
+    selectedJsonAddons.forEach((a) => { total += a.price; });
     if (total > 0) return total.toFixed(2);
     if (params.intakeData?.priceRange) {
       return ((params.intakeData.priceRange.min + params.intakeData.priceRange.max) / 2).toFixed(2);
     }
     return null;
-  }, [selectedService, selectedAddons, params.intakeData?.priceRange]);
+  }, [selectedService, selectedAddons, selectedJsonAddons, params.intakeData?.priceRange]);
 
   const toggleAddon = (id: string) => {
     Haptics.selectionAsync();
@@ -239,7 +309,11 @@ export default function SimpleBookingScreen() {
         throw new Error("Missing required booking data");
       }
 
-      const addonNames = selectedAddons.map((a) => a.name).join(", ");
+      const allAddonNames = [
+        ...selectedAddons.map((a) => a.name),
+        ...selectedJsonAddons.map((a) => a.name),
+      ];
+      const addonNames = allAddonNames.join(", ");
       const serviceNameFull = addonNames
         ? `${selectedService.name} + ${addonNames}`
         : selectedService.name;
@@ -253,11 +327,18 @@ export default function SimpleBookingScreen() {
         "";
       // Send raw fields — server recomposes the canonical description via
       // the shared formatter so all three booking entry points produce the
-      // same shape.
-      const structuredAddOns = selectedAddons.map((a) => ({
-        name: a.name,
-        price: getBasePrice(a),
-      }));
+      // same shape. Both standalone add-on services and JSON-embedded
+      // upgrades flow through as { name, price } entries.
+      const structuredAddOns = [
+        ...selectedAddons.map((a) => ({
+          name: a.name,
+          price: getBasePrice(a),
+        })),
+        ...selectedJsonAddons.map((a) => ({
+          name: a.name,
+          price: a.price,
+        })),
+      ];
       const res = await apiRequest("POST", url.toString(), {
         userId: user.id,
         homeId: defaultHome.id,
@@ -501,7 +582,7 @@ export default function SimpleBookingScreen() {
         </Animated.View>
 
         {/* Add-on suggestions */}
-        {addonServices.length > 0 ? (
+        {addonServices.length > 0 || jsonAddons.length > 0 ? (
           <Animated.View entering={FadeInDown.delay(280)}>
             <ThemedText style={styles.sectionTitle}>Suggested Add-ons</ThemedText>
             {addonServices.map((addon) => {
@@ -511,6 +592,48 @@ export default function SimpleBookingScreen() {
                 <Pressable
                   key={addon.id}
                   onPress={() => toggleAddon(addon.id)}
+                  testID={`addon-service-${addon.id}`}
+                  style={[
+                    styles.addonCard,
+                    {
+                      backgroundColor: isSelected ? Colors.accent + "12" : theme.cardBackground,
+                      borderColor: isSelected ? Colors.accent : theme.borderLight,
+                      borderWidth: isSelected ? 2 : 1,
+                    },
+                  ]}
+                >
+                  <View style={styles.addonCheckbox}>
+                    <View style={[
+                      styles.checkbox,
+                      { borderColor: isSelected ? Colors.accent : theme.borderLight, backgroundColor: isSelected ? Colors.accent : "transparent" },
+                    ]}>
+                      {isSelected ? <Feather name="check" size={12} color="#fff" /> : null}
+                    </View>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <ThemedText style={[styles.addonName, isSelected && { color: Colors.accent }]}>
+                      {addon.name}
+                    </ThemedText>
+                    {addon.description ? (
+                      <ThemedText style={[styles.addonDesc, { color: theme.textSecondary }]} numberOfLines={1}>
+                        {addon.description}
+                      </ThemedText>
+                    ) : null}
+                  </View>
+                  <ThemedText style={[styles.addonPrice, isSelected && { color: Colors.accent }]}>
+                    {priceLabel}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+            {jsonAddons.map((addon) => {
+              const isSelected = selectedAddonIds.has(addon.id);
+              const priceLabel = addon.price > 0 ? `$${addon.price.toFixed(0)}` : "Included";
+              return (
+                <Pressable
+                  key={addon.id}
+                  onPress={() => toggleAddon(addon.id)}
+                  testID={`addon-upgrade-${addon.id}`}
                   style={[
                     styles.addonCard,
                     {
