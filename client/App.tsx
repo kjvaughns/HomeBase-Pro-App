@@ -32,6 +32,10 @@ const linking = {
     screens: {
       SimpleBooking: "SimpleBooking",
       Subscription: "Subscription",
+      // Stripe Checkout return — homebase://payment-result?invoiceId=...&jobId=...&status=paid|cancelled
+      Payment: "payment-result",
+      JobDetail: "job/:jobId",
+      InvoiceDetail: "invoice/:invoiceId",
     },
   },
 };

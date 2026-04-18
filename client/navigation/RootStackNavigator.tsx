@@ -123,7 +123,7 @@ export type RootStackParamList = {
   BookingSuccess: { jobId: string };
   JobDetail: { jobId: string };
   AppointmentDetail: { appointmentId: string };
-  Payment: { jobId: string; invoiceId: string };
+  Payment: { jobId?: string; invoiceId: string; status?: "paid" | "cancelled" };
   Review: { jobId: string };
   ProfileEdit: undefined;
   AccountSecurity: undefined;

@@ -8212,6 +8212,103 @@ Respond with JSON only:
 </body>
 </html>`;
 
+  // ────────────────────────────────────────────────────────────────────────
+  // Stripe Checkout return bridges (web fallback that triggers homebase://)
+  // ────────────────────────────────────────────────────────────────────────
+  // These pages are loaded by Stripe after a Checkout Session finishes.
+  // They auto-redirect to the app via the homebase:// scheme, and show a
+  // visible button for users whose browser doesn't open the app.
+  const invoiceReturnHtml = (
+    invoiceId: string,
+    jobId: string | null,
+    status: "paid" | "cancelled",
+  ) => {
+    const params = new URLSearchParams({ invoiceId, status });
+    if (jobId) params.set("jobId", jobId);
+    const deepLink = `homebase://payment-result?${params.toString()}`;
+    const isPaid = status === "paid";
+    const title = isPaid ? "Payment Received" : "Payment Cancelled";
+    const message = isPaid
+      ? "Thanks — your payment was processed successfully. Returning you to the HomeBase app."
+      : "No charge was made. You can return to the HomeBase app to try again or pick a different payment method.";
+    const icon = isPaid ? "✓" : "✕";
+    const accent = isPaid ? "#38AE5F" : "#E0856F";
+
+    return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${title} — HomeBase</title>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0e1322;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}
+    .card{background:#1a2236;border-radius:20px;padding:40px 32px;max-width:420px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.4)}
+    .icon{width:72px;height:72px;border-radius:36px;background:${accent};color:#fff;font-size:36px;line-height:72px;margin:0 auto 20px;font-weight:600}
+    h1{font-size:24px;margin:0 0 12px;font-weight:700}
+    p{color:#a0a8c0;font-size:15px;line-height:1.6;margin:0 0 28px}
+    a.btn{display:inline-block;background:${accent};color:#fff;text-decoration:none;padding:14px 32px;border-radius:12px;font-weight:600;font-size:16px}
+    a.btn:hover{filter:brightness(1.1)}
+    .small{font-size:13px;color:#6b7280;margin-top:18px}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">${icon}</div>
+    <h1>${title}</h1>
+    <p>${message}</p>
+    <a class="btn" id="open" href="${deepLink}">Open HomeBase App</a>
+    <p class="small">If the app doesn't open automatically, tap the button above.</p>
+  </div>
+  <script>
+    // Auto-trigger the deep link on load. Mobile browsers will hand the URL
+    // to the OS, which switches to the HomeBase app if installed.
+    (function(){
+      var url = ${JSON.stringify(deepLink)};
+      try { window.location.replace(url); } catch (_) {}
+      setTimeout(function(){
+        // Some browsers block the auto-open; the visible button is the fallback.
+      }, 250);
+    })();
+  </script>
+</body>
+</html>`;
+  };
+
+  async function lookupInvoiceJobId(
+    invoiceId: string,
+  ): Promise<string | null> {
+    try {
+      const [inv] = await db
+        .select({ jobId: invoices.jobId })
+        .from(invoices)
+        .where(eq(invoices.id, invoiceId));
+      return inv?.jobId ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  app.get(
+    "/r/invoice/:invoiceId/paid",
+    async (req: Request<{ invoiceId: string }>, res: Response) => {
+      const { invoiceId } = req.params;
+      const jobId = await lookupInvoiceJobId(invoiceId);
+      res.setHeader("Content-Type", "text/html");
+      res.send(invoiceReturnHtml(invoiceId, jobId, "paid"));
+    },
+  );
+
+  app.get(
+    "/r/invoice/:invoiceId/cancelled",
+    async (req: Request<{ invoiceId: string }>, res: Response) => {
+      const { invoiceId } = req.params;
+      const jobId = await lookupInvoiceJobId(invoiceId);
+      res.setHeader("Content-Type", "text/html");
+      res.send(invoiceReturnHtml(invoiceId, jobId, "cancelled"));
+    },
+  );
+
   app.get("/provider/connect/complete", (_req: Request, res: Response) => {
     res.setHeader("Content-Type", "text/html");
     res.send(
@@ -9323,7 +9420,12 @@ Respond with JSON only:
     },
   );
 
-  // Create Stripe Invoice for invoice (hosted payment page)
+  // Create Stripe Checkout Session for invoice payment.
+  // Prefers a Checkout Session (which supports success_url/cancel_url that
+  // deep-link back into the app via the homebase:// scheme). Falls back to
+  // creating a Stripe Invoice's hosted payment page only if the provider's
+  // Connect account isn't ready — in that case we lose the deep-link return,
+  // but the homeowner can still pay.
   app.post(
     "/api/invoices/:invoiceId/checkout",
     requireAuth,
@@ -9331,6 +9433,21 @@ Respond with JSON only:
       try {
         const { invoiceId } = req.params;
         if (!(await assertInvoiceAccess(req, invoiceId, res))) return;
+
+        // Try Connect-backed Checkout Session first (proper deep-link return).
+        try {
+          const session = await createStripeCheckoutSession(invoiceId);
+          return res.json({
+            url: session.checkoutUrl,
+            sessionId: session.sessionId,
+          });
+        } catch (sessionErr: any) {
+          // Fall through to hosted invoice only if Stripe Connect isn't ready.
+          const code = sessionErr?.code || sessionErr?.message;
+          if (code !== "stripe_not_ready") throw sessionErr;
+        }
+
+        // Fallback: hosted Stripe invoice (no deep-link return after payment).
         const result = await createStripeInvoice(invoiceId);
         res.json({
           url: result.hostedInvoiceUrl,

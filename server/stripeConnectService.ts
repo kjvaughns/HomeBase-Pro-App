@@ -603,8 +603,8 @@ export async function createStripeCheckoutSession(invoiceId: string) {
         providerId: invoice.providerId,
       },
     },
-    success_url: `${APP_URL}/invoice/${invoiceId}/success`,
-    cancel_url: `${APP_URL}/invoice/${invoiceId}/cancel`,
+    success_url: `${APP_URL}/r/invoice/${invoiceId}/paid?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${APP_URL}/r/invoice/${invoiceId}/cancelled`,
     metadata: {
       invoiceId: invoice.id,
       providerId: invoice.providerId,
@@ -688,8 +688,8 @@ export async function createDirectCheckoutSession(
   const session = await getStripe().checkout.sessions.create({
     mode: "payment",
     line_items: stripeLineItems,
-    success_url: `${baseUrl}/invoice/${invoiceId}/success`,
-    cancel_url: `${baseUrl}/invoice/${invoiceId}/cancel`,
+    success_url: `${baseUrl}/r/invoice/${invoiceId}/paid?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${baseUrl}/r/invoice/${invoiceId}/cancelled`,
     metadata: {
       invoiceId: invoice.id,
       providerId: invoice.providerId,

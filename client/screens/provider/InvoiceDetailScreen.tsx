@@ -510,26 +510,39 @@ export default function InvoiceDetailScreen() {
             </PrimaryButton>
           ) : null}
 
-          {/* Sent / Overdue: Mark as Paid (with inline confirm) */}
+          {/* Sent / Overdue: Mark Paid (Cash/Offline)
+              Stripe-paid invoices flip to "paid" automatically via the webhook
+              after the homeowner finishes Checkout, so this button is only for
+              recording out-of-band (cash, check, transfer) payments. When the
+              provider has Stripe set up, we explain that to avoid confusion. */}
           {(invoice.status === "sent" || invoice.status === "overdue") ? (
             confirmType === "mark-paid" ? (
               <InlineConfirm
-                message="Mark this invoice as paid?"
-                confirmLabel="Yes, Mark Paid"
+                message="Record this invoice as paid outside of Stripe (cash, check, transfer)? Stripe payments update automatically."
+                confirmLabel="Yes, Mark Paid (Offline)"
                 onConfirm={() => markPaidMutation.mutate()}
                 onCancel={() => setConfirmType(null)}
                 loading={markPaidMutation.isPending}
                 theme={theme}
               />
             ) : (
-              <PrimaryButton
+              <SecondaryButton
                 onPress={() => setConfirmType("mark-paid")}
                 disabled={anyPending}
                 testID="button-mark-paid"
               >
-                Mark as Paid
-              </PrimaryButton>
+                {stripeReady ? "Mark Paid (Cash/Offline)" : "Mark as Paid"}
+              </SecondaryButton>
             )
+          ) : null}
+
+          {stripeReady && (invoice.status === "sent" || invoice.status === "overdue") ? (
+            <ThemedText
+              style={[styles.linkHint, { color: theme.textSecondary, marginTop: -Spacing.sm }]}
+              testID="text-stripe-auto-paid-hint"
+            >
+              Stripe payments are recorded automatically — no need to mark them paid here.
+            </ThemedText>
           ) : null}
 
           {/* Sent / Overdue: Resend Invoice */}

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { StyleSheet, View, ScrollView, ActivityIndicator, Pressable, Platform } from "react-native";
 import { openExternalUrl } from "@/lib/openExternalUrl";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -42,11 +42,18 @@ export default function PaymentScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
   const queryClient = useQueryClient();
-  const { jobId, invoiceId } = route.params;
+  const { jobId, invoiceId, status } = route.params;
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [openedExternal, setOpenedExternal] = useState(false);
+  const [returnNotice, setReturnNotice] = useState<string | null>(
+    status === "cancelled"
+      ? "Payment cancelled — no charge was made. You can try again below."
+      : status === "paid"
+      ? "Payment received. Updating your invoice…"
+      : null,
+  );
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery<{ invoice: InvoiceRecord; payments: unknown[] }>({
     queryKey: ["/api/invoices", invoiceId],
@@ -60,13 +67,24 @@ export default function PaymentScreen() {
   });
 
   // Refresh invoice status whenever the screen regains focus (e.g., after the
-  // homeowner returns from the external Stripe browser session).
+  // homeowner returns from the external Stripe browser session via the
+  // homebase://payment-result deep link).
   useFocusEffect(
     useCallback(() => {
       refetch();
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-    }, [refetch, queryClient])
+      if (jobId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
+      }
+    }, [refetch, queryClient, jobId])
   );
+
+  // Auto-clear the "payment received" notice once the invoice flips to paid.
+  useEffect(() => {
+    if (data?.invoice?.status === "paid" && returnNotice) {
+      setReturnNotice(null);
+    }
+  }, [data?.invoice?.status, returnNotice]);
 
   const handlePayInvoice = async () => {
     setIsProcessing(true);
@@ -111,6 +129,29 @@ export default function PaymentScreen() {
     }
   };
 
+  // Guard against malformed deep links (e.g., homebase://payment-result with no
+  // invoiceId). Without this, useQuery stays disabled and the user sees an
+  // infinite spinner.
+  if (!invoiceId) {
+    return (
+      <ThemedView style={[styles.container, styles.centered]}>
+        <Feather name="alert-circle" size={40} color={theme.textTertiary} />
+        <ThemedText style={[styles.errorText, { color: theme.textSecondary }]}>
+          We couldn't read the payment link. Please return to your invoice and try again.
+        </ThemedText>
+        <Pressable
+          onPress={() =>
+            navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: "Main" }] }))
+          }
+          style={styles.backBtn}
+          testID="button-payment-link-error-home"
+        >
+          <ThemedText style={{ color: Colors.accent }}>Go to Home</ThemedText>
+        </Pressable>
+      </ThemedView>
+    );
+  }
+
   if (isLoading) {
     return (
       <ThemedView style={[styles.container, styles.centered]}>
@@ -134,6 +175,7 @@ export default function PaymentScreen() {
   const invoice = data.invoice;
   const totalAmount = invoice.total || invoice.amount || "0.00";
   const isPaid = invoice.status === "paid";
+  const effectiveJobId = jobId ?? invoice.jobId ?? null;
 
   if (isPaid) {
     return (
@@ -146,11 +188,27 @@ export default function PaymentScreen() {
           Your invoice has been paid successfully.
         </ThemedText>
         <PrimaryButton
-          onPress={() => navigation.dispatch(CommonActions.reset({ index: 1, routes: [{ name: "Main" }, { name: "JobDetail", params: { jobId } }] }))}
+          onPress={() => {
+            if (effectiveJobId) {
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 1,
+                  routes: [
+                    { name: "Main" },
+                    { name: "JobDetail", params: { jobId: effectiveJobId } },
+                  ],
+                }),
+              );
+            } else {
+              navigation.dispatch(
+                CommonActions.reset({ index: 0, routes: [{ name: "Main" }] }),
+              );
+            }
+          }}
           style={styles.successBtn}
           testID="button-view-job"
         >
-          View Job
+          {effectiveJobId ? "View Job" : "Done"}
         </PrimaryButton>
       </ThemedView>
     );
@@ -166,6 +224,33 @@ export default function PaymentScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
+        {returnNotice ? (
+          <View
+            style={[
+              styles.returnNotice,
+              {
+                backgroundColor: status === "cancelled" ? "#FEF3C7" : "#D1FAE5",
+                borderColor: status === "cancelled" ? "#F59E0B" : "#10B981",
+              },
+            ]}
+            testID="banner-payment-return"
+          >
+            <Feather
+              name={status === "cancelled" ? "alert-circle" : "check-circle"}
+              size={18}
+              color={status === "cancelled" ? "#92400E" : "#065F46"}
+            />
+            <ThemedText
+              style={[
+                styles.returnNoticeText,
+                { color: status === "cancelled" ? "#92400E" : "#065F46" },
+              ]}
+            >
+              {returnNotice}
+            </ThemedText>
+          </View>
+        ) : null}
+
         <GlassCard style={styles.invoiceCard}>
           <View style={styles.invoiceHeader}>
             <ThemedText style={styles.invoiceTitle}>Invoice Summary</ThemedText>
@@ -324,4 +409,14 @@ const styles = StyleSheet.create({
   successTitle: { ...Typography.title1, fontWeight: "700", marginBottom: Spacing.sm, textAlign: "center" },
   successSubtitle: { ...Typography.body, textAlign: "center", marginBottom: Spacing.xl, paddingHorizontal: Spacing.screenPadding },
   successBtn: { width: "80%" },
+  returnNotice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.sm,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    marginBottom: Spacing.md,
+  },
+  returnNoticeText: { ...Typography.subhead, flex: 1, lineHeight: 20 },
 });
