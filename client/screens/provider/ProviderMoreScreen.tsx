@@ -191,10 +191,15 @@ export default function ProviderMoreScreen() {
           </ThemedText>
           <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
             <ListRow
-              title="Notification Preferences"
+              title="Notifications"
               leftIcon="bell"
-              onPress={() => navigation.navigate("NotificationPreferences")}
+              onPress={() => navigation.navigate("Notifications")}
               isFirst
+            />
+            <ListRow
+              title="Notification Preferences"
+              leftIcon="sliders"
+              onPress={() => navigation.navigate("NotificationPreferences")}
             />
             <ListRow
               title="Switch to Homeowner Mode"
