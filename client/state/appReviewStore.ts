@@ -4,12 +4,21 @@ import * as StoreReview from "expo-store-review";
 import Constants from "expo-constants";
 
 const STORAGE_KEY = "app-review-tracker.v1";
-// Public landing page that links out to both store listings. Used as the
+// Direct links to the live App Store / Play Store listings. Used as the
 // fallback when the native in-app review sheet isn't available (e.g. web,
-// or when the OS-level throttle is exhausted). The dedicated /rate path
-// resolves to the live App Store / Play Store listings once they exist,
-// and to the marketing page otherwise — so this URL is always valid.
-const STORE_FALLBACK_URL = "https://homebaseproapp.com/rate";
+// or when the OS-level throttle is exhausted). Keep these in sync with
+// `APP_STORE_URL` / `PLAY_STORE_URL` in `server/redirectPages.ts`.
+const APP_STORE_URL =
+  "https://apps.apple.com/app/homebase-pro/id6739456140?action=write-review";
+const PLAY_STORE_URL =
+  "https://play.google.com/store/apps/details?id=com.homebase.app";
+const WEB_FALLBACK_URL = "https://homebaseproapp.com/rate";
+
+function storeFallbackUrl(): string {
+  if (Platform.OS === "ios") return APP_STORE_URL;
+  if (Platform.OS === "android") return PLAY_STORE_URL;
+  return WEB_FALLBACK_URL;
+}
 
 const FIRST_SESSION_DELAY_MS = 24 * 60 * 60 * 1000;
 const PROMPT_THROTTLE_MS = 90 * 24 * 60 * 60 * 1000;
@@ -265,7 +274,7 @@ export async function openAppReviewFromSettings(): Promise<void> {
     }
   }
   try {
-    await Linking.openURL(STORE_FALLBACK_URL);
+    await Linking.openURL(storeFallbackUrl());
   } catch (err) {
     console.warn("[appReview] could not open store URL:", err);
   }
