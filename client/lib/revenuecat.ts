@@ -108,21 +108,91 @@ export async function logoutPurchasesUser(): Promise<void> {
 }
 
 export async function getProOffering(): Promise<PurchasesOffering | null> {
-  if (!isPurchasesAvailable()) return null;
-  const Purchases = await loadPurchases();
-  if (!Purchases) return null;
-  try {
-    const offerings = await Purchases.getOfferings();
-    console.log("[revenuecat] getOfferings result:", JSON.stringify({
-      currentId: offerings.current?.identifier ?? null,
-      currentPackageCount: offerings.current?.availablePackages?.length ?? 0,
-      allOfferingIds: Object.keys(offerings.all || {}),
-    }));
-    return offerings.current ?? null;
-  } catch (err) {
-    console.error("[revenuecat] getOfferings error:", err);
-    return null;
+  const result = await fetchProOffering();
+  return result.status === "ok" ? result.offering : null;
+}
+
+export type OfferingFetchResult =
+  | { status: "ok"; offering: PurchasesOffering }
+  | { status: "empty"; reason: string }
+  | { status: "error"; errorCode?: string; errorMessage: string };
+
+/**
+ * Fetch the current "pro" offering from RevenueCat with retry/backoff on
+ * transient errors. Distinguishes three outcomes so the UI can render the
+ * right state:
+ *   - ok: a current offering with at least one package is available
+ *   - empty: SDK responded but no current offering / no packages are configured
+ *            (a dashboard/StoreKit configuration issue, not a transient error)
+ *   - error: SDK threw or returned in a way that suggests retry may help
+ *            (network down, store unreachable, SDK not yet configured, etc.)
+ */
+export async function fetchProOffering(): Promise<OfferingFetchResult> {
+  if (!isPurchasesAvailable()) {
+    return {
+      status: "error",
+      errorMessage: "In-app purchases are only available on iOS.",
+    };
   }
+  const Purchases = await loadPurchases();
+  if (!Purchases) {
+    return {
+      status: "error",
+      errorMessage: "In-app purchases failed to load.",
+    };
+  }
+
+  const maxAttempts = 3;
+  let lastErr: any = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const offerings = await Purchases.getOfferings();
+      const current = offerings.current;
+      const packageCount = current?.availablePackages?.length ?? 0;
+      console.log(
+        "[revenuecat] getOfferings result:",
+        JSON.stringify({
+          attempt,
+          currentId: current?.identifier ?? null,
+          currentPackageCount: packageCount,
+          allOfferingIds: Object.keys(offerings.all || {}),
+        }),
+      );
+      if (current && packageCount > 0) {
+        return { status: "ok", offering: current };
+      }
+      // SDK responded successfully but no current offering / packages are
+      // configured. Retrying won't help — surface as "empty" immediately.
+      return {
+        status: "empty",
+        reason: !current
+          ? "No current offering is set in RevenueCat."
+          : "Current offering has no available packages.",
+      };
+    } catch (err: any) {
+      lastErr = err;
+      console.error(
+        `[revenuecat] getOfferings error (attempt ${attempt}/${maxAttempts}):`,
+        {
+          code: err?.code,
+          message: err?.message,
+          underlyingErrorMessage: err?.underlyingErrorMessage,
+        },
+      );
+      if (attempt < maxAttempts) {
+        // Exponential-ish backoff: 400ms, 1000ms.
+        const delay = attempt === 1 ? 400 : 1000;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+  return {
+    status: "error",
+    errorCode: lastErr?.code,
+    errorMessage:
+      lastErr?.message ||
+      "Couldn't reach the App Store. Check your connection and try again.",
+  };
 }
 
 export interface PurchaseResult {

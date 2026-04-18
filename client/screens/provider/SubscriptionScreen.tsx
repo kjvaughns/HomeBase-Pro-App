@@ -18,15 +18,20 @@ import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { useTheme } from "@/hooks/useTheme";
-import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
+import {
+  useSubscriptionStatus,
+  type SubscriptionStatusInfo,
+} from "@/hooks/useSubscriptionStatus";
+import { useAuthStore } from "@/state/authStore";
 import { apiRequest } from "@/lib/query-client";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import {
   isPurchasesAvailable,
-  getProOffering,
+  fetchProOffering,
   purchasePackage,
   restorePurchases,
   getManageSubscriptionUrl,
@@ -50,12 +55,21 @@ interface CopyForState {
   caption?: string;
 }
 
+type OfferingState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "ok"; offering: PurchasesOffering }
+  | { kind: "empty"; reason: string }
+  | { kind: "error"; message: string; errorCode?: string };
+
 export default function SubscriptionScreen() {
   const { theme, isDark } = useTheme();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const queryClient = useQueryClient();
+  const providerId = useAuthStore((s) => s.providerProfile?.id ?? null);
   const {
     data,
     isLoading,
@@ -67,46 +81,57 @@ export default function SubscriptionScreen() {
   } = useSubscriptionStatus();
   const [busy, setBusy] = useState(false);
   const [restoring, setRestoring] = useState(false);
-  const [offering, setOffering] = useState<PurchasesOffering | null>(null);
-  const [offeringError, setOfferingError] = useState<string | null>(null);
-  const [loadingOffering, setLoadingOffering] = useState(false);
+  const [offeringState, setOfferingState] = useState<OfferingState>(
+    isPurchasesAvailable() ? { kind: "loading" } : { kind: "idle" },
+  );
+  const fetchTokenRef = React.useRef(0);
 
   const useIAP = isPurchasesAvailable();
 
   const loadOffering = useCallback(() => {
     if (!useIAP) return;
-    let cancelled = false;
-    setOfferingError(null);
-    setLoadingOffering(true);
-    getProOffering()
-      .then((current) => {
-        if (cancelled) return;
-        setOffering(current);
-        if (!current) {
-          setOfferingError(
-            "Subscriptions are temporarily unavailable. Please try again in a moment.",
-          );
+    const token = ++fetchTokenRef.current;
+    setOfferingState({ kind: "loading" });
+    fetchProOffering()
+      .then((result) => {
+        // Drop stale results if a newer fetch was kicked off (e.g. Retry).
+        if (token !== fetchTokenRef.current) return;
+        if (result.status === "ok") {
+          setOfferingState({ kind: "ok", offering: result.offering });
+        } else if (result.status === "empty") {
+          setOfferingState({ kind: "empty", reason: result.reason });
+        } else {
+          setOfferingState({
+            kind: "error",
+            message: result.errorMessage,
+            errorCode: result.errorCode,
+          });
         }
       })
-      .catch(() => {
-        if (cancelled) return;
-        setOfferingError(
-          "Subscriptions are temporarily unavailable. Please try again in a moment.",
-        );
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingOffering(false);
+      .catch((err) => {
+        if (token !== fetchTokenRef.current) return;
+        setOfferingState({
+          kind: "error",
+          message:
+            err?.message ||
+            "Couldn't reach the App Store. Check your connection and try again.",
+        });
       });
-    return () => {
-      cancelled = true;
-    };
   }, [useIAP]);
 
-  // Load the current RevenueCat offering on mount (native only).
+  // Load the current RevenueCat offering on mount (native only). Re-load when
+  // the signed-in provider changes so receipts attach to the right account.
   useEffect(() => {
-    const cleanup = loadOffering();
-    return cleanup;
-  }, [loadOffering]);
+    loadOffering();
+    return () => {
+      // Invalidate any in-flight fetch on unmount.
+      fetchTokenRef.current++;
+    };
+  }, [loadOffering, providerId]);
+
+  const offering =
+    offeringState.kind === "ok" ? offeringState.offering : null;
+  const loadingOffering = offeringState.kind === "loading";
 
   const handleDeleteAccount = useCallback(() => {
     navigation.navigate("AccountSecurity");
@@ -129,6 +154,49 @@ export default function SubscriptionScreen() {
   // the localized native price (StoreKit/Play Billing) is shown when available.
   const priceLabel = useIAP ? nativePriceLabel : null;
 
+  // After a successful purchase or restore, the RevenueCat webhook will mark
+  // the provider as subscribed server-side, but the webhook can lag a few
+  // seconds. To unlock the gate immediately we optimistically write the
+  // subscription-status cache to "subscribed" when StoreKit confirms the Pro
+  // entitlement client-side, then reconcile with the server refetch.
+  const refreshEntitlement = useCallback(
+    async (entitled: boolean) => {
+      if (!providerId) {
+        await refetch();
+        return;
+      }
+      const queryKey = [
+        "/api/providers",
+        providerId,
+        "subscription-status",
+      ] as const;
+      if (entitled) {
+        queryClient.setQueryData<SubscriptionStatusInfo | undefined>(
+          queryKey,
+          (prev) => ({
+            status: "subscribed",
+            daysRemainingInGrace: prev?.daysRemainingInGrace ?? null,
+            firstPaidBookingAt: prev?.firstPaidBookingAt ?? null,
+            gracePeriodEndsAt: prev?.gracePeriodEndsAt ?? null,
+            isSubscribed: true,
+            subscriptionSource:
+              prev?.subscriptionSource ??
+              (Platform.OS === "ios"
+                ? "revenuecat_ios"
+                : Platform.OS === "android"
+                  ? "revenuecat_android"
+                  : prev?.subscriptionSource ?? null),
+            currentPeriodEnd: prev?.currentPeriodEnd ?? null,
+          }),
+        );
+      }
+      // Reconcile with server (picks up real currentPeriodEnd, source, etc.)
+      await queryClient.invalidateQueries({ queryKey });
+      await refetch();
+    },
+    [providerId, queryClient, refetch],
+  );
+
   // ─── Native (iOS/Android) IAP actions ────────────────────────────────────────
   const handleNativeSubscribe = useCallback(async () => {
     if (busy) return;
@@ -140,9 +208,12 @@ export default function SubscriptionScreen() {
       return;
     }
     setBusy(true);
+    let entitled = false;
     try {
       const result = await purchasePackage(proPackage);
-      if (result.success && isProEntitled(result.customerInfo)) {
+      entitled = !!(result.success && isProEntitled(result.customerInfo));
+      if (entitled) {
+        await refreshEntitlement(true);
         Alert.alert("Subscription active", "Welcome to HomeBase Pro!");
       } else if (!result.success && !result.userCancelled) {
         Alert.alert(
@@ -153,16 +224,20 @@ export default function SubscriptionScreen() {
       }
     } finally {
       setBusy(false);
-      refetch();
+      // Reconcile with server even on cancel/failure to avoid stale state.
+      if (!entitled) void refreshEntitlement(false);
     }
-  }, [busy, proPackage, refetch]);
+  }, [busy, proPackage, refreshEntitlement]);
 
   const handleRestore = useCallback(async () => {
     if (restoring) return;
     setRestoring(true);
+    let entitled = false;
     try {
       const result = await restorePurchases();
-      if (result.success && isProEntitled(result.customerInfo)) {
+      entitled = !!(result.success && isProEntitled(result.customerInfo));
+      if (entitled) {
+        await refreshEntitlement(true);
         Alert.alert("Restored", "Your subscription has been restored.");
       } else if (result.success) {
         Alert.alert(
@@ -178,9 +253,9 @@ export default function SubscriptionScreen() {
       }
     } finally {
       setRestoring(false);
-      refetch();
+      if (!entitled) void refreshEntitlement(false);
     }
-  }, [restoring, refetch]);
+  }, [restoring, refreshEntitlement]);
 
   const handleManageNative = useCallback(async () => {
     try {
@@ -354,35 +429,119 @@ export default function SubscriptionScreen() {
 
             {/* Primary action */}
             {showSubscribeButton ? (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.button,
-                  {
-                    backgroundColor: pressed
-                      ? Colors.accentPressed
-                      : Colors.accent,
-                    opacity: busy || (useIAP && !proPackage) ? 0.6 : 1,
-                  },
-                ]}
-                onPress={
-                  useIAP
-                    ? handleNativeSubscribe
-                    : () => openStripeFlow("subscribe")
-                }
-                disabled={busy || loadingOffering || (useIAP && !proPackage)}
-                testID="button-subscribe"
-              >
-                {busy || loadingOffering ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <>
-                    <Feather name="credit-card" size={16} color="#fff" />
-                    <ThemedText style={styles.buttonText}>
-                      {subscribeLabel}
+              useIAP && offeringState.kind === "loading" ? (
+                <View
+                  style={[styles.button, styles.skeletonButton]}
+                  testID="subscribe-loading-skeleton"
+                >
+                  <ActivityIndicator size="small" color={Colors.accent} />
+                  <ThemedText
+                    style={[
+                      styles.skeletonText,
+                      { color: theme.textSecondary },
+                    ]}
+                  >
+                    Loading subscription…
+                  </ThemedText>
+                </View>
+              ) : useIAP &&
+                (offeringState.kind === "error" ||
+                  offeringState.kind === "empty") ? (
+                <View
+                  style={styles.errorBlock}
+                  testID="subscribe-error-block"
+                >
+                  <ThemedText
+                    style={[
+                      styles.errorTitle,
+                      { color: theme.text },
+                    ]}
+                  >
+                    {offeringState.kind === "empty"
+                      ? "Subscriptions aren't available right now"
+                      : "Couldn't load subscription"}
+                  </ThemedText>
+                  <ThemedText
+                    style={[styles.caption, { color: theme.textSecondary }]}
+                  >
+                    {offeringState.kind === "empty"
+                      ? "We can't show subscription pricing right now. Please try again shortly or contact support if this keeps happening."
+                      : offeringState.message}
+                  </ThemedText>
+                  {offeringState.kind === "error" && offeringState.errorCode ? (
+                    <ThemedText
+                      style={[styles.caption, { color: theme.textTertiary }]}
+                      testID="text-offering-error-code"
+                    >
+                      Error code: {offeringState.errorCode}
                     </ThemedText>
-                  </>
-                )}
-              </Pressable>
+                  ) : null}
+                  <View style={styles.errorActions}>
+                    <Pressable
+                      onPress={loadOffering}
+                      disabled={loadingOffering}
+                      style={({ pressed }) => [
+                        styles.button,
+                        styles.retryButton,
+                        {
+                          backgroundColor: pressed
+                            ? Colors.accentPressed
+                            : Colors.accent,
+                          opacity: loadingOffering ? 0.6 : 1,
+                        },
+                      ]}
+                      testID="button-retry-offering"
+                    >
+                      <Feather name="refresh-cw" size={16} color="#fff" />
+                      <ThemedText style={styles.buttonText}>Retry</ThemedText>
+                    </Pressable>
+                    <Pressable
+                      onPress={handleContactSupport}
+                      style={styles.secondaryButton}
+                      testID="button-contact-support-error"
+                    >
+                      <ThemedText
+                        style={[
+                          styles.secondaryButtonText,
+                          { color: Colors.accent },
+                        ]}
+                      >
+                        Contact support
+                      </ThemedText>
+                    </Pressable>
+                  </View>
+                </View>
+              ) : (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.button,
+                    {
+                      backgroundColor: pressed
+                        ? Colors.accentPressed
+                        : Colors.accent,
+                      opacity: busy || (useIAP && !proPackage) ? 0.6 : 1,
+                    },
+                  ]}
+                  onPress={
+                    useIAP
+                      ? handleNativeSubscribe
+                      : () => openStripeFlow("subscribe")
+                  }
+                  disabled={busy || (useIAP && !proPackage)}
+                  testID="button-subscribe"
+                >
+                  {busy ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Feather name="credit-card" size={16} color="#fff" />
+                      <ThemedText style={styles.buttonText}>
+                        {subscribeLabel}
+                      </ThemedText>
+                    </>
+                  )}
+                </Pressable>
+              )
             ) : (
               <Pressable
                 style={({ pressed }) => [
@@ -456,44 +615,6 @@ export default function SubscriptionScreen() {
               </ThemedText>
             ) : null}
 
-            {offeringError && useIAP && showSubscribeButton ? (
-              <View style={styles.errorBlock}>
-                <ThemedText style={[styles.caption, { color: "#dc2626" }]}>
-                  {offeringError}
-                </ThemedText>
-                <View style={styles.errorActions}>
-                  <Pressable
-                    onPress={loadOffering}
-                    disabled={loadingOffering}
-                    style={styles.secondaryButton}
-                    testID="button-retry-offering"
-                  >
-                    <ThemedText
-                      style={[
-                        styles.secondaryButtonText,
-                        { color: Colors.accent },
-                      ]}
-                    >
-                      Retry
-                    </ThemedText>
-                  </Pressable>
-                  <Pressable
-                    onPress={handleContactSupport}
-                    style={styles.secondaryButton}
-                    testID="button-contact-support-error"
-                  >
-                    <ThemedText
-                      style={[
-                        styles.secondaryButtonText,
-                        { color: Colors.accent },
-                      ]}
-                    >
-                      Contact support
-                    </ThemedText>
-                  </Pressable>
-                </View>
-              </View>
-            ) : null}
           </View>
         )}
 
@@ -687,12 +808,37 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   errorBlock: {
-    marginTop: Spacing.md,
+    alignSelf: "stretch",
     alignItems: "center",
+    paddingVertical: Spacing.sm,
+    gap: Spacing.xs,
+  },
+  errorTitle: {
+    ...Typography.subhead,
+    fontWeight: "700",
+    textAlign: "center",
   },
   errorActions: {
     flexDirection: "row",
+    alignItems: "center",
     gap: Spacing.lg,
-    marginTop: Spacing.xs,
+    marginTop: Spacing.sm,
+    flexWrap: "wrap",
+    justifyContent: "center",
+  },
+  retryButton: {
+    flexShrink: 1,
+    alignSelf: "auto",
+    paddingVertical: 12,
+    paddingHorizontal: Spacing.lg,
+  },
+  skeletonButton: {
+    backgroundColor: "rgba(127, 127, 127, 0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(127, 127, 127, 0.18)",
+  },
+  skeletonText: {
+    ...Typography.callout,
+    fontWeight: "600",
   },
 });
