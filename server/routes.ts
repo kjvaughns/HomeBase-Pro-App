@@ -6726,6 +6726,7 @@ Respond with JSON only:
           .select()
           .from(invoices)
           .where(eq(invoices.jobId, req.params.id))
+          .orderBy(desc(invoices.createdAt))
           .limit(1);
         if (!invoice) return res.json({ invoice: null });
         const isHomeowner = invoice.homeownerUserId === authUserId;
