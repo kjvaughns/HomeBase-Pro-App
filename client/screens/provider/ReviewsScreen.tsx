@@ -70,12 +70,23 @@ export default function ReviewsScreen() {
   const allReviews = data?.reviews || [];
 
   useEffect(() => {
-    const fiveStar = allReviews.find((r) => r.rating === 5);
-    if (fiveStar) {
-      recordHappyMoment("provider_five_star_received", {
-        payload: { reviewId: fiveStar.id },
-      }).catch(() => {});
-    }
+    let cancelled = false;
+    const fiveStarIds = allReviews.filter((r) => r.rating === 5).map((r) => r.id);
+    (async () => {
+      for (const reviewId of fiveStarIds) {
+        if (cancelled) return;
+        try {
+          await recordHappyMoment("provider_five_star_received", {
+            payload: { reviewId },
+          });
+        } catch {
+          // best-effort
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [allReviews]);
 
   const rating = providerProfile?.rating ? Number(providerProfile.rating) : 0;

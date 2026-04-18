@@ -137,11 +137,29 @@ export async function initAppReviewTracker(): Promise<void> {
   await load();
 }
 
+// Serialize all tracker mutations so concurrent callers can't clobber each
+// other's writes. Each call appends to a single chain; the chain settles
+// even when an individual update throws.
+let mutationChain: Promise<void> = Promise.resolve();
+
+function enqueueMutation(work: () => Promise<void>): Promise<void> {
+  const next = mutationChain.then(work, work);
+  mutationChain = next.catch(() => undefined);
+  return next;
+}
+
 /**
  * Record that a happy moment occurred. Call this after a clearly positive user
  * action. The function will internally decide whether to prompt right now.
  */
 export async function recordHappyMoment(
+  key: HappyMomentKey,
+  options?: { onlyOncePerKey?: boolean; payload?: Record<string, string> },
+): Promise<void> {
+  return enqueueMutation(() => recordHappyMomentInternal(key, options));
+}
+
+async function recordHappyMomentInternal(
   key: HappyMomentKey,
   options?: { onlyOncePerKey?: boolean; payload?: Record<string, string> },
 ): Promise<void> {

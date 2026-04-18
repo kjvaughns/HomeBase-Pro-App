@@ -87,16 +87,29 @@ export default function MoneyScreen() {
   const clients = clientsData?.clients || [];
 
   // Record paid invoices (covers Stripe webhook updates as well as manual
-  // mark-paid). The store dedups by invoice id and only fires a happy
-  // moment for the third (and later) unique paid invoice.
+  // mark-paid). Calls are queued/serialized inside the tracker, but we
+  // also dedup at the call site so we don't re-enqueue work for the same
+  // invoice on every render.
   useEffect(() => {
-    invoices
+    let cancelled = false;
+    const paidIds = invoices
       .filter((inv) => inv.status === "paid")
-      .forEach((inv) => {
-        recordHappyMoment("provider_invoice_paid", {
-          payload: { invoiceId: inv.id },
-        }).catch(() => {});
-      });
+      .map((inv) => inv.id);
+    (async () => {
+      for (const invoiceId of paidIds) {
+        if (cancelled) return;
+        try {
+          await recordHappyMoment("provider_invoice_paid", {
+            payload: { invoiceId },
+          });
+        } catch {
+          // best-effort, never blocks rendering
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [invoices]);
   const stats = statsData?.stats || { revenueMTD: 0, jobsCompleted: 0, activeClients: 0, upcomingJobs: 0 };
 
