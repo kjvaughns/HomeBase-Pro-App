@@ -20,13 +20,15 @@ let currentAppUserId: string | null = null;
 let purchasesPromise: Promise<PurchasesNamespace | null> | null = null;
 
 /**
- * RevenueCat IAP only runs on iOS and Android. The web build keeps using
- * Stripe Checkout. We do **not** key this off the API key — native builds
- * must always take the IAP code path so they never display Stripe/website
- * subscription copy (Apple compliance).
+ * RevenueCat IAP currently runs on iOS only. Android is not yet configured
+ * in the RevenueCat dashboard (no `goog_…` key, no Play Billing products),
+ * so Android builds must skip IAP entirely until that's set up. The web
+ * build keeps using Stripe Checkout. We do **not** key this off the API
+ * key — iOS must always take the IAP code path so it never displays
+ * Stripe/website subscription copy (Apple compliance).
  */
 export function isPurchasesAvailable(): boolean {
-  return Platform.OS === "ios" || Platform.OS === "android";
+  return Platform.OS === "ios";
 }
 
 async function loadPurchases(): Promise<PurchasesNamespace | null> {
