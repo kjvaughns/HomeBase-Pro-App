@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { StyleSheet, View, FlatList, RefreshControl, Pressable, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -19,6 +19,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
+import { recordHappyMoment } from "@/state/appReviewStore";
 
 interface Invoice {
   id: string;
@@ -84,6 +85,19 @@ export default function MoneyScreen() {
 
   const invoices = invoicesData?.invoices || [];
   const clients = clientsData?.clients || [];
+
+  // Record paid invoices (covers Stripe webhook updates as well as manual
+  // mark-paid). The store dedups by invoice id and only fires a happy
+  // moment for the third (and later) unique paid invoice.
+  useEffect(() => {
+    invoices
+      .filter((inv) => inv.status === "paid")
+      .forEach((inv) => {
+        recordHappyMoment("provider_invoice_paid", {
+          payload: { invoiceId: inv.id },
+        }).catch(() => {});
+      });
+  }, [invoices]);
   const stats = statsData?.stats || { revenueMTD: 0, jobsCompleted: 0, activeClients: 0, upcomingJobs: 0 };
 
   const getClientName = (clientId: string): string => {

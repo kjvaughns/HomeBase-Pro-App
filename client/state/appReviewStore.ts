@@ -4,10 +4,12 @@ import * as StoreReview from "expo-store-review";
 import Constants from "expo-constants";
 
 const STORAGE_KEY = "app-review-tracker.v1";
-const APP_STORE_URL =
-  "https://apps.apple.com/app/homebase-home-services/id0000000000";
-const PLAY_STORE_URL =
-  "https://play.google.com/store/apps/details?id=com.homebase.app";
+// Public landing page that links out to both store listings. Used as the
+// fallback when the native in-app review sheet isn't available (e.g. web,
+// or when the OS-level throttle is exhausted). The dedicated /rate path
+// resolves to the live App Store / Play Store listings once they exist,
+// and to the marketing page otherwise — so this URL is always valid.
+const STORE_FALLBACK_URL = "https://homebaseproapp.com/rate";
 
 const FIRST_SESSION_DELAY_MS = 24 * 60 * 60 * 1000;
 const PROMPT_THROTTLE_MS = 90 * 24 * 60 * 60 * 1000;
@@ -233,9 +235,8 @@ export async function openAppReviewFromSettings(): Promise<void> {
       console.warn("[appReview] settings invocation failed:", err);
     }
   }
-  const url = Platform.OS === "android" ? PLAY_STORE_URL : APP_STORE_URL;
   try {
-    await Linking.openURL(url);
+    await Linking.openURL(STORE_FALLBACK_URL);
   } catch (err) {
     console.warn("[appReview] could not open store URL:", err);
   }

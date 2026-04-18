@@ -17,6 +17,7 @@ import RootStackNavigator from "@/navigation/RootStackNavigator";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useThemeStore } from "@/state/themeStore";
 import { useOnboardingStore } from "@/state/onboardingStore";
+import { initAppReviewTracker } from "@/state/appReviewStore";
 import { useAuthStore } from "@/state/authStore";
 import { useTheme } from "@/hooks/useTheme";
 import {
@@ -105,6 +106,7 @@ export default function App() {
   useEffect(() => {
     hydrateTheme();
     hydrateOnboarding();
+    void initAppReviewTracker();
 
     async function downloadUpdateIfAvailable() {
       if (__DEV__) return;
