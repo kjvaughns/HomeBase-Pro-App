@@ -16,6 +16,7 @@ import cron from "node-cron";
 import { eq, and, gte, lte, lt } from "drizzle-orm";
 import { appointments, invoices, clients, providers, users } from "@shared/schema";
 import { dispatch, hasDeliveryForRecord } from "./notificationService";
+import { registerRedirectPages } from "./redirectPages";
 
 const app = express();
 const log = console.log;
@@ -418,6 +419,10 @@ function configureExpoAndLanding(app: express.Application) {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.send(resetPasswordHtml);
   });
+
+  // Branded post-payment / deep-link redirect pages (Task #153)
+  // /payment-success, /payment-cancelled, /booking-success, /open-app
+  registerRedirectPages(app);
 
   // Backward-compatible redirect: old /book/:slug → /providers/:slug
   app.get("/book/:slug", (req: Request<{ slug: string }>, res: Response) => {

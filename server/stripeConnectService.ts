@@ -69,6 +69,14 @@ const APP_URL =
     ? `https://${process.env.REPLIT_DEV_DOMAIN}`
     : "https://homebase.replit.app");
 
+// Public, branded base URL for any user-facing redirect from Stripe Checkout
+// (success_url / cancel_url). MUST NOT fall back to a Replit dev domain — those
+// surface as broken-looking unbranded redirects to end users.
+const PUBLIC_REDIRECT_BASE =
+  process.env.PUBLIC_APP_URL ||
+  process.env.SUBSCRIPTION_RETURN_URL ||
+  "https://homebaseproapp.com";
+
 export interface PlatformFee {
   percent: number;
   fixedCents: number;
@@ -622,8 +630,8 @@ export async function createStripeCheckoutSession(invoiceId: string) {
         providerId: invoice.providerId,
       },
     },
-    success_url: `${APP_URL}/r/invoice/${invoiceId}/paid?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${APP_URL}/r/invoice/${invoiceId}/cancelled`,
+    success_url: `${PUBLIC_REDIRECT_BASE}/payment-success?invoiceId=${encodeURIComponent(invoiceId)}${invoice.jobId ? `&jobId=${encodeURIComponent(invoice.jobId)}` : ""}&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${PUBLIC_REDIRECT_BASE}/payment-cancelled?invoiceId=${encodeURIComponent(invoiceId)}${invoice.jobId ? `&jobId=${encodeURIComponent(invoice.jobId)}` : ""}`,
     metadata: {
       invoiceId: invoice.id,
       providerId: invoice.providerId,
@@ -655,6 +663,9 @@ export async function createDirectCheckoutSession(
   _invoiceId: string,
   _reqHost?: string,
 ): Promise<{ checkoutUrl: string; sessionId: string }> {
+  // Task #150 disabled this path; all provider checkouts go through
+  // `createStripeCheckoutSession` (which already uses the branded
+  // `/payment-success` and `/payment-cancelled` URLs introduced in Task #153).
   throw new Error(
     "createDirectCheckoutSession is disabled — use createStripeCheckoutSession (Stripe Connect).",
   );
@@ -1743,8 +1754,8 @@ export async function createSubscriptionCheckoutSession(opts: {
     customer: customerId,
     line_items: [{ price: priceId, quantity: 1 }],
     allow_promotion_codes: true,
-    success_url: `${SUBSCRIPTION_RETURN_BASE}/?subscription=success`,
-    cancel_url: `${SUBSCRIPTION_RETURN_BASE}/?subscription=cancelled`,
+    success_url: `${PUBLIC_REDIRECT_BASE}/payment-success?subscription=success`,
+    cancel_url: `${PUBLIC_REDIRECT_BASE}/payment-cancelled?subscription=cancelled`,
     metadata: {
       subscriptionType: "homebase_pro",
       userId: opts.userId,
