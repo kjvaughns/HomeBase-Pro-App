@@ -129,6 +129,19 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
     return errorPage(404, "Provider not found", "The provider associated with this booking page could not be found.");
   }
 
+  // Block public booking page when the provider is unpublished or not yet
+  // ready to accept payment. This closes the loophole where the booking
+  // link could remain accessible after a provider was filtered out of
+  // homeowner-facing listings.
+  if (provider.isPublic !== true) {
+    return errorPage(404, "Booking page unavailable", "This booking page is currently unavailable. Please contact the provider directly.");
+  }
+  const { isProviderReadyForCharges } = await import("./stripeConnectService");
+  const stripeReady = await isProviderReadyForCharges(provider.id);
+  if (!stripeReady) {
+    return errorPage(404, "Booking page unavailable", "This provider is finishing payment setup and isn't accepting bookings yet. Please check back soon.");
+  }
+
   // Fetch published custom services
   const customServices = await db
     .select()

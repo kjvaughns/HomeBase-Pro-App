@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
+import { useNavigation } from "@react-navigation/native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -76,10 +77,26 @@ export default function BusinessDetailsScreen() {
   const { theme } = useTheme();
   const { providerProfile } = useAuthStore();
   const queryClient = useQueryClient();
+  const navigation = useNavigation<any>();
 
   const providerId = providerProfile?.id;
 
   const [saved, setSaved] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+
+  // Stripe Connect readiness — gates the public-profile toggle. A provider
+  // can't publish until charges are enabled on their Connect account.
+  const { data: stripeStatus } = useQuery<{ chargesEnabled: boolean; payoutsEnabled: boolean }>({
+    queryKey: ["/api/stripe/connect/status", providerId],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/stripe/connect/status/${providerId}`);
+      if (!response.ok) throw new Error("Failed to fetch Stripe status");
+      return response.json();
+    },
+    enabled: !!providerId,
+    retry: false,
+  });
+  const stripeReady = !!stripeStatus?.chargesEnabled;
 
   // Load current provider data
   const { data: providerData } = useQuery<{ provider: any }>({
@@ -142,25 +159,59 @@ export default function BusinessDetailsScreen() {
   const saveMutation = useMutation({
     mutationFn: async (payload: any) => {
       const response = await apiRequest("PATCH", `/api/provider/${providerId}`, payload);
-      return response.json();
+      const body = await response.json();
+      if (!response.ok) {
+        const err: any = new Error(body?.message || body?.error || "Failed to save");
+        err.code = body?.error;
+        err.status = response.status;
+        throw err;
+      }
+      return body;
     },
     onSuccess: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId] });
       setSaved(true);
+      setPublishError(null);
       setTimeout(() => setSaved(false), 3000);
+    },
+    onError: (err: any) => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      if (err?.code === "stripe_not_ready") {
+        setIsPublicProfile(false);
+        setPublishError(err.message);
+      } else {
+        setPublishError(err?.message || "Couldn't save changes. Please try again.");
+      }
     },
   });
 
   const handleSave = () => {
+    setPublishError(null);
+    // Client-side guard: don't send isPublic=true if Stripe isn't ready.
+    const safeIsPublic = isPublicProfile && stripeReady;
+    if (isPublicProfile && !stripeReady) {
+      setIsPublicProfile(false);
+    }
     saveMutation.mutate({
       bookingPolicies: JSON.stringify(policies),
       businessHours: JSON.stringify(hours),
       serviceRadius: parseInt(serviceRadius) || null,
       serviceZipCodes: zipCodes.trim() || null,
       serviceCities: cities.trim() || null,
-      isPublic: isPublicProfile,
+      isPublic: safeIsPublic,
     });
+  };
+
+  const handleTogglePublic = (value: boolean) => {
+    if (value && !stripeReady) {
+      setPublishError(
+        "Set up payments with Stripe before publishing your profile so clients can book and pay you.",
+      );
+      return;
+    }
+    setPublishError(null);
+    setIsPublicProfile(value);
   };
 
   const toggleDay = (day: DayKey) => {
@@ -199,23 +250,47 @@ export default function BusinessDetailsScreen() {
               <View style={styles.switchLeft}>
                 <ThemedText style={styles.switchLabel}>Visible to clients</ThemedText>
                 <ThemedText style={[styles.switchSubtitle, { color: theme.textSecondary }]}>
-                  {isPublicProfile
+                  {!stripeReady
+                    ? "Finish Stripe setup to publish. Clients can't book a provider who can't accept payment."
+                    : isPublicProfile
                     ? "Clients can discover your public booking page."
                     : "Your profile is hidden. Enable to accept bookings."}
                 </ThemedText>
               </View>
               <Switch
-                value={isPublicProfile}
-                onValueChange={setIsPublicProfile}
+                value={isPublicProfile && stripeReady}
+                onValueChange={handleTogglePublic}
+                disabled={!stripeReady}
                 trackColor={{ false: theme.backgroundTertiary, true: Colors.accent }}
                 thumbColor="#FFFFFF"
+                testID="switch-public-profile"
               />
             </View>
-            {isPublicProfile ? (
+            {!stripeReady ? (
+              <Pressable
+                onPress={() => navigation.navigate("StripeConnect")}
+                style={[styles.activeBadge, { backgroundColor: theme.backgroundSecondary }]}
+                testID="button-setup-stripe-from-publish"
+              >
+                <Feather name="credit-card" size={14} color={Colors.accent} />
+                <ThemedText style={[styles.activeBadgeText, { color: Colors.accent }]}>
+                  Set up payments
+                </ThemedText>
+                <Feather name="chevron-right" size={14} color={Colors.accent} />
+              </Pressable>
+            ) : isPublicProfile ? (
               <View style={[styles.activeBadge, { backgroundColor: Colors.accentLight }]}>
                 <Feather name="check-circle" size={14} color={Colors.accent} />
                 <ThemedText style={[styles.activeBadgeText, { color: Colors.accent }]}>
                   Profile is publicly discoverable
+                </ThemedText>
+              </View>
+            ) : null}
+            {publishError ? (
+              <View style={[styles.activeBadge, { backgroundColor: theme.backgroundSecondary, marginTop: Spacing.sm }]}>
+                <Feather name="alert-circle" size={14} color={theme.text} />
+                <ThemedText style={[styles.activeBadgeText, { color: theme.text, flex: 1 }]} numberOfLines={3}>
+                  {publishError}
                 </ThemedText>
               </View>
             ) : null}

@@ -6,8 +6,9 @@ import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/query-client";
+import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -257,6 +258,32 @@ export default function ProviderHomeScreen() {
   const isLoading = statsLoading || jobsLoading;
 
   const isStripeConnected = stripeStatusData?.chargesEnabled && stripeStatusData?.payoutsEnabled;
+  const stripeReady = !!stripeStatusData?.chargesEnabled;
+  const profileIsPublic =
+    freshProviderData?.provider?.isPublic ?? providerProfile?.isPublic ?? false;
+  // Provider is unlisted from homeowner discovery when their public toggle is
+  // off OR when Stripe isn't ready (server filters them out either way).
+  const isUnlisted = !!providerId && (!profileIsPublic || !stripeReady);
+  // Show "you're ready — publish your profile" prompt when Stripe just
+  // finished but the toggle is still off.
+  const showPublishPrompt = stripeReady && profileIsPublic === false;
+
+  const publishMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("PATCH", `/api/provider/${providerId}`, {
+        isPublic: true,
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        throw new Error(body?.message || body?.error || "Failed to publish");
+      }
+      return body;
+    },
+    onSuccess: () => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId] });
+    },
+  });
   const hasServices = (providerProfile?.services?.length ?? 0) > 0;
   const hasClients = clients.length > 0;
   const hasBookingLink = (bookingLinksData?.bookingLinks?.length ?? 0) > 0;
@@ -339,6 +366,58 @@ export default function ProviderHomeScreen() {
         <View style={{ marginHorizontal: -Spacing.screenPadding }}>
           <GracePeriodBanner />
         </View>
+
+        {showPublishPrompt ? (
+          <Animated.View entering={FadeInDown.delay(50).duration(400)}>
+            <GlassCard style={[styles.greetingCard, { borderColor: Colors.accent, borderWidth: 1 }]}>
+              <View style={styles.publishRow}>
+                <View style={[styles.publishIcon, { backgroundColor: Colors.accentLight }]}>
+                  <Feather name="globe" size={20} color={Colors.accent} />
+                </View>
+                <View style={styles.publishText}>
+                  <ThemedText style={styles.publishTitle}>You're ready to go live</ThemedText>
+                  <ThemedText style={[styles.publishSubtitle, { color: theme.textSecondary }]}>
+                    Stripe is set up. Publish your profile so clients can discover and book you.
+                  </ThemedText>
+                </View>
+              </View>
+              <PrimaryButton
+                onPress={() => publishMutation.mutate()}
+                disabled={publishMutation.isPending}
+                style={{ marginTop: Spacing.sm }}
+                testID="button-publish-profile"
+              >
+                {publishMutation.isPending ? "Publishing..." : "Publish my profile"}
+              </PrimaryButton>
+            </GlassCard>
+          </Animated.View>
+        ) : isUnlisted && !isLoading ? (
+          <Animated.View entering={FadeInDown.delay(50).duration(400)}>
+            <Pressable
+              onPress={() =>
+                navigation.navigate(stripeReady ? "BusinessDetails" : "StripeConnect")
+              }
+              testID="banner-unlisted"
+            >
+              <GlassCard style={[styles.greetingCard, { borderColor: theme.separator, borderWidth: 1 }]}>
+                <View style={styles.publishRow}>
+                  <View style={[styles.publishIcon, { backgroundColor: theme.backgroundSecondary }]}>
+                    <Feather name="eye-off" size={20} color={theme.text} />
+                  </View>
+                  <View style={styles.publishText}>
+                    <ThemedText style={styles.publishTitle}>Your profile is unlisted</ThemedText>
+                    <ThemedText style={[styles.publishSubtitle, { color: theme.textSecondary }]}>
+                      {!stripeReady
+                        ? "Finish Stripe setup to start accepting bookings."
+                        : "Turn on visibility in Business Details to be discoverable."}
+                    </ThemedText>
+                  </View>
+                  <Feather name="chevron-right" size={18} color={theme.textTertiary} />
+                </View>
+              </GlassCard>
+            </Pressable>
+          </Animated.View>
+        ) : null}
 
         <Animated.View entering={FadeInDown.delay(100).duration(400)}>
           <GlassCard style={styles.greetingCard}>
@@ -755,5 +834,29 @@ const styles = StyleSheet.create({
   insightDivider: {
     height: StyleSheet.hairlineWidth,
     marginLeft: Spacing.md + 32 + Spacing.sm,
+  },
+  publishRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  publishIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  publishText: {
+    flex: 1,
+  },
+  publishTitle: {
+    ...Typography.callout,
+    fontWeight: "600",
+  },
+  publishSubtitle: {
+    ...Typography.caption1,
+    marginTop: 2,
+    lineHeight: 16,
   },
 });

@@ -1,6 +1,6 @@
 import Stripe from "stripe";
 import { db } from "./db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import {
   stripeConnectAccounts,
   providerPlans,
@@ -122,6 +122,41 @@ export async function getConnectAccount(providerId: string) {
     .from(stripeConnectAccounts)
     .where(eq(stripeConnectAccounts.providerId, providerId));
   return account;
+}
+
+/**
+ * Single source of truth for "is this provider allowed to be discoverable
+ * and accept payments?". A provider is ready when their Connect account
+ * exists AND charges are enabled. Used to gate publish, public listings,
+ * and the public booking page so homeowners never land on a provider who
+ * cannot collect payment.
+ */
+export async function isProviderReadyForCharges(
+  providerId: string,
+): Promise<boolean> {
+  const account = await getConnectAccount(providerId);
+  return !!(account && account.chargesEnabled);
+}
+
+/**
+ * Bulk version of isProviderReadyForCharges — returns the subset of the
+ * given provider IDs whose Connect account is ready to accept charges.
+ * Used to filter homeowner-facing provider lists in one query.
+ */
+export async function getProviderReadinessSet(
+  providerIds: string[],
+): Promise<Set<string>> {
+  if (providerIds.length === 0) return new Set();
+  const rows = await db
+    .select({ providerId: stripeConnectAccounts.providerId })
+    .from(stripeConnectAccounts)
+    .where(
+      and(
+        inArray(stripeConnectAccounts.providerId, providerIds),
+        eq(stripeConnectAccounts.chargesEnabled, true),
+      ),
+    );
+  return new Set(rows.map((r) => r.providerId));
 }
 
 export async function createConnectAccountLink(providerId: string) {

@@ -60,6 +60,7 @@ import {
   createConnectAccountLink,
   refreshConnectAccountLink,
   getConnectStatus,
+  isProviderReadyForCharges,
   reonboardConnectAccount,
   getConnectAccount,
   createInvoicePaymentIntent,
@@ -559,6 +560,22 @@ async function handleMarketplaceBooking(params: {
     .where(eq(bookingLinks.slug, slug))
     .limit(1);
   if (!link || link.isActive === false || link.status !== "active") {
+    return { ok: false, status: 404, error: "Booking page not found" };
+  }
+
+  // Mirror SSR/list gating: don't accept submissions for unpublished or
+  // not-yet-Stripe-ready providers — they can't be paid, so they can't
+  // accept bookings.
+  const [bookingProvider] = await db
+    .select()
+    .from(providers)
+    .where(eq(providers.id, link.providerId))
+    .limit(1);
+  if (!bookingProvider || bookingProvider.isPublic !== true) {
+    return { ok: false, status: 404, error: "Booking page not found" };
+  }
+  const providerStripeReady = await isProviderReadyForCharges(link.providerId);
+  if (!providerStripeReady) {
     return { ok: false, status: 404, error: "Booking page not found" };
   }
 
@@ -5823,6 +5840,21 @@ Respond with JSON only:
           if (body[field] !== undefined) update[field] = body[field];
         }
 
+        // Gate publishing on Stripe Connect readiness. A provider may only
+        // flip isPublic=true if their Connect account has chargesEnabled,
+        // otherwise homeowners would land on a profile that cannot accept
+        // payment. Setting isPublic=false (unpublishing) is always allowed.
+        if (update.isPublic === true) {
+          const ready = await isProviderReadyForCharges(id);
+          if (!ready) {
+            return res.status(422).json({
+              error: "stripe_not_ready",
+              message:
+                "Set up payments with Stripe before publishing your profile so clients can book and pay you.",
+            });
+          }
+        }
+
         // Store JSON object fields as objects (Supabase jsonb columns)
         // instantBooking and advanceBookingDays are stored inside bookingPolicies JSON (not top-level columns)
         if (
@@ -10147,6 +10179,15 @@ Respond with JSON only:
           return res.status(404).json({ error: "Provider not found" });
         }
 
+        // Don't surface unpublished or not-yet-payable providers to the
+        // public booking client — same gate as homeowner discovery.
+        if (provider.isPublic !== true) {
+          return res.status(404).json({ error: "Booking page not found" });
+        }
+        if (!(await isProviderReadyForCharges(provider.id))) {
+          return res.status(404).json({ error: "Booking page not found" });
+        }
+
         res.json({
           bookingLink: {
             ...link,
@@ -10334,6 +10375,15 @@ Respond with JSON only:
 
         if (!provider) {
           return res.status(404).json({ error: "Provider not found" });
+        }
+
+        // Public-facing gate: provider must be published AND Stripe-ready
+        // (mirrors the SSR booking page and homeowner-listing rule).
+        if (provider.isPublic !== true) {
+          return res.status(404).json({ error: "Booking page not found" });
+        }
+        if (!(await isProviderReadyForCharges(provider.id))) {
+          return res.status(404).json({ error: "Booking page not found" });
         }
 
         // Fetch public custom services (isPublished = true)

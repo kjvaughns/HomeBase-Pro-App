@@ -30,6 +30,7 @@ export interface ProviderProfile {
   yearsExperience?: number;
   specialty?: string;
   isActive?: boolean;
+  isPublic?: boolean;
 }
 
 interface AuthState {

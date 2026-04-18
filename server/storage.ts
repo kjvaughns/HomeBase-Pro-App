@@ -43,6 +43,7 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
+import { getProviderReadinessSet } from "./stripeConnectService";
 import { hash, compare } from "bcryptjs";
 
 const SALT_ROUNDS = 10;
@@ -224,11 +225,15 @@ export class DatabaseStorage implements IStorage {
           results.push(provider);
         }
       }
-      return results;
+      // Final gate: only providers whose Stripe Connect account can accept
+      // charges are surfaced to homeowners. Prevents listing profiles that
+      // can't actually take a payment.
+      const readySet = await getProviderReadinessSet(results.map((p) => p.id));
+      return results.filter((p) => readySet.has(p.id));
     }
     // No filter — return only providers that are active, public, and owned by a real user.
     // Also exclude providers whose subscription grace period has expired.
-    return db.select().from(providers).where(
+    const baseList = await db.select().from(providers).where(
       and(
         eq(providers.isActive, true),
         eq(providers.isPublic, true),
@@ -236,6 +241,10 @@ export class DatabaseStorage implements IStorage {
         sql`NOT EXISTS (SELECT 1 FROM provider_plans pp WHERE pp.provider_id = ${providers.id} AND COALESCE(pp.is_subscribed, false) = false AND pp.grace_period_ends_at IS NOT NULL AND pp.grace_period_ends_at < NOW())`
       )
     );
+    // Final gate: only providers whose Stripe Connect account can accept
+    // charges are surfaced to homeowners.
+    const readySet = await getProviderReadinessSet(baseList.map((p) => p.id));
+    return baseList.filter((p) => readySet.has(p.id));
   }
 
   async getProvider(id: string): Promise<Provider | undefined> {
