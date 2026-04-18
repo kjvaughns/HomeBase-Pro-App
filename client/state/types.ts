@@ -66,6 +66,9 @@ export interface Review {
   rating: number;
   comment: string;
   createdAt: string;
+  providerReply?: string | null;
+  providerReplyAt?: string | null;
+  providerReplyUpdatedAt?: string | null;
 }
 
 export interface Provider {

@@ -474,6 +474,48 @@ export async function sendBookingRequestReceivedEmail(data: {
   );
 }
 
+// ─── Review reply ──────────────────────────────────────────────────────────────
+
+interface ReviewReplyEmailData {
+  clientEmail: string;
+  clientName: string;
+  providerName?: string;
+  serviceName?: string;
+  replyText: string;
+  reviewUrl?: string;
+}
+
+export async function sendReviewReplyEmail(
+  data: ReviewReplyEmailData,
+): Promise<SendResult> {
+  const provider = data.providerName || "Your service provider";
+  const service = data.serviceName ? ` for ${data.serviceName}` : "";
+  const safeReply = (data.replyText || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  const body =
+    greeting(data.clientName) +
+    paragraph(
+      `${provider} replied to your review${service}.`,
+    ) +
+    `<div style="background:#f9fafb;border-left:4px solid #38AE5F;border-radius:8px;padding:18px 20px;margin-bottom:20px;">
+      <p style="color:#374151;font-weight:600;font-size:13px;margin:0 0 8px;">${provider} wrote:</p>
+      <p style="color:#374151;font-size:14px;line-height:1.6;margin:0;white-space:pre-wrap;">${safeReply}</p>
+    </div>` +
+    appDownloadSection();
+  return sendEmail(
+    data.clientEmail,
+    `${provider} replied to your review`,
+    buildEmailBase(
+      "Review Reply",
+      body,
+      data.reviewUrl ? "Open in HomeBase" : undefined,
+      data.reviewUrl,
+    ),
+  );
+}
+
 // ─── Invoice templates ─────────────────────────────────────────────────────────
 
 interface InvoiceEmailData {

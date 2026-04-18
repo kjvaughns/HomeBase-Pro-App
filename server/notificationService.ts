@@ -13,6 +13,7 @@ import {
   sendInvoicePaidEmail,
   sendPaymentFailedEmail,
   sendReviewRequestEmail,
+  sendReviewReplyEmail,
   sendStripeOnboardingNeededEmail,
   sendStripeConnectedEmail,
   sendProviderBookingNotificationEmail,
@@ -43,6 +44,7 @@ export type NotificationEvent =
   | 'invoice.payment_failed'
   | 'job.status_changed'
   | 'review.request'
+  | 'review.reply'
   | 'rebook.prompt'
   | 'stripe.onboarding_needed'
   | 'stripe.connected'
@@ -160,6 +162,7 @@ const EVENT_PREF_FIELD: Partial<Record<NotificationEvent, keyof typeof notificat
   'invoice.paid':         'emailInvoicePaid',
   'invoice.payment_failed': 'emailPaymentFailed',
   'review.request':       'emailReviewRequest',
+  'review.reply':         'emailReviewRequest',
 };
 
 async function isEmailAllowed(event: NotificationEvent, recipientUserId?: string): Promise<boolean> {
@@ -401,6 +404,21 @@ async function _dispatch(event: NotificationEvent, payload: DispatchPayload): Pr
         relatedRecordId: payload.relatedRecordId,
       });
       const result = await sendPaymentFailedEmail({ clientEmail, clientName, providerName, invoiceNumber, amount, paymentLink });
+      await updateDelivery(deliveryId, result.success ? 'sent' : 'failed', result.messageId, result.error);
+      break;
+    }
+
+    case 'review.reply': {
+      const { clientEmail, clientName, providerName, serviceName, reviewUrl, description } = payload;
+      if (!clientEmail || !clientName) break;
+      const deliveryId = await logDelivery({
+        channel: 'email', status: 'queued', eventType: event,
+        recipientEmail: clientEmail,
+        recipientUserId: payload.recipientUserId,
+        relatedRecordType: payload.relatedRecordType,
+        relatedRecordId: payload.relatedRecordId,
+      });
+      const result = await sendReviewReplyEmail({ clientEmail, clientName, providerName, serviceName, replyText: description || '', reviewUrl });
       await updateDelivery(deliveryId, result.success ? 'sent' : 'failed', result.messageId, result.error);
       break;
     }

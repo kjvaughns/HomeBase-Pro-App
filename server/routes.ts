@@ -3525,7 +3525,14 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
               email: provider.email,
             }
           : null;
-        res.json({ appointment, provider: providerInfo });
+        // Include the homeowner's review (if any) with the provider's reply so
+        // both parties can see the latest state on the appointment screen.
+        const [reviewRow] = await db
+          .select()
+          .from(reviews)
+          .where(eq(reviews.appointmentId, appointment.id))
+          .limit(1);
+        res.json({ appointment, provider: providerInfo, review: reviewRow ?? null });
       } catch (error) {
         console.error("Get appointment error:", error);
         res.status(500).json({ error: "Failed to get appointment" });
@@ -6191,6 +6198,9 @@ Respond with JSON only:
             rating: reviews.rating,
             comment: reviews.comment,
             createdAt: reviews.createdAt,
+            providerReply: reviews.providerReply,
+            providerReplyAt: reviews.providerReplyAt,
+            providerReplyUpdatedAt: reviews.providerReplyUpdatedAt,
             reviewerName: sql<string>`TRIM(CONCAT(COALESCE(${users.firstName}, ''), ' ', COALESCE(${users.lastName}, '')))`,
           })
           .from(reviews)
@@ -6201,6 +6211,162 @@ Respond with JSON only:
       } catch (error) {
         console.error("Get provider reviews error:", error);
         res.status(500).json({ error: "Failed to fetch reviews" });
+      }
+    },
+  );
+
+  // Provider reply to a review (create/update/delete) — only the provider
+  // who owns the review may reply. On create, notify the homeowner.
+  const REPLY_MAX_LENGTH = 1000;
+
+  async function loadReviewForReply(reviewId: string, authUserId: string) {
+    const [row] = await db
+      .select({
+        review: reviews,
+        provider: providers,
+      })
+      .from(reviews)
+      .innerJoin(providers, eq(reviews.providerId, providers.id))
+      .where(eq(reviews.id, reviewId))
+      .limit(1);
+    if (!row) return { error: "not_found" as const };
+    if (row.provider.userId !== authUserId) return { error: "forbidden" as const };
+    return { review: row.review, provider: row.provider };
+  }
+
+  app.post(
+    "/api/reviews/:id/reply",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const authUserId = req.authenticatedUserId!;
+        const reply = String(req.body?.reply ?? "").trim();
+        if (!reply) {
+          return res.status(400).json({ error: "Reply text is required" });
+        }
+        if (reply.length > REPLY_MAX_LENGTH) {
+          return res.status(400).json({ error: `Reply must be ${REPLY_MAX_LENGTH} characters or fewer` });
+        }
+        const loaded = await loadReviewForReply(req.params.id, authUserId);
+        if ("error" in loaded) {
+          return res.status(loaded.error === "not_found" ? 404 : 403).json({
+            error: loaded.error === "not_found" ? "Review not found" : "Access denied",
+          });
+        }
+        if (loaded.review.providerReply) {
+          return res.status(409).json({ error: "Reply already exists. Use PATCH to edit." });
+        }
+        const now = new Date();
+        const [updated] = await db
+          .update(reviews)
+          .set({ providerReply: reply, providerReplyAt: now, providerReplyUpdatedAt: now })
+          .where(eq(reviews.id, req.params.id))
+          .returning();
+
+        // Notify the homeowner (push + email). Fire-and-forget.
+        (async () => {
+          try {
+            const [homeowner] = await db
+              .select()
+              .from(users)
+              .where(eq(users.id, loaded.review.userId))
+              .limit(1);
+            const [appt] = await db
+              .select()
+              .from(appointments)
+              .where(eq(appointments.id, loaded.review.appointmentId))
+              .limit(1);
+            const providerName = loaded.provider.businessName || "Your provider";
+            const serviceName = appt?.serviceName || undefined;
+            if (homeowner) {
+              const clientName = `${homeowner.firstName || ""} ${homeowner.lastName || ""}`.trim() || homeowner.email;
+              dispatch("review.reply", {
+                clientEmail: homeowner.email,
+                clientName,
+                providerName,
+                serviceName,
+                description: reply,
+                relatedRecordType: "review",
+                relatedRecordId: updated.id,
+                recipientUserId: homeowner.id,
+              }).catch((e) => console.error("review.reply dispatch error:", e));
+              dispatchNotification(
+                homeowner.id,
+                `${providerName} replied to your review`,
+                reply.length > 140 ? `${reply.slice(0, 140)}…` : reply,
+                "review.reply",
+                { reviewId: updated.id, providerId: loaded.provider.id, appointmentId: loaded.review.appointmentId },
+                "messages",
+              ).catch((e) => console.error("review.reply push error:", e));
+            }
+          } catch (notifyErr) {
+            console.error("review.reply notify failed:", notifyErr);
+          }
+        })();
+
+        res.status(201).json({ review: updated });
+      } catch (error) {
+        console.error("Reply to review error:", error);
+        res.status(500).json({ error: "Failed to post reply" });
+      }
+    },
+  );
+
+  app.patch(
+    "/api/reviews/:id/reply",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const authUserId = req.authenticatedUserId!;
+        const reply = String(req.body?.reply ?? "").trim();
+        if (!reply) {
+          return res.status(400).json({ error: "Reply text is required" });
+        }
+        if (reply.length > REPLY_MAX_LENGTH) {
+          return res.status(400).json({ error: `Reply must be ${REPLY_MAX_LENGTH} characters or fewer` });
+        }
+        const loaded = await loadReviewForReply(req.params.id, authUserId);
+        if ("error" in loaded) {
+          return res.status(loaded.error === "not_found" ? 404 : 403).json({
+            error: loaded.error === "not_found" ? "Review not found" : "Access denied",
+          });
+        }
+        if (!loaded.review.providerReply) {
+          return res.status(404).json({ error: "No existing reply to edit" });
+        }
+        const [updated] = await db
+          .update(reviews)
+          .set({ providerReply: reply, providerReplyUpdatedAt: new Date() })
+          .where(eq(reviews.id, req.params.id))
+          .returning();
+        res.json({ review: updated });
+      } catch (error) {
+        console.error("Edit review reply error:", error);
+        res.status(500).json({ error: "Failed to edit reply" });
+      }
+    },
+  );
+
+  app.delete(
+    "/api/reviews/:id/reply",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const authUserId = req.authenticatedUserId!;
+        const loaded = await loadReviewForReply(req.params.id, authUserId);
+        if ("error" in loaded) {
+          return res.status(loaded.error === "not_found" ? 404 : 403).json({
+            error: loaded.error === "not_found" ? "Review not found" : "Access denied",
+          });
+        }
+        await db
+          .update(reviews)
+          .set({ providerReply: null, providerReplyAt: null, providerReplyUpdatedAt: null })
+          .where(eq(reviews.id, req.params.id));
+        res.json({ success: true });
+      } catch (error) {
+        console.error("Delete review reply error:", error);
+        res.status(500).json({ error: "Failed to delete reply" });
       }
     },
   );

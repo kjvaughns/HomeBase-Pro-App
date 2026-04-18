@@ -179,6 +179,8 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
       rating: reviews.rating,
       comment: reviews.comment,
       createdAt: reviews.createdAt,
+      providerReply: reviews.providerReply,
+      providerReplyAt: reviews.providerReplyAt,
       reviewerFirstName: users.firstName,
     })
     .from(reviews)
@@ -257,6 +259,11 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
             </div>
           </div>
           ${r.comment ? `<p class="review-comment">${escapeHtml(r.comment)}</p>` : ""}
+          ${r.providerReply ? `
+          <div class="review-reply">
+            <div class="review-reply-label">Response from ${businessName}${r.providerReplyAt ? ` &middot; ${formatDate(r.providerReplyAt)}` : ""}</div>
+            <p class="review-reply-text">${escapeHtml(r.providerReply)}</p>
+          </div>` : ""}
         </div>`;
       }).join("")
     : "";
@@ -659,6 +666,29 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
       font-size: 0.9rem;
       color: var(--text-muted);
       line-height: 1.5;
+    }
+
+    .review-reply {
+      margin-top: 12px;
+      padding: 12px 14px;
+      background: rgba(56, 174, 95, 0.08);
+      border-left: 3px solid #38AE5F;
+      border-radius: 8px;
+    }
+    .review-reply-label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #38AE5F;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .review-reply-text {
+      font-size: 0.875rem;
+      color: var(--text);
+      line-height: 1.5;
+      white-space: pre-wrap;
     }
 
     .intake-question-group {

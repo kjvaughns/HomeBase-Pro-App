@@ -401,6 +401,9 @@ export const reviews = pgTable("reviews", {
     .references(() => providers.id, { onDelete: "cascade" }),
   rating: integer("rating").notNull(),
   comment: text("comment"),
+  providerReply: text("provider_reply"),
+  providerReplyAt: timestamp("provider_reply_at"),
+  providerReplyUpdatedAt: timestamp("provider_reply_updated_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
