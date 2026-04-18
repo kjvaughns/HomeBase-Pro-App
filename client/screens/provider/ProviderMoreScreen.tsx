@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { StyleSheet, View, ScrollView, Switch, Alert } from "react-native";
+import * as WebBrowser from "expo-web-browser";
+import Constants from "expo-constants";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
@@ -19,6 +21,7 @@ import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useProviderStore } from "@/state/providerStore";
 import { useThemeStore } from "@/state/themeStore";
+import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 export default function ProviderMoreScreen() {
@@ -29,6 +32,16 @@ export default function ProviderMoreScreen() {
   const { theme, isDark } = useTheme();
   const { user, providerProfile, logout } = useAuthStore();
   const toggleDarkMode = useThemeStore((s) => s.toggleDarkMode);
+
+  const { isSubscribed, isInGrace, daysRemainingInGrace, status: subStatus } =
+    useSubscriptionStatus();
+  const subscriptionSubtitle = isSubscribed
+    ? "Active — manage your HomeBase Pro plan"
+    : isInGrace
+      ? `${daysRemainingInGrace ?? 7} days left in trial`
+      : subStatus === "expired"
+        ? "Trial ended — subscribe to reactivate"
+        : "Free until your first paid booking";
 
   const availableForWork = useProviderStore((s) => s.availableForWork);
   const syncAvailableForWork = useProviderStore((s) => s.syncAvailableForWork);
@@ -154,11 +167,18 @@ export default function ProviderMoreScreen() {
           </ThemedText>
           <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
             <ListRow
+              title="Subscription"
+              subtitle={subscriptionSubtitle}
+              leftIcon="credit-card"
+              onPress={() => navigation.navigate("Subscription")}
+              isFirst
+              testID="row-subscription"
+            />
+            <ListRow
               title="Account & Security"
-              subtitle="Email, password, subscription, and account deletion"
+              subtitle="Email, password, and account deletion"
               leftIcon="shield"
               onPress={() => navigation.navigate("AccountSecurity")}
-              isFirst
               isLast
             />
           </View>
@@ -231,6 +251,20 @@ export default function ProviderMoreScreen() {
               title="Contact Support"
               leftIcon="message-circle"
               onPress={() => navigation.navigate("ContactUs")}
+            />
+            <ListRow
+              title="Terms of Service"
+              leftIcon="file-text"
+              onPress={() =>
+                WebBrowser.openBrowserAsync("https://homebaseproapp.com/terms")
+              }
+            />
+            <ListRow
+              title="Privacy Policy"
+              leftIcon="shield"
+              onPress={() =>
+                WebBrowser.openBrowserAsync("https://homebaseproapp.com/privacy")
+              }
               isLast
             />
           </View>
@@ -252,7 +286,7 @@ export default function ProviderMoreScreen() {
 
         <Animated.View entering={FadeInDown.delay(800).duration(400)}>
           <ThemedText style={[styles.version, { color: theme.textTertiary }]}>
-            Version 1.0.0
+            Version {Constants.expoConfig?.version ?? "1.0.0"}
           </ThemedText>
         </Animated.View>
       </ScrollView>

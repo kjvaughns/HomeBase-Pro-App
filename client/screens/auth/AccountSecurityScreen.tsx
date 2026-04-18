@@ -62,17 +62,24 @@ export default function AccountSecurityScreen() {
   const [active, setActive] = useState<ActiveSheet>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const handleDeleteAccount = async () => {
     setDeleteLoading(true);
+    setDeleteError(null);
     try {
       await apiRequest("DELETE", "/api/auth/account", undefined);
+      setShowDeleteModal(false);
       logout();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Delete account error:", err);
+      const { message } = parseApiError(
+        err,
+        "Couldn't delete your account. Please try again or contact support.",
+      );
+      setDeleteError(message);
     } finally {
       setDeleteLoading(false);
-      setShowDeleteModal(false);
     }
   };
 
@@ -218,6 +225,14 @@ export default function AccountSecurityScreen() {
                 ? "This will permanently delete your provider account and all associated data including your clients, jobs, invoices, and business profile. This action cannot be undone."
                 : "This will permanently delete your account and all associated data. This action cannot be undone."}
             </ThemedText>
+            {deleteError ? (
+              <ThemedText
+                style={[styles.modalBody, { color: "#FF3B30", marginBottom: Spacing.md }]}
+                testID="text-delete-error"
+              >
+                {deleteError}
+              </ThemedText>
+            ) : null}
             <Pressable
               style={[styles.modalDeleteBtn, deleteLoading && { opacity: 0.7 }]}
               onPress={handleDeleteAccount}
@@ -232,7 +247,10 @@ export default function AccountSecurityScreen() {
             </Pressable>
             <Pressable
               style={[styles.modalCancelBtn, { backgroundColor: theme.backgroundSecondary }]}
-              onPress={() => setShowDeleteModal(false)}
+              onPress={() => {
+                setDeleteError(null);
+                setShowDeleteModal(false);
+              }}
               disabled={deleteLoading}
               testID="button-cancel-delete"
             >

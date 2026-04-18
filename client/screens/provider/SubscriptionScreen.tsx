@@ -124,7 +124,10 @@ export default function SubscriptionScreen() {
   const proPackage: PurchasesPackage | null =
     offering?.monthly ?? offering?.availablePackages?.[0] ?? null;
   const nativePriceLabel = proPackage?.product?.priceString ?? null;
-  const priceLabel = useIAP ? nativePriceLabel : "$29.99/mo";
+  // Web fallback: we don't hardcode a marketing price — Stripe owns the
+  // canonical price. The "Subscribe" button works without the price label;
+  // the localized native price (StoreKit/Play Billing) is shown when available.
+  const priceLabel = useIAP ? nativePriceLabel : null;
 
   // ─── Native (iOS/Android) IAP actions ────────────────────────────────────────
   const handleNativeSubscribe = useCallback(async () => {

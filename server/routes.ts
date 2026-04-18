@@ -6378,6 +6378,12 @@ Respond with JSON only:
     requireAuth,
     async (req: Request<IdParams>, res: Response) => {
       try {
+        const existing = await storage.getClient(req.params.id);
+        if (!existing) {
+          return res.status(404).json({ error: "Client not found" });
+        }
+        if (!(await assertProviderOwnership(req, existing.providerId, res)))
+          return;
         const deleted = await storage.deleteClient(req.params.id);
         if (!deleted) {
           return res.status(404).json({ error: "Client not found" });
@@ -7096,6 +7102,12 @@ Respond with JSON only:
     requireAuth,
     async (req: Request<IdParams>, res: Response) => {
       try {
+        const existing = await storage.getJob(req.params.id);
+        if (!existing) {
+          return res.status(404).json({ error: "Job not found" });
+        }
+        if (!(await assertProviderOwnership(req, existing.providerId, res)))
+          return;
         const deleted = await storage.deleteJob(req.params.id);
         if (!deleted) {
           return res.status(404).json({ error: "Job not found" });
@@ -7720,6 +7732,12 @@ Respond with JSON only:
     requireAuth,
     async (req: Request<IdParams>, res: Response) => {
       try {
+        const existing = await storage.getInvoice(req.params.id);
+        if (!existing) {
+          return res.status(404).json({ error: "Invoice not found" });
+        }
+        if (!(await assertProviderOwnership(req, existing.providerId, res)))
+          return;
         const invoice = await storage.cancelInvoice(req.params.id);
         if (!invoice) {
           return res.status(404).json({ error: "Invoice not found" });
@@ -8015,10 +8033,30 @@ Respond with JSON only:
     },
   );
 
+  // Apple App Store policy: in-app subscriptions on iOS must use IAP, not
+  // Stripe Checkout / Customer Portal. We hard-block iOS clients from these
+  // legacy Stripe subscription endpoints based on the X-Client-Platform
+  // header (sent by apiRequest in client/lib/query-client.ts).
+  function rejectIosSubscriptionFlow(req: Request, res: Response): boolean {
+    const platform = String(
+      req.headers["x-client-platform"] || "",
+    ).toLowerCase();
+    if (platform === "ios") {
+      res.status(403).json({
+        error:
+          "Subscriptions on iOS must be purchased through the App Store. Open the Subscription screen in the app to subscribe.",
+        code: "ios_use_iap",
+      });
+      return true;
+    }
+    return false;
+  }
+
   app.post(
     "/api/stripe/create-checkout-session",
     requireAuth,
     async (req: Request, res: Response) => {
+      if (rejectIosSubscriptionFlow(req, res)) return;
       try {
         const { customerId, priceId, successUrl, cancelUrl } = req.body;
         if (!customerId || !priceId) {
@@ -8044,6 +8082,7 @@ Respond with JSON only:
     "/api/stripe/customer-portal",
     requireAuth,
     async (req: Request, res: Response) => {
+      if (rejectIosSubscriptionFlow(req, res)) return;
       try {
         const { customerId, returnUrl } = req.body;
         if (!customerId) {
@@ -8070,6 +8109,7 @@ Respond with JSON only:
     "/api/subscriptions/create-checkout",
     requireAuth,
     async (req: Request, res: Response) => {
+      if (rejectIosSubscriptionFlow(req, res)) return;
       try {
         const userId =
           (req as any).authenticatedUserId ?? (req as any).user?.id;
@@ -8105,6 +8145,7 @@ Respond with JSON only:
     "/api/subscriptions/portal",
     requireAuth,
     async (req: Request, res: Response) => {
+      if (rejectIosSubscriptionFlow(req, res)) return;
       try {
         const userId =
           (req as any).authenticatedUserId ?? (req as any).user?.id;
@@ -9871,6 +9912,12 @@ Respond with JSON only:
     async (req: Request<{ id: string }>, res: Response) => {
       try {
         const { id } = req.params;
+        const existingLink = await storage.getBookingLink(id);
+        if (!existingLink) {
+          return res.status(404).json({ error: "Booking link not found" });
+        }
+        if (!(await assertProviderOwnership(req, existingLink.providerId, res)))
+          return;
         const updates = req.body;
 
         if (
@@ -9913,6 +9960,12 @@ Respond with JSON only:
     async (req: Request<{ id: string }>, res: Response) => {
       try {
         const { id } = req.params;
+        const existingLink = await storage.getBookingLink(id);
+        if (!existingLink) {
+          return res.status(404).json({ error: "Booking link not found" });
+        }
+        if (!(await assertProviderOwnership(req, existingLink.providerId, res)))
+          return;
         await storage.deleteBookingLink(id);
         res.json({ success: true });
       } catch (error: any) {
@@ -10671,6 +10724,16 @@ Respond with JSON only:
     async (req: Request<{ id: string }>, res: Response) => {
       try {
         const { id } = req.params;
+        const [existingLead] = await db
+          .select({ providerId: leads.providerId })
+          .from(leads)
+          .where(eq(leads.id, id))
+          .limit(1);
+        if (!existingLead) {
+          return res.status(404).json({ error: "Lead not found" });
+        }
+        if (!(await assertProviderOwnership(req, existingLead.providerId, res)))
+          return;
         const [deleted] = await db
           .delete(leads)
           .where(eq(leads.id, id))

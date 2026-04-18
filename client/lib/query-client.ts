@@ -58,6 +58,7 @@ export async function apiRequest(
 
   const headers: Record<string, string> = {
     ...getAuthHeaders(),
+    "X-Client-Platform": Platform.OS,
     ...(data ? { "Content-Type": "application/json" } : {}),
   };
 
@@ -83,7 +84,7 @@ export const getQueryFn: <T>(options: {
 
     const res = await fetch(url, {
       credentials: "include",
-      headers: getAuthHeaders(),
+      headers: { ...getAuthHeaders(), "X-Client-Platform": Platform.OS },
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {

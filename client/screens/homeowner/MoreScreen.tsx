@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { StyleSheet, View, ScrollView, Switch, Pressable, Modal, ActivityIndicator } from "react-native";
 import * as WebBrowser from "expo-web-browser";
+import Constants from "expo-constants";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
@@ -42,6 +43,7 @@ export default function MoreScreen() {
   const [showAccountGate, setShowAccountGate] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const toggleDarkMode = useThemeStore((s) => s.toggleDarkMode);
   const { isDark } = useTheme();
@@ -66,7 +68,7 @@ export default function MoreScreen() {
       setNeedsRoleSelection(false);
       navigation.reset({
         index: 0,
-        routes: [{ name: "ProviderTabs" }],
+        routes: [{ name: "Main" }],
       });
     }
   };
@@ -77,14 +79,21 @@ export default function MoreScreen() {
 
   const handleDeleteAccount = async () => {
     setDeleteLoading(true);
+    setDeleteError(null);
     try {
       await apiRequest("DELETE", "/api/auth/account", undefined);
+      setShowDeleteModal(false);
       logout();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Delete account error:", err);
+      const fallback = "Couldn't delete your account. Please try again or contact support.";
+      const message =
+        err instanceof Error
+          ? err.message.replace(/^\d{3}:\s*/, "") || fallback
+          : fallback;
+      setDeleteError(message);
     } finally {
       setDeleteLoading(false);
-      setShowDeleteModal(false);
     }
   };
 
@@ -387,7 +396,7 @@ export default function MoreScreen() {
 
         <Animated.View entering={FadeInDown.delay(800).duration(400)}>
           <ThemedText style={[styles.version, { color: theme.textTertiary }]}>
-            Version 1.0.0
+            Version {Constants.expoConfig?.version ?? "1.0.0"}
           </ThemedText>
         </Animated.View>
       </ScrollView>
@@ -414,6 +423,14 @@ export default function MoreScreen() {
             <ThemedText style={[styles.modalBody, { color: theme.textSecondary }]}>
               This will permanently delete your account and all associated data including your booking history, addresses, and payment methods. This action cannot be undone.
             </ThemedText>
+            {deleteError ? (
+              <ThemedText
+                style={[styles.modalBody, { color: "#FF3B30", marginBottom: Spacing.md }]}
+                testID="text-delete-error"
+              >
+                {deleteError}
+              </ThemedText>
+            ) : null}
             <Pressable
               style={[styles.modalDeleteBtn, deleteLoading && { opacity: 0.7 }]}
               onPress={handleDeleteAccount}
@@ -428,7 +445,10 @@ export default function MoreScreen() {
             </Pressable>
             <Pressable
               style={[styles.modalCancelBtn, { backgroundColor: theme.backgroundSecondary }]}
-              onPress={() => setShowDeleteModal(false)}
+              onPress={() => {
+                setDeleteError(null);
+                setShowDeleteModal(false);
+              }}
               disabled={deleteLoading}
               testID="button-cancel-delete"
             >
