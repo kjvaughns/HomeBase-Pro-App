@@ -111,6 +111,11 @@ export async function getProOffering(): Promise<PurchasesOffering | null> {
   if (!Purchases) return null;
   try {
     const offerings = await Purchases.getOfferings();
+    console.log("[revenuecat] getOfferings result:", JSON.stringify({
+      currentId: offerings.current?.identifier ?? null,
+      currentPackageCount: offerings.current?.availablePackages?.length ?? 0,
+      allOfferingIds: Object.keys(offerings.all || {}),
+    }));
     return offerings.current ?? null;
   } catch (err) {
     console.error("[revenuecat] getOfferings error:", err);
