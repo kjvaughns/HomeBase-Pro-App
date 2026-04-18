@@ -11,6 +11,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useOnboardingStore } from "@/state/onboardingStore";
+import { recordHappyMoment } from "@/state/appReviewStore";
 
 type Props = NativeStackScreenProps<RootStackParamList, "HomeownerOnboarding">;
 
@@ -84,6 +85,7 @@ export default function HomeownerOnboardingScreen({ navigation }: Props) {
       animateTransition(() => setCurrentStep(currentStep + 1));
     } else {
       setHasCompletedFirstLaunch(true);
+      recordHappyMoment("homeowner_onboarding_complete").catch(() => {});
       navigation.reset({
         index: 0,
         routes: [{ name: "SignUp" }],

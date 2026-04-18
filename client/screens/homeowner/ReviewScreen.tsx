@@ -20,6 +20,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography } from "@/constants/theme";
 import { apiRequest, getApiUrl, getAuthHeaders } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { recordHappyMoment } from "@/state/appReviewStore";
 
 type ScreenRouteProp = RouteProp<RootStackParamList, "Review">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -111,6 +112,9 @@ export default function ReviewScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       queryClient.invalidateQueries({ queryKey: ["/api/appointments", jobId] });
       setShowSuccess(true);
+      if (rating >= 4) {
+        recordHappyMoment("homeowner_high_review_submitted").catch(() => {});
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Something went wrong. Please try again.";
       setSubmitError(message);

@@ -25,6 +25,7 @@ import { useHomeownerStore } from "@/state/homeownerStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { Job, JobStatus, ServiceCategory } from "@/state/types";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
+import { recordHappyMoment } from "@/state/appReviewStore";
 
 interface Appointment {
   id: string;
@@ -82,6 +83,7 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchAppointments();
+      recordHappyMoment("homeowner_feature_used").catch(() => {});
     }, [fetchAppointments])
   );
 

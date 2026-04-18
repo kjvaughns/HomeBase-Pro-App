@@ -22,6 +22,7 @@ import { useAuthStore } from "@/state/authStore";
 import { useThemeStore } from "@/state/themeStore";
 import { useNotificationCount } from "@/hooks/useNotificationCount";
 import { apiRequest } from "@/lib/query-client";
+import { openAppReviewFromSettings } from "@/state/appReviewStore";
 
 export default function MoreScreen() {
   const insets = useSafeAreaInsets();
@@ -353,7 +354,14 @@ export default function MoreScreen() {
               title="Privacy Policy"
               leftIcon="shield"
               onPress={() => WebBrowser.openBrowserAsync("https://homebaseproapp.com/privacy")}
+            />
+            <ListRow
+              title="Rate HomeBase"
+              subtitle="Loving the app? Leave a quick rating."
+              leftIcon="star"
+              onPress={() => openAppReviewFromSettings()}
               isLast
+              testID="row-rate-homebase"
             />
           </View>
         </Animated.View>

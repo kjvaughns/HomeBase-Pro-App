@@ -11,6 +11,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useOnboardingStore } from "@/state/onboardingStore";
+import { recordHappyMoment } from "@/state/appReviewStore";
 
 const AppLogo = require("../../../assets/images/icon.png");
 
@@ -82,6 +83,7 @@ export default function AccountTypeSelectionScreen({ navigation }: Props) {
   const handleHomeowner = () => {
     setAccountType("homeowner");
     setHasCompletedFirstLaunch(true);
+    recordHappyMoment("homeowner_onboarding_complete").catch(() => {});
     // Allow one render cycle for the navigator to register "Main" before resetting
     setTimeout(() => {
       navigation.reset({ index: 0, routes: [{ name: "Main" }] });

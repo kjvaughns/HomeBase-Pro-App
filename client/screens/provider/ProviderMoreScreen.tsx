@@ -23,6 +23,7 @@ import { useProviderStore } from "@/state/providerStore";
 import { useThemeStore } from "@/state/themeStore";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { openAppReviewFromSettings } from "@/state/appReviewStore";
 
 export default function ProviderMoreScreen() {
   const insets = useSafeAreaInsets();
@@ -265,7 +266,14 @@ export default function ProviderMoreScreen() {
               onPress={() =>
                 WebBrowser.openBrowserAsync("https://homebaseproapp.com/privacy")
               }
+            />
+            <ListRow
+              title="Rate HomeBase"
+              subtitle="Loving the app? Leave a quick rating."
+              leftIcon="star"
+              onPress={() => openAppReviewFromSettings()}
               isLast
+              testID="row-rate-homebase"
             />
           </View>
         </Animated.View>

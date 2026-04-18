@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   StyleSheet,
   View,
@@ -26,6 +26,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest } from "@/lib/query-client";
+import { recordHappyMoment } from "@/state/appReviewStore";
 
 interface Review {
   id: string;
@@ -67,6 +68,15 @@ export default function ReviewsScreen() {
   });
 
   const allReviews = data?.reviews || [];
+
+  useEffect(() => {
+    const fiveStar = allReviews.find((r) => r.rating === 5);
+    if (fiveStar) {
+      recordHappyMoment("provider_five_star_received", {
+        payload: { reviewId: fiveStar.id },
+      }).catch(() => {});
+    }
+  }, [allReviews]);
 
   const rating = providerProfile?.rating ? Number(providerProfile.rating) : 0;
   const reviewCount = providerProfile?.reviewCount || allReviews.length;

@@ -26,6 +26,7 @@ import { Spacing, Typography, Colors, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useTheme } from "@/hooks/useTheme";
 import { apiRequest } from "@/lib/query-client";
+import { recordHappyMoment } from "@/state/appReviewStore";
 
 type RouteParams = {
   InvoiceDetail: { invoiceId: string };
@@ -188,6 +189,9 @@ export default function InvoiceDetailScreen() {
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "stats"] });
       setConfirmType(null);
       showBanner("Invoice marked as paid");
+      recordHappyMoment("provider_invoice_paid", {
+        payload: { invoiceId },
+      }).catch(() => {});
     },
     onError: () => {
       setConfirmType(null);
