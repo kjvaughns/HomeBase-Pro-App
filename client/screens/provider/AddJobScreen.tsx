@@ -116,6 +116,54 @@ function getDurationLabel(mins: number): string {
   return `${m}m`;
 }
 
+type Theme = ReturnType<typeof useTheme>["theme"];
+
+const Section = React.memo(function Section({
+  title,
+  theme,
+  children,
+}: {
+  title: string;
+  theme: Theme;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.sectionWrap}>
+      <ThemedText style={[styles.sectionTitle, { color: theme.textTertiary }]}>
+        {title}
+      </ThemedText>
+      <View
+        style={[styles.sectionCard, { backgroundColor: theme.cardBackground }]}
+      >
+        {children}
+      </View>
+    </View>
+  );
+});
+
+const TapRow = React.memo(function TapRow({
+  placeholder,
+  onPress,
+  testID,
+  theme,
+}: {
+  placeholder: string;
+  onPress: () => void;
+  testID?: string;
+  theme: Theme;
+}) {
+  return (
+    <Pressable onPress={onPress} style={styles.tapRow} testID={testID}>
+      <ThemedText
+        style={[styles.tapRowPlaceholder, { color: theme.textTertiary }]}
+      >
+        {placeholder}
+      </ThemedText>
+      <Feather name="chevron-right" size={18} color={theme.textTertiary} />
+    </Pressable>
+  );
+});
+
 function getPricingTypeLabel(t: string): string {
   switch (t) {
     case "fixed":
@@ -469,55 +517,6 @@ export default function AddJobScreen() {
   const canSave =
     !!selectedClientId && !!selectedService && !createJobMutation.isPending;
 
-  // ==== Reusable section (title + card) ====
-  const Section = ({
-    title,
-    children,
-  }: {
-    title: string;
-    children: React.ReactNode;
-  }) => (
-    <View style={styles.sectionWrap}>
-      <ThemedText
-        style={[styles.sectionTitle, { color: theme.textTertiary }]}
-      >
-        {title}
-      </ThemedText>
-      <View
-        style={[
-          styles.sectionCard,
-          { backgroundColor: theme.cardBackground },
-        ]}
-      >
-        {children}
-      </View>
-    </View>
-  );
-
-  // ==== Tap row (used for Client & Service closed-state placeholders) ====
-  const TapRow = ({
-    placeholder,
-    onPress,
-    testID,
-  }: {
-    placeholder: string;
-    onPress: () => void;
-    testID?: string;
-  }) => (
-    <Pressable
-      onPress={onPress}
-      style={styles.tapRow}
-      testID={testID}
-    >
-      <ThemedText
-        style={[styles.tapRowPlaceholder, { color: theme.textTertiary }]}
-      >
-        {placeholder}
-      </ThemedText>
-      <Feather name="chevron-right" size={18} color={theme.textTertiary} />
-    </Pressable>
-  );
-
   return (
     <ThemedView style={styles.container}>
       <KeyboardAwareScrollViewCompat
@@ -529,7 +528,7 @@ export default function AddJobScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ============ 1. CLIENT ============ */}
-        <Section title="Client">
+        <Section title="Client" theme={theme}>
           {selectedClient ? (
             <Pressable
               style={styles.identityRow}
@@ -569,12 +568,13 @@ export default function AddJobScreen() {
               placeholder="Select a client"
               onPress={openClientSheet}
               testID="button-open-client-sheet"
+              theme={theme}
             />
           )}
         </Section>
 
         {/* ============ 2. SERVICE ============ */}
-        <Section title="Service">
+        <Section title="Service" theme={theme}>
           {selectedService ? (
             <Pressable
               style={styles.serviceSummary}
@@ -689,12 +689,13 @@ export default function AddJobScreen() {
               placeholder="Select a service"
               onPress={openServiceSheet}
               testID="button-open-service-sheet"
+              theme={theme}
             />
           )}
         </Section>
 
         {/* ============ 3. JOB DETAILS ============ */}
-        <Section title="Job Details">
+        <Section title="Job Details" theme={theme}>
           <View style={styles.detailsBlock}>
             <ThemedText
               style={[styles.fieldLabel, { color: theme.textSecondary }]}
@@ -896,7 +897,7 @@ export default function AddJobScreen() {
         </View>
 
         {/* ============ 5. PRICE ============ */}
-        <Section title="Price">
+        <Section title="Price" theme={theme}>
           <View style={styles.priceRow}>
             <ThemedText
               style={[styles.priceLabel, { color: theme.textSecondary }]}
@@ -1123,7 +1124,7 @@ export default function AddJobScreen() {
         </Section>
 
         {/* ============ 6. JOB SUMMARY ============ */}
-        <Section title="Job Summary">
+        <Section title="Job Summary" theme={theme}>
           <SummaryRow
             label="Client"
             value={
