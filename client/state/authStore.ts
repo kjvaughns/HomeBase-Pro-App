@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { queryClient } from "@/lib/query-client";
+import { getApiUrl, queryClient } from "@/lib/query-client";
 
 export type UserRole = "guest" | "homeowner" | "provider";
 export type ProviderStatus = "draft" | "pending" | "approved" | "rejected" | "paused";
@@ -102,7 +102,29 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   logout: () => {
-    const { lastActiveRole } = get();
+    const { lastActiveRole, sessionToken } = get();
+    // Deactivate ONLY this device's push token (not the user's other devices).
+    // Capture the bearer token NOW (before clearing auth state) and send it
+    // explicitly so the request is authenticated even though the store is
+    // wiped immediately after. Fire and forget: never block logout.
+    (async () => {
+      try {
+        const pushToken = await AsyncStorage.getItem(
+          "@homebase/current_push_token",
+        );
+        if (!pushToken || !sessionToken) return;
+        const url = new URL("/api/push-tokens", getApiUrl()).toString();
+        await fetch(url, {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${sessionToken}`,
+          },
+          body: JSON.stringify({ token: pushToken }),
+        });
+        await AsyncStorage.removeItem("@homebase/current_push_token");
+      } catch {}
+    })();
     const newState = {
       isAuthenticated: false,
       user: null,

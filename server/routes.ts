@@ -3537,13 +3537,14 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
             platform: platform || "expo",
             isActive: true,
           })
-          .onConflictDoNothing();
-        await db
-          .update(pushTokens)
-          .set({ isActive: true, updatedAt: new Date() })
-          .where(
-            and(eq(pushTokens.userId, userId), eq(pushTokens.token, token)),
-          );
+          .onConflictDoUpdate({
+            target: [pushTokens.userId, pushTokens.token],
+            set: {
+              isActive: true,
+              platform: platform || "expo",
+              updatedAt: new Date(),
+            },
+          });
         res.json({ success: true });
       } catch (error) {
         console.error("Register push token error:", error);

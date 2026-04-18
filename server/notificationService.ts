@@ -789,8 +789,13 @@ export async function sendPush(
 
     if (tokens.length === 0) return;
 
-    const messages: PushMessage[] = tokens.map((t) => ({
-      to: t.token,
+    // Defense in depth: even with the (user_id, token) unique constraint in
+    // place, dedupe here so any straggler duplicates can never produce more
+    // than one push per physical device. (See Task #143.)
+    const uniqueTokens = Array.from(new Set(tokens.map((t) => t.token)));
+
+    const messages: PushMessage[] = uniqueTokens.map((token) => ({
+      to: token,
       title,
       body,
       data,

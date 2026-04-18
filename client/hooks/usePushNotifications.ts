@@ -3,8 +3,11 @@ import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import { Platform } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiRequest } from "@/lib/query-client";
 import { useAuthStore } from "@/state/authStore";
+
+export const CURRENT_PUSH_TOKEN_STORAGE_KEY = "@homebase/current_push_token";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -57,13 +60,10 @@ export function usePushNotifications() {
   useEffect(() => {
     if (!user?.id || !sessionToken) return;
 
-    let currentToken: string | null = null;
-
     async function setup() {
       try {
         const token = await registerForPushNotificationsAsync();
         if (!token) return;
-        currentToken = token;
 
         if (Platform.OS === "android") {
           await Notifications.setNotificationChannelAsync("default", {
@@ -75,6 +75,11 @@ export function usePushNotifications() {
         }
 
         await apiRequest("POST", "/api/push-tokens", { token, platform: "expo" });
+        // Persist for logout: we need to know which device's token to
+        // deactivate without affecting the user's other logged-in devices.
+        try {
+          await AsyncStorage.setItem(CURRENT_PUSH_TOKEN_STORAGE_KEY, token);
+        } catch {}
       } catch (err) {
         console.warn("Push notification setup failed:", err);
       }
@@ -92,14 +97,16 @@ export function usePushNotifications() {
     });
 
     return () => {
+      // NOTE: Do NOT call DELETE /api/push-tokens here. This effect re-runs on
+      // every auth state change / remount, and deactivating the token on cleanup
+      // (combined with re-registration on mount) was creating duplicate rows
+      // and causing users to receive 8-9 identical pushes per event. The token
+      // should only be deactivated on explicit logout (handled in the auth store).
       if (notificationListener.current) {
         notificationListener.current.remove();
       }
       if (responseListener.current) {
         responseListener.current.remove();
-      }
-      if (currentToken) {
-        apiRequest("DELETE", "/api/push-tokens", { token: currentToken }).catch(() => {});
       }
     };
   }, [user?.id, sessionToken]);

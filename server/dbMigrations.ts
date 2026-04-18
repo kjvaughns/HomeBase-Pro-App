@@ -132,6 +132,26 @@ export async function runBootMigrations(): Promise<void> {
       )
     `);
 
+    // ── push_tokens: dedupe + unique constraint (Task #143) ───────────────
+    // Without a unique constraint, the registration upsert silently inserts
+    // duplicate rows, and the send path then fans out N pushes per event.
+    // Delete duplicates (keep most recently updated row per user/token), then
+    // add a unique index so future re-registrations are truly idempotent.
+    await runSql("push_tokens.dedupe_rows", `
+      DELETE FROM push_tokens a
+      USING push_tokens b
+      WHERE a.user_id = b.user_id
+        AND a.token = b.token
+        AND (
+          a.updated_at < b.updated_at
+          OR (a.updated_at = b.updated_at AND a.id < b.id)
+        )
+    `);
+    await runSql("push_tokens.unique_user_token", `
+      CREATE UNIQUE INDEX IF NOT EXISTS push_tokens_user_id_token_unique
+        ON push_tokens (user_id, token)
+    `);
+
     // ── notification_preferences ──────────────────────────────────────────
     await runSql("table.notification_preferences", `
       CREATE TABLE IF NOT EXISTS notification_preferences (

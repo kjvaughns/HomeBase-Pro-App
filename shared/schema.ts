@@ -10,6 +10,7 @@ import {
   pgEnum,
   json,
   jsonb,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -1206,19 +1207,28 @@ export const notificationDeliveryStatusEnum = pgEnum(
   ["queued", "sent", "delivered", "failed", "pending_sms"],
 );
 
-export const pushTokens = pgTable("push_tokens", {
-  id: varchar("id")
-    .primaryKey()
-    .default(sql`gen_random_uuid()`),
-  userId: varchar("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  token: text("token").notNull(),
-  platform: text("platform").notNull(), // ios | android
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+export const pushTokens = pgTable(
+  "push_tokens",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    token: text("token").notNull(),
+    platform: text("platform").notNull(), // ios | android
+    isActive: boolean("is_active").default(true),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userTokenUnique: uniqueIndex("push_tokens_user_id_token_unique").on(
+      table.userId,
+      table.token,
+    ),
+  }),
+);
 
 export const notificationPreferences = pgTable("notification_preferences", {
   id: varchar("id")
