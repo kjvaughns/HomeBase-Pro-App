@@ -243,6 +243,11 @@ export default function AppointmentDetailScreen() {
   }
 
   const canModify = appointment.status !== "completed" && appointment.status !== "cancelled";
+  const hasUnpaidInvoice =
+    !!appointment.invoice &&
+    !!appointment.job &&
+    appointment.invoice.status !== "paid" &&
+    appointment.invoice.status !== "cancelled";
 
   return (
     <ThemedView style={styles.container}>
@@ -420,28 +425,27 @@ export default function AppointmentDetailScreen() {
                   Due: {formatDate(appointment.invoice.dueDate)}
                 </ThemedText>
               ) : null}
-              {appointment.invoice.status !== "paid" && appointment.invoice.status !== "cancelled" ? (
-                <View style={{ marginTop: Spacing.md }}>
-                  <PrimaryButton
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                      navigation.navigate("Payment", {
-                        jobId: appointment.job!.id,
-                        invoiceId: appointment.invoice!.id,
-                      });
-                    }}
-                    testID="button-pay-invoice"
-                  >
-                    Pay Invoice
-                  </PrimaryButton>
-                </View>
-              ) : null}
             </GlassCard>
           </View>
         ) : null}
 
         <View style={styles.actions}>
-          <SecondaryButton onPress={handleMessage}>
+          {hasUnpaidInvoice ? (
+            <PrimaryButton
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                navigation.navigate("Payment", {
+                  jobId: appointment.job!.id,
+                  invoiceId: appointment.invoice!.id,
+                });
+              }}
+              testID="button-pay-invoice"
+            >
+              {`Pay Invoice $${parseFloat(appointment.invoice!.total || appointment.invoice!.amount || "0").toFixed(2)}`}
+            </PrimaryButton>
+          ) : null}
+
+          <SecondaryButton onPress={handleMessage} style={hasUnpaidInvoice ? styles.actionBtn : undefined}>
             Message Provider
           </SecondaryButton>
 
