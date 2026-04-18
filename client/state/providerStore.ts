@@ -8,6 +8,23 @@ import { useAuthStore } from "./authStore";
 // TYPES
 // ============================================
 
+/**
+ * Thrown by `syncAvailableForWork` when the server rejects an
+ * `isActive: true` PATCH because Stripe Connect isn't ready
+ * (HTTP 422 with `{ error: "stripe_not_ready" }`).
+ *
+ * Callers should catch this specifically and route the user to the
+ * Stripe Connect setup flow rather than showing the raw message in
+ * an Alert.
+ */
+export class StripeNotReadyError extends Error {
+  readonly code = "stripe_not_ready" as const;
+  constructor(message: string) {
+    super(message);
+    this.name = "StripeNotReadyError";
+  }
+}
+
 export interface Lead {
   id: string;
   providerId: string;
@@ -812,6 +829,28 @@ export const useProviderStore = create<ProviderState>()(
           queryClient.invalidateQueries({ queryKey: ["/api/search/providers"] });
         } catch (error) {
           set({ availableForWork: previous });
+          // Detect the server-side stripe_not_ready guard (Task #183) so
+          // callers can surface the inline "Finish Stripe setup" hint instead
+          // of an Alert with the raw server message. apiRequest throws a
+          // generic Error of the form `${status}: ${body}` — parse that.
+          if (error instanceof Error) {
+            const match = error.message.match(/^(\d{3}):\s*(.*)$/s);
+            if (match && match[1] === "422") {
+              try {
+                const body = JSON.parse(match[2]);
+                if (body?.error === "stripe_not_ready") {
+                  throw new StripeNotReadyError(
+                    typeof body.message === "string" && body.message.length > 0
+                      ? body.message
+                      : "Finish Stripe setup to start accepting bookings.",
+                  );
+                }
+              } catch (parseErr) {
+                if (parseErr instanceof StripeNotReadyError) throw parseErr;
+                // Fall through: not JSON or not the expected shape.
+              }
+            }
+          }
           throw error;
         }
       },

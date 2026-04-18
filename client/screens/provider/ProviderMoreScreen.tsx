@@ -20,7 +20,7 @@ import { StatusPill } from "@/components/StatusPill";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
-import { useProviderStore } from "@/state/providerStore";
+import { useProviderStore, StripeNotReadyError } from "@/state/providerStore";
 import { useThemeStore } from "@/state/themeStore";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -79,6 +79,12 @@ export default function ProviderMoreScreen() {
     try {
       await syncAvailableForWork(next, providerId);
     } catch (err: unknown) {
+      // Server-side gate (Task #183) — route to Stripe Connect setup, the
+      // same destination as the local pre-PATCH gate above.
+      if (err instanceof StripeNotReadyError) {
+        navigation.navigate("StripeConnect");
+        return;
+      }
       const message =
         err instanceof Error
           ? err.message

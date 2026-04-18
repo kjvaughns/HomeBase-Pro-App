@@ -35,7 +35,7 @@ import { ZipCodeAreaInput } from "@/components/ZipCodeAreaInput";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
-import { useProviderStore } from "@/state/providerStore";
+import { useProviderStore, StripeNotReadyError } from "@/state/providerStore";
 import { apiRequest, getApiUrl, getAuthHeaders } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -761,6 +761,12 @@ export default function BusinessHubScreen() {
                   try {
                     await syncAvailableForWork(next, providerId);
                   } catch (err: unknown) {
+                    // Server-side gate (Task #183) — route to Stripe Connect
+                    // setup instead of surfacing the raw server message.
+                    if (err instanceof StripeNotReadyError) {
+                      navigation.navigate("StripeConnect");
+                      return;
+                    }
                     const message =
                       err instanceof Error
                         ? err.message
