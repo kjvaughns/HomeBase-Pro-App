@@ -34,6 +34,15 @@ interface AppointmentData {
   provider: {
     businessName: string;
   } | null;
+  review?: {
+    id: string;
+    rating: number;
+    comment?: string | null;
+    createdAt: string;
+    providerReply?: string | null;
+    providerReplyAt?: string | null;
+    providerReplyUpdatedAt?: string | null;
+  } | null;
 }
 
 export default function ReviewScreen() {
@@ -160,6 +169,97 @@ export default function ReviewScreen() {
 
   const providerName = data?.provider?.businessName || "Service Provider";
   const serviceName = data?.appointment?.serviceName || "Service";
+  const existingReview = data?.review || null;
+  const formatReviewDate = (iso: string) =>
+    new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+  if (existingReview) {
+    const replyEdited =
+      existingReview.providerReply &&
+      existingReview.providerReplyAt &&
+      existingReview.providerReplyUpdatedAt &&
+      new Date(existingReview.providerReplyUpdatedAt).getTime() -
+        new Date(existingReview.providerReplyAt).getTime() >
+        2000;
+    return (
+      <ThemedView style={styles.container}>
+        <KeyboardAwareScrollViewCompat
+          contentContainerStyle={{
+            paddingTop: headerHeight + Spacing.lg,
+            paddingBottom: insets.bottom + Spacing.xl,
+            paddingHorizontal: Spacing.screenPadding,
+          }}
+        >
+          <GlassCard style={styles.providerCard}>
+            <View style={styles.providerRow}>
+              <Avatar name={providerName} size="medium" />
+              <View style={styles.providerInfo}>
+                <ThemedText style={styles.providerName}>{providerName}</ThemedText>
+                <ThemedText style={[styles.serviceName, { color: theme.textSecondary }]}>
+                  {serviceName}
+                </ThemedText>
+              </View>
+            </View>
+          </GlassCard>
+
+          <GlassCard style={styles.providerCard} testID="card-existing-review">
+            <View style={styles.starsRowSmall}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Feather
+                  key={star}
+                  name="star"
+                  size={20}
+                  color={star <= existingReview.rating ? Colors.accent : theme.borderLight}
+                />
+              ))}
+              <ThemedText style={[styles.reviewMetaText, { color: theme.textTertiary }]}>
+                {`· ${formatReviewDate(existingReview.createdAt)}`}
+              </ThemedText>
+            </View>
+            {existingReview.comment ? (
+              <ThemedText style={[styles.existingComment, { color: theme.textSecondary }]}>
+                {existingReview.comment}
+              </ThemedText>
+            ) : (
+              <ThemedText style={[styles.existingComment, { color: theme.textTertiary }]}>
+                You didn't leave a comment.
+              </ThemedText>
+            )}
+
+            {existingReview.providerReply ? (
+              <View
+                style={[
+                  styles.replyBlock,
+                  { backgroundColor: Colors.accentLight, borderLeftColor: Colors.accent },
+                ]}
+                testID="block-provider-reply"
+              >
+                <View style={styles.replyHeader}>
+                  <Feather name="corner-down-right" size={14} color={Colors.accent} />
+                  <ThemedText style={[styles.replyHeaderText, { color: Colors.accent }]}>
+                    {`Response from ${providerName}`}
+                    {replyEdited ? " (edited)" : ""}
+                  </ThemedText>
+                  {existingReview.providerReplyAt ? (
+                    <ThemedText style={[styles.replyTimestamp, { color: theme.textTertiary }]}>
+                      {`· ${formatReviewDate(
+                        replyEdited && existingReview.providerReplyUpdatedAt
+                          ? existingReview.providerReplyUpdatedAt
+                          : existingReview.providerReplyAt,
+                      )}`}
+                    </ThemedText>
+                  ) : null}
+                </View>
+                <ThemedText style={[styles.replyText, { color: theme.textSecondary }]}>
+                  {existingReview.providerReply}
+                </ThemedText>
+              </View>
+            ) : null}
+          </GlassCard>
+        </KeyboardAwareScrollViewCompat>
+      </ThemedView>
+    );
+  }
 
   return (
     <ThemedView style={styles.container}>
@@ -383,5 +483,43 @@ const styles = StyleSheet.create({
   successSubtext: {
     ...Typography.body,
     textAlign: "center",
+  },
+  starsRowSmall: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    marginBottom: Spacing.sm,
+  },
+  reviewMetaText: {
+    ...Typography.caption1,
+    marginLeft: Spacing.sm,
+  },
+  existingComment: {
+    ...Typography.body,
+    lineHeight: 22,
+  },
+  replyBlock: {
+    marginTop: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: 12,
+    borderLeftWidth: 3,
+  },
+  replyHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 6,
+    marginBottom: Spacing.xs,
+  },
+  replyHeaderText: {
+    ...Typography.caption1,
+    fontWeight: "600",
+  },
+  replyTimestamp: {
+    ...Typography.caption2,
+  },
+  replyText: {
+    ...Typography.subhead,
+    lineHeight: 20,
   },
 });

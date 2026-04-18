@@ -6278,6 +6278,12 @@ Respond with JSON only:
               .limit(1);
             const providerName = loaded.provider.businessName || "Your provider";
             const serviceName = appt?.serviceName || undefined;
+            const baseUrl =
+              process.env.PUBLIC_BASE_URL ||
+              (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "https://homebaseproapp.com");
+            const reviewUrl = loaded.provider.slug
+              ? `${baseUrl}/providers/${loaded.provider.slug}#reviews`
+              : baseUrl;
             if (homeowner) {
               const clientName = `${homeowner.firstName || ""} ${homeowner.lastName || ""}`.trim() || homeowner.email;
               dispatch("review.reply", {
@@ -6286,6 +6292,7 @@ Respond with JSON only:
                 providerName,
                 serviceName,
                 description: reply,
+                reviewUrl,
                 relatedRecordType: "review",
                 relatedRecordId: updated.id,
                 recipientUserId: homeowner.id,
@@ -6295,7 +6302,7 @@ Respond with JSON only:
                 `${providerName} replied to your review`,
                 reply.length > 140 ? `${reply.slice(0, 140)}…` : reply,
                 "review.reply",
-                { reviewId: updated.id, providerId: loaded.provider.id, appointmentId: loaded.review.appointmentId },
+                { reviewId: updated.id, providerId: loaded.provider.id, appointmentId: loaded.review.appointmentId, reviewUrl },
                 "messages",
               ).catch((e) => console.error("review.reply push error:", e));
             }

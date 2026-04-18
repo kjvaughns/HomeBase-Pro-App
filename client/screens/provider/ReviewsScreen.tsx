@@ -205,8 +205,14 @@ export default function ReviewsScreen() {
               <View style={styles.replyHeader}>
                 <Feather name="corner-down-right" size={14} color={Colors.accent} />
                 <ThemedText style={[styles.replyHeaderText, { color: Colors.accent }]}>
-                  Your response{replyEdited ? " (edited)" : ""}
+                  {`Response from ${providerProfile?.businessName || "you"}`}
+                  {replyEdited ? " (edited)" : ""}
                 </ThemedText>
+                {item.providerReplyAt ? (
+                  <ThemedText style={[styles.replyTimestamp, { color: theme.textTertiary }]}>
+                    {`· ${formatDate(replyEdited && item.providerReplyUpdatedAt ? item.providerReplyUpdatedAt : item.providerReplyAt)}`}
+                  </ThemedText>
+                ) : null}
               </View>
               <ThemedText style={[styles.replyText, { color: theme.textSecondary }]}>
                 {item.providerReply}
@@ -581,6 +587,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   replyHeaderText: { ...Typography.caption1, fontWeight: "600" },
+  replyTimestamp: { ...Typography.caption2, marginLeft: 4 },
   replyText: { ...Typography.subhead, lineHeight: 20 },
   replyActions: {
     flexDirection: "row",
