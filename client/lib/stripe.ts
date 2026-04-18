@@ -12,19 +12,9 @@ export async function getStripeConfig() {
   }
 }
 
-export async function createPaymentIntent(amount: number, currency = 'usd', customerId?: string) {
-  try {
-    const response = await apiRequest('POST', '/api/stripe/create-payment-intent', {
-      amount,
-      currency,
-      customerId,
-    });
-    return response.json();
-  } catch (error) {
-    console.error('Error creating payment intent:', error);
-    throw error;
-  }
-}
+// createPaymentIntent removed in Task #150 — provider-payment intents must be
+// created via the Stripe Connect destination-charge flow. Use the homeowner
+// payment-sheet API or POST /api/invoices/:invoiceId/checkout instead.
 
 export async function createStripeCustomer(email: string, userId: string) {
   try {

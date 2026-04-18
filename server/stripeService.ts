@@ -21,15 +21,10 @@ export class StripeService {
     });
   }
 
-  async createPaymentIntent(amount: number, currency: string = 'usd', customerId?: string) {
-    const stripe = await getUncachableStripeClient();
-    return await stripe.paymentIntents.create({
-      amount,
-      currency,
-      customer: customerId,
-      automatic_payment_methods: { enabled: true },
-    });
-  }
+  // REMOVED in Task #150 — see /api/stripe/create-payment-intent in routes.ts.
+  // All provider payments must go through Stripe Connect destination charges
+  // (createInvoicePaymentIntent / createStripeCheckoutSession in
+  // stripeConnectService.ts), never a platform-account PaymentIntent.
 
   async createCustomerPortalSession(customerId: string, returnUrl: string) {
     const stripe = await getUncachableStripeClient();

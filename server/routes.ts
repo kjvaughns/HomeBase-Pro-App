@@ -67,6 +67,7 @@ import {
   createStripeInvoice,
   sendStripeInvoiceEmail,
   sendPlatformStripeInvoice,
+  resendStripeInvoice,
   createDirectCheckoutSession,
   applyCreditsToInvoice,
   calculateFeePreview,
@@ -7336,6 +7337,17 @@ Respond with JSON only:
               : undefined;
 
         const subtotalCents = Math.round(total * 100);
+        // Compute the platform fee at draft time so the eventual Connect
+        // destination charge / invoice carries the correct application_fee
+        // (Task #150).
+        const draftPlan = req.body.providerId
+          ? await getProviderPlan(req.body.providerId)
+          : { platformFeePercent: "3.00", platformFeeFixedCents: 0 };
+        const draftFee = calculatePlatformFee(
+          subtotalCents,
+          draftPlan.platformFeePercent || "3.00",
+          draftPlan.platformFeeFixedCents || 0,
+        );
         const invoiceData = {
           providerId: req.body.providerId,
           clientId: req.body.clientId,
@@ -7345,7 +7357,7 @@ Respond with JSON only:
           subtotalCents,
           taxCents: 0,
           discountCents: 0,
-          platformFeeCents: 0,
+          platformFeeCents: draftFee.totalCents,
           totalCents: subtotalCents,
           amount: total.toFixed(2),
           total: total.toFixed(2),
@@ -7450,6 +7462,14 @@ Respond with JSON only:
         }
 
         const subtotalCents = Math.round(amount * 100);
+        // Compute platform fee so the eventual Connect destination charge
+        // / Stripe Invoice carries the right application_fee (Task #150).
+        const sendPlan = await getProviderPlan(bodyProviderId);
+        const sendFee = calculatePlatformFee(
+          subtotalCents,
+          sendPlan.platformFeePercent || "3.00",
+          sendPlan.platformFeeFixedCents || 0,
+        );
         const invoiceData = {
           providerId: bodyProviderId,
           clientId: req.body.clientId,
@@ -7459,7 +7479,7 @@ Respond with JSON only:
           subtotalCents,
           taxCents: 0,
           discountCents: 0,
-          platformFeeCents: 0,
+          platformFeeCents: sendFee.totalCents,
           totalCents: subtotalCents,
           amount: amount.toFixed(2),
           total: amount.toFixed(2),
@@ -7661,14 +7681,13 @@ Respond with JSON only:
           if (platformResult?.hostedInvoiceUrl)
             hostedUrl = platformResult.hostedInvoiceUrl;
         } else {
-          // Stripe invoice already exists — just resend it
+          // Stripe invoice already exists on the provider's connected account
+          // — resend via the Connect-aware helper (Task #150).
           hostedUrl = invoice.hostedInvoiceUrl || undefined;
-          await getStripe()
-            .invoices.sendInvoice(invoice.stripeInvoiceId)
-            .catch((err: any) => {
-              stripeError = err?.message;
-              console.warn("[stripe-invoice-resend]", stripeError);
-            });
+          await resendStripeInvoice(invoiceId).catch((err: any) => {
+            stripeError = err?.message;
+            console.warn("[stripe-invoice-resend]", stripeError);
+          });
         }
 
         // Get client and provider details for email
@@ -8091,28 +8110,21 @@ Respond with JSON only:
     },
   );
 
+  // REMOVED in Task #150 — was an unscoped legacy endpoint that created a
+  // platform-account PaymentIntent with no providerId/invoiceId metadata, so
+  // funds would have landed on HomeBase's platform account instead of the
+  // provider's connected account. Customer-facing payments must go through
+  // /api/invoices/:invoiceId/checkout (Connect destination charge) or the
+  // homeowner payment-sheet flow.
   app.post(
     "/api/stripe/create-payment-intent",
     requireAuth,
-    async (req: Request, res: Response) => {
-      try {
-        const { amount, currency = "usd", customerId } = req.body;
-        if (!amount) {
-          return res.status(400).json({ error: "Amount is required" });
-        }
-        const paymentIntent = await stripeService.createPaymentIntent(
-          amount,
-          currency,
-          customerId,
-        );
-        res.json({
-          clientSecret: paymentIntent.client_secret,
-          paymentIntentId: paymentIntent.id,
-        });
-      } catch (error) {
-        console.error("Create payment intent error:", error);
-        res.status(500).json({ error: "Failed to create payment intent" });
-      }
+    async (_req: Request, res: Response) => {
+      res.status(410).json({
+        error: "endpoint_removed",
+        message:
+          "This endpoint was removed. Use /api/invoices/:invoiceId/checkout for provider invoice payments.",
+      });
     },
   );
 
@@ -8712,12 +8724,12 @@ Respond with JSON only:
           if (platformResult?.hostedInvoiceUrl)
             hostedUrl = platformResult.hostedInvoiceUrl;
         } else {
+          // Resend via Connect-aware helper (Task #150) — invoice lives on
+          // the connected account, not the platform account.
           hostedUrl = invoice.hostedInvoiceUrl || undefined;
-          await getStripe()
-            .invoices.sendInvoice(invoice.stripeInvoiceId)
-            .catch((err: any) => {
-              stripeError = err?.message;
-            });
+          await resendStripeInvoice(invoiceId).catch((err: any) => {
+            stripeError = err?.message;
+          });
         }
 
         // Send HomeBase notification email as secondary notification
@@ -9229,6 +9241,20 @@ Respond with JSON only:
         res.json(result);
       } catch (error: any) {
         console.error("Create payment intent error:", error);
+        // Standardize stripe_not_ready propagation (Task #150) — provider
+        // Connect onboarding gates surface here too.
+        if (
+          error?.code === "stripe_not_ready" ||
+          error?.message?.includes("not enabled") ||
+          error?.message?.includes("not set up") ||
+          error?.message?.includes("Stripe Connect onboarding") ||
+          error?.message?.includes("charges are not enabled")
+        ) {
+          return res.status(402).json({
+            error: "stripe_not_ready",
+            message: error.message,
+          });
+        }
         res
           .status(500)
           .json({ error: error.message || "Failed to create payment intent" });
@@ -9557,13 +9583,19 @@ Respond with JSON only:
         });
       } catch (error: any) {
         console.error("Create Stripe invoice error:", error);
+        // Standardize stripe_not_ready propagation (Task #150) — match by
+        // structured error code first, falling back to legacy message sniffing
+        // for any third-party errors that don't carry our code.
         if (
-          error.message?.includes("not enabled") ||
-          error.message?.includes("not set up")
+          error?.code === "stripe_not_ready" ||
+          error?.message?.includes("not enabled") ||
+          error?.message?.includes("not set up") ||
+          error?.message?.includes("Stripe Connect onboarding")
         ) {
-          return res
-            .status(402)
-            .json({ error: "stripe_not_ready", message: error.message });
+          return res.status(402).json({
+            error: "stripe_not_ready",
+            message: error.message,
+          });
         }
         res
           .status(500)
