@@ -9,6 +9,7 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
+import { useQuery } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -24,6 +25,7 @@ import { useThemeStore } from "@/state/themeStore";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { openAppReviewFromSettings } from "@/state/appReviewStore";
+import { apiRequest } from "@/lib/query-client";
 
 export default function ProviderMoreScreen() {
   const insets = useSafeAreaInsets();
@@ -49,6 +51,18 @@ export default function ProviderMoreScreen() {
   const hydrateAvailableForWork = useProviderStore((s) => s.hydrateAvailableForWork);
   const [availabilitySaving, setAvailabilitySaving] = useState(false);
 
+  const providerId = providerProfile?.id;
+  const { data: stripeStatusData } = useQuery<{ chargesEnabled: boolean; payoutsEnabled: boolean }>({
+    queryKey: ["/api/stripe/connect/status", providerId],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/stripe/connect/status/${providerId}`);
+      if (!response.ok) throw new Error("Failed to fetch Stripe status");
+      return response.json();
+    },
+    enabled: !!providerId,
+  });
+  const stripeReady = !!stripeStatusData?.chargesEnabled;
+
   useEffect(() => {
     if (providerProfile?.isActive !== undefined && providerProfile?.isActive !== null) {
       hydrateAvailableForWork(providerProfile.isActive);
@@ -56,10 +70,14 @@ export default function ProviderMoreScreen() {
   }, [providerProfile?.isActive, hydrateAvailableForWork]);
 
   const handleToggleAvailability = async (next: boolean) => {
-    if (!providerProfile?.id) return;
+    if (!providerId) return;
+    if (next && !stripeReady) {
+      navigation.navigate("StripeConnect");
+      return;
+    }
     setAvailabilitySaving(true);
     try {
-      await syncAvailableForWork(next, providerProfile.id);
+      await syncAvailableForWork(next, providerId);
     } catch (err: unknown) {
       const message =
         err instanceof Error
@@ -131,15 +149,24 @@ export default function ProviderMoreScreen() {
             <View style={styles.switchRow}>
               <ListRow
                 title="Available for Work"
-                subtitle="Accept new job requests"
+                subtitle={
+                  !stripeReady && !!providerId
+                    ? "Finish Stripe setup to start accepting bookings"
+                    : "Accept new job requests"
+                }
                 leftIcon="toggle-left"
-                showChevron={false}
+                showChevron={!stripeReady && !!providerId}
+                onPress={
+                  !stripeReady && !!providerId
+                    ? () => navigation.navigate("StripeConnect")
+                    : undefined
+                }
                 isFirst
               />
-              <View style={styles.switchContainer}>
+              <View style={styles.switchContainer} pointerEvents={!stripeReady ? "none" : "auto"}>
                 <Switch
-                  value={availableForWork}
-                  disabled={availabilitySaving || !providerProfile?.id}
+                  value={stripeReady ? availableForWork : false}
+                  disabled={availabilitySaving || !providerId || !stripeReady}
                   onValueChange={handleToggleAvailability}
                   trackColor={{ false: theme.backgroundTertiary, true: Colors.accent }}
                   thumbColor="#FFFFFF"

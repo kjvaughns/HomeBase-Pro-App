@@ -167,6 +167,17 @@ export default function BusinessHubScreen() {
 
   const providerId = providerProfile?.id;
 
+  const { data: stripeStatusData } = useQuery<{ chargesEnabled: boolean; payoutsEnabled: boolean }>({
+    queryKey: ["/api/stripe/connect/status", providerId],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/stripe/connect/status/${providerId}`);
+      if (!response.ok) throw new Error("Failed to fetch Stripe status");
+      return response.json();
+    },
+    enabled: !!providerId,
+  });
+  const stripeReady = !!stripeStatusData?.chargesEnabled;
+
   // Load provider data from API (for profile + policies)
   const {
     data: providerData,
@@ -716,37 +727,56 @@ export default function BusinessHubScreen() {
         </GlassCard>
 
         {/* Availability */}
-        <GlassCard style={styles.card}>
-          <View style={styles.switchRow}>
-            <View style={{ flex: 1 }}>
-              <ThemedText style={styles.cardTitle}>Available for Work</ThemedText>
-              <ThemedText style={[styles.infoLabel, { color: theme.textSecondary }]}>
-                Accept new job requests
-              </ThemedText>
+        <Pressable
+          onPress={
+            !stripeReady && !!providerId
+              ? () => navigation.navigate("StripeConnect")
+              : undefined
+          }
+          disabled={stripeReady || !providerId}
+        >
+          <GlassCard style={styles.card}>
+            <View style={styles.switchRow}>
+              <View style={{ flex: 1 }}>
+                <ThemedText style={styles.cardTitle}>Available for Work</ThemedText>
+                <ThemedText style={[styles.infoLabel, { color: theme.textSecondary }]}>
+                  {!stripeReady && !!providerId
+                    ? "Finish Stripe setup to start accepting bookings"
+                    : "Accept new job requests"}
+                </ThemedText>
+              </View>
+              {!stripeReady && !!providerId ? (
+                <Feather name="chevron-right" size={18} color={theme.textTertiary} />
+              ) : null}
+              <Switch
+                value={stripeReady ? availableForWork : false}
+                disabled={availabilitySaving || !providerId || !stripeReady}
+                onValueChange={async (next) => {
+                  if (!providerId) return;
+                  if (next && !stripeReady) {
+                    navigation.navigate("StripeConnect");
+                    return;
+                  }
+                  setAvailabilitySaving(true);
+                  try {
+                    await syncAvailableForWork(next, providerId);
+                  } catch (err: unknown) {
+                    const message =
+                      err instanceof Error
+                        ? err.message
+                        : "Please check your connection and try again.";
+                    Alert.alert("Couldn't update availability", message);
+                  } finally {
+                    setAvailabilitySaving(false);
+                  }
+                }}
+                trackColor={{ false: theme.backgroundTertiary, true: Colors.accent }}
+                thumbColor="#FFFFFF"
+                style={!stripeReady && !!providerId ? { marginLeft: Spacing.sm } : undefined}
+              />
             </View>
-            <Switch
-              value={availableForWork}
-              disabled={availabilitySaving || !providerId}
-              onValueChange={async (next) => {
-                if (!providerId) return;
-                setAvailabilitySaving(true);
-                try {
-                  await syncAvailableForWork(next, providerId);
-                } catch (err: unknown) {
-                  const message =
-                    err instanceof Error
-                      ? err.message
-                      : "Please check your connection and try again.";
-                  Alert.alert("Couldn't update availability", message);
-                } finally {
-                  setAvailabilitySaving(false);
-                }
-              }}
-              trackColor={{ false: theme.backgroundTertiary, true: Colors.accent }}
-              thumbColor="#FFFFFF"
-            />
-          </View>
-        </GlassCard>
+          </GlassCard>
+        </Pressable>
 
         {/* Service Area */}
         <GlassCard style={styles.card}>

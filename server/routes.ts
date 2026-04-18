@@ -5874,6 +5874,21 @@ Respond with JSON only:
           }
         }
 
+        // Same gate for the "Available for Work" toggle (top-level isActive).
+        // Flipping availability ON without Stripe ready would put the toggle
+        // out of sync with the unlisted state and silently fail discovery.
+        // Setting isActive=false (going unavailable) is always allowed.
+        if (update.isActive === true) {
+          const ready = await isProviderReadyForCharges(id);
+          if (!ready) {
+            return res.status(422).json({
+              error: "stripe_not_ready",
+              message:
+                "Finish Stripe setup to start accepting bookings.",
+            });
+          }
+        }
+
         // Store JSON object fields as objects (Supabase jsonb columns)
         // instantBooking and advanceBookingDays are stored inside bookingPolicies JSON (not top-level columns)
         if (
