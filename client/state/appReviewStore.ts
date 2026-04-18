@@ -180,14 +180,25 @@ async function recordHappyMomentInternal(
       return;
 
     case "homeowner_feature_used": {
+      // Mark the feature-use flag so we know the user has actually engaged
+      // with the app at some point after onboarding.
       next.hasUsedFeatureSinceOnboarding = true;
       const onboardedAt = state.homeownerOnboardedAt;
-      const eligible =
+      const elapsed =
         onboardedAt !== null && Date.now() - onboardedAt >= FIRST_SESSION_DELAY_MS;
-      if (!eligible) {
+      // Only count the happy moment once the *combined* condition is true:
+      // (a) at least 24h has elapsed since onboarding, and (b) they've used
+      // a feature at any point after onboarding (current call satisfies b).
+      // We dedup so multiple feature-use events don't inflate the counter.
+      if (!elapsed) {
         await persist(next);
         return;
       }
+      if (state.recordedKeys.includes("homeowner_feature_used")) {
+        await persist(next);
+        return;
+      }
+      next.recordedKeys = [...state.recordedKeys, "homeowner_feature_used"];
       next.happyMomentCount = state.happyMomentCount + 1;
       break;
     }
