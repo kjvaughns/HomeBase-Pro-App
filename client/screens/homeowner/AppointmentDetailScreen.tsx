@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from "react";
 import { StyleSheet, View, ScrollView, Modal, Pressable, Alert, ActivityIndicator, TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
-import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
+import { useRoute, useNavigation, useFocusEffect, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -43,6 +43,21 @@ interface Provider {
   avatarUrl?: string;
 }
 
+interface LinkedJob {
+  id: string;
+  status?: string | null;
+}
+
+interface LinkedInvoice {
+  id: string;
+  invoiceNumber?: string | null;
+  status: string;
+  total?: string | null;
+  amount?: string | null;
+  dueDate?: string | null;
+  jobId?: string | null;
+}
+
 interface Appointment {
   id: string;
   userId: string;
@@ -66,6 +81,8 @@ interface Appointment {
   updatedAt: string;
   completedAt?: string;
   provider?: Provider;
+  job?: LinkedJob | null;
+  invoice?: LinkedInvoice | null;
 }
 
 const STATUS_CONFIG: Record<AppointmentStatus, { label: string; status: "success" | "info" | "warning" | "neutral" | "cancelled" }> = {
@@ -111,6 +128,12 @@ export default function AppointmentDetailScreen() {
 
   const appointment = data?.appointment;
   const statusConfig = appointment ? STATUS_CONFIG[appointment.status] : null;
+
+  useFocusEffect(
+    useCallback(() => {
+      queryClient.invalidateQueries({ queryKey: ["/api/appointment", appointmentId] });
+    }, [queryClient, appointmentId])
+  );
 
   const generateDates = useMemo(() => {
     const dates: Date[] = [];
@@ -354,6 +377,66 @@ export default function AppointmentDetailScreen() {
                 {appointment.providerDiagnosis}
               </ThemedText>
             </View>
+          </View>
+        ) : null}
+
+        {appointment.invoice && appointment.job ? (
+          <View style={styles.section}>
+            <ThemedText style={styles.sectionTitle}>Invoice</ThemedText>
+            <GlassCard style={styles.invoiceCard}>
+              <View style={styles.invoiceRow}>
+                <View style={{ flex: 1 }}>
+                  <ThemedText style={styles.invoiceNumber}>
+                    {appointment.invoice.invoiceNumber || `Invoice #${appointment.invoice.id.slice(-6)}`}
+                  </ThemedText>
+                  <ThemedText
+                    style={[
+                      styles.invoiceStatus,
+                      {
+                        color:
+                          appointment.invoice.status === "paid"
+                            ? Colors.accent
+                            : appointment.invoice.status === "cancelled"
+                            ? theme.textTertiary
+                            : "#F59E0B",
+                      },
+                    ]}
+                  >
+                    {appointment.invoice.status === "paid"
+                      ? "Paid"
+                      : appointment.invoice.status === "cancelled"
+                      ? "Cancelled"
+                      : appointment.invoice.status === "sent"
+                      ? "Payment Due"
+                      : appointment.invoice.status.toUpperCase()}
+                  </ThemedText>
+                </View>
+                <ThemedText style={styles.invoiceAmount}>
+                  ${parseFloat(appointment.invoice.total || appointment.invoice.amount || "0").toFixed(2)}
+                </ThemedText>
+              </View>
+              {appointment.invoice.dueDate ? (
+                <ThemedText style={[styles.invoiceDueText, { color: theme.textSecondary }]}>
+                  Due: {formatDate(appointment.invoice.dueDate)}
+                </ThemedText>
+              ) : null}
+              {appointment.invoice.status !== "paid" && appointment.invoice.status !== "cancelled" ? (
+                <View style={{ marginTop: Spacing.md }}>
+                  <PrimaryButton
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                      navigation.navigate("Payment", {
+                        jobId: appointment.job!.id,
+                        invoiceId: appointment.invoice!.id,
+                      });
+                    }}
+                    testID="button-pay-invoice"
+                  >
+                    Pay Invoice
+                  </PrimaryButton>
+                </View>
+              ) : null}
+            </GlassCard>
           </View>
         ) : null}
 
@@ -871,5 +954,32 @@ const styles = StyleSheet.create({
   },
   conditionSubmitBtn: {
     marginTop: Spacing.sm,
+  },
+  invoiceCard: {
+    padding: Spacing.md,
+  },
+  invoiceRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  invoiceNumber: {
+    ...Typography.subhead,
+    fontWeight: "600",
+  },
+  invoiceStatus: {
+    ...Typography.caption1,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  invoiceAmount: {
+    ...Typography.title3,
+    fontWeight: "700",
+    color: Colors.accent,
+  },
+  invoiceDueText: {
+    ...Typography.caption1,
+    marginTop: Spacing.xs,
   },
 });

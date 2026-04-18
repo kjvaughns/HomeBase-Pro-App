@@ -2871,6 +2871,24 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
           }
         }
 
+        const [linkedJob] = await db
+          .select()
+          .from(jobs)
+          .where(eq(jobs.appointmentId, appointment.id))
+          .orderBy(desc(jobs.createdAt))
+          .limit(1);
+
+        let linkedInvoice = null;
+        if (linkedJob) {
+          const [inv] = await db
+            .select()
+            .from(invoices)
+            .where(eq(invoices.jobId, linkedJob.id))
+            .orderBy(desc(invoices.createdAt))
+            .limit(1);
+          if (inv) linkedInvoice = inv;
+        }
+
         res.json({
           appointment: {
             ...appointment,
@@ -2885,6 +2903,8 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
                   avatarUrl: provider.avatarUrl,
                 }
               : null,
+            job: linkedJob ? { id: linkedJob.id, status: linkedJob.status } : null,
+            invoice: linkedInvoice,
           },
         });
       } catch (error) {
