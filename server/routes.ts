@@ -11,6 +11,11 @@ import {
 import { storage } from "./storage";
 import { seedDatabase } from "./seed";
 import {
+  formatJobSummary,
+  parseIntakeAnswers,
+  parseIntakeQuestions,
+} from "../shared/jobSummary";
+import {
   insertUserSchema,
   loginSchema,
   insertHomeSchema,
@@ -356,6 +361,11 @@ async function convertIntakeToClientJob(
     targetStatus?: "converted" | "confirmed";
     appointmentId?: string | null;
     serviceName?: string | null;
+    /** Raw intake answers map (q.id → answer) so the job description can
+     * include the configured intake questions, matching the in-app flows. */
+    intakeAnswers?: unknown;
+    /** Optional intake question definitions for resolving labels. */
+    intakeQuestionsJson?: string | null;
   },
 ): Promise<{ clientId: string; job: typeof jobs.$inferSelect }> {
   const {
@@ -373,6 +383,8 @@ async function convertIntakeToClientJob(
     targetStatus = "converted",
     appointmentId,
     serviceName,
+    intakeAnswers,
+    intakeQuestionsJson,
   } = params;
 
   const nameParts = (clientName || "").trim().split(" ");
@@ -442,8 +454,16 @@ async function convertIntakeToClientJob(
     clientId = newC.id;
   }
 
-  // Create job (linked to appointment when provided, matching portal flow)
+  // Create job (linked to appointment when provided, matching portal flow).
+  // Description is composed via the shared formatter so it has the same shape
+  // regardless of which entry point produced the underlying intake submission.
   const jobDate = scheduledDate ?? new Date();
+  const composedDescription = formatJobSummary({
+    serviceName: serviceName ?? null,
+    problemDescription: problemDescription ?? null,
+    intakeAnswers: parseIntakeAnswers(intakeAnswers),
+    intakeQuestions: parseIntakeQuestions(intakeQuestionsJson),
+  });
   const [newJob] = await tx
     .insert(jobs)
     .values({
@@ -452,7 +472,7 @@ async function convertIntakeToClientJob(
       appointmentId: appointmentId || null,
       title:
         serviceName || problemDescription?.slice(0, 100) || "Service Request",
-      description: problemDescription || null,
+      description: composedDescription || problemDescription || null,
       scheduledDate: jobDate,
       scheduledTime: scheduledTime || null,
       status: "scheduled",
@@ -678,6 +698,8 @@ async function handleMarketplaceBooking(params: {
         targetStatus: "confirmed",
         appointmentId: appt.id,
         serviceName: link.customTitle ?? null,
+        intakeAnswers: answersJson,
+        intakeQuestionsJson: link.intakeQuestions,
       });
       clientId = converted.clientId;
       job = converted.job;
@@ -2935,15 +2957,23 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
         // Create a provider job record linked to this appointment
         if (clientId) {
           try {
-            // Validate customServiceId belongs to this provider before persisting to jobs
+            // Validate customServiceId belongs to this provider before persisting to jobs.
+            // Also pull intakeQuestionsJson so we can resolve answer labels via
+            // the shared formatter and store a description that matches the
+            // shape produced by both the provider and public booking flows.
             const rawCustomSvcId =
               typeof req.body.customServiceId === "string"
                 ? req.body.customServiceId
                 : null;
             let apptCustomServiceId: string | null = null;
+            let apptSvcIntakeQuestionsJson: string | null = null;
             if (rawCustomSvcId) {
               const [ownedSvc] = await db
-                .select({ id: providerCustomServices.id })
+                .select({
+                  id: providerCustomServices.id,
+                  intakeQuestionsJson:
+                    providerCustomServices.intakeQuestionsJson,
+                })
                 .from(providerCustomServices)
                 .where(
                   and(
@@ -2955,15 +2985,53 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
                   ),
                 )
                 .catch(() => [null]);
-              if (ownedSvc) apptCustomServiceId = rawCustomSvcId;
+              if (ownedSvc) {
+                apptCustomServiceId = rawCustomSvcId;
+                apptSvcIntakeQuestionsJson = ownedSvc.intakeQuestionsJson;
+              }
             }
+
+            // Recompose description via the shared formatter as the canonical
+            // server-side source of truth. Add-ons sent by the client (when
+            // present) are included so the description mirrors what the
+            // provider sees in Add Job and the public booking page produces.
+            const apptAddOns = Array.isArray(req.body.addOns)
+              ? (req.body.addOns as unknown[])
+                  .filter(
+                    (a): a is Record<string, unknown> =>
+                      typeof a === "object" && a !== null,
+                  )
+                  .map((a) => ({
+                    name: String(a.name ?? "").slice(0, 200),
+                    price:
+                      typeof a.price === "number"
+                        ? a.price
+                        : parseFloat(String(a.price ?? "0")) || 0,
+                  }))
+                  .filter((a) => a.name.length > 0)
+              : [];
+            // Normalize service name to base form (strip " + addon" suffix)
+            // so jobs.title and the formatter input are consistent across all
+            // entry points; add-ons are conveyed via the structured array.
+            const baseApptServiceName = (parsed.data.serviceName ?? "")
+              .split(" + ")[0]
+              .trim();
+            const composedApptDescription = formatJobSummary({
+              serviceName: baseApptServiceName || null,
+              problemDescription: parsed.data.description ?? null,
+              intakeAnswers: parseIntakeAnswers(req.body.answersJson),
+              intakeQuestions: parseIntakeQuestions(apptSvcIntakeQuestionsJson),
+              addOns: apptAddOns,
+            });
+
             await db.insert(jobs).values({
               providerId: parsed.data.providerId,
               clientId,
               appointmentId: appointment.id,
               customServiceId: apptCustomServiceId,
-              title: parsed.data.serviceName,
-              description: parsed.data.description || null,
+              title: baseApptServiceName || parsed.data.serviceName,
+              description:
+                composedApptDescription || parsed.data.description || null,
               scheduledDate: parsed.data.scheduledDate,
               scheduledTime: parsed.data.scheduledTime,
               estimatedDuration: 60,
@@ -6726,6 +6794,7 @@ Respond with JSON only:
         pricingType: string;
         basePrice: string | null;
         priceFrom: string | null;
+        intakeQuestionsJson: string | null;
       } | null = null;
       let verifiedCustomServiceId: string | null = null;
       if (parsed.data.customServiceId) {
@@ -6735,6 +6804,7 @@ Respond with JSON only:
             pricingType: providerCustomServices.pricingType,
             basePrice: providerCustomServices.basePrice,
             priceFrom: providerCustomServices.priceFrom,
+            intakeQuestionsJson: providerCustomServices.intakeQuestionsJson,
           })
           .from(providerCustomServices)
           .where(
@@ -6750,6 +6820,37 @@ Respond with JSON only:
         }
         // If svcRow is null, the service doesn't belong to this provider — silently ignore it
       }
+
+      // Recompose the canonical job description server-side via the shared
+      // formatter so it never depends on client behavior or version. Provider-
+      // entered description, intake answers, and selected add-ons are merged
+      // into the same shape used by the homeowner flow and public booking page.
+      const rawJobAddOns = Array.isArray(req.body.selectedAddOns)
+        ? (req.body.selectedAddOns as unknown[])
+            .filter(
+              (a): a is Record<string, unknown> =>
+                typeof a === "object" && a !== null,
+            )
+            .map((a) => ({
+              name: String(a.name ?? "").slice(0, 200),
+              price:
+                typeof a.price === "number"
+                  ? a.price
+                  : parseFloat(String(a.price ?? "0")) || 0,
+            }))
+            .filter((a) => a.name.length > 0)
+        : [];
+      const composedJobDescription = formatJobSummary({
+        serviceName: parsed.data.title ?? null,
+        problemDescription: parsed.data.description ?? null,
+        intakeAnswers: parseIntakeAnswers(
+          req.body.intakeAnswers ?? req.body.answersJson,
+        ),
+        intakeQuestions: parseIntakeQuestions(svcSnapshot?.intakeQuestionsJson),
+        addOns: rawJobAddOns,
+      });
+      const finalJobDescription =
+        composedJobDescription || parsed.data.description || null;
 
       // Compute effective estimatedPrice: provider manual entry takes precedence, then service price
       const effectivePrice =
@@ -6769,6 +6870,7 @@ Respond with JSON only:
           ...parsed.data,
           customServiceId: verifiedCustomServiceId,
           estimatedPrice: effectivePrice ?? parsed.data.estimatedPrice,
+          description: finalJobDescription,
         };
         const [job] = await tx.insert(jobs).values(jobValues).returning();
 
@@ -10466,6 +10568,19 @@ Respond with JSON only:
           }
         }
 
+        // Look up the originating booking link's intake question definitions so
+        // the shared formatter can resolve human-readable labels for each
+        // answer. Fetched outside the transaction since it's read-only.
+        let acceptLinkIntakeQuestions: string | null = null;
+        if (submission.bookingLinkId) {
+          const [linkRow] = await db
+            .select({ intakeQuestions: bookingLinks.intakeQuestions })
+            .from(bookingLinks)
+            .where(eq(bookingLinks.id, submission.bookingLinkId))
+            .catch(() => [null]);
+          acceptLinkIntakeQuestions = linkRow?.intakeQuestions ?? null;
+        }
+
         // Run conversion in a transaction using the shared helper.
         // SELECT FOR UPDATE on the submission row serializes concurrent accept requests —
         // the second request will see the updated status and abort idempotently.
@@ -10495,6 +10610,8 @@ Respond with JSON only:
             estimatedPrice: estimatedPrice ? String(estimatedPrice) : null,
             notes: notes || null,
             targetStatus: "converted",
+            intakeAnswers: submission.answersJson,
+            intakeQuestionsJson: acceptLinkIntakeQuestions,
           });
 
           // Mark related lead as won (if one exists with matching email)

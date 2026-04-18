@@ -18,6 +18,12 @@ import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
+import { useProviderPublishedServices } from "@/hooks/useProviderPublishedServices";
+import { IntakeQuestionFields } from "@/components/IntakeQuestionFields";
+import {
+  parseIntakeQuestions,
+  type IntakeQuestionDef,
+} from "../../../shared/jobSummary";
 
 type ScreenRouteProp = RouteProp<RootStackParamList, "SimpleBooking">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -61,6 +67,8 @@ interface HomeRecord {
   isDefault: boolean;
 }
 
+// Local alias kept for back-compat with the existing UI types in this file.
+// The shared hook returns the same shape via PublishedProviderService.
 interface ProviderService {
   id: string;
   name: string;
@@ -77,13 +85,7 @@ interface ProviderService {
   bookingMode: string | null;
 }
 
-interface ServiceIntakeQuestion {
-  id: string;
-  question: string;
-  type: "text" | "select" | "number";
-  options: string[] | null;
-  required: boolean;
-}
+type ServiceIntakeQuestion = IntakeQuestionDef;
 
 function getPriceLabel(svc: ProviderService): string {
   if (svc.pricingType === "quote") return "Quote required";
@@ -136,14 +138,8 @@ export default function SimpleBookingScreen() {
     enabled: !!user?.id,
   });
 
-  const { data: servicesData, isLoading: servicesLoading } = useQuery<{ services: ProviderService[] }>({
-    queryKey: ["/api/provider", params.providerId, "custom-services", "published"],
-    queryFn: async () => {
-      const res = await apiRequest("GET", `/api/provider/${params.providerId}/custom-services?publishedOnly=true`);
-      return res.json();
-    },
-    enabled: !!params.providerId,
-  });
+  const { services: publishedServices, isLoading: servicesLoading } =
+    useProviderPublishedServices(params.providerId);
 
   const { data: availabilityData, isLoading: availabilityLoading } = useQuery<{
     slots: { startTime: string; label: string }[];
@@ -163,7 +159,7 @@ export default function SimpleBookingScreen() {
   const timeSlots = availabilityData?.slots || TIME_SLOTS;
   const workingDays = availabilityData?.workingDays ?? [1, 2, 3, 4, 5];
 
-  const allServices = servicesData?.services || [];
+  const allServices: ProviderService[] = publishedServices;
   const primaryServices = allServices.filter((s) => !s.isAddon);
   const addonServices = allServices.filter((s) => s.isAddon);
 
@@ -186,13 +182,9 @@ export default function SimpleBookingScreen() {
 
   const selectedService = primaryServices.find((s) => s.id === selectedServiceId);
 
-  const serviceIntakeQuestions: ServiceIntakeQuestion[] = (() => {
-    if (!selectedService?.intakeQuestionsJson) return [];
-    try {
-      const parsed = JSON.parse(selectedService.intakeQuestionsJson);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch { return []; }
-  })();
+  const serviceIntakeQuestions: ServiceIntakeQuestion[] = parseIntakeQuestions(
+    selectedService?.intakeQuestionsJson,
+  );
 
   const isQuoteOnly = selectedService?.bookingMode === "quote_only";
 
@@ -254,12 +246,25 @@ export default function SimpleBookingScreen() {
 
       const url = new URL("/api/appointments", getApiUrl());
       const intakeAnswersJson = Object.keys(intakeAnswers).length > 0 ? JSON.stringify(intakeAnswers) : undefined;
+      const baseDescription =
+        params.intakeData?.problemDescription ||
+        params.intakeData?.issueSummary ||
+        selectedService.description ||
+        "";
+      // Send raw fields — server recomposes the canonical description via
+      // the shared formatter so all three booking entry points produce the
+      // same shape.
+      const structuredAddOns = selectedAddons.map((a) => ({
+        name: a.name,
+        price: getBasePrice(a),
+      }));
       const res = await apiRequest("POST", url.toString(), {
         userId: user.id,
         homeId: defaultHome.id,
         providerId: params.providerId,
         serviceName: serviceNameFull,
-        description: params.intakeData?.problemDescription || params.intakeData?.issueSummary || selectedService.description || "",
+        addOns: structuredAddOns.length > 0 ? structuredAddOns : undefined,
+        description: baseDescription,
         scheduledDate: new Date(selectedDate).toISOString(),
         scheduledTime: selectedTimeLabel || selectedTime,
         estimatedPrice: isQuoteOnly ? null : totalEstimatedPrice,
@@ -546,52 +551,17 @@ export default function SimpleBookingScreen() {
           <Animated.View entering={FadeInDown.delay(275)}>
             <ThemedText style={styles.sectionTitle}>Booking Questions</ThemedText>
             <GlassCard style={styles.intakeCard}>
-              {serviceIntakeQuestions.map((q, i) => (
-                <View key={q.id} style={[styles.intakeQuestion, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.borderLight }]}>
-                  <ThemedText style={[styles.intakeLabel, { color: theme.text }]}>
-                    {q.question}{q.required ? " *" : ""}
-                  </ThemedText>
-                  {q.options && q.options.length > 0 ? (
-                    <View style={styles.intakeOptions}>
-                      {q.options.map((opt) => {
-                        const isSelected = intakeAnswers[q.id] === opt;
-                        return (
-                          <Pressable
-                            key={opt}
-                            onPress={() => {
-                              Haptics.selectionAsync();
-                              setIntakeAnswers((prev) => ({ ...prev, [q.id]: opt }));
-                            }}
-                            style={[
-                              styles.intakeOption,
-                              {
-                                backgroundColor: isSelected ? Colors.accent + "18" : theme.backgroundElevated,
-                                borderColor: isSelected ? Colors.accent : theme.borderLight,
-                              },
-                            ]}
-                          >
-                            <ThemedText style={[styles.intakeOptionText, { color: isSelected ? Colors.accent : theme.text }]}>
-                              {opt}
-                            </ThemedText>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  ) : (
-                    <TextInput
-                      style={[
-                        styles.intakeInput,
-                        { color: theme.text, borderColor: theme.borderLight, backgroundColor: theme.backgroundElevated },
-                      ]}
-                      placeholder={q.type === "number" ? "Enter a number" : "Your answer..."}
-                      placeholderTextColor={theme.textTertiary}
-                      value={intakeAnswers[q.id] || ""}
-                      onChangeText={(text) => setIntakeAnswers((prev) => ({ ...prev, [q.id]: text }))}
-                      keyboardType={q.type === "number" ? "numeric" : "default"}
-                    />
-                  )}
-                </View>
-              ))}
+              <View style={{ paddingHorizontal: Spacing.md }}>
+                <IntakeQuestionFields
+                  questions={serviceIntakeQuestions}
+                  answers={intakeAnswers}
+                  onChange={(next) => {
+                    Haptics.selectionAsync();
+                    setIntakeAnswers(next);
+                  }}
+                  testIDPrefix="booking-intake"
+                />
+              </View>
             </GlassCard>
           </Animated.View>
         ) : null}

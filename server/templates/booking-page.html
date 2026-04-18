@@ -553,10 +553,14 @@
         }
         errorBanner.style.display = 'none';
 
+        // Key answers by question id (falling back to question text only when
+        // a definition lacks an id) so the saved intake_submissions.answers_json
+        // shape matches what the in-app booking flows send. The shared server
+        // formatter resolves human-readable labels using the question defs.
         const answers = {};
         questions.forEach((q, i) => {
           const el = document.getElementById(`custom-${i}`);
-          if (el) answers[q.question] = el.value;
+          if (el) answers[q.id || q.question || `q${i}`] = el.value;
         });
 
         $('btn-submit').disabled = true;

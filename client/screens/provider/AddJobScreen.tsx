@@ -36,7 +36,13 @@ import {
 } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useTheme } from "@/hooks/useTheme";
-import { apiRequest, getApiUrl, getAuthHeaders } from "@/lib/query-client";
+import { apiRequest } from "@/lib/query-client";
+import { useProviderPublishedServices } from "@/hooks/useProviderPublishedServices";
+import { IntakeQuestionFields } from "@/components/IntakeQuestionFields";
+import {
+  parseIntakeQuestions,
+  type IntakeQuestionDef,
+} from "../../../shared/jobSummary";
 
 if (
   Platform.OS === "android" &&
@@ -66,13 +72,7 @@ interface ServiceAddOn {
   description?: string;
 }
 
-interface IntakeQuestion {
-  id: string;
-  question: string;
-  required?: boolean;
-  type?: string;
-  options?: string[];
-}
+type IntakeQuestion = IntakeQuestionDef;
 
 interface CustomService {
   id: string;
@@ -196,27 +196,14 @@ export default function AddJobScreen() {
   });
 
   const {
-    data: servicesData,
+    services: publishedServices,
     isLoading: servicesLoading,
     isError: servicesError,
-  } = useQuery<{ services: CustomService[] }>({
-    queryKey: ["/api/provider", providerId, "custom-services", "published"],
-    queryFn: async () => {
-      const url = new URL(
-        `/api/provider/${providerId}/custom-services?publishedOnly=true`,
-        getApiUrl(),
-      );
-      const res = await fetch(url.toString(), {
-        credentials: "include",
-        headers: getAuthHeaders(),
-      });
-      if (!res.ok) throw new Error(`${res.status}`);
-      return res.json();
-    },
-    enabled: !!providerId,
-  });
+  } = useProviderPublishedServices(providerId);
 
-  const providerServices = servicesData?.services || [];
+  // AddJobScreen lets providers select any of their published services (incl.
+  // add-ons used as standalone) so we keep the full list rather than filtering.
+  const providerServices: CustomService[] = publishedServices;
   const clients = clientsData?.clients || [];
 
   // Form state
@@ -260,15 +247,10 @@ export default function AddJobScreen() {
 
   const selectedClient = clients.find((c) => c.id === selectedClientId);
 
-  const serviceIntakeQuestions = useMemo<IntakeQuestion[]>(() => {
-    if (!selectedService?.intakeQuestionsJson) return [];
-    try {
-      const parsed = JSON.parse(selectedService.intakeQuestionsJson);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  }, [selectedService]);
+  const serviceIntakeQuestions = useMemo<IntakeQuestion[]>(
+    () => parseIntakeQuestions(selectedService?.intakeQuestionsJson),
+    [selectedService],
+  );
 
   const availableAddOns = useMemo<ServiceAddOn[]>(() => {
     if (!selectedService?.addOnsJson) return [];
@@ -332,6 +314,7 @@ export default function AddJobScreen() {
   };
 
   const handleSelectService = (svc: CustomService) => {
+    animateTransition();
     setSelectedService(svc);
     setSelectedAddOns([]);
     setIntakeAnswers({});
@@ -350,6 +333,7 @@ export default function AddJobScreen() {
   };
 
   const handleToggleAddOn = (addon: ServiceAddOn) => {
+    animateTransition();
     setSelectedAddOns((prev) => {
       const isSelected = prev.some((a) => a.name === addon.name);
       const next = isSelected
@@ -433,6 +417,9 @@ export default function AddJobScreen() {
       Object.keys(trimmedAnswers).length > 0
         ? JSON.stringify(trimmedAnswers)
         : undefined;
+    // Send the raw provider-entered description plus structured intake answers
+    // and add-ons. The server is the single source of truth and runs the
+    // shared formatter to compose the canonical job summary.
     createJobMutation.mutate({
       providerId,
       clientId: selectedClientId,
@@ -731,88 +718,12 @@ export default function AddJobScreen() {
               >
                 Service Intake
               </ThemedText>
-              {serviceIntakeQuestions.map((q, i) => (
-                <View
-                  key={q.id}
-                  style={[
-                    styles.intakeQuestion,
-                    i > 0 && { marginTop: Spacing.md },
-                  ]}
-                >
-                  <ThemedText style={styles.intakeQuestionLabel}>
-                    {q.question}
-                    {q.required ? " *" : ""}
-                  </ThemedText>
-                  {q.options && q.options.length > 0 ? (
-                    <View style={styles.intakeOptions}>
-                      {q.options.map((opt) => {
-                        const isSelected = intakeAnswers[q.id] === opt;
-                        return (
-                          <Pressable
-                            key={opt}
-                            onPress={() =>
-                              setIntakeAnswers((prev) => ({
-                                ...prev,
-                                [q.id]: opt,
-                              }))
-                            }
-                            style={[
-                              styles.intakeOption,
-                              {
-                                backgroundColor: isSelected
-                                  ? Colors.accentLight
-                                  : theme.backgroundSecondary,
-                                borderColor: isSelected
-                                  ? Colors.accent
-                                  : "transparent",
-                              },
-                            ]}
-                            testID={`intake-option-${q.id}-${opt}`}
-                          >
-                            <ThemedText
-                              style={[
-                                styles.intakeOptionText,
-                                {
-                                  color: isSelected
-                                    ? Colors.accent
-                                    : theme.text,
-                                },
-                              ]}
-                            >
-                              {opt}
-                            </ThemedText>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  ) : (
-                    <TextInput
-                      value={intakeAnswers[q.id] || ""}
-                      onChangeText={(text) =>
-                        setIntakeAnswers((prev) => ({
-                          ...prev,
-                          [q.id]: text,
-                        }))
-                      }
-                      placeholder={
-                        q.type === "number" ? "Enter a number" : "Answer"
-                      }
-                      placeholderTextColor={theme.textTertiary}
-                      keyboardType={
-                        q.type === "number" ? "numeric" : "default"
-                      }
-                      style={[
-                        styles.intakeInput,
-                        {
-                          color: theme.text,
-                          backgroundColor: theme.backgroundSecondary,
-                        },
-                      ]}
-                      testID={`intake-input-${q.id}`}
-                    />
-                  )}
-                </View>
-              ))}
+              <IntakeQuestionFields
+                questions={serviceIntakeQuestions}
+                answers={intakeAnswers}
+                onChange={setIntakeAnswers}
+                testIDPrefix="intake"
+              />
             </View>
           ) : null}
 
