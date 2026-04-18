@@ -42,7 +42,7 @@ import {
   type NotificationPreference,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
+import { eq, and, or, desc, sql, gte, lte } from "drizzle-orm";
 import { getProviderReadinessSet } from "./stripeConnectService";
 import { hash, compare } from "bcryptjs";
 
@@ -551,16 +551,21 @@ export class DatabaseStorage implements IStorage {
     const clientList = await this.getClients(providerId);
     const activeClients = clientList.length;
 
-    // Upcoming jobs (scheduled in the future)
-    const now = new Date();
+    // Upcoming jobs: future-dated scheduled OR any in-progress (active work).
+    // Mirrors client/lib/jobUtils.ts isUpcomingJob so the Provider Home tile,
+    // the upcoming list, and downstream consumers (Money/Financials/AI) agree.
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
     const upcomingJobsList = await db
       .select({ id: jobs.id })
       .from(jobs)
       .where(
         and(
           eq(jobs.providerId, providerId),
-          eq(jobs.status, "scheduled"),
-          gte(jobs.scheduledDate, now)
+          or(
+            eq(jobs.status, "in_progress"),
+            and(eq(jobs.status, "scheduled"), gte(jobs.scheduledDate, startOfToday))
+          )
         )
       );
     const upcomingJobs = upcomingJobsList.length;

@@ -22,6 +22,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useProviderStore } from "@/state/providerStore";
+import { isUpcomingJob } from "@/lib/jobUtils";
 
 interface ProviderStats {
   revenueMTD: number;
@@ -209,12 +210,23 @@ export default function ProviderHomeScreen() {
   const jobs = jobsData?.jobs || [];
   const clients = clientsData?.clients || [];
 
-  const upcomingJobs = useMemo(() => {
+  const upcomingJobsAll = useMemo(() => {
+    const now = new Date();
     return jobs
-      .filter((job) => job.status === "scheduled" || job.status === "in_progress")
-      .sort((a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime())
-      .slice(0, 3);
+      .filter((job) => isUpcomingJob(job, now))
+      .sort((a, b) => {
+        // in_progress first (oldest start first), then scheduled by date+time asc
+        if (a.status === "in_progress" && b.status !== "in_progress") return -1;
+        if (b.status === "in_progress" && a.status !== "in_progress") return 1;
+        const da = new Date(a.scheduledDate).getTime();
+        const db = new Date(b.scheduledDate).getTime();
+        if (da !== db) return da - db;
+        return (a.scheduledTime || "").localeCompare(b.scheduledTime || "");
+      });
   }, [jobs]);
+
+  const upcomingJobs = useMemo(() => upcomingJobsAll.slice(0, 3), [upcomingJobsAll]);
+  const upcomingCount = upcomingJobsAll.length;
 
   const inProgressJobs = useMemo(() => {
     return jobs.filter((job) => job.status === "in_progress");
@@ -464,7 +476,7 @@ export default function ProviderHomeScreen() {
                 <View style={[styles.statIcon, { backgroundColor: Colors.accentLight }]}>
                   <Feather name="calendar" size={16} color={Colors.accent} />
                 </View>
-                <ThemedText style={styles.statValue}>{stats.upcomingJobs}</ThemedText>
+                <ThemedText style={styles.statValue}>{upcomingCount}</ThemedText>
                 <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Upcoming</ThemedText>
               </Pressable>
 
