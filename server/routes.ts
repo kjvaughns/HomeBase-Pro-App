@@ -2739,6 +2739,18 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
 
   // ============ End HouseFax API Endpoints ============
 
+  app.get("/api/provider-resources", async (_req: Request, res: Response) => {
+    try {
+      const { getProviderResources } = await import("./providerResources");
+      const { resources, source, fetchedAt } = await getProviderResources();
+      res.set("Cache-Control", "public, max-age=300");
+      res.json({ resources, source, fetchedAt });
+    } catch (error) {
+      console.error("Get provider resources error:", error);
+      res.status(500).json({ error: "Failed to get provider resources" });
+    }
+  });
+
   app.get("/api/categories", async (req: Request, res: Response) => {
     try {
       const categories = await storage.getCategories();

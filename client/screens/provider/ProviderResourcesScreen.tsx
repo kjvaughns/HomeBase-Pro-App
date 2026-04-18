@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   StyleSheet,
   View,
@@ -11,7 +11,10 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation } from "@react-navigation/native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
+import { useQuery } from "@tanstack/react-query";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { getApiUrl } from "@/lib/query-client";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
@@ -27,78 +30,32 @@ interface Resource {
   url: string;
 }
 
-const RESOURCES: Resource[] = [
+const RESOURCES_CACHE_KEY = "@homebase/provider-resources-cache-v1";
+
+/**
+ * Minimal cold-start fallback used only when the device has never reached
+ * the server (no AsyncStorage cache) and is offline. The server owns the
+ * authoritative content; this list exists purely so the screen is never
+ * empty on a brand-new install with no connectivity.
+ */
+const COLD_START_FALLBACK: Resource[] = [
   {
-    id: "1",
+    id: "cold-start-1",
     icon: "book-open",
     title: "Getting Started on HomeBase",
     description:
-      "Complete your Business Hub profile, add services with clear pricing, create a public booking link, and connect Stripe to accept payments. A complete profile receives 3x more client inquiries.",
+      "Complete your Business Hub profile, add services with clear pricing, create a public booking link, and connect Stripe to accept payments.",
     type: "guide",
     url: "https://homebasepro-app.lovable.app/blog/getting-started-on-homebase",
   },
   {
-    id: "2",
-    icon: "dollar-sign",
-    title: "Setting Your Rates",
+    id: "cold-start-2",
+    icon: "wifi-off",
+    title: "Reconnect to load the latest articles",
     description:
-      "Research local market rates and factor in labor, materials, overhead, and a 15-20% profit margin. Update your pricing quarterly as material costs change to stay competitive and profitable.",
+      "Provider Resources are kept up to date by our marketing team. Reconnect to the internet to load the latest guides, articles, and tools.",
     type: "article",
-    url: "https://homebasepro-app.lovable.app/blog/setting-your-rates",
-  },
-  {
-    id: "3",
-    icon: "star",
-    title: "Winning 5-Star Reviews",
-    description:
-      "Send a reminder message 24 hours before arrival, arrive on time, take before-and-after photos of your work, and follow up the next day. Satisfied clients become long-term repeat clients.",
-    type: "article",
-    url: "https://homebasepro-app.lovable.app/blog/winning-5-star-reviews",
-  },
-  {
-    id: "4",
-    icon: "camera",
-    title: "Photographing Your Work",
-    description:
-      "Use natural lighting and capture wide shots plus close-up detail of finished work. Before-and-after photos can increase booking rates by up to 40%. Keep your phone steady — a small tripod helps.",
-    type: "guide",
-    url: "https://homebasepro-app.lovable.app/blog/photographing-your-work",
-  },
-  {
-    id: "5",
-    icon: "shield",
-    title: "Business Insurance Guide",
-    description:
-      "Maintain at least $1M general liability coverage. Add workers' comp if you have employees, and a tools-and-equipment policy for high-value gear. Upload proof of insurance in your Business Hub to build trust.",
-    type: "guide",
-    url: "https://homebasepro-app.lovable.app/blog/business-insurance-guide",
-  },
-  {
-    id: "6",
-    icon: "bar-chart-2",
-    title: "Understanding Your Stats",
-    description:
-      "Your HomeBase dashboard tracks conversion rate, average job value, repeat-client rate, and total revenue. Review your stats weekly to spot trends and find opportunities to grow your business.",
-    type: "tool",
-    url: "https://homebasepro-app.lovable.app/blog/understanding-your-stats",
-  },
-  {
-    id: "7",
-    icon: "calendar",
-    title: "Managing Your Schedule",
-    description:
-      "Set your business hours to control when clients can book. Use minimum advance booking windows to avoid last-minute rushes, and block personal time to maintain work-life balance.",
-    type: "article",
-    url: "https://homebasepro-app.lovable.app/blog/managing-your-schedule",
-  },
-  {
-    id: "8",
-    icon: "zap",
-    title: "Getting Paid Faster",
-    description:
-      "Connect Stripe in your Business Hub to enable online payments. Require a deposit on booking links for larger jobs. Send invoices within 1 hour of job completion — faster invoicing means faster payment.",
-    type: "guide",
-    url: "https://homebasepro-app.lovable.app/blog/getting-paid-faster",
+    url: "https://homebasepro-app.lovable.app/blog",
   },
 ];
 
@@ -138,6 +95,60 @@ export default function ProviderResourcesScreen() {
   const headerHeight = useHeaderHeight();
   const { theme } = useTheme();
   const navigation = useNavigation<any>();
+
+  const [cachedResources, setCachedResources] = useState<Resource[] | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    AsyncStorage.getItem(RESOURCES_CACHE_KEY)
+      .then((raw) => {
+        if (!active || !raw) return;
+        try {
+          const parsed = JSON.parse(raw) as Resource[];
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setCachedResources(parsed);
+          }
+        } catch {
+          // Ignore corrupted cache
+        }
+      })
+      .catch(() => {
+        // Ignore cache read errors
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const { data: remoteResources } = useQuery<Resource[]>({
+    queryKey: ["/api/provider-resources"],
+    queryFn: async () => {
+      const url = new URL("/api/provider-resources", getApiUrl());
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Failed to load resources: ${res.status}`);
+      const json = (await res.json()) as { resources: Resource[] };
+      return json.resources;
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+
+  useEffect(() => {
+    if (remoteResources && remoteResources.length > 0) {
+      AsyncStorage.setItem(
+        RESOURCES_CACHE_KEY,
+        JSON.stringify(remoteResources),
+      ).catch(() => {
+        // Ignore cache write errors
+      });
+    }
+  }, [remoteResources]);
+
+  const resources: Resource[] =
+    remoteResources && remoteResources.length > 0
+      ? remoteResources
+      : cachedResources && cachedResources.length > 0
+        ? cachedResources
+        : COLD_START_FALLBACK;
 
   const getTypeColor = (type: Resource["type"]) => {
     switch (type) {
@@ -205,7 +216,7 @@ export default function ProviderResourcesScreen() {
             Featured Resources
           </ThemedText>
           <View style={styles.resourcesGrid}>
-            {RESOURCES.map((resource, index) => (
+            {resources.map((resource, index) => (
               <Animated.View
                 key={resource.id}
                 entering={FadeInDown.delay(100 + index * 30).duration(300)}
