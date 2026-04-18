@@ -46,7 +46,7 @@ const COLD_START_FALLBACK: Resource[] = [
     description:
       "Complete your Business Hub profile, add services with clear pricing, create a public booking link, and connect Stripe to accept payments.",
     type: "guide",
-    url: "https://homebasepro-app.lovable.app/blog/getting-started-on-homebase",
+    url: "https://homebaseproapp.com/blog/getting-started-on-homebase",
   },
   {
     id: "cold-start-2",
@@ -55,7 +55,7 @@ const COLD_START_FALLBACK: Resource[] = [
     description:
       "Provider Resources are kept up to date by our marketing team. Reconnect to the internet to load the latest guides, articles, and tools.",
     type: "article",
-    url: "https://homebasepro-app.lovable.app/blog",
+    url: "https://homebaseproapp.com/blog",
   },
 ];
 

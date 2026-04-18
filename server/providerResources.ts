@@ -30,7 +30,7 @@ const BUNDLED_FALLBACK: ProviderResource[] = [
     description:
       "Complete your Business Hub profile, add services with clear pricing, create a public booking link, and connect Stripe to accept payments. A complete profile receives 3x more client inquiries.",
     type: "guide",
-    url: "https://homebasepro-app.lovable.app/blog/getting-started-on-homebase",
+    url: "https://homebaseproapp.com/blog/getting-started-on-homebase",
   },
   {
     id: "2",
@@ -39,7 +39,7 @@ const BUNDLED_FALLBACK: ProviderResource[] = [
     description:
       "Research local market rates and factor in labor, materials, overhead, and a 15-20% profit margin. Update your pricing quarterly as material costs change to stay competitive and profitable.",
     type: "article",
-    url: "https://homebasepro-app.lovable.app/blog/setting-your-rates",
+    url: "https://homebaseproapp.com/blog/setting-your-rates",
   },
   {
     id: "3",
@@ -48,7 +48,7 @@ const BUNDLED_FALLBACK: ProviderResource[] = [
     description:
       "Send a reminder message 24 hours before arrival, arrive on time, take before-and-after photos of your work, and follow up the next day. Satisfied clients become long-term repeat clients.",
     type: "article",
-    url: "https://homebasepro-app.lovable.app/blog/winning-5-star-reviews",
+    url: "https://homebaseproapp.com/blog/winning-5-star-reviews",
   },
   {
     id: "4",
@@ -57,7 +57,7 @@ const BUNDLED_FALLBACK: ProviderResource[] = [
     description:
       "Use natural lighting and capture wide shots plus close-up detail of finished work. Before-and-after photos can increase booking rates by up to 40%. Keep your phone steady — a small tripod helps.",
     type: "guide",
-    url: "https://homebasepro-app.lovable.app/blog/photographing-your-work",
+    url: "https://homebaseproapp.com/blog/photographing-your-work",
   },
   {
     id: "5",
@@ -66,7 +66,7 @@ const BUNDLED_FALLBACK: ProviderResource[] = [
     description:
       "Maintain at least $1M general liability coverage. Add workers' comp if you have employees, and a tools-and-equipment policy for high-value gear. Upload proof of insurance in your Business Hub to build trust.",
     type: "guide",
-    url: "https://homebasepro-app.lovable.app/blog/business-insurance-guide",
+    url: "https://homebaseproapp.com/blog/business-insurance-guide",
   },
   {
     id: "6",
@@ -75,7 +75,7 @@ const BUNDLED_FALLBACK: ProviderResource[] = [
     description:
       "Your HomeBase dashboard tracks conversion rate, average job value, repeat-client rate, and total revenue. Review your stats weekly to spot trends and find opportunities to grow your business.",
     type: "tool",
-    url: "https://homebasepro-app.lovable.app/blog/understanding-your-stats",
+    url: "https://homebaseproapp.com/blog/understanding-your-stats",
   },
   {
     id: "7",
@@ -84,7 +84,7 @@ const BUNDLED_FALLBACK: ProviderResource[] = [
     description:
       "Set your business hours to control when clients can book. Use minimum advance booking windows to avoid last-minute rushes, and block personal time to maintain work-life balance.",
     type: "article",
-    url: "https://homebasepro-app.lovable.app/blog/managing-your-schedule",
+    url: "https://homebaseproapp.com/blog/managing-your-schedule",
   },
   {
     id: "8",
@@ -93,7 +93,7 @@ const BUNDLED_FALLBACK: ProviderResource[] = [
     description:
       "Connect Stripe in your Business Hub to enable online payments. Require a deposit on booking links for larger jobs. Send invoices within 1 hour of job completion — faster invoicing means faster payment.",
     type: "guide",
-    url: "https://homebasepro-app.lovable.app/blog/getting-paid-faster",
+    url: "https://homebaseproapp.com/blog/getting-paid-faster",
   },
 ];
 
