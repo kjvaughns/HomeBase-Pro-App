@@ -738,6 +738,16 @@ export async function runBootMigrations(): Promise<void> {
         ON saved_providers (user_id, provider_id)
     `);
 
+    // ── stripe_webhook_events: per-endpoint audit columns (Task #239) ────
+    await runSql(
+      "stripe_webhook_events.endpoint",
+      `ALTER TABLE stripe_webhook_events ADD COLUMN IF NOT EXISTS endpoint TEXT`,
+    );
+    await runSql(
+      "stripe_webhook_events.stripe_account_id",
+      `ALTER TABLE stripe_webhook_events ADD COLUMN IF NOT EXISTS stripe_account_id TEXT`,
+    );
+
     // ── review_reports: UGC moderation (Apple Guideline 1.2) ─────────────
     await runSql("review_reports.create", `
       CREATE TABLE IF NOT EXISTS review_reports (

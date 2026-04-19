@@ -122,9 +122,17 @@ On `invoice.paid` for Connect/booking invoices, `handleStripeInvoicePaid` (and `
 
 The new dispatcher's idempotency means a Stripe retry of `invoice.paid` is now guaranteed to short-circuit BEFORE any side effect runs, not just inside individual notification helpers.
 
-### 4.5 Schema additions
+### 4.5 Misrouted events: explicit deviation from "record everything"
 
-`stripe_webhook_events` table gained two columns (added to Supabase via `ALTER TABLE … ADD COLUMN IF NOT EXISTS`):
+The original requirement asked the dispatcher to record **every** received event into `stripe_webhook_events` (with the receiving endpoint) before any side effect runs. Implementation deviates from this in exactly one place:
+
+**Misrouted events (wrong endpoint) are NOT inserted into `stripe_webhook_events`.**
+
+Rationale: `stripe_event_id` is globally unique. If we reserved the row at first delivery (to the wrong endpoint), a later legitimate delivery to the correct endpoint would short-circuit as `duplicate` and the side effects would never run. This is the exact failure mode flagged in code review and is now covered by regression test §5.4b ("Wrong-endpoint does NOT poison idempotency"). The misroute is still observable via the structured log line (`outcome=rejected reason=wrong_endpoint expected=…`) and via Stripe Dashboard delivery history. If a persistent paper trail is later required, the right shape is a separate audit table (e.g., `stripe_webhook_misroutes`) without a unique constraint on `event.id` — out of scope for this task.
+
+### 4.6 Schema additions
+
+`stripe_webhook_events` table gained two columns. The migration is applied at boot via `runBootMigrations` in `server/dbMigrations.ts` (`ALTER TABLE … ADD COLUMN IF NOT EXISTS`), so any environment — fresh or existing — is reconciled to the new shape automatically on the next backend start. The same statements were run directly against the live Supabase database during this task to avoid waiting for a redeploy:
 
 | Column | Type | Purpose |
 | --- | --- | --- |
