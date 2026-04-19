@@ -3,7 +3,7 @@ modules = ["nodejs-20", "nodejs-22", "postgresql-16"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["glib"]
+packages = ["glib", "run"]
 
 [deployment]
 deploymentTarget = "autoscale"
