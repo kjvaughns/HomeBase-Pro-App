@@ -2943,7 +2943,7 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
           Number.isFinite(userLng) &&
           Number.isFinite(pLat) &&
           Number.isFinite(pLng)
-            ? haversineMiles(userLat, userLng, pLat, pLng)
+            ? Math.round(haversineMiles(userLat, userLng, pLat, pLng) * 10) / 10
             : null;
 
         res.json({
