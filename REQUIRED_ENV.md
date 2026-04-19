@@ -8,7 +8,8 @@ This document defines every environment variable the HomeBase backend depends on
 | `STRIPE_CONNECT_WEBHOOK_SECRET` | **Critical** | `process.exit(1)` at startup if unset in production; all webhook requests rejected without it | Stripe Dashboard → Webhooks → signing secret |
 | `SUPABASE_DATABASE_URL` | **Critical** | `db.ts` throws on connection if unset. Supabase is the only supported database — there is no fallback. | Supabase project settings |
 | `STRIPE_SECRET_KEY` | **Critical** | Replit Stripe integration; `getStripe()` throws on use if missing | Replit Stripe integration |
-| `STRIPE_WEBHOOK_SECRET` | **Critical** | Used by `stripe-replit-sync`; `/api/stripe/webhook` returns 400 on sig failure | Stripe Dashboard → Webhooks |
+| `STRIPE_WEBHOOK_SECRET_PLATFORM` (legacy: `STRIPE_WEBHOOK_SECRET`) | **Critical** | Used by `stripe-replit-sync`; `/api/stripe/webhook/platform` returns 400 on sig failure | Stripe Dashboard → Webhooks (platform endpoint) |
+| `STRIPE_WEBHOOK_SECRET_CONNECT` (legacy: `STRIPE_CONNECT_WEBHOOK_SECRET`) | **Critical** | `/api/stripe/webhook/connect` returns 400 on sig failure | Stripe Dashboard → Webhooks (Connect endpoint) |
 | `RESEND_API_KEY` | Required for email | Replit Resend integration; email send fails gracefully if missing | Resend dashboard |
 | `OPENAI_API_KEY` | Required for AI features | Replit AI integration; AI endpoints return 500 if missing | OpenAI dashboard |
 | `RAPIDAPI_KEY` | Optional | `fetchZillowPropertyData` returns `null` gracefully if missing | RapidAPI dashboard |
@@ -62,9 +63,9 @@ The backend automatically selects Stripe test vs live mode based on `NODE_ENV`:
    - The Replit Stripe connector should be configured for the `production` environment (see `server/stripeClient.ts`) so `/api/stripe/config` returns the live publishable key to deployed mobile builds.
 
 2. **Register webhooks in the Stripe dashboard (live mode)**:
-   - Platform account → endpoint `https://<deployed-domain>/api/stripe/webhook` — subscribe to the same events used in test mode (see `server/webhookHandlers.ts`), notably `checkout.session.completed`, `invoice.paid`, `invoice.payment_failed`.
-   - Connect endpoint → `https://<deployed-domain>/api/webhooks/stripe-connect` — subscribe to `account.updated`, `invoice.paid`, `invoice.payment_failed`, `payout.*`, `charge.refunded`, `transfer.*` (full list in `server/stripeConnectService.ts :: handleStripeWebhook`).
-   - Paste the two signing secrets into deployment env as `STRIPE_WEBHOOK_SECRET` and `STRIPE_CONNECT_WEBHOOK_SECRET`.
+   - Platform account → endpoint `https://<deployed-domain>/api/stripe/webhook/platform` — subscribe to the same events used in test mode (see `server/webhookHandlers.ts`), notably `checkout.session.completed`, `invoice.paid`, `invoice.payment_failed`.
+   - Connect endpoint → `https://<deployed-domain>/api/stripe/webhook/connect` — subscribe to `account.updated`, `invoice.paid`, `invoice.payment_failed`, `payout.*`, `charge.refunded`, `transfer.*` (full list in `server/stripeConnectService.ts :: handleStripeWebhook`).
+   - Paste the two signing secrets into deployment env as `STRIPE_WEBHOOK_SECRET_PLATFORM` and `STRIPE_WEBHOOK_SECRET_CONNECT` (the legacy names `STRIPE_WEBHOOK_SECRET` / `STRIPE_CONNECT_WEBHOOK_SECRET` are still honored as fallbacks during cutover).
    - Redeploy.
 
 3. **Mobile builds**:

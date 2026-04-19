@@ -8,8 +8,12 @@ import { stripeWebhookEvents, stripeConnectAccounts } from "../shared/schema";
 // =============================================================================
 // Two production webhook endpoints route into this single shared dispatcher:
 //
-//   - /api/stripe/webhook            → endpoint = "platform"
-//   - /api/webhooks/stripe-connect   → endpoint = "connect"
+//   - /api/stripe/webhook/platform   → endpoint = "platform"
+//   - /api/stripe/webhook/connect    → endpoint = "connect"
+//
+// (Legacy paths /api/stripe/webhook and /api/webhooks/stripe-connect are also
+// mounted on the same handlers during the Dashboard cutover — see
+// setupStripeWebhook / setupStripeConnectWebhook in server/index.ts.)
 //
 // The dispatcher enforces:
 //

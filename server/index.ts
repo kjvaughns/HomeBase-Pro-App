@@ -89,111 +89,135 @@ function setupCors(app: express.Application) {
 // (server/webhookSecrets.ts) so regression tests can import + exercise it
 // without booting the whole server. Re-exported here for backwards compat
 // with existing callers in this file.
-export { resolveWebhookSecret } from "./webhookSecrets";
+import { resolveWebhookSecret } from "./webhookSecrets";
+export { resolveWebhookSecret };
+
+// -----------------------------------------------------------------------------
+// Shared platform-webhook handler. Mounted on the canonical new path
+// `/api/stripe/webhook/platform` and (briefly, for cutover) the legacy path
+// `/api/stripe/webhook`. Both must be registered with express.raw() BEFORE the
+// global express.json() so Stripe's signature verification sees the raw bytes.
+// -----------------------------------------------------------------------------
+async function handlePlatformWebhook(req: Request, res: Response) {
+  const sigHeader = req.headers["stripe-signature"];
+  const endpointSecret = resolveWebhookSecret("platform");
+
+  if (!sigHeader) {
+    console.error("[stripe-webhook] endpoint=platform outcome=rejected reason=missing_signature");
+    return res.status(400).json({ error: "Missing stripe-signature header" });
+  }
+  if (!endpointSecret) {
+    console.error("[stripe-webhook] endpoint=platform outcome=rejected reason=secret_not_configured");
+    return res.status(500).json({ error: "Webhook secret not configured" });
+  }
+  if (!Buffer.isBuffer(req.body)) {
+    console.error("[stripe-webhook] endpoint=platform outcome=rejected reason=body_not_buffer");
+    return res.status(500).json({ error: "Webhook processing error" });
+  }
+
+  const sig = Array.isArray(sigHeader) ? sigHeader[0] : sigHeader;
+
+  // 1. Verify signature with the platform secret.
+  let event: any;
+  try {
+    event = getStripe().webhooks.constructEvent(req.body, sig, endpointSecret);
+  } catch (err: any) {
+    console.error(
+      `[stripe-webhook] endpoint=platform outcome=rejected reason=bad_signature message=${err?.message ?? "unknown"}`,
+    );
+    return res.status(400).json({ error: `Webhook Error: ${err?.message ?? "signature verification failed"}` });
+  }
+
+  // 2. Best-effort: keep stripe-replit-sync mirroring Stripe state into
+  //    the local stripe.* schema. Failures here MUST NOT fail the webhook
+  //    — the sync is read-only mirror data, not the source of truth.
+  try {
+    await WebhookHandlers.processWebhook(req.body as Buffer, sig);
+  } catch (err: any) {
+    console.warn(
+      `[stripe-webhook] endpoint=platform sync_mirror_error event=${event.id} message=${err?.message ?? "unknown"}`,
+    );
+  }
+
+  // 3. Run the verified event through the shared dispatcher.
+  try {
+    const result = await processStripeEvent(event, "platform");
+    return res.status(200).json(result);
+  } catch (err: any) {
+    // processStripeEvent already logged the error with stack trace.
+    return res.status(500).json({ error: err?.message ?? "Webhook processing failed" });
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Shared connect-webhook handler. Mounted on the canonical new path
+// `/api/stripe/webhook/connect` and (briefly, for cutover) the legacy path
+// `/api/webhooks/stripe-connect`. Verifies with STRIPE_WEBHOOK_SECRET_CONNECT
+// (and reads `event.account` to resolve the connected provider — the shared
+// dispatcher in stripeWebhookRouter.ts handles that resolution).
+// -----------------------------------------------------------------------------
+async function handleConnectWebhook(req: Request, res: Response) {
+  const sigHeader = req.headers["stripe-signature"];
+  const endpointSecret = resolveWebhookSecret("connect");
+
+  if (!sigHeader) {
+    console.error("[stripe-webhook] endpoint=connect outcome=rejected reason=missing_signature");
+    return res.status(400).json({ error: "Missing stripe-signature header" });
+  }
+  if (!endpointSecret) {
+    console.error("[stripe-webhook] endpoint=connect outcome=rejected reason=secret_not_configured");
+    return res.status(500).json({ error: "Webhook secret not configured" });
+  }
+  if (!Buffer.isBuffer(req.body)) {
+    console.error("[stripe-webhook] endpoint=connect outcome=rejected reason=body_not_buffer");
+    return res.status(500).json({ error: "Webhook processing error" });
+  }
+
+  const sig = Array.isArray(sigHeader) ? sigHeader[0] : sigHeader;
+
+  let event: any;
+  try {
+    event = getStripe().webhooks.constructEvent(req.body, sig, endpointSecret);
+  } catch (err: any) {
+    console.error(
+      `[stripe-webhook] endpoint=connect outcome=rejected reason=bad_signature message=${err?.message ?? "unknown"}`,
+    );
+    return res.status(400).json({ error: `Webhook Error: ${err?.message ?? "signature verification failed"}` });
+  }
+
+  try {
+    const result = await processStripeEvent(event, "connect");
+    return res.status(200).json(result);
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message ?? "Webhook processing failed" });
+  }
+}
 
 function setupStripeWebhook(app: express.Application) {
   // Platform endpoint — receives events on the platform Stripe account
   // (subscriptions, platform-billed invoices, platform Checkouts).
-  app.post(
-    "/api/stripe/webhook",
-    express.raw({ type: "application/json" }),
-    async (req, res) => {
-      const sigHeader = req.headers["stripe-signature"];
-      const endpointSecret = resolveWebhookSecret("platform");
+  const rawJson = express.raw({ type: "application/json" });
 
-      if (!sigHeader) {
-        console.error("[stripe-webhook] endpoint=platform outcome=rejected reason=missing_signature");
-        return res.status(400).json({ error: "Missing stripe-signature header" });
-      }
-      if (!endpointSecret) {
-        console.error("[stripe-webhook] endpoint=platform outcome=rejected reason=secret_not_configured");
-        return res.status(500).json({ error: "Webhook secret not configured" });
-      }
-      if (!Buffer.isBuffer(req.body)) {
-        console.error("[stripe-webhook] endpoint=platform outcome=rejected reason=body_not_buffer");
-        return res.status(500).json({ error: "Webhook processing error" });
-      }
+  // Canonical new path.
+  app.post("/api/stripe/webhook/platform", rawJson, handlePlatformWebhook);
 
-      const sig = Array.isArray(sigHeader) ? sigHeader[0] : sigHeader;
-
-      // 1. Verify signature with the platform secret.
-      let event: any;
-      try {
-        event = getStripe().webhooks.constructEvent(req.body, sig, endpointSecret);
-      } catch (err: any) {
-        console.error(
-          `[stripe-webhook] endpoint=platform outcome=rejected reason=bad_signature message=${err?.message ?? "unknown"}`,
-        );
-        return res.status(400).json({ error: `Webhook Error: ${err?.message ?? "signature verification failed"}` });
-      }
-
-      // 2. Best-effort: keep stripe-replit-sync mirroring Stripe state into
-      //    the local stripe.* schema. Failures here MUST NOT fail the webhook
-      //    — the sync is read-only mirror data, not the source of truth.
-      try {
-        await WebhookHandlers.processWebhook(req.body as Buffer, sig);
-      } catch (err: any) {
-        console.warn(
-          `[stripe-webhook] endpoint=platform sync_mirror_error event=${event.id} message=${err?.message ?? "unknown"}`,
-        );
-      }
-
-      // 3. Run the verified event through the shared dispatcher.
-      try {
-        const result = await processStripeEvent(event, "platform");
-        return res.status(200).json(result);
-      } catch (err: any) {
-        // processStripeEvent already logged the error with stack trace.
-        return res.status(500).json({ error: err?.message ?? "Webhook processing failed" });
-      }
-    },
-  );
+  // Legacy path — kept temporarily so a Stripe Dashboard cutover doesn't
+  // drop deliveries. Remove once both Dashboard endpoints are pointed at
+  // the new `/platform` and `/connect` paths and recent deliveries are 2xx.
+  app.post("/api/stripe/webhook", rawJson, handlePlatformWebhook);
 }
 
 function setupStripeConnectWebhook(app: express.Application) {
   // Connect endpoint — receives "events on connected accounts".
   // MUST be registered before express.json() so req.body is the raw Buffer
   // required by Stripe's cryptographic signature verification.
-  app.post(
-    "/api/webhooks/stripe-connect",
-    express.raw({ type: "application/json" }),
-    async (req: Request, res: Response) => {
-      const sigHeader = req.headers["stripe-signature"];
-      const endpointSecret = resolveWebhookSecret("connect");
+  const rawJson = express.raw({ type: "application/json" });
 
-      if (!sigHeader) {
-        console.error("[stripe-webhook] endpoint=connect outcome=rejected reason=missing_signature");
-        return res.status(400).json({ error: "Missing stripe-signature header" });
-      }
-      if (!endpointSecret) {
-        console.error("[stripe-webhook] endpoint=connect outcome=rejected reason=secret_not_configured");
-        return res.status(500).json({ error: "Webhook secret not configured" });
-      }
-      if (!Buffer.isBuffer(req.body)) {
-        console.error("[stripe-webhook] endpoint=connect outcome=rejected reason=body_not_buffer");
-        return res.status(500).json({ error: "Webhook processing error" });
-      }
+  // Canonical new path.
+  app.post("/api/stripe/webhook/connect", rawJson, handleConnectWebhook);
 
-      const sig = Array.isArray(sigHeader) ? sigHeader[0] : sigHeader;
-
-      let event: any;
-      try {
-        event = getStripe().webhooks.constructEvent(req.body, sig, endpointSecret);
-      } catch (err: any) {
-        console.error(
-          `[stripe-webhook] endpoint=connect outcome=rejected reason=bad_signature message=${err?.message ?? "unknown"}`,
-        );
-        return res.status(400).json({ error: `Webhook Error: ${err?.message ?? "signature verification failed"}` });
-      }
-
-      try {
-        const result = await processStripeEvent(event, "connect");
-        return res.status(200).json(result);
-      } catch (err: any) {
-        return res.status(500).json({ error: err?.message ?? "Webhook processing failed" });
-      }
-    },
-  );
+  // Legacy path — kept temporarily for cutover (see note above).
+  app.post("/api/webhooks/stripe-connect", rawJson, handleConnectWebhook);
 }
 
 function setupBodyParsing(app: express.Application) {
@@ -269,7 +293,7 @@ async function initStripe() {
         console.log('Stripe webhook setup skipped: REPLIT_DOMAINS not set');
       } else {
         const { webhook } = await stripeSync.findOrCreateManagedWebhook(
-          `${webhookBaseUrl}/api/stripe/webhook`
+          `${webhookBaseUrl}/api/stripe/webhook/platform`
         );
         console.log(`Webhook configured: ${webhook?.url ?? 'unknown'}`);
       }
