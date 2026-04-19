@@ -33,7 +33,7 @@ import {
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
 import { db } from "./db";
-import { sql, eq, and, desc, inArray, gte } from "drizzle-orm";
+import { sql, eq, and, or, desc, inArray, gte, ilike } from "drizzle-orm";
 import {
   sendInvoiceEmail,
   sendProviderClientMessage,
@@ -9678,8 +9678,16 @@ Respond with JSON only:
     requireAdmin,
     async (req: Request, res: Response) => {
       try {
-        const search = (req.query.q as string | undefined)?.trim().toLowerCase() ?? "";
-        const rows = await db
+        const search = (req.query.q as string | undefined)?.trim() ?? "";
+        const limit = Math.min(
+          Math.max(parseInt((req.query.limit as string) ?? "50", 10) || 50, 1),
+          200,
+        );
+        const offset = Math.max(parseInt((req.query.offset as string) ?? "0", 10) || 0, 0);
+
+        // Search is performed in SQL with case-insensitive LIKE so admins
+        // can find ANY provider, not just those in the first page of rows.
+        const baseQuery = db
           .select({
             id: providers.id,
             businessName: providers.businessName,
@@ -9688,17 +9696,22 @@ Respond with JSON only:
             partnerSince: providerPlans.partnerSince,
           })
           .from(providers)
-          .leftJoin(providerPlans, eq(providerPlans.providerId, providers.id))
-          .orderBy(desc(providerPlans.partnerSince), providers.businessName)
-          .limit(100);
-        const filtered = search
-          ? rows.filter(
-              (r) =>
-                (r.businessName ?? "").toLowerCase().includes(search) ||
-                (r.email ?? "").toLowerCase().includes(search),
+          .leftJoin(providerPlans, eq(providerPlans.providerId, providers.id));
+
+        const rows = await (search
+          ? baseQuery.where(
+              or(
+                ilike(providers.businessName, `%${search}%`),
+                ilike(providers.email, `%${search}%`),
+              ),
             )
-          : rows;
-        res.json({ providers: filtered });
+          : baseQuery
+        )
+          .orderBy(desc(providerPlans.partnerSince), providers.businessName)
+          .limit(limit)
+          .offset(offset);
+
+        res.json({ providers: rows, limit, offset });
       } catch (err: any) {
         console.error("[admin] list providers error:", err);
         res.status(500).json({ error: err.message || "Failed to list providers" });
