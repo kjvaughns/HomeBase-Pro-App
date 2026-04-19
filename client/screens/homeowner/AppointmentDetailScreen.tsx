@@ -46,6 +46,17 @@ interface Provider {
 interface LinkedJob {
   id: string;
   status?: string | null;
+  title?: string | null;
+  description?: string | null;
+  address?: string | null;
+  estimatedDuration?: number | null;
+  estimatedPrice?: string | null;
+  finalPrice?: string | null;
+  notes?: string | null;
+  scheduledDate?: string | null;
+  scheduledTime?: string | null;
+  completedAt?: string | null;
+  checklistCount?: number;
 }
 
 interface LinkedInvoice {
@@ -65,13 +76,10 @@ interface Appointment {
   providerId: string;
   serviceName: string;
   description?: string;
-  jobSummary?: string;
   scheduledDate: string;
   scheduledTime: string;
-  urgency: string;
-  jobSize: string;
-  estimatedPrice?: number;
-  finalPrice?: number;
+  estimatedPrice?: number | string | null;
+  finalPrice?: number | string | null;
   providerDiagnosis?: string;
   statusHistory?: StatusUpdate[];
   status: AppointmentStatus;
@@ -264,7 +272,9 @@ export default function AppointmentDetailScreen() {
             <View style={styles.headerRow}>
               <Avatar name={appointment.provider?.businessName || "Provider"} size="medium" />
               <View style={styles.headerInfo}>
-                <ThemedText style={styles.serviceName}>{appointment.serviceName}</ThemedText>
+                <ThemedText style={styles.serviceName}>
+                  {appointment.job?.title || appointment.serviceName}
+                </ThemedText>
                 <ThemedText style={[styles.providerName, { color: theme.textSecondary }]}>
                   {appointment.provider?.businessName || "Service Provider"}
                 </ThemedText>
@@ -277,175 +287,213 @@ export default function AppointmentDetailScreen() {
                   </View>
                 ) : null}
               </View>
-              <StatusPill
-                label={statusConfig.label}
-                status={statusConfig.status}
-              />
+              <StatusPill label={statusConfig.label} status={statusConfig.status} />
             </View>
           </GlassCard>
         </Animated.View>
 
-        {appointment.jobSummary ? (
-          <View style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>Job Summary</ThemedText>
-            <View style={[styles.summaryCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
-              <ThemedText style={[styles.summaryText, { color: theme.text }]}>
-                {appointment.jobSummary}
-              </ThemedText>
+        {appointment.job?.description || appointment.description ? (
+          <Animated.View entering={FadeInDown.delay(50).duration(400)}>
+            <View style={styles.section}>
+              <ThemedText style={styles.sectionTitle}>Job Description</ThemedText>
+              <View style={[styles.summaryCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
+                <ThemedText style={[styles.summaryText, { color: theme.text }]}>
+                  {appointment.job?.description || appointment.description}
+                </ThemedText>
+              </View>
             </View>
-          </View>
+          </Animated.View>
         ) : null}
 
-        <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Details</ThemedText>
-          
-          <View style={[styles.detailCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
-            <View style={styles.detailRow}>
-              <Feather name="calendar" size={18} color={theme.textSecondary} />
-              <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Date</ThemedText>
-              <ThemedText style={styles.detailValue}>{formatDate(appointment.scheduledDate)}</ThemedText>
-            </View>
-            <View style={styles.detailRow}>
-              <Feather name="clock" size={18} color={theme.textSecondary} />
-              <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Time</ThemedText>
-              <ThemedText style={styles.detailValue}>{appointment.scheduledTime}</ThemedText>
-            </View>
-            <View style={styles.detailRow}>
-              <Feather name="alert-circle" size={18} color={theme.textSecondary} />
-              <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Urgency</ThemedText>
-              <ThemedText style={styles.detailValue}>{appointment.urgency}</ThemedText>
-            </View>
-            <View style={styles.detailRow}>
-              <Feather name="layers" size={18} color={theme.textSecondary} />
-              <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Job Size</ThemedText>
-              <ThemedText style={styles.detailValue}>{appointment.jobSize}</ThemedText>
-            </View>
-            {appointment.estimatedPrice ? (
-              <View style={[styles.detailRow, { borderBottomWidth: appointment.status === "completed" && appointment.finalPrice ? StyleSheet.hairlineWidth : 0 }]}>
-                <Feather name="dollar-sign" size={18} color={theme.textSecondary} />
-                <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Est. Price</ThemedText>
-                <ThemedText style={[styles.detailValue, { color: Colors.accent }]}>${appointment.estimatedPrice}</ThemedText>
-              </View>
-            ) : null}
-            {appointment.status === "completed" && appointment.finalPrice ? (
-              <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
-                <Feather name="check-circle" size={18} color={Colors.accent} />
-                <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Final Price</ThemedText>
-                <ThemedText style={[styles.detailValue, { color: Colors.accent, fontWeight: "600" }]}>${appointment.finalPrice}</ThemedText>
-              </View>
-            ) : null}
-          </View>
-        </View>
-
-        {appointment.statusHistory && appointment.statusHistory.length > 0 ? (
+        <Animated.View entering={FadeInDown.delay(100).duration(400)}>
           <View style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>Status Updates</ThemedText>
-            <View style={[styles.timelineCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
-              {appointment.statusHistory.map((update, index) => (
-                <View key={index} style={styles.timelineItem}>
-                  <View style={styles.timelineDot}>
-                    <View style={[styles.dot, { backgroundColor: index === appointment.statusHistory!.length - 1 ? Colors.accent : theme.textTertiary }]} />
-                    {index < appointment.statusHistory!.length - 1 ? (
-                      <View style={[styles.timelineLine, { backgroundColor: theme.borderLight }]} />
-                    ) : null}
-                  </View>
-                  <View style={styles.timelineContent}>
-                    <View style={styles.timelineHeader}>
-                      <ThemedText style={styles.timelineStatus}>
-                        {update.status.charAt(0).toUpperCase() + update.status.slice(1).replace("_", " ")}
-                      </ThemedText>
-                      <ThemedText style={[styles.timelineDate, { color: theme.textTertiary }]}>
-                        {new Date(update.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                      </ThemedText>
-                    </View>
-                    <ThemedText style={[styles.timelineNote, { color: theme.textSecondary }]}>
-                      {update.note}
+            <ThemedText style={styles.sectionTitle}>Schedule</ThemedText>
+            <View style={[styles.detailCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
+              <View style={styles.detailRow}>
+                <Feather name="calendar" size={18} color={theme.textSecondary} />
+                <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Date</ThemedText>
+                <ThemedText style={styles.detailValue}>{formatDate(appointment.scheduledDate)}</ThemedText>
+              </View>
+              <View style={styles.detailRow}>
+                <Feather name="clock" size={18} color={theme.textSecondary} />
+                <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Time</ThemedText>
+                <ThemedText style={styles.detailValue}>{appointment.scheduledTime}</ThemedText>
+              </View>
+              {appointment.job?.estimatedDuration ? (
+                <View style={styles.detailRow}>
+                  <Feather name="watch" size={18} color={theme.textSecondary} />
+                  <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Duration</ThemedText>
+                  <ThemedText style={styles.detailValue}>~{appointment.job.estimatedDuration} min</ThemedText>
+                </View>
+              ) : null}
+              {appointment.job?.address ? (
+                <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
+                  <Feather name="map-pin" size={18} color={theme.textSecondary} />
+                  <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Address</ThemedText>
+                  <ThemedText style={styles.detailValue} numberOfLines={2}>{appointment.job.address}</ThemedText>
+                </View>
+              ) : (
+                <View style={[styles.detailRow, { borderBottomWidth: 0 }]} />
+              )}
+            </View>
+          </View>
+        </Animated.View>
+
+        {(() => {
+          const toNum = (v: string | number | null | undefined): number | null => {
+            if (v === null || v === undefined || v === "") return null;
+            const n = typeof v === "number" ? v : parseFloat(v);
+            return isNaN(n) ? null : n;
+          };
+          const finalPrice = toNum(appointment.job?.finalPrice ?? appointment.finalPrice);
+          const estPrice = toNum(appointment.job?.estimatedPrice ?? appointment.estimatedPrice);
+          const showPrice = finalPrice ?? estPrice;
+          if (showPrice === null) return null;
+          return (
+            <Animated.View entering={FadeInDown.delay(150).duration(400)}>
+              <View style={styles.section}>
+                <ThemedText style={styles.sectionTitle}>Pricing</ThemedText>
+                <View style={[styles.detailCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
+                  <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
+                    <Feather name="dollar-sign" size={18} color={theme.textSecondary} />
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>
+                      {finalPrice ? "Final Price" : "Estimated"}
+                    </ThemedText>
+                    <ThemedText style={[styles.detailValue, { color: Colors.accent, fontWeight: "600" }]}>
+                      ${(finalPrice || estPrice)?.toFixed(2)}
                     </ThemedText>
                   </View>
                 </View>
-              ))}
+              </View>
+            </Animated.View>
+          );
+        })()}
+
+        {appointment.invoice && appointment.job ? (
+          <Animated.View entering={FadeInDown.delay(200).duration(400)}>
+            <View style={styles.section}>
+              <ThemedText style={styles.sectionTitle}>Invoice</ThemedText>
+              <GlassCard style={styles.invoiceCard}>
+                <View style={styles.invoiceRow}>
+                  <View style={{ flex: 1 }}>
+                    <ThemedText style={styles.invoiceNumber}>
+                      {appointment.invoice.invoiceNumber || `Invoice #${appointment.invoice.id.slice(-6)}`}
+                    </ThemedText>
+                    <ThemedText
+                      style={[
+                        styles.invoiceStatus,
+                        {
+                          color:
+                            appointment.invoice.status === "paid"
+                              ? Colors.accent
+                              : appointment.invoice.status === "cancelled"
+                              ? theme.textTertiary
+                              : "#F59E0B",
+                        },
+                      ]}
+                    >
+                      {appointment.invoice.status === "paid"
+                        ? "Paid"
+                        : appointment.invoice.status === "cancelled"
+                        ? "Cancelled"
+                        : appointment.invoice.status === "sent"
+                        ? "Payment Due"
+                        : appointment.invoice.status.toUpperCase()}
+                    </ThemedText>
+                  </View>
+                  <ThemedText style={styles.invoiceAmount}>
+                    ${parseFloat(appointment.invoice.total || appointment.invoice.amount || "0").toFixed(2)}
+                  </ThemedText>
+                </View>
+                {appointment.invoice.dueDate ? (
+                  <ThemedText style={[styles.invoiceDueText, { color: theme.textSecondary }]}>
+                    Due: {formatDate(appointment.invoice.dueDate)}
+                  </ThemedText>
+                ) : null}
+                {hasUnpaidInvoice ? (
+                  <View style={{ marginTop: Spacing.md }}>
+                    <PrimaryButton
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                        navigation.navigate("Payment", {
+                          jobId: appointment.job!.id,
+                          invoiceId: appointment.invoice!.id,
+                        });
+                      }}
+                      testID="button-pay-invoice"
+                    >
+                      {`Pay $${parseFloat(appointment.invoice.total || appointment.invoice.amount || "0").toFixed(2)}`}
+                    </PrimaryButton>
+                  </View>
+                ) : null}
+              </GlassCard>
             </View>
-          </View>
+          </Animated.View>
+        ) : null}
+
+        {appointment.provider?.phone ? (
+          <Animated.View entering={FadeInDown.delay(250).duration(400)}>
+            <View style={styles.section}>
+              <ThemedText style={styles.sectionTitle}>Provider Contact</ThemedText>
+              <View style={[styles.detailCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
+                <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
+                  <Feather name="phone" size={18} color={theme.textSecondary} />
+                  <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Phone</ThemedText>
+                  <ThemedText style={styles.detailValue}>{appointment.provider.phone}</ThemedText>
+                </View>
+              </View>
+            </View>
+          </Animated.View>
         ) : null}
 
         {appointment.status === "completed" && appointment.providerDiagnosis ? (
-          <View style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>Provider Diagnosis</ThemedText>
-            <View style={[styles.diagnosisCard, { backgroundColor: `${Colors.accent}08`, borderColor: Colors.accent + "30" }]}>
-              <View style={styles.diagnosisHeader}>
-                <View style={[styles.diagnosisIcon, { backgroundColor: Colors.accent + "20" }]}>
-                  <Feather name="clipboard" size={16} color={Colors.accent} />
-                </View>
-                <ThemedText style={[styles.diagnosisLabel, { color: Colors.accent }]}>Work Completed</ThemedText>
+          <Animated.View entering={FadeInDown.delay(300).duration(400)}>
+            <View style={styles.section}>
+              <ThemedText style={styles.sectionTitle}>Work Completed</ThemedText>
+              <View style={[styles.diagnosisCard, { backgroundColor: `${Colors.accent}08`, borderColor: Colors.accent + "30" }]}>
+                <ThemedText style={[styles.diagnosisText, { color: theme.text }]}>
+                  {appointment.providerDiagnosis}
+                </ThemedText>
               </View>
-              <ThemedText style={[styles.diagnosisText, { color: theme.text }]}>
-                {appointment.providerDiagnosis}
-              </ThemedText>
             </View>
-          </View>
+          </Animated.View>
         ) : null}
 
-        {appointment.invoice && appointment.job ? (
-          <View style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>Invoice</ThemedText>
-            <GlassCard style={styles.invoiceCard}>
-              <View style={styles.invoiceRow}>
-                <View style={{ flex: 1 }}>
-                  <ThemedText style={styles.invoiceNumber}>
-                    {appointment.invoice.invoiceNumber || `Invoice #${appointment.invoice.id.slice(-6)}`}
-                  </ThemedText>
-                  <ThemedText
-                    style={[
-                      styles.invoiceStatus,
-                      {
-                        color:
-                          appointment.invoice.status === "paid"
-                            ? Colors.accent
-                            : appointment.invoice.status === "cancelled"
-                            ? theme.textTertiary
-                            : "#F59E0B",
-                      },
-                    ]}
-                  >
-                    {appointment.invoice.status === "paid"
-                      ? "Paid"
-                      : appointment.invoice.status === "cancelled"
-                      ? "Cancelled"
-                      : appointment.invoice.status === "sent"
-                      ? "Payment Due"
-                      : appointment.invoice.status.toUpperCase()}
-                  </ThemedText>
-                </View>
-                <ThemedText style={styles.invoiceAmount}>
-                  ${parseFloat(appointment.invoice.total || appointment.invoice.amount || "0").toFixed(2)}
-                </ThemedText>
+        {appointment.statusHistory && appointment.statusHistory.length > 0 ? (
+          <Animated.View entering={FadeInDown.delay(350).duration(400)}>
+            <View style={styles.section}>
+              <ThemedText style={styles.sectionTitle}>Status Timeline</ThemedText>
+              <View style={[styles.timelineCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
+                {appointment.statusHistory.map((update, index) => (
+                  <View key={index} style={styles.timelineItem}>
+                    <View style={styles.timelineDot}>
+                      <View style={[styles.dot, { backgroundColor: index === appointment.statusHistory!.length - 1 ? Colors.accent : theme.textTertiary }]} />
+                      {index < appointment.statusHistory!.length - 1 ? (
+                        <View style={[styles.timelineLine, { backgroundColor: theme.borderLight }]} />
+                      ) : null}
+                    </View>
+                    <View style={styles.timelineContent}>
+                      <View style={styles.timelineHeader}>
+                        <ThemedText style={styles.timelineStatus}>
+                          {update.status.charAt(0).toUpperCase() + update.status.slice(1).replace("_", " ")}
+                        </ThemedText>
+                        <ThemedText style={[styles.timelineDate, { color: theme.textTertiary }]}>
+                          {new Date(update.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                        </ThemedText>
+                      </View>
+                      <ThemedText style={[styles.timelineNote, { color: theme.textSecondary }]}>
+                        {update.note}
+                      </ThemedText>
+                    </View>
+                  </View>
+                ))}
               </View>
-              {appointment.invoice.dueDate ? (
-                <ThemedText style={[styles.invoiceDueText, { color: theme.textSecondary }]}>
-                  Due: {formatDate(appointment.invoice.dueDate)}
-                </ThemedText>
-              ) : null}
-            </GlassCard>
-          </View>
+            </View>
+          </Animated.View>
         ) : null}
 
         <View style={styles.actions}>
-          {hasUnpaidInvoice ? (
-            <PrimaryButton
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                navigation.navigate("Payment", {
-                  jobId: appointment.job!.id,
-                  invoiceId: appointment.invoice!.id,
-                });
-              }}
-              testID="button-pay-invoice"
-            >
-              {`Pay Invoice $${parseFloat(appointment.invoice!.total || appointment.invoice!.amount || "0").toFixed(2)}`}
-            </PrimaryButton>
-          ) : null}
-
-          <SecondaryButton onPress={handleMessage} style={hasUnpaidInvoice ? styles.actionBtn : undefined}>
+          <SecondaryButton onPress={handleMessage}>
             Message Provider
           </SecondaryButton>
 

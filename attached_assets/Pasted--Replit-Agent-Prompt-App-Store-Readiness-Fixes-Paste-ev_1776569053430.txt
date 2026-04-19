@@ -1,0 +1,477 @@
+# Replit Agent Prompt — App Store Readiness Fixes
+
+Paste everything below this line into Replit's agent (or Claude in Replit). It's a self-contained task list with exact file paths, before/after code, and verification steps. The agent should plan first, then execute, then report back.
+
+---
+
+You are working on **HomeBase-Pro-App** — an Expo SDK 55 / React Native app with an Express + Drizzle + Supabase backend. We're preparing for Apple App Store submission (TestFlight first). A full audit identified a short list of remaining issues. Please implement the fixes below exactly as specified.
+
+**Ground rules:**
+1. Before making any changes, read each file I reference so you understand its current state. Then propose a plan (list the files you'll touch and the net change). Wait for my OK before editing.
+2. Don't refactor unrelated code. Don't "improve" things I didn't ask you to touch.
+3. If you discover the fix I described doesn't fit the current state of the code (e.g., the file has already been partially fixed), flag it — don't silently adapt.
+4. After each task, run `npm run check:types` and report any new errors.
+5. Group your final commit(s) logically: one commit per task or one commit for "App Store readiness fixes" — your call, but keep the messages descriptive.
+
+---
+
+## Task 1 — Fix push notifications projectId (JS only, OTA-compatible)
+
+**File:** `client/hooks/usePushNotifications.ts`
+
+**Current code (lines ~39–51):**
+
+```ts
+try {
+  const tokenData = await Notifications.getExpoPushTokenAsync({
+    projectId: "homebase-app",
+  });
+  return tokenData.data;
+} catch {
+  try {
+    const tokenData = await Notifications.getExpoPushTokenAsync();
+    return tokenData.data;
+  } catch {
+    return null;
+  }
+}
+```
+
+**Replace with:**
+
+```ts
+try {
+  const projectId =
+    (Constants.expoConfig?.extra?.eas as { projectId?: string } | undefined)
+      ?.projectId ??
+    (Constants as unknown as { easConfig?: { projectId?: string } })
+      .easConfig?.projectId;
+
+  if (!projectId) {
+    console.warn(
+      "[push] No EAS projectId found in Constants — cannot register for push notifications."
+    );
+    return null;
+  }
+
+  const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+  return tokenData.data;
+} catch (err) {
+  console.warn("[push] getExpoPushTokenAsync failed:", err);
+  return null;
+}
+```
+
+Add to the imports at the top of the file if not already present:
+```ts
+import Constants from "expo-constants";
+```
+
+**Why:** The current code passes a non-UUID string `"homebase-app"` which throws, then relies on an undocumented auto-detection fallback. It works today but is fragile against SDK upgrades. Pin it to the real `extra.eas.projectId` from `app.json` (`16db0e26-c342-42df-934c-b619f917e881`) so behavior is explicit.
+
+---
+
+## Task 2 — Add expo-notifications to app.json plugins (native, requires rebuild)
+
+**File:** `app.json`
+
+In the `expo.plugins` array, add an entry for `expo-notifications`. Put it after the other simple string plugins and before `expo-build-properties`:
+
+```json
+[
+  "expo-notifications",
+  {
+    "iosDisplayInForeground": true
+  }
+]
+```
+
+**Why:** Makes push entitlement generation deterministic in EAS prebuild. The SDK works without it right now because Expo auto-adds it from the dep list, but explicit config is more robust and lets us tune in-foreground display behavior.
+
+---
+
+## Task 3 — Harden JWT_SECRET fallback (server only, no iOS rebuild needed)
+
+**File:** `server/auth.ts`
+
+**Current code (lines ~8–25):**
+
+```ts
+const IS_PROD = process.env.NODE_ENV === "production";
+
+if (!process.env.JWT_SECRET) {
+  if (IS_PROD) {
+    console.error(
+      "[auth] CRITICAL: JWT_SECRET is not set in the production environment. " +
+      "Sessions will not persist across server restarts. " +
+      "Set JWT_SECRET in Replit Secrets to fix this permanently."
+    );
+  } else {
+    console.warn("[auth] JWT_SECRET not set — using dev fallback. DO NOT use in production.");
+  }
+}
+
+const _generatedSecret = randomBytes(64).toString("hex");
+
+export const JWT_SECRET =
+  process.env.JWT_SECRET || (IS_PROD ? _generatedSecret : "homebase-jwt-secret-dev-only");
+```
+
+**Replace with:**
+
+```ts
+const IS_PROD = process.env.NODE_ENV === "production";
+
+if (IS_PROD && !process.env.JWT_SECRET) {
+  console.error(
+    "[auth] CRITICAL: JWT_SECRET is not set in production. Refusing to start. " +
+    "Set JWT_SECRET in Replit Secrets."
+  );
+  process.exit(1);
+}
+
+if (!IS_PROD && !process.env.JWT_SECRET) {
+  console.warn("[auth] JWT_SECRET not set — using dev fallback. DO NOT use in production.");
+}
+
+export const JWT_SECRET =
+  process.env.JWT_SECRET || "homebase-jwt-secret-dev-only";
+```
+
+Also remove the now-unused `randomBytes` import from `crypto` if nothing else in the file uses it — check first.
+
+**Why:** The current code generates a random in-memory secret in production if the env var is missing, which silently invalidates every user's session on every restart and breaks horizontal scaling. Fail-loud is the right behavior — you'd rather a crashed deploy than a fleet of broken sessions.
+
+---
+
+## Task 4 — Move sessionToken to expo-secure-store (requires native rebuild)
+
+**Files:** `client/state/authStore.ts`, `package.json`
+
+**Steps:**
+
+1. Install the dep:
+   ```bash
+   npx expo install expo-secure-store
+   ```
+2. Create a new file `client/lib/secureSession.ts`:
+   ```ts
+   import * as SecureStore from "expo-secure-store";
+   import { Platform } from "react-native";
+
+   const SESSION_TOKEN_KEY = "homebase_session_token";
+
+   /**
+    * Session token storage. Uses Keychain on iOS / Keystore on Android via
+    * expo-secure-store. Falls back to a no-op on web where SecureStore isn't
+    * available — web users re-auth via cookie anyway.
+    */
+   export async function setSessionToken(token: string | null): Promise<void> {
+     if (Platform.OS === "web") return;
+     if (token === null) {
+       await SecureStore.deleteItemAsync(SESSION_TOKEN_KEY);
+     } else {
+       await SecureStore.setItemAsync(SESSION_TOKEN_KEY, token, {
+         keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
+       });
+     }
+   }
+
+   export async function getSessionToken(): Promise<string | null> {
+     if (Platform.OS === "web") return null;
+     try {
+       return await SecureStore.getItemAsync(SESSION_TOKEN_KEY);
+     } catch {
+       return null;
+     }
+   }
+   ```
+3. In `client/state/authStore.ts`:
+   - On `login`: after the existing `sessionToken` state update, call `await setSessionToken(token)`.
+   - On `logout`: call `await setSessionToken(null)` before the state reset.
+   - In the `hydrate()` function: after reading from `AsyncStorage.getItem(STORAGE_KEY)`, also call `await getSessionToken()` and prefer that value for `sessionToken` (to migrate existing installs). If the stored auth-storage JSON already has a `sessionToken`, write it to secure storage on migration and strip it from the JSON blob on the next save.
+   - In the persisted JSON (line ~274 where `JSON.stringify(data)` is called): exclude `sessionToken` from the serialized payload — sessionToken lives only in SecureStore now.
+
+**Why:** AsyncStorage is NSUserDefaults; Keychain is the right home for a 7-day JWT.
+
+---
+
+## Task 5 — Populate the iOS privacy manifest (config plugin, requires rebuild)
+
+**Files:** new `plugins/withPrivacyManifest.js`, `app.json`
+
+1. Create `plugins/withPrivacyManifest.js`:
+
+```js
+const { withInfoPlist } = require("@expo/config-plugins");
+const fs = require("fs");
+const path = require("path");
+
+const COLLECTED_DATA_TYPES = [
+  {
+    NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeEmailAddress",
+    NSPrivacyCollectedDataTypeLinked: true,
+    NSPrivacyCollectedDataTypeTracking: false,
+    NSPrivacyCollectedDataTypePurposes: [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      "NSPrivacyCollectedDataTypePurposeCustomerSupport",
+    ],
+  },
+  {
+    NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeName",
+    NSPrivacyCollectedDataTypeLinked: true,
+    NSPrivacyCollectedDataTypeTracking: false,
+    NSPrivacyCollectedDataTypePurposes: [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+    ],
+  },
+  {
+    NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypePhoneNumber",
+    NSPrivacyCollectedDataTypeLinked: true,
+    NSPrivacyCollectedDataTypeTracking: false,
+    NSPrivacyCollectedDataTypePurposes: [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+    ],
+  },
+  {
+    NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypePhysicalAddress",
+    NSPrivacyCollectedDataTypeLinked: true,
+    NSPrivacyCollectedDataTypeTracking: false,
+    NSPrivacyCollectedDataTypePurposes: [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+    ],
+  },
+  {
+    NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypePreciseLocation",
+    NSPrivacyCollectedDataTypeLinked: true,
+    NSPrivacyCollectedDataTypeTracking: false,
+    NSPrivacyCollectedDataTypePurposes: [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+    ],
+  },
+  {
+    NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypePhotosOrVideos",
+    NSPrivacyCollectedDataTypeLinked: true,
+    NSPrivacyCollectedDataTypeTracking: false,
+    NSPrivacyCollectedDataTypePurposes: [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+    ],
+  },
+  {
+    NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypePaymentInfo",
+    NSPrivacyCollectedDataTypeLinked: true,
+    NSPrivacyCollectedDataTypeTracking: false,
+    NSPrivacyCollectedDataTypePurposes: [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+    ],
+  },
+  {
+    NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeUserID",
+    NSPrivacyCollectedDataTypeLinked: true,
+    NSPrivacyCollectedDataTypeTracking: false,
+    NSPrivacyCollectedDataTypePurposes: [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      "NSPrivacyCollectedDataTypePurposeAnalytics",
+    ],
+  },
+  {
+    NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeDeviceID",
+    NSPrivacyCollectedDataTypeLinked: true,
+    NSPrivacyCollectedDataTypeTracking: false,
+    NSPrivacyCollectedDataTypePurposes: [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      "NSPrivacyCollectedDataTypePurposeAnalytics",
+    ],
+  },
+  {
+    NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeProductInteraction",
+    NSPrivacyCollectedDataTypeLinked: true,
+    NSPrivacyCollectedDataTypeTracking: false,
+    NSPrivacyCollectedDataTypePurposes: [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      "NSPrivacyCollectedDataTypePurposeAnalytics",
+    ],
+  },
+  {
+    NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeCrashData",
+    NSPrivacyCollectedDataTypeLinked: false,
+    NSPrivacyCollectedDataTypeTracking: false,
+    NSPrivacyCollectedDataTypePurposes: [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+    ],
+  },
+  {
+    NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypePerformanceData",
+    NSPrivacyCollectedDataTypeLinked: false,
+    NSPrivacyCollectedDataTypeTracking: false,
+    NSPrivacyCollectedDataTypePurposes: [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+    ],
+  },
+  {
+    NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeOtherDiagnosticData",
+    NSPrivacyCollectedDataTypeLinked: false,
+    NSPrivacyCollectedDataTypeTracking: false,
+    NSPrivacyCollectedDataTypePurposes: [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+    ],
+  },
+  {
+    NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeOtherUserContent",
+    NSPrivacyCollectedDataTypeLinked: true,
+    NSPrivacyCollectedDataTypeTracking: false,
+    NSPrivacyCollectedDataTypePurposes: [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+    ],
+  },
+];
+
+/**
+ * Expo config plugin that writes HomeBase Pro's data-collection declarations
+ * into the generated PrivacyInfo.xcprivacy at prebuild time. The file is
+ * created fresh on each prebuild, so we hook into withDangerousMod to write
+ * it after Expo's own prebuild step.
+ */
+const withPrivacyManifest = (config) => {
+  return withInfoPlist(config, (cfg) => {
+    // We don't actually modify Info.plist — we use this hook to get
+    // access to the ios directory so we can write PrivacyInfo.xcprivacy.
+    const iosProjectPath = path.join(
+      cfg.modRequest.projectRoot,
+      "ios",
+      cfg.modRequest.projectName || "HomeBase"
+    );
+    const manifestPath = path.join(iosProjectPath, "PrivacyInfo.xcprivacy");
+
+    // Read the existing manifest so we preserve NSPrivacyAccessedAPITypes
+    // that Expo's prebuild wrote.
+    let existing = {};
+    if (fs.existsSync(manifestPath)) {
+      const plist = require("@expo/plist");
+      existing = plist.parse(fs.readFileSync(manifestPath, "utf8"));
+    }
+
+    const merged = {
+      ...existing,
+      NSPrivacyTracking: false,
+      NSPrivacyTrackingDomains: existing.NSPrivacyTrackingDomains || [],
+      NSPrivacyCollectedDataTypes: COLLECTED_DATA_TYPES,
+      NSPrivacyAccessedAPITypes: existing.NSPrivacyAccessedAPITypes || [],
+    };
+
+    const plist = require("@expo/plist");
+    fs.writeFileSync(manifestPath, plist.build(merged));
+    return cfg;
+  });
+};
+
+module.exports = withPrivacyManifest;
+```
+
+2. Register the plugin in `app.json` — add it to the `expo.plugins` array:
+
+```json
+"./plugins/withPrivacyManifest.js"
+```
+
+3. Run `npx expo prebuild --clean --platform ios` locally once to verify the plugin produces a valid `ios/HomeBase/PrivacyInfo.xcprivacy`. Don't commit the generated `ios/` folder (it's gitignored).
+
+**Why:** The current `PrivacyInfo.xcprivacy` has `NSPrivacyCollectedDataTypes` as an empty array, but the app clearly collects email, name, phone, address, location, photos, and payment info. This plugin declares everything honestly. The App Store Connect App Privacy questionnaire should match this exactly.
+
+---
+
+## Task 6 — Wire SavedProvidersScreen to real data (JS only, OTA-compatible)
+
+**File:** `client/screens/homeowner/SavedProvidersScreen.tsx`
+
+**What's broken:** `providers` state is initialized to `[]` and never populated. Nothing fetches saved providers from the server.
+
+**Steps:**
+1. Check `server/routes.ts` (or wherever routes live) for an existing saved-providers endpoint. If one exists (e.g. `GET /api/homeowners/me/saved-providers`), use it. If not, add one that returns the current homeowner's saved provider list in the `SavedProviderDisplay` shape.
+2. Replace the local `providers` state with a React Query hook:
+   ```ts
+   const { data: providers = [], refetch, isFetching } = useQuery({
+     queryKey: ["saved-providers"],
+     queryFn: async () => {
+       const res = await apiRequest("GET", "/api/homeowners/me/saved-providers");
+       const json = await res.json();
+       return json.providers as SavedProviderDisplay[];
+     },
+   });
+   ```
+3. Update the `onRefresh` handler to `await refetch()` instead of the fake 1-second timeout.
+4. Update `handleRemoveProvider` to:
+   - Call the existing `toggleSavedProvider` mutation (or POST `/api/homeowners/me/saved-providers/:id/unsave`).
+   - Invalidate the `["saved-providers"]` query on success.
+5. Keep the existing empty-state UI — it'll show correctly for users with no saved providers.
+
+**Why:** Right now this screen is a dead end. A homeowner who saves a provider elsewhere in the app will still see "No saved providers yet" here. Small Guideline 2.1 risk.
+
+---
+
+## Task 7 — Rename MOCK_TIPS to MAINTENANCE_TIPS (JS only, OTA-compatible)
+
+**File:** `client/screens/homeowner/SurvivalKitScreen.tsx`
+
+Do a find-and-replace in this file: `MOCK_TIPS` → `MAINTENANCE_TIPS`. Two occurrences: the constant declaration (~line 272) and the render usage (~line 1137).
+
+**Why:** The content is legitimate — we just don't want "MOCK" in production code. Pure hygiene.
+
+---
+
+## Task 8 — Verify UGC moderation coverage (possibly no change needed)
+
+**Files to check:**
+- Any review/rating screens under `client/screens/**/*Review*.tsx` or similar
+- `server/routes.ts` for endpoints like `POST /api/reviews/:id/report`, `POST /api/users/:id/block`
+
+**What to confirm:**
+1. Homeowners can write reviews of providers → is there a way for a provider (or another user) to **report** an abusive review?
+2. Can users **block** each other (i.e., prevent further messaging or review targeting)?
+3. Is there a contact/support path (`support@homebaseproapp.com` is present in `SubscriptionScreen` — that's good).
+
+If any of the above is missing, add:
+- A "Report review" action in the UI on each review card (show a sheet with reasons: spam, harassment, false info, other).
+- A `POST /api/reviews/:reviewId/report` endpoint that records the report and emails support.
+- A simple block path if messaging exists between parties.
+
+**Why:** Apple Guideline 1.2 requires apps with user-generated content to provide (a) a filter for objectionable content, (b) a mechanism to report content, (c) a mechanism to block users, and (d) a published point of contact. Missing any of these is a common rejection reason.
+
+If these already exist, just confirm and skip this task.
+
+---
+
+## Verification (run after all tasks)
+
+1. `npm run check:types` — zero new errors.
+2. `npx expo prebuild --clean --platform ios` — succeeds and generates a PrivacyInfo.xcprivacy with the new `NSPrivacyCollectedDataTypes` section populated. Do NOT commit the generated `ios/` folder.
+3. `eas build --profile production --platform ios` — builds successfully.
+4. On a real device via TestFlight, verify:
+   - Sign in as a provider → push token registers on the server (check logs for `POST /api/push-tokens`).
+   - Subscribe via StoreKit sandbox → Pro entitlement flips, subscription gate lifts.
+   - Restore Purchases on a fresh install with the same Apple ID re-entitles.
+   - Sign out → session token is removed from Keychain (SecureStore).
+   - Delete account end-to-end.
+   - Save a provider from a provider profile screen → appears in Saved Providers list.
+
+## What to report back
+
+After each task:
+- The files you changed.
+- The exact diff (or a summary if it's long).
+- Whether `npm run check:types` is clean.
+
+After all tasks:
+- Confirm you're ready for me to run the EAS build.
+- Flag anything you were unsure about or that required a judgment call.
+
+---
+
+## What I am NOT asking you to do
+
+- Don't refactor the auth store beyond what Task 4 requires.
+- Don't change bundle identifiers, URL schemes, or version numbers.
+- Don't touch Stripe Connect code.
+- Don't touch the SubscriptionScreen IAP flow — it's already correct.
+- Don't commit the generated `ios/` or `android/` folders.
+- Don't skip hooks or bypass pre-commit checks.

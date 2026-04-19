@@ -2932,7 +2932,25 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
                   avatarUrl: provider.avatarUrl,
                 }
               : null,
-            job: linkedJob ? { id: linkedJob.id, status: linkedJob.status } : null,
+            job: linkedJob
+              ? {
+                  id: linkedJob.id,
+                  status: linkedJob.status,
+                  title: linkedJob.title,
+                  description: linkedJob.description,
+                  address: linkedJob.address,
+                  estimatedDuration: linkedJob.estimatedDuration,
+                  estimatedPrice: linkedJob.estimatedPrice,
+                  finalPrice: linkedJob.finalPrice,
+                  notes: linkedJob.notes,
+                  scheduledDate: linkedJob.scheduledDate,
+                  scheduledTime: linkedJob.scheduledTime,
+                  completedAt: linkedJob.completedAt,
+                  checklistCount: Array.isArray(linkedJob.checklist)
+                    ? linkedJob.checklist.length
+                    : 0,
+                }
+              : null,
             invoice: linkedInvoice,
           },
         });
