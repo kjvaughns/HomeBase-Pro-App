@@ -1,0 +1,112 @@
+Just make 2 POST endpoints in your backend instead of one.
+
+Example idea:
+
+* /api/stripe/webhook/platform
+* /api/stripe/webhook/connect
+
+Then in Stripe Dashboard:
+
+* your platform webhook points to the platform route
+* your connect webhook points to the connect route
+
+If your Replit backend uses Express
+
+It would look like this conceptually:
+
+app.post("/api/stripe/webhook/platform", rawBodyMiddleware, async (req, res) => {
+  const sig = req.headers["stripe-signature"];
+  const event = stripe.webhooks.constructEvent(
+    req.body,
+    sig,
+    process.env.STRIPE_WEBHOOK_SECRET_PLATFORM
+  );
+  // handle platform events here
+  switch (event.type) {
+    case "invoice.paid":
+      break;
+    case "invoice.payment_failed":
+      break;
+    case "invoice.finalized":
+      break;
+  }
+  res.json({ received: true });
+});
+app.post("/api/stripe/webhook/connect", rawBodyMiddleware, async (req, res) => {
+  const sig = req.headers["stripe-signature"];
+  const event = stripe.webhooks.constructEvent(
+    req.body,
+    sig,
+    process.env.STRIPE_WEBHOOK_SECRET_CONNECT
+  );
+  const connectedAccountId = event.account;
+  // handle connected account events here
+  switch (event.type) {
+    case "invoice.paid":
+      break;
+    case "invoice.payment_failed":
+      break;
+    case "account.updated":
+      break;
+  }
+  res.json({ received: true });
+});
+
+Important part
+
+For Stripe webhooks, you need the raw request body.
+If your app uses express.json() globally, Stripe signature verification can fail unless you exclude these routes or use express.raw({ type: "application/json" }) on them.
+
+Example:
+
+app.post(
+  "/api/stripe/webhook/platform",
+  express.raw({ type: "application/json" }),
+  handler
+);
+app.post(
+  "/api/stripe/webhook/connect",
+  express.raw({ type: "application/json" }),
+  handler
+);
+
+Why separate routes are better
+
+Because then:
+
+* each route has its own signing secret
+* easier debugging
+* easier Stripe Dashboard setup
+* less chance of mixing platform and connected account events
+
+In Replit
+
+You do not create “Replit routes” in some special dashboard.
+
+You just:
+
+1. open your backend file, probably server/routes.ts or wherever Express routes live
+2. add two POST endpoints
+3. deploy or republish
+4. copy those live URLs into Stripe Dashboard
+
+Your final Stripe destinations would look like
+
+Something like:
+
+* https://your-replit-domain.replit.app/api/stripe/webhook/platform
+* https://your-replit-domain.replit.app/api/stripe/webhook/connect
+
+Replit secrets you need
+
+* STRIPE_WEBHOOK_SECRET_PLATFORM
+* STRIPE_WEBHOOK_SECRET_CONNECT
+
+And probably also:
+
+* STRIPE_SECRET_KEY
+* STRIPE_PUBLISHABLE_KEY
+
+Best next move
+
+Tell Replit to split your current webhook into those 2 routes and wire each one to the correct secret and event set.
