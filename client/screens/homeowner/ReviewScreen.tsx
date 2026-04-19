@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { StyleSheet, View, Pressable, ActivityIndicator } from "react-native";
+import { StyleSheet, View, Pressable, ActivityIndicator, LayoutChangeEvent } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import Animated, { ZoomIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -60,6 +61,12 @@ export default function ReviewScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [bottomBarHeight, setBottomBarHeight] = useState(0);
+
+  const handleBottomBarLayout = (e: LayoutChangeEvent) => {
+    const h = e.nativeEvent.layout.height;
+    if (h > 0 && Math.abs(h - bottomBarHeight) > 1) setBottomBarHeight(h);
+  };
 
   const { data, isLoading, isError } = useQuery<AppointmentData>({
     queryKey: ["/api/appointments", jobId],
@@ -266,11 +273,16 @@ export default function ReviewScreen() {
   }
 
   return (
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior="padding"
+      keyboardVerticalOffset={0}
+    >
     <ThemedView style={styles.container}>
       <KeyboardAwareScrollViewCompat
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,
-          paddingBottom: insets.bottom + 100,
+          paddingBottom: (bottomBarHeight || 96) + Spacing.lg,
           paddingHorizontal: Spacing.screenPadding,
         }}
       >
@@ -357,6 +369,7 @@ export default function ReviewScreen() {
       </KeyboardAwareScrollViewCompat>
 
       <View
+        onLayout={handleBottomBarLayout}
         style={[
           styles.bottomBar,
           { backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.md },
@@ -372,6 +385,7 @@ export default function ReviewScreen() {
         </PrimaryButton>
       </View>
     </ThemedView>
+    </KeyboardAvoidingView>
   );
 }
 
