@@ -671,12 +671,20 @@ export default function BusinessHubScreen() {
               ]}
               value={description}
               onChangeText={setDescription}
-              onContentSizeChange={(e) => {
-                const next = e.nativeEvent.contentSize.height + Spacing.md;
-                if (Math.abs(next - descriptionHeight) > 1) {
-                  setDescriptionHeight(next);
-                }
-              }}
+              onContentSizeChange={
+                Platform.OS === "web"
+                  ? undefined
+                  : (e) => {
+                      const measured = e?.nativeEvent?.contentSize?.height;
+                      if (typeof measured !== "number" || !isFinite(measured)) {
+                        return;
+                      }
+                      const next = measured + Spacing.md;
+                      if (Math.abs(next - descriptionHeight) > 1) {
+                        setDescriptionHeight(next);
+                      }
+                    }
+              }
               placeholder="Describe your business and services..."
               placeholderTextColor={theme.textTertiary}
               multiline
