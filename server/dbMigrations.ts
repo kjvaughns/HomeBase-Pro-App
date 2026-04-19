@@ -676,6 +676,22 @@ export async function runBootMigrations(): Promise<void> {
       const msg = err instanceof Error ? err.message : String(err);
       console.warn("[boot-migration] Appointment dedupe skipped:", msg);
     }
+    // ── Task #236: appointments — deposit + cancellation-fee + reschedule tracking ──
+    const apptPolicyAlters: Array<[string, string]> = [
+      ["appointments.deposit_amount_cents", `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS deposit_amount_cents INTEGER DEFAULT 0`],
+      ["appointments.deposit_status", `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS deposit_status TEXT DEFAULT 'not_required'`],
+      ["appointments.deposit_payment_intent_id", `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS deposit_payment_intent_id TEXT`],
+      ["appointments.deposit_checkout_session_id", `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS deposit_checkout_session_id TEXT`],
+      ["appointments.cancellation_fee_cents", `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS cancellation_fee_cents INTEGER DEFAULT 0`],
+      ["appointments.cancellation_fee_status", `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS cancellation_fee_status TEXT`],
+      ["appointments.cancellation_fee_payment_intent_id", `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS cancellation_fee_payment_intent_id TEXT`],
+      ["appointments.cancellation_fee_checkout_session_id", `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS cancellation_fee_checkout_session_id TEXT`],
+      ["appointments.reschedule_count", `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS reschedule_count INTEGER NOT NULL DEFAULT 0`],
+    ];
+    for (const [label, sql] of apptPolicyAlters) {
+      await runSql(label, sql);
+    }
+
     await runSql("appointments.user_provider_slot_unique", `
       CREATE UNIQUE INDEX IF NOT EXISTS appointments_user_provider_slot_unique
         ON appointments (user_id, provider_id, scheduled_date)

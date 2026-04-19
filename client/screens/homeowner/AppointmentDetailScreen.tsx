@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from "react";
-import { StyleSheet, View, ScrollView, Modal, Pressable, Alert, ActivityIndicator, TextInput } from "react-native";
+import { StyleSheet, View, ScrollView, Modal, Pressable, Alert, ActivityIndicator, TextInput, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, useNavigation, useFocusEffect, RouteProp } from "@react-navigation/native";
@@ -20,8 +20,26 @@ import { SecondaryButton } from "@/components/SecondaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
-import { apiRequest, getApiUrl } from "@/lib/query-client";
+import { apiRequest, getApiUrl, getAuthHeaders } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+
+// Task #236: small helper to call POST endpoints that may legitimately
+// return a non-2xx (e.g. 409) without throwing — `apiRequest`
+// rejects on every non-OK response, which would short-circuit our
+// policy-aware handlers below.
+async function postRaw(path: string, body: unknown): Promise<Response> {
+  const url = new URL(path, getApiUrl());
+  return fetch(url, {
+    method: "POST",
+    headers: {
+      ...getAuthHeaders(),
+      "X-Client-Platform": Platform.OS,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body ?? {}),
+    credentials: "include",
+  });
+}
 
 type AppointmentDetailParams = { appointmentId: string };
 type ScreenRouteProp = RouteProp<{ AppointmentDetail: AppointmentDetailParams }, "AppointmentDetail">;
@@ -103,6 +121,12 @@ interface Appointment {
   job?: LinkedJob | null;
   invoice?: LinkedInvoice | null;
   review?: { id: string; rating: number; comment?: string | null } | null;
+  depositAmountCents?: number | null;
+  depositStatus?: string | null;
+  depositPaymentIntentId?: string | null;
+  cancellationFeeCents?: number | null;
+  cancellationFeeStatus?: string | null;
+  cancellationFeePaymentIntentId?: string | null;
 }
 
 const REVIEW_ELIGIBLE_STATUSES = new Set([
@@ -231,10 +255,26 @@ export default function AppointmentDetailScreen() {
     setIsSubmitting(true);
     try {
       const formattedDate = selectedDate.toISOString().split("T")[0];
-      await apiRequest("POST", `/api/appointments/${appointmentId}/reschedule`, {
+      const res = await postRaw(`/api/appointments/${appointmentId}/reschedule`, {
         scheduledDate: formattedDate,
         scheduledTime: selectedTime,
       });
+      if (!res.ok) {
+        // Task #236: server returns 409 with reason + message when the
+        // homeowner is inside the reschedule window or has already
+        // hit the maxReschedules cap.
+        const body: { error?: string; message?: string } = await res
+          .json()
+          .catch(() => ({}));
+        if (res.status === 409) {
+          Alert.alert(
+            "Reschedule Not Allowed",
+            body.message || "This appointment can no longer be rescheduled.",
+          );
+          return;
+        }
+        throw new Error(body.message || body.error || "Reschedule failed");
+      }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       queryClient.invalidateQueries({ queryKey: ["/api/appointments"] });
@@ -248,23 +288,69 @@ export default function AppointmentDetailScreen() {
     }
   }, [selectedDate, selectedTime, appointment, appointmentId, queryClient]);
 
+  const performCancel = useCallback(
+    async (acceptFee: boolean) => {
+      setIsSubmitting(true);
+      try {
+        const res = await postRaw(
+          `/api/appointments/${appointmentId}/cancel`,
+          { acceptFee },
+        );
+        if (!res.ok) {
+          const body: {
+            error?: string;
+            message?: string;
+            feeCents?: number;
+          } = await res.json().catch(() => ({}));
+          // Task #236: server returns 409 when there's an unaccepted late
+          // cancellation fee. Surface a confirmation prompt and re-call
+          // with acceptFee = true if the homeowner agrees.
+          if (res.status === 409 && body.error === "fee_acknowledgement_required") {
+            const fee = ((body.feeCents ?? 0) / 100).toFixed(2);
+            Alert.alert(
+              "Late Cancellation Fee",
+              `Cancelling now will charge a fee of $${fee}. Continue?`,
+              [
+                { text: "Keep Appointment", style: "cancel" },
+                {
+                  text: "Cancel & Pay Fee",
+                  style: "destructive",
+                  onPress: () => performCancel(true),
+                },
+              ],
+            );
+            return;
+          }
+          throw new Error(body.message || body.error || "Cancel failed");
+        }
+        const body: { cancellationFeeCheckoutUrl?: string | null } = await res
+          .json()
+          .catch(() => ({}));
+        // If a fee was charged, open the Stripe Checkout page so the
+        // homeowner can complete payment.
+        if (body.cancellationFeeCheckoutUrl) {
+          try {
+            const { openExternalUrl } = await import("@/lib/openExternalUrl");
+            await openExternalUrl(body.cancellationFeeCheckoutUrl);
+          } catch {}
+        }
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        queryClient.invalidateQueries({ queryKey: ["/api/appointments"] });
+        setShowCancelModal(false);
+        navigation.goBack();
+      } catch (err) {
+        Alert.alert("Error", "Failed to cancel appointment. Please try again.");
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [appointmentId, queryClient, navigation],
+  );
+
   const handleCancel = useCallback(async () => {
     if (!appointment) return;
-
-    setIsSubmitting(true);
-    try {
-      await apiRequest("POST", `/api/appointments/${appointmentId}/cancel`);
-
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      queryClient.invalidateQueries({ queryKey: ["/api/appointments"] });
-      setShowCancelModal(false);
-      navigation.goBack();
-    } catch (err) {
-      Alert.alert("Error", "Failed to cancel appointment. Please try again.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, [appointment, appointmentId, queryClient, navigation]);
+    await performCancel(false);
+  }, [appointment, performCancel]);
 
   const handleMessage = () => {
     Alert.alert("Coming Soon", "Messaging will be available in a future update.");
@@ -479,6 +565,85 @@ export default function AppointmentDetailScreen() {
                       ${(finalPrice || estPrice)?.toFixed(2)}
                     </ThemedText>
                   </View>
+                </View>
+              </View>
+            </Animated.View>
+          );
+        })()}
+
+        {(() => {
+          const depositCents = appointment.depositAmountCents ?? 0;
+          const feeCents = appointment.cancellationFeeCents ?? 0;
+          if (depositCents <= 0 && feeCents <= 0) return null;
+          const fmtStatus = (s?: string | null): { label: string; color: string } => {
+            switch (s) {
+              case "paid":
+                return { label: "Paid", color: Colors.accent };
+              case "awaiting":
+                return { label: "Awaiting Payment", color: "#D97706" };
+              case "skipped_no_stripe":
+                return { label: "Waived", color: theme.textSecondary };
+              case "failed":
+                return { label: "Failed", color: "#DC2626" };
+              default:
+                return { label: s ?? "—", color: theme.textSecondary };
+            }
+          };
+          const depositInfo = fmtStatus(appointment.depositStatus);
+          const feeInfo = fmtStatus(appointment.cancellationFeeStatus);
+          return (
+            <Animated.View entering={FadeInDown.delay(175).duration(400)}>
+              <View style={styles.section}>
+                <ThemedText style={styles.sectionTitle}>Payment Details</ThemedText>
+                <View style={[styles.detailCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
+                  {depositCents > 0 ? (
+                    <>
+                      <View style={styles.detailRow}>
+                        <Feather name="credit-card" size={18} color={theme.textSecondary} />
+                        <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Deposit</ThemedText>
+                        <ThemedText
+                          testID={`text-deposit-amount-${appointment.id}`}
+                          style={styles.detailValue}
+                        >
+                          ${(depositCents / 100).toFixed(2)}
+                        </ThemedText>
+                      </View>
+                      <View style={[styles.detailRow, feeCents <= 0 ? { borderBottomWidth: 0 } : null]}>
+                        <Feather name="info" size={18} color={theme.textSecondary} />
+                        <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Deposit Status</ThemedText>
+                        <ThemedText
+                          testID={`status-deposit-${appointment.id}`}
+                          style={[styles.detailValue, { color: depositInfo.color, fontWeight: "600" }]}
+                        >
+                          {depositInfo.label}
+                        </ThemedText>
+                      </View>
+                    </>
+                  ) : null}
+                  {feeCents > 0 ? (
+                    <>
+                      <View style={styles.detailRow}>
+                        <Feather name="alert-circle" size={18} color={theme.textSecondary} />
+                        <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Cancellation Fee</ThemedText>
+                        <ThemedText
+                          testID={`text-cancellation-fee-${appointment.id}`}
+                          style={styles.detailValue}
+                        >
+                          ${(feeCents / 100).toFixed(2)}
+                        </ThemedText>
+                      </View>
+                      <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
+                        <Feather name="info" size={18} color={theme.textSecondary} />
+                        <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Fee Status</ThemedText>
+                        <ThemedText
+                          testID={`status-cancellation-fee-${appointment.id}`}
+                          style={[styles.detailValue, { color: feeInfo.color, fontWeight: "600" }]}
+                        >
+                          {feeInfo.label}
+                        </ThemedText>
+                      </View>
+                    </>
+                  ) : null}
                 </View>
               </View>
             </Animated.View>

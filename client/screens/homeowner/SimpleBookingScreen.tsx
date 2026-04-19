@@ -21,6 +21,12 @@ import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { useProviderPublishedServices } from "@/hooks/useProviderPublishedServices";
 import { IntakeQuestionFields } from "@/components/IntakeQuestionFields";
 import {
+  normalizeBookingPolicy,
+  summarizePolicy,
+  computeDepositCents,
+  dollarsToCents,
+} from "@shared/bookingPolicies";
+import {
   parseIntakeQuestions,
   type IntakeQuestionDef,
 } from "../../../shared/jobSummary";
@@ -150,6 +156,27 @@ export default function SimpleBookingScreen() {
 
   const { services: publishedServices, isLoading: servicesLoading } =
     useProviderPublishedServices(params.providerId);
+
+  // Task #236: fetch provider's booking policies so we can show the
+  // homeowner the policy summary + deposit estimate before they book.
+  const { data: providerData } = useQuery<{
+    provider?: { bookingPolicies?: unknown };
+  }>({
+    queryKey: ["/api/providers", params.providerId],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/providers/${params.providerId}`);
+      return res.json();
+    },
+    enabled: !!params.providerId,
+  });
+  const bookingPolicy = useMemo(
+    () => normalizeBookingPolicy(providerData?.provider?.bookingPolicies),
+    [providerData?.provider?.bookingPolicies],
+  );
+  const policySummaryText = useMemo(
+    () => summarizePolicy(bookingPolicy),
+    [bookingPolicy],
+  );
 
   const { data: availabilityData, isLoading: availabilityLoading } = useQuery<{
     slots: { startTime: string; label: string }[];
@@ -357,9 +384,46 @@ export default function SimpleBookingScreen() {
       });
       return res.json();
     },
-    onSuccess: (data: { appointment?: { id: string } }) => {
+    onSuccess: async (data: {
+      appointment?: { id: string };
+      requiresDeposit?: boolean;
+      depositCheckoutUrl?: string | null;
+      depositAmountCents?: number;
+    }) => {
       const appointmentId = data?.appointment?.id || "booking";
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // Task #236: provider requires a deposit — open the Stripe Checkout
+      // page externally so the homeowner can pay before the booking is
+      // confirmed by the webhook. If we cannot launch the browser the
+      // booking is effectively stuck pending payment, so surface a clear
+      // error rather than silently routing to the success screen.
+      if (data?.requiresDeposit && data?.depositCheckoutUrl) {
+        try {
+          const { openExternalUrl } = await import("@/lib/openExternalUrl");
+          await openExternalUrl(data.depositCheckoutUrl);
+        } catch {
+          Alert.alert(
+            "Payment Required",
+            "We couldn't open the deposit payment page. Open this booking from My Appointments to retry the payment.",
+            [
+              {
+                text: "View Appointment",
+                onPress: () =>
+                  (navigation as unknown as { navigate: (n: string, p: unknown) => void }).navigate(
+                    "AppointmentDetail",
+                    { appointmentId },
+                  ),
+              },
+            ],
+          );
+          return;
+        }
+        navigation.navigate("BookingSuccess", {
+          jobId: appointmentId,
+          awaitingDeposit: true,
+        });
+        return;
+      }
       navigation.navigate("BookingSuccess", { jobId: appointmentId });
     },
     onError: (error: Error) => {
@@ -812,6 +876,47 @@ export default function SimpleBookingScreen() {
             ) : null}
           </GlassCard>
         </Animated.View>
+
+        {policySummaryText ? (
+          <Animated.View entering={FadeInDown.duration(400)}>
+            <GlassCard style={styles.summaryCard}>
+              <View style={styles.policyHeader}>
+                <Feather name="info" size={16} color={Colors.accent} />
+                <ThemedText style={styles.policyTitle}>Booking Policy</ThemedText>
+              </View>
+              <ThemedText
+                style={[styles.policyText, { color: theme.textSecondary }]}
+                testID="text-booking-policy-summary"
+              >
+                {policySummaryText}
+              </ThemedText>
+              {bookingPolicy.requireDeposit &&
+              bookingPolicy.depositPercent > 0 &&
+              totalEstimatedPrice ? (
+                <View
+                  style={[
+                    styles.depositBadge,
+                    { backgroundColor: Colors.accent + "15" },
+                  ]}
+                >
+                  <Feather name="credit-card" size={13} color={Colors.accent} />
+                  <ThemedText
+                    style={[styles.depositBadgeText, { color: Colors.accent }]}
+                    testID="text-booking-deposit-estimate"
+                  >
+                    Deposit due now: $
+                    {(
+                      computeDepositCents(
+                        bookingPolicy,
+                        dollarsToCents(totalEstimatedPrice),
+                      ) / 100
+                    ).toFixed(2)}
+                  </ThemedText>
+                </View>
+              ) : null}
+            </GlassCard>
+          </Animated.View>
+        ) : null}
       </ScrollView>
 
       <View
@@ -1116,6 +1221,34 @@ const styles = StyleSheet.create({
     ...Typography.title3,
     fontWeight: "700",
     color: Colors.accent,
+  },
+  policyHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    marginBottom: Spacing.xs,
+  },
+  policyTitle: {
+    ...Typography.headline,
+    fontWeight: "600",
+  },
+  policyText: {
+    ...Typography.footnote,
+    lineHeight: 19,
+  },
+  depositBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.sm,
+    marginTop: Spacing.sm,
+  },
+  depositBadgeText: {
+    ...Typography.footnote,
+    fontWeight: "600",
   },
   recurringBadge: {
     flexDirection: "row",

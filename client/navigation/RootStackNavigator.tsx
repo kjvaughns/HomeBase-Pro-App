@@ -121,7 +121,7 @@ export type RootStackParamList = {
       category: string;
     };
   };
-  BookingSuccess: { jobId: string };
+  BookingSuccess: { jobId: string; awaitingDeposit?: boolean };
   JobDetail: { jobId: string };
   AppointmentDetail: { appointmentId: string };
   Payment: { jobId?: string; invoiceId: string; status?: "paid" | "cancelled" };

@@ -35,7 +35,7 @@ export default function BookingSuccessScreen() {
   const route = useRoute<ScreenRouteProp>();
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
-  const { jobId } = route.params;
+  const { jobId, awaitingDeposit } = route.params;
 
   const { data: aptData, isLoading } = useQuery<{ appointment: AppointmentRecord }>({
     queryKey: ["/api/appointments", jobId],
@@ -91,9 +91,13 @@ export default function BookingSuccessScreen() {
         </Animated.View>
 
         <Animated.View entering={FadeIn.delay(300).duration(400)}>
-          <ThemedText style={styles.title}>Booking Confirmed!</ThemedText>
+          <ThemedText style={styles.title}>
+            {awaitingDeposit ? "Deposit Required" : "Booking Confirmed!"}
+          </ThemedText>
           <ThemedText style={[styles.subtitle, { color: theme.textSecondary }]}>
-            Your service has been scheduled
+            {awaitingDeposit
+              ? "Complete your deposit payment in the browser to confirm this booking."
+              : "Your service has been scheduled"}
           </ThemedText>
         </Animated.View>
 

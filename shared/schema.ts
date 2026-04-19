@@ -415,6 +415,19 @@ export const appointments = pgTable(
     notes: text("notes"),
     isRecurring: boolean("is_recurring").default(false),
     recurringFrequency: text("recurring_frequency"),
+    // Task #236: deposit + cancellation-fee tracking. Populated by booking
+    // policy enforcement; null/zero when the provider has no deposit policy.
+    depositAmountCents: integer("deposit_amount_cents").default(0),
+    depositStatus: text("deposit_status").default("not_required"),
+    depositPaymentIntentId: text("deposit_payment_intent_id"),
+    depositCheckoutSessionId: text("deposit_checkout_session_id"),
+    cancellationFeeCents: integer("cancellation_fee_cents").default(0),
+    cancellationFeeStatus: text("cancellation_fee_status"),
+    cancellationFeePaymentIntentId: text("cancellation_fee_payment_intent_id"),
+    cancellationFeeCheckoutSessionId: text(
+      "cancellation_fee_checkout_session_id",
+    ),
+    rescheduleCount: integer("reschedule_count").notNull().default(0),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
     completedAt: timestamp("completed_at"),

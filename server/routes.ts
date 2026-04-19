@@ -82,7 +82,18 @@ import {
   getStripe,
   createSubscriptionCheckoutSession,
   createSubscriptionPortalSession,
+  createDepositCheckoutSession,
+  createCancellationFeeCheckoutSession,
 } from "./stripeConnectService";
+import {
+  normalizeBookingPolicy,
+  computeDepositCents,
+  computeCancellationFee,
+  checkRescheduleAllowed,
+  dollarsToCents,
+  summarizePolicy,
+  combineDateAndTime,
+} from "@shared/bookingPolicies";
 import {
   checkSubscriptionGate,
   getProviderSubscriptionStatus,
@@ -3681,6 +3692,101 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
           return res.json({ appointment, reused: true });
         }
 
+        // ── Task #236: deposit policy enforcement ────────────────────────
+        // If the provider requires a deposit, hold the appointment in
+        // `pending` with `depositStatus = 'awaiting'`, mint a Stripe
+        // Checkout Session, and return its URL. The webhook flips the
+        // appointment to `confirmed` + `depositStatus = paid` once the
+        // homeowner completes payment.
+        //
+        // Hard-enforcement: if Checkout Session creation fails for any
+        // reason OTHER than the provider simply not having Stripe set up
+        // (`stripe_not_ready`), we ROLL BACK the appointment and surface
+        // a 502 — it is better to fail the booking than to leave a
+        // dangling record that the homeowner thinks is confirmed without
+        // having paid the required deposit.
+        let depositCheckoutUrl: string | null = null;
+        let depositAmountCents = 0;
+        const [policyProvider] = await db
+          .select({ bookingPolicies: providers.bookingPolicies })
+          .from(providers)
+          .where(eq(providers.id, parsed.data.providerId));
+        const policy = normalizeBookingPolicy(
+          policyProvider?.bookingPolicies,
+        );
+        const totalCents = dollarsToCents(parsed.data.estimatedPrice);
+        depositAmountCents = computeDepositCents(policy, totalCents);
+        if (depositAmountCents > 0) {
+          await db
+            .update(appointments)
+            .set({
+              depositStatus: "awaiting",
+              depositAmountCents,
+              status: "pending",
+              updatedAt: new Date(),
+            })
+            .where(eq(appointments.id, appointment.id));
+          try {
+            const session = await createDepositCheckoutSession({
+              appointmentId: appointment.id,
+              providerId: parsed.data.providerId,
+              amountCents: depositAmountCents,
+              description: `${parsed.data.serviceName} on ${
+                typeof parsed.data.scheduledDate === "string"
+                  ? parsed.data.scheduledDate
+                  : (parsed.data.scheduledDate as Date)
+                      .toISOString()
+                      .slice(0, 10)
+              } at ${parsed.data.scheduledTime}`,
+            });
+            depositCheckoutUrl = session.checkoutUrl;
+          } catch (depositErr: unknown) {
+            const code =
+              typeof depositErr === "object" &&
+              depositErr !== null &&
+              "code" in depositErr
+                ? (depositErr as { code?: string }).code
+                : undefined;
+            if (code === "stripe_not_ready") {
+              // Provider hasn't completed Stripe Connect; degrade
+              // gracefully — confirm the booking without a deposit so
+              // the homeowner isn't blocked. Mark depositStatus so
+              // providers can see the policy was bypassed.
+              console.warn(
+                "[booking-deposit] provider not Stripe-ready, skipping deposit",
+                parsed.data.providerId,
+              );
+              await db
+                .update(appointments)
+                .set({
+                  depositStatus: "skipped_no_stripe",
+                  depositAmountCents: 0,
+                  status: "confirmed",
+                  updatedAt: new Date(),
+                })
+                .where(eq(appointments.id, appointment.id));
+              depositAmountCents = 0;
+              depositCheckoutUrl = null;
+            } else {
+              // Hard fail: roll back the appointment so the slot is
+              // freed and the homeowner gets a clear error rather than
+              // a "confirmed" appointment they never paid for.
+              console.error(
+                "[booking-deposit] Stripe Checkout session creation failed",
+                depositErr,
+              );
+              await db
+                .delete(appointments)
+                .where(eq(appointments.id, appointment.id));
+              return res.status(502).json({
+                error: "deposit_charge_failed",
+                message:
+                  "We couldn't set up the deposit payment for this booking. Please try again in a moment.",
+              });
+            }
+          }
+        }
+
         // Find or create a client record in the provider's client list
         let clientId: string | null = null;
         try {
@@ -3809,15 +3915,37 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
           }
         }
 
-        await storage.createNotification(
-          parsed.data.userId,
-          "Booking Confirmed",
-          `Your ${parsed.data.serviceName} appointment has been scheduled.`,
-          "booking_confirmed",
-          JSON.stringify({ appointmentId: appointment.id }),
-        );
+        // Task #236: when a deposit is required, the booking is held in
+        // `pending` until the webhook confirms payment — don't claim
+        // "Booking Confirmed" yet. The webhook fires the confirmed
+        // notification + booking.created email once the deposit clears.
+        const depositPending = !!depositCheckoutUrl;
+        if (depositPending) {
+          await storage.createNotification(
+            parsed.data.userId,
+            "Deposit Required",
+            `Complete the deposit payment to confirm your ${parsed.data.serviceName} booking.`,
+            "booking_deposit_pending",
+            JSON.stringify({
+              appointmentId: appointment.id,
+              depositCheckoutUrl,
+              depositAmountCents,
+            }),
+          );
+        } else {
+          await storage.createNotification(
+            parsed.data.userId,
+            "Booking Confirmed",
+            `Your ${parsed.data.serviceName} appointment has been scheduled.`,
+            "booking_confirmed",
+            JSON.stringify({ appointmentId: appointment.id }),
+          );
+        }
 
-        // Fire booking confirmation emails (fire-and-forget)
+        // Fire booking confirmation emails (fire-and-forget). Skip when a
+        // deposit is still awaiting — the webhook fires the email once
+        // the deposit payment clears so we don't email "Booking
+        // Confirmed!" before the homeowner has actually paid.
         const [bookedUser] = await db
           .select()
           .from(users)
@@ -3828,7 +3956,7 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
           .from(providers)
           .where(eq(providers.id, parsed.data.providerId))
           .catch(() => [null]);
-        if (bookedUser && bookedProvider) {
+        if (bookedUser && bookedProvider && !depositPending) {
           // Extract base service name (before " + " add-on suffix) for DB lookup
           const baseServiceName = parsed.data.serviceName
             .split(" + ")[0]
@@ -3985,7 +4113,18 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
           );
         }
 
-        res.status(201).json({ appointment });
+        // Re-fetch the appointment so the response reflects the latest
+        // depositStatus / depositAmountCents written above.
+        const [finalAppt] = await db
+          .select()
+          .from(appointments)
+          .where(eq(appointments.id, appointment.id));
+        res.status(201).json({
+          appointment: finalAppt ?? appointment,
+          requiresDeposit: depositAmountCents > 0 && !!depositCheckoutUrl,
+          depositAmountCents,
+          depositCheckoutUrl,
+        });
       } catch (error) {
         console.error("Create appointment error:", error);
         res.status(500).json({ error: "Failed to create appointment" });
@@ -4051,6 +4190,51 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
     },
   );
 
+  // Task #236: preview the cancellation fee (if any) without actually
+  // cancelling. The client uses this to render an "are you sure?" modal
+  // showing the late-cancel charge before the homeowner confirms.
+  app.get(
+    "/api/appointments/:id/cancellation-preview",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const authUserId = req.authenticatedUserId!;
+        const existing = await storage.getAppointment(req.params.id);
+        if (!existing)
+          return res.status(404).json({ error: "Appointment not found" });
+        const providerRecord = await storage.getProviderByUserId(authUserId);
+        const isOwner = existing.userId === authUserId;
+        const isProvider =
+          providerRecord && existing.providerId === providerRecord.id;
+        if (!isOwner && !isProvider)
+          return res.status(403).json({ error: "Access denied" });
+
+        const [policyProvider] = await db
+          .select({ bookingPolicies: providers.bookingPolicies })
+          .from(providers)
+          .where(eq(providers.id, existing.providerId));
+        const policy = normalizeBookingPolicy(policyProvider?.bookingPolicies);
+        const totalCents = dollarsToCents(existing.estimatedPrice ?? null);
+        const quote = computeCancellationFee(
+          policy,
+          totalCents,
+          combineDateAndTime(existing.scheduledDate, existing.scheduledTime),
+        );
+        // Providers cancelling on a homeowner's behalf never owe a fee.
+        const feeCents = isProvider ? 0 : quote.feeCents;
+        res.json({
+          feeCents,
+          insideCancellationWindow: quote.insideCancellationWindow,
+          hoursBefore: Math.round(quote.hoursBefore * 10) / 10,
+          policySummary: summarizePolicy(policy),
+        });
+      } catch (error) {
+        console.error("Cancellation preview error:", error);
+        res.status(500).json({ error: "Failed to compute cancellation fee" });
+      }
+    },
+  );
+
   app.post(
     "/api/appointments/:id/cancel",
     requireAuth,
@@ -4066,6 +4250,72 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
           providerRecord && existing.providerId === providerRecord.id;
         if (!isOwner && !isProvider)
           return res.status(403).json({ error: "Access denied" });
+
+        // ── Task #236: cancellation fee enforcement ──────────────────────
+        // Compute the fee BEFORE flipping status so the scheduled-date
+        // window check is honest. Only homeowners are charged; providers
+        // cancelling never owe a fee. If the homeowner has not explicitly
+        // acknowledged the fee (acceptFee !== true), return a 409 so the
+        // client can show a confirmation modal.
+        let cancellationFeeCheckoutUrl: string | null = null;
+        let cancellationFeeCents = 0;
+        if (isOwner && !isProvider) {
+          const [policyProvider] = await db
+            .select({ bookingPolicies: providers.bookingPolicies })
+            .from(providers)
+            .where(eq(providers.id, existing.providerId));
+          const policy = normalizeBookingPolicy(
+            policyProvider?.bookingPolicies,
+          );
+          const totalCents = dollarsToCents(existing.estimatedPrice ?? null);
+          const quote = computeCancellationFee(
+            policy,
+            totalCents,
+            combineDateAndTime(existing.scheduledDate, existing.scheduledTime),
+          );
+          if (quote.feeCents > 0) {
+            const acceptFee = req.body?.acceptFee === true;
+            if (!acceptFee) {
+              return res.status(409).json({
+                error: "fee_acknowledgement_required",
+                feeCents: quote.feeCents,
+                insideCancellationWindow: true,
+                message: `Cancelling now incurs a fee of $${(quote.feeCents / 100).toFixed(2)}. Confirm to proceed.`,
+              });
+            }
+            cancellationFeeCents = quote.feeCents;
+            try {
+              const session = await createCancellationFeeCheckoutSession({
+                appointmentId: existing.id,
+                providerId: existing.providerId,
+                amountCents: quote.feeCents,
+                description: `Late cancellation fee for ${existing.serviceName}`,
+              });
+              cancellationFeeCheckoutUrl = session.checkoutUrl;
+              await db
+                .update(appointments)
+                .set({
+                  cancellationFeeCents: quote.feeCents,
+                  updatedAt: new Date(),
+                })
+                .where(eq(appointments.id, existing.id));
+            } catch (feeErr: unknown) {
+              const code =
+                typeof feeErr === "object" &&
+                feeErr !== null &&
+                "code" in feeErr
+                  ? (feeErr as { code?: string }).code
+                  : undefined;
+              if (code !== "stripe_not_ready") {
+                console.error("Cancellation fee charge error:", feeErr);
+              }
+              // If Stripe isn't ready, proceed with cancel and skip the
+              // fee — better to honor the cancel than block it.
+              cancellationFeeCheckoutUrl = null;
+            }
+          }
+        }
+
         const appointment = await storage.cancelAppointment(req.params.id);
         if (!appointment) {
           return res.status(404).json({ error: "Appointment not found" });
@@ -4108,7 +4358,11 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
           );
         }
 
-        res.json({ appointment });
+        res.json({
+          appointment,
+          cancellationFeeCents,
+          cancellationFeeCheckoutUrl,
+        });
       } catch (error) {
         console.error("Cancel appointment error:", error);
         res.status(500).json({ error: "Failed to cancel appointment" });
@@ -4139,10 +4393,37 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
             .json({ error: "New date and time are required" });
         }
 
+        // ── Task #236: reschedule policy enforcement ─────────────────────
+        // Homeowners are bound by the provider's reschedule window and
+        // max-reschedules count. Providers can always reschedule.
+        if (isOwner && !isProvider) {
+          const [policyProvider] = await db
+            .select({ bookingPolicies: providers.bookingPolicies })
+            .from(providers)
+            .where(eq(providers.id, existing.providerId));
+          const policy = normalizeBookingPolicy(
+            policyProvider?.bookingPolicies,
+          );
+          const check = checkRescheduleAllowed(
+            policy,
+            combineDateAndTime(existing.scheduledDate, existing.scheduledTime),
+            existing.rescheduleCount ?? 0,
+          );
+          if (!check.allowed) {
+            return res.status(409).json({
+              error: check.reason,
+              message: check.message,
+              rescheduleCount: existing.rescheduleCount ?? 0,
+              maxReschedules: policy.maxReschedules,
+            });
+          }
+        }
+
         const appointment = await storage.updateAppointment(req.params.id, {
           scheduledDate,
           scheduledTime,
           status: "pending", // Reset to pending when rescheduled
+          rescheduleCount: (existing.rescheduleCount ?? 0) + 1,
         });
 
         if (!appointment) {

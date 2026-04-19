@@ -1632,6 +1632,23 @@ export async function handlePayoutFailed(
 export async function handleCheckoutSessionCompleted(
   session: Stripe.Checkout.Session,
 ) {
+  // Task #236: route by metadata so booking-deposit and cancellation-fee
+  // checkouts share the same Stripe webhook plumbing as invoice payments.
+  const depositForAppointment = session.metadata?.depositForAppointment;
+  if (depositForAppointment) {
+    await handleDepositCheckoutCompleted(depositForAppointment, session);
+    return;
+  }
+  const cancellationFeeForAppointment =
+    session.metadata?.cancellationFeeForAppointment;
+  if (cancellationFeeForAppointment) {
+    await handleCancellationFeeCheckoutCompleted(
+      cancellationFeeForAppointment,
+      session,
+    );
+    return;
+  }
+
   const invoiceId = session.metadata?.invoiceId;
   if (!invoiceId) return;
 
@@ -1663,6 +1680,245 @@ export async function handleCheckoutSessionCompleted(
       });
     }
   }
+}
+
+async function handleDepositCheckoutCompleted(
+  appointmentId: string,
+  session: Stripe.Checkout.Session,
+) {
+  const [appt] = await db
+    .select()
+    .from(appointments)
+    .where(eq(appointments.id, appointmentId));
+  if (!appt) {
+    console.warn(
+      "[stripe-webhook] deposit completion for unknown appointment",
+      appointmentId,
+    );
+    return;
+  }
+  const paymentIntentId = session.payment_intent?.toString() || null;
+  await db
+    .update(appointments)
+    .set({
+      depositStatus: "paid",
+      depositPaymentIntentId: paymentIntentId,
+      // Flip the booking to confirmed once deposit clears, mirroring how an
+      // appointment with no deposit policy lands in `confirmed` immediately.
+      status: appt.status === "pending" ? "confirmed" : appt.status,
+      updatedAt: new Date(),
+    })
+    .where(eq(appointments.id, appointmentId));
+
+  // Task #236: now that the deposit has cleared, fire the
+  // "Booking Confirmed" notification + booking.created email that the
+  // POST /api/appointments handler intentionally deferred. This is what
+  // the homeowner expects to see — they only get the confirmation
+  // touchpoints once their payment has actually gone through.
+  try {
+    if (appt.userId) {
+      await dispatchNotification(
+        appt.userId,
+        "Booking Confirmed",
+        `Your ${appt.serviceName} appointment is confirmed — deposit received.`,
+        "booking_confirmed",
+        { appointmentId },
+        "bookings",
+      );
+    }
+    const [bookedUser] = appt.userId
+      ? await db.select().from(users).where(eq(users.id, appt.userId))
+      : [null];
+    const [bookedProvider] = await db
+      .select()
+      .from(providers)
+      .where(eq(providers.id, appt.providerId));
+    if (bookedUser && bookedProvider) {
+      await dispatch("booking.created", {
+        clientEmail: bookedUser.email,
+        clientName:
+          `${bookedUser.firstName || ""} ${bookedUser.lastName || ""}`.trim() ||
+          bookedUser.email,
+        providerEmail: bookedProvider.email ?? undefined,
+        providerName: bookedProvider.businessName,
+        serviceName: appt.serviceName,
+        appointmentDate: appt.scheduledDate as unknown as string,
+        appointmentTime: appt.scheduledTime ?? "",
+        estimatedPrice: appt.estimatedPrice
+          ? parseFloat(String(appt.estimatedPrice)) || undefined
+          : undefined,
+        confirmationNumber: appt.id,
+        relatedRecordType: "appointment",
+        relatedRecordId: appt.id,
+        recipientUserId: bookedUser.id,
+      });
+    }
+  } catch (notifyErr) {
+    console.error(
+      "[stripe-webhook] deposit-paid notify error (non-fatal):",
+      notifyErr,
+    );
+  }
+}
+
+async function handleCancellationFeeCheckoutCompleted(
+  appointmentId: string,
+  session: Stripe.Checkout.Session,
+) {
+  const [appt] = await db
+    .select()
+    .from(appointments)
+    .where(eq(appointments.id, appointmentId));
+  if (!appt) return;
+  await db
+    .update(appointments)
+    .set({
+      cancellationFeeStatus: "paid",
+      cancellationFeePaymentIntentId:
+        session.payment_intent?.toString() || null,
+      updatedAt: new Date(),
+    })
+    .where(eq(appointments.id, appointmentId));
+}
+
+/**
+ * Task #236: create a Stripe Checkout Session that collects the booking
+ * deposit. Mirrors `createStripeCheckoutSession` (destination charge with
+ * application_fee_amount → provider Connect account) but is tied to an
+ * appointment instead of an invoice. The webhook flips the appointment to
+ * `confirmed` + `depositStatus = paid` once the homeowner completes payment.
+ */
+export async function createDepositCheckoutSession(params: {
+  appointmentId: string;
+  providerId: string;
+  amountCents: number;
+  description: string;
+}): Promise<{ sessionId: string; checkoutUrl: string | null }> {
+  const { appointmentId, providerId, amountCents, description } = params;
+
+  const connectAccount = await getConnectAccount(providerId);
+  if (!connectAccount || !connectAccount.chargesEnabled) {
+    const err = new Error("stripe_not_ready") as Error & { code: string };
+    err.code = "stripe_not_ready";
+    throw err;
+  }
+
+  const plan = await getProviderPlan(providerId);
+  const fee = calculatePlatformFee(
+    amountCents,
+    plan.platformFeePercent || "3.00",
+    plan.platformFeeFixedCents || 0,
+  );
+
+  const session = await getStripe().checkout.sessions.create({
+    mode: "payment",
+    line_items: [
+      {
+        price_data: {
+          currency: "usd",
+          product_data: {
+            name: "Booking deposit",
+            description,
+          },
+          unit_amount: amountCents,
+        },
+        quantity: 1,
+      },
+    ],
+    payment_intent_data: {
+      application_fee_amount: fee.totalCents,
+      transfer_data: { destination: connectAccount.stripeAccountId },
+      metadata: {
+        depositForAppointment: appointmentId,
+        providerId,
+      },
+    },
+    success_url: `${PUBLIC_REDIRECT_BASE}/payment-success?appointmentId=${encodeURIComponent(appointmentId)}&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${PUBLIC_REDIRECT_BASE}/payment-cancelled?appointmentId=${encodeURIComponent(appointmentId)}`,
+    metadata: {
+      depositForAppointment: appointmentId,
+      providerId,
+    },
+  });
+
+  await db
+    .update(appointments)
+    .set({
+      depositCheckoutSessionId: session.id,
+      updatedAt: new Date(),
+    })
+    .where(eq(appointments.id, appointmentId));
+
+  return { sessionId: session.id, checkoutUrl: session.url };
+}
+
+/**
+ * Task #236: create a Stripe Checkout Session that collects a late-cancel
+ * fee. Same destination-charge shape as the deposit/invoice flows.
+ */
+export async function createCancellationFeeCheckoutSession(params: {
+  appointmentId: string;
+  providerId: string;
+  amountCents: number;
+  description: string;
+}): Promise<{ sessionId: string; checkoutUrl: string | null }> {
+  const { appointmentId, providerId, amountCents, description } = params;
+
+  const connectAccount = await getConnectAccount(providerId);
+  if (!connectAccount || !connectAccount.chargesEnabled) {
+    const err = new Error("stripe_not_ready") as Error & { code: string };
+    err.code = "stripe_not_ready";
+    throw err;
+  }
+
+  const plan = await getProviderPlan(providerId);
+  const fee = calculatePlatformFee(
+    amountCents,
+    plan.platformFeePercent || "3.00",
+    plan.platformFeeFixedCents || 0,
+  );
+
+  const session = await getStripe().checkout.sessions.create({
+    mode: "payment",
+    line_items: [
+      {
+        price_data: {
+          currency: "usd",
+          product_data: {
+            name: "Late cancellation fee",
+            description,
+          },
+          unit_amount: amountCents,
+        },
+        quantity: 1,
+      },
+    ],
+    payment_intent_data: {
+      application_fee_amount: fee.totalCents,
+      transfer_data: { destination: connectAccount.stripeAccountId },
+      metadata: {
+        cancellationFeeForAppointment: appointmentId,
+        providerId,
+      },
+    },
+    success_url: `${PUBLIC_REDIRECT_BASE}/payment-success?appointmentId=${encodeURIComponent(appointmentId)}&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${PUBLIC_REDIRECT_BASE}/payment-cancelled?appointmentId=${encodeURIComponent(appointmentId)}`,
+    metadata: {
+      cancellationFeeForAppointment: appointmentId,
+      providerId,
+    },
+  });
+
+  await db
+    .update(appointments)
+    .set({
+      cancellationFeeCheckoutSessionId: session.id,
+      cancellationFeeStatus: "awaiting",
+      updatedAt: new Date(),
+    })
+    .where(eq(appointments.id, appointmentId));
+
+  return { sessionId: session.id, checkoutUrl: session.url };
 }
 
 export async function calculateFeePreview(
