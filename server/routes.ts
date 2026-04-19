@@ -9264,11 +9264,23 @@ Respond with JSON only:
           }
         }
 
-        const invoiceWithStripe = hostedUrl
-          ? { ...invoice, hostedInvoiceUrl: hostedUrl }
-          : invoice;
+        // Stripe send succeeded — promote draft → sent (Task #245). The
+        // row was inserted as `draft` above so a stripe_not_ready
+        // refusal would leave it draft; now that the hosted Stripe
+        // Invoice exists we can safely transition the state.
+        const [promoted] = await db
+          .update(invoices)
+          .set({
+            status: "sent",
+            sentAt: new Date(),
+            ...(hostedUrl ? { hostedInvoiceUrl: hostedUrl } : {}),
+            updatedAt: new Date(),
+          })
+          .where(eq(invoices.id, invoice.id))
+          .returning();
+
         res.status(201).json({
-          invoice: invoiceWithStripe,
+          invoice: promoted ?? invoice,
           emailSent,
           emailError,
           stripeError,

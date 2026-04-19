@@ -858,6 +858,17 @@ export async function handleAccountUpdated(account: Stripe.Account) {
     .where(eq(stripeConnectAccounts.id, connectAccount.id));
 }
 
+// Helper: narrow a Stripe expandable field (`string | T | null | undefined`)
+// to its plain id string so we never have to sprinkle `as any` over the
+// webhook handlers (architect-review fix, Task #245).
+function resolveExpandableId<T extends { id: string }>(
+  value: string | T | null | undefined,
+): string | null {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  return value.id ?? null;
+}
+
 export async function handlePaymentIntentSucceeded(
   paymentIntent: Stripe.PaymentIntent,
 ) {
@@ -866,12 +877,19 @@ export async function handlePaymentIntentSucceeded(
   // PaymentIntent's `invoice` link (Stripe Invoices paid via the hosted
   // page create the PI internally with no metadata — Task #245).
   let invoiceId = paymentIntent.metadata?.invoiceId;
-  if (!invoiceId && (paymentIntent as any).invoice) {
-    const stripeInvoiceId = String((paymentIntent as any).invoice);
+  // The PI's `invoice` link is an expandable Stripe field — typed as
+  // `string | Stripe.Invoice | null`. Narrow without a blanket `as any`
+  // (architect-review fix).
+  const piInvoice = resolveExpandableId<Stripe.Invoice>(
+    (paymentIntent as Stripe.PaymentIntent & {
+      invoice?: string | Stripe.Invoice | null;
+    }).invoice,
+  );
+  if (!invoiceId && piInvoice) {
     const [linked] = await db
       .select({ id: invoices.id })
       .from(invoices)
-      .where(eq(invoices.stripeInvoiceId, stripeInvoiceId));
+      .where(eq(invoices.stripeInvoiceId, piInvoice));
     if (linked) invoiceId = linked.id;
   }
   if (!invoiceId) return;
@@ -1265,14 +1283,18 @@ export async function handleStripeInvoicePaid(stripeInvoice: Stripe.Invoice) {
   // can record a payments row tied to the homeowner's funds movement
   // (Task #245). For Stripe Invoices paid via the hosted page these are
   // populated by Stripe at finalize/pay time.
-  const stripePaymentIntentId =
-    typeof (stripeInvoice as any).payment_intent === "string"
-      ? ((stripeInvoice as any).payment_intent as string)
-      : ((stripeInvoice as any).payment_intent?.id ?? null);
-  const stripeChargeId =
-    typeof (stripeInvoice as any).charge === "string"
-      ? ((stripeInvoice as any).charge as string)
-      : ((stripeInvoice as any).charge?.id ?? null);
+  // `payment_intent` and `charge` are expandable Stripe Invoice fields.
+  // Narrow safely without `as any` (architect-review fix).
+  const invoiceWithLinks = stripeInvoice as Stripe.Invoice & {
+    payment_intent?: string | Stripe.PaymentIntent | null;
+    charge?: string | Stripe.Charge | null;
+  };
+  const stripePaymentIntentId = resolveExpandableId<Stripe.PaymentIntent>(
+    invoiceWithLinks.payment_intent,
+  );
+  const stripeChargeId = resolveExpandableId<Stripe.Charge>(
+    invoiceWithLinks.charge,
+  );
 
   const [updatedInvoice] = await db
     .update(invoices)
