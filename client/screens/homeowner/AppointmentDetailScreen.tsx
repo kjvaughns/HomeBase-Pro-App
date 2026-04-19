@@ -26,7 +26,15 @@ type AppointmentDetailParams = { appointmentId: string };
 type ScreenRouteProp = RouteProp<{ AppointmentDetail: AppointmentDetailParams }, "AppointmentDetail">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-type AppointmentStatus = "pending" | "confirmed" | "in_progress" | "completed" | "cancelled";
+type AppointmentStatus =
+  | "pending"
+  | "confirmed"
+  | "in_progress"
+  | "completed"
+  | "awaiting_payment"
+  | "paid"
+  | "closed"
+  | "cancelled";
 
 interface StatusUpdate {
   status: string;
@@ -92,15 +100,28 @@ interface Appointment {
   provider?: Provider;
   job?: LinkedJob | null;
   invoice?: LinkedInvoice | null;
+  review?: { id: string; rating: number; comment?: string | null } | null;
 }
+
+const REVIEW_ELIGIBLE_STATUSES = new Set([
+  "completed",
+  "paid",
+  "closed",
+  "awaiting_payment",
+]);
 
 const STATUS_CONFIG: Record<AppointmentStatus, { label: string; status: "success" | "info" | "warning" | "neutral" | "cancelled" }> = {
   pending: { label: "Pending", status: "info" },
   confirmed: { label: "Confirmed", status: "info" },
   in_progress: { label: "In Progress", status: "warning" },
   completed: { label: "Completed", status: "success" },
+  awaiting_payment: { label: "Awaiting Payment", status: "warning" },
+  paid: { label: "Paid", status: "success" },
+  closed: { label: "Closed", status: "neutral" },
   cancelled: { label: "Cancelled", status: "cancelled" },
 };
+
+const FALLBACK_STATUS_CONFIG = { label: "Status", status: "neutral" as const };
 
 const TIME_SLOTS = [
   "8:00 AM", "9:00 AM", "10:00 AM", "11:00 AM",
@@ -136,7 +157,9 @@ export default function AppointmentDetailScreen() {
   });
 
   const appointment = data?.appointment;
-  const statusConfig = appointment ? STATUS_CONFIG[appointment.status] : null;
+  const statusConfig = appointment
+    ? STATUS_CONFIG[appointment.status] ?? FALLBACK_STATUS_CONFIG
+    : null;
 
   useFocusEffect(
     useCallback(() => {
@@ -252,6 +275,10 @@ export default function AppointmentDetailScreen() {
   }
 
   const canModify = appointment.status !== "completed" && appointment.status !== "cancelled";
+  const isHomeowner = !!user && appointment.userId === user.id;
+  const canReview =
+    isHomeowner && REVIEW_ELIGIBLE_STATUSES.has(appointment.status);
+  const hasReview = !!appointment.review;
   const hasUnpaidInvoice =
     !!appointment.invoice &&
     !!appointment.job &&
@@ -526,6 +553,19 @@ export default function AppointmentDetailScreen() {
         ) : null}
 
         <View style={styles.actions}>
+          {canReview ? (
+            <PrimaryButton
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                navigation.navigate("Review", { jobId: appointment.id });
+              }}
+              style={styles.actionBtn}
+              testID={hasReview ? "button-view-review" : "button-leave-review"}
+            >
+              {hasReview ? "View Your Review" : "Leave a Review"}
+            </PrimaryButton>
+          ) : null}
+
           <SecondaryButton onPress={handleMessage}>
             Message Provider
           </SecondaryButton>

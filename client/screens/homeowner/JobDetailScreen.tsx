@@ -18,12 +18,14 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { getApiUrl, getAuthHeaders } from "@/lib/query-client";
+import { useAuthStore } from "@/state/authStore";
 
 type ScreenRouteProp = RouteProp<RootStackParamList, "JobDetail">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 interface AppointmentRecord {
   id: string;
+  userId: string;
   providerId: string;
   serviceName: string;
   scheduledDate: string;
@@ -36,6 +38,19 @@ interface AppointmentRecord {
   providerDiagnosis: string | null;
   completedAt: string | null;
 }
+
+interface ReviewRecord {
+  id: string;
+  rating: number;
+  comment?: string | null;
+}
+
+const REVIEW_ELIGIBLE_STATUSES = new Set([
+  "completed",
+  "paid",
+  "closed",
+  "awaiting_payment",
+]);
 
 interface ProviderInfo {
   businessName: string;
@@ -93,8 +108,9 @@ export default function JobDetailScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
   const { jobId } = route.params;
+  const { user } = useAuthStore();
 
-  const { data: aptData, isLoading } = useQuery<{ appointment: AppointmentRecord; provider: ProviderInfo | null }>({
+  const { data: aptData, isLoading } = useQuery<{ appointment: AppointmentRecord; provider: ProviderInfo | null; review?: ReviewRecord | null }>({
     queryKey: ["/api/appointments", jobId],
     enabled: !!jobId,
     queryFn: async () => {
@@ -132,6 +148,13 @@ export default function JobDetailScreen() {
   const invoice = invoiceData?.invoice;
   const appointment = aptData?.appointment;
   const provider = aptData?.provider;
+  const review = aptData?.review ?? null;
+  const isHomeowner = !!appointment && !!user && appointment.userId === user.id;
+  const canReview =
+    !!appointment &&
+    isHomeowner &&
+    REVIEW_ELIGIBLE_STATUSES.has(appointment.status || "");
+  const hasReview = !!review;
 
   if (isLoading) {
     return (
@@ -311,6 +334,19 @@ export default function JobDetailScreen() {
                   {formatDate(appointment.completedAt)}
                 </ThemedText>
               ) : null}
+              {canReview ? (
+                <View style={{ marginTop: Spacing.md }}>
+                  <PrimaryButton
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      navigation.navigate("Review", { jobId: appointment.id });
+                    }}
+                    testID={hasReview ? "button-view-review" : "button-leave-review"}
+                  >
+                    {hasReview ? "View Your Review" : "Leave a Review"}
+                  </PrimaryButton>
+                </View>
+              ) : null}
               {appointment.providerId && provider ? (
                 <View style={{ marginTop: Spacing.md }}>
                   <PrimaryButton
@@ -328,6 +364,20 @@ export default function JobDetailScreen() {
                 </View>
               ) : null}
             </GlassCard>
+          </Animated.View>
+        ) : canReview ? (
+          <Animated.View entering={FadeInDown.delay(300).duration(400)}>
+            <View style={styles.section}>
+              <PrimaryButton
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  navigation.navigate("Review", { jobId: appointment.id });
+                }}
+                testID={hasReview ? "button-view-review" : "button-leave-review"}
+              >
+                {hasReview ? "View Your Review" : "Leave a Review"}
+              </PrimaryButton>
+            </View>
           </Animated.View>
         ) : null}
 

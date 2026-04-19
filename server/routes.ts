@@ -2918,6 +2918,14 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
           if (inv) linkedInvoice = inv;
         }
 
+        // Surface the homeowner's review (if any) so the appointment screen
+        // can switch the "Leave a Review" affordance to "View your review".
+        const [reviewRow] = await db
+          .select()
+          .from(reviews)
+          .where(eq(reviews.appointmentId, appointment.id))
+          .limit(1);
+
         res.json({
           appointment: {
             ...appointment,
@@ -2953,6 +2961,7 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
                 }
               : null,
             invoice: linkedInvoice,
+            review: reviewRow ?? null,
           },
         });
       } catch (error) {
