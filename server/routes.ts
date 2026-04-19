@@ -3335,12 +3335,50 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
           }
         }
 
-        const [linkedJob] = await db
+        let [linkedJob] = await db
           .select()
           .from(jobs)
           .where(eq(jobs.appointmentId, appointment.id))
           .orderBy(desc(jobs.createdAt))
           .limit(1);
+
+        // Task #226: defense-in-depth fallback for legacy rows where
+        // `jobs.appointment_id` was never back-linked at insert time. Match
+        // by (provider_id, scheduled_date) restricted to clients owned by
+        // this homeowner (clients.homeowner_user_id = appointment.user_id).
+        // Ensures iOS and web render identical Appointment Detail screens
+        // even for unlinked historical bookings.
+        if (
+          !linkedJob &&
+          appointment.userId &&
+          appointment.scheduledDate
+        ) {
+          const candidateClients = await db
+            .select({ id: clients.id })
+            .from(clients)
+            .where(
+              and(
+                eq(clients.providerId, appointment.providerId),
+                eq(clients.homeownerUserId, appointment.userId),
+              ),
+            );
+          if (candidateClients.length > 0) {
+            const clientIds = candidateClients.map((c) => c.id);
+            const [fallbackJob] = await db
+              .select()
+              .from(jobs)
+              .where(
+                and(
+                  eq(jobs.providerId, appointment.providerId),
+                  eq(jobs.scheduledDate, appointment.scheduledDate),
+                  inArray(jobs.clientId, clientIds),
+                ),
+              )
+              .orderBy(desc(jobs.createdAt))
+              .limit(1);
+            if (fallbackJob) linkedJob = fallbackJob;
+          }
+        }
 
         let linkedInvoice = null;
         if (linkedJob) {
@@ -3427,7 +3465,43 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
             allowed: VALID_FREQUENCIES,
           });
         }
-        const appointment = await storage.createAppointment(parsed.data);
+
+        // Task #226: route-level idempotency. If an appointment already
+        // exists for this (user, provider, slot), return it immediately
+        // without re-running the downstream client-create / job-create /
+        // notification side-effects. Without this short-circuit, a
+        // double-tapped Book button would still produce a duplicate Job
+        // even though the underlying storage layer dedupes the appointment.
+        if (parsed.data.userId && parsed.data.scheduledDate) {
+          const [preExisting] = await db
+            .select()
+            .from(appointments)
+            .where(
+              and(
+                eq(appointments.userId, parsed.data.userId),
+                eq(appointments.providerId, parsed.data.providerId),
+                eq(
+                  appointments.scheduledDate,
+                  parsed.data.scheduledDate as Date,
+                ),
+              ),
+            )
+            .limit(1);
+          if (preExisting) {
+            return res.json({ appointment: preExisting, reused: true });
+          }
+        }
+
+        const { appointment, created: appointmentCreated } =
+          await storage.createAppointment(parsed.data);
+
+        // Task #226: if storage layer detected a duplicate slot (race
+        // window between the route pre-check and the insert), short-circuit
+        // before re-running the client/job/notification side-effects so we
+        // don't double-fire downstream work.
+        if (!appointmentCreated) {
+          return res.json({ appointment, reused: true });
+        }
 
         // Find or create a client record in the provider's client list
         let clientId: string | null = null;

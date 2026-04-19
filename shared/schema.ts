@@ -382,42 +382,54 @@ export type InsertProviderCustomService = z.infer<
   typeof insertProviderCustomServiceSchema
 >;
 
-export const appointments = pgTable("appointments", {
-  id: varchar("id")
-    .primaryKey()
-    .default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").references(() => users.id, {
-    onDelete: "cascade",
+export const appointments = pgTable(
+  "appointments",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: varchar("user_id").references(() => users.id, {
+      onDelete: "cascade",
+    }),
+    homeId: varchar("home_id").references(() => homes.id, {
+      onDelete: "cascade",
+    }),
+    providerId: varchar("provider_id")
+      .notNull()
+      .references(() => providers.id, { onDelete: "cascade" }),
+    serviceId: varchar("service_id").references(() => services.id, {
+      onDelete: "set null",
+    }),
+    serviceName: text("service_name").notNull(),
+    description: text("description"),
+    jobSummary: text("job_summary"),
+    urgency: urgencyEnum("urgency").default("flexible"),
+    jobSize: jobSizeEnum("job_size").default("small"),
+    scheduledDate: timestamp("scheduled_date").notNull(),
+    scheduledTime: text("scheduled_time"),
+    status: appointmentStatusEnum("status").default("pending"),
+    estimatedPrice: decimal("estimated_price", { precision: 10, scale: 2 }),
+    finalPrice: decimal("final_price", { precision: 10, scale: 2 }),
+    providerDiagnosis: text("provider_diagnosis"),
+    statusHistory: text("status_history"),
+    notes: text("notes"),
+    isRecurring: boolean("is_recurring").default(false),
+    recurringFrequency: text("recurring_frequency"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    completedAt: timestamp("completed_at"),
+    cancelledAt: timestamp("cancelled_at"),
+  },
+  (table) => ({
+    // Task #226: prevent duplicate appointment rows for the same homeowner +
+    // provider + slot. Partial because public-booking rows have user_id NULL
+    // until the homeowner registers. Backed by SQL migration that deduped
+    // 134 historical duplicates before the index was added.
+    userProviderSlotUnique: uniqueIndex("appointments_user_provider_slot_unique")
+      .on(table.userId, table.providerId, table.scheduledDate)
+      .where(sql`user_id IS NOT NULL AND scheduled_date IS NOT NULL`),
   }),
-  homeId: varchar("home_id").references(() => homes.id, {
-    onDelete: "cascade",
-  }),
-  providerId: varchar("provider_id")
-    .notNull()
-    .references(() => providers.id, { onDelete: "cascade" }),
-  serviceId: varchar("service_id").references(() => services.id, {
-    onDelete: "set null",
-  }),
-  serviceName: text("service_name").notNull(),
-  description: text("description"),
-  jobSummary: text("job_summary"),
-  urgency: urgencyEnum("urgency").default("flexible"),
-  jobSize: jobSizeEnum("job_size").default("small"),
-  scheduledDate: timestamp("scheduled_date").notNull(),
-  scheduledTime: text("scheduled_time"),
-  status: appointmentStatusEnum("status").default("pending"),
-  estimatedPrice: decimal("estimated_price", { precision: 10, scale: 2 }),
-  finalPrice: decimal("final_price", { precision: 10, scale: 2 }),
-  providerDiagnosis: text("provider_diagnosis"),
-  statusHistory: text("status_history"),
-  notes: text("notes"),
-  isRecurring: boolean("is_recurring").default(false),
-  recurringFrequency: text("recurring_frequency"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  completedAt: timestamp("completed_at"),
-  cancelledAt: timestamp("cancelled_at"),
-});
+);
 
 export const appointmentsRelations = relations(appointments, ({ one }) => ({
   user: one(users, { fields: [appointments.userId], references: [users.id] }),

@@ -460,6 +460,18 @@ export async function runBootMigrations(): Promise<void> {
       ["invoice_line_items.amount_cents",    `SELECT amount_cents FROM invoice_line_items LIMIT 0`],
       ["payments.amount_cents column",       `SELECT amount_cents FROM payments LIMIT 0`],
       ["providers.is_public column",         `SELECT is_public FROM providers LIMIT 0`],
+      // Task #226: production-critical unique index. If this is missing in
+      // a production environment, startup fails (see verificationErrors
+      // handling below) so we never silently regress to dup-friendly state.
+      ["appointments_user_provider_slot_unique index",
+        `DO $$ BEGIN
+           IF NOT EXISTS (
+             SELECT 1 FROM pg_indexes
+              WHERE indexname = 'appointments_user_provider_slot_unique'
+           ) THEN
+             RAISE EXCEPTION 'missing index appointments_user_provider_slot_unique';
+           END IF;
+         END $$`],
     ];
 
     // ── jobs: AI-generated checklist column ───────────────────────────────
@@ -557,6 +569,159 @@ export async function runBootMigrations(): Promise<void> {
       const msg = err instanceof Error ? err.message : String(err);
       console.warn("[boot-migration] invoices.homeowner_user_id backfill skipped:", msg);
     }
+
+    // ── Task #226: dedupe duplicate appointments + add unique partial index
+    // ─────────────────────────────────────────────────────────────────────
+    // Production (and any environment seeded with seedTestAccount.ts before
+    // Task #226 shipped) accumulated duplicate appointment rows for the same
+    // (user_id, provider_id, scheduled_date) — one homeowner had 13 dupes
+    // for a single recurring slot. This caused iOS and web to open
+    // different appointment IDs for the "same" booking, so the Appointment
+    // Detail screen rendered inconsistently. We dedupe first (keeping the
+    // row with a linked job, falling back to earliest created_at) then add
+    // the unique partial index that prevents recurrence. Fully idempotent
+    // — when there are no duplicates the dedupe step is a no-op and the
+    // CREATE INDEX uses IF NOT EXISTS.
+    try {
+      const dedupePlan = await client.query(`
+        WITH ranked AS (
+          SELECT
+            a.id,
+            ROW_NUMBER() OVER (
+              PARTITION BY a.user_id, a.provider_id, a.scheduled_date
+              ORDER BY
+                EXISTS (SELECT 1 FROM jobs j WHERE j.appointment_id = a.id) DESC,
+                a.created_at ASC,
+                a.id ASC
+            ) AS rn,
+            FIRST_VALUE(a.id) OVER (
+              PARTITION BY a.user_id, a.provider_id, a.scheduled_date
+              ORDER BY
+                EXISTS (SELECT 1 FROM jobs j WHERE j.appointment_id = a.id) DESC,
+                a.created_at ASC,
+                a.id ASC
+            ) AS winner_id
+          FROM appointments a
+          WHERE a.user_id IS NOT NULL AND a.scheduled_date IS NOT NULL
+        )
+        SELECT id, winner_id FROM ranked WHERE id <> winner_id
+      `);
+      if (dedupePlan.rowCount && dedupePlan.rowCount > 0) {
+        // Repoint jobs only when the winner doesn't already have its own
+        // linked job (avoids creating two jobs pointing at the same appt).
+        await client.query(`
+          UPDATE jobs j
+             SET appointment_id = r.winner_id, updated_at = NOW()
+            FROM (
+              WITH ranked AS (
+                SELECT a.id, FIRST_VALUE(a.id) OVER (
+                  PARTITION BY a.user_id, a.provider_id, a.scheduled_date
+                  ORDER BY
+                    EXISTS (SELECT 1 FROM jobs jj WHERE jj.appointment_id = a.id) DESC,
+                    a.created_at ASC, a.id ASC
+                ) AS winner_id
+                FROM appointments a
+                WHERE a.user_id IS NOT NULL AND a.scheduled_date IS NOT NULL
+              )
+              SELECT id, winner_id FROM ranked WHERE id <> winner_id
+            ) r
+           WHERE j.appointment_id = r.id
+             AND NOT EXISTS (
+               SELECT 1 FROM jobs j2
+                WHERE j2.appointment_id = r.winner_id AND j2.id <> j.id
+             )
+        `);
+        // Repoint reviews (FK is ON DELETE CASCADE, so MUST happen
+        // before the appointment delete).
+        await client.query(`
+          UPDATE reviews rv
+             SET appointment_id = r.winner_id
+            FROM (
+              WITH ranked AS (
+                SELECT a.id, FIRST_VALUE(a.id) OVER (
+                  PARTITION BY a.user_id, a.provider_id, a.scheduled_date
+                  ORDER BY
+                    EXISTS (SELECT 1 FROM jobs jj WHERE jj.appointment_id = a.id) DESC,
+                    a.created_at ASC, a.id ASC
+                ) AS winner_id
+                FROM appointments a
+                WHERE a.user_id IS NOT NULL AND a.scheduled_date IS NOT NULL
+              )
+              SELECT id, winner_id FROM ranked WHERE id <> winner_id
+            ) r
+           WHERE rv.appointment_id = r.id
+        `);
+        // Repoint housefax_entries (FK is ON DELETE SET NULL, but repoint
+        // anyway to preserve the timeline).
+        await client.query(`
+          UPDATE housefax_entries h
+             SET appointment_id = r.winner_id
+            FROM (
+              WITH ranked AS (
+                SELECT a.id, FIRST_VALUE(a.id) OVER (
+                  PARTITION BY a.user_id, a.provider_id, a.scheduled_date
+                  ORDER BY
+                    EXISTS (SELECT 1 FROM jobs jj WHERE jj.appointment_id = a.id) DESC,
+                    a.created_at ASC, a.id ASC
+                ) AS winner_id
+                FROM appointments a
+                WHERE a.user_id IS NOT NULL AND a.scheduled_date IS NOT NULL
+              )
+              SELECT id, winner_id FROM ranked WHERE id <> winner_id
+            ) r
+           WHERE h.appointment_id = r.id
+        `);
+        // Null out any leftover loser→job links (winner already had one)
+        // so the upcoming DELETE doesn't surprise anyone reading old logs.
+        await client.query(`
+          UPDATE jobs j
+             SET appointment_id = NULL, updated_at = NOW()
+            FROM (
+              WITH ranked AS (
+                SELECT a.id, FIRST_VALUE(a.id) OVER (
+                  PARTITION BY a.user_id, a.provider_id, a.scheduled_date
+                  ORDER BY
+                    EXISTS (SELECT 1 FROM jobs jj WHERE jj.appointment_id = a.id) DESC,
+                    a.created_at ASC, a.id ASC
+                ) AS winner_id
+                FROM appointments a
+                WHERE a.user_id IS NOT NULL AND a.scheduled_date IS NOT NULL
+              )
+              SELECT id FROM ranked WHERE id <> winner_id
+            ) loser
+           WHERE j.appointment_id = loser.id
+        `);
+        // Finally, delete the loser appointment rows.
+        const del = await client.query(`
+          DELETE FROM appointments a
+            USING (
+              WITH ranked AS (
+                SELECT a2.id, FIRST_VALUE(a2.id) OVER (
+                  PARTITION BY a2.user_id, a2.provider_id, a2.scheduled_date
+                  ORDER BY
+                    EXISTS (SELECT 1 FROM jobs jj WHERE jj.appointment_id = a2.id) DESC,
+                    a2.created_at ASC, a2.id ASC
+                ) AS winner_id
+                FROM appointments a2
+                WHERE a2.user_id IS NOT NULL AND a2.scheduled_date IS NOT NULL
+              )
+              SELECT id FROM ranked WHERE id <> winner_id
+            ) loser
+           WHERE a.id = loser.id
+        `);
+        console.log(
+          `[boot-migration] Deduped ${del.rowCount ?? 0} duplicate appointment(s) (Task #226)`,
+        );
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn("[boot-migration] Appointment dedupe skipped:", msg);
+    }
+    await runSql("appointments.user_provider_slot_unique", `
+      CREATE UNIQUE INDEX IF NOT EXISTS appointments_user_provider_slot_unique
+        ON appointments (user_id, provider_id, scheduled_date)
+        WHERE user_id IS NOT NULL AND scheduled_date IS NOT NULL
+    `);
 
     // ── saved_providers: homeowner saved/favorited providers ─────────────
     await runSql("saved_providers.create", `

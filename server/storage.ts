@@ -70,7 +70,7 @@ export interface IStorage {
   
   getAppointments(userId: string): Promise<Appointment[]>;
   getAppointment(id: string): Promise<Appointment | undefined>;
-  createAppointment(appointment: InsertAppointment): Promise<Appointment>;
+  createAppointment(appointment: InsertAppointment): Promise<{ appointment: Appointment; created: boolean }>;
   updateAppointment(id: string, data: Partial<Appointment>): Promise<Appointment | undefined>;
   cancelAppointment(id: string): Promise<Appointment | undefined>;
   
@@ -275,7 +275,53 @@ export class DatabaseStorage implements IStorage {
     return appointment || undefined;
   }
 
-  async createAppointment(appointment: InsertAppointment): Promise<Appointment> {
+  async createAppointment(appointment: InsertAppointment): Promise<{ appointment: Appointment; created: boolean }> {
+    // Task #226: race-safe idempotency. The DB has a unique partial index
+    // appointments_user_provider_slot_unique on (user_id, provider_id,
+    // scheduled_date) for non-null user/slot combos. We use a pre-check for
+    // the fast path, then attempt an insert with ON CONFLICT DO NOTHING so
+    // two concurrent requests can never produce duplicate rows. If the
+    // insert is skipped due to conflict, we re-select the winning row.
+    if (
+      appointment.userId &&
+      appointment.providerId &&
+      appointment.scheduledDate
+    ) {
+      const slotFilter = and(
+        eq(appointments.userId, appointment.userId),
+        eq(appointments.providerId, appointment.providerId),
+        eq(appointments.scheduledDate, appointment.scheduledDate as Date),
+      );
+
+      // Fast path: existing row already there
+      const [existing] = await db
+        .select()
+        .from(appointments)
+        .where(slotFilter)
+        .limit(1);
+      if (existing) return existing;
+
+      // Race-safe insert: returns [] on conflict, populated on success
+      const inserted = await db
+        .insert(appointments)
+        .values(appointment)
+        .onConflictDoNothing()
+        .returning();
+      if (inserted[0]) return inserted[0];
+
+      // Conflict happened between the SELECT and INSERT — another request
+      // created the same slot. Re-select the winner.
+      const [winner] = await db
+        .select()
+        .from(appointments)
+        .where(slotFilter)
+        .limit(1);
+      if (winner) return winner;
+      throw new Error(
+        "createAppointment: insert skipped on conflict but no existing row found",
+      );
+    }
+
     const [newAppointment] = await db.insert(appointments).values(appointment).returning();
     return newAppointment;
   }
