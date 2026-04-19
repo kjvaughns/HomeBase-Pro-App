@@ -163,10 +163,10 @@ function setupBodyParsing(app: express.Application) {
 }
 
 async function initStripe() {
-  const databaseUrl = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
+  const databaseUrl = process.env.SUPABASE_DATABASE_URL;
 
   if (!databaseUrl) {
-    console.log('DATABASE_URL not found, skipping Stripe initialization');
+    console.log('SUPABASE_DATABASE_URL not found, skipping Stripe initialization');
     return;
   }
 
@@ -1115,7 +1115,6 @@ function validateProductionEnv() {
 
   // These degrade features gracefully but should still be configured
   const softRequired: Array<[string, string]> = [
-    ["SUPABASE_DATABASE_URL", "Falling back to DATABASE_URL — ensure it is set for production"],
     [process.env.OPENAI_API_KEY ? "OPENAI_API_KEY" : "AI_INTEGRATIONS_OPENAI_API_KEY", "AI assistant features will return 500 errors"],
   ];
 

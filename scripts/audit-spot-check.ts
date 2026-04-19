@@ -2,7 +2,7 @@ import pg from "pg";
 const { Client } = pg;
 
 async function main() {
-  const url = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL!;
+  const url = process.env.SUPABASE_DATABASE_URL!;
   const client = new Client({ connectionString: url, ssl: url.includes("supabase") ? { rejectUnauthorized: false } : undefined });
   await client.connect();
 

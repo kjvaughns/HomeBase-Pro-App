@@ -6,8 +6,7 @@ This document defines every environment variable the HomeBase backend depends on
 |---|---|---|---|
 | `JWT_SECRET` | **Critical** | `process.exit(1)` at startup if unset in production | Set manually in deployment secrets |
 | `STRIPE_CONNECT_WEBHOOK_SECRET` | **Critical** | `process.exit(1)` at startup if unset in production; all webhook requests rejected without it | Stripe Dashboard → Webhooks → signing secret |
-| `SUPABASE_DATABASE_URL` | **Critical** | `db.ts` throws on connection if neither DB URL set | Supabase project settings |
-| `DATABASE_URL` | Fallback | Used if `SUPABASE_DATABASE_URL` unset | Replit built-in PostgreSQL |
+| `SUPABASE_DATABASE_URL` | **Critical** | `db.ts` throws on connection if unset. Supabase is the only supported database — there is no fallback. | Supabase project settings |
 | `STRIPE_SECRET_KEY` | **Critical** | Replit Stripe integration; `getStripe()` throws on use if missing | Replit Stripe integration |
 | `STRIPE_WEBHOOK_SECRET` | **Critical** | Used by `stripe-replit-sync`; `/api/stripe/webhook` returns 400 on sig failure | Stripe Dashboard → Webhooks |
 | `RESEND_API_KEY` | Required for email | Replit Resend integration; email send fails gracefully if missing | Resend dashboard |
@@ -42,7 +41,6 @@ The following missing variables will cause the server to **hard-exit at startup*
 
 Variables that log WARNING in production but do not cause exit:
 
-- `SUPABASE_DATABASE_URL` — falls back to `DATABASE_URL`
 - `OPENAI_API_KEY` — AI features return 500 errors
 
 ---

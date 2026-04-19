@@ -4,22 +4,21 @@ import * as schema from "@shared/schema";
 
 const { Pool } = pg;
 
-// Use Supabase as primary DB, fallback to Replit DATABASE_URL
-const databaseUrl = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
+// Supabase is the only supported backend database. The Replit-managed
+// DATABASE_URL is intentionally NOT a fallback — pointing the app at the
+// wrong DB silently corrupts data, and we have been bitten by that.
+const databaseUrl = process.env.SUPABASE_DATABASE_URL;
 
 if (!databaseUrl) {
   throw new Error(
-    "SUPABASE_DATABASE_URL or DATABASE_URL must be set. Did you forget to configure a database?",
+    "SUPABASE_DATABASE_URL must be set. HomeBase uses Supabase as its only database.",
   );
 }
 
-// Detect Supabase from the resolved URL (covers both SUPABASE_DATABASE_URL and a Supabase-format DATABASE_URL)
-const isSupabase = databaseUrl.includes("supabase");
-console.log(`[db] Connecting to ${isSupabase ? "Supabase" : "Replit PostgreSQL"}`);
+console.log(`[db] Connecting to Supabase`);
 
 export const pool = new Pool({
   connectionString: databaseUrl,
-  // Supabase requires SSL; Replit's internal Postgres does not use SSL so we enable only when connecting to Supabase
-  ...(isSupabase ? { ssl: { rejectUnauthorized: false } } : {}),
+  ssl: { rejectUnauthorized: false },
 });
 export const db = drizzle(pool, { schema });

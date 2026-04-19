@@ -12,8 +12,8 @@ const { Client } = pg;
  * Run: npx tsx scripts/migrate-supabase.ts
  */
 
-const url = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
-if (!url) throw new Error("SUPABASE_DATABASE_URL or DATABASE_URL must be set");
+const url = process.env.SUPABASE_DATABASE_URL;
+if (!url) throw new Error("SUPABASE_DATABASE_URL must be set");
 
 const client = new Client({
   connectionString: url,

@@ -6,7 +6,7 @@ import { is } from "drizzle-orm";
 const { Client } = pg;
 
 async function main() {
-  const url = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
+  const url = process.env.SUPABASE_DATABASE_URL;
   if (!url) throw new Error("no DB url");
   const client = new Client({ connectionString: url, ssl: url.includes("supabase") ? { rejectUnauthorized: false } : undefined });
   await client.connect();
