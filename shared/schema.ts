@@ -766,7 +766,10 @@ export const stripeWebhookEvents = pgTable("stripe_webhook_events", {
   eventType: text("event_type").notNull(),
   endpoint: text("endpoint"), // 'platform' | 'connect' (nullable for legacy rows)
   stripeAccountId: text("stripe_account_id"), // event.account, null on platform events
-  processedAt: timestamp("processed_at").defaultNow().notNull(),
+  // Nullable: row is inserted at "reserve" time with processed_at=NULL,
+  // then UPDATEd to NOW() once the handler succeeds. A retry that finds
+  // the row but processed_at IS NULL re-runs the handler.
+  processedAt: timestamp("processed_at"),
   payload: text("payload"), // JSON string of event data
 });
 

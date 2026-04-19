@@ -80,9 +80,14 @@ Both `/api/stripe/webhook` and `/api/webhooks/stripe-connect` call this function
    - `event.account` set ⇒ event must arrive on `connect`
    - `event.account` absent ⇒ event must arrive on `platform`
 
-   Mis-routed events are recorded to `stripe_webhook_events` (paper trail), logged with `outcome=rejected reason=wrong_endpoint`, and acknowledged with HTTP 200 so Stripe doesn't retry forever — the fix lives in the Dashboard, not our handler.
+   Mis-routed events are NOT recorded (see §4.5 for the rationale). They are logged with `outcome=rejected reason=wrong_endpoint` and acknowledged with HTTP 200 so Stripe doesn't retry forever — the fix lives in the Dashboard, not our handler.
 
-2. **Idempotency** — `event.id` is reserved in `stripe_webhook_events` (now with `endpoint` and `stripe_account_id` columns) BEFORE any side effect runs. The Postgres unique constraint on `stripe_event_id` is the race-winner; a duplicate delivery returns `outcome=duplicate`.
+2. **Idempotency** — uses a 3-state model on `stripe_webhook_events.processed_at` (now nullable):
+   - `fresh` → row inserted with `processed_at = NULL`, handler runs.
+   - `retry` → row exists with `processed_at IS NULL` (a previous attempt threw before commit), handler runs again. Logged as `outcome=retry note=prior_attempt_failed`.
+   - `duplicate` → row exists with `processed_at IS NOT NULL`, handler short-circuits with `outcome=duplicate`.
+
+   The Postgres unique constraint on `stripe_event_id` arbitrates concurrent first deliveries (the loser falls through to the SELECT path). After the handler returns successfully, `markEventProcessed(event.id)` UPDATEs `processed_at = NOW()`, committing the reservation. Handler failures leave `processed_at = NULL` so a Stripe retry can re-attempt the side effects — without this state model, the unique constraint would silently drop retries as `duplicate`.
 
 3. **Connected-account resolution** — for Connect events, the dispatcher looks up `stripeConnectAccounts.stripeAccountId === event.account`. Unknown accounts log `outcome=rejected reason=unknown_account` and short-circuit.
 

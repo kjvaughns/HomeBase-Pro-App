@@ -747,6 +747,14 @@ export async function runBootMigrations(): Promise<void> {
       "stripe_webhook_events.stripe_account_id",
       `ALTER TABLE stripe_webhook_events ADD COLUMN IF NOT EXISTS stripe_account_id TEXT`,
     );
+    // Make processed_at nullable so we can implement reserve→handle→commit:
+    // a row exists with processed_at=NULL while the handler is running. If
+    // the handler throws, the row stays NULL and a Stripe retry re-runs it.
+    // Only rows with processed_at IS NOT NULL are treated as duplicates.
+    await runSql(
+      "stripe_webhook_events.processed_at_nullable",
+      `ALTER TABLE stripe_webhook_events ALTER COLUMN processed_at DROP NOT NULL`,
+    );
 
     // ── review_reports: UGC moderation (Apple Guideline 1.2) ─────────────
     await runSql("review_reports.create", `

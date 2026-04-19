@@ -1,6 +1,6 @@
 import type Stripe from "stripe";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { stripeWebhookEvents, stripeConnectAccounts } from "../shared/schema";
 
 // =============================================================================
@@ -195,10 +195,15 @@ export async function processStripeEvent(
   }
 
   // -- 2. Idempotency ---------------------------------------------------------
-  // Reserve the event id BEFORE running side effects. If two deliveries race,
-  // only one wins the unique-constraint insert; the other returns "duplicate".
-  const reserved = await reserveEvent(event, endpoint);
-  if (!reserved) {
+  // Reserve the event id BEFORE running side effects, but use a 3-state model:
+  //   "fresh"     → first delivery, row inserted with processed_at=NULL, run handler
+  //   "retry"     → row exists with processed_at IS NULL → previous attempt
+  //                 failed (handler threw, Stripe is retrying), run handler again
+  //   "duplicate" → row exists with processed_at IS NOT NULL → already done, skip
+  // This means transient handler failures DON'T permanently lock out retries
+  // via the unique constraint on stripe_event_id.
+  const reservation = await reserveEvent(event, endpoint);
+  if (reservation === "duplicate") {
     console.log(`${baseLog} outcome=duplicate`);
     return {
       processed: false,
@@ -208,6 +213,9 @@ export async function processStripeEvent(
       eventType,
       account,
     };
+  }
+  if (reservation === "retry") {
+    console.warn(`${baseLog} outcome=retry note=prior_attempt_failed`);
   }
 
   // -- 3. Connected-account resolution ---------------------------------------
@@ -243,6 +251,9 @@ export async function processStripeEvent(
 
   try {
     await handler(event);
+    // Commit the reservation: mark processed_at so future deliveries with the
+    // same event.id are short-circuited as duplicate.
+    await markEventProcessed(event.id);
     console.log(`${baseLog} outcome=processed`);
     return {
       processed: true,
@@ -253,8 +264,9 @@ export async function processStripeEvent(
       account,
     };
   } catch (err: any) {
-    // Stack trace is preserved (no swallowing). Re-throw so the HTTP layer
-    // returns 5xx and Stripe retries with backoff.
+    // Leave processed_at NULL so a Stripe retry can re-attempt. Stack trace
+    // is preserved (no swallowing). Re-throw so the HTTP layer returns 5xx
+    // and Stripe retries with exponential backoff.
     console.error(
       `${baseLog} outcome=error message=${err?.message ?? "unknown"}`,
       err?.stack ?? err,
@@ -275,15 +287,26 @@ export function expectedEndpointFor(event: Stripe.Event): WebhookEndpoint {
   return event.account ? "connect" : "platform";
 }
 
+export type ReservationState = "fresh" | "retry" | "duplicate";
+
 /**
- * Insert a row in stripe_webhook_events for `event.id`. Returns true if the
- * row was inserted (caller proceeds with side effects), false if a row
- * already existed (duplicate delivery).
+ * Reserve an event id in stripe_webhook_events for processing. Three outcomes:
+ *
+ *   "fresh"     – row inserted with processed_at=NULL. Caller runs handler,
+ *                 then calls markEventProcessed() on success.
+ *   "retry"     – row already existed but processed_at IS NULL, meaning a
+ *                 prior attempt threw before commit. Caller re-runs handler.
+ *   "duplicate" – row already existed with processed_at IS NOT NULL. Caller
+ *                 short-circuits — handler must not run.
+ *
+ * Race-safe: the unique constraint on stripe_event_id arbitrates concurrent
+ * first deliveries. The losing INSERT catches 23505 and falls through to the
+ * SELECT path, which inspects processed_at to decide retry vs duplicate.
  */
-async function reserveEvent(
+export async function reserveEvent(
   event: Stripe.Event,
   endpoint: WebhookEndpoint,
-): Promise<boolean> {
+): Promise<ReservationState> {
   try {
     await db.insert(stripeWebhookEvents).values({
       stripeEventId: event.id,
@@ -291,32 +314,35 @@ async function reserveEvent(
       endpoint,
       stripeAccountId: event.account ?? null,
       payload: JSON.stringify(event.data),
+      processedAt: null,
     });
-    return true;
+    return "fresh";
   } catch (err: any) {
-    // Postgres unique violation = duplicate.
-    if (err?.code === "23505" || /duplicate key/i.test(err?.message ?? "")) {
-      return false;
+    if (!(err?.code === "23505" || /duplicate key/i.test(err?.message ?? ""))) {
+      throw err;
     }
-    throw err;
   }
+  // Row exists — inspect processed_at to decide retry vs duplicate.
+  const [row] = await db
+    .select({ processedAt: stripeWebhookEvents.processedAt })
+    .from(stripeWebhookEvents)
+    .where(eq(stripeWebhookEvents.stripeEventId, event.id));
+  if (row && row.processedAt !== null) {
+    return "duplicate";
+  }
+  return "retry";
 }
 
-async function recordEvent(
-  event: Stripe.Event,
-  endpoint: WebhookEndpoint,
-): Promise<void> {
-  try {
-    await db.insert(stripeWebhookEvents).values({
-      stripeEventId: event.id,
-      eventType: event.type,
-      endpoint,
-      stripeAccountId: event.account ?? null,
-      payload: JSON.stringify(event.data),
-    });
-  } catch {
-    // Best-effort — already exists is fine.
-  }
+/**
+ * Mark a previously-reserved event as fully processed. Only called after a
+ * handler returns successfully. Future deliveries with the same event.id
+ * will then short-circuit as "duplicate".
+ */
+export async function markEventProcessed(eventId: string): Promise<void> {
+  await db
+    .update(stripeWebhookEvents)
+    .set({ processedAt: sql`NOW()` })
+    .where(eq(stripeWebhookEvents.stripeEventId, eventId));
 }
 
 /**

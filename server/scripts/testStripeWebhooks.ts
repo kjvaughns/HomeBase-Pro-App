@@ -160,6 +160,31 @@ async function main() {
   assertEq(r2.reason, "wrong_endpoint", "connect event on platform endpoint → wrong_endpoint");
 
   // -------------------------------------------------------------------------
+  // 3b. Failed-handler retry MUST be allowed to succeed on a later delivery
+  // (regression: previously reserveEvent inserted with processed_at=NOW(),
+  // so a 5xx-then-Stripe-retry delivery hit the unique constraint and was
+  // silently dropped as a duplicate, permanently losing the event)
+  // -------------------------------------------------------------------------
+  console.log("\n3b. Failed handler → Stripe retry succeeds (state model)");
+  const { reserveEvent: reserve, markEventProcessed: markDone } = await import(
+    "../stripeWebhookRouter"
+  );
+  const failThenSucceed = makeEvent({
+    id: `${RUN_TAG}_retry_after_fail`,
+    type: "invoice.finalized",
+    object: { id: "in_test_retry" },
+  });
+  const r0 = await reserve(failThenSucceed, "platform");
+  assertEq(r0, "fresh", "first delivery: fresh");
+  // simulate handler throw → DON'T call markEventProcessed → row stays NULL
+  const r1retry = await reserve(failThenSucceed, "platform");
+  assertEq(r1retry, "retry", "second delivery (after fail): retry, not duplicate");
+  // simulate handler success on retry → commit
+  await markDone(failThenSucceed.id);
+  const r2dup = await reserve(failThenSucceed, "platform");
+  assertEq(r2dup, "duplicate", "third delivery (after success): duplicate");
+
+  // -------------------------------------------------------------------------
   // 4b. Wrong-endpoint MUST NOT poison idempotency for the correct endpoint
   // (regression: a misrouted delivery would have reserved the event_id and
   // caused the correct delivery to be silently dropped as a duplicate)
