@@ -230,6 +230,7 @@ export default function BusinessHubScreen() {
   const [businessName, setBusinessName] = useState("");
   const [description, setDescription] = useState("");
   const [descriptionHeight, setDescriptionHeight] = useState(130);
+  const [citiesHeight, setCitiesHeight] = useState(80);
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [hourlyRate, setHourlyRate] = useState("");
@@ -747,19 +748,31 @@ export default function BusinessHubScreen() {
             />
           </View>
 
-          <View style={styles.fieldRow}>
-            <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
-              Hourly Rate ($)
+          <View style={styles.stackedField}>
+            <ThemedText style={[styles.stackedLabel, { color: theme.textSecondary }]}>
+              Hourly Rate
             </ThemedText>
-            <TextInput
-              style={[styles.fieldInputSmall, { color: theme.text, backgroundColor: theme.backgroundElevated }]}
-              value={hourlyRate}
-              onChangeText={setHourlyRate}
-              placeholder="95"
-              placeholderTextColor={theme.textTertiary}
-              keyboardType="decimal-pad"
-              testID="input-hourly-rate"
-            />
+            <View
+              style={[
+                styles.stackedInputWithSuffix,
+                { backgroundColor: theme.backgroundElevated, borderColor: theme.border },
+              ]}
+            >
+              <ThemedText
+                style={[styles.stackedAffix, { color: theme.textSecondary, marginRight: Spacing.xs }]}
+              >
+                $
+              </ThemedText>
+              <TextInput
+                style={[styles.stackedInputInner, { color: theme.text }]}
+                value={hourlyRate}
+                onChangeText={setHourlyRate}
+                placeholder="95"
+                placeholderTextColor={theme.textTertiary}
+                keyboardType="decimal-pad"
+                testID="input-hourly-rate"
+              />
+            </View>
           </View>
 
           <View style={styles.infoRow}>
@@ -844,29 +857,41 @@ export default function BusinessHubScreen() {
             <ThemedText style={styles.cardTitle}>Service Area</ThemedText>
           </View>
 
-          <View style={styles.fieldRow}>
-            <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
-              Radius (miles)
+          <View style={styles.stackedField}>
+            <ThemedText style={[styles.stackedLabel, { color: theme.textSecondary }]}>
+              Radius
             </ThemedText>
-            <TextInput
-              style={[styles.fieldInputSmall, { color: theme.text, backgroundColor: theme.backgroundElevated }]}
-              value={serviceRadius}
-              onChangeText={setServiceRadius}
-              keyboardType="number-pad"
-              placeholder="25"
-              placeholderTextColor={theme.textTertiary}
-            />
+            <View
+              style={[
+                styles.stackedInputWithSuffix,
+                { backgroundColor: theme.backgroundElevated, borderColor: theme.border },
+              ]}
+            >
+              <TextInput
+                style={[styles.stackedInputInner, { color: theme.text }]}
+                value={serviceRadius}
+                onChangeText={setServiceRadius}
+                keyboardType="number-pad"
+                placeholder="25"
+                placeholderTextColor={theme.textTertiary}
+              />
+              <ThemedText
+                style={[styles.stackedAffix, { color: theme.textSecondary, marginLeft: Spacing.xs }]}
+              >
+                miles
+              </ThemedText>
+            </View>
           </View>
-          <View style={{ marginTop: Spacing.sm }}>
+          <View style={{ marginTop: Spacing.md }}>
             <ZipCodeAreaInput
               label="ZIP Code"
               value={zipCodes}
               onChange={setZipCodes}
             />
           </View>
-          <View style={[styles.fieldCol, { marginTop: Spacing.md }]}>
+          <View style={styles.stackedField}>
             <View style={styles.aiLabelRow}>
-              <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary, flex: 1 }]}>
+              <ThemedText style={[styles.stackedLabel, { color: theme.textSecondary, flex: 1, marginBottom: 0 }]}>
                 Cities Served
               </ThemedText>
               <Pressable
@@ -886,13 +911,38 @@ export default function BusinessHubScreen() {
               </Pressable>
             </View>
             <TextInput
-              style={[styles.textArea, { color: theme.text, backgroundColor: theme.backgroundElevated }]}
+              style={[
+                styles.stackedTextArea,
+                {
+                  color: theme.text,
+                  backgroundColor: theme.backgroundElevated,
+                  borderColor: theme.border,
+                  marginTop: Spacing.xs,
+                  minHeight: 80,
+                  height: Math.max(80, citiesHeight),
+                },
+              ]}
               value={cities}
               onChangeText={setCities}
+              onContentSizeChange={
+                Platform.OS === "web"
+                  ? undefined
+                  : (e) => {
+                      const measured = e?.nativeEvent?.contentSize?.height;
+                      if (typeof measured !== "number" || !isFinite(measured)) {
+                        return;
+                      }
+                      const next = measured + Spacing.md;
+                      if (Math.abs(next - citiesHeight) > 1) {
+                        setCitiesHeight(next);
+                      }
+                    }
+              }
               multiline
-              numberOfLines={2}
               placeholder="San Francisco, Oakland, Daly City"
               placeholderTextColor={theme.textTertiary}
+              textAlignVertical="top"
+              scrollEnabled={false}
             />
             {citiesError.length > 0 ? (
               <ThemedText style={[styles.aiErrorText, { color: Colors.error }]}>{citiesError}</ThemedText>
@@ -910,7 +960,16 @@ export default function BusinessHubScreen() {
           {DAYS.map((day) => {
             const dayData = hours[day.key];
             return (
-              <View key={day.key} style={styles.hoursRow}>
+              <View
+                key={day.key}
+                style={[
+                  styles.hoursRow,
+                  {
+                    backgroundColor: theme.backgroundElevated,
+                    borderColor: theme.border,
+                  },
+                ]}
+              >
                 <Pressable
                   style={[
                     styles.dayToggle,
@@ -1197,13 +1256,18 @@ export default function BusinessHubScreen() {
               />
             </View>
             {policies.requireDeposit ? (
-              <View style={[styles.fieldRow, { marginTop: Spacing.sm }]}>
-                <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+              <View style={styles.stackedField}>
+                <ThemedText style={[styles.stackedLabel, { color: theme.textSecondary }]}>
                   Deposit Percent
                 </ThemedText>
-                <View style={styles.inputWithSuffix}>
+                <View
+                  style={[
+                    styles.stackedInputWithSuffix,
+                    { backgroundColor: theme.backgroundElevated, borderColor: theme.border },
+                  ]}
+                >
                   <TextInput
-                    style={[styles.numericInput, { color: theme.text, backgroundColor: theme.backgroundElevated }]}
+                    style={[styles.stackedInputInner, { color: theme.text }]}
                     value={String(policies.depositPercent)}
                     onChangeText={(v) => setPolicies((p) => ({ ...p, depositPercent: parseInt(v) || 0 }))}
                     keyboardType="number-pad"
@@ -1211,7 +1275,11 @@ export default function BusinessHubScreen() {
                     placeholder="25"
                     placeholderTextColor={theme.textTertiary}
                   />
-                  <ThemedText style={[styles.inputSuffix, { color: theme.textSecondary }]}>%</ThemedText>
+                  <ThemedText
+                    style={[styles.stackedAffix, { color: theme.textSecondary, marginLeft: Spacing.xs }]}
+                  >
+                    %
+                  </ThemedText>
                 </View>
               </View>
             ) : null}
@@ -1223,13 +1291,18 @@ export default function BusinessHubScreen() {
               <Feather name="x-circle" size={16} color={Colors.accent} />
               <ThemedText style={styles.cardTitle}>Cancellation Policy</ThemedText>
             </View>
-            <View style={styles.fieldRow}>
-              <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+            <View style={styles.stackedField}>
+              <ThemedText style={[styles.stackedLabel, { color: theme.textSecondary }]}>
                 Free cancellation window
               </ThemedText>
-              <View style={styles.inputWithSuffix}>
+              <View
+                style={[
+                  styles.stackedInputWithSuffix,
+                  { backgroundColor: theme.backgroundElevated, borderColor: theme.border },
+                ]}
+              >
                 <TextInput
-                  style={[styles.numericInput, { color: theme.text, backgroundColor: theme.backgroundElevated }]}
+                  style={[styles.stackedInputInner, { color: theme.text }]}
                   value={String(policies.cancellationHours)}
                   onChangeText={(v) => setPolicies((p) => ({ ...p, cancellationHours: parseInt(v) || 0 }))}
                   keyboardType="number-pad"
@@ -1237,16 +1310,25 @@ export default function BusinessHubScreen() {
                   placeholder="24"
                   placeholderTextColor={theme.textTertiary}
                 />
-                <ThemedText style={[styles.inputSuffix, { color: theme.textSecondary }]}>hrs</ThemedText>
+                <ThemedText
+                  style={[styles.stackedAffix, { color: theme.textSecondary, marginLeft: Spacing.xs }]}
+                >
+                  hrs
+                </ThemedText>
               </View>
             </View>
-            <View style={[styles.fieldRow, { marginTop: Spacing.sm }]}>
-              <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+            <View style={styles.stackedField}>
+              <ThemedText style={[styles.stackedLabel, { color: theme.textSecondary }]}>
                 Late cancellation fee
               </ThemedText>
-              <View style={styles.inputWithSuffix}>
+              <View
+                style={[
+                  styles.stackedInputWithSuffix,
+                  { backgroundColor: theme.backgroundElevated, borderColor: theme.border },
+                ]}
+              >
                 <TextInput
-                  style={[styles.numericInput, { color: theme.text, backgroundColor: theme.backgroundElevated }]}
+                  style={[styles.stackedInputInner, { color: theme.text }]}
                   value={String(policies.cancellationFeePercent)}
                   onChangeText={(v) => setPolicies((p) => ({ ...p, cancellationFeePercent: parseInt(v) || 0 }))}
                   keyboardType="number-pad"
@@ -1254,7 +1336,11 @@ export default function BusinessHubScreen() {
                   placeholder="50"
                   placeholderTextColor={theme.textTertiary}
                 />
-                <ThemedText style={[styles.inputSuffix, { color: theme.textSecondary }]}>%</ThemedText>
+                <ThemedText
+                  style={[styles.stackedAffix, { color: theme.textSecondary, marginLeft: Spacing.xs }]}
+                >
+                  %
+                </ThemedText>
               </View>
             </View>
           </GlassCard>
@@ -1265,13 +1351,18 @@ export default function BusinessHubScreen() {
               <Feather name="refresh-cw" size={16} color={Colors.accent} />
               <ThemedText style={styles.cardTitle}>Reschedule Policy</ThemedText>
             </View>
-            <View style={styles.fieldRow}>
-              <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+            <View style={styles.stackedField}>
+              <ThemedText style={[styles.stackedLabel, { color: theme.textSecondary }]}>
                 Reschedule notice required
               </ThemedText>
-              <View style={styles.inputWithSuffix}>
+              <View
+                style={[
+                  styles.stackedInputWithSuffix,
+                  { backgroundColor: theme.backgroundElevated, borderColor: theme.border },
+                ]}
+              >
                 <TextInput
-                  style={[styles.numericInput, { color: theme.text, backgroundColor: theme.backgroundElevated }]}
+                  style={[styles.stackedInputInner, { color: theme.text }]}
                   value={String(policies.rescheduleHours)}
                   onChangeText={(v) => setPolicies((p) => ({ ...p, rescheduleHours: parseInt(v) || 0 }))}
                   keyboardType="number-pad"
@@ -1279,16 +1370,25 @@ export default function BusinessHubScreen() {
                   placeholder="12"
                   placeholderTextColor={theme.textTertiary}
                 />
-                <ThemedText style={[styles.inputSuffix, { color: theme.textSecondary }]}>hrs</ThemedText>
+                <ThemedText
+                  style={[styles.stackedAffix, { color: theme.textSecondary, marginLeft: Spacing.xs }]}
+                >
+                  hrs
+                </ThemedText>
               </View>
             </View>
-            <View style={[styles.fieldRow, { marginTop: Spacing.sm }]}>
-              <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+            <View style={styles.stackedField}>
+              <ThemedText style={[styles.stackedLabel, { color: theme.textSecondary }]}>
                 Max reschedules per booking
               </ThemedText>
-              <View style={styles.inputWithSuffix}>
+              <View
+                style={[
+                  styles.stackedInputWithSuffix,
+                  { backgroundColor: theme.backgroundElevated, borderColor: theme.border },
+                ]}
+              >
                 <TextInput
-                  style={[styles.numericInput, { color: theme.text, backgroundColor: theme.backgroundElevated }]}
+                  style={[styles.stackedInputInner, { color: theme.text }]}
                   value={String(policies.maxReschedules)}
                   onChangeText={(v) => setPolicies((p) => ({ ...p, maxReschedules: parseInt(v) || 0 }))}
                   keyboardType="number-pad"
@@ -1564,6 +1664,23 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
     ...Typography.callout,
   },
+  stackedInputWithSuffix: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
+    borderRadius: BorderRadius.input,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: Spacing.md,
+    minHeight: Spacing.inputHeight,
+  },
+  stackedInputInner: {
+    flex: 1,
+    paddingVertical: Spacing.sm + 2,
+    ...Typography.callout,
+  },
+  stackedAffix: {
+    ...Typography.callout,
+  },
   logoSection: {
     flexDirection: "row",
     alignItems: "center",
@@ -1614,13 +1731,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.sm,
+    paddingHorizontal: Spacing.sm + 2,
     paddingVertical: Spacing.xs + 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(0,0,0,0.06)",
+    borderRadius: BorderRadius.input,
+    borderWidth: StyleSheet.hairlineWidth,
+    minHeight: Spacing.inputHeight,
+    marginBottom: Spacing.xs + 2,
   },
   dayToggle: {
-    width: 42,
-    height: 30,
+    width: 48,
+    height: 34,
     borderRadius: BorderRadius.sm,
     alignItems: "center",
     justifyContent: "center",
@@ -1638,16 +1758,17 @@ const styles = StyleSheet.create({
   timeInput: {
     flex: 1,
     borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.xs + 2,
-    paddingVertical: Spacing.xs,
-    ...Typography.caption1,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs + 2,
+    ...Typography.footnote,
     textAlign: "center",
-    minWidth: 70,
+    minWidth: 80,
+    minHeight: 34,
   },
   timeButton: {
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 30,
+    minHeight: 34,
   },
   aiLabelRow: {
     flexDirection: "row",
