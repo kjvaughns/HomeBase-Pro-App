@@ -196,7 +196,6 @@ export default function JobDetailScreen() {
   const statusConfig = STATUS_CONFIG[statusKey] || { label: statusKey, status: "neutral" as const };
   const price = appointment.finalPrice || appointment.estimatedPrice;
 
-  const isInvoiceUnpaid = invoice && invoice.status !== "paid" && invoice.status !== "cancelled";
   const isInvoicePaidOrClosed =
     invoice && (invoice.status === "paid" || invoice.status === "closed");
   const showInvoiceCta = !!invoice;
