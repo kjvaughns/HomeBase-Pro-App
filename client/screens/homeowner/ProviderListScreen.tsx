@@ -97,6 +97,7 @@ export default function ProviderListScreen() {
       distance: p.distance ?? undefined,
       gallery: Array.isArray(p.gallery) ? p.gallery : [],
       phone: p.phone ?? undefined,
+      isPartner: p.isPartner ?? false,
     }));
   }, [apiData, categoryId]);
 
