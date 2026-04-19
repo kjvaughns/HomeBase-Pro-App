@@ -186,6 +186,8 @@ export default function JobDetailScreen() {
   const price = appointment.finalPrice || appointment.estimatedPrice;
 
   const isInvoiceUnpaid = invoice && invoice.status !== "paid" && invoice.status !== "cancelled";
+  const isInvoicePaid = invoice && invoice.status === "paid";
+  const showInvoiceCta = invoice && invoice.status !== "cancelled";
 
   const handlePayInvoice = async () => {
     if (!invoice) return;
@@ -318,10 +320,10 @@ export default function JobDetailScreen() {
                     Due: {formatDate(invoice.dueDate)}
                   </ThemedText>
                 ) : null}
-                {isInvoiceUnpaid ? (
+                {showInvoiceCta ? (
                   <View style={{ marginTop: Spacing.md }}>
-                    <PrimaryButton onPress={handlePayInvoice} testID="button-pay-invoice">
-                      Pay Invoice
+                    <PrimaryButton onPress={handlePayInvoice} testID="button-view-invoice">
+                      {isInvoicePaid ? "View Receipt" : "View Invoice"}
                     </PrimaryButton>
                   </View>
                 ) : null}
