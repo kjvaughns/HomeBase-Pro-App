@@ -9,6 +9,7 @@ import {
   Platform,
 } from "react-native";
 import { useSafeAreaInsets, type EdgeInsets } from "react-native-safe-area-context";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -657,7 +658,10 @@ function ClientPickerModal({
   insets,
 }: ClientPickerModalProps) {
   return (
-    <View style={modalStyles.overlay}>
+    <KeyboardAvoidingView
+      style={modalStyles.overlay}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       <View style={[modalStyles.sheet, { backgroundColor: theme.backgroundElevated, paddingBottom: insets.bottom + Spacing.md }]}>
         {/* Handle */}
@@ -742,7 +746,7 @@ function ClientPickerModal({
           })}
         </ScrollView>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -768,7 +772,10 @@ function ServicePickerModal({
   insets,
 }: ServicePickerModalProps) {
   return (
-    <View style={modalStyles.overlay}>
+    <KeyboardAvoidingView
+      style={modalStyles.overlay}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       <View style={[modalStyles.sheet, { backgroundColor: theme.backgroundElevated, paddingBottom: insets.bottom + Spacing.md }]}>
         {/* Handle */}
@@ -851,7 +858,7 @@ function ServicePickerModal({
           ) : null}
         </ScrollView>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
