@@ -134,6 +134,12 @@ export function handleNotificationNavigation(
       });
     } else if (screen === "Notifications") {
       navigation.navigate("Notifications");
+    } else if (screen === "Review") {
+      const appointmentId = (params?.appointmentId as string | undefined)
+        ?? (data.appointmentId as string | undefined);
+      if (appointmentId) {
+        navigation.navigate("Review", { jobId: appointmentId });
+      }
     }
   } catch (err) {
     console.warn("Notification navigation error:", err);

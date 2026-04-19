@@ -1,6 +1,6 @@
 import { db } from './db';
 import { eq, and } from 'drizzle-orm';
-import { notificationDeliveries, notificationPreferences, pushTokens, notifications } from '@shared/schema';
+import { notificationDeliveries, notificationPreferences, pushTokens, notifications, appointments, reviews, users, providers } from '@shared/schema';
 import {
   sendWelcomeEmail,
   sendBookingConfirmationEmail,
@@ -847,5 +847,129 @@ export async function dispatchNotification(
     await sendPush(userId, title, message, data, category);
   } catch (err) {
     console.error('dispatchNotification error:', err);
+  }
+}
+
+const REVIEW_NUDGE_EVENT = 'review.nudge';
+const REVIEW_NUDGE_REVIEWABLE_STATUSES = new Set([
+  'completed',
+  'paid',
+  'closed',
+  'awaiting_payment',
+]);
+
+/**
+ * Sends a one-time push + email nudging the homeowner to leave a review for
+ * a completed appointment. Safe to call multiple times — it is deduped by a
+ * sent push delivery row keyed on the appointment id.
+ *
+ * Skipped when:
+ *   - the appointment is missing or cancelled
+ *   - the appointment is not in a reviewable state
+ *   - the homeowner has already left a review
+ *   - a nudge has already been delivered for this appointment
+ */
+export async function sendReviewNudge(appointmentId: string): Promise<void> {
+  try {
+    const [appointment] = await db
+      .select()
+      .from(appointments)
+      .where(eq(appointments.id, appointmentId))
+      .limit(1);
+    if (!appointment) return;
+    if (appointment.status === 'cancelled') return;
+    if (!REVIEW_NUDGE_REVIEWABLE_STATUSES.has(appointment.status || '')) return;
+
+    const [existingReview] = await db
+      .select({ id: reviews.id })
+      .from(reviews)
+      .where(eq(reviews.appointmentId, appointmentId))
+      .limit(1);
+    if (existingReview) return;
+
+    const alreadyNudged = await hasDeliveryForRecord(
+      REVIEW_NUDGE_EVENT,
+      appointmentId,
+      'push',
+    );
+    if (alreadyNudged) return;
+
+    const [homeowner] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, appointment.userId))
+      .limit(1);
+    const [provider] = appointment.providerId
+      ? await db
+          .select()
+          .from(providers)
+          .where(eq(providers.id, appointment.providerId))
+          .limit(1)
+      : [null];
+
+    const providerName = provider?.businessName || 'your provider';
+    const serviceName = appointment.serviceName || 'your service';
+    const baseUrl =
+      process.env.PUBLIC_BASE_URL ||
+      (process.env.REPLIT_DEV_DOMAIN
+        ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+        : 'https://homebaseproapp.com');
+    const reviewUrl = `${baseUrl}/open-app?path=review&jobId=${encodeURIComponent(appointmentId)}`;
+
+    // In-app push (this is also what we dedupe against)
+    if (homeowner) {
+      try {
+        await dispatchNotification(
+          homeowner.id,
+          `How was your ${serviceName}?`,
+          `Tell ${providerName} how it went — your review only takes a minute.`,
+          REVIEW_NUDGE_EVENT,
+          {
+            screen: 'Review',
+            params: { appointmentId },
+            appointmentId,
+            providerId: appointment.providerId,
+            reviewUrl,
+          },
+          'reminders',
+        );
+        // Persist a "sent" push delivery row keyed on the appointment so the
+        // dedup check above sees it on subsequent calls. dispatchNotification
+        // does not log into notification_deliveries on its own.
+        await logDelivery({
+          channel: 'push',
+          status: 'sent',
+          eventType: REVIEW_NUDGE_EVENT,
+          recipientUserId: homeowner.id,
+          relatedRecordType: 'appointment',
+          relatedRecordId: appointmentId,
+        });
+      } catch (err) {
+        console.error('[review.nudge] push error:', err);
+      }
+    }
+
+    // Email companion (best-effort, respects user notification prefs)
+    if (homeowner?.email) {
+      const clientName =
+        `${homeowner.firstName || ''} ${homeowner.lastName || ''}`.trim() ||
+        homeowner.email;
+      try {
+        await dispatch('review.request', {
+          clientEmail: homeowner.email,
+          clientName,
+          providerName,
+          serviceName,
+          reviewUrl,
+          recipientUserId: homeowner.id,
+          relatedRecordType: 'appointment',
+          relatedRecordId: appointmentId,
+        });
+      } catch (err) {
+        console.error('[review.nudge] email error:', err);
+      }
+    }
+  } catch (err) {
+    console.error('sendReviewNudge error:', err);
   }
 }

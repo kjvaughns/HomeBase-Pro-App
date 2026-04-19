@@ -46,6 +46,7 @@ import {
   dispatchWithResult,
   dispatchNotification,
   sendPush,
+  sendReviewNudge,
 } from "./notificationService";
 import { haversineMiles } from "./lib/distance";
 import {
@@ -2728,6 +2729,13 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
             );
           }
         }
+
+        // Nudge homeowner to leave a review now that the appointment is in
+        // a reviewable state. Fire-and-forget; helper is deduped per-appointment
+        // and skips cancelled/already-reviewed appointments.
+        sendReviewNudge(req.params.id).catch((e: unknown) =>
+          console.error("review nudge dispatch error:", e),
+        );
 
         res.json({ appointment: updatedAppointment });
       } catch (error) {
@@ -7446,6 +7454,44 @@ Respond with JSON only:
         autoLogHouseFaxEntry(job).catch((e: unknown) =>
           console.error("housefax auto-log error:", e),
         );
+
+        // Provider-side completion does not currently flip the linked
+        // appointment to "completed" automatically — but as soon as the job is
+        // done the homeowner can leave a review. Promote the appointment to
+        // "completed" if it isn't already in a reviewable/cancelled state, and
+        // fire the (deduped) review nudge for the linked appointment.
+        if (job.appointmentId) {
+          const apptId = job.appointmentId;
+          (async () => {
+            try {
+              const [appt] = await db
+                .select({ id: appointments.id, status: appointments.status })
+                .from(appointments)
+                .where(eq(appointments.id, apptId))
+                .limit(1);
+              if (appt) {
+                const REVIEWABLE = new Set([
+                  "completed",
+                  "paid",
+                  "closed",
+                  "awaiting_payment",
+                ]);
+                if (
+                  appt.status !== "cancelled" &&
+                  !REVIEWABLE.has(appt.status || "")
+                ) {
+                  await storage.updateAppointment(apptId, {
+                    status: "completed",
+                  });
+                }
+              }
+              await sendReviewNudge(apptId);
+            } catch (e) {
+              console.error("review nudge (job complete) error:", e);
+            }
+          })();
+        }
+
         res.json({ job });
       } catch (error) {
         console.error("Complete job error:", error);
