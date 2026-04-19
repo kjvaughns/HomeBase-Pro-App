@@ -72,7 +72,6 @@ import {
   createStripeCheckoutSession,
   createStripeInvoice,
   sendStripeInvoiceEmail,
-  sendPlatformStripeInvoice,
   resendStripeInvoice,
   createDirectCheckoutSession,
   applyCreditsToInvoice,
@@ -3565,7 +3564,7 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
           linkedInvoice.status !== "cancelled"
         ) {
           try {
-            const result = await sendPlatformStripeInvoice(linkedInvoice.id);
+            const result = await sendStripeInvoiceEmail(linkedInvoice.id);
             if (result?.hostedInvoiceUrl) {
               linkedInvoice = {
                 ...linkedInvoice,
@@ -8110,7 +8109,7 @@ Respond with JSON only:
           invoice.status !== "cancelled"
         ) {
           try {
-            const result = await sendPlatformStripeInvoice(invoice.id);
+            const result = await sendStripeInvoiceEmail(invoice.id);
             if (result?.hostedInvoiceUrl) {
               invoice = {
                 ...invoice,
@@ -9181,7 +9180,7 @@ Respond with JSON only:
         // Send proper Stripe Invoice — Stripe emails the client at invoice.stripe.com
         let hostedUrl: string | undefined;
         let stripeError: string | undefined;
-        const platformResult = await sendPlatformStripeInvoice(
+        const platformResult = await sendStripeInvoiceEmail(
           invoice.id,
         ).catch((err: any) => {
           stripeError = err?.message || "Stripe invoice send failed";
@@ -9343,7 +9342,7 @@ Respond with JSON only:
 
         if (!invoice.stripeInvoiceId) {
           // No existing Stripe invoice — create and send one now
-          const platformResult = await sendPlatformStripeInvoice(
+          const platformResult = await sendStripeInvoiceEmail(
             invoiceId,
           ).catch((err: any) => {
             stripeError = err?.message || "Stripe invoice send failed";
@@ -9579,7 +9578,7 @@ Respond with JSON only:
         let reminderPaymentLink: string | undefined =
           invoice.hostedInvoiceUrl || undefined;
         if (!reminderPaymentLink) {
-          const platformResult = await sendPlatformStripeInvoice(
+          const platformResult = await sendStripeInvoiceEmail(
             invoiceId,
           ).catch(() => null);
           if (platformResult?.hostedInvoiceUrl)
@@ -9709,7 +9708,7 @@ Respond with JSON only:
           method = "existing";
         } else {
           // Send a proper Stripe Invoice (platform account — no Connect required)
-          const result = await sendPlatformStripeInvoice(invoiceId);
+          const result = await sendStripeInvoiceEmail(invoiceId);
           checkoutUrl = result.hostedInvoiceUrl;
           method = "stripe_invoice";
         }
@@ -10441,7 +10440,7 @@ Respond with JSON only:
         let stripeError: string | undefined;
 
         if (!invoice.stripeInvoiceId) {
-          const platformResult = await sendPlatformStripeInvoice(
+          const platformResult = await sendStripeInvoiceEmail(
             invoiceId,
           ).catch((err: any) => {
             stripeError = err?.message || "Stripe invoice send failed";
@@ -10572,7 +10571,7 @@ Respond with JSON only:
 
         let url = inv.hostedInvoiceUrl;
         if (!url) {
-          const result = await sendPlatformStripeInvoice(invoiceId);
+          const result = await sendStripeInvoiceEmail(invoiceId);
           url = result.hostedInvoiceUrl;
         }
 

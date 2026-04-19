@@ -1006,7 +1006,19 @@ export const payments = pgTable("payments", {
   reference: text("reference"), // transaction ID or check number
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  // Task #245: enforce idempotency on webhook-driven payment upserts. A
+  // single Stripe PaymentIntent must map to at most one payments row so
+  // ON CONFLICT (stripe_payment_intent_id) DO UPDATE works in handlers.
+  // Note: Postgres allows multiple NULLs in a UNIQUE index by default
+  // (NULL ≠ NULL), so a non-partial index is safe even though most rows
+  // for non-Stripe payment methods have NULL here. We keep the index
+  // non-partial because ON CONFLICT cannot infer a partial-index target
+  // unless its WHERE predicate is restated, which Drizzle's onConflict
+  // helper doesn't currently support.
+  paymentIntentUnique: uniqueIndex("payments_stripe_payment_intent_id_unique")
+    .on(table.stripePaymentIntentId),
+}));
 
 export const paymentsRelations = relations(payments, ({ one }) => ({
   invoice: one(invoices, {

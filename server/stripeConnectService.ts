@@ -52,6 +52,14 @@ function getStripe(): Stripe {
   return stripe;
 }
 
+// Test-only seam: regression tests (server/scripts/testInvoiceConnectRouting.ts)
+// inject a stub Stripe to assert request shape / connect-account routing
+// without making live API calls. Pass `null` to clear and re-derive the real
+// client on next call. Production code MUST NOT call this.
+export function __setStripeForTesting(client: Stripe | null): void {
+  stripe = client;
+}
+
 // Exposed so routes/webhooks can inspect whether the active Stripe client is
 // talking to live mode — used to gate live-mode-only features (e.g. detecting
 // legacy test-mode Connect accounts that must re-onboard).
@@ -557,6 +565,20 @@ export async function createStripeInvoice(
       )
     : 30;
 
+  // Hard runtime guard (Task #245): refuse to call Stripe if `connectId` is
+  // not a real connected-account id. A regression that drops the
+  // `stripeAccount` option here would silently route invoices to the
+  // platform balance — exactly the bug we just spent a task fixing.
+  if (
+    typeof connectId !== "string" ||
+    !connectId.startsWith("acct_") ||
+    connectId.length < 10
+  ) {
+    throw new Error(
+      `[stripe-connect-routing] refusing to create invoice without a valid connected-account id (got: ${JSON.stringify(connectId)}, providerId=${invoice.providerId}, invoiceId=${invoice.id})`,
+    );
+  }
+
   const stripeInvoice = await getStripe().invoices.create(
     {
       customer: stripeCustomerId,
@@ -839,29 +861,62 @@ export async function handleAccountUpdated(account: Stripe.Account) {
 export async function handlePaymentIntentSucceeded(
   paymentIntent: Stripe.PaymentIntent,
 ) {
-  const invoiceId = paymentIntent.metadata?.invoiceId;
+  // Resolve our invoice id either from explicit metadata (in-app
+  // PaymentIntent flow created via createInvoicePaymentIntent) or from the
+  // PaymentIntent's `invoice` link (Stripe Invoices paid via the hosted
+  // page create the PI internally with no metadata — Task #245).
+  let invoiceId = paymentIntent.metadata?.invoiceId;
+  if (!invoiceId && (paymentIntent as any).invoice) {
+    const stripeInvoiceId = String((paymentIntent as any).invoice);
+    const [linked] = await db
+      .select({ id: invoices.id })
+      .from(invoices)
+      .where(eq(invoices.stripeInvoiceId, stripeInvoiceId));
+    if (linked) invoiceId = linked.id;
+  }
   if (!invoiceId) return;
 
-  const [payment] = await db
-    .select()
-    .from(payments)
-    .where(eq(payments.stripePaymentIntentId, paymentIntent.id));
+  // Look up provider for upsert + amount fallback
+  const [invForUpsert] = await db
+    .select({ providerId: invoices.providerId, totalCents: invoices.totalCents })
+    .from(invoices)
+    .where(eq(invoices.id, invoiceId));
+  if (!invForUpsert) return;
 
-  if (payment) {
-    await db
-      .update(payments)
-      .set({
+  const amountCents = paymentIntent.amount ?? invForUpsert.totalCents ?? 0;
+  const stripeChargeId = paymentIntent.latest_charge?.toString() ?? null;
+
+  // UPSERT the payments row keyed on stripe_payment_intent_id (Task #245).
+  // First-time webhook delivery → INSERT. In-app PI flow already inserted a
+  // row at PI-create time → UPDATE flips it to succeeded and stamps the
+  // charge id. The unique partial index on stripe_payment_intent_id
+  // arbitrates concurrent deliveries.
+  await db
+    .insert(payments)
+    .values({
+      invoiceId,
+      providerId: invForUpsert.providerId,
+      amountCents,
+      amount: (amountCents / 100).toFixed(2),
+      method: "stripe",
+      status: "succeeded",
+      stripePaymentIntentId: paymentIntent.id,
+      stripeChargeId,
+    })
+    .onConflictDoUpdate({
+      target: payments.stripePaymentIntentId,
+      set: {
         status: "succeeded",
-        stripeChargeId: paymentIntent.latest_charge?.toString(),
-      })
-      .where(eq(payments.id, payment.id));
-  }
+        stripeChargeId,
+      },
+    });
 
   const [updatedInvoice] = await db
     .update(invoices)
     .set({
       status: "paid",
       paidAt: new Date(),
+      stripePaymentIntentId: paymentIntent.id,
       updatedAt: new Date(),
     })
     .where(eq(invoices.id, invoiceId))
@@ -1206,13 +1261,70 @@ export async function handleStripeInvoicePaid(stripeInvoice: Stripe.Invoice) {
   const homebaseInvoiceId = stripeInvoice.metadata?.homebaseInvoiceId;
   if (!homebaseInvoiceId) return;
 
+  // Resolve the PaymentIntent + charge that paid this Stripe Invoice so we
+  // can record a payments row tied to the homeowner's funds movement
+  // (Task #245). For Stripe Invoices paid via the hosted page these are
+  // populated by Stripe at finalize/pay time.
+  const stripePaymentIntentId =
+    typeof (stripeInvoice as any).payment_intent === "string"
+      ? ((stripeInvoice as any).payment_intent as string)
+      : ((stripeInvoice as any).payment_intent?.id ?? null);
+  const stripeChargeId =
+    typeof (stripeInvoice as any).charge === "string"
+      ? ((stripeInvoice as any).charge as string)
+      : ((stripeInvoice as any).charge?.id ?? null);
+
   const [updatedInvoice] = await db
     .update(invoices)
-    .set({ status: "paid", paidAt: new Date(), updatedAt: new Date() })
+    .set({
+      status: "paid",
+      paidAt: new Date(),
+      ...(stripePaymentIntentId
+        ? { stripePaymentIntentId }
+        : {}),
+      updatedAt: new Date(),
+    })
     .where(eq(invoices.id, homebaseInvoiceId))
     .returning();
 
   if (!updatedInvoice) return;
+
+  // Persist a payments row keyed on the PI (idempotent UPSERT against the
+  // unique partial index from Task #245). Skipped only if Stripe didn't
+  // give us a PI id — defensive; should not happen for a paid invoice.
+  if (stripePaymentIntentId) {
+    const amountCents =
+      stripeInvoice.amount_paid ??
+      stripeInvoice.amount_due ??
+      updatedInvoice.totalCents ??
+      0;
+    try {
+      await db
+        .insert(payments)
+        .values({
+          invoiceId: homebaseInvoiceId,
+          providerId: updatedInvoice.providerId,
+          amountCents,
+          amount: (amountCents / 100).toFixed(2),
+          method: "stripe",
+          status: "succeeded",
+          stripePaymentIntentId,
+          stripeChargeId,
+        })
+        .onConflictDoUpdate({
+          target: payments.stripePaymentIntentId,
+          set: {
+            status: "succeeded",
+            stripeChargeId,
+          },
+        });
+    } catch (e) {
+      console.error(
+        `[invoice.paid] failed to upsert payments row for invoice ${homebaseInvoiceId}:`,
+        e,
+      );
+    }
+  }
 
   try {
     const [provider] = await db
@@ -2001,19 +2113,6 @@ export async function sendStripeInvoiceEmail(
   return { stripeInvoiceId, hostedInvoiceUrl };
 }
 
-/**
- * DEPRECATED PLATFORM-ONLY PATH — preserved as a thin wrapper that now routes
- * through Stripe Connect (destination charge with application_fee_amount) so
- * funds land in the provider's connected account. Throws `stripe_not_ready`
- * (code) if the provider hasn't completed Connect onboarding. Kept under the
- * original name so existing callers (Task #150) continue to compile.
- */
-export async function sendPlatformStripeInvoice(invoiceId: string): Promise<{
-  stripeInvoiceId: string;
-  hostedInvoiceUrl: string;
-}> {
-  return sendStripeInvoiceEmail(invoiceId);
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HomeBase Pro provider subscription billing (Task #124)
