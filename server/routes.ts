@@ -1394,13 +1394,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const providerProfile = await storage.getProviderByUserId(userId);
       // Attach the HomeBase Partner flag (Task #211) so the provider can see
       // their own badge in the More tab and ProviderProfile screens.
-      let enrichedProfile: any = providerProfile;
+      type ProviderProfileWithPartner =
+        NonNullable<Awaited<ReturnType<typeof storage.getProviderByUserId>>> & {
+          isPartner: boolean;
+        };
+      let enrichedProfile: ProviderProfileWithPartner | null = null;
       if (providerProfile) {
         const [planRow] = await db
           .select({ isPartner: providerPlans.isPartner })
           .from(providerPlans)
           .where(eq(providerPlans.providerId, providerProfile.id));
-        enrichedProfile = { ...providerProfile, isPartner: planRow?.isPartner ?? false };
+        enrichedProfile = {
+          ...providerProfile,
+          isPartner: planRow?.isPartner ?? false,
+        };
       }
       res.json({ user: formatUserResponse(user), providerProfile: enrichedProfile });
     } catch (error) {
