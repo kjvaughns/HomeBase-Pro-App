@@ -57,6 +57,8 @@ export default function AddressesScreen() {
   const [enrichmentData, setEnrichmentData] = useState<EnrichmentData | null>(null);
   const [nickname, setNickname] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const fetchHomes = useCallback(async () => {
     if (!user?.id) return;
@@ -101,10 +103,31 @@ export default function AddressesScreen() {
     return "single_family";
   };
 
+  const parseApiError = (error: unknown, fallback: string): string => {
+    const raw = error instanceof Error ? error.message : String(error ?? "");
+    const match = raw.match(/^\d{3}:\s*(.*)$/s);
+    const body = match ? match[1].trim() : raw.trim();
+    if (!body) return fallback;
+    try {
+      const parsed = JSON.parse(body);
+      if (parsed && typeof parsed === "object") {
+        const msg =
+          (parsed as { error?: unknown }).error ??
+          (parsed as { message?: unknown }).message;
+        if (typeof msg === "string" && msg.trim()) return msg.trim();
+      }
+    } catch {
+      // not JSON, fall through and use the body string
+    }
+    if (body.length > 0 && body.length < 200) return body;
+    return fallback;
+  };
+
   const handleSaveHome = async () => {
     if (!user?.id || !enrichmentData) return;
 
     setIsSaving(true);
+    setSaveError(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
@@ -136,17 +159,19 @@ export default function AddressesScreen() {
         isDefault: homes.length === 0,
       };
 
-      const response = await apiRequest("POST", "/api/homes", homeData);
-
-      if (response.ok) {
-        setShowAddModal(false);
-        setEnrichmentData(null);
-        setNickname("");
-        await fetchHomes();
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
+      await apiRequest("POST", "/api/homes", homeData);
+      setShowAddModal(false);
+      setEnrichmentData(null);
+      setNickname("");
+      setSaveError(null);
+      await fetchHomes();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       console.error("Failed to save home:", error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setSaveError(
+        parseApiError(error, "Couldn't save this home. Please try again."),
+      );
     } finally {
       setIsSaving(false);
     }
@@ -156,17 +181,19 @@ export default function AddressesScreen() {
     if (!editingHome) return;
 
     setIsSaving(true);
+    setEditError(null);
     try {
-      const response = await apiRequest("PUT", `/api/homes/${editingHome.id}`, { label: nickname });
-
-      if (response.ok) {
-        setEditingHome(null);
-        setNickname("");
-        await fetchHomes();
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
+      await apiRequest("PUT", `/api/homes/${editingHome.id}`, { label: nickname });
+      setEditingHome(null);
+      setNickname("");
+      await fetchHomes();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       console.error("Failed to update home:", error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setEditError(
+        parseApiError(error, "Couldn't update the nickname. Please try again."),
+      );
     } finally {
       setIsSaving(false);
     }
@@ -175,18 +202,20 @@ export default function AddressesScreen() {
   const handleSetDefault = async (homeId: string) => {
     Haptics.selectionAsync();
     try {
-      const response = await apiRequest("PUT", `/api/homes/${homeId}`, { isDefault: true });
-
-      if (response.ok) {
-        setHomes((prev) =>
-          prev.map((h) => ({
-            ...h,
-            isDefault: h.id === homeId,
-          }))
-        );
-      }
+      await apiRequest("PUT", `/api/homes/${homeId}`, { isDefault: true });
+      setHomes((prev) =>
+        prev.map((h) => ({
+          ...h,
+          isDefault: h.id === homeId,
+        })),
+      );
     } catch (error) {
       console.error("Failed to set default:", error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        "Couldn't update primary home",
+        parseApiError(error, "Please try again in a moment."),
+      );
     }
   };
 
@@ -202,12 +231,15 @@ export default function AddressesScreen() {
           onPress: async () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             try {
-              const response = await apiRequest("DELETE", `/api/homes/${home.id}`);
-              if (response.ok) {
-                await fetchHomes();
-              }
+              await apiRequest("DELETE", `/api/homes/${home.id}`);
+              await fetchHomes();
             } catch (error) {
               console.error("Failed to delete home:", error);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+              Alert.alert(
+                "Couldn't delete home",
+                parseApiError(error, "Please try again in a moment."),
+              );
             }
           },
         },
@@ -325,7 +357,7 @@ export default function AddressesScreen() {
     <Modal visible={showAddModal} animationType="slide" presentationStyle="pageSheet">
       <ThemedView style={styles.modalContainer}>
         <View style={[styles.modalHeader, { paddingTop: insets.top + Spacing.md }]}>
-          <Pressable onPress={() => { setShowAddModal(false); setEnrichmentData(null); setNickname(""); }}>
+          <Pressable onPress={() => { setShowAddModal(false); setEnrichmentData(null); setNickname(""); setSaveError(null); }}>
             <ThemedText style={[styles.modalCancel, { color: Colors.accent }]}>Cancel</ThemedText>
           </Pressable>
           <ThemedText style={styles.modalTitle}>Add Home</ThemedText>
@@ -419,6 +451,11 @@ export default function AddressesScreen() {
             >
               {isSaving ? "Saving..." : "Save Home"}
             </PrimaryButton>
+            {saveError ? (
+              <ThemedText style={styles.inlineError} testID="text-save-home-error">
+                {saveError}
+              </ThemedText>
+            ) : null}
           </View>
         </ScrollView>
       </ThemedView>
@@ -436,8 +473,13 @@ export default function AddressesScreen() {
             onChangeText={setNickname}
             autoFocus
           />
+          {editError ? (
+            <ThemedText style={styles.inlineError} testID="text-edit-home-error">
+              {editError}
+            </ThemedText>
+          ) : null}
           <View style={styles.editModalActions}>
-            <SecondaryButton onPress={() => { setEditingHome(null); setNickname(""); }} style={styles.editModalBtn}>Cancel</SecondaryButton>
+            <SecondaryButton onPress={() => { setEditingHome(null); setNickname(""); setEditError(null); }} style={styles.editModalBtn}>Cancel</SecondaryButton>
             <PrimaryButton
               onPress={handleUpdateNickname}
               disabled={!nickname || isSaving}
@@ -724,6 +766,12 @@ const styles = StyleSheet.create({
   },
   modalActions: {
     marginTop: Spacing.xl,
+  },
+  inlineError: {
+    ...Typography.footnote,
+    color: Colors.error,
+    textAlign: "center",
+    marginTop: Spacing.md,
   },
   editModalOverlay: {
     flex: 1,

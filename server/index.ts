@@ -69,7 +69,10 @@ function setupCors(app: express.Application) {
         "Access-Control-Allow-Methods",
         "GET, POST, PUT, PATCH, DELETE, OPTIONS",
       );
-      res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+      res.header(
+        "Access-Control-Allow-Headers",
+        "Content-Type, Authorization, X-Client-Platform",
+      );
       res.header("Access-Control-Allow-Credentials", "true");
     }
 
