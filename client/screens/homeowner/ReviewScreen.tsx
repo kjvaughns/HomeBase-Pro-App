@@ -298,43 +298,46 @@ export default function ReviewScreen() {
           </View>
         </GlassCard>
 
-        <View style={styles.ratingSection}>
-          <ThemedText style={styles.sectionTitle}>How was your experience?</ThemedText>
+        <GlassCard style={styles.sectionCard}>
+          <View style={styles.ratingSection}>
+            <ThemedText style={styles.sectionTitle}>How was your experience?</ThemedText>
 
-          <View style={styles.starsRow}>
-            {[1, 2, 3, 4, 5].map((star) => (
-              <Pressable key={star} onPress={() => handleStarPress(star)} style={styles.starButton} testID={`button-star-${star}`}>
-                <Ionicons
-                  name={star <= rating ? "star" : "star-outline"}
-                  size={40}
-                  color={star <= rating ? Colors.accent : theme.borderLight}
-                />
-              </Pressable>
-            ))}
+            <View style={styles.starsRow}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Pressable key={star} onPress={() => handleStarPress(star)} style={styles.starButton} testID={`button-star-${star}`}>
+                  <Ionicons
+                    name={star <= rating ? "star" : "star-outline"}
+                    size={40}
+                    color={star <= rating ? Colors.accent : theme.textTertiary}
+                  />
+                </Pressable>
+              ))}
+            </View>
+
+            <ThemedText
+              style={[
+                styles.ratingLabel,
+                { color: rating > 0 ? Colors.accent : theme.textSecondary },
+              ]}
+            >
+              {getRatingLabel()}
+            </ThemedText>
           </View>
+        </GlassCard>
 
-          <ThemedText
-            style={[
-              styles.ratingLabel,
-              { color: rating > 0 ? Colors.accent : theme.textSecondary },
-            ]}
-          >
-            {getRatingLabel()}
-          </ThemedText>
-        </View>
-
-        <View style={styles.commentSection}>
-          <ThemedText style={styles.sectionTitle}>Tell us more (optional)</ThemedText>
-          <TextField
-            placeholder="Share details of your experience..."
-            value={comment}
-            onChangeText={setComment}
-            multiline
-            numberOfLines={4}
-            style={styles.textArea}
-            testID="input-review-comment"
-          />
-        </View>
+        <GlassCard style={styles.sectionCard}>
+          <View style={styles.commentSection}>
+            <ThemedText style={styles.sectionTitleLeft}>Tell us more (optional)</ThemedText>
+            <TextField
+              placeholder="Share details of your experience..."
+              value={comment}
+              onChangeText={setComment}
+              multiline
+              numberOfLines={4}
+              testID="input-review-comment"
+            />
+          </View>
+        </GlassCard>
 
         {submitError ? (
           <View style={[styles.errorBanner, { backgroundColor: Colors.errorLight }]}>
@@ -343,36 +346,42 @@ export default function ReviewScreen() {
           </View>
         ) : null}
 
-        <View style={styles.tipsSection}>
-          <ThemedText style={[styles.tipsTitle, { color: theme.textSecondary }]}>
-            Tips for a helpful review:
-          </ThemedText>
-          <View style={styles.tipRow}>
-            <Feather name="check" size={14} color={Colors.accent} />
-            <ThemedText style={[styles.tipText, { color: theme.textTertiary }]}>
-              Was the provider on time and professional?
+        <GlassCard style={styles.sectionCard}>
+          <View style={styles.tipsSection}>
+            <ThemedText style={[styles.tipsTitle, { color: theme.textSecondary }]}>
+              Tips for a helpful review
             </ThemedText>
+            <View style={styles.tipRow}>
+              <Feather name="check" size={14} color={Colors.accent} />
+              <ThemedText style={[styles.tipText, { color: theme.textSecondary }]}>
+                Was the provider on time and professional?
+              </ThemedText>
+            </View>
+            <View style={styles.tipRow}>
+              <Feather name="check" size={14} color={Colors.accent} />
+              <ThemedText style={[styles.tipText, { color: theme.textSecondary }]}>
+                Did they complete the work as expected?
+              </ThemedText>
+            </View>
+            <View style={styles.tipRow}>
+              <Feather name="check" size={14} color={Colors.accent} />
+              <ThemedText style={[styles.tipText, { color: theme.textSecondary }]}>
+                Would you recommend them to others?
+              </ThemedText>
+            </View>
           </View>
-          <View style={styles.tipRow}>
-            <Feather name="check" size={14} color={Colors.accent} />
-            <ThemedText style={[styles.tipText, { color: theme.textTertiary }]}>
-              Did they complete the work as expected?
-            </ThemedText>
-          </View>
-          <View style={styles.tipRow}>
-            <Feather name="check" size={14} color={Colors.accent} />
-            <ThemedText style={[styles.tipText, { color: theme.textTertiary }]}>
-              Would you recommend them to others?
-            </ThemedText>
-          </View>
-        </View>
+        </GlassCard>
       </KeyboardAwareScrollViewCompat>
 
       <View
         onLayout={handleBottomBarLayout}
         style={[
           styles.bottomBar,
-          { backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.md },
+          {
+            backgroundColor: theme.backgroundDefault,
+            borderTopColor: theme.borderLight,
+            paddingBottom: insets.bottom + Spacing.md,
+          },
         ]}
       >
         <PrimaryButton
@@ -416,14 +425,20 @@ const styles = StyleSheet.create({
     ...Typography.subhead,
     marginTop: 2,
   },
+  sectionCard: {
+    marginBottom: Spacing.lg,
+  },
   ratingSection: {
     alignItems: "center",
-    marginBottom: Spacing.xl,
   },
   sectionTitle: {
     ...Typography.headline,
     marginBottom: Spacing.md,
     textAlign: "center",
+  },
+  sectionTitleLeft: {
+    ...Typography.headline,
+    marginBottom: Spacing.sm,
   },
   starsRow: {
     flexDirection: "row",
@@ -437,13 +452,7 @@ const styles = StyleSheet.create({
     ...Typography.subhead,
     fontWeight: "600",
   },
-  commentSection: {
-    marginBottom: Spacing.lg,
-  },
-  textArea: {
-    minHeight: 100,
-    textAlignVertical: "top",
-  },
+  commentSection: {},
   errorBanner: {
     flexDirection: "row",
     alignItems: "center",

@@ -21,6 +21,7 @@ export function TextField({
   rightIcon,
   onRightIconPress,
   style,
+  multiline,
   ...props
 }: TextFieldProps) {
   const { theme } = useTheme();
@@ -47,6 +48,7 @@ export function TextField({
       <View
         style={[
           styles.inputContainer,
+          multiline ? styles.inputContainerMultiline : null,
           {
             backgroundColor,
             borderColor,
@@ -64,8 +66,10 @@ export function TextField({
         ) : null}
 
         <TextInput
+          multiline={multiline}
           style={[
             styles.input,
+            multiline ? styles.inputMultiline : null,
             { color: theme.text },
             style,
           ]}
@@ -111,6 +115,11 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.input,
     paddingHorizontal: Spacing.md,
   },
+  inputContainerMultiline: {
+    alignItems: "flex-start",
+    height: undefined,
+    paddingVertical: Spacing.sm,
+  },
   leftIcon: {
     marginRight: Spacing.sm,
   },
@@ -118,6 +127,12 @@ const styles = StyleSheet.create({
     flex: 1,
     ...Typography.body,
     height: "100%",
+  },
+  inputMultiline: {
+    height: undefined,
+    minHeight: 96,
+    textAlignVertical: "top",
+    paddingTop: 0,
   },
   error: {
     color: Colors.error,
