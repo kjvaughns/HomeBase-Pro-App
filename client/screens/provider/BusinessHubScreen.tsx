@@ -593,24 +593,33 @@ export default function BusinessHubScreen() {
 
           <View style={[styles.divider, { backgroundColor: theme.separator }]} />
 
-          <View style={styles.fieldRow}>
-            <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+          <View style={styles.stackedField}>
+            <ThemedText style={[styles.stackedLabel, { color: theme.textSecondary }]}>
               Business Name
             </ThemedText>
             <TextInput
-              style={[styles.fieldInput, { color: theme.text, backgroundColor: theme.backgroundElevated }]}
+              style={[
+                styles.stackedInput,
+                {
+                  color: theme.text,
+                  backgroundColor: theme.backgroundElevated,
+                  borderColor: theme.border,
+                },
+              ]}
               value={businessName}
               onChangeText={setBusinessName}
               placeholder="Your business name"
               placeholderTextColor={theme.textTertiary}
               returnKeyType="done"
+              autoCapitalize="words"
+              textContentType="organizationName"
               testID="input-business-name"
             />
           </View>
 
-          <View style={[styles.fieldCol, { marginTop: Spacing.sm }]}>
+          <View style={styles.stackedField}>
             <View style={styles.aiLabelRow}>
-              <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary, flex: 1 }]}>
+              <ThemedText style={[styles.stackedLabel, { color: theme.textSecondary, flex: 1, marginBottom: 0 }]}>
                 Description
               </ThemedText>
               <View style={styles.aiButtonGroup}>
@@ -649,13 +658,22 @@ export default function BusinessHubScreen() {
               </View>
             </View>
             <TextInput
-              style={[styles.textArea, { color: theme.text, backgroundColor: theme.backgroundElevated }]}
+              style={[
+                styles.stackedTextArea,
+                {
+                  color: theme.text,
+                  backgroundColor: theme.backgroundElevated,
+                  borderColor: theme.border,
+                  marginTop: Spacing.xs,
+                },
+              ]}
               value={description}
               onChangeText={setDescription}
               placeholder="Describe your business and services..."
               placeholderTextColor={theme.textTertiary}
               multiline
-              numberOfLines={3}
+              numberOfLines={5}
+              textAlignVertical="top"
               testID="input-description"
             />
             {bioError.length > 0 ? (
@@ -663,33 +681,51 @@ export default function BusinessHubScreen() {
             ) : null}
           </View>
 
-          <View style={styles.fieldRow}>
-            <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+          <View style={styles.stackedField}>
+            <ThemedText style={[styles.stackedLabel, { color: theme.textSecondary }]}>
               Phone
             </ThemedText>
             <TextInput
-              style={[styles.fieldInput, { color: theme.text, backgroundColor: theme.backgroundElevated }]}
+              style={[
+                styles.stackedInput,
+                {
+                  color: theme.text,
+                  backgroundColor: theme.backgroundElevated,
+                  borderColor: theme.border,
+                },
+              ]}
               value={phone}
               onChangeText={setPhone}
               placeholder="(555) 000-0000"
               placeholderTextColor={theme.textTertiary}
               keyboardType="phone-pad"
+              textContentType="telephoneNumber"
+              autoCorrect={false}
               testID="input-phone"
             />
           </View>
 
-          <View style={styles.fieldRow}>
-            <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+          <View style={styles.stackedField}>
+            <ThemedText style={[styles.stackedLabel, { color: theme.textSecondary }]}>
               Business Email
             </ThemedText>
             <TextInput
-              style={[styles.fieldInput, { color: theme.text, backgroundColor: theme.backgroundElevated }]}
+              style={[
+                styles.stackedInput,
+                {
+                  color: theme.text,
+                  backgroundColor: theme.backgroundElevated,
+                  borderColor: theme.border,
+                },
+              ]}
               value={email}
               onChangeText={setEmail}
               placeholder="contact@yourbusiness.com"
               placeholderTextColor={theme.textTertiary}
               keyboardType="email-address"
               autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="emailAddress"
               testID="input-business-email"
             />
           </View>
@@ -1482,6 +1518,34 @@ const styles = StyleSheet.create({
     ...Typography.footnote,
     minHeight: 60,
     textAlignVertical: "top",
+  },
+  stackedField: {
+    marginTop: Spacing.md,
+  },
+  stackedLabel: {
+    ...Typography.footnote,
+    fontWeight: "600",
+    marginBottom: Spacing.xs + 2,
+  },
+  stackedInput: {
+    width: "100%",
+    borderRadius: BorderRadius.input,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm + 2,
+    minHeight: Spacing.inputHeight,
+    ...Typography.callout,
+  },
+  stackedTextArea: {
+    width: "100%",
+    borderRadius: BorderRadius.input,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.sm + 2,
+    paddingBottom: Spacing.sm + 2,
+    minHeight: 130,
+    textAlignVertical: "top",
+    ...Typography.callout,
   },
   logoSection: {
     flexDirection: "row",
