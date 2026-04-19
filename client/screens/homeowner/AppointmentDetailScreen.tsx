@@ -168,6 +168,8 @@ export default function AppointmentDetailScreen() {
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [conditionUpdate, setConditionUpdate] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [invoiceError, setInvoiceError] = useState<string | null>(null);
+  const [isOpeningInvoice, setIsOpeningInvoice] = useState(false);
 
   const { data, isLoading, error } = useQuery<{ appointment: Appointment }>({
     queryKey: ["/api/appointment", appointmentId],
@@ -329,27 +331,46 @@ export default function AppointmentDetailScreen() {
   const handleViewInvoice = async () => {
     if (!effectiveInvoice) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    if (effectiveInvoice.hostedInvoiceUrl) {
-      try {
-        await WebBrowser.openBrowserAsync(effectiveInvoice.hostedInvoiceUrl);
-        return;
-      } catch (e) {
-        // Fall through to in-app Payment screen
+    setInvoiceError(null);
+    setIsOpeningInvoice(true);
+    try {
+      let url = effectiveInvoice.hostedInvoiceUrl;
+      // If we don't have a cached URL, ask the server to generate one
+      // using the same Stripe helper the provider's "Get Payment Link"
+      // route uses, so the homeowner gets the exact same Stripe page.
+      if (!url) {
+        const res = await apiRequest(
+          "POST",
+          `/api/invoices/${effectiveInvoice.id}/payment-link`,
+          {},
+        );
+        if (!res.ok) {
+          const errBody: { error?: string } = await res
+            .json()
+            .catch(() => ({}));
+          throw new Error(
+            errBody.error || "We couldn't load this invoice. Please try again.",
+          );
+        }
+        const body: { url?: string } = await res.json();
+        url = body.url;
       }
+      if (!url) {
+        throw new Error(
+          "This invoice isn't ready for online payment yet. Please contact your provider.",
+        );
+      }
+      await WebBrowser.openBrowserAsync(url);
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "We couldn't open this invoice right now. Please try again in a moment.";
+      setInvoiceError(message);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setIsOpeningInvoice(false);
     }
-    const fallbackJobIdForNav =
-      appointment.job?.id || effectiveInvoice.jobId || null;
-    if (fallbackJobIdForNav) {
-      navigation.navigate("Payment", {
-        jobId: fallbackJobIdForNav,
-        invoiceId: effectiveInvoice.id,
-      });
-      return;
-    }
-    Alert.alert(
-      "Unable to open invoice",
-      "We couldn't open this invoice right now. Please try again in a moment.",
-    );
   };
 
   return (
@@ -511,10 +532,29 @@ export default function AppointmentDetailScreen() {
                   <View style={{ marginTop: Spacing.md }}>
                     <PrimaryButton
                       onPress={handleViewInvoice}
+                      loading={isOpeningInvoice}
+                      disabled={isOpeningInvoice}
                       testID="button-view-invoice"
                     >
-                      {isInvoicePaidOrClosed ? "View Receipt" : "View Invoice"}
+                      {isInvoicePaidOrClosed
+                        ? "View Receipt"
+                        : `Pay $${parseFloat(effectiveInvoice.total || effectiveInvoice.amount || "0").toFixed(2)}`}
                     </PrimaryButton>
+                    {invoiceError ? (
+                      <View
+                        style={styles.invoiceErrorBox}
+                        testID="text-invoice-error"
+                      >
+                        <Feather
+                          name="alert-circle"
+                          size={14}
+                          color="#B91C1C"
+                        />
+                        <ThemedText style={styles.invoiceErrorText}>
+                          {invoiceError}
+                        </ThemedText>
+                      </View>
+                    ) : null}
                   </View>
                 ) : null}
               </GlassCard>
@@ -1177,5 +1217,21 @@ const styles = StyleSheet.create({
   invoiceDueText: {
     ...Typography.caption1,
     marginTop: Spacing.xs,
+  },
+  invoiceErrorBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.xs,
+    marginTop: Spacing.sm,
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+  },
+  invoiceErrorText: {
+    ...Typography.caption1,
+    color: "#B91C1C",
+    flex: 1,
   },
 });

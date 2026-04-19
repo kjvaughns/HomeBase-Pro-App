@@ -33,7 +33,7 @@ import {
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
 import { db } from "./db";
-import { sql, eq, and, or, desc, inArray, gte, ilike } from "drizzle-orm";
+import { sql, eq, and, or, desc, inArray, gte, ilike, isNull } from "drizzle-orm";
 import {
   sendInvoiceEmail,
   sendProviderClientMessage,
@@ -3431,6 +3431,142 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
             .orderBy(desc(invoices.createdAt))
             .limit(1);
           if (inv) linkedInvoice = inv;
+        }
+
+        // Task #230: broaden invoice discoverability for the homeowner.
+        // Many invoices are not back-linked to the appointment's job, so also
+        // try matching by (provider_id, homeowner_user_id) — preferring the
+        // most recent unpaid one — so the homeowner sees the invoice their
+        // provider has already sent on Stripe.
+        if (!linkedInvoice && appointment.userId) {
+          const candidateInvoices = await db
+            .select()
+            .from(invoices)
+            .where(
+              and(
+                eq(invoices.providerId, appointment.providerId),
+                eq(invoices.homeownerUserId, appointment.userId),
+              ),
+            )
+            .orderBy(desc(invoices.createdAt))
+            .limit(10);
+          // Only consider invoices the homeowner can actually act on — i.e.
+          // ones the provider has sent (sent/overdue) or already settled
+          // (paid/closed). Skip drafts and cancelled invoices so the
+          // homeowner never sees an in-progress or aborted invoice.
+          const VISIBLE_STATUSES = new Set([
+            "sent",
+            "overdue",
+            "paid",
+            "closed",
+          ]);
+          const visible = candidateInvoices.filter((inv) =>
+            VISIBLE_STATUSES.has(inv.status),
+          );
+          // Prefer payable (sent/overdue), and within that prefer one whose
+          // due date is closest to the appointment date (±60d).
+          const apptTime = appointment.scheduledDate
+            ? new Date(appointment.scheduledDate).getTime()
+            : null;
+          const sixtyDays = 60 * 24 * 60 * 60 * 1000;
+          const payable = visible.filter(
+            (inv) => inv.status === "sent" || inv.status === "overdue",
+          );
+          const nearPayable = apptTime
+            ? payable.find((inv) => {
+                const dt = inv.dueDate ? new Date(inv.dueDate).getTime() : 0;
+                return dt && Math.abs(dt - apptTime) <= sixtyDays;
+              })
+            : null;
+          linkedInvoice =
+            nearPayable ?? payable[0] ?? visible[0] ?? null;
+        }
+
+        // Task #230 (legacy): older invoices were created before the
+        // `homeowner_user_id` column on `invoices` was wired up, so they may
+        // be linked only via `clients` (provider's CRM record). When the
+        // primary lookup found nothing, walk the appointment client → clients
+        // table and find invoices for that client (or any client whose
+        // cached homeowner matches this appointment's homeowner) so legacy
+        // invoices still surface for the homeowner.
+        if (!linkedInvoice && appointment.userId) {
+          const matchingClients = await db
+            .select({ id: clients.id })
+            .from(clients)
+            .where(
+              and(
+                eq(clients.providerId, appointment.providerId),
+                eq(clients.homeownerUserId, appointment.userId),
+              ),
+            );
+          const clientIds = matchingClients.map((c) => c.id);
+          if (clientIds.length > 0) {
+            const legacyCandidates = await db
+              .select()
+              .from(invoices)
+              .where(
+                and(
+                  eq(invoices.providerId, appointment.providerId),
+                  inArray(invoices.clientId, clientIds),
+                  isNull(invoices.homeownerUserId),
+                ),
+              )
+              .orderBy(desc(invoices.createdAt))
+              .limit(10);
+            const VISIBLE_STATUSES = new Set([
+              "sent",
+              "overdue",
+              "paid",
+              "closed",
+            ]);
+            const visible = legacyCandidates.filter((inv) =>
+              VISIBLE_STATUSES.has(inv.status),
+            );
+            const apptTime = appointment.scheduledDate
+              ? new Date(appointment.scheduledDate).getTime()
+              : null;
+            const sixtyDays = 60 * 24 * 60 * 60 * 1000;
+            const payable = visible.filter(
+              (inv) => inv.status === "sent" || inv.status === "overdue",
+            );
+            const nearPayable = apptTime
+              ? payable.find((inv) => {
+                  const dt = inv.dueDate
+                    ? new Date(inv.dueDate).getTime()
+                    : 0;
+                  return dt && Math.abs(dt - apptTime) <= sixtyDays;
+                })
+              : null;
+            linkedInvoice =
+              nearPayable ?? payable[0] ?? visible[0] ?? null;
+          }
+        }
+
+        // Make sure the invoice carries a usable hostedInvoiceUrl. If it
+        // hasn't been generated yet (or got cleared), generate it on demand
+        // using the same Stripe helper the provider's "Get Payment Link"
+        // route uses, then persist it. Failures are non-fatal — the client
+        // can retry on tap.
+        if (
+          linkedInvoice &&
+          !linkedInvoice.hostedInvoiceUrl &&
+          linkedInvoice.status !== "draft" &&
+          linkedInvoice.status !== "cancelled"
+        ) {
+          try {
+            const result = await sendPlatformStripeInvoice(linkedInvoice.id);
+            if (result?.hostedInvoiceUrl) {
+              linkedInvoice = {
+                ...linkedInvoice,
+                hostedInvoiceUrl: result.hostedInvoiceUrl,
+              };
+            }
+          } catch (err) {
+            console.warn(
+              "[appointment] hosted invoice URL generation skipped:",
+              (err as Error)?.message,
+            );
+          }
         }
 
         // Surface the homeowner's review (if any) so the appointment screen
@@ -7534,12 +7670,121 @@ Respond with JSON only:
       try {
         const authUserId = req.authenticatedUserId!;
         const providerRecord = await storage.getProviderByUserId(authUserId);
-        const [invoice] = await db
+        let [invoice] = await db
           .select()
           .from(invoices)
           .where(eq(invoices.jobId, req.params.id))
           .orderBy(desc(invoices.createdAt))
           .limit(1);
+
+        // Task #230: when the job has no invoice tightly linked, walk
+        // job → appointment → (provider, homeowner) and surface the most
+        // recent invoice from that provider for this homeowner. Mirrors the
+        // broader lookup used by `/api/appointment/:id` so homeowners always
+        // see the same invoice regardless of which screen they land on.
+        if (!invoice) {
+          const [linkedJob] = await db
+            .select({
+              appointmentId: jobs.appointmentId,
+              providerId: jobs.providerId,
+            })
+            .from(jobs)
+            .where(eq(jobs.id, req.params.id))
+            .limit(1);
+          if (linkedJob?.appointmentId) {
+            const [appt] = await db
+              .select({
+                userId: appointments.userId,
+                providerId: appointments.providerId,
+                scheduledDate: appointments.scheduledDate,
+              })
+              .from(appointments)
+              .where(eq(appointments.id, linkedJob.appointmentId))
+              .limit(1);
+            if (appt?.userId) {
+              const candidates = await db
+                .select()
+                .from(invoices)
+                .where(
+                  and(
+                    eq(invoices.providerId, appt.providerId),
+                    eq(invoices.homeownerUserId, appt.userId),
+                  ),
+                )
+                .orderBy(desc(invoices.createdAt))
+                .limit(10);
+              const VISIBLE_STATUSES = new Set([
+                "sent",
+                "overdue",
+                "paid",
+                "closed",
+              ]);
+              const visible = candidates.filter((inv) =>
+                VISIBLE_STATUSES.has(inv.status),
+              );
+              const apptTime = appt.scheduledDate
+                ? new Date(appt.scheduledDate).getTime()
+                : null;
+              const sixtyDays = 60 * 24 * 60 * 60 * 1000;
+              const payable = visible.filter(
+                (inv) =>
+                  inv.status === "sent" || inv.status === "overdue",
+              );
+              const nearPayable = apptTime
+                ? payable.find((inv) => {
+                    const dt = inv.dueDate
+                      ? new Date(inv.dueDate).getTime()
+                      : 0;
+                    return dt && Math.abs(dt - apptTime) <= sixtyDays;
+                  })
+                : null;
+              invoice =
+                nearPayable ?? payable[0] ?? visible[0] ?? undefined;
+            }
+            // Legacy fallback: invoices created before homeowner_user_id
+            // backfill — match via clients.homeowner_user_id.
+            if (!invoice && appt?.userId) {
+              const matchingClients = await db
+                .select({ id: clients.id })
+                .from(clients)
+                .where(
+                  and(
+                    eq(clients.providerId, appt.providerId),
+                    eq(clients.homeownerUserId, appt.userId),
+                  ),
+                );
+              const clientIds = matchingClients.map((c) => c.id);
+              if (clientIds.length > 0) {
+                const legacyCandidates = await db
+                  .select()
+                  .from(invoices)
+                  .where(
+                    and(
+                      eq(invoices.providerId, appt.providerId),
+                      inArray(invoices.clientId, clientIds),
+                      isNull(invoices.homeownerUserId),
+                    ),
+                  )
+                  .orderBy(desc(invoices.createdAt))
+                  .limit(10);
+                const VISIBLE_STATUSES = new Set([
+                  "sent",
+                  "overdue",
+                  "paid",
+                  "closed",
+                ]);
+                const visible = legacyCandidates.filter((inv) =>
+                  VISIBLE_STATUSES.has(inv.status),
+                );
+                const payable = visible.filter(
+                  (inv) =>
+                    inv.status === "sent" || inv.status === "overdue",
+                );
+                invoice = payable[0] ?? visible[0] ?? undefined;
+              }
+            }
+          }
+        }
         if (!invoice) return res.json({ invoice: null });
         let isHomeowner = invoice.homeownerUserId === authUserId;
         // Fallback for legacy invoices (Task #217): some invoices were created
@@ -7575,6 +7820,29 @@ Respond with JSON only:
           providerRecord && invoice.providerId === providerRecord.id;
         if (!isHomeowner && !isProvider)
           return res.status(403).json({ error: "Access denied" });
+
+        // Task #230: ensure the homeowner gets the same Stripe-hosted URL
+        // the provider sees. Generate-on-demand and persist if missing.
+        if (
+          !invoice.hostedInvoiceUrl &&
+          invoice.status !== "draft" &&
+          invoice.status !== "cancelled"
+        ) {
+          try {
+            const result = await sendPlatformStripeInvoice(invoice.id);
+            if (result?.hostedInvoiceUrl) {
+              invoice = {
+                ...invoice,
+                hostedInvoiceUrl: result.hostedInvoiceUrl,
+              } as typeof invoice;
+            }
+          } catch (err) {
+            console.warn(
+              "[jobs/invoice] hosted invoice URL generation skipped:",
+              (err as Error)?.message,
+            );
+          }
+        }
         res.json({ invoice });
       } catch (error) {
         console.error("Get job invoice error:", error);
@@ -8418,6 +8686,71 @@ Respond with JSON only:
     },
   );
 
+  // Task #230: send the homeowner a push + in-app notification when a
+  // provider sends them an invoice. Prefers the invoice's linked
+  // homeownerUserId (most reliable), falls back to client.email →
+  // users.email for legacy invoices missing the back-link. Routes the
+  // tap-through to AppointmentDetail so the homeowner lands on the
+  // screen with the new "Pay $X.XX" button.
+  async function notifyHomeownerInvoiceSent(args: {
+    invoice: {
+      id: string;
+      invoiceNumber: string | null;
+      homeownerUserId: string | null;
+      jobId: string | null;
+    };
+    providerName: string;
+    amount: number;
+    clientEmail: string | null;
+  }): Promise<void> {
+    let homeownerUserId = args.invoice.homeownerUserId ?? null;
+    if (!homeownerUserId && args.clientEmail) {
+      const rows = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.email, args.clientEmail))
+        .limit(1)
+        .catch((): { id: string }[] => []);
+      const u = rows[0];
+      if (u?.id) homeownerUserId = u.id;
+    }
+    if (!homeownerUserId) return;
+
+    // Find the appointment so the notification can deep-link to a screen
+    // that surfaces the invoice and the Pay button.
+    let appointmentId: string | null = null;
+    if (args.invoice.jobId) {
+      const rows = await db
+        .select({ appointmentId: jobs.appointmentId })
+        .from(jobs)
+        .where(eq(jobs.id, args.invoice.jobId))
+        .limit(1)
+        .catch((): { appointmentId: string | null }[] => []);
+      const j = rows[0];
+      if (j?.appointmentId) appointmentId = j.appointmentId;
+    }
+
+    const title = `Invoice from ${args.providerName}`;
+    const body = `Invoice ${args.invoice.invoiceNumber || args.invoice.id.slice(0, 8)} for $${args.amount.toFixed(2)} is ready. Tap to pay.`;
+    const data: Record<string, unknown> = {
+      type: "invoice",
+      invoiceId: args.invoice.id,
+    };
+    if (appointmentId) {
+      data.screen = "AppointmentDetail";
+      data.params = { appointmentId };
+      data.appointmentId = appointmentId;
+    }
+    await dispatchNotification(
+      homeownerUserId,
+      title,
+      body,
+      "invoice_sent",
+      data,
+      "invoices",
+    );
+  }
+
   // Create and immediately send invoice (one-step flow)
   app.post(
     "/api/invoices/create-and-send",
@@ -8553,24 +8886,18 @@ Respond with JSON only:
             emailSent = sendResult.emailSent;
             emailError = sendResult.emailError;
 
-            // Push notification — non-fatal, only fires if client has a HomeBase account
-            if (client?.email) {
-              const [clientUser] = await db
-                .select({ id: users.id })
-                .from(users)
-                .where(eq(users.email, client.email))
-                .limit(1)
-                .catch(() => [null]);
-              if (clientUser) {
-                sendPush(
-                  clientUser.id,
-                  `Invoice from ${provider.businessName || "Your Provider"}`,
-                  `Invoice ${invoice.invoiceNumber} for $${amount.toFixed(2)} is ready. Tap to view.`,
-                  { type: "invoice", invoiceId: invoice.id },
-                  "invoices",
-                ).catch(() => {});
-              }
-            }
+            // Push + in-app notification to the homeowner (Task #230).
+            // Use the invoice's linked homeownerUserId when available — more
+            // reliable than matching client.email → users.email — and fall
+            // back to the email lookup for legacy clients without a link.
+            notifyHomeownerInvoiceSent({
+              invoice,
+              providerName: provider.businessName || "Your Provider",
+              amount,
+              clientEmail: client?.email ?? null,
+            }).catch((e) =>
+              console.error("[invoice.sent] homeowner notify failed:", e),
+            );
           } else if (!client?.email) {
             emailError = "Client has no email address on file.";
           }
@@ -8739,27 +9066,16 @@ Respond with JSON only:
             emailSent = sendResult.emailSent;
             emailError = sendResult.emailError;
 
-            // Push notification — non-fatal
-            if (client?.email) {
-              const [clientUser] = await db
-                .select({ id: users.id })
-                .from(users)
-                .where(eq(users.email, client.email))
-                .limit(1)
-                .catch(() => [null]);
-              if (clientUser) {
-                const invoiceTotal = parseFloat(
-                  invoice.total?.toString() || "0",
-                );
-                sendPush(
-                  clientUser.id,
-                  `Invoice from ${provider.businessName || "Your Provider"}`,
-                  `Invoice ${invoice.invoiceNumber || invoiceId.slice(0, 8)} for $${invoiceTotal.toFixed(2)} is ready. Tap to view.`,
-                  { type: "invoice", invoiceId },
-                  "invoices",
-                ).catch(() => {});
-              }
-            }
+            // Push + in-app notification to the homeowner (Task #230).
+            const invoiceTotal = parseFloat(invoice.total?.toString() || "0");
+            notifyHomeownerInvoiceSent({
+              invoice,
+              providerName: provider.businessName || "Your Provider",
+              amount: invoiceTotal,
+              clientEmail: client?.email ?? null,
+            }).catch((e) =>
+              console.error("[invoice.sent] homeowner notify failed:", e),
+            );
           }
         }
 
@@ -8968,8 +9284,61 @@ Respond with JSON only:
         if (!invoice)
           return res.status(404).json({ error: "Invoice not found" });
 
+        // Task #230: allow the homeowner who owns this invoice to fetch the
+        // hosted payment URL too — same Stripe link the provider sees. This
+        // backs the Pay button on the homeowner Job/Appointment screens.
         const authProvider = await storage.getProviderByUserId(authUserId);
-        if (!authProvider || invoice.providerId !== authProvider.id) {
+        const isProvider =
+          !!authProvider && invoice.providerId === authProvider.id;
+        let isHomeowner = invoice.homeownerUserId === authUserId;
+
+        // Legacy resolution (Task #230): if invoice.homeownerUserId is null,
+        // resolve via the linked client (provider's CRM record cached
+        // homeowner) or the linked job → appointment homeowner. Opportunistically
+        // backfill invoices.homeownerUserId so future calls hit the fast path.
+        if (!isProvider && !isHomeowner && !invoice.homeownerUserId) {
+          let resolvedHomeownerId: string | null = null;
+          if (invoice.clientId) {
+            const [c] = await db
+              .select({ homeownerUserId: clients.homeownerUserId })
+              .from(clients)
+              .where(eq(clients.id, invoice.clientId))
+              .limit(1);
+            if (c?.homeownerUserId) resolvedHomeownerId = c.homeownerUserId;
+          }
+          if (!resolvedHomeownerId && invoice.jobId) {
+            const [j] = await db
+              .select({ appointmentId: jobs.appointmentId })
+              .from(jobs)
+              .where(eq(jobs.id, invoice.jobId))
+              .limit(1);
+            if (j?.appointmentId) {
+              const [a] = await db
+                .select({ userId: appointments.userId })
+                .from(appointments)
+                .where(eq(appointments.id, j.appointmentId))
+                .limit(1);
+              if (a?.userId) resolvedHomeownerId = a.userId;
+            }
+          }
+          if (resolvedHomeownerId === authUserId) {
+            isHomeowner = true;
+            try {
+              await db
+                .update(invoices)
+                .set({ homeownerUserId: authUserId })
+                .where(eq(invoices.id, invoiceId));
+            } catch (err) {
+              // Backfill is best-effort — don't block the payment link.
+              console.warn(
+                "[payment-link] homeowner backfill failed:",
+                (err as Error)?.message,
+              );
+            }
+          }
+        }
+
+        if (!isProvider && !isHomeowner) {
           return res.status(403).json({ error: "Access denied" });
         }
 
