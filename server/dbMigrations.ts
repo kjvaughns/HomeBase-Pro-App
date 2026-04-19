@@ -485,6 +485,78 @@ export async function runBootMigrations(): Promise<void> {
     // ── clients: HouseFax enrichment columns ─────────────────────────────
     await runSql("clients.home_data", `ALTER TABLE clients ADD COLUMN IF NOT EXISTS home_data TEXT`);
     await runSql("clients.home_id",   `ALTER TABLE clients ADD COLUMN IF NOT EXISTS home_id VARCHAR REFERENCES homes(id) ON DELETE SET NULL`);
+    // Cached homeowner user id resolved from homes.userId. Without this column,
+    // provider-created jobs can't be linked back to the homeowner's account
+    // (Task #217). Idempotent ADD COLUMN IF NOT EXISTS.
+    await runSql("clients.homeowner_user_id", `ALTER TABLE clients ADD COLUMN IF NOT EXISTS homeowner_user_id VARCHAR REFERENCES users(id) ON DELETE SET NULL`);
+
+    // ── Backfill: clients.homeowner_user_id from homes.user_id (Task #217) ─
+    // Fills in the cached homeowner link for every client whose home is owned
+    // by a registered homeowner account. Safe to re-run.
+    try {
+      const clientBackfill = await client.query(`
+        UPDATE clients c
+           SET homeowner_user_id = h.user_id, updated_at = NOW()
+          FROM homes h
+         WHERE c.home_id = h.id
+           AND c.homeowner_user_id IS NULL
+           AND h.user_id IS NOT NULL
+      `);
+      if (clientBackfill.rowCount && clientBackfill.rowCount > 0) {
+        console.log(`[boot-migration] Backfilled homeowner_user_id on ${clientBackfill.rowCount} client row(s) (Task #217)`);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn("[boot-migration] clients.homeowner_user_id backfill skipped:", msg);
+    }
+
+    // ── Backfill: appointments.user_id / home_id from linked job's client (Task #217) ─
+    // Provider-initiated jobs created the linked appointment without setting
+    // user_id/home_id, so the appointment never appeared in the homeowner's
+    // feed. Pull those values from the job's client whenever the client now
+    // has a known homeowner. Idempotent.
+    try {
+      const apptBackfill = await client.query(`
+        UPDATE appointments a
+           SET user_id = c.homeowner_user_id,
+               home_id = COALESCE(a.home_id, c.home_id),
+               updated_at = NOW()
+          FROM jobs j
+          JOIN clients c ON c.id = j.client_id
+         WHERE j.appointment_id = a.id
+           AND a.user_id IS NULL
+           AND c.homeowner_user_id IS NOT NULL
+      `);
+      if (apptBackfill.rowCount && apptBackfill.rowCount > 0) {
+        console.log(`[boot-migration] Backfilled homeowner link on ${apptBackfill.rowCount} appointment(s) for provider-initiated jobs (Task #217)`);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn("[boot-migration] appointments homeowner backfill skipped:", msg);
+    }
+
+    // ── Backfill: invoices.homeowner_user_id from job's appointment (Task #217) ─
+    // Pre-fix invoices generated for orphaned jobs have no homeowner_user_id,
+    // which blocks the homeowner's "Pay Invoice" CTA via the auth check in
+    // GET /api/jobs/:id/invoice. Resolve from the now-linked appointment.
+    try {
+      const invBackfill = await client.query(`
+        UPDATE invoices i
+           SET homeowner_user_id = a.user_id,
+               updated_at = NOW()
+          FROM jobs j
+          JOIN appointments a ON a.id = j.appointment_id
+         WHERE i.job_id = j.id
+           AND i.homeowner_user_id IS NULL
+           AND a.user_id IS NOT NULL
+      `);
+      if (invBackfill.rowCount && invBackfill.rowCount > 0) {
+        console.log(`[boot-migration] Backfilled homeowner_user_id on ${invBackfill.rowCount} invoice(s) (Task #217)`);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn("[boot-migration] invoices.homeowner_user_id backfill skipped:", msg);
+    }
 
     // ── saved_providers: homeowner saved/favorited providers ─────────────
     await runSql("saved_providers.create", `

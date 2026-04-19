@@ -7403,7 +7403,36 @@ Respond with JSON only:
           .orderBy(desc(invoices.createdAt))
           .limit(1);
         if (!invoice) return res.json({ invoice: null });
-        const isHomeowner = invoice.homeownerUserId === authUserId;
+        let isHomeowner = invoice.homeownerUserId === authUserId;
+        // Fallback for legacy invoices (Task #217): some invoices were created
+        // before the homeowner link was wired up and have a null
+        // homeowner_user_id. Treat the homeowner of the linked appointment as
+        // the rightful viewer, and opportunistically backfill so future calls
+        // hit the fast path.
+        if (!isHomeowner && !invoice.homeownerUserId) {
+          const [linkedJob] = await db
+            .select({ appointmentId: jobs.appointmentId })
+            .from(jobs)
+            .where(eq(jobs.id, req.params.id))
+            .limit(1);
+          if (linkedJob?.appointmentId) {
+            const [appt] = await db
+              .select({ userId: appointments.userId })
+              .from(appointments)
+              .where(eq(appointments.id, linkedJob.appointmentId))
+              .limit(1);
+            if (appt?.userId && appt.userId === authUserId) {
+              isHomeowner = true;
+              await db
+                .update(invoices)
+                .set({ homeownerUserId: appt.userId, updatedAt: new Date() })
+                .where(eq(invoices.id, invoice.id))
+                .catch((e) =>
+                  console.error("invoice.homeowner_user_id backfill skipped:", e),
+                );
+            }
+          }
+        }
         const isProvider =
           providerRecord && invoice.providerId === providerRecord.id;
         if (!isHomeowner && !isProvider)
@@ -7559,6 +7588,65 @@ Respond with JSON only:
           ? (svcSnapshot?.priceFrom ?? undefined)
           : undefined);
 
+      // Resolve homeowner identity from the job's client BEFORE the transaction.
+      // If the client record is linked to a home that has a registered homeowner
+      // user, propagate that user_id + home_id onto the appointment row so the
+      // homeowner's `getAppointments(userId)` query surfaces the new job and
+      // the downstream "Pay Invoice" CTA renders for them. (Task #217)
+      let resolvedHomeownerUserId: string | null = null;
+      let resolvedHomeId: string | null = null;
+      if (parsed.data.clientId) {
+        // SECURITY: Scope the lookup to (clientId, providerId) so a provider
+        // cannot reference another provider's client and accidentally (or
+        // maliciously) attach a job/appointment/invoice to an unrelated
+        // homeowner account. callerProvider.id was already proven to belong
+        // to authUserId above, so this is the right tenant boundary.
+        const [jobClientRow] = await db
+          .select({
+            id: clients.id,
+            homeId: clients.homeId,
+            homeownerUserId: clients.homeownerUserId,
+          })
+          .from(clients)
+          .where(
+            and(
+              eq(clients.id, parsed.data.clientId),
+              eq(clients.providerId, callerProvider.id),
+            ),
+          );
+        if (!jobClientRow) {
+          return res
+            .status(403)
+            .json({ error: "Forbidden: client does not belong to this provider" });
+        }
+        if (jobClientRow.homeId) {
+          resolvedHomeId = jobClientRow.homeId;
+          if (jobClientRow.homeownerUserId) {
+            resolvedHomeownerUserId = jobClientRow.homeownerUserId;
+          } else {
+            // Cached link not yet populated — derive from homes.userId. The
+            // read intentionally does NOT swallow errors: a transient failure
+            // here used to silently fall back to a null homeowner link and
+            // reintroduce the original sync miss (Task #217). The cache write
+            // below is still best-effort because it's just an optimization.
+            const [homeRow] = await db
+              .select({ userId: homes.userId })
+              .from(homes)
+              .where(eq(homes.id, jobClientRow.homeId));
+            if (homeRow?.userId) {
+              resolvedHomeownerUserId = homeRow.userId;
+              await db
+                .update(clients)
+                .set({ homeownerUserId: homeRow.userId, updatedAt: new Date() })
+                .where(eq(clients.id, jobClientRow.id))
+                .catch((e) =>
+                  console.error("client.homeowner_user_id cache write skipped:", e),
+                );
+            }
+          }
+        }
+      }
+
       // Atomic transaction: create job and appointment together so booking data model is
       // always consistent. If appointment creation fails the job is rolled back too.
       const { job: newJob, appointment } = await db.transaction(async (tx) => {
@@ -7572,13 +7660,17 @@ Respond with JSON only:
 
         // Create a linked appointment row for every provider-added job so all booking
         // paths produce the same normalized structure (appointments → jobs → clients → invoices).
-        // userId and homeId are optional because this is a provider-initiated entry.
+        // userId/homeId are populated from the resolved homeowner above so the
+        // appointment is visible to the homeowner's feed (Task #217). When the
+        // client has no linked home (no registered homeowner), both stay null.
         // description: prefer provider-entered "client's issue", fall back to service description
         const apptDescription =
           job.description || svcSnapshot?.description || undefined;
         const [apptRow] = await tx
           .insert(appointments)
           .values({
+            userId: resolvedHomeownerUserId ?? undefined,
+            homeId: resolvedHomeId ?? undefined,
             providerId: job.providerId,
             serviceName: job.title,
             description: apptDescription,

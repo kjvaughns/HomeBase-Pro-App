@@ -409,14 +409,34 @@ export default function ProviderJobDetailScreen() {
   const updateJobMutation = useMutation({
     mutationFn: async (newStatus: DBJobStatus) => {
       const url = new URL(`/api/jobs/${jobId}`, getApiUrl());
-      return apiRequest("PUT", url.toString(), { status: newStatus });
+      const res = await apiRequest("PUT", url.toString(), { status: newStatus });
+      return (await res.json()) as { job: ApiJob };
     },
-    onSuccess: () => {
+    // Roll the optimistic UI back to the server's truth on the way in and out.
+    // (Task #217) Previously the optimistic `setDisplayStatus` ran from the
+    // caller and was never reverted when the request failed, so users saw a
+    // success-looking status change AND a "Failed to update" alert at the same
+    // time. We now drive the local optimistic state from the mutation itself
+    // and reset it whenever the request errors.
+    onMutate: (newStatus: DBJobStatus) => {
+      const previous = displayStatus;
+      setDisplayStatus(newStatus);
+      return { previous };
+    },
+    onSuccess: (data) => {
+      if (data?.job?.status) {
+        setDisplayStatus(mapDbStatusToDisplay(data.job.status));
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "jobs"] });
     },
-    onError: () => {
-      Alert.alert("Error", "Failed to update job status");
+    onError: (error: unknown, _vars, context) => {
+      setDisplayStatus(context?.previous ?? null);
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "Failed to update job status";
+      Alert.alert("Couldn't update status", message);
     },
   });
 
@@ -437,13 +457,16 @@ export default function ProviderJobDetailScreen() {
 
   const handleUpdateStatus = useCallback((newDisplayStatus: DisplayStatus) => {
     if (!job) return;
+    if (updateJobMutation.isPending || completeJobMutation.isPending) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     if (newDisplayStatus === "completed") {
       completeJobMutation.mutate();
     } else {
+      // Optimistic update + rollback are owned by updateJobMutation itself
+      // (Task #217). Don't touch displayStatus here or the rollback gets
+      // overwritten when the request fails.
       updateJobMutation.mutate(newDisplayStatus);
-      setDisplayStatus(newDisplayStatus);
     }
   }, [job, updateJobMutation, completeJobMutation]);
 
@@ -458,7 +481,6 @@ export default function ProviderJobDetailScreen() {
           style: "destructive",
           onPress: () => {
             updateJobMutation.mutate("cancelled");
-            setDisplayStatus("cancelled");
           },
         },
       ]

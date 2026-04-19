@@ -797,6 +797,12 @@ export const clients = pgTable("clients", {
   homeId: varchar("home_id").references(() => homes.id, {
     onDelete: "set null",
   }),
+  // Cached homeowner user ID resolved from homes.userId. Populated when a client's
+  // homeId points at a home that has a registered homeowner account, so all
+  // notification + ownership lookups can use a single field instead of joining.
+  homeownerUserId: varchar("homeowner_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
