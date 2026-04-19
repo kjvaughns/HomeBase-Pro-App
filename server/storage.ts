@@ -299,7 +299,7 @@ export class DatabaseStorage implements IStorage {
         .from(appointments)
         .where(slotFilter)
         .limit(1);
-      if (existing) return existing;
+      if (existing) return { appointment: existing, created: false };
 
       // Race-safe insert: returns [] on conflict, populated on success
       const inserted = await db
@@ -307,7 +307,7 @@ export class DatabaseStorage implements IStorage {
         .values(appointment)
         .onConflictDoNothing()
         .returning();
-      if (inserted[0]) return inserted[0];
+      if (inserted[0]) return { appointment: inserted[0], created: true };
 
       // Conflict happened between the SELECT and INSERT — another request
       // created the same slot. Re-select the winner.
@@ -316,14 +316,14 @@ export class DatabaseStorage implements IStorage {
         .from(appointments)
         .where(slotFilter)
         .limit(1);
-      if (winner) return winner;
+      if (winner) return { appointment: winner, created: false };
       throw new Error(
         "createAppointment: insert skipped on conflict but no existing row found",
       );
     }
 
     const [newAppointment] = await db.insert(appointments).values(appointment).returning();
-    return newAppointment;
+    return { appointment: newAppointment, created: true };
   }
 
   async updateAppointment(id: string, data: Partial<Appointment>): Promise<Appointment | undefined> {

@@ -577,52 +577,62 @@ export async function runBootMigrations(): Promise<void> {
     // (user_id, provider_id, scheduled_date) — one homeowner had 13 dupes
     // for a single recurring slot. This caused iOS and web to open
     // different appointment IDs for the "same" booking, so the Appointment
-    // Detail screen rendered inconsistently. We dedupe first (keeping the
-    // row with a linked job, falling back to earliest created_at) then add
-    // the unique partial index that prevents recurrence. Fully idempotent
-    // — when there are no duplicates the dedupe step is a no-op and the
+    // Detail screen rendered inconsistently. We dedupe first then add the
+    // unique partial index that prevents recurrence. Fully idempotent —
+    // when there are no duplicates the dedupe step is a no-op and the
     // CREATE INDEX uses IF NOT EXISTS.
+    //
+    // Winner ranking (highest priority first):
+    //   1. Has a linked job (preserves provider-side work)
+    //   2. That job has any invoice (money trail wins)
+    //   3. Most recent invoice created_at (newest billing artifact wins)
+    //   4. Earliest appointment created_at (oldest booking is canonical)
+    //   5. id ASC (deterministic tiebreaker)
+    const RANK_ORDER_BY = `
+      ORDER BY
+        (EXISTS (SELECT 1 FROM jobs jj WHERE jj.appointment_id = a.id)) DESC,
+        (EXISTS (
+          SELECT 1 FROM invoices i
+            JOIN jobs jj ON i.job_id = jj.id
+           WHERE jj.appointment_id = a.id
+        )) DESC,
+        (
+          SELECT MAX(i.created_at) FROM invoices i
+            JOIN jobs jj ON i.job_id = jj.id
+           WHERE jj.appointment_id = a.id
+        ) DESC NULLS LAST,
+        a.created_at ASC,
+        a.id ASC
+    `;
+    const RANKED_CTE = `
+      WITH ranked AS (
+        SELECT
+          a.id,
+          FIRST_VALUE(a.id) OVER (
+            PARTITION BY a.user_id, a.provider_id, a.scheduled_date
+            ${RANK_ORDER_BY}
+          ) AS winner_id
+        FROM appointments a
+        WHERE a.user_id IS NOT NULL AND a.scheduled_date IS NOT NULL
+      )
+    `;
     try {
       const dedupePlan = await client.query(`
-        WITH ranked AS (
-          SELECT
-            a.id,
-            ROW_NUMBER() OVER (
-              PARTITION BY a.user_id, a.provider_id, a.scheduled_date
-              ORDER BY
-                EXISTS (SELECT 1 FROM jobs j WHERE j.appointment_id = a.id) DESC,
-                a.created_at ASC,
-                a.id ASC
-            ) AS rn,
-            FIRST_VALUE(a.id) OVER (
-              PARTITION BY a.user_id, a.provider_id, a.scheduled_date
-              ORDER BY
-                EXISTS (SELECT 1 FROM jobs j WHERE j.appointment_id = a.id) DESC,
-                a.created_at ASC,
-                a.id ASC
-            ) AS winner_id
-          FROM appointments a
-          WHERE a.user_id IS NOT NULL AND a.scheduled_date IS NOT NULL
-        )
+        ${RANKED_CTE}
         SELECT id, winner_id FROM ranked WHERE id <> winner_id
       `);
       if (dedupePlan.rowCount && dedupePlan.rowCount > 0) {
         // Repoint jobs only when the winner doesn't already have its own
         // linked job (avoids creating two jobs pointing at the same appt).
+        // Loser jobs whose winner already has a job get nulled below — we
+        // can't merge two jobs into one FK slot, and dropping them would
+        // lose provider work history. The next step (#227 follow-up) will
+        // reconcile orphan jobs into the canonical appointment.
         await client.query(`
           UPDATE jobs j
              SET appointment_id = r.winner_id, updated_at = NOW()
             FROM (
-              WITH ranked AS (
-                SELECT a.id, FIRST_VALUE(a.id) OVER (
-                  PARTITION BY a.user_id, a.provider_id, a.scheduled_date
-                  ORDER BY
-                    EXISTS (SELECT 1 FROM jobs jj WHERE jj.appointment_id = a.id) DESC,
-                    a.created_at ASC, a.id ASC
-                ) AS winner_id
-                FROM appointments a
-                WHERE a.user_id IS NOT NULL AND a.scheduled_date IS NOT NULL
-              )
+              ${RANKED_CTE}
               SELECT id, winner_id FROM ranked WHERE id <> winner_id
             ) r
            WHERE j.appointment_id = r.id
@@ -637,16 +647,7 @@ export async function runBootMigrations(): Promise<void> {
           UPDATE reviews rv
              SET appointment_id = r.winner_id
             FROM (
-              WITH ranked AS (
-                SELECT a.id, FIRST_VALUE(a.id) OVER (
-                  PARTITION BY a.user_id, a.provider_id, a.scheduled_date
-                  ORDER BY
-                    EXISTS (SELECT 1 FROM jobs jj WHERE jj.appointment_id = a.id) DESC,
-                    a.created_at ASC, a.id ASC
-                ) AS winner_id
-                FROM appointments a
-                WHERE a.user_id IS NOT NULL AND a.scheduled_date IS NOT NULL
-              )
+              ${RANKED_CTE}
               SELECT id, winner_id FROM ranked WHERE id <> winner_id
             ) r
            WHERE rv.appointment_id = r.id
@@ -657,57 +658,32 @@ export async function runBootMigrations(): Promise<void> {
           UPDATE housefax_entries h
              SET appointment_id = r.winner_id
             FROM (
-              WITH ranked AS (
-                SELECT a.id, FIRST_VALUE(a.id) OVER (
-                  PARTITION BY a.user_id, a.provider_id, a.scheduled_date
-                  ORDER BY
-                    EXISTS (SELECT 1 FROM jobs jj WHERE jj.appointment_id = a.id) DESC,
-                    a.created_at ASC, a.id ASC
-                ) AS winner_id
-                FROM appointments a
-                WHERE a.user_id IS NOT NULL AND a.scheduled_date IS NOT NULL
-              )
+              ${RANKED_CTE}
               SELECT id, winner_id FROM ranked WHERE id <> winner_id
             ) r
            WHERE h.appointment_id = r.id
         `);
-        // Null out any leftover loser→job links (winner already had one)
-        // so the upcoming DELETE doesn't surprise anyone reading old logs.
+        // Null out any leftover loser→job links (winner already has its
+        // own job, so we can't repoint without violating "one job per
+        // appointment" expectations downstream). The orphan jobs survive
+        // and are picked up by the #227 reconciliation follow-up.
         await client.query(`
           UPDATE jobs j
              SET appointment_id = NULL, updated_at = NOW()
             FROM (
-              WITH ranked AS (
-                SELECT a.id, FIRST_VALUE(a.id) OVER (
-                  PARTITION BY a.user_id, a.provider_id, a.scheduled_date
-                  ORDER BY
-                    EXISTS (SELECT 1 FROM jobs jj WHERE jj.appointment_id = a.id) DESC,
-                    a.created_at ASC, a.id ASC
-                ) AS winner_id
-                FROM appointments a
-                WHERE a.user_id IS NOT NULL AND a.scheduled_date IS NOT NULL
-              )
+              ${RANKED_CTE}
               SELECT id FROM ranked WHERE id <> winner_id
             ) loser
            WHERE j.appointment_id = loser.id
         `);
         // Finally, delete the loser appointment rows.
+        // The CTE's "a" alias is scoped inside the CTE only — it does not
+        // collide with the outer DELETE's appointments table reference.
         const del = await client.query(`
-          DELETE FROM appointments a
-            USING (
-              WITH ranked AS (
-                SELECT a2.id, FIRST_VALUE(a2.id) OVER (
-                  PARTITION BY a2.user_id, a2.provider_id, a2.scheduled_date
-                  ORDER BY
-                    EXISTS (SELECT 1 FROM jobs jj WHERE jj.appointment_id = a2.id) DESC,
-                    a2.created_at ASC, a2.id ASC
-                ) AS winner_id
-                FROM appointments a2
-                WHERE a2.user_id IS NOT NULL AND a2.scheduled_date IS NOT NULL
-              )
-              SELECT id FROM ranked WHERE id <> winner_id
-            ) loser
-           WHERE a.id = loser.id
+          ${RANKED_CTE}
+          DELETE FROM appointments
+            USING (SELECT id FROM ranked WHERE id <> winner_id) loser
+           WHERE appointments.id = loser.id
         `);
         console.log(
           `[boot-migration] Deduped ${del.rowCount ?? 0} duplicate appointment(s) (Task #226)`,
