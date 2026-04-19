@@ -223,6 +223,10 @@ export async function processStripeEvent(
     const provider = await resolveConnectedProvider(account);
     if (!provider) {
       console.warn(`${baseLog} outcome=rejected reason=unknown_account`);
+      // Mark terminal so the row doesn't sit in NULL/retry state forever —
+      // there's no provider to attribute this event to and nothing useful
+      // would happen on a manual replay.
+      await markEventProcessed(event.id);
       return {
         processed: false,
         reason: "unknown_account",
@@ -239,6 +243,9 @@ export async function processStripeEvent(
   const handler = handlers[eventType];
   if (!handler) {
     console.log(`${baseLog} outcome=unhandled_type`);
+    // Mark terminal — there is no handler, so a manual replay would behave
+    // identically. Avoids leaving the row in NULL/retry state forever.
+    await markEventProcessed(event.id);
     return {
       processed: true,
       reason: "unhandled_type",

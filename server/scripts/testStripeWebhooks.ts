@@ -120,14 +120,17 @@ async function main() {
   assertEq(rejectedTamperedPayload, true, "tampered payload rejected");
 
   // -------------------------------------------------------------------------
-  // 3. Idempotent replay of invoice.finalized (no-op handler, safe)
+  // 3. Idempotent replay of invoice.paid (Task #239 acceptance criterion)
+  // Uses an invoice with no homebaseInvoiceId metadata → handler treats it
+  // as a non-HomeBase invoice and no-ops, while the dispatcher still
+  // exercises the reservation/commit path on a real production event type.
   // -------------------------------------------------------------------------
-  console.log("\n3. Idempotent replay (event.id reuse)");
+  console.log("\n3. Idempotent replay of invoice.paid (event.id reuse)");
   const replayId = `${RUN_TAG}_replay`;
   const replayEvent = makeEvent({
     id: replayId,
-    type: "invoice.finalized",
-    object: { id: "in_test_replay" },
+    type: "invoice.paid",
+    object: { id: "in_test_replay", metadata: {} },
   });
   const first = await processStripeEvent(replayEvent, "platform");
   assertEq(first.processed, true, "first delivery: processed=true");
@@ -136,6 +139,56 @@ async function main() {
   const second = await processStripeEvent(replayEvent, "platform");
   assertEq(second.processed, false, "second delivery: processed=false");
   assertEq(second.reason, "duplicate", "second delivery: reason=duplicate");
+
+  // -------------------------------------------------------------------------
+  // 3c. resolveWebhookSecret() env-var precedence (new name → legacy fallback)
+  // -------------------------------------------------------------------------
+  console.log("\n3c. resolveWebhookSecret precedence");
+  const { resolveWebhookSecret } = await import("../index");
+  const saved = {
+    plat: process.env.STRIPE_WEBHOOK_SECRET_PLATFORM,
+    platLegacy: process.env.STRIPE_WEBHOOK_SECRET,
+    conn: process.env.STRIPE_WEBHOOK_SECRET_CONNECT,
+    connLegacy: process.env.STRIPE_CONNECT_WEBHOOK_SECRET,
+  };
+  try {
+    process.env.STRIPE_WEBHOOK_SECRET_PLATFORM = "whsec_new_platform";
+    process.env.STRIPE_WEBHOOK_SECRET = "whsec_legacy_platform";
+    assertEq(
+      resolveWebhookSecret("platform"),
+      "whsec_new_platform",
+      "platform: new name preferred over legacy",
+    );
+    delete process.env.STRIPE_WEBHOOK_SECRET_PLATFORM;
+    assertEq(
+      resolveWebhookSecret("platform"),
+      "whsec_legacy_platform",
+      "platform: legacy fallback when new name absent",
+    );
+    process.env.STRIPE_WEBHOOK_SECRET_CONNECT = "whsec_new_connect";
+    process.env.STRIPE_CONNECT_WEBHOOK_SECRET = "whsec_legacy_connect";
+    assertEq(
+      resolveWebhookSecret("connect"),
+      "whsec_new_connect",
+      "connect: new name preferred over legacy",
+    );
+    delete process.env.STRIPE_WEBHOOK_SECRET_CONNECT;
+    assertEq(
+      resolveWebhookSecret("connect"),
+      "whsec_legacy_connect",
+      "connect: legacy fallback when new name absent",
+    );
+  } finally {
+    // Restore original env so subsequent tests / live endpoints work
+    if (saved.plat !== undefined) process.env.STRIPE_WEBHOOK_SECRET_PLATFORM = saved.plat;
+    else delete process.env.STRIPE_WEBHOOK_SECRET_PLATFORM;
+    if (saved.platLegacy !== undefined) process.env.STRIPE_WEBHOOK_SECRET = saved.platLegacy;
+    else delete process.env.STRIPE_WEBHOOK_SECRET;
+    if (saved.conn !== undefined) process.env.STRIPE_WEBHOOK_SECRET_CONNECT = saved.conn;
+    else delete process.env.STRIPE_WEBHOOK_SECRET_CONNECT;
+    if (saved.connLegacy !== undefined) process.env.STRIPE_CONNECT_WEBHOOK_SECRET = saved.connLegacy;
+    else delete process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
+  }
 
   // -------------------------------------------------------------------------
   // 4. Wrong-endpoint rejection

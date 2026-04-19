@@ -85,47 +85,11 @@ function setupCors(app: express.Application) {
   });
 }
 
-// -----------------------------------------------------------------------------
-// Webhook signing-secret resolution
-// -----------------------------------------------------------------------------
-// We standardized on STRIPE_WEBHOOK_SECRET_PLATFORM and
-// STRIPE_WEBHOOK_SECRET_CONNECT. The legacy names (STRIPE_WEBHOOK_SECRET and
-// STRIPE_CONNECT_WEBHOOK_SECRET) are still honored as fallbacks so an env
-// rename can be rolled out without breaking deploys; a deprecation warning is
-// logged once per process when a fallback is used.
-// -----------------------------------------------------------------------------
-
-const _legacySecretWarned: Record<string, boolean> = {};
-
-export function resolveWebhookSecret(
-  endpoint: "platform" | "connect",
-): string | undefined {
-  const newName =
-    endpoint === "platform"
-      ? "STRIPE_WEBHOOK_SECRET_PLATFORM"
-      : "STRIPE_WEBHOOK_SECRET_CONNECT";
-  const oldName =
-    endpoint === "platform"
-      ? "STRIPE_WEBHOOK_SECRET"
-      : "STRIPE_CONNECT_WEBHOOK_SECRET";
-
-  const fromNew = process.env[newName];
-  if (fromNew) return fromNew;
-
-  const fromOld = process.env[oldName];
-  if (fromOld) {
-    if (!_legacySecretWarned[oldName]) {
-      console.warn(
-        `[webhook] DEPRECATED env var ${oldName} in use — please rename to ${newName}. ` +
-          `The old name will continue to work for now but should be migrated.`,
-      );
-      _legacySecretWarned[oldName] = true;
-    }
-    return fromOld;
-  }
-
-  return undefined;
-}
+// Webhook signing-secret resolution lives in its own side-effect-free module
+// (server/webhookSecrets.ts) so regression tests can import + exercise it
+// without booting the whole server. Re-exported here for backwards compat
+// with existing callers in this file.
+export { resolveWebhookSecret } from "./webhookSecrets";
 
 function setupStripeWebhook(app: express.Application) {
   // Platform endpoint — receives events on the platform Stripe account
