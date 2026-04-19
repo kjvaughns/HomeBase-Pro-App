@@ -5,6 +5,7 @@ import {
   ScrollView,
   Pressable,
   Linking,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -13,6 +14,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import NetInfo, { type NetInfoState } from "@react-native-community/netinfo";
 
 import { getApiUrl } from "@/lib/query-client";
 import { ThemedText } from "@/components/ThemedText";
@@ -31,33 +33,6 @@ interface Resource {
 }
 
 const RESOURCES_CACHE_KEY = "@homebase/provider-resources-cache-v1";
-
-/**
- * Minimal cold-start fallback used only when the device has never reached
- * the server (no AsyncStorage cache) and is offline. The server owns the
- * authoritative content; this list exists purely so the screen is never
- * empty on a brand-new install with no connectivity.
- */
-const COLD_START_FALLBACK: Resource[] = [
-  {
-    id: "cold-start-1",
-    icon: "book-open",
-    title: "Getting Started on HomeBase",
-    description:
-      "Complete your Business Hub profile, add services with clear pricing, create a public booking link, and connect Stripe to accept payments.",
-    type: "guide",
-    url: "https://homebaseproapp.com/blog/getting-started-on-homebase",
-  },
-  {
-    id: "cold-start-2",
-    icon: "wifi-off",
-    title: "Reconnect to load the latest articles",
-    description:
-      "Provider Resources are kept up to date by our marketing team. Reconnect to the internet to load the latest guides, articles, and tools.",
-    type: "article",
-    url: "https://homebaseproapp.com/blog",
-  },
-];
 
 type QuickLink =
   | { icon: keyof typeof Feather.glyphMap; label: string; type: "url"; url: string }
@@ -97,30 +72,56 @@ export default function ProviderResourcesScreen() {
   const navigation = useNavigation<any>();
 
   const [cachedResources, setCachedResources] = useState<Resource[] | null>(null);
+  const [cacheLoaded, setCacheLoaded] = useState(false);
+  // `null` means we haven't determined connectivity yet (treat as online so we
+  // don't flash the offline state on first render).
+  const [isOnline, setIsOnline] = useState<boolean | null>(null);
 
   useEffect(() => {
     let active = true;
     AsyncStorage.getItem(RESOURCES_CACHE_KEY)
       .then((raw) => {
-        if (!active || !raw) return;
-        try {
-          const parsed = JSON.parse(raw) as Resource[];
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setCachedResources(parsed);
+        if (!active) return;
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw) as Resource[];
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setCachedResources(parsed);
+            }
+          } catch {
+            // Ignore corrupted cache
           }
-        } catch {
-          // Ignore corrupted cache
         }
+        setCacheLoaded(true);
       })
       .catch(() => {
-        // Ignore cache read errors
+        if (active) setCacheLoaded(true);
       });
     return () => {
       active = false;
     };
   }, []);
 
-  const { data: remoteResources } = useQuery<Resource[]>({
+  useEffect(() => {
+    const apply = (state: NetInfoState) => {
+      // `isInternetReachable` can be null on some platforms before the first
+      // probe completes; treat null as "assume online" to avoid false offline.
+      const reachable =
+        state.isInternetReachable === null ? true : state.isInternetReachable;
+      setIsOnline(Boolean(state.isConnected) && reachable);
+    };
+    NetInfo.fetch().then(apply).catch(() => setIsOnline(true));
+    const unsubscribe = NetInfo.addEventListener(apply);
+    return unsubscribe;
+  }, []);
+
+  const {
+    data: remoteResources,
+    isLoading,
+    isFetching,
+    isError,
+    refetch,
+  } = useQuery<Resource[]>({
     queryKey: ["/api/provider-resources"],
     queryFn: async () => {
       const url = new URL("/api/provider-resources", getApiUrl());
@@ -130,6 +131,11 @@ export default function ProviderResourcesScreen() {
       return json.resources;
     },
     staleTime: 1000 * 60 * 10,
+    // Skip the network request entirely when we know we're offline; the cached
+    // list (if any) will still render and refetch will resume when we go back
+    // online.
+    enabled: isOnline !== false,
+    retry: 1,
   });
 
   useEffect(() => {
@@ -148,7 +154,7 @@ export default function ProviderResourcesScreen() {
       ? remoteResources
       : cachedResources && cachedResources.length > 0
         ? cachedResources
-        : COLD_START_FALLBACK;
+        : [];
 
   const getTypeColor = (type: Resource["type"]) => {
     switch (type) {
@@ -188,6 +194,151 @@ export default function ProviderResourcesScreen() {
     }
   };
 
+  // Decide which state to render for the resources section.
+  // Order of precedence:
+  //  1. We have resources (from server or cache) → show them.
+  //  2. Still loading initial data (cache or first fetch) → spinner.
+  //  3. Device is offline with no cache → offline placeholder.
+  //  4. Online but request failed → error state with retry.
+  //  5. Online but server returned an empty list → empty state with retry.
+  const hasResources = resources.length > 0;
+  const initialLoading =
+    !hasResources && (!cacheLoaded || (isLoading && isOnline !== false));
+  const showOffline = !hasResources && isOnline === false && cacheLoaded;
+  const showError =
+    !hasResources && !initialLoading && !showOffline && isError;
+  const showEmpty =
+    !hasResources &&
+    !initialLoading &&
+    !showOffline &&
+    !showError &&
+    remoteResources !== undefined;
+
+  const renderResourcesSection = () => {
+    if (hasResources) {
+      return (
+        <View style={styles.resourcesGrid}>
+          {resources.map((resource, index) => (
+            <Animated.View
+              key={resource.id}
+              entering={FadeInDown.delay(100 + index * 30).duration(300)}
+            >
+              <Pressable
+                testID={`resource-${resource.id}`}
+                style={[styles.resourceCard, { backgroundColor: theme.cardBackground }]}
+                onPress={() => handleResourcePress(resource)}
+              >
+                <View style={styles.resourceHeader}>
+                  <View style={[styles.resourceIcon, { backgroundColor: Colors.accent + "15" }]}>
+                    <Feather name={resource.icon} size={20} color={Colors.accent} />
+                  </View>
+                  <View
+                    style={[
+                      styles.typeBadge,
+                      { backgroundColor: getTypeColor(resource.type) + "20" },
+                    ]}
+                  >
+                    <ThemedText
+                      style={[styles.typeText, { color: getTypeColor(resource.type) }]}
+                    >
+                      {getTypeLabel(resource.type)}
+                    </ThemedText>
+                  </View>
+                </View>
+                <ThemedText style={styles.resourceTitle}>{resource.title}</ThemedText>
+                <ThemedText style={[styles.resourceDescription, { color: theme.textSecondary }]}>
+                  {resource.description}
+                </ThemedText>
+                <View style={styles.resourceFooter}>
+                  <ThemedText style={{ color: Colors.accent, fontWeight: "500" }}>
+                    Read More
+                  </ThemedText>
+                  <Feather name="arrow-right" size={16} color={Colors.accent} />
+                </View>
+              </Pressable>
+            </Animated.View>
+          ))}
+        </View>
+      );
+    }
+
+    if (initialLoading) {
+      return (
+        <View testID="resources-loading" style={styles.statusCard}>
+          <ActivityIndicator color={Colors.accent} />
+        </View>
+      );
+    }
+
+    if (showOffline) {
+      return (
+        <GlassCard style={styles.statusCard} testID="resources-offline">
+          <View style={[styles.statusIcon, { backgroundColor: theme.textSecondary + "15" }]}>
+            <Feather name="wifi-off" size={24} color={theme.textSecondary} />
+          </View>
+          <ThemedText style={styles.statusTitle}>You&apos;re offline</ThemedText>
+          <ThemedText style={[styles.statusText, { color: theme.textSecondary }]}>
+            Reconnect to the internet to load the latest guides, articles, and tools from our marketing team.
+          </ThemedText>
+        </GlassCard>
+      );
+    }
+
+    if (showError) {
+      return (
+        <GlassCard style={styles.statusCard} testID="resources-error">
+          <View style={[styles.statusIcon, { backgroundColor: Colors.error + "15" }]}>
+            <Feather name="alert-circle" size={24} color={Colors.error} />
+          </View>
+          <ThemedText style={styles.statusTitle}>Couldn&apos;t load resources</ThemedText>
+          <ThemedText style={[styles.statusText, { color: theme.textSecondary }]}>
+            Something went wrong loading the latest guides and articles. Please try again.
+          </ThemedText>
+          <Pressable
+            testID="button-retry-resources"
+            onPress={() => refetch()}
+            style={[styles.retryButton, { backgroundColor: Colors.accent }]}
+            disabled={isFetching}
+          >
+            {isFetching ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <ThemedText style={styles.retryButtonText}>Try Again</ThemedText>
+            )}
+          </Pressable>
+        </GlassCard>
+      );
+    }
+
+    if (showEmpty) {
+      return (
+        <GlassCard style={styles.statusCard} testID="resources-empty">
+          <View style={[styles.statusIcon, { backgroundColor: theme.textSecondary + "15" }]}>
+            <Feather name="inbox" size={24} color={theme.textSecondary} />
+          </View>
+          <ThemedText style={styles.statusTitle}>No resources yet</ThemedText>
+          <ThemedText style={[styles.statusText, { color: theme.textSecondary }]}>
+            New guides and articles from our marketing team will appear here. Check back soon.
+          </ThemedText>
+          <Pressable
+            testID="button-refresh-resources"
+            onPress={() => refetch()}
+            style={[styles.retryButton, { backgroundColor: Colors.accent }]}
+            disabled={isFetching}
+          >
+            {isFetching ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <ThemedText style={styles.retryButtonText}>Refresh</ThemedText>
+            )}
+          </Pressable>
+        </GlassCard>
+      );
+    }
+
+    return null;
+  };
+
   return (
     <ThemedView style={styles.container}>
       <ScrollView
@@ -215,48 +366,7 @@ export default function ProviderResourcesScreen() {
           <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
             Featured Resources
           </ThemedText>
-          <View style={styles.resourcesGrid}>
-            {resources.map((resource, index) => (
-              <Animated.View
-                key={resource.id}
-                entering={FadeInDown.delay(100 + index * 30).duration(300)}
-              >
-                <Pressable
-                  testID={`resource-${resource.id}`}
-                  style={[styles.resourceCard, { backgroundColor: theme.cardBackground }]}
-                  onPress={() => handleResourcePress(resource)}
-                >
-                  <View style={styles.resourceHeader}>
-                    <View style={[styles.resourceIcon, { backgroundColor: Colors.accent + "15" }]}>
-                      <Feather name={resource.icon} size={20} color={Colors.accent} />
-                    </View>
-                    <View
-                      style={[
-                        styles.typeBadge,
-                        { backgroundColor: getTypeColor(resource.type) + "20" },
-                      ]}
-                    >
-                      <ThemedText
-                        style={[styles.typeText, { color: getTypeColor(resource.type) }]}
-                      >
-                        {getTypeLabel(resource.type)}
-                      </ThemedText>
-                    </View>
-                  </View>
-                  <ThemedText style={styles.resourceTitle}>{resource.title}</ThemedText>
-                  <ThemedText style={[styles.resourceDescription, { color: theme.textSecondary }]}>
-                    {resource.description}
-                  </ThemedText>
-                  <View style={styles.resourceFooter}>
-                    <ThemedText style={{ color: Colors.accent, fontWeight: "500" }}>
-                      Read More
-                    </ThemedText>
-                    <Feather name="arrow-right" size={16} color={Colors.accent} />
-                  </View>
-                </Pressable>
-              </Animated.View>
-            ))}
-          </View>
+          {renderResourcesSection()}
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(300).duration(300)}>
@@ -391,6 +501,44 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.xs,
+  },
+  statusCard: {
+    padding: Spacing.xl,
+    alignItems: "center",
+    marginBottom: Spacing.xl,
+  },
+  statusIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: BorderRadius.full,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.md,
+  },
+  statusTitle: {
+    ...Typography.headline,
+    fontWeight: "600",
+    marginBottom: Spacing.xs,
+    textAlign: "center",
+  },
+  statusText: {
+    ...Typography.subhead,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: Spacing.md,
+  },
+  retryButton: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    minWidth: 120,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+    fontSize: 14,
   },
   quickLinksCard: {
     marginBottom: Spacing.xl,
