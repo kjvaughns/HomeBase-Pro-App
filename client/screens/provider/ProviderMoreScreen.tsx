@@ -47,15 +47,17 @@ export default function ProviderMoreScreen() {
   const isAdminUser = !!user?.email &&
     adminEmails.includes(user.email.toLowerCase());
 
-  const { isSubscribed, isInGrace, daysRemainingInGrace, status: subStatus } =
+  const { isSubscribed, isInGrace, daysRemainingInGrace, status: subStatus, isPartner } =
     useSubscriptionStatus();
-  const subscriptionSubtitle = isSubscribed
-    ? "Active — manage your HomeBase Pro plan"
-    : isInGrace
-      ? `${daysRemainingInGrace ?? 7} days left in trial`
-      : subStatus === "expired"
-        ? "Trial ended — subscribe to reactivate"
-        : "Free until your first paid booking";
+  const subscriptionSubtitle = isPartner
+    ? "HomeBase Partner — complimentary Pro access"
+    : isSubscribed
+      ? "Active — manage your HomeBase Pro plan"
+      : isInGrace
+        ? `${daysRemainingInGrace ?? 7} days left in trial`
+        : subStatus === "expired"
+          ? "Trial ended — subscribe to reactivate"
+          : "Free until your first paid booking";
 
   const availableForWork = useProviderStore((s) => s.availableForWork);
   const syncAvailableForWork = useProviderStore((s) => s.syncAvailableForWork);
