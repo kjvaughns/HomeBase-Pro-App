@@ -2,13 +2,13 @@ import React from "react";
 import { StyleSheet, View, ScrollView, Pressable, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
-import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
+import { useRoute, useNavigation, useFocusEffect, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -111,6 +111,17 @@ export default function JobDetailScreen() {
   const { theme } = useTheme();
   const { jobId } = route.params;
   const { user } = useAuthStore();
+  const queryClient = useQueryClient();
+
+  // Refresh appointment + invoice when screen regains focus (e.g., after
+  // returning from the Stripe-hosted invoice in an external browser) so
+  // payment status syncs without requiring a manual reload.
+  useFocusEffect(
+    React.useCallback(() => {
+      queryClient.invalidateQueries({ queryKey: ["/api/appointments", jobId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+    }, [queryClient, jobId])
+  );
 
   const { data: aptData, isLoading } = useQuery<{ appointment: AppointmentRecord; provider: ProviderInfo | null; review?: ReviewRecord | null }>({
     queryKey: ["/api/appointments", jobId],
