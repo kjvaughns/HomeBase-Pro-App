@@ -707,6 +707,18 @@ export async function runBootMigrations(): Promise<void> {
           `[boot-migration] Backfilled appointment_id on ${jobBackfill.rowCount} job(s) (Task #226)`,
         );
       }
+      // Report any jobs that still couldn't be matched (no client-homeowner
+      // link or no matching appointment row) so manual remediation is
+      // auditable from boot logs rather than silently absorbed.
+      const stragglers = await client.query(`
+        SELECT COUNT(*)::int AS n FROM jobs WHERE appointment_id IS NULL
+      `);
+      const remaining = stragglers.rows?.[0]?.n ?? 0;
+      if (remaining > 0) {
+        console.log(
+          `[boot-migration] ${remaining} job(s) still have appointment_id IS NULL — typically because clients.homeowner_user_id is unset (see follow-up #227)`,
+        );
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       console.warn("[boot-migration] jobs.appointment_id backfill skipped:", msg);
