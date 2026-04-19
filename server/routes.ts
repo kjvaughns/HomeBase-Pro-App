@@ -8733,7 +8733,7 @@ Respond with JSON only:
     const title = `Invoice from ${args.providerName}`;
     const body = `Invoice ${args.invoice.invoiceNumber || args.invoice.id.slice(0, 8)} for $${args.amount.toFixed(2)} is ready. Tap to pay.`;
     const data: Record<string, unknown> = {
-      type: "invoice",
+      type: "invoice_sent",
       invoiceId: args.invoice.id,
     };
     if (appointmentId) {
@@ -8746,6 +8746,66 @@ Respond with JSON only:
       title,
       body,
       "invoice_sent",
+      data,
+      "invoices",
+    );
+  }
+
+  // Task #235: when a provider sends a reminder for an unpaid invoice, push +
+  // in-app notify the homeowner so they aren't relying solely on email.
+  // Mirrors notifyHomeownerInvoiceSent for consistency.
+  async function notifyHomeownerInvoiceReminder(args: {
+    invoice: {
+      id: string;
+      invoiceNumber: string | null;
+      homeownerUserId: string | null;
+      jobId: string | null;
+    };
+    providerName: string;
+    amount: number;
+    clientEmail: string | null;
+  }): Promise<void> {
+    let homeownerUserId = args.invoice.homeownerUserId ?? null;
+    if (!homeownerUserId && args.clientEmail) {
+      const rows = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.email, args.clientEmail))
+        .limit(1)
+        .catch((): { id: string }[] => []);
+      const u = rows[0];
+      if (u?.id) homeownerUserId = u.id;
+    }
+    if (!homeownerUserId) return;
+
+    let appointmentId: string | null = null;
+    if (args.invoice.jobId) {
+      const rows = await db
+        .select({ appointmentId: jobs.appointmentId })
+        .from(jobs)
+        .where(eq(jobs.id, args.invoice.jobId))
+        .limit(1)
+        .catch((): { appointmentId: string | null }[] => []);
+      const j = rows[0];
+      if (j?.appointmentId) appointmentId = j.appointmentId;
+    }
+
+    const title = `Payment reminder from ${args.providerName}`;
+    const body = `Invoice ${args.invoice.invoiceNumber || args.invoice.id.slice(0, 8)} for $${args.amount.toFixed(2)} is still unpaid. Tap to pay.`;
+    const data: Record<string, unknown> = {
+      type: "invoice_reminder",
+      invoiceId: args.invoice.id,
+    };
+    if (appointmentId) {
+      data.screen = "AppointmentDetail";
+      data.params = { appointmentId };
+      data.appointmentId = appointmentId;
+    }
+    await dispatchNotification(
+      homeownerUserId,
+      title,
+      body,
+      "invoice_reminder",
       data,
       "invoices",
     );
@@ -9263,6 +9323,22 @@ Respond with JSON only:
           daysOverdue: diffDays < 0 ? Math.abs(diffDays) : undefined,
           paymentLink: reminderPaymentLink,
         });
+
+        // Task #235: also fire a push + in-app notification to the homeowner
+        // so the reminder shows up in the app, not just email.
+        notifyHomeownerInvoiceReminder({
+          invoice: {
+            id: invoice.id,
+            invoiceNumber: invoice.invoiceNumber,
+            homeownerUserId: invoice.homeownerUserId,
+            jobId: invoice.jobId,
+          },
+          providerName,
+          amount: parseFloat(invoice.total?.toString() || "0"),
+          clientEmail: client.email,
+        }).catch((e) =>
+          console.error("[invoice.reminder] homeowner notify failed:", e),
+        );
 
         res.json({ sent: true });
       } catch (error) {
@@ -10160,7 +10236,7 @@ Respond with JSON only:
                 clientUser.id,
                 `Invoice from ${provider.businessName || "Your Provider"}`,
                 `Invoice ${invoice.invoiceNumber || invoiceId.slice(0, 8)} for $${invoiceTotal.toFixed(2)} is ready. Tap to view.`,
-                { type: "invoice", invoiceId },
+                { type: "invoice_sent", invoiceId },
                 "invoices",
               ).catch(() => {});
             }

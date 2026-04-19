@@ -330,7 +330,20 @@ export default function FinancesScreen() {
       return res.json();
     },
     enabled: !!providerId,
-    refetchInterval: 30_000,
+    // Task #235: short-poll while any invoice is still outstanding so the
+    // list flips to "paid" within a few seconds of the Stripe webhook;
+    // fall back to the longer 30s cadence once everything is settled.
+    refetchInterval: (query) => {
+      const list = query.state.data?.invoices ?? [];
+      const OUTSTANDING = new Set([
+        "sent",
+        "viewed",
+        "overdue",
+        "partially_paid",
+      ]);
+      const hasUnpaid = list.some((inv) => OUTSTANDING.has(inv.status));
+      return hasUnpaid ? 5_000 : 30_000;
+    },
     staleTime: 15_000,
   });
 

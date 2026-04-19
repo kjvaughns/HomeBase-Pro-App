@@ -64,6 +64,21 @@ export default function PaymentScreen() {
       return res.json();
     },
     enabled: !!invoiceId,
+    // Task #235: poll while the invoice is still unpaid so the screen flips
+    // automatically once the Stripe webhook updates status server-side.
+    refetchInterval: (query) => {
+      const status = query.state.data?.invoice?.status;
+      if (
+        !status ||
+        status === "paid" ||
+        status === "void" ||
+        status === "cancelled" ||
+        status === "canceled"
+      ) {
+        return false;
+      }
+      return 5000;
+    },
   });
 
   // Refresh invoice status whenever the screen regains focus (e.g., after the

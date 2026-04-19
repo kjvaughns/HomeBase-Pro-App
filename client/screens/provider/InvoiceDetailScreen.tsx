@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import {
   StyleSheet,
   ScrollView,
@@ -12,7 +12,7 @@ import {
 import * as Clipboard from "expo-clipboard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
-import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
+import { useNavigation, useRoute, useFocusEffect, RouteProp } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 
@@ -132,10 +132,33 @@ export default function InvoiceDetailScreen() {
 
   useEffect(() => () => { if (bannerTimer.current) clearTimeout(bannerTimer.current); }, []);
 
-  const { data: invoiceData, isLoading } = useQuery<{ invoice: Invoice }>({
+  const { data: invoiceData, isLoading, refetch: refetchInvoice } = useQuery<{ invoice: Invoice }>({
     queryKey: ["/api/invoices", invoiceId],
     enabled: !!invoiceId,
+    // Task #235: poll while the invoice is still unpaid so the provider sees
+    // the status flip the moment the homeowner finishes Stripe Checkout.
+    refetchInterval: (query) => {
+      const status = query.state.data?.invoice?.status as string | undefined;
+      if (
+        !status ||
+        status === "paid" ||
+        status === "void" ||
+        status === "cancelled" ||
+        status === "canceled"
+      ) {
+        return false;
+      }
+      return 5000;
+    },
   });
+
+  // Task #235: also refetch on focus so coming back from another screen (or
+  // tapping a push notification) immediately reflects the latest status.
+  useFocusEffect(
+    useCallback(() => {
+      if (invoiceId) refetchInvoice();
+    }, [invoiceId, refetchInvoice]),
+  );
 
   const { data: clientsData } = useQuery<{ clients: Client[] }>({
     queryKey: ["/api/provider", providerId, "clients"],

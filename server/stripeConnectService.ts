@@ -20,7 +20,7 @@ import {
   homes,
   appointments,
 } from "../shared/schema";
-import { dispatch, dispatchNotification } from "./notificationService";
+import { dispatch, dispatchNotification, hasDeliveryForRecord, logDelivery } from "./notificationService";
 
 let stripe: Stripe | null = null;
 
@@ -1026,20 +1026,92 @@ async function handlePaymentIntentSucceeded(
       }
 
       // Provider push: notify the provider that funds landed in their Connect
-      // account (Task #150). Uses dispatchNotification so it also creates an
-      // in-app notification record.
+      // account (Task #150). Dedup against handleStripeInvoicePaid so the
+      // provider only receives one push per payment (Task #235).
       if (provider?.userId) {
-        const amountStr = String(updatedInvoice.total ?? "0");
-        dispatchNotification(
-          provider.userId,
-          "Payment received",
-          `Invoice ${updatedInvoice.invoiceNumber} was paid — $${amountStr} is on the way to your bank account.`,
+        const alreadyPushed = await hasDeliveryForRecord(
           "invoice.paid",
-          { invoiceId, invoiceNumber: updatedInvoice.invoiceNumber },
-          "invoices",
-        ).catch((e: unknown) =>
-          console.error("provider invoice.paid push error (webhook):", e),
+          invoiceId,
+          "push",
         );
+        if (!alreadyPushed) {
+          const amountStr = String(updatedInvoice.total ?? "0");
+          await dispatchNotification(
+            provider.userId,
+            "Payment received",
+            `Invoice ${updatedInvoice.invoiceNumber} was paid — $${amountStr} is on the way to your bank account.`,
+            "invoice_paid",
+            {
+              invoiceId,
+              invoiceNumber: updatedInvoice.invoiceNumber,
+              type: "invoice_paid",
+              screen: "InvoiceDetail",
+              params: { invoiceId },
+            },
+            "invoices",
+          ).catch((e: unknown) =>
+            console.error("provider invoice.paid push error (webhook):", e),
+          );
+          await logDelivery({
+            channel: "push",
+            status: "sent",
+            eventType: "invoice.paid",
+            recipientUserId: provider.userId,
+            relatedRecordType: "invoice",
+            relatedRecordId: invoiceId,
+          });
+        }
+      }
+
+      // Homeowner-side "payment confirmed" in-app + push so the notification
+      // center reflects the payment and the client app invalidates its
+      // invoice/job queries even if it was backgrounded (Task #235).
+      if (updatedInvoice.homeownerUserId) {
+        const alreadyPushed = await hasDeliveryForRecord(
+          "invoice.paid.homeowner",
+          invoiceId,
+          "push",
+        );
+        if (!alreadyPushed) {
+          const amountStr = String(updatedInvoice.total ?? "0");
+          const data: Record<string, unknown> = {
+            type: "invoice_paid",
+            invoiceId,
+            invoiceNumber: updatedInvoice.invoiceNumber,
+          };
+          if (updatedInvoice.jobId) {
+            const jobRows = await db
+              .select({ appointmentId: jobs.appointmentId })
+              .from(jobs)
+              .where(eq(jobs.id, updatedInvoice.jobId))
+              .limit(1)
+              .catch((): { appointmentId: string | null }[] => []);
+            const appointmentId = jobRows[0]?.appointmentId ?? null;
+            if (appointmentId) {
+              data.screen = "AppointmentDetail";
+              data.params = { appointmentId };
+              data.appointmentId = appointmentId;
+            }
+          }
+          await dispatchNotification(
+            updatedInvoice.homeownerUserId,
+            "Payment confirmed",
+            `Your $${amountStr} payment to ${provider?.businessName || "your provider"} was received.`,
+            "invoice_paid",
+            data,
+            "invoices",
+          ).catch((e: unknown) =>
+            console.error("homeowner invoice.paid push error (webhook):", e),
+          );
+          await logDelivery({
+            channel: "push",
+            status: "sent",
+            eventType: "invoice.paid.homeowner",
+            recipientUserId: updatedInvoice.homeownerUserId,
+            relatedRecordType: "invoice",
+            relatedRecordId: invoiceId,
+          });
+        }
       }
 
       // HouseFax: update costCents on the housefax entry for the invoice's linked job (if any)
@@ -1291,26 +1363,96 @@ async function handleStripeInvoicePaid(stripeInvoice: Stripe.Invoice) {
       );
     }
 
-    // Provider push (Task #150): same in-app + push notification flow as the
-    // payment_intent.succeeded handler.
+    // Provider push (Task #150). Dedup against handlePaymentIntentSucceeded so
+    // the provider only receives one push per payment (Task #235).
     if (provider?.userId) {
-      const amountStr = String(updatedInvoice.total ?? "0");
-      dispatchNotification(
-        provider.userId,
-        "Payment received",
-        `Invoice ${updatedInvoice.invoiceNumber} was paid — $${amountStr} is on the way to your bank account.`,
+      const alreadyPushed = await hasDeliveryForRecord(
         "invoice.paid",
-        {
+        homebaseInvoiceId,
+        "push",
+      );
+      if (!alreadyPushed) {
+        const amountStr = String(updatedInvoice.total ?? "0");
+        await dispatchNotification(
+          provider.userId,
+          "Payment received",
+          `Invoice ${updatedInvoice.invoiceNumber} was paid — $${amountStr} is on the way to your bank account.`,
+          "invoice_paid",
+          {
+            invoiceId: homebaseInvoiceId,
+            invoiceNumber: updatedInvoice.invoiceNumber,
+            type: "invoice_paid",
+            screen: "InvoiceDetail",
+            params: { invoiceId: homebaseInvoiceId },
+          },
+          "invoices",
+        ).catch((e: unknown) =>
+          console.error(
+            "provider invoice.paid push error (stripe invoice webhook):",
+            e,
+          ),
+        );
+        await logDelivery({
+          channel: "push",
+          status: "sent",
+          eventType: "invoice.paid",
+          recipientUserId: provider.userId,
+          relatedRecordType: "invoice",
+          relatedRecordId: homebaseInvoiceId,
+        });
+      }
+    }
+
+    // Homeowner-side "payment confirmed" in-app + push (Task #235).
+    if (updatedInvoice.homeownerUserId) {
+      const alreadyPushed = await hasDeliveryForRecord(
+        "invoice.paid.homeowner",
+        homebaseInvoiceId,
+        "push",
+      );
+      if (!alreadyPushed) {
+        const amountStr = String(updatedInvoice.total ?? "0");
+        const data: Record<string, unknown> = {
+          type: "invoice_paid",
           invoiceId: homebaseInvoiceId,
           invoiceNumber: updatedInvoice.invoiceNumber,
-        },
-        "invoices",
-      ).catch((e: unknown) =>
-        console.error(
-          "provider invoice.paid push error (stripe invoice webhook):",
-          e,
-        ),
-      );
+        };
+        if (updatedInvoice.jobId) {
+          const jobRows = await db
+            .select({ appointmentId: jobs.appointmentId })
+            .from(jobs)
+            .where(eq(jobs.id, updatedInvoice.jobId))
+            .limit(1)
+            .catch((): { appointmentId: string | null }[] => []);
+          const appointmentId = jobRows[0]?.appointmentId ?? null;
+          if (appointmentId) {
+            data.screen = "AppointmentDetail";
+            data.params = { appointmentId };
+            data.appointmentId = appointmentId;
+          }
+        }
+        await dispatchNotification(
+          updatedInvoice.homeownerUserId,
+          "Payment confirmed",
+          `Your $${amountStr} payment to ${provider?.businessName || "your provider"} was received.`,
+          "invoice_paid",
+          data,
+          "invoices",
+        ).catch((e: unknown) =>
+          console.error(
+            "homeowner invoice.paid push error (stripe invoice webhook):",
+            e,
+          ),
+        );
+        await logDelivery({
+          channel: "push",
+          status: "sent",
+          eventType: "invoice.paid.homeowner",
+          recipientUserId: updatedInvoice.homeownerUserId,
+          relatedRecordType: "invoice",
+          relatedRecordId: homebaseInvoiceId,
+        });
+      }
     }
   } catch (err) {
     console.error(

@@ -104,7 +104,7 @@ export interface DispatchPayload {
   reviewUrl?: string;
 }
 
-async function logDelivery(opts: {
+export async function logDelivery(opts: {
   channel: 'email' | 'push' | 'in_app' | 'sms';
   status: 'queued' | 'sent' | 'delivered' | 'failed' | 'pending_sms';
   eventType: string;

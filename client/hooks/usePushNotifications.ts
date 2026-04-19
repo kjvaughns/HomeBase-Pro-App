@@ -4,6 +4,7 @@ import * as Device from "expo-device";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import { useQueryClient } from "@tanstack/react-query";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiRequest } from "@/lib/query-client";
 import { useAuthStore } from "@/state/authStore";
@@ -64,6 +65,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
 export function usePushNotifications() {
   const { user, sessionToken } = useAuthStore();
   const navigation = useNavigation<any>();
+  const queryClient = useQueryClient();
   const notificationListener = useRef<Notifications.EventSubscription | null>(null);
   const responseListener = useRef<Notifications.EventSubscription | null>(null);
 
@@ -99,10 +101,18 @@ export function usePushNotifications() {
 
     notificationListener.current = Notifications.addNotificationReceivedListener((notification) => {
       console.log("Notification received:", notification.request.content.title);
+      // Task #235: invalidate cached queries when an invoice-related push lands
+      // in the foreground so the relevant screens (Payment, InvoiceDetail,
+      // Finances, Jobs, AppointmentDetail) refresh without manual pull.
+      const data = notification.request.content.data as Record<string, unknown>;
+      invalidateQueriesForNotification(data, queryClient);
     });
 
     responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as Record<string, unknown>;
+      // Same invalidation on tap-through, before navigating, so the destination
+      // screen always sees fresh data.
+      invalidateQueriesForNotification(data, queryClient);
       handleNotificationNavigation(data, navigation);
     });
 
@@ -120,6 +130,68 @@ export function usePushNotifications() {
       }
     };
   }, [user?.id, sessionToken]);
+}
+
+/**
+ * Task #235: invalidate React Query caches relevant to a push notification so
+ * screens auto-refresh without the user pulling to refresh. Safe to call from
+ * both foreground (received) and tap-through (response) listeners.
+ */
+export function invalidateQueriesForNotification(
+  data: Record<string, unknown> | undefined,
+  queryClient: ReturnType<typeof useQueryClient>,
+) {
+  try {
+    if (!data) return;
+    const type = (data.type as string | undefined) ?? "";
+    const invoiceId = data.invoiceId as string | undefined;
+    const appointmentId =
+      (data.appointmentId as string | undefined) ??
+      ((data.params as Record<string, unknown> | undefined)?.appointmentId as
+        | string
+        | undefined);
+
+    const isInvoiceEvent =
+      type === "invoice_paid" ||
+      type === "invoice_sent" ||
+      type === "invoice_reminder" ||
+      // Legacy payload from older server builds that used a generic "invoice"
+      // type for sent invoices — keep treating it as an invoice event so the
+      // homeowner's in-flight pushes still trigger cache invalidation.
+      type === "invoice";
+
+    if (isInvoiceEvent) {
+      // Specific invoice + provider/homeowner invoice lists
+      if (invoiceId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/invoices", invoiceId] });
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+      queryClient.invalidateQueries({
+        predicate: (q) => {
+          const k = q.queryKey;
+          return (
+            Array.isArray(k) &&
+            typeof k[0] === "string" &&
+            (k[0] === "/api/provider" || k[0] === "/api/homeowner") &&
+            k.includes("invoices")
+          );
+        },
+      });
+      // Job/appointment views often render the invoice status
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      if (appointmentId) {
+        queryClient.invalidateQueries({
+          queryKey: ["/api/appointments", appointmentId],
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/appointments"] });
+    }
+
+    // Always refresh the notification center when any push arrives.
+    queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+  } catch (err) {
+    console.warn("invalidateQueriesForNotification error:", err);
+  }
 }
 
 export function handleNotificationNavigation(
