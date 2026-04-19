@@ -18,6 +18,7 @@ import { GlassCard } from "@/components/GlassCard";
 import { PartnerBadge } from "@/components/PartnerBadge";
 import { apiRequest } from "@/lib/query-client";
 import { useTheme } from "@/hooks/useTheme";
+import { useAuthStore } from "@/state/authStore";
 import { BorderRadius, Colors, Spacing } from "@/constants/theme";
 
 interface AdminProviderRow {
@@ -38,6 +39,13 @@ export default function AdminPartnersScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  // Task #220 review fix: when an admin grants/revokes Partner status on
+  // their OWN provider record, mirror the change into the in-memory auth
+  // store so the More-tab badge, SubscriptionScreen perks panel, and the
+  // booking-page badge all reflect the new status without requiring a
+  // logout/login or full app reload.
+  const myProviderId = useAuthStore((s) => s.providerProfile?.id);
+  const updateProviderProfile = useAuthStore((s) => s.updateProviderProfile);
 
   const queryKey = useMemo(
     () => ["/api/admin/providers", search] as const,
@@ -64,8 +72,14 @@ export default function AdminPartnersScreen() {
       );
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, providerId) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/providers"] });
+      // Also invalidate subscription status so the SubscriptionScreen
+      // immediately switches to the Partner perks panel.
+      queryClient.invalidateQueries({ queryKey: ["/api/provider/subscription/status"] });
+      if (providerId === myProviderId) {
+        updateProviderProfile({ isPartner: true });
+      }
     },
     onError: (err: unknown) => {
       Alert.alert(
@@ -83,8 +97,12 @@ export default function AdminPartnersScreen() {
       );
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, providerId) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/providers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/provider/subscription/status"] });
+      if (providerId === myProviderId) {
+        updateProviderProfile({ isPartner: false });
+      }
     },
     onError: (err: unknown) => {
       Alert.alert(

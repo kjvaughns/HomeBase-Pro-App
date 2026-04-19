@@ -173,10 +173,20 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export default function RootStackNavigator() {
   const screenOptions = useScreenOptions();
   const { theme } = useTheme();
-  const { isAuthenticated, isHydrated, activeRole, canAccessProviderMode, needsRoleSelection, setActiveRole, setNeedsRoleSelection, activateProviderMode } = useAuthStore();
+  const { isAuthenticated, isHydrated, activeRole, canAccessProviderMode, needsRoleSelection, setActiveRole, setNeedsRoleSelection, activateProviderMode, syncFromServer } = useAuthStore();
   const { hasCompletedFirstLaunch, hasCompletedProviderSetup, isHydrated: onboardingHydrated } = useOnboardingStore();
 
   usePushNotifications();
+
+  // Task #220: rehydrate user.isAdmin and providerProfile.isPartner from
+  // /api/auth/me whenever an authenticated session is available. This
+  // catches admin grants/revocations made via SQL or by another admin while
+  // the user was offline, so persisted Zustand state never goes stale.
+  useEffect(() => {
+    if (isHydrated && isAuthenticated) {
+      void syncFromServer();
+    }
+  }, [isHydrated, isAuthenticated]);
 
   // Auto-resolve role selection edge cases (e.g., very old cached state).
   // login() now sets the correct role directly, so this is mostly a safety net.

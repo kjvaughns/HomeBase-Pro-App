@@ -64,6 +64,7 @@ interface AuthState {
   hasProviderProfile: () => boolean;
   canAccessProviderMode: () => boolean;
   hydrate: () => Promise<void>;
+  syncFromServer: () => Promise<void>;
 }
 
 const STORAGE_KEY = "auth-storage";
@@ -206,6 +207,58 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         providerProfile: { ...providerProfile, ...updates },
       });
       saveToStorage(get());
+    }
+  },
+
+  // Task #220: rehydrate user.isAdmin and providerProfile.isPartner from
+  // server truth on app start. Admin can be granted via SQL (or by another
+  // admin in the app) without invalidating the persisted auth blob, so we
+  // explicitly fetch /api/auth/me whenever a session token exists. Failures
+  // are silent — stale persisted values keep the app usable offline.
+  syncFromServer: async () => {
+    const { sessionToken, user, providerProfile } = get();
+    if (!sessionToken) return;
+    try {
+      const { apiRequest } = await import("@/lib/query-client");
+      const res = await apiRequest("GET", "/api/auth/me");
+      const data = await res.json();
+      if (!data?.user) return;
+
+      const nextUser: User | null = user
+        ? {
+            ...user,
+            id: data.user.id ?? user.id,
+            name: data.user.name ?? user.name,
+            email: data.user.email ?? user.email,
+            phone: data.user.phone ?? user.phone,
+            avatarUrl: data.user.avatarUrl ?? user.avatarUrl,
+            isProvider: data.user.isProvider ?? user.isProvider,
+            isAdmin: data.user.isAdmin === true,
+          }
+        : null;
+
+      const nextProfile: ProviderProfile | null = data.providerProfile
+        ? {
+            ...(providerProfile ?? {
+              id: data.providerProfile.id,
+              userId: data.providerProfile.userId,
+              businessName: data.providerProfile.businessName,
+              services: data.providerProfile.capabilityTags || [],
+              status: data.providerProfile.isActive
+                ? ("approved" as const)
+                : ("pending" as const),
+              rating: parseFloat(data.providerProfile.rating) || 0,
+              reviewCount: data.providerProfile.reviewCount || 0,
+              completedJobs: 0,
+            }),
+            isPartner: data.providerProfile.isPartner === true,
+          }
+        : providerProfile;
+
+      set({ user: nextUser, providerProfile: nextProfile });
+      saveToStorage(get());
+    } catch {
+      // Network / auth error — keep persisted values, surface elsewhere.
     }
   },
 
