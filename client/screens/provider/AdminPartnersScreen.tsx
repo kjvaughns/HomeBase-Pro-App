@@ -74,11 +74,18 @@ export default function AdminPartnersScreen() {
     },
     onSuccess: (_data, providerId) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/providers"] });
-      // Also invalidate subscription status so the SubscriptionScreen
-      // immediately switches to the Partner perks panel.
-      queryClient.invalidateQueries({ queryKey: ["/api/provider/subscription/status"] });
+      // Invalidate the subscription-status query for this specific provider
+      // so the SubscriptionScreen immediately switches to the Partner perks
+      // panel. Key shape mirrors useSubscriptionStatus():
+      //   ["/api/providers", providerId, "subscription-status"]
+      queryClient.invalidateQueries({
+        queryKey: ["/api/providers", providerId, "subscription-status"],
+      });
       if (providerId === myProviderId) {
         updateProviderProfile({ isPartner: true });
+        // Pull authoritative state for own surfaces (More tab badge,
+        // SubscriptionScreen subtitle, booking page) from /api/auth/me.
+        void useAuthStore.getState().syncFromServer();
       }
     },
     onError: (err: unknown) => {
@@ -99,9 +106,12 @@ export default function AdminPartnersScreen() {
     },
     onSuccess: (_data, providerId) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/providers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/provider/subscription/status"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/providers", providerId, "subscription-status"],
+      });
       if (providerId === myProviderId) {
         updateProviderProfile({ isPartner: false });
+        void useAuthStore.getState().syncFromServer();
       }
     },
     onError: (err: unknown) => {
