@@ -7,7 +7,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as Updates from "expo-updates";
 import { useFonts } from "expo-font";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import * as SplashScreen from "expo-splash-screen";
 
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -62,13 +62,16 @@ export default function App() {
   const [webFontReady, setWebFontReady] = useState(Platform.OS !== "web");
 
   const [fontsLoaded, fontError] = useFonts(
-    Platform.OS !== "web" ? { ...Feather.font } : {},
+    Platform.OS !== "web" ? { ...Feather.font, ...Ionicons.font } : {},
   );
 
   useEffect(() => {
     if (Platform.OS === "web") {
       const style = document.createElement("style");
-      style.textContent = `@font-face { font-family: "feather"; src: url("/assets/fonts/Feather.ttf") format("truetype"); font-display: block; }`;
+      style.textContent = `
+        @font-face { font-family: "feather"; src: url("/assets/fonts/Feather.ttf") format("truetype"); font-display: block; }
+        @font-face { font-family: "Ionicons"; src: url("/assets/fonts/Ionicons.ttf") format("truetype"); font-display: block; }
+      `;
       document.head.appendChild(style);
       setWebFontReady(true);
     }
