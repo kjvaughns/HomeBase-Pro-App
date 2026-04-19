@@ -17,7 +17,7 @@ import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Animated, { FadeInDown } from "react-native-reanimated";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
@@ -766,7 +766,7 @@ export default function BusinessHubScreen() {
           <View style={styles.infoRow}>
             <ThemedText style={[styles.infoLabel, { color: theme.textSecondary }]}>Rating</ThemedText>
             <View style={styles.ratingRow}>
-              <Feather name="star" size={14} color={Colors.warning} />
+              <Ionicons name="star" size={14} color={Colors.warning} />
               <ThemedText style={styles.infoValue}>
                 {provider?.rating ? Number(provider.rating).toFixed(1) : "New"}
               </ThemedText>

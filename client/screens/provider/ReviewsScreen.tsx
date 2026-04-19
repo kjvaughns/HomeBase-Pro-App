@@ -14,7 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import Animated, { FadeInDown } from "react-native-reanimated";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
@@ -109,9 +109,9 @@ export default function ReviewsScreen() {
   const renderStars = (count: number, size = 14) => (
     <View style={styles.starsRow}>
       {[1, 2, 3, 4, 5].map((star) => (
-        <Feather
+        <Ionicons
           key={star}
-          name="star"
+          name={star <= count ? "star" : "star-outline"}
           size={size}
           color={star <= count ? Colors.warning : theme.backgroundTertiary}
         />
@@ -314,7 +314,7 @@ export default function ReviewsScreen() {
       <Animated.View entering={FadeInDown.delay(100).duration(300)}>
         <View style={[styles.emptyState, { backgroundColor: theme.cardBackground }]}>
           <View style={[styles.emptyIcon, { backgroundColor: Colors.accentLight }]}>
-            <Feather name="star" size={28} color={Colors.accent} />
+            <Ionicons name="star" size={28} color={Colors.accent} />
           </View>
           <ThemedText style={styles.emptyTitle}>No reviews yet</ThemedText>
           <ThemedText style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
@@ -353,7 +353,7 @@ export default function ReviewsScreen() {
                     <ThemedText style={[styles.ratingLabel, { color: theme.textSecondary }]}>
                       {stars}
                     </ThemedText>
-                    <Feather name="star" size={12} color={theme.textTertiary} />
+                    <Ionicons name="star" size={12} color={theme.textTertiary} />
                     <View style={[styles.ratingBarBg, { backgroundColor: theme.backgroundTertiary }]}>
                       <View
                         style={[
@@ -395,7 +395,7 @@ export default function ReviewsScreen() {
                 >
                   {key === "all" ? "All" : `${key}`}
                   {key !== "all" ? (
-                    <Feather
+                    <Ionicons
                       name="star"
                       size={10}
                       color={filter === key ? "#FFFFFF" : theme.textTertiary}

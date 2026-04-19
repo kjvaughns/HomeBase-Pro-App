@@ -15,7 +15,7 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -454,7 +454,7 @@ export default function FindScreen() {
                       {provider.businessName}
                     </ThemedText>
                     <View style={styles.savedProviderRating}>
-                      <Feather name="star" size={12} color={Colors.warning} />
+                      <Ionicons name="star" size={12} color={Colors.warning} />
                       <ThemedText
                         style={[
                           styles.savedProviderRatingText,
@@ -867,7 +867,7 @@ export default function FindScreen() {
                     ]}
                   >
                     {rating > 0 ? (
-                      <Feather
+                      <Ionicons
                         name="star"
                         size={14}
                         color={

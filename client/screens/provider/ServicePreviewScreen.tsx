@@ -3,7 +3,7 @@ import { StyleSheet, View, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRoute, RouteProp } from "@react-navigation/native";
 import Animated, { FadeInDown } from "react-native-reanimated";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -65,7 +65,7 @@ export default function ServicePreviewScreen() {
           <GlassCard style={styles.serviceCard}>
             <View style={styles.serviceHeader}>
               <View style={styles.serviceIconContainer}>
-                <Feather name="star" size={20} color={Colors.accent} />
+                <Ionicons name="star" size={20} color={Colors.accent} />
               </View>
               <View style={styles.serviceInfo}>
                 <ThemedText type="h3" style={{ fontWeight: "700" }}>

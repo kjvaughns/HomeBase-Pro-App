@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import { useNavigation } from "@react-navigation/native";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/query-client";
@@ -607,7 +607,11 @@ export default function ProviderHomeScreen() {
                 {i > 0 && <View style={[styles.insightDivider, { backgroundColor: theme.separator }]} />}
                 <View style={styles.insightRow}>
                   <View style={[styles.insightIcon, { backgroundColor: Colors.accentLight }]}>
-                    <Feather name={row.icon} size={16} color={Colors.accent} />
+                    {row.icon === "star" ? (
+                      <Ionicons name="star" size={16} color={Colors.accent} />
+                    ) : (
+                      <Feather name={row.icon} size={16} color={Colors.accent} />
+                    )}
                   </View>
                   <View style={styles.insightContent}>
                     <ThemedText style={styles.insightTitle}>{row.title}</ThemedText>

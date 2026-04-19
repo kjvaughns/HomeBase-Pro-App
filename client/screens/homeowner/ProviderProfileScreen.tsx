@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight, HeaderButton } from "@react-navigation/elements";
 import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -339,11 +339,11 @@ export default function ProviderProfileScreen() {
     const hasHalf = safe - fullStars >= 0.5;
     for (let i = 0; i < 5; i++) {
       if (i < fullStars) {
-        stars.push(<Feather key={i} name="star" size={16} color={Colors.accent} />);
+        stars.push(<Ionicons key={i} name="star" size={16} color={Colors.accent} />);
       } else if (i === fullStars && hasHalf) {
-        stars.push(<Feather key={i} name="star" size={16} color={Colors.accent} />);
+        stars.push(<Ionicons key={i} name="star-half" size={16} color={Colors.accent} />);
       } else {
-        stars.push(<Feather key={i} name="star" size={16} color={theme.borderLight} />);
+        stars.push(<Ionicons key={i} name="star-outline" size={16} color={theme.borderLight} />);
       }
     }
     return stars;

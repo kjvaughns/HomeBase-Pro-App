@@ -1,7 +1,7 @@
 import React from "react";
 import { StyleSheet, View, Platform } from "react-native";
 import { BlurView } from "expo-blur";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -116,7 +116,7 @@ export function ProviderCard({
 
         <View style={[styles.meta, { borderTopColor: theme.separator }]}>
           <View style={styles.ratingContainer}>
-            <Feather name="star" size={14} color={Colors.warning} />
+            <Ionicons name="star" size={14} color={Colors.warning} />
             <ThemedText type="label" style={styles.rating}>
               {rating.toFixed(1)}
             </ThemedText>

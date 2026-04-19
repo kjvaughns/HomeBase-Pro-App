@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, useNavigation, RouteProp, CommonActions } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -216,9 +216,9 @@ export default function ReviewScreen() {
           <GlassCard style={styles.providerCard} testID="card-existing-review">
             <View style={styles.starsRowSmall}>
               {[1, 2, 3, 4, 5].map((star) => (
-                <Feather
+                <Ionicons
                   key={star}
-                  name="star"
+                  name={star <= existingReview.rating ? "star" : "star-outline"}
                   size={20}
                   color={star <= existingReview.rating ? Colors.accent : theme.borderLight}
                 />
@@ -304,8 +304,8 @@ export default function ReviewScreen() {
           <View style={styles.starsRow}>
             {[1, 2, 3, 4, 5].map((star) => (
               <Pressable key={star} onPress={() => handleStarPress(star)} style={styles.starButton} testID={`button-star-${star}`}>
-                <Feather
-                  name="star"
+                <Ionicons
+                  name={star <= rating ? "star" : "star-outline"}
                   size={40}
                   color={star <= rating ? Colors.accent : theme.borderLight}
                 />

@@ -11,7 +11,7 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 
@@ -121,7 +121,7 @@ export default function SavedProvidersScreen() {
             <ThemedText style={styles.providerName}>{item.name}</ThemedText>
             <ThemedText style={[styles.providerCategory, { color: theme.textSecondary }]}>{item.category}</ThemedText>
             <View style={styles.ratingRow}>
-              <Feather name="star" size={14} color={Colors.warning} />
+              <Ionicons name="star" size={14} color={Colors.warning} />
               <ThemedText style={styles.ratingText}>{item.rating}</ThemedText>
               <ThemedText style={[styles.reviewCount, { color: theme.textSecondary }]}>
                 ({item.reviewCount} reviews)

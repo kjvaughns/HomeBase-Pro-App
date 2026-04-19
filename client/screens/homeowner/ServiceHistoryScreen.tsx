@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 
@@ -285,7 +285,7 @@ export default function ServiceHistoryScreen() {
             <ThemedText style={styles.providerName}>{provider.name}</ThemedText>
             <ThemedText style={[styles.providerCategory, { color: theme.textSecondary }]}>{provider.category}</ThemedText>
             <View style={styles.providerRating}>
-              <Feather name="star" size={14} color={Colors.warning} />
+              <Ionicons name="star" size={14} color={Colors.warning} />
               <ThemedText style={styles.providerRatingText}>{provider.rating}</ThemedText>
               <ThemedText style={[styles.providerJobs, { color: theme.textSecondary }]}>
                 {provider.jobsCompleted} jobs

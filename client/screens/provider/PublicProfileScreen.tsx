@@ -12,7 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation } from "@react-navigation/native";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import * as Clipboard from "expo-clipboard";
@@ -259,11 +259,11 @@ export default function PublicProfileScreen() {
     const hasHalf = safe - fullStars >= 0.5;
     for (let i = 0; i < 5; i++) {
       if (i < fullStars) {
-        stars.push(<Feather key={i} name="star" size={16} color={Colors.accent} />);
+        stars.push(<Ionicons key={i} name="star" size={16} color={Colors.accent} />);
       } else if (i === fullStars && hasHalf) {
-        stars.push(<Feather key={i} name="star" size={16} color={Colors.accent} />);
+        stars.push(<Ionicons key={i} name="star-half" size={16} color={Colors.accent} />);
       } else {
-        stars.push(<Feather key={i} name="star" size={16} color={theme.borderLight} />);
+        stars.push(<Ionicons key={i} name="star-outline" size={16} color={theme.borderLight} />);
       }
     }
     return stars;
@@ -581,7 +581,7 @@ export default function PublicProfileScreen() {
         ))
       ) : (
         <View style={styles.emptyState}>
-          <Feather name="star" size={32} color={theme.textTertiary} />
+          <Ionicons name="star" size={32} color={theme.textTertiary} />
           <ThemedText style={[styles.emptyTitle, { color: theme.textSecondary }]}>
             No reviews yet
           </ThemedText>

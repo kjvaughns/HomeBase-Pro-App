@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 
@@ -706,7 +706,7 @@ export default function SmartIntakeScreen() {
                 </View>
                 <View style={styles.providerStats}>
                   <View style={styles.ratingRow}>
-                    <Feather name="star" size={12} color={Colors.accent} />
+                    <Ionicons name="star" size={12} color={Colors.accent} />
                     <ThemedText style={styles.ratingText}>
                       {typeof provider.rating === "string" ? provider.rating : provider.rating?.toFixed(1)} ({provider.reviewCount})
                     </ThemedText>
