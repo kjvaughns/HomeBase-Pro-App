@@ -334,6 +334,16 @@ export async function runBootMigrations(): Promise<void> {
       await runSql(label, sql);
     }
 
+    // ── reviews: provider reply columns (Task #197) ──────────────────────
+    const reviewAlters: Array<[string, string]> = [
+      ["reviews.provider_reply",            `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS provider_reply TEXT`],
+      ["reviews.provider_reply_at",         `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS provider_reply_at TIMESTAMP`],
+      ["reviews.provider_reply_updated_at", `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS provider_reply_updated_at TIMESTAMP`],
+    ];
+    for (const [label, sql] of reviewAlters) {
+      await runSql(label, sql);
+    }
+
     // ── housefax_entries: service history log for each home ──────────────
     await runSql("table.housefax_entries", `
       CREATE TABLE IF NOT EXISTS housefax_entries (
