@@ -419,6 +419,47 @@ export const reviewsRelations = relations(reviews, ({ one }) => ({
   }),
 }));
 
+export const savedProviders = pgTable("saved_providers", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  userProviderIdx: uniqueIndex("saved_providers_user_provider_unique").on(t.userId, t.providerId),
+}));
+
+export const savedProvidersRelations = relations(savedProviders, ({ one }) => ({
+  user: one(users, { fields: [savedProviders.userId], references: [users.id] }),
+  provider: one(providers, { fields: [savedProviders.providerId], references: [providers.id] }),
+}));
+
+export const reviewReports = pgTable("review_reports", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  reviewId: varchar("review_id")
+    .notNull()
+    .references(() => reviews.id, { onDelete: "cascade" }),
+  reporterUserId: varchar("reporter_user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  reason: text("reason").notNull(),
+  details: text("details"),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const reviewReportsRelations = relations(reviewReports, ({ one }) => ({
+  review: one(reviews, { fields: [reviewReports.reviewId], references: [reviews.id] }),
+  reporter: one(users, { fields: [reviewReports.reporterUserId], references: [users.id] }),
+}));
+
 export const notifications = pgTable("notifications", {
   id: varchar("id")
     .primaryKey()

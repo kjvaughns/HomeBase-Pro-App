@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useLayoutEffect } from "react";
-import { StyleSheet, View, ScrollView, Pressable, Linking, Alert, ActivityIndicator } from "react-native";
+import { StyleSheet, View, ScrollView, Pressable, Linking, Alert, ActivityIndicator, Modal } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight, HeaderButton } from "@react-navigation/elements";
 import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
@@ -7,7 +7,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -21,7 +21,7 @@ import { useHomeownerStore } from "@/state/homeownerStore";
 import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { AccountGateModal } from "@/components/AccountGateModal";
-import { getApiUrl, getAuthHeaders } from "@/lib/query-client";
+import { getApiUrl, getAuthHeaders, apiRequest, queryClient } from "@/lib/query-client";
 import { Provider } from "@/state/types";
 import { mapApiProvider, ApiServiceItem } from "@/lib/providerUtils";
 import { formatServiceAreaSubtitle } from "@/lib/formatServiceArea";
@@ -102,11 +102,31 @@ export default function ProviderProfileScreen() {
   const { providerId, intakeData, provider: passedProvider } = route.params;
 
   const allReviews = useHomeownerStore((s) => s.reviews);
-  const toggleSavedProvider = useHomeownerStore((s) => s.toggleSavedProvider);
-  const savedProviderIds = useHomeownerStore((s) => s.savedProviderIds);
   const { isAuthenticated } = useAuthStore();
 
-  const isSaved = savedProviderIds.includes(providerId);
+  const { data: savedProvidersData } = useQuery<{ providers: { id: string }[] }>({
+    queryKey: ["/api/saved-providers"],
+    enabled: isAuthenticated,
+  });
+  const isSaved = !!savedProvidersData?.providers?.some((p) => p.id === providerId);
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", `/api/saved-providers/${providerId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/saved-providers"] });
+    },
+  });
+
+  const unsaveMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("DELETE", `/api/saved-providers/${providerId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/saved-providers"] });
+    },
+  });
 
   const { data: apiData, isLoading: isApiLoading } = useQuery<ApiProviderResponse>({
     queryKey: ["/api/providers", providerId],
@@ -147,10 +167,43 @@ export default function ProviderProfileScreen() {
 
   const [activeTab, setActiveTab] = useState<TabType>("about");
   const [showAccountGate, setShowAccountGate] = useState(false);
+  const [reportingReviewId, setReportingReviewId] = useState<string | null>(null);
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+
+  const REPORT_REASONS = [
+    "Spam or misleading",
+    "Harassment or hate speech",
+    "Inappropriate or offensive",
+    "Off-topic or fake review",
+    "Other",
+  ];
+
+  const submitReport = async (reason: string) => {
+    if (!reportingReviewId) return;
+    setReportSubmitting(true);
+    try {
+      await apiRequest("POST", `/api/reviews/${reportingReviewId}/report`, { reason });
+      setReportingReviewId(null);
+      Alert.alert("Report submitted", "Thanks — our moderators will review this within 24 hours.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Please try again later.";
+      Alert.alert("Couldn't submit report", message);
+    } finally {
+      setReportSubmitting(false);
+    }
+  };
 
   const handleToggleSave = () => {
+    if (!isAuthenticated) {
+      setShowAccountGate(true);
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    toggleSavedProvider(providerId);
+    if (isSaved) {
+      unsaveMutation.mutate();
+    } else {
+      saveMutation.mutate();
+    }
   };
 
   const hasProvider = !!(apiData?.provider || passedProvider);
@@ -536,9 +589,20 @@ export default function ProviderProfileScreen() {
             <ThemedText style={[styles.reviewComment, { color: theme.textSecondary }]}>
               {review.comment}
             </ThemedText>
-            <ThemedText style={[styles.reviewDate, { color: theme.textTertiary }]}>
-              {new Date(review.createdAt).toLocaleDateString()}
-            </ThemedText>
+            <View style={styles.reviewFooter}>
+              <ThemedText style={[styles.reviewDate, { color: theme.textTertiary }]}>
+                {new Date(review.createdAt).toLocaleDateString()}
+              </ThemedText>
+              <Pressable
+                onPress={() => setReportingReviewId(review.id)}
+                hitSlop={8}
+                testID={`button-report-review-${review.id}`}
+                style={styles.reportLink}
+              >
+                <Feather name="flag" size={12} color={theme.textTertiary} />
+                <ThemedText style={[styles.reportLinkText, { color: theme.textTertiary }]}>Report</ThemedText>
+              </Pressable>
+            </View>
           </View>
         ))
       ) : (
@@ -650,6 +714,45 @@ export default function ProviderProfileScreen() {
         onSignIn={handleSignIn}
         onSignUp={handleSignUp}
       />
+
+      <Modal
+        visible={reportingReviewId !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setReportingReviewId(null)}
+      >
+        <Pressable style={styles.reportBackdrop} onPress={() => setReportingReviewId(null)}>
+          <Pressable
+            style={[styles.reportSheet, { backgroundColor: theme.cardBackground }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <ThemedText style={styles.reportTitle}>Report this review</ThemedText>
+            <ThemedText style={[styles.reportSubtitle, { color: theme.textSecondary }]}>
+              Why are you reporting it? A moderator will review within 24 hours.
+            </ThemedText>
+            {REPORT_REASONS.map((reason) => (
+              <Pressable
+                key={reason}
+                style={[styles.reportOption, { borderBottomColor: theme.borderLight }]}
+                onPress={() => submitReport(reason)}
+                disabled={reportSubmitting}
+                testID={`button-report-reason-${reason.replace(/\s+/g, "-").toLowerCase()}`}
+              >
+                <ThemedText style={styles.reportOptionText}>{reason}</ThemedText>
+              </Pressable>
+            ))}
+            <Pressable
+              style={styles.reportCancel}
+              onPress={() => setReportingReviewId(null)}
+              disabled={reportSubmitting}
+            >
+              <ThemedText style={[styles.reportCancelText, { color: Colors.accent }]}>
+                {reportSubmitting ? "Submitting…" : "Cancel"}
+              </ThemedText>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ThemedView>
   );
 }
@@ -848,6 +951,56 @@ const styles = StyleSheet.create({
   reviewDate: {
     ...Typography.caption2,
     marginTop: Spacing.xs,
+  },
+  reviewFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  reportLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 4,
+  },
+  reportLinkText: {
+    ...Typography.caption2,
+  },
+  reportBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "flex-end",
+  },
+  reportSheet: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.xl,
+    borderTopLeftRadius: BorderRadius.lg,
+    borderTopRightRadius: BorderRadius.lg,
+  },
+  reportTitle: {
+    ...Typography.title3,
+    marginBottom: Spacing.xs,
+  },
+  reportSubtitle: {
+    ...Typography.subhead,
+    marginBottom: Spacing.md,
+  },
+  reportOption: {
+    paddingVertical: Spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  reportOptionText: {
+    ...Typography.body,
+  },
+  reportCancel: {
+    paddingVertical: Spacing.md,
+    alignItems: "center",
+    marginTop: Spacing.sm,
+  },
+  reportCancelText: {
+    ...Typography.body,
+    fontWeight: "600",
   },
   emptyReviews: {
     paddingVertical: Spacing.xl,

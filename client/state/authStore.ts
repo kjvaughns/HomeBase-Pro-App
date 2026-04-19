@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApiUrl, queryClient } from "@/lib/query-client";
+import { setSessionToken as secureSetSessionToken, getSessionToken as secureGetSessionToken } from "@/lib/secureSession";
 
 export type UserRole = "guest" | "homeowner" | "provider";
 export type ProviderStatus = "draft" | "pending" | "approved" | "rejected" | "paused";
@@ -99,6 +100,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       needsRoleSelection: false,
     };
     set(newState);
+    secureSetSessionToken(token || null);
     saveToStorage(get());
   },
 
@@ -136,6 +138,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       lastActiveRole,
     };
     set(newState);
+    secureSetSessionToken(null);
     saveToStorage(get());
     queryClient.clear();
   },
@@ -172,6 +175,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
   setSessionToken: (token: string | null) => {
     set({ sessionToken: token });
+    secureSetSessionToken(token);
     saveToStorage(get());
   },
 
@@ -217,8 +221,22 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   hydrate: async () => {
     try {
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      // Prefer the SecureStore-backed session token. Migrate any legacy token
+      // that was previously persisted in the AsyncStorage JSON blob.
+      let secureToken = await secureGetSessionToken();
       if (stored) {
         const data = JSON.parse(stored);
+        if (!secureToken && data.sessionToken) {
+          await secureSetSessionToken(data.sessionToken);
+          secureToken = data.sessionToken;
+        }
+        if (data.sessionToken) {
+          // Clear it from the JSON blob so it's no longer persisted in plain storage.
+          delete data.sessionToken;
+          try {
+            await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+          } catch {}
+        }
         const isAuthenticated = data.isAuthenticated || false;
         const needsRoleSelection = isAuthenticated ? false : (data.needsRoleSelection ?? true);
         const storedUser = data.user || null;
@@ -243,7 +261,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         set({
           isAuthenticated,
           user: storedUser,
-          sessionToken: data.sessionToken || null,
+          sessionToken: secureToken || null,
           activeRole,
           lastActiveRole: data.lastActiveRole || null,
           providerProfile,
@@ -251,7 +269,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
           isHydrated: true,
         });
       } else {
-        set({ isHydrated: true });
+        set({ sessionToken: secureToken || null, isHydrated: true });
       }
     } catch (error) {
       console.error("Failed to hydrate auth store:", error);
@@ -265,7 +283,7 @@ async function saveToStorage(state: AuthState) {
     const data = {
       isAuthenticated: state.isAuthenticated,
       user: state.user,
-      sessionToken: state.sessionToken,
+      // sessionToken is intentionally omitted: it lives in SecureStore.
       activeRole: state.activeRole,
       lastActiveRole: state.lastActiveRole,
       providerProfile: state.providerProfile,

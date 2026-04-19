@@ -442,6 +442,33 @@ export async function runBootMigrations(): Promise<void> {
     await runSql("clients.home_data", `ALTER TABLE clients ADD COLUMN IF NOT EXISTS home_data TEXT`);
     await runSql("clients.home_id",   `ALTER TABLE clients ADD COLUMN IF NOT EXISTS home_id VARCHAR REFERENCES homes(id) ON DELETE SET NULL`);
 
+    // ── saved_providers: homeowner saved/favorited providers ─────────────
+    await runSql("saved_providers.create", `
+      CREATE TABLE IF NOT EXISTS saved_providers (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        provider_id VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    await runSql("saved_providers.unique", `
+      CREATE UNIQUE INDEX IF NOT EXISTS saved_providers_user_provider_unique
+        ON saved_providers (user_id, provider_id)
+    `);
+
+    // ── review_reports: UGC moderation (Apple Guideline 1.2) ─────────────
+    await runSql("review_reports.create", `
+      CREATE TABLE IF NOT EXISTS review_reports (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        review_id VARCHAR NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+        reporter_user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        reason TEXT NOT NULL,
+        details TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+
     const verificationErrors: string[] = [];
     for (const [label, sql] of verifications) {
       try {

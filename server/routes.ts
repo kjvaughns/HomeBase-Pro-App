@@ -112,6 +112,8 @@ import {
   notificationPreferences,
   housefaxEntries,
   supportTickets,
+  savedProviders,
+  reviewReports,
 } from "@shared/schema";
 
 import { generateToken, authenticateJWT } from "./auth";
@@ -2858,6 +2860,145 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
       } catch (error) {
         console.error("Get provider error:", error);
         res.status(500).json({ error: "Failed to get provider" });
+      }
+    },
+  );
+
+  // ─── Saved Providers ──────────────────────────────────────────────────
+  // Homeowner's list of saved/favorited providers, joined with provider data
+  // so the SavedProvidersScreen can render without a second round-trip.
+  app.get(
+    "/api/saved-providers",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const authUserId = req.authenticatedUserId!;
+        const rows = await db
+          .select({
+            id: providers.id,
+            name: providers.businessName,
+            avatarUrl: providers.avatarUrl,
+            rating: providers.rating,
+            reviewCount: providers.reviewCount,
+            serviceArea: providers.serviceArea,
+            hourlyRate: providers.hourlyRate,
+            capabilityTags: providers.capabilityTags,
+            savedAt: savedProviders.createdAt,
+          })
+          .from(savedProviders)
+          .innerJoin(providers, eq(savedProviders.providerId, providers.id))
+          .where(eq(savedProviders.userId, authUserId))
+          .orderBy(desc(savedProviders.createdAt));
+
+        const items = rows.map((r) => ({
+          id: r.id,
+          name: r.name,
+          category: Array.isArray(r.capabilityTags) && r.capabilityTags.length > 0 ? r.capabilityTags[0] : "Service Provider",
+          rating: r.rating ? Number(r.rating) : 0,
+          reviewCount: r.reviewCount ?? 0,
+          serviceArea: r.serviceArea ?? "",
+          startingPrice: r.hourlyRate ? Number(r.hourlyRate) : null,
+          avatarUrl: r.avatarUrl ?? undefined,
+          tags: Array.isArray(r.capabilityTags) ? r.capabilityTags.slice(0, 3) : [],
+          savedAt: (r.savedAt instanceof Date ? r.savedAt : new Date(r.savedAt)).toISOString(),
+        }));
+        res.json({ providers: items });
+      } catch (error) {
+        console.error("Get saved providers error:", error);
+        res.status(500).json({ error: "Failed to get saved providers" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/saved-providers/:providerId",
+    requireAuth,
+    async (req: Request<ProviderIdParams>, res: Response) => {
+      try {
+        const authUserId = req.authenticatedUserId!;
+        const provider = await storage.getProvider(req.params.providerId);
+        if (!provider) return res.status(404).json({ error: "Provider not found" });
+        await db
+          .insert(savedProviders)
+          .values({ userId: authUserId, providerId: req.params.providerId })
+          .onConflictDoNothing();
+        res.status(201).json({ ok: true });
+      } catch (error) {
+        console.error("Save provider error:", error);
+        res.status(500).json({ error: "Failed to save provider" });
+      }
+    },
+  );
+
+  app.delete(
+    "/api/saved-providers/:providerId",
+    requireAuth,
+    async (req: Request<ProviderIdParams>, res: Response) => {
+      try {
+        const authUserId = req.authenticatedUserId!;
+        await db
+          .delete(savedProviders)
+          .where(and(eq(savedProviders.userId, authUserId), eq(savedProviders.providerId, req.params.providerId)));
+        res.json({ ok: true });
+      } catch (error) {
+        console.error("Unsave provider error:", error);
+        res.status(500).json({ error: "Failed to unsave provider" });
+      }
+    },
+  );
+
+  // ─── Review Reports (UGC moderation, Apple Guideline 1.2) ─────────────
+  app.post(
+    "/api/reviews/:id/report",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const authUserId = req.authenticatedUserId!;
+        const reason = String(req.body?.reason ?? "").trim();
+        const details = req.body?.details ? String(req.body.details).trim().slice(0, 1000) : null;
+        if (!reason) {
+          return res.status(400).json({ error: "Reason is required" });
+        }
+        const [review] = await db.select().from(reviews).where(eq(reviews.id, req.params.id)).limit(1);
+        if (!review) return res.status(404).json({ error: "Review not found" });
+
+        const [report] = await db
+          .insert(reviewReports)
+          .values({
+            reviewId: req.params.id,
+            reporterUserId: authUserId,
+            reason,
+            details,
+          })
+          .returning();
+
+        // Email the moderation team so a human can act within 24h (App Store req).
+        (async () => {
+          try {
+            const [reporter] = await db.select().from(users).where(eq(users.id, authUserId)).limit(1);
+            const reporterName = reporter ? `${reporter.firstName || ""} ${reporter.lastName || ""}`.trim() || reporter.email : authUserId;
+            await sendSupportTicketEmail({
+              ticketId: report.id,
+              email: reporter?.email || "unknown@homebaseproapp.com",
+              name: reporterName,
+              subject: `Review report: ${reason}`,
+              message:
+                `Review ID: ${req.params.id}\n` +
+                `Provider ID: ${review.providerId}\n` +
+                `Reason: ${reason}\n` +
+                (details ? `Details: ${details}\n` : "") +
+                `Original review: ${review.comment ?? "(no text)"}`,
+              category: "moderation",
+            });
+          } catch (e) {
+            console.error("review.report email failed:", e);
+          }
+        })();
+
+        res.status(201).json({ report });
+      } catch (error) {
+        console.error("Report review error:", error);
+        res.status(500).json({ error: "Failed to report review" });
       }
     },
   );

@@ -269,7 +269,7 @@ function generateTasksFromWizardData(data: WizardData): MaintenanceTask[] {
   return tasks;
 }
 
-const MOCK_TIPS = [
+const MAINTENANCE_TIPS = [
   {
     id: "1",
     title: "Change HVAC filters monthly",
@@ -1134,7 +1134,7 @@ export default function SurvivalKitScreen() {
 
         {resultsTab === "tips" ? (
           <ScrollView showsVerticalScrollIndicator={false}>
-            {MOCK_TIPS.map((tip) => (
+            {MAINTENANCE_TIPS.map((tip) => (
               <GlassCard key={tip.id} style={styles.tipCard}>
                 <View style={styles.tipHeader}>
                   <View style={[styles.tipIcon, { backgroundColor: Colors.accentLight }]}>

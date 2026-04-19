@@ -54,6 +54,13 @@
       "expo-image",
       "expo-location",
       [
+        "expo-notifications",
+        {
+          "iosDisplayInForeground": true
+        }
+      ],
+      "./plugins/withPrivacyManifest.js",
+      [
         "expo-build-properties",
         {
           "ios": {

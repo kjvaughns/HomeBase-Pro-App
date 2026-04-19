@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
+import Constants from "expo-constants";
 import { Platform } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -36,18 +37,27 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     return null;
   }
 
+  const easConfigProjectId =
+    typeof Constants.easConfig === "object" && Constants.easConfig !== null
+      ? (Constants.easConfig as { projectId?: string }).projectId
+      : undefined;
+  const projectId =
+    Constants.expoConfig?.extra?.eas?.projectId ?? easConfigProjectId;
+
+  if (!projectId) {
+    console.warn(
+      "[push] No EAS projectId found in Constants.expoConfig.extra.eas.projectId. " +
+        "Push notifications will not work without it.",
+    );
+    return null;
+  }
+
   try {
-    const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId: "homebase-app",
-    });
+    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     return tokenData.data;
-  } catch {
-    try {
-      const tokenData = await Notifications.getExpoPushTokenAsync();
-      return tokenData.data;
-    } catch {
-      return null;
-    }
+  } catch (err) {
+    console.warn("[push] getExpoPushTokenAsync failed:", err);
+    return null;
   }
 }
 

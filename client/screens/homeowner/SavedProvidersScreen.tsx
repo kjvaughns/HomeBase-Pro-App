@@ -15,14 +15,16 @@ import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 
+import { useQuery, useMutation } from "@tanstack/react-query";
+
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { Avatar } from "@/components/Avatar";
 import { useTheme } from "@/hooks/useTheme";
-import { useHomeownerStore } from "@/state/homeownerStore";
 import { Colors, Spacing, Typography, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { apiRequest, queryClient } from "@/lib/query-client";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -53,13 +55,23 @@ export default function SavedProvidersScreen() {
   const navigation = useNavigation<NavigationProp>();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
-  const { toggleSavedProvider } = useHomeownerStore();
-
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("recent");
   const [showSortMenu, setShowSortMenu] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [providers, setProviders] = useState<SavedProviderDisplay[]>([]);
+
+  const { data, isLoading, refetch, isRefetching } = useQuery<{ providers: SavedProviderDisplay[] }>({
+    queryKey: ["/api/saved-providers"],
+  });
+  const providers: SavedProviderDisplay[] = data?.providers ?? [];
+
+  const removeMutation = useMutation({
+    mutationFn: async (providerId: string) => {
+      await apiRequest("DELETE", `/api/saved-providers/${providerId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/saved-providers"] });
+    },
+  });
 
   const filteredProviders = providers
     .filter((p) => {
@@ -74,15 +86,12 @@ export default function SavedProvidersScreen() {
     });
 
   const onRefresh = async () => {
-    setRefreshing(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setRefreshing(false);
+    await refetch();
   };
 
   const handleRemoveProvider = (providerId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setProviders(providers.filter((p) => p.id !== providerId));
-    toggleSavedProvider(providerId);
+    removeMutation.mutate(providerId);
   };
 
   const handleBookProvider = (providerId: string, providerName: string) => {
@@ -244,7 +253,7 @@ export default function SavedProvidersScreen() {
           styles.list,
           { paddingTop: headerHeight + Spacing.md, paddingBottom: insets.bottom + Spacing.xl },
         ]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />}
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={onRefresh} tintColor={Colors.accent} />}
         showsVerticalScrollIndicator={false}
       />
     </ThemedView>
