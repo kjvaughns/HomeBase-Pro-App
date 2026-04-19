@@ -381,6 +381,92 @@ async function main() {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Test 5: ROUTE-LEVEL — POST /api/stripe/invoices/:invoiceId/send must
+  // FAIL CLOSED with 409 + { code: "stripe_not_ready" } when the
+  // provider's Connect account isn't ready, AND must NOT mark the
+  // invoice as "sent" or trigger any side effects (Task #245
+  // architect-review fix).
+  // ---------------------------------------------------------------------------
+  console.log(
+    "\n5. POST /api/stripe/invoices/:id/send fails closed on stripe_not_ready",
+  );
+  {
+    const fx = await setupFixture({ chargesEnabled: false });
+    try {
+      const { generateToken } = await import("../auth");
+      // Look up the user we just created so we can mint a JWT for them.
+      const [u] = await db
+        .select()
+        .from(users)
+        .where(
+          eq(
+            users.id,
+            (
+              await db
+                .select({ userId: providers.userId })
+                .from(providers)
+                .where(eq(providers.id, fx.providerId))
+            )[0].userId!,
+          ),
+        );
+      const token = generateToken(u.id, "provider", (u as any).tokenVersion ?? 0);
+
+      const port = process.env.PORT || "5000";
+      const base = `http://127.0.0.1:${port}`;
+      const resp = await fetch(
+        `${base}/api/stripe/invoices/${fx.invoiceId}/send`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "content-type": "application/json",
+          },
+          body: "{}",
+        },
+      );
+      const body = await resp.json().catch(() => ({}));
+      ok(
+        "send route returns HTTP 409",
+        resp.status === 409,
+        `status=${resp.status} body=${JSON.stringify(body)}`,
+      );
+      ok(
+        'send route body has code "stripe_not_ready"',
+        body?.code === "stripe_not_ready",
+        `body.code=${body?.code}`,
+      );
+
+      // Side-effect proof: invoice status MUST still be "draft" — fail
+      // closed means no transition to "sent", no sentAt timestamp.
+      const [inv] = await db
+        .select()
+        .from(invoices)
+        .where(eq(invoices.id, fx.invoiceId));
+      ok(
+        "invoice was NOT marked sent (status stays draft)",
+        inv?.status === "draft",
+        `status=${inv?.status}`,
+      );
+      ok(
+        "invoice has no sentAt timestamp",
+        inv?.sentAt == null,
+        `sentAt=${inv?.sentAt}`,
+      );
+    } catch (err: any) {
+      // If the dev server isn't reachable (e.g. running in CI without the
+      // backend), record a single failure rather than crashing — keeps
+      // the rest of the suite informative.
+      ok(
+        "route-level test reached the dev server",
+        false,
+        `Could not reach backend: ${err?.message}. Start the backend before running this test.`,
+      );
+    } finally {
+      await fx.cleanup();
+    }
+  }
+
   console.log(`\n=== Result: ${pass} passed, ${fail} failed ===\n`);
   await pool.end().catch(() => {});
   process.exit(fail === 0 ? 0 : 1);

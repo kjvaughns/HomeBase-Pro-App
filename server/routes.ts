@@ -9178,15 +9178,30 @@ Respond with JSON only:
         const invoice = await storage.createInvoice(parsed.data);
 
         // Send proper Stripe Invoice — Stripe emails the client at invoice.stripe.com
+        // FAIL CLOSED on stripe_not_ready (Task #245): if the provider's
+        // Connect account isn't ready, refuse the entire request rather
+        // than persisting "sent" state with no actual Stripe Invoice
+        // behind it. The invoice row was created above as "draft", so
+        // the homeowner is never billed for nothing.
         let hostedUrl: string | undefined;
         let stripeError: string | undefined;
+        let stripeErrorCode: string | undefined;
         const platformResult = await sendStripeInvoiceEmail(
           invoice.id,
         ).catch((err: any) => {
           stripeError = err?.message || "Stripe invoice send failed";
+          stripeErrorCode = err?.code;
           console.error("[stripe-invoice-send] create-and-send:", stripeError);
           return null;
         });
+        if (stripeErrorCode === "stripe_not_ready") {
+          return res.status(409).json({
+            code: "stripe_not_ready",
+            error:
+              "Provider Stripe Connect account is not ready to accept charges. Finish onboarding before sending invoices.",
+            invoiceId: invoice.id,
+          });
+        }
         if (platformResult?.hostedInvoiceUrl)
           hostedUrl = platformResult.hostedInvoiceUrl;
 
@@ -10439,11 +10454,18 @@ Respond with JSON only:
         let hostedUrl: string | undefined;
         let stripeError: string | undefined;
 
+        // FAIL CLOSED on stripe_not_ready (Task #245): refuse the send and
+        // do NOT mark the invoice as "sent" if the provider's Connect
+        // account isn't ready. Returning 2xx with a soft `stripeError`
+        // would leave the invoice in "sent" state with no hosted URL,
+        // which silently breaks the homeowner's payment flow.
+        let stripeErrorCode: string | undefined;
         if (!invoice.stripeInvoiceId) {
           const platformResult = await sendStripeInvoiceEmail(
             invoiceId,
           ).catch((err: any) => {
             stripeError = err?.message || "Stripe invoice send failed";
+            stripeErrorCode = err?.code;
             console.error(
               "[stripe-invoice-send] stripe/invoices/:id/send:",
               stripeError,
@@ -10458,6 +10480,15 @@ Respond with JSON only:
           hostedUrl = invoice.hostedInvoiceUrl || undefined;
           await resendStripeInvoice(invoiceId).catch((err: any) => {
             stripeError = err?.message;
+            stripeErrorCode = err?.code;
+          });
+        }
+        if (stripeErrorCode === "stripe_not_ready") {
+          return res.status(409).json({
+            code: "stripe_not_ready",
+            error:
+              "Provider Stripe Connect account is not ready to accept charges. Finish onboarding before sending invoices.",
+            invoiceId,
           });
         }
 
@@ -10571,8 +10602,21 @@ Respond with JSON only:
 
         let url = inv.hostedInvoiceUrl;
         if (!url) {
-          const result = await sendStripeInvoiceEmail(invoiceId);
-          url = result.hostedInvoiceUrl;
+          try {
+            const result = await sendStripeInvoiceEmail(invoiceId);
+            url = result.hostedInvoiceUrl;
+          } catch (err: any) {
+            // FAIL CLOSED on stripe_not_ready (Task #245).
+            if (err?.code === "stripe_not_ready") {
+              return res.status(409).json({
+                code: "stripe_not_ready",
+                error:
+                  "Provider Stripe Connect account is not ready to accept charges.",
+                invoiceId,
+              });
+            }
+            throw err;
+          }
         }
 
         res.json({ url, stripeInvoiceId: inv.stripeInvoiceId });
