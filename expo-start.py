@@ -28,9 +28,12 @@ try { execSync("sleep 2", { stdio: "ignore" }); } catch (_) {}
 // The Replit dev domain (port 80 externally → port 8081 Metro)
 const replitDomain = process.env.REPLIT_DEV_DOMAIN || process.env.EXPO_PUBLIC_DOMAIN || "localhost";
 
-// API calls go to Express backend on port 5000
+// API calls go to the Express backend. The backend listens on localPort 5000
+// but Replit exposes it via externalPort 80 (see .replit), so the public URL
+// is just the bare dev domain over HTTPS — DO NOT append ":5000" here, that
+// port is not externally reachable and produces 502s for both web and Expo Go.
 const apiDomain = process.env.REPLIT_DEV_DOMAIN
-  ? `${process.env.REPLIT_DEV_DOMAIN}:5000`
+  ? process.env.REPLIT_DEV_DOMAIN
   : process.env.EXPO_PUBLIC_DOMAIN;
 
 // The Expo Go URL will be exps://<replitDomain> (HTTPS via Replit proxy)

@@ -38,11 +38,17 @@ function setupCors(app: express.Application) {
 
     if (process.env.REPLIT_DEV_DOMAIN) {
       origins.add(`https://${process.env.REPLIT_DEV_DOMAIN}`);
+      // Expo web preview is served by Metro on localPort 8081 (mapped to
+      // externalPort 8081 in .replit), so the browser sends an Origin
+      // header that includes ":8081". Allow that variant explicitly.
+      origins.add(`https://${process.env.REPLIT_DEV_DOMAIN}:8081`);
     }
 
     if (process.env.REPLIT_DOMAINS) {
       process.env.REPLIT_DOMAINS.split(",").forEach((d) => {
-        origins.add(`https://${d.trim()}`);
+        const domain = d.trim();
+        origins.add(`https://${domain}`);
+        origins.add(`https://${domain}:8081`);
       });
     }
 

@@ -86,14 +86,22 @@ export default function LoginScreen({ navigation }: Props) {
         }, providerProfile, data.token ?? null);
       }
     } catch (error) {
-      const isNetworkError =
-        error instanceof TypeError ||
-        (error instanceof Error && (
-          error.message.includes("Network request failed") ||
-          error.message.toLowerCase().includes("failed to fetch")
-        ));
       const message = error instanceof Error ? error.message : "";
-      if (message.includes("401") || message.includes("Invalid")) {
+      const lowerMessage = message.toLowerCase();
+      // 401 must win over the network-error branch — otherwise a TypeError
+      // thrown elsewhere would mask a real "Invalid email or password".
+      const isAuthError = message.includes("401") || message.includes("Invalid");
+      const isNetworkError =
+        !isAuthError && (
+          error instanceof TypeError ||
+          lowerMessage.includes("network") ||        // RN: "Network request failed"
+          lowerMessage.includes("failed to fetch") || // Chrome
+          lowerMessage.includes("load failed") ||     // Safari/WebKit
+          lowerMessage.includes("fetch") ||
+          lowerMessage.includes("connection") ||
+          lowerMessage.includes("cors")
+        );
+      if (isAuthError) {
         setErrors({ password: "Invalid email or password" });
       } else if (isNetworkError) {
         setErrors({ email: "Can't connect to HomeBase. Check your internet connection." });
