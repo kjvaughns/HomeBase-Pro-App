@@ -163,6 +163,24 @@ export default function AppointmentDetailScreen() {
     ? STATUS_CONFIG[appointment.status] ?? FALLBACK_STATUS_CONFIG
     : null;
 
+  // Fallback: if the appointment payload didn't include the linked invoice
+  // (intermittent iOS data gap), fetch it directly by linked job ID so the
+  // homeowner can still surface the invoice CTA.
+  const fallbackJobId = appointment?.job?.id ?? null;
+  const shouldFetchFallbackInvoice =
+    !!appointment && !appointment.invoice && !!fallbackJobId;
+  const { data: fallbackInvoiceData } = useQuery<{ invoice: LinkedInvoice | null }>({
+    queryKey: ["/api/jobs", fallbackJobId, "invoice"],
+    enabled: shouldFetchFallbackInvoice,
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/jobs/${fallbackJobId}/invoice`);
+      if (!response.ok) return { invoice: null };
+      return response.json();
+    },
+  });
+  const effectiveInvoice: LinkedInvoice | null =
+    appointment?.invoice ?? fallbackInvoiceData?.invoice ?? null;
+
   useFocusEffect(
     useCallback(() => {
       queryClient.invalidateQueries({ queryKey: ["/api/appointment", appointmentId] });
@@ -281,30 +299,30 @@ export default function AppointmentDetailScreen() {
   const canReview =
     isHomeowner && REVIEW_ELIGIBLE_STATUSES.has(appointment.status);
   const hasReview = !!appointment.review;
-  const hasInvoice = !!appointment.invoice;
-  const isInvoicePaid =
-    !!appointment.invoice && appointment.invoice.status === "paid";
-  const isInvoiceCancelled =
-    !!appointment.invoice && appointment.invoice.status === "cancelled";
-  const showInvoiceCta = hasInvoice && !isInvoiceCancelled;
+  const hasInvoice = !!effectiveInvoice;
+  const isInvoicePaidOrClosed =
+    !!effectiveInvoice &&
+    (effectiveInvoice.status === "paid" ||
+      effectiveInvoice.status === "closed");
+  const showInvoiceCta = hasInvoice;
 
   const handleViewInvoice = async () => {
-    if (!appointment.invoice) return;
+    if (!effectiveInvoice) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    if (appointment.invoice.hostedInvoiceUrl) {
+    if (effectiveInvoice.hostedInvoiceUrl) {
       try {
-        await WebBrowser.openBrowserAsync(appointment.invoice.hostedInvoiceUrl);
+        await WebBrowser.openBrowserAsync(effectiveInvoice.hostedInvoiceUrl);
         return;
       } catch (e) {
         // Fall through to in-app Payment screen
       }
     }
-    const fallbackJobId =
-      appointment.job?.id || appointment.invoice.jobId || null;
-    if (fallbackJobId) {
+    const fallbackJobIdForNav =
+      appointment.job?.id || effectiveInvoice.jobId || null;
+    if (fallbackJobIdForNav) {
       navigation.navigate("Payment", {
-        jobId: fallbackJobId,
-        invoiceId: appointment.invoice.id,
+        jobId: fallbackJobIdForNav,
+        invoiceId: effectiveInvoice.id,
       });
       return;
     }
@@ -426,7 +444,7 @@ export default function AppointmentDetailScreen() {
           );
         })()}
 
-        {appointment.invoice ? (
+        {effectiveInvoice ? (
           <Animated.View entering={FadeInDown.delay(200).duration(400)}>
             <View style={styles.section}>
               <ThemedText style={styles.sectionTitle}>Invoice</ThemedText>
@@ -434,37 +452,39 @@ export default function AppointmentDetailScreen() {
                 <View style={styles.invoiceRow}>
                   <View style={{ flex: 1 }}>
                     <ThemedText style={styles.invoiceNumber}>
-                      {appointment.invoice.invoiceNumber || `Invoice #${appointment.invoice.id.slice(-6)}`}
+                      {effectiveInvoice.invoiceNumber || `Invoice #${effectiveInvoice.id.slice(-6)}`}
                     </ThemedText>
                     <ThemedText
                       style={[
                         styles.invoiceStatus,
                         {
                           color:
-                            appointment.invoice.status === "paid"
+                            isInvoicePaidOrClosed
                               ? Colors.accent
-                              : appointment.invoice.status === "cancelled"
+                              : effectiveInvoice.status === "cancelled"
                               ? theme.textTertiary
                               : "#F59E0B",
                         },
                       ]}
                     >
-                      {appointment.invoice.status === "paid"
+                      {effectiveInvoice.status === "paid"
                         ? "Paid"
-                        : appointment.invoice.status === "cancelled"
+                        : effectiveInvoice.status === "closed"
+                        ? "Closed"
+                        : effectiveInvoice.status === "cancelled"
                         ? "Cancelled"
-                        : appointment.invoice.status === "sent"
+                        : effectiveInvoice.status === "sent"
                         ? "Payment Due"
-                        : appointment.invoice.status.toUpperCase()}
+                        : effectiveInvoice.status.toUpperCase()}
                     </ThemedText>
                   </View>
                   <ThemedText style={styles.invoiceAmount}>
-                    ${parseFloat(appointment.invoice.total || appointment.invoice.amount || "0").toFixed(2)}
+                    ${parseFloat(effectiveInvoice.total || effectiveInvoice.amount || "0").toFixed(2)}
                   </ThemedText>
                 </View>
-                {appointment.invoice.dueDate ? (
+                {effectiveInvoice.dueDate ? (
                   <ThemedText style={[styles.invoiceDueText, { color: theme.textSecondary }]}>
-                    Due: {formatDate(appointment.invoice.dueDate)}
+                    Due: {formatDate(effectiveInvoice.dueDate)}
                   </ThemedText>
                 ) : null}
                 {showInvoiceCta ? (
@@ -473,7 +493,7 @@ export default function AppointmentDetailScreen() {
                       onPress={handleViewInvoice}
                       testID="button-view-invoice"
                     >
-                      {isInvoicePaid ? "View Receipt" : "View Invoice"}
+                      {isInvoicePaidOrClosed ? "View Receipt" : "View Invoice"}
                     </PrimaryButton>
                   </View>
                 ) : null}
