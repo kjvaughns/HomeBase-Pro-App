@@ -37,6 +37,16 @@ export default function ProviderMoreScreen() {
   const { user, providerProfile, logout } = useAuthStore();
   const toggleDarkMode = useThemeStore((s) => s.toggleDarkMode);
 
+  // Client-side visibility gate for the admin link. The server-side
+  // requireAdmin middleware (env ADMIN_EMAILS) is the source of truth —
+  // this just hides the menu entry for non-admins.
+  const adminEmails = (process.env.EXPO_PUBLIC_ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  const isAdminUser = !!user?.email &&
+    adminEmails.includes(user.email.toLowerCase());
+
   const { isSubscribed, isInGrace, daysRemainingInGrace, status: subStatus } =
     useSubscriptionStatus();
   const subscriptionSubtitle = isSubscribed
@@ -215,8 +225,21 @@ export default function ProviderMoreScreen() {
               subtitle="Email, password, and account deletion"
               leftIcon="shield"
               onPress={() => navigation.navigate("AccountSecurity")}
-              isLast
+              isLast={!isAdminUser}
             />
+            {/* HomeBase Partner admin (Task #211): visible only when the
+                signed-in user's email is in EXPO_PUBLIC_ADMIN_EMAILS. The
+                server enforces the actual gate on the endpoints. */}
+            {isAdminUser ? (
+              <ListRow
+                title="HomeBase Partners"
+                subtitle="Grant complimentary Pro access"
+                leftIcon="award"
+                onPress={() => navigation.navigate("AdminPartners")}
+                isLast
+                testID="row-admin-partners"
+              />
+            ) : null}
           </View>
         </Animated.View>
 

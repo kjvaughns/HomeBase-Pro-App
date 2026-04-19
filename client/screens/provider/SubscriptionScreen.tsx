@@ -440,8 +440,9 @@ export default function SubscriptionScreen() {
               {copy.body}
             </ThemedText>
 
-            {/* Primary action */}
-            {showSubscribeButton ? (
+            {/* Primary action — partners get no billing controls at all
+                (their access is admin-granted, not billed). */}
+            {isPartner ? null : showSubscribeButton ? (
               useIAP && offeringState.kind === "loading" ? (
                 <View
                   style={[styles.button, styles.skeletonButton]}
@@ -584,8 +585,9 @@ export default function SubscriptionScreen() {
               </Pressable>
             )}
 
-            {/* Restore purchases — required by App Store reviewers */}
-            {useIAP ? (
+            {/* Restore purchases — required by App Store reviewers.
+                Hidden for partners since they have no purchase to restore. */}
+            {isPartner ? null : useIAP ? (
               <Pressable
                 onPress={handleRestore}
                 disabled={restoring || busy}

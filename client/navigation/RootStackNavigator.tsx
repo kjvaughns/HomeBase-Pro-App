@@ -55,6 +55,7 @@ import ProviderResourcesScreen from "@/screens/provider/ProviderResourcesScreen"
 import ProviderAIAssistantScreen from "@/screens/provider/ProviderAIAssistantScreen";
 import StripeConnectScreen from "@/screens/provider/StripeConnectScreen";
 import SubscriptionScreen from "@/screens/provider/SubscriptionScreen";
+import AdminPartnersScreen from "@/screens/provider/AdminPartnersScreen";
 import BusinessHubScreen from "@/screens/provider/BusinessHubScreen";
 import BookingLinkScreen from "@/screens/provider/BookingLinkScreen";
 import SendMessageScreen from "@/screens/provider/SendMessageScreen";
@@ -164,6 +165,7 @@ export type RootStackParamList = {
   };
   Communications: undefined;
   Subscription: undefined;
+  AdminPartners: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -600,6 +602,13 @@ export default function RootStackNavigator() {
         component={SubscriptionScreen}
         options={{
           headerTitle: "Subscription & Plan",
+        }}
+      />
+      <Stack.Screen
+        name="AdminPartners"
+        component={AdminPartnersScreen}
+        options={{
+          headerTitle: "HomeBase Partners",
         }}
       />
     </Stack.Navigator>
