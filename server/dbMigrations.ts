@@ -85,6 +85,13 @@ export async function runBootMigrations(): Promise<void> {
     // ── payments: missing amount_cents column ─────────────────────────────
     await runSql("payments.amount_cents", `ALTER TABLE payments ADD COLUMN IF NOT EXISTS amount_cents INTEGER NOT NULL DEFAULT 0`);
 
+    // ── payments.status: drift discovered in Task #203 audit. Schema declares
+    // payment_status enum on this column but Supabase was missing it.
+    await runSql("payments.status", `ALTER TABLE payments ADD COLUMN IF NOT EXISTS status payment_status DEFAULT 'requires_payment'`);
+
+    // ── payouts.description: drift discovered in Task #203 audit. ─────────
+    await runSql("payouts.description", `ALTER TABLE payouts ADD COLUMN IF NOT EXISTS description TEXT`);
+
     // ── providers: is_public (public profile visibility flag) ─────────────
     await runSql("providers.is_public", `ALTER TABLE providers ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE`);
 

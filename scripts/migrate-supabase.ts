@@ -55,6 +55,10 @@ async function run(): Promise<void> {
   await safeAlter(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP`);
   await safeAlter(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW() NOT NULL`);
 
+  // Drift discovered in Task #203 audit:
+  await safeAlter(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS status payment_status DEFAULT 'requires_payment'`);
+  await safeAlter(`ALTER TABLE payouts  ADD COLUMN IF NOT EXISTS description TEXT`);
+
   // ─── 2. Create PostgreSQL enums (idempotent) ───────────────────────────────
   console.log("\nStep 2: Ensuring enums exist…");
   const enumDefs: Array<[string, string]> = [
