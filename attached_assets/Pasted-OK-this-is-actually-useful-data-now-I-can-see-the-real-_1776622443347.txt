@@ -1,0 +1,62 @@
+OK this is actually useful data — now I can see the real bug. The iOS screenshot is missing **two things** web has:
+
+1. No "Duration: ~60 min" in the Schedule section
+2. No Invoice section at all
+
+Both are gated on the same thing in the source:
+
+```tsx
+// Duration row gates on:
+appointment.job?.estimatedDuration
+
+// Invoice section gates on:
+effectiveInvoice   // = appointment.invoice ?? fallbackInvoiceData?.invoice
+// and the fallback fetch is gated on:
+appointment?.job?.id
+```
+
+So on iOS, `appointment.job` is null. On web, `appointment.job` is a populated object with duration, address, etc. Same code, same server, same appointment ID — different response payload. That narrows it down.
+
+**Most likely cause: React Query cached a stale appointment payload on iOS from before the provider linked a job to this appointment.** Your `queryClient` defaults (`client/lib/query-client.ts:98-110`) set `staleTime: 5 min` and `refetchOnWindowFocus: false`. The `useFocusEffect` on AppointmentDetailScreen only fires when you navigate *back* to the screen — not when you just unlock the phone and see the already-open screen. So if iOS loaded this appointment before the provider completed/linked the job+invoice, the cached payload sticks.
+
+**Quick test to confirm.** On iOS, with that same appointment open:
+1. Tap back → you're on the appointments list
+2. Tap the appointment again
+3. You should now see the Invoice section + Duration row
+
+If that works, it's a cache staleness bug — my earlier "OTA fixed it" conclusion was premature; the OTA is fine, it's the query config.
+
+**Two-line fix.** In `client/screens/homeowner/AppointmentDetailScreen.tsx`, change the query to always refetch:
+
+```tsx
+const { data, isLoading, error } = useQuery<{ appointment: Appointment }>({
+  queryKey: ["/api/appointment", appointmentId],
+  queryFn: async () => {
+    const response = await apiRequest("GET", `/api/appointment/${appointmentId}`);
+    if (!response.ok) throw new Error("Failed to fetch appointment");
+    return response.json();
+  },
+  staleTime: 0,                  // ← add
+  refetchOnMount: "always",      // ← add
+});
+```
+
+Do the same in `JobDetailScreen.tsx` for the three queries it runs (`/api/appointments/:jobId`, `/api/appointments/:jobId/job`, `/api/jobs/:linkedJob.id/invoice`). This guarantees every time the screen mounts, the data is re-fetched — no cache.
+
+**If the back-and-tap-again test DOESN'T work**, then the server is actually returning `job: null` for this appointment when iOS asks. In that case run this from your machine with the same session token iOS is using:
+
+```bash
+# Get your token: on iOS, pull it from the Keychain via a temporary 
+# debug log, or grab it from web devtools (Application → Local Storage 
+# or Zustand persist state) — it's the same JWT either way.
+TOKEN="<paste-token>"
+APPT_ID="<appointment-uuid-from-url-or-notification>"
+
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "https://home-base-pro-app.replit.app/api/appointment/$APPT_ID" \
+  | jq '{status: .appointment.status, job: .appointment.job, invoice: .appointment.invoice}'
+```
+
+If that returns populated `job` and `invoice`, it's 100% client cache. If it returns nulls, we have a real server-side bug to chase.
+
+My bet is cache. Make the two-line change, `eas update --branch production`, force-quit the TestFlight app twice (first open downloads update, second open runs it), and the invoice should appear.

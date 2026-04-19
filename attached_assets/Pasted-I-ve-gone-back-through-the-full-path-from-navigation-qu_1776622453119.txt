@@ -1,0 +1,118 @@
+I've gone back through the full path from navigation → query → server handler → storage layer. Here's what I've actually confirmed, and where the real divergence must be happening. No more hypotheses — I want to give you an investigation plan that produces evidence, not another guess.
+
+---
+
+## What I ruled out by reading code
+
+**1. The server does NOT branch on platform for this endpoint.**
+
+`server/routes.ts:3310-3407` (`GET /api/appointment/:id`) is completely deterministic. It does three DB lookups:
+
+```
+appointments WHERE id = :id
+jobs WHERE appointmentId = appointment.id      ORDER BY createdAt DESC LIMIT 1
+invoices WHERE jobId = job.id                  ORDER BY createdAt DESC LIMIT 1
+```
+
+No `X-Client-Platform` check, no User-Agent check, no feature-flag read, nothing. Same user + same appointment ID = same JSON, full stop.
+
+**2. The client code has no Platform.OS fork around the invoice section.**
+
+`AppointmentDetailScreen.tsx:189-202` — `fallbackJobId`, `shouldFetchFallbackInvoice`, `effectiveInvoice` — identical on web and native. Section at 467-523 gates purely on `effectiveInvoice` being truthy.
+
+**3. eas.json `production` channel env vars match web.**
+
+Same `EXPO_PUBLIC_DOMAIN=home-base-pro-app.replit.app`, same Supabase URL, same live Stripe key. iOS prod and Replit web hit the same server and the same Postgres.
+
+**4. There's only one homeowner route into this screen.**
+
+Grep confirms all three entry points (`HomeScreen`, `ManageScreen`, `NotificationsScreen`, and push handler) pass `{ appointmentId }` and nothing else. Screen ignores any other param.
+
+---
+
+## So what's actually different
+
+If server code is deterministic and client code is platform-agnostic, the ONLY way iOS can render "no Duration, no Address, no Invoice" while web renders all three is one of these — and they are all **data-plane**, not code-plane:
+
+**A) Different appointment ID.** iOS and web tap what *looks* like the same card but are actually on different appointment records. Most common cause: the public-booking path and the provider-add-job path both create `appointments` rows, and historical accounts often have a duplicate pair (one appointment with a linked job, one without). If iOS's list is ordered differently (e.g., by `scheduledDate` with a tie-break that flips in ISO vs. Date.parse), you tap the orphan row on iOS and the linked row on web.
+
+**B) Same appointment ID, but `jobs.appointmentId` is NULL in Postgres for that row.** Task #217 backfilled the homeowner sync, but I don't see evidence it retroactively set `jobs.appointmentId` for every historical job that already existed. If that back-link is missing, the `WHERE jobs.appointmentId = appointment.id` lookup returns zero rows and the handler returns `job: null, invoice: null` — exactly what you're seeing on iOS.
+
+**C) Different authenticated user.** Your iOS TestFlight build is logged in as a test account whose appointment really has no linked job, and your web session is a different account whose appointment does.
+
+**D) Edge cache.** Replit fronts `*.replit.app` with Cloudflare. If an older response got cached under a key that varies by `User-Agent` or by `Accept` but not by Authorization, iOS could get stale JSON. This is the least likely but the easiest to rule out.
+
+The first three are all data problems, not code problems. That's why 5 code/config fixes have failed — there's no code path to patch.
+
+---
+
+## How to get evidence (do these in order, stop when one fires)
+
+### Step 1 — Dump the iOS appointment ID and the raw server response
+
+Add a 3-line instrumentation to `AppointmentDetailScreen.tsx` right after the query resolves, wrapped so it only runs on a dev TestFlight:
+
+```tsx
+useEffect(() => {
+  if (!appointment) return;
+  Alert.alert(
+    "DEBUG",
+    `apptId=${appointment.id}\njob=${appointment.job ? appointment.job.id : "null"}\ninvoice=${appointment.invoice ? appointment.invoice.id : "null"}\nuser=${user?.id}`,
+  );
+}, [appointment, user?.id]);
+```
+
+Ship it as an OTA update (`eas update --branch production --message debug-appt-shape`). Open the screen on iOS, screenshot the alert. Open the same card on web (DevTools → Network → response body). Compare `apptId`, `user`, `job`, `invoice`.
+
+- If `apptId` differs → it's (A), duplicate appointment rows. Fix is a one-time SQL dedupe + a DISTINCT ON constraint.
+- If `apptId` matches but iOS returns `job: null` → it's (B) or (D). Go to step 2.
+- If `user` differs → it's (C). You're logged into different accounts. Log out/in and re-test.
+
+### Step 2 — Query Postgres directly
+
+On Supabase SQL editor, with the `apptId` from step 1:
+
+```sql
+SELECT a.id AS appt_id, a.status, a."userId", a."scheduledDate",
+       j.id AS job_id, j."appointmentId" AS job_appt_id,
+       i.id AS invoice_id, i."jobId" AS inv_job_id, i.status AS inv_status
+FROM appointments a
+LEFT JOIN jobs j ON j."appointmentId" = a.id
+LEFT JOIN invoices i ON i."jobId" = j.id
+WHERE a.id = '<apptId-from-ios>';
+```
+
+- If `job_id` is NULL → the back-link was never written. Look up the job by `clientId`/`scheduledDate` match and set `appointmentId` manually, then write a migration to backfill every homeowner-visible appointment whose `jobs.appointmentId` is NULL. That's the permanent fix.
+- If `job_id` is present in SQL but the API returns `null` → it's (D), edge cache. Go to step 3.
+
+### Step 3 — Rule out Cloudflare / Replit caching
+
+From a local terminal, with your iOS session token in hand:
+
+```bash
+TOKEN="<paste-session-token>"
+APPT="<apptId>"
+curl -sS "https://home-base-pro-app.replit.app/api/appointment/$APPT" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-Client-Platform: ios" \
+  -D - | head -60
+```
+
+Run it twice. Look at the response headers — `CF-Cache-Status`, `Age`, `Cache-Control`, `ETag`. If you see `CF-Cache-Status: HIT` on an endpoint that touches auth state, that's the bug and the fix is server-side: add `Cache-Control: private, no-store` and `Vary: Authorization` to the `/api/appointment/:id` response.
+
+You can add it in one line in the handler:
+
+```ts
+res.setHeader("Cache-Control", "private, no-store");
+res.setHeader("Vary", "Authorization");
+```
+
+Then push it and hard-refresh iOS (reinstall app to kill any NSURLCache entry).
+
+---
+
+## My prediction
+
+Given your history — Task #217 was a homeowner↔provider sync patch, and the symptom matches exactly what a missing `jobs.appointmentId` back-link produces — I'd put ~70% on **(B)**, ~20% on **(A)**, ~5% on **(C)**, ~5% on **(D)**. Step 1 will tell you which.
+
+If you want, paste the alert output from step 1 and the row from step 2 and I'll write you the exact backfill SQL + the Drizzle migration to prevent it from recurring. No more shots-in-the-dark client patches until we see the data.
