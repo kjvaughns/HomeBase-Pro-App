@@ -622,12 +622,10 @@ export async function runBootMigrations(): Promise<void> {
         SELECT id, winner_id FROM ranked WHERE id <> winner_id
       `);
       if (dedupePlan.rowCount && dedupePlan.rowCount > 0) {
-        // Repoint jobs only when the winner doesn't already have its own
-        // linked job (avoids creating two jobs pointing at the same appt).
-        // Loser jobs whose winner already has a job get nulled below — we
-        // can't merge two jobs into one FK slot, and dropping them would
-        // lose provider work history. The next step (#227 follow-up) will
-        // reconcile orphan jobs into the canonical appointment.
+        // Always repoint loser-linked jobs to the winner. The jobs table
+        // has no unique constraint on appointment_id, so an appointment
+        // can legitimately have multiple jobs (e.g., add-on services).
+        // This keeps the back-link populated rather than nulling it.
         await client.query(`
           UPDATE jobs j
              SET appointment_id = r.winner_id, updated_at = NOW()
@@ -636,10 +634,6 @@ export async function runBootMigrations(): Promise<void> {
               SELECT id, winner_id FROM ranked WHERE id <> winner_id
             ) r
            WHERE j.appointment_id = r.id
-             AND NOT EXISTS (
-               SELECT 1 FROM jobs j2
-                WHERE j2.appointment_id = r.winner_id AND j2.id <> j.id
-             )
         `);
         // Repoint reviews (FK is ON DELETE CASCADE, so MUST happen
         // before the appointment delete).
@@ -663,20 +657,9 @@ export async function runBootMigrations(): Promise<void> {
             ) r
            WHERE h.appointment_id = r.id
         `);
-        // Null out any leftover loser→job links (winner already has its
-        // own job, so we can't repoint without violating "one job per
-        // appointment" expectations downstream). The orphan jobs survive
-        // and are picked up by the #227 reconciliation follow-up.
-        await client.query(`
-          UPDATE jobs j
-             SET appointment_id = NULL, updated_at = NOW()
-            FROM (
-              ${RANKED_CTE}
-              SELECT id FROM ranked WHERE id <> winner_id
-            ) loser
-           WHERE j.appointment_id = loser.id
-        `);
-        // Finally, delete the loser appointment rows.
+        // Finally, delete the loser appointment rows. All loser-linked
+        // jobs/reviews/housefax_entries have been repointed above, so the
+        // delete is safe.
         // The CTE's "a" alias is scoped inside the CTE only — it does not
         // collide with the outer DELETE's appointments table reference.
         const del = await client.query(`
@@ -698,6 +681,36 @@ export async function runBootMigrations(): Promise<void> {
         ON appointments (user_id, provider_id, scheduled_date)
         WHERE user_id IS NOT NULL AND scheduled_date IS NOT NULL
     `);
+
+    // ── Task #226: backfill jobs.appointment_id for legacy null links ────
+    // The original symptom that motivated #226: 353/361 jobs in production
+    // had jobs.appointment_id IS NULL, so opening a job from the provider
+    // CRM couldn't show the linked appointment timeline. The unique partial
+    // index above now guarantees that (provider_id, scheduled_date,
+    // homeowner_user_id) resolves to exactly one appointment, so we can
+    // safely backfill from jobs.client_id → clients.homeowner_user_id.
+    // Idempotent: only updates rows where appointment_id is still NULL.
+    try {
+      const jobBackfill = await client.query(`
+        UPDATE jobs j
+           SET appointment_id = a.id, updated_at = NOW()
+          FROM clients c, appointments a
+         WHERE j.appointment_id IS NULL
+           AND j.client_id = c.id
+           AND c.homeowner_user_id IS NOT NULL
+           AND a.user_id = c.homeowner_user_id
+           AND a.provider_id = j.provider_id
+           AND a.scheduled_date = j.scheduled_date
+      `);
+      if (jobBackfill.rowCount && jobBackfill.rowCount > 0) {
+        console.log(
+          `[boot-migration] Backfilled appointment_id on ${jobBackfill.rowCount} job(s) (Task #226)`,
+        );
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn("[boot-migration] jobs.appointment_id backfill skipped:", msg);
+    }
 
     // ── saved_providers: homeowner saved/favorited providers ─────────────
     await runSql("saved_providers.create", `

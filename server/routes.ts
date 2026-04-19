@@ -730,17 +730,59 @@ async function handleMarketplaceBooking(params: {
     // Instant booking: create appointment + client + job (matching portal flow)
     if (isInstant) {
       const apptDate = validPreferredDate ?? new Date();
-      const [appt] = await tx
-        .insert(appointments)
-        .values({
-          userId: homeownerUserId || null,
-          providerId: link.providerId,
-          serviceName: link.customTitle ?? "Home Service",
-          description: problemDescription,
-          scheduledDate: apptDate,
-          status: "confirmed",
-        })
-        .returning();
+      // Task #226: race-safe insert. The new unique partial index would
+      // otherwise turn a duplicate-tap into a 500. Mirror the same
+      // pre-check + onConflictDoNothing + reselect pattern used by
+      // storage.createAppointment, scoped to this transaction.
+      let appt: { id: string } | undefined;
+      if (homeownerUserId) {
+        const [pre] = await tx
+          .select({ id: appointments.id })
+          .from(appointments)
+          .where(
+            and(
+              eq(appointments.userId, homeownerUserId),
+              eq(appointments.providerId, link.providerId),
+              eq(appointments.scheduledDate, apptDate),
+            ),
+          )
+          .limit(1);
+        if (pre) appt = pre;
+      }
+      if (!appt) {
+        const inserted = await tx
+          .insert(appointments)
+          .values({
+            userId: homeownerUserId || null,
+            providerId: link.providerId,
+            serviceName: link.customTitle ?? "Home Service",
+            description: problemDescription,
+            scheduledDate: apptDate,
+            status: "confirmed",
+          })
+          .onConflictDoNothing()
+          .returning({ id: appointments.id });
+        if (inserted[0]) {
+          appt = inserted[0];
+        } else if (homeownerUserId) {
+          // Conflict raced past the pre-check — re-select the winner.
+          const [winner] = await tx
+            .select({ id: appointments.id })
+            .from(appointments)
+            .where(
+              and(
+                eq(appointments.userId, homeownerUserId),
+                eq(appointments.providerId, link.providerId),
+                eq(appointments.scheduledDate, apptDate),
+              ),
+            )
+            .limit(1);
+          appt = winner;
+        }
+        if (!appt) {
+          throw new Error("public booking: appointment insert produced no row");
+        }
+      }
 
       const converted = await convertIntakeToClientJob(tx, {
         submissionId: sub.id,
