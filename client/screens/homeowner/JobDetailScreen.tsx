@@ -7,6 +7,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import * as WebBrowser from "expo-web-browser";
 import { useQuery } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
@@ -72,6 +73,7 @@ interface InvoiceRecord {
   totalAmount: string;
   dueDate: string | null;
   paidAt: string | null;
+  hostedInvoiceUrl?: string | null;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; status: "success" | "info" | "warning" | "neutral" }> = {
@@ -185,9 +187,17 @@ export default function JobDetailScreen() {
 
   const isInvoiceUnpaid = invoice && invoice.status !== "paid" && invoice.status !== "cancelled";
 
-  const handlePayInvoice = () => {
+  const handlePayInvoice = async () => {
     if (!invoice) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    if (invoice.hostedInvoiceUrl) {
+      try {
+        await WebBrowser.openBrowserAsync(invoice.hostedInvoiceUrl);
+        return;
+      } catch (e) {
+        // Fall through to in-app Payment screen
+      }
+    }
     navigation.navigate("Payment", { jobId, invoiceId: invoice.id });
   };
 

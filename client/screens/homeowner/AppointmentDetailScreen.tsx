@@ -7,6 +7,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import * as WebBrowser from "expo-web-browser";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
@@ -76,6 +77,7 @@ interface LinkedInvoice {
   amount?: string | null;
   dueDate?: string | null;
   jobId?: string | null;
+  hostedInvoiceUrl?: string | null;
 }
 
 interface Appointment {
@@ -279,11 +281,38 @@ export default function AppointmentDetailScreen() {
   const canReview =
     isHomeowner && REVIEW_ELIGIBLE_STATUSES.has(appointment.status);
   const hasReview = !!appointment.review;
-  const hasUnpaidInvoice =
-    !!appointment.invoice &&
-    !!appointment.job &&
-    appointment.invoice.status !== "paid" &&
-    appointment.invoice.status !== "cancelled";
+  const hasInvoice = !!appointment.invoice;
+  const isInvoicePaid =
+    !!appointment.invoice && appointment.invoice.status === "paid";
+  const isInvoiceCancelled =
+    !!appointment.invoice && appointment.invoice.status === "cancelled";
+  const showInvoiceCta = hasInvoice && !isInvoiceCancelled;
+
+  const handleViewInvoice = async () => {
+    if (!appointment.invoice) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    if (appointment.invoice.hostedInvoiceUrl) {
+      try {
+        await WebBrowser.openBrowserAsync(appointment.invoice.hostedInvoiceUrl);
+        return;
+      } catch (e) {
+        // Fall through to in-app Payment screen
+      }
+    }
+    const fallbackJobId =
+      appointment.job?.id || appointment.invoice.jobId || null;
+    if (fallbackJobId) {
+      navigation.navigate("Payment", {
+        jobId: fallbackJobId,
+        invoiceId: appointment.invoice.id,
+      });
+      return;
+    }
+    Alert.alert(
+      "Unable to open invoice",
+      "We couldn't open this invoice right now. Please try again in a moment.",
+    );
+  };
 
   return (
     <ThemedView style={styles.container}>
@@ -397,7 +426,7 @@ export default function AppointmentDetailScreen() {
           );
         })()}
 
-        {appointment.invoice && appointment.job ? (
+        {appointment.invoice ? (
           <Animated.View entering={FadeInDown.delay(200).duration(400)}>
             <View style={styles.section}>
               <ThemedText style={styles.sectionTitle}>Invoice</ThemedText>
@@ -438,19 +467,13 @@ export default function AppointmentDetailScreen() {
                     Due: {formatDate(appointment.invoice.dueDate)}
                   </ThemedText>
                 ) : null}
-                {hasUnpaidInvoice ? (
+                {showInvoiceCta ? (
                   <View style={{ marginTop: Spacing.md }}>
                     <PrimaryButton
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                        navigation.navigate("Payment", {
-                          jobId: appointment.job!.id,
-                          invoiceId: appointment.invoice!.id,
-                        });
-                      }}
-                      testID="button-pay-invoice"
+                      onPress={handleViewInvoice}
+                      testID="button-view-invoice"
                     >
-                      {`Pay $${parseFloat(appointment.invoice.total || appointment.invoice.amount || "0").toFixed(2)}`}
+                      {isInvoicePaid ? "View Receipt" : "View Invoice"}
                     </PrimaryButton>
                   </View>
                 ) : null}
