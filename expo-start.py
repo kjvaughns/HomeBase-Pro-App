@@ -50,7 +50,10 @@ try { fs.writeFileSync("/tmp/expo-tunnel-url.txt", expoGoUrl, "utf8"); } catch (
 const env = {
   ...process.env,
   REACT_NATIVE_DEBUGGER_OPEN: "0",
-  // Override EXPO_PUBLIC_DOMAIN to point to Express backend (port 5000)
+  // Point EXPO_PUBLIC_DOMAIN at the bare Replit dev domain. Replit maps
+  // backend localPort 5000 → externalPort 80, so HTTPS to the bare domain
+  // reaches the Express server. Do NOT add ":5000" — that port is not
+  // externally reachable and produces 502s.
   EXPO_PUBLIC_DOMAIN: apiDomain,
   // Tell Metro to use the Replit domain in manifest bundle URLs (hostname only)
   REACT_NATIVE_PACKAGER_HOSTNAME: replitDomain,
