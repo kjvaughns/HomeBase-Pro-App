@@ -229,6 +229,7 @@ export default function BusinessHubScreen() {
   // Profile tab state
   const [businessName, setBusinessName] = useState("");
   const [description, setDescription] = useState("");
+  const [descriptionHeight, setDescriptionHeight] = useState(130);
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [hourlyRate, setHourlyRate] = useState("");
@@ -665,15 +666,23 @@ export default function BusinessHubScreen() {
                   backgroundColor: theme.backgroundElevated,
                   borderColor: theme.border,
                   marginTop: Spacing.xs,
+                  height: Math.max(130, descriptionHeight),
                 },
               ]}
               value={description}
               onChangeText={setDescription}
+              onContentSizeChange={(e) => {
+                const next = e.nativeEvent.contentSize.height + Spacing.md;
+                if (Math.abs(next - descriptionHeight) > 1) {
+                  setDescriptionHeight(next);
+                }
+              }}
               placeholder="Describe your business and services..."
               placeholderTextColor={theme.textTertiary}
               multiline
               numberOfLines={5}
               textAlignVertical="top"
+              scrollEnabled={false}
               testID="input-description"
             />
             {bioError.length > 0 ? (
