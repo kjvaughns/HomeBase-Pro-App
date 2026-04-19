@@ -20,6 +20,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useHomeownerStore } from "@/state/homeownerStore";
 import { useAuthStore } from "@/state/authStore";
+import { useLocationStore } from "@/state/locationStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { AccountGateModal } from "@/components/AccountGateModal";
 import { getApiUrl, getAuthHeaders, apiRequest, queryClient } from "@/lib/query-client";
@@ -129,10 +130,19 @@ export default function ProviderProfileScreen() {
     },
   });
 
+  // Pull the homeowner's coordinates so the server can compute the
+  // "Miles Away" distance (Task #207). Falls back gracefully when the
+  // user has no location set — the server returns distance: null.
+  const userCoords = useLocationStore((s) => s.coords);
   const { data: apiData, isLoading: isApiLoading } = useQuery<ApiProviderResponse>({
-    queryKey: ["/api/providers", providerId],
+    queryKey: ["/api/providers", providerId, userCoords?.lat, userCoords?.lng],
     queryFn: async () => {
-      const response = await fetch(new URL(`/api/providers/${providerId}`, getApiUrl()).toString());
+      const url = new URL(`/api/providers/${providerId}`, getApiUrl());
+      if (userCoords) {
+        url.searchParams.set("lat", String(userCoords.lat));
+        url.searchParams.set("lng", String(userCoords.lng));
+      }
+      const response = await fetch(url.toString());
       if (!response.ok) throw new Error("Provider not found");
       return response.json();
     },
@@ -168,6 +178,10 @@ export default function ProviderProfileScreen() {
 
   const [activeTab, setActiveTab] = useState<TabType>("about");
   const [showAccountGate, setShowAccountGate] = useState(false);
+  // Measure the floating Call/Text/Book Now bar so the scroll content
+  // clears it on every device (Task #207). Falls back to a generous
+  // default until the first layout pass arrives.
+  const [bottomBarHeight, setBottomBarHeight] = useState(140);
   const [reportingReviewId, setReportingReviewId] = useState<string | null>(null);
   const [reportSubmitting, setReportSubmitting] = useState(false);
 
@@ -621,7 +635,7 @@ export default function ProviderProfileScreen() {
       <ScrollView
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.md,
-          paddingBottom: insets.bottom + 100,
+          paddingBottom: bottomBarHeight + Spacing.lg,
           paddingHorizontal: Spacing.screenPadding,
         }}
         showsVerticalScrollIndicator={false}
@@ -690,7 +704,13 @@ export default function ProviderProfileScreen() {
         {activeTab === "reviews" ? renderReviewsTab() : null}
       </ScrollView>
 
-      <View style={[styles.bottomBar, { backgroundColor: theme.backgroundRoot, paddingBottom: insets.bottom + Spacing.md }]}>
+      <View
+        style={[styles.bottomBar, { backgroundColor: theme.backgroundRoot, paddingBottom: insets.bottom + Spacing.md }]}
+        onLayout={(e) => {
+          const h = e.nativeEvent.layout.height;
+          if (h > 0 && Math.abs(h - bottomBarHeight) > 1) setBottomBarHeight(h);
+        }}
+      >
         <View style={styles.contactButtons}>
           <Pressable
             style={[styles.contactButton, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}

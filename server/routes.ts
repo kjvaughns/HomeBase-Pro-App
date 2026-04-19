@@ -2922,12 +2922,37 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
           .select({ isPartner: providerPlans.isPartner })
           .from(providerPlans)
           .where(eq(providerPlans.providerId, req.params.id));
+
+        // Compute distance (Task #207) when the homeowner passes their
+        // coordinates, mirroring /api/providers list behavior so the
+        // "Miles Away" stat on the profile matches the marketplace cards.
+        const latRaw = req.query.lat as string | undefined;
+        const lngRaw = req.query.lng as string | undefined;
+        const userLat = latRaw !== undefined ? parseFloat(latRaw) : NaN;
+        const userLng = lngRaw !== undefined ? parseFloat(lngRaw) : NaN;
+        const pLat =
+          provider.latitude !== null && provider.latitude !== undefined
+            ? parseFloat(provider.latitude as unknown as string)
+            : NaN;
+        const pLng =
+          provider.longitude !== null && provider.longitude !== undefined
+            ? parseFloat(provider.longitude as unknown as string)
+            : NaN;
+        const distance =
+          Number.isFinite(userLat) &&
+          Number.isFinite(userLng) &&
+          Number.isFinite(pLat) &&
+          Number.isFinite(pLng)
+            ? haversineMiles(userLat, userLng, pLat, pLng)
+            : null;
+
         res.json({
           provider: {
             ...provider,
             bookingPolicies,
             businessHours,
             isPartner: planRow?.isPartner ?? false,
+            distance,
           },
           services: providerServices,
         });
