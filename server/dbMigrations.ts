@@ -388,6 +388,28 @@ export async function runBootMigrations(): Promise<void> {
       await runSql(label, sql);
     }
 
+    // ── Backfill: appointments stuck on pre-completion status whose linked
+    // job is already completed (Task #200). Auto-promote logic was added in
+    // Task #189, but it only runs at the moment of completion — jobs that
+    // wrapped before that fix shipped left their appointments stranded, so
+    // the homeowner never saw the "Leave a Review" button. Idempotent.
+    try {
+      const backfill = await client.query(`
+        UPDATE appointments a
+           SET status = 'completed', updated_at = NOW()
+          FROM jobs j
+         WHERE j.appointment_id = a.id
+           AND j.status = 'completed'
+           AND a.status NOT IN ('completed', 'cancelled')
+      `);
+      if (backfill.rowCount && backfill.rowCount > 0) {
+        console.log(`[boot-migration] Promoted ${backfill.rowCount} appointment(s) to completed to match their already-completed jobs`);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn("[boot-migration] Appointment status backfill skipped:", msg);
+    }
+
     // ── Post-migration verification ───────────────────────────────────────
     // ── Orphan-provider cleanup ────────────────────────────────────────────────
     // When a user account is deleted, providers.user_id is set to NULL by FK

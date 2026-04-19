@@ -7514,6 +7514,47 @@ Respond with JSON only:
             console.error("job.status_changed dispatch error:", e),
           );
         }
+        // Defense-in-depth (Task #200): if the generic job updater is used to
+        // transition a job to "completed", mirror the same appointment-promote
+        // behavior as POST /api/jobs/:id/complete so the homeowner can leave
+        // a review. Fire-and-forget; never blocks the response.
+        if (
+          status === "completed" &&
+          existing.status !== "completed" &&
+          job.appointmentId
+        ) {
+          const apptId = job.appointmentId;
+          (async () => {
+            try {
+              const [appt] = await db
+                .select({ id: appointments.id, status: appointments.status })
+                .from(appointments)
+                .where(eq(appointments.id, apptId))
+                .limit(1);
+              if (appt) {
+                // Mirror the REVIEWABLE set used by POST /api/jobs/:id/complete
+                // so the two completion paths stay in lock-step.
+                const REVIEWABLE = new Set([
+                  "completed",
+                  "paid",
+                  "closed",
+                  "awaiting_payment",
+                ]);
+                if (
+                  appt.status !== "cancelled" &&
+                  !REVIEWABLE.has(appt.status || "")
+                ) {
+                  await storage.updateAppointment(apptId, {
+                    status: "completed",
+                  });
+                }
+              }
+              await sendReviewNudge(apptId);
+            } catch (e) {
+              console.error("review nudge (job update) error:", e);
+            }
+          })();
+        }
         res.json({ job });
       } catch (error) {
         console.error("Update job error:", error);
