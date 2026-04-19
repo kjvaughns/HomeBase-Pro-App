@@ -1,0 +1,348 @@
+Replit Agent Prompt — Homeowner Tools + Zillow Integration
+
+Paste everything below the horizontal rule into Replit's agent. This is a bigger change than the App Store fixes prompt — it touches the schema, HouseFax, SurvivalKit, HealthScore, and the server enrichment pipeline. Tell the agent to plan first, then execute in the phase order below, and to commit each phase separately so you can review the progression.
+
+---
+
+You are working on **HomeBase-Pro-App**. The goal of this task is to make the three homeowner tools — **HouseFax**, **Survival Kit**, and **Home Health Score** — actually use the Zillow-enriched home data that already sits on the `homes` table, and to add a Home Profile editor inside HouseFax so homeowners can record the kinds of details any home service provider would ask about (AC type, HVAC install year, water heater, roof, etc.).
+
+Today these tools ignore Zillow data and re-ask homeowners for the same information every visit without saving the answers. That's what we're fixing.
+
+**Ground rules:**
+1. Plan before executing. Print the list of files you'll touch and proposed schema/API changes. Wait for my OK on the plan.
+2. Commit after each phase — one logical commit per phase — so I can review progressively.
+3. Run `npm run check:types` after each phase and report any new errors.
+4. Don't break existing data. Schema changes must be additive (no column drops/renames unless I approve).
+5. Don't touch the SubscriptionScreen, auth, Stripe Connect, or anything outside the scope below.
+
+---
+
+## Phase 1 — Extend the `homes` schema
+
+**File:** `shared/schema.ts`
+
+Add the following columns to the `homes` table. All nullable, all additive. Use Drizzle's `text`/`integer`/`boolean` types to match existing style.
+
+```ts
+// Building
+stories: integer("stories"),                            // 1, 2, 3, etc.
+foundationType: text("foundation_type"),                // "slab" | "crawl" | "basement" | "pier_and_beam"
+
+// Cooling / Heating / HVAC
+coolingType: text("cooling_type"),                      // "central_ac" | "heat_pump" | "mini_split" | "window_units" | "evaporative" | "none"
+heatingType: text("heating_type"),                      // "gas_furnace" | "electric_furnace" | "heat_pump" | "boiler" | "baseboard" | "radiant" | "none"
+hvacBrand: text("hvac_brand"),                          // free text, e.g. "Carrier", "Trane"
+hvacInstalledYear: integer("hvac_installed_year"),      // 2019, etc.
+hvacLastServicedAt: timestamp("hvac_last_serviced_at"),
+
+// Water heater
+waterHeaterType: text("water_heater_type"),             // "tank_gas" | "tank_electric" | "tankless_gas" | "tankless_electric" | "hybrid" | "solar"
+waterHeaterBrand: text("water_heater_brand"),
+waterHeaterInstalledYear: integer("water_heater_installed_year"),
+waterHeaterCapacityGallons: integer("water_heater_capacity_gallons"),
+
+// Roof
+roofMaterial: text("roof_material"),                    // "asphalt_shingle" | "metal" | "tile" | "slate" | "flat_tpo" | "flat_epdm" | "wood_shake"
+roofInstalledYear: integer("roof_installed_year"),
+
+// Exterior
+sidingMaterial: text("siding_material"),                // "vinyl" | "wood" | "stucco" | "brick" | "fiber_cement" | "metal"
+windowType: text("window_type"),                        // "single_pane" | "double_pane" | "triple_pane"
+yardSizeSqft: integer("yard_size_sqft"),
+
+// Electrical / Plumbing
+electricalPanelAmps: integer("electrical_panel_amps"),  // 100, 150, 200, 400
+electricalPanelType: text("electrical_panel_type"),     // "breaker" | "fuse" | "federal_pacific" | "zinsco" | "unknown"
+plumbingMaterial: text("plumbing_material"),            // "copper" | "pex" | "pvc" | "cpvc" | "galvanized" | "polybutylene"
+
+// Amenities / features
+hasBasement: boolean("has_basement"),
+hasAttic: boolean("has_attic"),
+hasGarage: boolean("has_garage"),
+garageType: text("garage_type"),                        // "attached_1" | "attached_2" | "attached_3plus" | "detached" | "carport" | null
+hasPool: boolean("has_pool"),
+hasSolar: boolean("has_solar"),
+hasSprinklers: boolean("has_sprinklers"),
+hasSecuritySystem: boolean("has_security_system"),
+hasFireplace: boolean("has_fireplace"),
+
+// Freeform notes for providers
+knownIssues: text("known_issues"),                      // short free-text; e.g., "Master bath shower has slow drain. South-facing fence leans."
+
+// Change-log audit
+detailsUpdatedAt: timestamp("details_updated_at"),
+detailsUpdatedBy: text("details_updated_by"),           // "homeowner" | "provider" | "zillow_import" | "health_score" | "survival_kit"
+```
+
+Then add a new `home_field_changes` table for the change log described in the spec:
+
+```ts
+export const homeFieldChanges = pgTable("home_field_changes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  homeId: varchar("home_id").notNull().references(() => homes.id, { onDelete: "cascade" }),
+  fieldName: text("field_name").notNull(),
+  oldValue: text("old_value"),
+  newValue: text("new_value"),
+  source: text("source").notNull(),                     // "homeowner" | "provider" | "zillow_import" | "health_score" | "survival_kit"
+  changedByUserId: varchar("changed_by_user_id").references(() => users.id),
+  changedAt: timestamp("changed_at").defaultNow().notNull(),
+});
+```
+
+Run `npm run db:push` to apply. Commit: `feat(schema): extend homes table with system/amenity details + change log`.
+
+---
+
+## Phase 2 — Zillow pipeline should populate what it can
+
+**File:** `server/housefaxService.ts`
+
+When Zillow enrichment runs (`enrichPropertyData`), map any Zillow response fields onto the new columns where the mapping is unambiguous. At minimum:
+
+- Zillow `livingArea` → `home.squareFeet` (already done, confirm)
+- Zillow `yearBuilt` → `home.yearBuilt` (already done, confirm)
+- Zillow `bedrooms`, `bathrooms`, `propertyType` → same-named columns (already done, confirm)
+- Zillow `lotSize` → `home.lotSize` (already done, confirm)
+- If Zillow returns `stories` (some payloads do), map to `home.stories`
+
+Zillow doesn't directly tell you `hvacType`, `waterHeaterType`, `roofMaterial`, etc. — leave those null for the homeowner to fill in.
+
+For every field Zillow did populate, write a `home_field_changes` entry with `source: "zillow_import"` so the change log shows the provenance.
+
+Commit: `feat(housefax): log Zillow-sourced home fields into change log`.
+
+---
+
+## Phase 3 — Server API for the Home Profile editor
+
+**File:** `server/routes.ts` (or wherever home routes live)
+
+Add/confirm these endpoints:
+
+1. `GET /api/homes/:homeId/profile`
+   - Returns the full home including all new fields and the most-recent 20 entries from `home_field_changes`.
+   - Authz: homeowner must own the home.
+
+2. `PATCH /api/homes/:homeId/profile`
+   - Body: partial home profile update (any subset of the new fields).
+   - Validate with a Zod schema that only accepts the allowed fields and enum values.
+   - For each changed field, write a `home_field_changes` row with `source: "homeowner"` and the current user's id.
+   - Update `home.detailsUpdatedAt` and `home.detailsUpdatedBy = "homeowner"`.
+   - Return the updated home profile + the new change-log entries.
+
+3. `GET /api/homes/:homeId/changes?limit=50`
+   - Paginated change log for the Home Changes view.
+
+Add Zod schemas to `shared/schema.ts` using `drizzle-zod`:
+
+```ts
+export const homeProfileUpdateSchema = createInsertSchema(homes).pick({
+  stories: true,
+  foundationType: true,
+  coolingType: true,
+  heatingType: true,
+  hvacBrand: true,
+  hvacInstalledYear: true,
+  waterHeaterType: true,
+  waterHeaterBrand: true,
+  waterHeaterInstalledYear: true,
+  waterHeaterCapacityGallons: true,
+  roofMaterial: true,
+  roofInstalledYear: true,
+  sidingMaterial: true,
+  windowType: true,
+  yardSizeSqft: true,
+  electricalPanelAmps: true,
+  electricalPanelType: true,
+  plumbingMaterial: true,
+  hasBasement: true,
+  hasAttic: true,
+  hasGarage: true,
+  garageType: true,
+  hasPool: true,
+  hasSolar: true,
+  hasSprinklers: true,
+  hasSecuritySystem: true,
+  hasFireplace: true,
+  knownIssues: true,
+}).partial();
+```
+
+Commit: `feat(server): home profile API (get/patch/changes)`.
+
+---
+
+## Phase 4 — Home Profile editor inside HouseFax
+
+**File:** `client/screens/homeowner/HouseFaxScreen.tsx`
+
+Add a new tab called **Profile** (between "Assets" and "Documents" — or replace "Overview" as the landing tab — your call, pick the cleaner IA).
+
+The Profile tab has three states:
+
+### 4a. Property Snapshot card (top of tab, always visible)
+Reads from Zillow-enriched fields on the home object.
+
+Show the following when available:
+- Formatted address (big, `home.formattedAddress` or fallback)
+- Year built • Square feet • Bedrooms/Bathrooms • Property type
+- Estimated value (from `home.estimatedValue`) with "via Zillow" tag
+- Tax assessed value + last sold price/date (small caption)
+- Neighborhood + County
+- Subtle "Update on Zillow ↗" link to `home.zillowUrl` if present
+
+If Zillow data is missing (null `zillowId`), show a "Pull property data" button that hits the enrichment endpoint on demand.
+
+### 4b. Home Details editor
+Sectioned form, each section is a collapsible card:
+
+**Section: Building**
+- Stories (segmented: 1, 2, 3+)
+- Foundation (pick: Slab / Crawlspace / Basement / Pier & beam)
+- Square feet (numeric — prefilled from Zillow, editable)
+- Year built (numeric — prefilled from Zillow, editable)
+
+**Section: HVAC**
+- Cooling type (pick: Central AC / Heat pump / Mini-split / Window units / Evaporative / None)
+- Heating type (pick: Gas furnace / Electric furnace / Heat pump / Boiler / Baseboard / Radiant / None)
+- HVAC brand (free text)
+- HVAC installed year (numeric)
+- "Last serviced" date (date picker; optional)
+
+**Section: Water Heater**
+- Type (pick: Tank gas / Tank electric / Tankless gas / Tankless electric / Hybrid / Solar)
+- Brand (free text)
+- Installed year (numeric)
+- Capacity in gallons (numeric; optional)
+
+**Section: Roof**
+- Material (pick: Asphalt shingle / Metal / Tile / Slate / Flat TPO / Flat EPDM / Wood shake)
+- Installed year (numeric)
+
+**Section: Exterior**
+- Siding (pick: Vinyl / Wood / Stucco / Brick / Fiber cement / Metal)
+- Windows (pick: Single pane / Double pane / Triple pane)
+- Yard size sqft (numeric; optional)
+
+**Section: Electrical & Plumbing**
+- Electrical panel amps (pick: 100 / 150 / 200 / 400)
+- Electrical panel type (pick: Breaker / Fuse / Federal Pacific / Zinsco / Unknown)
+- Plumbing material (pick: Copper / PEX / PVC / CPVC / Galvanized / Polybutylene)
+
+**Section: Amenities & Features**
+- Toggles for: Basement, Attic, Garage (+ sub-pick for garage type), Pool, Solar, Sprinklers, Security system, Fireplace
+
+**Section: Known issues (for providers)**
+- Multiline textarea, 500 char limit, caption: "Anything a provider should know before they show up — e.g., slow drain, fence repair needed, pilot light goes out."
+
+Implementation notes:
+- Use a single React Query hook `useHomeProfile(homeId)` that wraps `GET /api/homes/:homeId/profile`.
+- Use a mutation `useUpdateHomeProfile()` that wraps `PATCH /api/homes/:homeId/profile` and invalidates `useHomeProfile` + `housefaxData` on success.
+- Save on blur per-section, or show a bottom-docked "Save changes" button that batches the whole dirty form. Pick one — I prefer per-section save for lower-friction editing on mobile.
+- Build this on the existing `@gorhom/bottom-sheet` pattern used elsewhere in the app — open the editor in a full-height sheet rather than a stacked screen.
+
+### 4c. Home Changes log (bottom of Profile tab, or inside a "View history" link)
+Fetches `GET /api/homes/:homeId/changes` and renders a vertical timeline:
+- Icon + "HVAC brand set to Carrier" • "by you" / "by Elena's Plumbing" / "from Zillow" • "2 hours ago"
+- Before/after values on tap
+- Group by day
+
+Commit: `feat(housefax): Home Profile editor with Zillow snapshot + change log`.
+
+---
+
+## Phase 5 — Wire the wizards to read from and write to the home profile
+
+### 5a. SurvivalKitScreen
+**File:** `client/screens/homeowner/SurvivalKitScreen.tsx`
+
+In `prefillFromHome()` (currently around line 368), pull ALL of the following (not just the four it reads today):
+- `propertyType` → wizard `propertyType`
+- `yearBuilt` → bucket
+- `squareFeet` → bucket
+- `bedrooms` → label
+- `coolingType` → map to `hvacType` wizard value (or rename the wizard field to `coolingType` for consistency — preferred)
+- `hvacInstalledYear` → compute age bucket
+- `waterHeaterType` → wizard value
+- `waterHeaterInstalledYear` → compute age bucket
+- `roofInstalledYear` → compute age bucket
+- `yardSizeSqft` → map to `yardSize` bucket
+- `hasPool`, `hasGarage`, `hasBasement`, `hasSprinklers` → populate `exteriorFeatures` array
+
+When a wizard step is already answered from the home profile, **skip the step** (fast-forward) and show a compact inline "From your home profile · tap to edit" chip instead. Homeowner can tap it to override for this run.
+
+At the end of the wizard, when the user hits "Save & continue" or equivalent, call `PATCH /api/homes/:homeId/profile` to persist:
+- hvacType → `coolingType`
+- hvacAge → `hvacInstalledYear` (current year minus midpoint of bucket, or null if "Unknown")
+- waterHeaterType → `waterHeaterType`
+- roofAge → `roofInstalledYear` (current year minus midpoint)
+- yardSize → `yardSizeSqft` (midpoint estimate)
+- exteriorFeatures → individual boolean toggles
+
+Also: rename `MOCK_TIPS` → `MAINTENANCE_TIPS` while you're in there.
+
+### 5b. HealthScoreScreen
+**File:** `client/screens/homeowner/HealthScoreScreen.tsx`
+
+Same pattern:
+- `home-age` step: compute from `home.yearBuilt` and auto-skip.
+- `roof-age`: compute from `home.roofInstalledYear` and auto-skip.
+- `hvac-age`: compute from `home.hvacInstalledYear` and auto-skip.
+- `water-heater`: compute from `home.waterHeaterInstalledYear` and auto-skip.
+- When any of those are unknown/null, ask and save the answer back via `PATCH /api/homes/:homeId/profile` so the next tool session prefills.
+
+Source tag for writes from this screen: `"health_score"`.
+
+### 5c. Shared helper
+Create `client/lib/homeProfile.ts` with two small helpers used by both wizards:
+```ts
+export function yearsSince(installedYear: number | null | undefined): number | null;
+export function ageBucketFromYear(installedYear: number | null | undefined): "0-5" | "5-10" | "10-15" | "15+" | "unknown";
+export function bucketToInstalledYear(bucket: string): number | null;
+```
+
+Commit: `feat(tools): wizards read/write home profile; skip prefilled steps`.
+
+---
+
+## Phase 6 — Provider-facing read access
+
+This is the payoff — providers get to see the home profile when they receive a booking.
+
+**Files:** whatever provider-side screens show booking details (likely `client/screens/provider/AppointmentDetail*.tsx` and/or `client/screens/provider/JobDetail*.tsx`).
+
+Add a "Home profile" expandable section (collapsed by default) that renders the same data from the HouseFax Profile tab, read-only. Shows what the homeowner has declared so the provider isn't asking basic questions on the call.
+
+If `knownIssues` is set, surface it prominently at the top of the booking card ("Homeowner notes for you").
+
+Authz: provider can only see the profile for homes they have an active or recent booking against — confirm there's already a check pattern for this in the existing job-detail route, and reuse it.
+
+Commit: `feat(provider): surface home profile on booking/appointment detail`.
+
+---
+
+## Verification
+
+After all six phases:
+
+1. `npm run check:types` — zero new errors.
+2. `npm run db:push` — schema migration applies cleanly.
+3. In the Expo dev build:
+   - Add a new home → Zillow data pulls in → HouseFax Profile tab shows the snapshot.
+   - Edit HVAC / water heater / roof in the Profile editor → changes persist → change log shows "by you" entries.
+   - Open Survival Kit → HVAC / water heater / roof steps are auto-skipped with the "From your home profile" chip → answering a step that was unknown saves it back to the home.
+   - Open Home Health Score → same skip behavior for age questions.
+   - Sign in as a provider with a booking for that home → booking detail shows the home profile section.
+
+## What to report back
+
+After each phase: the files changed, the diff summary, and `check:types` status.
+After all phases: a walkthrough of the new flow on-device (or a screen recording if you can capture one in dev).
+
+## What NOT to do
+
+- Don't drop or rename existing columns.
+- Don't touch the App Store submission items (push projectId, privacy manifest, JWT secret, SecureStore migration) — those are a separate workstream.
+- Don't redesign HouseFax's other tabs (History, Assets, Documents, Insights) — leave them.
+- Don't change the SubscriptionScreen, Stripe Connect, or auth.
+- Don't commit the generated `ios/` or `android/` folders.
