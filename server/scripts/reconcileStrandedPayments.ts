@@ -115,22 +115,36 @@ async function reconcile(item: StrandedInvoice): Promise<ReconcileResult> {
   // Resolve the PaymentIntent that paid this invoice (works on both legacy
   // and current API versions: prefer the top-level field if present,
   // otherwise dig through the payments collection).
-  let paymentIntentId: string | null = null;
-  if ((stripeInvoice as any).payment_intent) {
-    paymentIntentId =
-      typeof (stripeInvoice as any).payment_intent === "string"
-        ? ((stripeInvoice as any).payment_intent as string)
-        : (((stripeInvoice as any).payment_intent as Stripe.PaymentIntent).id ??
-          null);
-  }
+  // The legacy top-level `payment_intent` field on Stripe.Invoice has been
+  // removed in newer API versions, hence the explicit shape extension here
+  // (no blanket `as any`).
+  type InvoiceWithLegacyLinks = Stripe.Invoice & {
+    payment_intent?: string | Stripe.PaymentIntent | null;
+    payments?: {
+      data?: Array<{
+        payment?: {
+          payment_intent?: string | Stripe.PaymentIntent | null;
+        } | null;
+      }>;
+    } | null;
+  };
+  const inv = stripeInvoice as InvoiceWithLegacyLinks;
+  const narrowId = (
+    v: string | { id?: string } | null | undefined,
+  ): string | null => {
+    if (!v) return null;
+    if (typeof v === "string") return v;
+    return v.id ?? null;
+  };
+
+  let paymentIntentId: string | null = narrowId(inv.payment_intent);
   if (!paymentIntentId) {
-    const paymentsList: any[] =
-      ((stripeInvoice as any).payments?.data as any[]) ?? [];
+    const paymentsList = inv.payments?.data ?? [];
     for (const p of paymentsList) {
-      const pid = p?.payment?.payment_intent;
+      const pid = narrowId(p?.payment?.payment_intent ?? null);
       if (pid) {
-        paymentIntentId = typeof pid === "string" ? pid : (pid?.id ?? null);
-        if (paymentIntentId) break;
+        paymentIntentId = pid;
+        break;
       }
     }
   }
@@ -278,6 +292,22 @@ async function reconcile(item: StrandedInvoice): Promise<ReconcileResult> {
         amountCents: amountPaid,
       };
     }
+  }
+
+  // True idempotency (architect review fix): when this run found a
+  // pre-existing reconciliation transfer (from a prior execution), the
+  // payments row and invoice notes were already written then. Re-running
+  // must be a true no-op for DB writes — no duplicate notes appended,
+  // no payments mutation. We still log so operators can see the run
+  // touched this invoice.
+  if (alreadyTransferred) {
+    return {
+      ok: true,
+      action: "already_reconciled",
+      invoiceNumber: item.invoiceNumber,
+      transferId,
+      amountCents: amountPaid,
+    };
   }
 
   // Persist a payments row + invoice note (idempotent UPSERT on PI id).

@@ -122,18 +122,27 @@ async function setupFixture(opts: {
   const clientId = `c_${RUN_TAG}_${Math.random().toString(36).slice(2, 8)}`;
   const invoiceId = `i_${RUN_TAG}_${Math.random().toString(36).slice(2, 8)}`;
 
+  // Test fixtures only set the columns this test cares about; the rest
+  // rely on schema defaults. We use Drizzle's `$inferInsert` types
+  // wrapped in `Partial<>` so the casts are typed (no blanket `any`).
+  type UserInsert = Partial<typeof users.$inferInsert>;
+  type ProviderInsert = Partial<typeof providers.$inferInsert>;
+  type ConnectInsert = Partial<typeof stripeConnectAccounts.$inferInsert>;
+  type ClientInsert = Partial<typeof clients.$inferInsert>;
+  type InvoiceInsert = Partial<typeof invoices.$inferInsert>;
+
   await db.insert(users).values({
     id: userId,
     email: `${userId}@test.local`,
     password: "x",
     isProvider: true,
-  } as any);
+  } as UserInsert as typeof users.$inferInsert);
 
   await db.insert(providers).values({
     id: providerId,
     userId,
     businessName: `Test Provider ${RUN_TAG}`,
-  } as any);
+  } as ProviderInsert as typeof providers.$inferInsert);
 
   await db.insert(stripeConnectAccounts).values({
     providerId,
@@ -141,7 +150,7 @@ async function setupFixture(opts: {
     chargesEnabled: opts.chargesEnabled,
     payoutsEnabled: opts.chargesEnabled,
     detailsSubmitted: true,
-  } as any);
+  } as ConnectInsert as typeof stripeConnectAccounts.$inferInsert);
 
   await db.insert(clients).values({
     id: clientId,
@@ -149,7 +158,7 @@ async function setupFixture(opts: {
     firstName: "Test",
     lastName: "Client",
     email: `${clientId}@test.local`,
-  } as any);
+  } as ClientInsert as typeof clients.$inferInsert);
 
   await db.insert(invoices).values({
     id: invoiceId,
@@ -166,7 +175,7 @@ async function setupFixture(opts: {
       { description: "Test service", quantity: 1, unitPrice: 50, total: 50 },
     ]),
     status: "draft",
-  } as any);
+  } as InvoiceInsert as typeof invoices.$inferInsert);
 
   const cleanup = async () => {
     await db.delete(payments).where(eq(payments.invoiceId, invoiceId));
@@ -266,6 +275,47 @@ async function main() {
   }
 
   // ---------------------------------------------------------------------------
+  // Test 2b: direct unit-level coverage of sendStripeInvoiceEmail's
+  // stripe_not_ready behavior (architect review fix). Asserts the helper
+  // throws with code='stripe_not_ready' BEFORE any Stripe API call when
+  // the provider's Connect account isn't ready.
+  // ---------------------------------------------------------------------------
+  console.log(
+    "\n2b. sendStripeInvoiceEmail refuses when chargesEnabled=false",
+  );
+  {
+    const fx = await setupFixture({ chargesEnabled: false });
+    const stub = makeStubStripe();
+    try {
+      const svc = await import("../stripeConnectService");
+      let threw: Error & { code?: string } = null as unknown as Error & {
+        code?: string;
+      };
+      await withStubStripe(stub, async () => {
+        try {
+          await svc.sendStripeInvoiceEmail(fx.invoiceId);
+        } catch (e) {
+          threw = e as Error & { code?: string };
+        }
+      });
+      ok("sendStripeInvoiceEmail threw an error", threw !== null);
+      ok(
+        "sendStripeInvoiceEmail error code is stripe_not_ready",
+        threw?.code === "stripe_not_ready",
+        `code=${threw?.code} message=${threw?.message}`,
+      );
+      ok(
+        "sendStripeInvoiceEmail made no Stripe API calls",
+        calls.length === 0,
+        `calls=${JSON.stringify(calls.map((c) => c.method))}`,
+      );
+    } finally {
+      await fx.cleanup();
+      calls.length = 0;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Test 3: handleStripeInvoicePaid upserts a payments row.
   // ---------------------------------------------------------------------------
   console.log("\n3. handleStripeInvoicePaid upserts a payments row");
@@ -343,14 +393,17 @@ async function main() {
         .set({ stripeInvoiceId })
         .where(eqOp(invoices.id, fx.invoiceId));
 
-      const fakePI: any = {
+      // Minimal Stripe.PaymentIntent shape for the fallback path. Cast
+      // through `unknown` so we don't have to construct every field of the
+      // SDK type, but stay typed at the call site.
+      const fakePI = {
         id: `pi_test_fb_${RUN_TAG}`,
         amount: 7500,
         latest_charge: `ch_test_fb_${RUN_TAG}`,
         invoice: stripeInvoiceId,
         metadata: {}, // explicitly missing invoiceId
-      };
-      await svc.handlePaymentIntentSucceeded(fakePI as any);
+      } as unknown as Stripe.PaymentIntent;
+      await svc.handlePaymentIntentSucceeded(fakePI);
 
       const rows = await db
         .select()
@@ -410,7 +463,7 @@ async function main() {
             )[0].userId!,
           ),
         );
-      const token = generateToken(u.id, "provider", (u as any).tokenVersion ?? 0);
+      const token = generateToken(u.id, "provider", u.tokenVersion ?? 0);
 
       const port = process.env.PORT || "5000";
       const base = `http://127.0.0.1:${port}`;
@@ -484,7 +537,7 @@ async function main() {
         .from(providers)
         .where(eq(providers.id, fx.providerId));
       const [u] = await db.select().from(users).where(eq(users.id, userId!));
-      const token = generateToken(u.id, "provider", (u as any).tokenVersion ?? 0);
+      const token = generateToken(u.id, "provider", u.tokenVersion ?? 0);
       const port = process.env.PORT || "5000";
       const resp = await fetch(
         `http://127.0.0.1:${port}/api/invoices/${fx.invoiceId}/send`,
@@ -545,7 +598,7 @@ async function main() {
         .from(providers)
         .where(eq(providers.id, fx.providerId));
       const [u] = await db.select().from(users).where(eq(users.id, userId!));
-      const token = generateToken(u.id, "provider", (u as any).tokenVersion ?? 0);
+      const token = generateToken(u.id, "provider", u.tokenVersion ?? 0);
       const [c] = await db
         .select({ id: clients.id })
         .from(clients)
