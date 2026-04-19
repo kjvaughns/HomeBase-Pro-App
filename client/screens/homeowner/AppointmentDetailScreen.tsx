@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { StyleSheet, View, ScrollView, Modal, Pressable, Alert, ActivityIndicator, TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -130,6 +130,26 @@ const TIME_SLOTS = [
   "12:00 PM", "1:00 PM", "2:00 PM", "3:00 PM",
   "4:00 PM", "5:00 PM"
 ];
+
+import { HomeProfileSection, type HomeProfile } from "@/components/HomeProfileSection";
+
+function ProviderHomeProfileForAppointment({ homeId }: { homeId: string }) {
+  const [home, setHome] = useState<HomeProfile | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    apiRequest("GET", `/api/homes/${homeId}/profile`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.home) setHome(data.home as HomeProfile);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [homeId]);
+  if (!home) return null;
+  return <HomeProfileSection home={home} editable highlightKnownIssues />;
+}
 
 export default function AppointmentDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -545,6 +565,14 @@ export default function AppointmentDetailScreen() {
                   </View>
                 ) : null}
               </View>
+            </View>
+          </Animated.View>
+        ) : null}
+
+        {appointment.homeId ? (
+          <Animated.View entering={FadeInDown.delay(280).duration(400)}>
+            <View style={styles.section}>
+              <ProviderHomeProfileForAppointment homeId={appointment.homeId} />
             </View>
           </Animated.View>
         ) : null}

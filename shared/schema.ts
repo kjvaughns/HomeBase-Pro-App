@@ -135,6 +135,46 @@ export const homes = pgTable("homes", {
   taxAssessedValue: decimal("tax_assessed_value", { precision: 12, scale: 2 }),
   lastSoldDate: text("last_sold_date"),
   lastSoldPrice: decimal("last_sold_price", { precision: 12, scale: 2 }),
+  stories: integer("stories"),
+
+  // Home profile - HVAC
+  hvacType: text("hvac_type"),
+  hvacInstalledYear: integer("hvac_installed_year"),
+  hvacLastServicedAt: timestamp("hvac_last_serviced_at"),
+  coolingType: text("cooling_type"),
+
+  // Home profile - Water heater
+  waterHeaterType: text("water_heater_type"),
+  waterHeaterInstalledYear: integer("water_heater_installed_year"),
+
+  // Home profile - Roof
+  roofMaterial: text("roof_material"),
+  roofInstalledYear: integer("roof_installed_year"),
+
+  // Home profile - Exterior
+  sidingMaterial: text("siding_material"),
+  foundationType: text("foundation_type"),
+  yardSizeSqft: integer("yard_size_sqft"),
+  hasBasement: boolean("has_basement"),
+  hasGarage: boolean("has_garage"),
+  hasPool: boolean("has_pool"),
+  hasDeck: boolean("has_deck"),
+  hasSprinklers: boolean("has_sprinklers"),
+  hasTreesNearRoof: boolean("has_trees_near_roof"),
+
+  // Home profile - Electrical & plumbing
+  electricalPanelAmps: integer("electrical_panel_amps"),
+  electricalPanelType: text("electrical_panel_type"),
+  plumbingMaterial: text("plumbing_material"),
+  sewerType: text("sewer_type"),
+
+  // Home profile - Amenities + notes
+  amenities: jsonb("amenities").$type<string[]>(),
+  knownIssues: text("known_issues"),
+
+  // Audit
+  detailsUpdatedAt: timestamp("details_updated_at"),
+  detailsUpdatedBy: varchar("details_updated_by"),
 
   // HouseFax enrichment fields - Google data
   latitude: decimal("latitude", { precision: 10, scale: 7 }),
@@ -1104,6 +1144,79 @@ export const insertHomeSchema = createInsertSchema(homes).omit({
   createdAt: true,
   updatedAt: true,
 });
+
+// Editable home profile fields - used by the Home Profile editor.
+// Picks only the fields homeowners can edit; everything is optional.
+export const homeProfileUpdateSchema = createInsertSchema(homes)
+  .pick({
+    propertyType: true,
+    bedrooms: true,
+    bathrooms: true,
+    squareFeet: true,
+    yearBuilt: true,
+    stories: true,
+    lotSize: true,
+    hvacType: true,
+    hvacInstalledYear: true,
+    hvacLastServicedAt: true,
+    coolingType: true,
+    waterHeaterType: true,
+    waterHeaterInstalledYear: true,
+    roofMaterial: true,
+    roofInstalledYear: true,
+    sidingMaterial: true,
+    foundationType: true,
+    yardSizeSqft: true,
+    hasBasement: true,
+    hasGarage: true,
+    hasPool: true,
+    hasDeck: true,
+    hasSprinklers: true,
+    hasTreesNearRoof: true,
+    electricalPanelAmps: true,
+    electricalPanelType: true,
+    plumbingMaterial: true,
+    sewerType: true,
+    amenities: true,
+    knownIssues: true,
+  })
+  .partial();
+export type HomeProfileUpdate = z.infer<typeof homeProfileUpdateSchema>;
+
+// Change-log table — every edit to a home profile field gets a row.
+export const homeFieldChanges = pgTable("home_field_changes", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  homeId: varchar("home_id")
+    .notNull()
+    .references(() => homes.id, { onDelete: "cascade" }),
+  fieldName: text("field_name").notNull(),
+  oldValue: text("old_value"),
+  newValue: text("new_value"),
+  source: text("source").notNull(), // "zillow_import" | "homeowner" | "health_score" | "survival_kit" | "provider"
+  changedByUserId: varchar("changed_by_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  changedAt: timestamp("changed_at").defaultNow().notNull(),
+});
+
+export const homeFieldChangesRelations = relations(
+  homeFieldChanges,
+  ({ one }) => ({
+    home: one(homes, {
+      fields: [homeFieldChanges.homeId],
+      references: [homes.id],
+    }),
+    changedByUser: one(users, {
+      fields: [homeFieldChanges.changedByUserId],
+      references: [users.id],
+    }),
+  }),
+);
+
+export type HomeFieldChange = typeof homeFieldChanges.$inferSelect;
+export type InsertHomeFieldChange = typeof homeFieldChanges.$inferInsert;
 
 export const insertAppointmentSchema = createInsertSchema(appointments, {
   scheduledDate: z.coerce.date(),

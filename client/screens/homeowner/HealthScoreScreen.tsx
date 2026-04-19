@@ -31,6 +31,13 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest, getApiUrl, getAuthHeaders } from "@/lib/query-client";
+import {
+  ageBucketFromYear,
+  roofAgeBucketFromYear,
+  bucketToInstalledYear,
+  healthScoreRoofBucketFromYear,
+  healthScoreSystemBucketFromYear,
+} from "@/lib/homeProfile";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -50,7 +57,7 @@ interface HealthScoreRun {
 }
 
 
-function computeScoreFromAnswers(answers: Record<string, any>): {
+function computeScoreFromAnswers(answers: Record<string, unknown>): {
   score: number;
   breakdown: { safety: number; water: number; energy: number; comfort: number; exterior: number };
   topRisks: string[];
@@ -78,7 +85,9 @@ function computeScoreFromAnswers(answers: Record<string, any>): {
   else if (answers["water-heater"] === "Unknown") { water -= 5; }
 
   // Visible symptoms (each symptom -5 to most relevant category)
-  const symptoms = answers["symptoms"] || [];
+  const symptoms: string[] = Array.isArray(answers["symptoms"])
+    ? (answers["symptoms"] as string[])
+    : [];
   if (symptoms.includes("Leaks or water stains")) { water -= 20; risks.push("Active leaks or water stains detected"); }
   if (symptoms.includes("Uneven temperatures")) { comfort -= 15; energy -= 10; }
   if (symptoms.includes("High energy bills")) { energy -= 15; risks.push("High energy bills — check insulation and HVAC"); }
@@ -242,6 +251,108 @@ function ScoreRing({ score, size = 120, strokeWidth = 10, animating = false }: {
   );
 }
 
+type HomeWithProfile = Home & {
+  hvacInstalledYear?: number | null;
+  roofInstalledYear?: number | null;
+  waterHeaterInstalledYear?: number | null;
+  knownIssues?: string[] | null;
+  hasBasement?: boolean | null;
+  hasPool?: boolean | null;
+  yardSizeSqft?: number | null;
+};
+
+type HealthAnswers = Record<string, string | string[] | boolean | number>;
+
+function buildPrefilledAnswers(home: Home | null): HealthAnswers {
+  const answers: HealthAnswers = {};
+  if (!home) return answers;
+  const h = home as HomeWithProfile;
+  const now = new Date().getFullYear();
+
+  if (home.yearBuilt) {
+    const age = now - home.yearBuilt;
+    answers["home-age"] =
+      age <= 5 ? "0-5 years" : age <= 15 ? "5-15 years" : age <= 30 ? "15-30 years" : "30+ years";
+  }
+  const roofBucket = healthScoreRoofBucketFromYear(h.roofInstalledYear);
+  if (roofBucket) answers["roof-age"] = roofBucket;
+  const hvacBucket = healthScoreSystemBucketFromYear(h.hvacInstalledYear);
+  if (hvacBucket) answers["hvac-age"] = hvacBucket;
+  const wHeaterBucket = healthScoreSystemBucketFromYear(h.waterHeaterInstalledYear);
+  if (wHeaterBucket) answers["water-heater"] = wHeaterBucket;
+  return answers;
+}
+
+function firstUnansweredStepIndex(answers: HealthAnswers): number {
+  for (let i = 0; i < WIZARD_STEPS.length; i++) {
+    const v = answers[WIZARD_STEPS[i].id];
+    if (v === undefined || v === "" || (Array.isArray(v) && v.length === 0)) {
+      return i;
+    }
+  }
+  return 0;
+}
+
+async function writeBackHealthAnswers(
+  homeId: string,
+  answers: HealthAnswers,
+) {
+  const payload: Record<string, unknown> = {};
+  const now = new Date().getFullYear();
+
+  const homeAgeToYear: Record<string, number> = {
+    "0-5 years": now - 2,
+    "5-15 years": now - 10,
+    "15-30 years": now - 22,
+    "30+ years": now - 40,
+  };
+  const roofAgeToYear: Record<string, number> = {
+    "< 5 years": now - 2,
+    "5-10 years": now - 7,
+    "10-20 years": now - 15,
+    "20+ years": now - 22,
+  };
+  const hvacAgeToYear: Record<string, number> = {
+    "< 5 years": now - 2,
+    "5-10 years": now - 7,
+    "10-15 years": now - 12,
+    "15+ years": now - 18,
+  };
+  const waterHeaterAgeToYear: Record<string, number> = {
+    "< 5 years": now - 2,
+    "5-10 years": now - 7,
+    "10-15 years": now - 12,
+    "15+ years": now - 18,
+  };
+
+  const homeAge = answers["home-age"];
+  if (typeof homeAge === "string" && homeAgeToYear[homeAge]) {
+    payload.yearBuilt = homeAgeToYear[homeAge];
+  }
+  const roofAge = answers["roof-age"];
+  if (typeof roofAge === "string" && roofAgeToYear[roofAge]) {
+    payload.roofInstalledYear = roofAgeToYear[roofAge];
+  }
+  const hvacAge = answers["hvac-age"];
+  if (typeof hvacAge === "string" && hvacAgeToYear[hvacAge]) {
+    payload.hvacInstalledYear = hvacAgeToYear[hvacAge];
+  }
+  const waterHeaterAge = answers["water-heater"];
+  if (typeof waterHeaterAge === "string" && waterHeaterAgeToYear[waterHeaterAge]) {
+    payload.waterHeaterInstalledYear = waterHeaterAgeToYear[waterHeaterAge];
+  }
+
+  if (Object.keys(payload).length === 0) return;
+  try {
+    await apiRequest("PATCH", `/api/homes/${homeId}/profile`, {
+      ...payload,
+      source: "health_score",
+    });
+  } catch (e) {
+    console.error("Health Score write-back failed:", e);
+  }
+}
+
 export default function HealthScoreScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
@@ -253,7 +364,8 @@ export default function HealthScoreScreen() {
   const [showWizard, setShowWizard] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [wizardStep, setWizardStep] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, any>>({});
+  const [answers, setAnswers] = useState<Record<string, unknown>>({});
+  const [prefilledKeys, setPrefilledKeys] = useState<Set<string>>(new Set());
   const [currentResult, setCurrentResult] = useState<HealthScoreRun | null>(null);
   const [showScoringDrawer, setShowScoringDrawer] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "risks" | "plan" | "history">("overview");
@@ -309,8 +421,10 @@ export default function HealthScoreScreen() {
 
   const handleStartAssessment = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setWizardStep(0);
-    setAnswers({});
+    const prefilled = buildPrefilledAnswers(selectedHome);
+    setAnswers(prefilled);
+    setPrefilledKeys(new Set(Object.keys(prefilled)));
+    setWizardStep(firstUnansweredStepIndex(prefilled));
     setShowWizard(true);
   };
 
@@ -344,6 +458,7 @@ export default function HealthScoreScreen() {
         } catch {
           // Non-blocking — score is still shown locally
         }
+        await writeBackHealthAnswers(selectedHome.id, answers as HealthAnswers);
       }
 
       setCurrentResult(newResult);
@@ -369,8 +484,12 @@ export default function HealthScoreScreen() {
   };
 
   const handleMultiSelect = (stepId: string, option: string) => {
-    const current = answers[stepId] || [];
-    const updated = current.includes(option) ? current.filter((o: string) => o !== option) : [...current, option];
+    const current = Array.isArray(answers[stepId])
+      ? (answers[stepId] as string[])
+      : [];
+    const updated = current.includes(option)
+      ? current.filter((o) => o !== option)
+      : [...current, option];
     setAnswers({ ...answers, [stepId]: updated });
   };
 
@@ -527,6 +646,26 @@ export default function HealthScoreScreen() {
             {step.helperText ? (
               <ThemedText style={[styles.wizardHelper, { color: theme.textSecondary }]}>{step.helperText}</ThemedText>
             ) : null}
+            {prefilledKeys.has(step.id) ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  alignSelf: "flex-start",
+                  paddingHorizontal: Spacing.sm,
+                  paddingVertical: 4,
+                  borderRadius: BorderRadius.sm,
+                  backgroundColor: Colors.accentLight,
+                  marginTop: Spacing.xs,
+                }}
+              >
+                <Feather name="check-circle" size={12} color={Colors.accent} />
+                <ThemedText style={{ fontSize: 11, color: Colors.accent, fontWeight: "600" }}>
+                  From your home profile · tap to change
+                </ThemedText>
+              </View>
+            ) : null}
 
             <View style={styles.wizardOptions}>
               {step.type === "single" && step.options?.map((option) => (
@@ -541,7 +680,9 @@ export default function HealthScoreScreen() {
               ))}
 
               {step.type === "multi" && step.options?.map((option) => {
-                const selected = (answers[step.id] || []).includes(option);
+                const selected = Array.isArray(answers[step.id])
+                  ? (answers[step.id] as string[]).includes(option)
+                  : false;
                 return (
                   <Pressable
                     key={option}

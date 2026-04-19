@@ -58,6 +58,10 @@ import {
   buildHouseFaxContext,
 } from "./housefaxService";
 import {
+  updateHomeWithChangeLog,
+  getHomeFieldChanges,
+} from "./homeProfileService";
+import {
   createConnectAccountLink,
   refreshConnectAccountLink,
   getConnectStatus,
@@ -114,6 +118,7 @@ import {
   supportTickets,
   savedProviders,
   reviewReports,
+  homeProfileUpdateSchema,
 } from "@shared/schema";
 
 import { generateToken, authenticateJWT } from "./auth";
@@ -1929,43 +1934,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
         enrichPropertyData(fullAddress)
           .then(async (enrichment) => {
             try {
-              const updateData: Record<string, unknown> = {
+              const zillowUpdates: Record<string, unknown> = {};
+              const otherUpdates: Record<string, unknown> = {
                 housefaxEnrichedAt: new Date(),
               };
 
               if (enrichment.zillow) {
-                const z = enrichment.zillow;
-                if (z.bedrooms) updateData.bedrooms = z.bedrooms;
-                if (z.bathrooms) updateData.bathrooms = z.bathrooms;
-                if (z.livingArea) updateData.squareFeet = z.livingArea;
-                if (z.yearBuilt) updateData.yearBuilt = z.yearBuilt;
-                if (z.lotSize) updateData.lotSize = z.lotSize;
+                const z = enrichment.zillow as Record<string, unknown> & {
+                  stories?: number;
+                  propertyType?: string;
+                };
+                if (z.bedrooms) zillowUpdates.bedrooms = z.bedrooms;
+                if (z.bathrooms) zillowUpdates.bathrooms = z.bathrooms;
+                if (z.livingArea) zillowUpdates.squareFeet = z.livingArea;
+                if (z.yearBuilt) zillowUpdates.yearBuilt = z.yearBuilt;
+                if (z.lotSize) zillowUpdates.lotSize = z.lotSize;
+                if (z.propertyType) zillowUpdates.propertyType = z.propertyType;
                 if (z.zestimate)
-                  updateData.estimatedValue = String(z.zestimate);
-                if (z.zpid) updateData.zillowId = z.zpid;
-                if (z.url) updateData.zillowUrl = z.url;
+                  zillowUpdates.estimatedValue = String(z.zestimate);
+                if (z.zpid) zillowUpdates.zillowId = z.zpid;
+                if (z.url) zillowUpdates.zillowUrl = z.url;
                 if (z.taxAssessedValue)
-                  updateData.taxAssessedValue = String(z.taxAssessedValue);
-                if (z.lastSoldDate) updateData.lastSoldDate = z.lastSoldDate;
+                  zillowUpdates.taxAssessedValue = String(z.taxAssessedValue);
+                if (z.lastSoldDate)
+                  zillowUpdates.lastSoldDate = z.lastSoldDate;
                 if (z.lastSoldPrice)
-                  updateData.lastSoldPrice = String(z.lastSoldPrice);
+                  zillowUpdates.lastSoldPrice = String(z.lastSoldPrice);
+                if (z.stories) zillowUpdates.stories = z.stories;
               }
 
               if (enrichment.google) {
                 const g = enrichment.google;
-                if (g.latitude) updateData.latitude = String(g.latitude);
-                if (g.longitude) updateData.longitude = String(g.longitude);
-                if (g.placeId) updateData.placeId = g.placeId;
+                if (g.latitude) otherUpdates.latitude = String(g.latitude);
+                if (g.longitude) otherUpdates.longitude = String(g.longitude);
+                if (g.placeId) otherUpdates.placeId = g.placeId;
                 if (g.formattedAddress)
-                  updateData.formattedAddress = g.formattedAddress;
+                  otherUpdates.formattedAddress = g.formattedAddress;
                 if (g.neighborhood)
-                  updateData.neighborhoodName = g.neighborhood;
-                if (g.county) updateData.countyName = g.county;
+                  otherUpdates.neighborhoodName = g.neighborhood;
+                if (g.county) otherUpdates.countyName = g.county;
               }
 
-              await storage.updateHome(home.id, updateData);
+              // Apply Zillow fields with change-log entries
+              if (Object.keys(zillowUpdates).length > 0) {
+                await updateHomeWithChangeLog({
+                  homeId: home.id,
+                  updates: zillowUpdates,
+                  source: "zillow_import",
+                });
+              }
+              await storage.updateHome(home.id, otherUpdates);
               console.log(
-                `Auto-enriched home ${home.id} with ${Object.keys(updateData).length - 1} fields`,
+                `Auto-enriched home ${home.id} with ${Object.keys(zillowUpdates).length + Object.keys(otherUpdates).length - 1} fields`,
               );
             } catch (err) {
               console.error("Auto-enrichment update failed:", err);
@@ -2161,55 +2181,200 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const fullAddress = `${home.street}, ${home.city}, ${home.state} ${home.zip}`;
         const enrichment = await enrichPropertyData(fullAddress);
 
-        // Prepare update data
-        const updateData: Record<string, unknown> = {
+        const zillowUpdates: Record<string, unknown> = {};
+        const otherUpdates: Record<string, unknown> = {
           housefaxEnrichedAt: new Date(),
         };
 
-        // Apply Zillow data if available
         if (enrichment.zillow) {
-          const z = enrichment.zillow;
-          if (z.bedrooms && !home.bedrooms) updateData.bedrooms = z.bedrooms;
-          if (z.bathrooms && !home.bathrooms)
-            updateData.bathrooms = z.bathrooms;
-          if (z.livingArea && !home.squareFeet)
-            updateData.squareFeet = z.livingArea;
-          if (z.yearBuilt && !home.yearBuilt)
-            updateData.yearBuilt = z.yearBuilt;
-          if (z.lotSize) updateData.lotSize = z.lotSize;
-          if (z.zestimate) updateData.estimatedValue = String(z.zestimate);
-          if (z.zpid) updateData.zillowId = z.zpid;
-          if (z.url) updateData.zillowUrl = z.url;
+          const z = enrichment.zillow as Record<string, unknown> & {
+            stories?: number;
+            propertyType?: string;
+          };
+          if (z.bedrooms) zillowUpdates.bedrooms = z.bedrooms;
+          if (z.bathrooms) zillowUpdates.bathrooms = z.bathrooms;
+          if (z.livingArea) zillowUpdates.squareFeet = z.livingArea;
+          if (z.yearBuilt) zillowUpdates.yearBuilt = z.yearBuilt;
+          if (z.lotSize) zillowUpdates.lotSize = z.lotSize;
+          if (z.propertyType) zillowUpdates.propertyType = z.propertyType;
+          if (z.zestimate) zillowUpdates.estimatedValue = String(z.zestimate);
+          if (z.zpid) zillowUpdates.zillowId = z.zpid;
+          if (z.url) zillowUpdates.zillowUrl = z.url;
           if (z.taxAssessedValue)
-            updateData.taxAssessedValue = String(z.taxAssessedValue);
-          if (z.lastSoldDate) updateData.lastSoldDate = z.lastSoldDate;
+            zillowUpdates.taxAssessedValue = String(z.taxAssessedValue);
+          if (z.lastSoldDate) zillowUpdates.lastSoldDate = z.lastSoldDate;
           if (z.lastSoldPrice)
-            updateData.lastSoldPrice = String(z.lastSoldPrice);
+            zillowUpdates.lastSoldPrice = String(z.lastSoldPrice);
+          if (z.stories) zillowUpdates.stories = z.stories;
         }
 
-        // Apply Google data if available
         if (enrichment.google) {
           const g = enrichment.google;
-          if (g.latitude) updateData.latitude = String(g.latitude);
-          if (g.longitude) updateData.longitude = String(g.longitude);
-          if (g.placeId) updateData.placeId = g.placeId;
+          if (g.latitude) otherUpdates.latitude = String(g.latitude);
+          if (g.longitude) otherUpdates.longitude = String(g.longitude);
+          if (g.placeId) otherUpdates.placeId = g.placeId;
           if (g.formattedAddress)
-            updateData.formattedAddress = g.formattedAddress;
-          if (g.neighborhood) updateData.neighborhoodName = g.neighborhood;
-          if (g.county) updateData.countyName = g.county;
+            otherUpdates.formattedAddress = g.formattedAddress;
+          if (g.neighborhood) otherUpdates.neighborhoodName = g.neighborhood;
+          if (g.county) otherUpdates.countyName = g.county;
         }
 
-        // Update the home
-        const updatedHome = await storage.updateHome(req.params.id, updateData);
+        // Apply Zillow values without overwriting homeowner-supplied data
+        if (Object.keys(zillowUpdates).length > 0) {
+          await updateHomeWithChangeLog({
+            homeId: home.id,
+            updates: zillowUpdates,
+            source: "zillow_import",
+            onlyIfEmpty: true,
+          });
+        }
+        const updatedHome = await storage.updateHome(home.id, otherUpdates);
 
         res.json({
           home: updatedHome ? formatHomeResponse(updatedHome) : null,
           enrichment,
-          fieldsUpdated: Object.keys(updateData).length - 1, // -1 for timestamp
+          fieldsUpdated:
+            Object.keys(zillowUpdates).length +
+            Object.keys(otherUpdates).length -
+            1,
         });
       } catch (error) {
         console.error("Home enrichment error:", error);
         res.status(500).json({ error: "Failed to enrich home" });
+      }
+    },
+  );
+
+  // ============ Home Profile editor endpoints ============
+
+  // GET /api/homes/:homeId/profile - read full home profile
+  app.get(
+    "/api/homes/:homeId/profile",
+    requireAuth,
+    async (req: Request<{ homeId: string }>, res: Response) => {
+      try {
+        const home = await storage.getHome(req.params.homeId);
+        if (!home) return res.status(404).json({ error: "Home not found" });
+        if (home.userId !== req.authenticatedUserId) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+        const recentChanges = await getHomeFieldChanges(home.id, 20);
+        res.json({ home: formatHomeResponse(home), changes: recentChanges });
+      } catch (error) {
+        console.error("Get home profile error:", error);
+        res.status(500).json({ error: "Failed to load home profile" });
+      }
+    },
+  );
+
+  // PATCH /api/homes/:homeId/profile - homeowner edits to the profile
+  app.patch(
+    "/api/homes/:homeId/profile",
+    requireAuth,
+    async (req: Request<{ homeId: string }>, res: Response) => {
+      try {
+        const home = await storage.getHome(req.params.homeId);
+        if (!home) return res.status(404).json({ error: "Home not found" });
+        if (home.userId !== req.authenticatedUserId) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+        const parsed = homeProfileUpdateSchema.safeParse(req.body);
+        if (!parsed.success) {
+          return res
+            .status(400)
+            .json({ error: "Invalid input", details: parsed.error.issues });
+        }
+        const sourceParam = (req.body?.source as string) || "homeowner";
+        const allowedSources = new Set([
+          "homeowner",
+          "health_score",
+          "survival_kit",
+        ]);
+        const source = (
+          allowedSources.has(sourceParam) ? sourceParam : "homeowner"
+        ) as "homeowner" | "health_score" | "survival_kit";
+        const result = await updateHomeWithChangeLog({
+          homeId: home.id,
+          updates: parsed.data as Record<string, unknown>,
+          source,
+          changedByUserId: req.authenticatedUserId,
+        });
+        res.json({
+          home: result ? formatHomeResponse(result.home) : null,
+          changes: result?.changes ?? [],
+        });
+      } catch (error) {
+        console.error("Update home profile error:", error);
+        res.status(500).json({ error: "Failed to update home profile" });
+      }
+    },
+  );
+
+  // GET /api/homes/:homeId/profile/provider-view - read-only profile for providers
+  // who have a job or appointment tied to this home.
+  app.get(
+    "/api/homes/:homeId/profile/provider-view",
+    requireAuth,
+    async (req: Request<{ homeId: string }>, res: Response) => {
+      try {
+        const authUserId = req.authenticatedUserId!;
+        const home = await storage.getHome(req.params.homeId);
+        if (!home) return res.status(404).json({ error: "Home not found" });
+
+        const providerRecord = await storage.getProviderByUserId(authUserId);
+        if (!providerRecord) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+        const [linkedJob] = await db
+          .select({ id: jobs.id })
+          .from(jobs)
+          .where(
+            and(
+              eq(jobs.homeId, home.id),
+              eq(jobs.providerId, providerRecord.id),
+            ),
+          )
+          .limit(1);
+        const [linkedAppt] = linkedJob
+          ? [null]
+          : await db
+              .select({ id: appointments.id })
+              .from(appointments)
+              .where(
+                and(
+                  eq(appointments.homeId, home.id),
+                  eq(appointments.providerId, providerRecord.id),
+                ),
+              )
+              .limit(1);
+        if (!linkedJob && !linkedAppt) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+        res.json({ home: formatHomeResponse(home) });
+      } catch (error) {
+        console.error("Provider home profile error:", error);
+        res.status(500).json({ error: "Failed to load home profile" });
+      }
+    },
+  );
+
+  // GET /api/homes/:homeId/changes - audit log
+  app.get(
+    "/api/homes/:homeId/changes",
+    requireAuth,
+    async (req: Request<{ homeId: string }>, res: Response) => {
+      try {
+        const home = await storage.getHome(req.params.homeId);
+        if (!home) return res.status(404).json({ error: "Home not found" });
+        if (home.userId !== req.authenticatedUserId) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+        const limit = Math.min(parseInt(String(req.query.limit ?? "50")), 200);
+        const changes = await getHomeFieldChanges(home.id, limit);
+        res.json({ changes });
+      } catch (error) {
+        console.error("Get home changes error:", error);
+        res.status(500).json({ error: "Failed to load change log" });
       }
     },
   );

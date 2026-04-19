@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { StyleSheet, View, ScrollView, Pressable, Dimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -15,6 +15,12 @@ import { HomeSelector, Home } from "@/components/HomeSelector";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuthStore } from "@/state/authStore";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
+import { apiRequest } from "@/lib/query-client";
+import {
+  ageBucketFromYear,
+  roofAgeBucketFromYear,
+  bucketToInstalledYear,
+} from "@/lib/homeProfile";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -324,6 +330,7 @@ export default function SurvivalKitScreen() {
     budgetGoal: "",
   });
   const [resultsTab, setResultsTab] = useState<"summary" | "plan" | "costs" | "tips" | "export">("summary");
+  const [prefilledFields, setPrefilledFields] = useState<Set<string>>(new Set());
 
   const currentStepIndex = WIZARD_STEPS.indexOf(currentStep);
   const totalSteps = WIZARD_STEPS.length - 2;
@@ -365,9 +372,112 @@ export default function SurvivalKitScreen() {
     }));
   }, []);
 
+  const writeBackToHome = useCallback(
+    async (homeId: string, data: WizardData) => {
+      const payload: Record<string, unknown> = {};
+      if (data.propertyType) payload.propertyType = data.propertyType;
+      if (data.yearBuilt) {
+        const yMap: Record<string, number> = {
+          "Before 1970": 1965,
+          "1970-1990": 1980,
+          "1990-2010": 2000,
+          "After 2010": 2015,
+          "Before 1960": 1955,
+          "1960-1980": 1970,
+        };
+        const y = yMap[data.yearBuilt];
+        if (y) payload.yearBuilt = y;
+      }
+      if (data.squareFootage) {
+        const sMap: Record<string, number> = {
+          small: 1200,
+          medium: 2000,
+          large: 3000,
+        };
+        const s = sMap[data.squareFootage];
+        if (s) payload.squareFeet = s;
+      }
+      if (data.bedrooms) {
+        const b = data.bedrooms === "4+" ? 4 : Number(data.bedrooms);
+        if (!Number.isNaN(b)) payload.bedrooms = b;
+      }
+      if (data.hvacType) payload.hvacType = data.hvacType;
+      const hvacYear = bucketToInstalledYear(data.hvacAge);
+      if (hvacYear) payload.hvacInstalledYear = hvacYear;
+      if (data.waterHeaterType) payload.waterHeaterType = data.waterHeaterType;
+      const roofYear = bucketToInstalledYear(data.roofAge);
+      if (roofYear) payload.roofInstalledYear = roofYear;
+      if (data.yardSize) {
+        payload.yardSizeSqft =
+          data.yardSize === "small"
+            ? 4000
+            : data.yardSize === "medium"
+              ? 8000
+              : 15000;
+      }
+      if (data.exteriorFeatures.includes("trees_near_roof"))
+        payload.hasTreesNearRoof = true;
+      if (data.exteriorFeatures.includes("basement"))
+        payload.hasBasement = true;
+      if (data.exteriorFeatures.includes("pool")) payload.hasPool = true;
+      if (data.exteriorFeatures.includes("garage")) payload.hasGarage = true;
+      if (data.exteriorFeatures.includes("deck_patio")) payload.hasDeck = true;
+      if (data.exteriorFeatures.includes("sprinklers"))
+        payload.hasSprinklers = true;
+      if (Object.keys(payload).length === 0) return;
+      try {
+        await apiRequest("PATCH", `/api/homes/${homeId}/profile`, {
+          ...payload,
+          source: "survival_kit",
+        });
+      } catch (e) {
+        console.error("Survival Kit write-back failed:", e);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (currentStep === "results" && selectedHome?.id) {
+      writeBackToHome(selectedHome.id, wizardData);
+    }
+  }, [currentStep, selectedHome?.id, wizardData, writeBackToHome]);
+
+  const firstUnfilledStep = (
+    home: Home,
+    h: { hvacType?: string | null; hvacInstalledYear?: number | null; waterHeaterType?: string | null; roofInstalledYear?: number | null; yardSizeSqft?: number | null },
+    exterior: string[],
+  ): WizardStep => {
+    if (!home.propertyType) return "property_type";
+    if (!home.yearBuilt) return "year_built";
+    if (!home.squareFeet) return "square_footage";
+    if (!home.bedrooms) return "bedrooms";
+    if (!h.hvacType) return "hvac_type";
+    if (!h.hvacInstalledYear) return "hvac_age";
+    if (!h.waterHeaterType) return "water_heater";
+    if (!h.roofInstalledYear) return "roof_age";
+    if (!h.yardSizeSqft) return "yard_size";
+    if (exterior.length === 0) return "exterior_features";
+    return "neighborhood";
+  };
+
   const prefillFromHome = useCallback((home: Home) => {
     setSelectedHome(home);
-    
+
+    const h = home as Home & {
+      hvacType?: string | null;
+      hvacInstalledYear?: number | null;
+      waterHeaterType?: string | null;
+      roofInstalledYear?: number | null;
+      yardSizeSqft?: number | null;
+      hasBasement?: boolean | null;
+      hasGarage?: boolean | null;
+      hasPool?: boolean | null;
+      hasDeck?: boolean | null;
+      hasSprinklers?: boolean | null;
+      hasTreesNearRoof?: boolean | null;
+    };
+
     const getPropertyType = (type?: string) => {
       if (!type) return "";
       const typeMap: Record<string, string> = {
@@ -379,7 +489,7 @@ export default function SurvivalKitScreen() {
       };
       return typeMap[type] || "";
     };
-    
+
     const getYearBuiltRange = (year?: number) => {
       if (!year) return "";
       if (year < 1970) return "Before 1970";
@@ -387,14 +497,14 @@ export default function SurvivalKitScreen() {
       if (year < 2010) return "1990-2010";
       return "After 2010";
     };
-    
+
     const getSquareFootageRange = (sqft?: number) => {
       if (!sqft) return "";
       if (sqft < 1500) return "small";
       if (sqft < 2500) return "medium";
       return "large";
     };
-    
+
     const getBedroomsLabel = (beds?: number) => {
       if (!beds) return "";
       if (beds === 1) return "1";
@@ -403,17 +513,60 @@ export default function SurvivalKitScreen() {
       if (beds >= 4) return "4+";
       return "";
     };
-    
+
+    const yardSizeBucket = (sqft?: number | null) => {
+      if (!sqft) return "";
+      if (sqft < 5400) return "small";
+      if (sqft < 10800) return "medium";
+      return "large";
+    };
+
+    const exterior: string[] = [];
+    if (h.hasTreesNearRoof) exterior.push("trees_near_roof");
+    if (h.hasBasement) exterior.push("basement");
+    if (h.hasPool) exterior.push("pool");
+    if (h.hasGarage) exterior.push("garage");
+    if (h.hasDeck) exterior.push("deck_patio");
+    if (h.hasSprinklers) exterior.push("sprinklers");
+
+    const filled = new Set<string>();
+    const propertyTypeVal = getPropertyType(home.propertyType);
+    const yearBuiltVal = getYearBuiltRange(home.yearBuilt);
+    const squareFootageVal = getSquareFootageRange(home.squareFeet);
+    const bedroomsVal = getBedroomsLabel(home.bedrooms);
+    if (propertyTypeVal) filled.add("propertyType");
+    if (yearBuiltVal) filled.add("yearBuilt");
+    if (squareFootageVal) filled.add("squareFootage");
+    if (bedroomsVal) filled.add("bedrooms");
+    if (h.hvacType) filled.add("hvacType");
+    if (h.hvacInstalledYear) filled.add("hvacAge");
+    if (h.waterHeaterType) filled.add("waterHeaterType");
+    if (h.roofInstalledYear) filled.add("roofAge");
+    if (h.yardSizeSqft) filled.add("yardSize");
+    if (exterior.length > 0) filled.add("exteriorFeatures");
+    setPrefilledFields(filled);
+
     setWizardData((prev) => ({
       ...prev,
-      propertyType: getPropertyType(home.propertyType),
-      yearBuilt: getYearBuiltRange(home.yearBuilt),
-      squareFootage: getSquareFootageRange(home.squareFeet),
-      bedrooms: getBedroomsLabel(home.bedrooms),
+      propertyType: propertyTypeVal,
+      yearBuilt: yearBuiltVal,
+      squareFootage: squareFootageVal,
+      bedrooms: bedroomsVal,
+      hvacType: h.hvacType || prev.hvacType,
+      hvacAge: h.hvacInstalledYear
+        ? ageBucketFromYear(h.hvacInstalledYear)
+        : prev.hvacAge,
+      waterHeaterType: h.waterHeaterType || prev.waterHeaterType,
+      roofAge: h.roofInstalledYear
+        ? roofAgeBucketFromYear(h.roofInstalledYear)
+        : prev.roofAge,
+      yardSize: yardSizeBucket(h.yardSizeSqft) || prev.yardSize,
+      exteriorFeatures: exterior.length > 0 ? exterior : prev.exteriorFeatures,
     }));
-    
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setCurrentStep("hvac_type");
+    // Jump to the first wizard step that isn't already prefilled.
+    setCurrentStep(firstUnfilledStep(home, h, exterior));
   }, []);
 
   const estimatedCost = useMemo(() => {
@@ -546,6 +699,44 @@ export default function SurvivalKitScreen() {
       </GlassCard>
     </Animated.View>
   );
+
+  const stepFieldMap: Record<string, string> = {
+    property_type: "propertyType",
+    year_built: "yearBuilt",
+    square_footage: "squareFootage",
+    bedrooms: "bedrooms",
+    hvac_type: "hvacType",
+    hvac_age: "hvacAge",
+    water_heater: "waterHeaterType",
+    roof_age: "roofAge",
+    yard_size: "yardSize",
+    exterior_features: "exteriorFeatures",
+  };
+
+  const renderPrefilledHint = () => {
+    const field = stepFieldMap[currentStep];
+    if (!field || !prefilledFields.has(field)) return null;
+    return (
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 6,
+          alignSelf: "flex-start",
+          paddingHorizontal: Spacing.sm,
+          paddingVertical: 4,
+          borderRadius: BorderRadius.sm,
+          backgroundColor: Colors.accentLight,
+          marginBottom: Spacing.sm,
+        }}
+      >
+        <Feather name="check-circle" size={12} color={Colors.accent} />
+        <ThemedText style={{ fontSize: 11, color: Colors.accent, fontWeight: "600" }}>
+          From your home profile · tap to change
+        </ThemedText>
+      </View>
+    );
+  };
 
   const renderWizardStep = () => {
     const stepContent = (() => {
@@ -919,6 +1110,7 @@ export default function SurvivalKitScreen() {
           </ThemedText>
         </View>
 
+        {renderPrefilledHint()}
         {stepContent}
 
         {currentStepIndex > 1 ? (

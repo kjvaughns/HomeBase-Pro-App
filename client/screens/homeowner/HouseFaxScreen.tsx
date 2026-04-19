@@ -15,8 +15,18 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
+import {
+  HomeProfileSection,
+  type HomeProfile,
+} from "@/components/HomeProfileSection";
 
-type TabType = "overview" | "history" | "assets" | "documents" | "insights";
+type TabType =
+  | "overview"
+  | "profile"
+  | "history"
+  | "assets"
+  | "documents"
+  | "insights";
 
 interface Home {
   id: string;
@@ -114,6 +124,19 @@ export default function HouseFaxScreen() {
   const [selectedAssetSystem, setSelectedAssetSystem] = useState<string | null>(null);
   const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
   const [historyFilter, setHistoryFilter] = useState<string>("all");
+  const [homeProfile, setHomeProfile] = useState<HomeProfile | null>(null);
+
+  const fetchHomeProfile = useCallback(async (homeId: string) => {
+    try {
+      const res = await apiRequest("GET", `/api/homes/${homeId}/profile`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.home) setHomeProfile(data.home as HomeProfile);
+      }
+    } catch (e) {
+      console.error("Error fetching home profile:", e);
+    }
+  }, []);
 
   const fetchHomes = useCallback(async () => {
     if (!user?.id) {
@@ -169,8 +192,9 @@ export default function HouseFaxScreen() {
     useCallback(() => {
       if (selectedHome?.id) {
         fetchHouseFaxData(selectedHome.id);
+        fetchHomeProfile(selectedHome.id);
       }
-    }, [selectedHome?.id, fetchHouseFaxData])
+    }, [selectedHome?.id, fetchHouseFaxData, fetchHomeProfile])
   );
 
   const formatCurrency = (value: number) => {
@@ -259,7 +283,7 @@ export default function HouseFaxScreen() {
   const renderTabs = () => (
     <View style={styles.tabsContainer}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        {(["overview", "history", "assets", "documents", "insights"] as TabType[]).map((tab) => (
+        {(["overview", "profile", "history", "assets", "documents", "insights"] as TabType[]).map((tab) => (
           <Pressable
             key={tab}
             onPress={() => {
@@ -284,6 +308,23 @@ export default function HouseFaxScreen() {
       </ScrollView>
     </View>
   );
+
+  const renderProfileTab = () => {
+    if (!homeProfile) {
+      return (
+        <View style={{ paddingVertical: Spacing.xl, alignItems: "center" }}>
+          <ActivityIndicator color={Colors.accent} />
+        </View>
+      );
+    }
+    return (
+      <HomeProfileSection
+        home={homeProfile}
+        editable
+        onUpdated={(updated) => setHomeProfile(updated)}
+      />
+    );
+  };
 
   const renderOverviewTab = () => {
     const recentEntries = housefaxData?.entries.slice(0, 4) || [];
@@ -783,6 +824,7 @@ export default function HouseFaxScreen() {
         {renderTabs()}
 
         {activeTab === "overview" ? renderOverviewTab() : null}
+        {activeTab === "profile" ? renderProfileTab() : null}
         {activeTab === "history" ? renderHistoryTab() : null}
         {activeTab === "assets" ? renderAssetsTab() : null}
         {activeTab === "documents" ? renderDocumentsTab() : null}

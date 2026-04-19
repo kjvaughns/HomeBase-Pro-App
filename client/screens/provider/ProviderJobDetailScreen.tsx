@@ -25,6 +25,101 @@ type JobStatus = "scheduled" | "confirmed" | "on_my_way" | "arrived" | "in_progr
 type DBJobStatus = JobStatus;
 type DisplayStatus = JobStatus;
 
+import { HomeProfileSection, type HomeProfile } from "@/components/HomeProfileSection";
+
+export function HomeownerNotesBanner({ homeId }: { homeId: string }) {
+  const [notes, setNotes] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    apiRequest("GET", `/api/homes/${homeId}/profile/provider-view`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.home?.knownIssues) {
+          setNotes(String(data.home.knownIssues));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [homeId]);
+  if (!notes) return null;
+  return (
+    <View
+      style={{
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: Colors.warning,
+        backgroundColor: "rgba(255, 193, 7, 0.08)",
+        marginBottom: 12,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
+        <Feather name="alert-circle" size={14} color={Colors.warning} />
+        <ThemedText style={{ fontWeight: "700", fontSize: 13 }}>
+          Homeowner notes for you
+        </ThemedText>
+      </View>
+      <ThemedText style={{ fontSize: 14, lineHeight: 20 }}>{notes}</ThemedText>
+    </View>
+  );
+}
+
+function ProviderHomeProfile({ homeId }: { homeId: string }) {
+  const [home, setHome] = useState<HomeProfile | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    apiRequest("GET", `/api/homes/${homeId}/profile/provider-view`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.home) setHome(data.home as HomeProfile);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [homeId]);
+  const [expanded, setExpanded] = useState(false);
+  if (!home) return null;
+  if (!expanded) {
+    return (
+      <Pressable
+        onPress={() => setExpanded(true)}
+        style={{
+          padding: 14,
+          borderRadius: 12,
+          backgroundColor: "rgba(0,0,0,0.04)",
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginVertical: 8,
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+          <Feather name="home" size={16} />
+          <ThemedText style={{ fontWeight: "600" }}>
+            Home profile{home.knownIssues ? " · Notes from homeowner" : ""}
+          </ThemedText>
+        </View>
+        <Feather name="chevron-down" size={18} />
+      </Pressable>
+    );
+  }
+  return (
+    <View>
+      <Pressable
+        onPress={() => setExpanded(false)}
+        style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}
+      >
+        <Feather name="chevron-up" size={16} />
+        <ThemedText style={{ fontWeight: "600" }}>Hide home profile</ThemedText>
+      </Pressable>
+      <HomeProfileSection home={home} editable={false} highlightKnownIssues />
+    </View>
+  );
+}
+
 interface ApiJob {
   id: string;
   providerId: string;
@@ -46,6 +141,7 @@ interface ApiJob {
   isRecurring?: boolean;
   recurringFrequency?: string | null;
   checklist?: JobChecklistItem[] | null;
+  homeId?: string | null;
 }
 
 interface ApiClient {
@@ -490,6 +586,8 @@ export default function ProviderJobDetailScreen() {
           <StatusBanner status={resolvedDisplayStatus} />
         </Animated.View>
 
+        {job.homeId ? <HomeownerNotesBanner homeId={job.homeId} /> : null}
+
         <Animated.View entering={FadeInDown.delay(100).duration(400)}>
           <GlassCard style={styles.section}>
             <View style={styles.customerRow}>
@@ -622,6 +720,12 @@ export default function ProviderJobDetailScreen() {
               </ThemedText>
               <ThemedText type="body">{job.notes}</ThemedText>
             </GlassCard>
+          </Animated.View>
+        ) : null}
+
+        {job.homeId ? (
+          <Animated.View entering={FadeInDown.delay(650).duration(400)}>
+            <ProviderHomeProfile homeId={job.homeId} />
           </Animated.View>
         ) : null}
 
