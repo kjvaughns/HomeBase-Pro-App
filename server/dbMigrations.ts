@@ -89,6 +89,31 @@ export async function runBootMigrations(): Promise<void> {
     // payment_status enum on this column but Supabase was missing it.
     await runSql("payments.status", `ALTER TABLE payments ADD COLUMN IF NOT EXISTS status payment_status DEFAULT 'requires_payment'`);
 
+    // ── payment_method enum: drift fixed in Task #245. Schema declares
+    // 'stripe' and 'credits' values; some envs were missing them which
+    // caused webhook upserts to fail with `invalid input value for enum`.
+    await runSql(
+      "payment_method.add_stripe",
+      `ALTER TYPE payment_method ADD VALUE IF NOT EXISTS 'stripe'`,
+    );
+    await runSql(
+      "payment_method.add_credits",
+      `ALTER TYPE payment_method ADD VALUE IF NOT EXISTS 'credits'`,
+    );
+
+    // ── payments.stripe_payment_intent_id unique index (Task #245). Required
+    // for ON CONFLICT (stripe_payment_intent_id) DO UPDATE in
+    // handleStripeInvoicePaid / handlePaymentIntentSucceeded. Without this
+    // index, paid-webhook processing fails with "no unique or exclusion
+    // constraint matching ON CONFLICT". Non-partial: Postgres treats NULLs
+    // as distinct so non-Stripe payments are unaffected; non-partial form
+    // is required because Drizzle's onConflict helper cannot restate a
+    // partial-index WHERE predicate.
+    await runSql(
+      "payments.stripe_payment_intent_id_unique",
+      `CREATE UNIQUE INDEX IF NOT EXISTS payments_stripe_payment_intent_id_unique ON payments (stripe_payment_intent_id)`,
+    );
+
     // ── payouts.description: drift discovered in Task #203 audit. ─────────
     await runSql("payouts.description", `ALTER TABLE payouts ADD COLUMN IF NOT EXISTS description TEXT`);
 

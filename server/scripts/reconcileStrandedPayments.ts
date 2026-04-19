@@ -184,30 +184,100 @@ async function reconcile(item: StrandedInvoice): Promise<ReconcileResult> {
       amountCents: amountPaid,
     };
   } else {
-    const transfer = await stripe.transfers.create(
-      {
-        amount: amountPaid,
-        currency: stripeInvoice.currency || "usd",
-        destination: item.destinationConnectAccountId,
-        source_transaction: chargeId,
-        transfer_group: transferGroup,
-        description: `HomeBase Task #245 reconciliation for ${item.invoiceNumber}`,
-        metadata: {
-          reason: "task-245-reconciliation",
-          homebaseInvoiceId: invRow.id,
-          invoiceNumber: item.invoiceNumber,
+    try {
+      const transfer = await stripe.transfers.create(
+        {
+          amount: amountPaid,
+          currency: stripeInvoice.currency || "usd",
+          destination: item.destinationConnectAccountId,
+          source_transaction: chargeId,
+          transfer_group: transferGroup,
+          description: `HomeBase Task #245 reconciliation for ${item.invoiceNumber}`,
+          metadata: {
+            reason: "task-245-reconciliation",
+            homebaseInvoiceId: invRow.id,
+            invoiceNumber: item.invoiceNumber,
+          },
         },
-      },
-      // Stripe-side idempotency key — guarantees that even if the script
-      // crashes between transfers.create returning and our DB write
-      // committing, a retry will return the original transfer rather than
-      // create a duplicate (architect review, Task #245).
-      { idempotencyKey: `reconcile_inv_${invRow.id}_v1` },
-    );
-    transferId = transfer.id;
-    console.log(
-      `${tag} CREATED transfer=${transferId} amount=${amountPaid} → ${item.destinationConnectAccountId}`,
-    );
+        // Stripe-side idempotency key — guarantees that even if the script
+        // crashes between transfers.create returning and our DB write
+        // committing, a retry will return the original transfer rather than
+        // create a duplicate (architect review, Task #245).
+        { idempotencyKey: `reconcile_inv_${invRow.id}_v1` },
+      );
+      transferId = transfer.id;
+      console.log(
+        `${tag} CREATED transfer=${transferId} amount=${amountPaid} → ${item.destinationConnectAccountId}`,
+      );
+    } catch (transferErr: any) {
+      // Transfer-or-refund fallback (per Task #245 step 4): if the platform
+      // can't move the funds to the provider's connected account (e.g. the
+      // connected account is restricted, charges_disabled, or Stripe
+      // refuses the transfer for any other reason), the homeowner must not
+      // be left holding an unrouted charge. Refund them and audit the
+      // failure. Refund is also idempotency-keyed so a re-run is safe.
+      console.error(
+        `${tag} transfer FAILED (${transferErr?.code ?? "unknown"} / ${transferErr?.message}); falling back to homeowner refund`,
+      );
+      const refund = await stripe.refunds.create(
+        {
+          charge: chargeId,
+          reason: "requested_by_customer",
+          metadata: {
+            reason: "task-245-reconciliation-transfer-failed",
+            homebaseInvoiceId: invRow.id,
+            invoiceNumber: item.invoiceNumber,
+            transferError: String(transferErr?.message ?? transferErr),
+          },
+        },
+        { idempotencyKey: `reconcile_refund_${invRow.id}_v1` },
+      );
+      console.log(
+        `${tag} REFUNDED ${amountPaid} cents via ${refund.id} after transfer failure`,
+      );
+      // Mark the homebase invoice as refunded and audit-note the path so
+      // ops can follow up. We return early — there is no transfer to
+      // record, but the refund replaces it as the terminal funds movement.
+      const refundNote = `\n[Task #245 reconciliation ${new Date().toISOString()}] transfer to ${item.destinationConnectAccountId} FAILED (${transferErr?.message}); refunded ${amountPaid} cents to homeowner via ${refund.id}`;
+      await db
+        .update(invoices)
+        .set({
+          status: "void",
+          notes: (invRow.notes || "") + refundNote,
+          updatedAt: new Date(),
+        })
+        .where(eq(invoices.id, invRow.id));
+      if (paymentIntentId) {
+        await db
+          .insert(payments)
+          .values({
+            invoiceId: invRow.id,
+            providerId: invRow.providerId,
+            amountCents: amountPaid,
+            amount: (amountPaid / 100).toFixed(2),
+            method: "stripe",
+            status: "refunded",
+            stripePaymentIntentId: paymentIntentId,
+            stripeChargeId: chargeId,
+            notes: `Refunded via Task #245 fallback: ${refund.id}`,
+          })
+          .onConflictDoUpdate({
+            target: payments.stripePaymentIntentId,
+            set: {
+              status: "refunded",
+              stripeChargeId: chargeId,
+              notes: `Refunded via Task #245 fallback: ${refund.id}`,
+            },
+          });
+      }
+      return {
+        ok: true,
+        action: "created_transfer",
+        invoiceNumber: item.invoiceNumber,
+        transferId: refund.id,
+        amountCents: amountPaid,
+      };
+    }
   }
 
   // Persist a payments row + invoice note (idempotent UPSERT on PI id).
