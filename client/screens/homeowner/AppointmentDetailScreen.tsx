@@ -39,7 +39,8 @@ interface Provider {
   businessName: string;
   rating?: string;
   reviewCount?: number;
-  phone?: string;
+  phone?: string | null;
+  email?: string | null;
   avatarUrl?: string;
 }
 
@@ -431,16 +432,48 @@ export default function AppointmentDetailScreen() {
           </Animated.View>
         ) : null}
 
-        {appointment.provider?.phone ? (
+        {appointment.provider?.phone || appointment.provider?.email ? (
           <Animated.View entering={FadeInDown.delay(250).duration(400)}>
             <View style={styles.section}>
               <ThemedText style={styles.sectionTitle}>Provider Contact</ThemedText>
               <View style={[styles.detailCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
-                <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
-                  <Feather name="phone" size={18} color={theme.textSecondary} />
-                  <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Phone</ThemedText>
-                  <ThemedText style={styles.detailValue}>{appointment.provider.phone}</ThemedText>
-                </View>
+                {appointment.provider.phone ? (
+                  <View style={[styles.detailRow, { borderBottomWidth: appointment.provider.email ? StyleSheet.hairlineWidth : 0 }]}>
+                    <Feather name="phone" size={18} color={theme.textSecondary} />
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Phone</ThemedText>
+                    <ThemedText style={styles.detailValue}>{appointment.provider.phone}</ThemedText>
+                  </View>
+                ) : null}
+                {appointment.provider.email ? (
+                  <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
+                    <Feather name="mail" size={18} color={theme.textSecondary} />
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Email</ThemedText>
+                    <ThemedText style={styles.detailValue} numberOfLines={1}>{appointment.provider.email}</ThemedText>
+                  </View>
+                ) : null}
+              </View>
+            </View>
+          </Animated.View>
+        ) : null}
+
+        {appointment.job?.notes || (appointment.job?.checklistCount && appointment.job.checklistCount > 0) ? (
+          <Animated.View entering={FadeInDown.delay(275).duration(400)}>
+            <View style={styles.section}>
+              <ThemedText style={styles.sectionTitle}>Job Notes</ThemedText>
+              <View style={[styles.summaryCard, { backgroundColor: theme.cardBackground, borderColor: theme.borderLight }]}>
+                {appointment.job?.notes ? (
+                  <ThemedText style={[styles.summaryText, { color: theme.text }]}>
+                    {appointment.job.notes}
+                  </ThemedText>
+                ) : null}
+                {appointment.job?.checklistCount && appointment.job.checklistCount > 0 ? (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.xs, marginTop: appointment.job.notes ? Spacing.sm : 0 }}>
+                    <Feather name="check-square" size={14} color={Colors.accent} />
+                    <ThemedText style={{ ...Typography.caption1, color: Colors.accent, fontWeight: "600" }}>
+                      {appointment.job.checklistCount} checklist {appointment.job.checklistCount === 1 ? "item" : "items"}
+                    </ThemedText>
+                  </View>
+                ) : null}
               </View>
             </View>
           </Animated.View>

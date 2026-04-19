@@ -1,11 +1,11 @@
 {
-  "id": "9c396d54-578a-4a8f-9f96-dda3e40dfffb",
-  "createdAt": "2026-04-02T04:45:24.081Z",
-  "runtimeVersion": "exposdk:55.0.0",
+  "id": "a1c58ff8-a5bd-40ec-a6f0-4628971b2cd5",
+  "createdAt": "2026-04-19T03:29:08.390Z",
+  "runtimeVersion": "1.1.0",
   "launchAsset": {
-    "key": "bundle-1775105124081-8801",
+    "key": "bundle-1776569348390-82958",
     "contentType": "application/javascript",
-    "url": "https://71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo.spock.replit.dev/1775105124081-8801/_expo/static/js/android/bundle.js"
+    "url": "https://71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo.spock.replit.dev/1776569348390-82958/_expo/static/js/android/bundle.js"
   },
   "assets": [],
   "metadata": {},
@@ -16,7 +16,7 @@
     "expoClient": {
       "name": "HomeBase",
       "slug": "homebase",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "privacyPolicyUrl": "https://homebaseproapp.com/privacy",
       "orientation": "portrait",
       "icon": "./assets/images/icon.png",
@@ -26,15 +26,13 @@
       "ios": {
         "supportsTablet": true,
         "bundleIdentifier": "com.homebasepro.app",
-        "buildNumber": "1",
+        "buildNumber": "2",
         "infoPlist": {
           "ITSAppUsesNonExemptEncryption": false,
-          "NSCameraUsageDescription": "HomeBase uses your camera to photograph your home, projects, and documents when submitting service requests or capturing job progress.",
           "NSPhotoLibraryUsageDescription": "HomeBase accesses your photo library so you can attach photos of your home, projects, or documents to service requests and job records.",
           "NSPhotoLibraryAddUsageDescription": "HomeBase saves photos related to your home projects and service records to your photo library.",
-          "NSMicrophoneUsageDescription": "HomeBase uses the microphone when recording video walkthroughs of your home or project areas to share with service providers.",
           "NSLocationWhenInUseUsageDescription": "HomeBase uses your location to find nearby service providers and verify service addresses.",
-          "NSContactsUsageDescription": "HomeBase accesses your contacts so you can quickly add clients or invite service providers without retyping their information."
+          "NSUserNotificationsUsageDescription": "HomeBase sends you appointment reminders, booking confirmations, and service updates."
         }
       },
       "android": {
@@ -45,7 +43,14 @@
         },
         "edgeToEdgeEnabled": true,
         "predictiveBackGestureEnabled": false,
-        "package": "com.homebase.app"
+        "package": "com.homebase.app",
+        "versionCode": 2,
+        "permissions": [
+          "ACCESS_COARSE_LOCATION",
+          "ACCESS_FINE_LOCATION",
+          "android.permission.ACCESS_COARSE_LOCATION",
+          "android.permission.ACCESS_FINE_LOCATION"
+        ]
       },
       "web": {
         "output": "single",
@@ -67,6 +72,7 @@
         "expo-web-browser",
         "expo-font",
         "expo-image",
+        "expo-location",
         [
           "expo-build-properties",
           {
@@ -90,6 +96,12 @@
           "projectId": "16db0e26-c342-42df-934c-b619f917e881"
         }
       },
+      "runtimeVersion": "1.1.0",
+      "updates": {
+        "url": "https://u.expo.dev/16db0e26-c342-42df-934c-b619f917e881",
+        "checkAutomatically": "ON_LOAD",
+        "fallbackToCacheTimeout": 0
+      },
       "_internal": {
         "isDebug": false,
         "projectRoot": "/home/runner/workspace",
@@ -112,6 +124,10 @@
           "expo-image": {
             "name": "expo-image",
             "version": "55.0.6"
+          },
+          "expo-location": {
+            "name": "expo-location",
+            "version": "55.1.8"
           },
           "@stripe/stripe-react-native": {
             "name": "@stripe/stripe-react-native",
@@ -139,6 +155,6 @@
       },
       "mainModuleName": "client/index"
     },
-    "scopeKey": "@anonymous/homebase-5c7d3a4a-90ae-49a2-bc82-709dc3efff21"
+    "scopeKey": "@anonymous/homebase-9588e196-d13c-4617-8746-900b620aaeed"
   }
 }

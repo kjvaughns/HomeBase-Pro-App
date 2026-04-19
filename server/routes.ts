@@ -2929,6 +2929,7 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
                   rating: provider.rating,
                   reviewCount: provider.reviewCount,
                   phone: provider.phone,
+                  email: provider.email,
                   avatarUrl: provider.avatarUrl,
                 }
               : null,
