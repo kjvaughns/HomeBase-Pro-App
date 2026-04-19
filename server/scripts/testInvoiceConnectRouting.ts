@@ -467,6 +467,150 @@ async function main() {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Test 6: ROUTE-LEVEL — POST /api/invoices/:id/send (the legacy
+  // non-/api/stripe send endpoint) MUST also fail closed on
+  // stripe_not_ready, otherwise the Connect-routing contract has a hole.
+  // ---------------------------------------------------------------------------
+  console.log(
+    "\n6. POST /api/invoices/:id/send fails closed on stripe_not_ready",
+  );
+  {
+    const fx = await setupFixture({ chargesEnabled: false });
+    try {
+      const { generateToken } = await import("../auth");
+      const [{ userId }] = await db
+        .select({ userId: providers.userId })
+        .from(providers)
+        .where(eq(providers.id, fx.providerId));
+      const [u] = await db.select().from(users).where(eq(users.id, userId!));
+      const token = generateToken(u.id, "provider", (u as any).tokenVersion ?? 0);
+      const port = process.env.PORT || "5000";
+      const resp = await fetch(
+        `http://127.0.0.1:${port}/api/invoices/${fx.invoiceId}/send`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "content-type": "application/json",
+          },
+          body: "{}",
+        },
+      );
+      const body = await resp.json().catch(() => ({}));
+      ok(
+        "legacy send route returns HTTP 409",
+        resp.status === 409,
+        `status=${resp.status} body=${JSON.stringify(body)}`,
+      );
+      ok(
+        'legacy send route body has code "stripe_not_ready"',
+        body?.code === "stripe_not_ready",
+      );
+      const [inv] = await db
+        .select()
+        .from(invoices)
+        .where(eq(invoices.id, fx.invoiceId));
+      ok(
+        "legacy send: invoice status stays draft",
+        inv?.status === "draft",
+        `status=${inv?.status}`,
+      );
+      ok("legacy send: invoice has no sentAt", inv?.sentAt == null);
+    } catch (err: any) {
+      ok(
+        "legacy send route-level test reached the dev server",
+        false,
+        `Could not reach backend: ${err?.message}`,
+      );
+    } finally {
+      await fx.cleanup();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Test 7: ROUTE-LEVEL — POST /api/invoices/create-and-send must insert
+  // the invoice as `draft`, refuse with 409 on stripe_not_ready, and
+  // leave the persisted row in `draft` (NOT `sent`).
+  // ---------------------------------------------------------------------------
+  console.log(
+    "\n7. POST /api/invoices/create-and-send fails closed on stripe_not_ready",
+  );
+  {
+    const fx = await setupFixture({ chargesEnabled: false });
+    try {
+      const { generateToken } = await import("../auth");
+      const [{ userId }] = await db
+        .select({ userId: providers.userId })
+        .from(providers)
+        .where(eq(providers.id, fx.providerId));
+      const [u] = await db.select().from(users).where(eq(users.id, userId!));
+      const token = generateToken(u.id, "provider", (u as any).tokenVersion ?? 0);
+      const [c] = await db
+        .select({ id: clients.id })
+        .from(clients)
+        .where(eq(clients.providerId, fx.providerId));
+      const port = process.env.PORT || "5000";
+      const resp = await fetch(
+        `http://127.0.0.1:${port}/api/invoices/create-and-send`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            providerId: fx.providerId,
+            clientId: c.id,
+            amount: 75,
+            notes: "T245-fail-closed-test",
+          }),
+        },
+      );
+      const body = await resp.json().catch(() => ({}));
+      ok(
+        "create-and-send returns HTTP 409",
+        resp.status === 409,
+        `status=${resp.status} body=${JSON.stringify(body)}`,
+      );
+      ok(
+        'create-and-send body has code "stripe_not_ready"',
+        body?.code === "stripe_not_ready",
+      );
+      const newInvoiceId = body?.invoiceId;
+      ok(
+        "create-and-send returned the newly-created invoiceId",
+        typeof newInvoiceId === "string" && newInvoiceId.length > 0,
+      );
+      if (newInvoiceId) {
+        const [inv] = await db
+          .select()
+          .from(invoices)
+          .where(eq(invoices.id, newInvoiceId));
+        ok(
+          "create-and-send: invoice persisted as draft (not sent)",
+          inv?.status === "draft",
+          `status=${inv?.status}`,
+        );
+        ok(
+          "create-and-send: invoice has no sentAt",
+          inv?.sentAt == null,
+          `sentAt=${inv?.sentAt}`,
+        );
+        // Cleanup the invoice we just created out-of-band
+        await db.delete(invoices).where(eq(invoices.id, newInvoiceId));
+      }
+    } catch (err: any) {
+      ok(
+        "create-and-send route-level test reached the dev server",
+        false,
+        `Could not reach backend: ${err?.message}`,
+      );
+    } finally {
+      await fx.cleanup();
+    }
+  }
+
   console.log(`\n=== Result: ${pass} passed, ${fail} failed ===\n`);
   await pool.end().catch(() => {});
   process.exit(fail === 0 ? 0 : 1);

@@ -9162,7 +9162,13 @@ Respond with JSON only:
           total: amount.toFixed(2),
           lineItems: JSON.stringify(lineItems),
           notes: req.body.notes || null,
-          status: "sent",
+          // Inserted as draft FIRST (Task #245). Promoted to "sent" only
+          // after Stripe successfully creates+finalizes the hosted
+          // invoice. If sendStripeInvoiceEmail throws stripe_not_ready,
+          // the row stays draft and the route returns 409 — the
+          // homeowner is never billed and the provider sees a clear
+          // error instead of a fake "sent" state.
+          status: "draft",
           dueDate: req.body.dueDate
             ? new Date(req.body.dueDate)
             : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
@@ -9355,12 +9361,18 @@ Respond with JSON only:
         let hostedUrl: string | undefined;
         let stripeError: string | undefined;
 
+        // FAIL CLOSED on stripe_not_ready (Task #245). We must never
+        // mark this invoice as `sent` when the provider's Connect
+        // account is not ready. Mirror the behavior already added to
+        // POST /api/stripe/invoices/:invoiceId/send.
+        let stripeErrorCode: string | undefined;
         if (!invoice.stripeInvoiceId) {
           // No existing Stripe invoice — create and send one now
           const platformResult = await sendStripeInvoiceEmail(
             invoiceId,
           ).catch((err: any) => {
             stripeError = err?.message || "Stripe invoice send failed";
+            stripeErrorCode = err?.code;
             console.error("[stripe-invoice-send] platform:", stripeError);
             return null;
           });
@@ -9372,7 +9384,16 @@ Respond with JSON only:
           hostedUrl = invoice.hostedInvoiceUrl || undefined;
           await resendStripeInvoice(invoiceId).catch((err: any) => {
             stripeError = err?.message;
+            stripeErrorCode = err?.code;
             console.warn("[stripe-invoice-resend]", stripeError);
+          });
+        }
+        if (stripeErrorCode === "stripe_not_ready") {
+          return res.status(409).json({
+            code: "stripe_not_ready",
+            error:
+              "Provider Stripe Connect account is not ready to accept charges. Finish onboarding before sending invoices.",
+            invoiceId,
           });
         }
 
