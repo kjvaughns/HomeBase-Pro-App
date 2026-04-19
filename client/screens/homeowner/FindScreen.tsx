@@ -973,6 +973,7 @@ export default function FindScreen() {
         services={item.services}
         hourlyRate={item.hourlyRate}
         verified={item.verified}
+        isPartner={item.isPartner}
         distance={item.distance ?? null}
         onPress={() => handleProviderCardPress(item.id)}
         testID={`provider-${item.id}`}

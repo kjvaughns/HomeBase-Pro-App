@@ -54,6 +54,12 @@ export function useSubscriptionStatus() {
   }, [queryClient, providerId]);
 
   const status = query.data?.status;
+  // HomeBase Partner (Task #211): admin-granted complimentary Pro access.
+  // Server reports status="subscribed" with subscriptionSource="partner" so
+  // the paywall, grace banner, and billing UI all bypass automatically. The
+  // client uses this flag to show a partner-specific "complimentary access"
+  // state on the Subscription screen instead of price/manage controls.
+  const isPartner = query.data?.subscriptionSource === "partner";
   return {
     ...query,
     providerId,
@@ -63,5 +69,6 @@ export function useSubscriptionStatus() {
     isInGrace: status === "grace_period",
     isGated: status === "expired",
     isSubscribed: status === "subscribed",
+    isPartner,
   };
 }

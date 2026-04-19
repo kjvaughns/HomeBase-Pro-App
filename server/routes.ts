@@ -142,6 +142,36 @@ declare module "express-serve-static-core" {
 
 const requireAuth: RequestHandler = authenticateJWT;
 
+/**
+ * Admin gate (Task #211): comma-separated allowlist in ADMIN_EMAILS env var.
+ * Used by HomeBase Partner grant/revoke endpoints. Falls through requireAuth
+ * first so req.authenticatedUserId is set, then checks the user's email
+ * against the allowlist. No admin role column exists on `users` — keeping
+ * the gate env-driven avoids a schema change for a tiny ops surface.
+ */
+const requireAdmin: RequestHandler = async (req, res, next) => {
+  try {
+    const userId = req.authenticatedUserId;
+    if (!userId) return res.status(401).json({ error: "Authentication required" });
+    const adminEmails = (process.env.ADMIN_EMAILS ?? "")
+      .split(",")
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+    if (adminEmails.length === 0) {
+      return res.status(403).json({ error: "Admin access is not configured" });
+    }
+    const user = await storage.getUser(userId);
+    const email = user?.email?.toLowerCase();
+    if (!email || !adminEmails.includes(email)) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+    next();
+  } catch (err) {
+    console.error("[admin] requireAdmin error:", err);
+    res.status(500).json({ error: "Failed to verify admin access" });
+  }
+};
+
 const aiRateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
 const insightsAiCache = new Map<
@@ -1362,7 +1392,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
       const providerProfile = await storage.getProviderByUserId(userId);
-      res.json({ user: formatUserResponse(user), providerProfile });
+      // Attach the HomeBase Partner flag (Task #211) so the provider can see
+      // their own badge in the More tab and ProviderProfile screens.
+      let enrichedProfile: any = providerProfile;
+      if (providerProfile) {
+        const [planRow] = await db
+          .select({ isPartner: providerPlans.isPartner })
+          .from(providerPlans)
+          .where(eq(providerPlans.providerId, providerProfile.id));
+        enrichedProfile = { ...providerProfile, isPartner: planRow?.isPartner ?? false };
+      }
+      res.json({ user: formatUserResponse(user), providerProfile: enrichedProfile });
     } catch (error) {
       console.error("Auth me error:", error);
       res.status(500).json({ error: "Failed to get user" });
@@ -2794,11 +2834,27 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
 
       const providersList = await storage.getProviders(categoryId);
 
+      // Augment each provider with their HomeBase Partner flag (Task #211) so
+      // the marketplace can render the Partner badge in a single round-trip.
+      const planRows = providersList.length
+        ? await db
+            .select({ providerId: providerPlans.providerId, isPartner: providerPlans.isPartner })
+            .from(providerPlans)
+            .where(inArray(providerPlans.providerId, providersList.map((p: any) => p.id)))
+        : [];
+      const partnerSet = new Set(
+        planRows.filter((r) => r.isPartner).map((r) => r.providerId),
+      );
+      const withPartner = providersList.map((p: any) => ({
+        ...p,
+        isPartner: partnerSet.has(p.id),
+      }));
+
       if (!hasUserCoords) {
-        return res.json({ providers: providersList });
+        return res.json({ providers: withPartner });
       }
 
-      const enriched = providersList.map((p: any) => {
+      const enriched = withPartner.map((p: any) => {
         const pLat =
           p.latitude !== null && p.latitude !== undefined
             ? parseFloat(p.latitude)
@@ -2853,8 +2909,19 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
                 }
               })()
             : provider.businessHours;
+        // Surface HomeBase Partner status (Task #211) so the homeowner-
+        // facing profile screen can render the Partner badge.
+        const [planRow] = await db
+          .select({ isPartner: providerPlans.isPartner })
+          .from(providerPlans)
+          .where(eq(providerPlans.providerId, req.params.id));
         res.json({
-          provider: { ...provider, bookingPolicies, businessHours },
+          provider: {
+            ...provider,
+            bookingPolicies,
+            businessHours,
+            isPartner: planRow?.isPartner ?? false,
+          },
           services: providerServices,
         });
       } catch (error) {
@@ -9590,6 +9657,109 @@ Respond with JSON only:
         res
           .status(500)
           .json({ error: error.message || "Failed to activate subscription" });
+      }
+    },
+  );
+
+  // ─── HomeBase Partner admin endpoints (Task #211) ───────────────────────
+  // Admin-only: grant or revoke complimentary "HomeBase Partner" Pro access
+  // for a provider. Partners bypass the subscription paywall but standard
+  // platform transaction fees still apply (handled in stripeConnectService).
+  app.get(
+    "/api/admin/providers",
+    requireAuth,
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const search = (req.query.q as string | undefined)?.trim().toLowerCase() ?? "";
+        const rows = await db
+          .select({
+            id: providers.id,
+            businessName: providers.businessName,
+            email: providers.email,
+            isPartner: providerPlans.isPartner,
+            partnerSince: providerPlans.partnerSince,
+          })
+          .from(providers)
+          .leftJoin(providerPlans, eq(providerPlans.providerId, providers.id))
+          .orderBy(desc(providerPlans.partnerSince), providers.businessName)
+          .limit(100);
+        const filtered = search
+          ? rows.filter(
+              (r) =>
+                (r.businessName ?? "").toLowerCase().includes(search) ||
+                (r.email ?? "").toLowerCase().includes(search),
+            )
+          : rows;
+        res.json({ providers: filtered });
+      } catch (err: any) {
+        console.error("[admin] list providers error:", err);
+        res.status(500).json({ error: err.message || "Failed to list providers" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/providers/:providerId/partner",
+    requireAuth,
+    requireAdmin,
+    async (req: Request<{ providerId: string }>, res: Response) => {
+      try {
+        const { providerId } = req.params;
+        const [provider] = await db
+          .select({ id: providers.id })
+          .from(providers)
+          .where(eq(providers.id, providerId));
+        if (!provider) return res.status(404).json({ error: "Provider not found" });
+
+        const now = new Date();
+        const [existing] = await db
+          .select()
+          .from(providerPlans)
+          .where(eq(providerPlans.providerId, providerId));
+        if (existing) {
+          await db
+            .update(providerPlans)
+            .set({ isPartner: true, partnerSince: now, updatedAt: now })
+            .where(eq(providerPlans.id, existing.id));
+        } else {
+          await db.insert(providerPlans).values({
+            providerId,
+            isPartner: true,
+            partnerSince: now,
+          });
+        }
+        const status = await getProviderSubscriptionStatus(providerId);
+        res.json({ success: true, providerId, isPartner: true, partnerSince: now.toISOString(), subscriptionStatus: status });
+      } catch (err: any) {
+        console.error("[admin] grant partner error:", err);
+        res.status(500).json({ error: err.message || "Failed to grant Partner status" });
+      }
+    },
+  );
+
+  app.delete(
+    "/api/admin/providers/:providerId/partner",
+    requireAuth,
+    requireAdmin,
+    async (req: Request<{ providerId: string }>, res: Response) => {
+      try {
+        const { providerId } = req.params;
+        const [existing] = await db
+          .select()
+          .from(providerPlans)
+          .where(eq(providerPlans.providerId, providerId));
+        if (existing) {
+          await db
+            .update(providerPlans)
+            .set({ isPartner: false, partnerSince: null, updatedAt: new Date() })
+            .where(eq(providerPlans.id, existing.id));
+        }
+        const status = await getProviderSubscriptionStatus(providerId);
+        res.json({ success: true, providerId, isPartner: false, subscriptionStatus: status });
+      } catch (err: any) {
+        console.error("[admin] revoke partner error:", err);
+        res.status(500).json({ error: err.message || "Failed to revoke Partner status" });
       }
     },
   );

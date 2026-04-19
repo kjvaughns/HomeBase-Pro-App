@@ -17,6 +17,7 @@ import { Avatar } from "@/components/Avatar";
 import { ListRow } from "@/components/ListRow";
 import { GlassCard } from "@/components/GlassCard";
 import { StatusPill } from "@/components/StatusPill";
+import { PartnerBadge } from "@/components/PartnerBadge";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
@@ -134,6 +135,7 @@ export default function ProviderMoreScreen() {
                 </ThemedText>
                 <View style={styles.roleRow}>
                   <StatusPill status="success" label="Provider" size="small" />
+                  {providerProfile?.isPartner ? <PartnerBadge size="small" /> : null}
                   <View style={styles.ratingRow}>
                     <Feather name="star" size={14} color={Colors.warning} />
                     <ThemedText style={styles.ratingText}>

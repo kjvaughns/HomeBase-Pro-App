@@ -36,6 +36,8 @@ type PlanLike =
         | "gracePeriodEndsAt"
         | "subscriptionSource"
         | "currentPeriodEnd"
+        | "isPartner"
+        | "partnerSince"
       >
     >
   | null
@@ -56,6 +58,22 @@ export function computeSubscriptionStatus(
   const currentPeriodEnd = plan?.currentPeriodEnd
     ? new Date(plan.currentPeriodEnd).toISOString()
     : null;
+
+  // HomeBase Partner: admin-granted complimentary Pro access. Resolves to
+  // "subscribed" so all gating bypasses, but reports source="partner" so the
+  // client can show partner-specific copy and badges instead of billing UI.
+  // Transaction fees are unaffected (handled by stripeConnectService).
+  if (plan?.isPartner) {
+    return {
+      status: "subscribed",
+      daysRemainingInGrace: null,
+      firstPaidBookingAt: firstPaidAt ? firstPaidAt.toISOString() : null,
+      gracePeriodEndsAt: graceEndsAt ? graceEndsAt.toISOString() : null,
+      isSubscribed: true,
+      subscriptionSource: "partner",
+      currentPeriodEnd: null,
+    };
+  }
 
   if (isSubscribed) {
     return {

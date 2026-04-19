@@ -14,6 +14,7 @@ import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { Avatar } from "@/components/Avatar";
 import { StatusPill } from "@/components/StatusPill";
+import { PartnerBadge } from "@/components/PartnerBadge";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
@@ -657,6 +658,7 @@ export default function ProviderProfileScreen() {
               {provider.verified ? (
                 <StatusPill label="Verified Pro" status="success" />
               ) : null}
+              {provider.isPartner ? <PartnerBadge /> : null}
             </View>
           </GlassCard>
         </Animated.View>

@@ -32,6 +32,7 @@ export interface ProviderProfile {
   specialty?: string;
   isActive?: boolean;
   isPublic?: boolean;
+  isPartner?: boolean;
 }
 
 interface AuthState {

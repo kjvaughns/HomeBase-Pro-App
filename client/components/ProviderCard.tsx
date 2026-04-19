@@ -13,6 +13,7 @@ import * as Haptics from "expo-haptics";
 import { Avatar } from "@/components/Avatar";
 import { ThemedText } from "@/components/ThemedText";
 import { StatusPill } from "@/components/StatusPill";
+import { PartnerBadge } from "@/components/PartnerBadge";
 import { useTheme } from "@/hooks/useTheme";
 import { BorderRadius, Spacing, Colors, Animation, GlassEffect } from "@/constants/theme";
 
@@ -25,6 +26,7 @@ interface ProviderCardProps {
   services: string[];
   hourlyRate: number;
   verified: boolean;
+  isPartner?: boolean;
   distance?: number | null;
   onPress: () => void;
   testID?: string;
@@ -41,6 +43,7 @@ export function ProviderCard({
   services,
   hourlyRate,
   verified,
+  isPartner,
   distance,
   onPress,
   testID,
@@ -99,6 +102,7 @@ export function ProviderCard({
               {verified ? (
                 <Feather name="check-circle" size={16} color={Colors.accent} />
               ) : null}
+              {isPartner ? <PartnerBadge size="small" /> : null}
             </View>
             <ThemedText
               type="small"

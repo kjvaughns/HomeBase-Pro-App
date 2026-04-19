@@ -9,6 +9,7 @@ export interface ApiProviderBase {
   reviewCount?: number | null;
   hourlyRate?: string | null;
   isVerified?: boolean | null;
+  isPartner?: boolean | null;
   description?: string | null;
   yearsExperience?: number | null;
   completedJobs?: number | null;
@@ -41,5 +42,6 @@ export function mapApiProvider(p: ApiProviderBase, serviceList: ApiServiceItem[]
     distance: p.distance ?? undefined,
     gallery: [],
     phone: p.phone ?? undefined,
+    isPartner: p.isPartner ?? false,
   };
 }

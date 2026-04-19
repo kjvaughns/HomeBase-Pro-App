@@ -548,6 +548,11 @@ export const providerPlans = pgTable("provider_plans", {
   subscriptionSource: text("subscription_source"),
   revenuecatProductId: text("revenuecat_product_id"),
   currentPeriodEnd: timestamp("current_period_end"),
+  // HomeBase Partner status (Task #211): admin-granted complimentary Pro
+  // access. Partners bypass the trial/grace/expired flow and never see the
+  // subscription paywall, but standard platform transaction fees still apply.
+  isPartner: boolean("is_partner").default(false).notNull(),
+  partnerSince: timestamp("partner_since"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

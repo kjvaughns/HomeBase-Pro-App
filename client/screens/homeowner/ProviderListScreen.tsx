@@ -489,6 +489,7 @@ export default function ProviderListScreen() {
         services={item.services}
         hourlyRate={item.hourlyRate}
         verified={item.verified}
+        isPartner={item.isPartner}
         distance={item.distance ?? null}
         onPress={() => handleProviderPress(item)}
         testID={`provider-${item.id}`}

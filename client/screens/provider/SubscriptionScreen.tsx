@@ -78,6 +78,7 @@ export default function SubscriptionScreen() {
     status,
     daysRemainingInGrace,
     isSubscribed,
+    isPartner,
   } = useSubscriptionStatus();
   const [busy, setBusy] = useState(false);
   const [restoring, setRestoring] = useState(false);
@@ -307,6 +308,16 @@ export default function SubscriptionScreen() {
 
   const stateKey: StateKey = (status as StateKey) ?? "free";
   const copy: CopyForState = (() => {
+    if (isPartner) {
+      return {
+        iconName: "award",
+        iconBg: isDark ? "#1C2E24" : "#F0FAF4",
+        iconColor: Colors.accent,
+        title: "HomeBase Partner",
+        body: "You have complimentary access to every Pro feature as a HomeBase Partner. Standard transaction fees still apply on payouts.",
+        caption: "Reach out to support if you have any questions about your Partner status.",
+      };
+    }
     switch (stateKey) {
       case "subscribed":
         return {
@@ -355,7 +366,9 @@ export default function SubscriptionScreen() {
     }
   })();
 
-  const showSubscribeButton = !isSubscribed;
+  // Partners bypass the paywall entirely — no subscribe/manage controls,
+  // since their access is admin-granted and not billed.
+  const showSubscribeButton = !isSubscribed && !isPartner;
   const subscribeLabel = priceLabel
     ? stateKey === "free"
       ? `Subscribe early — ${priceLabel}`

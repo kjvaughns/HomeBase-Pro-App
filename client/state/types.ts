@@ -89,6 +89,7 @@ export interface Provider {
   distance?: number;
   gallery: string[];
   phone?: string;
+  isPartner?: boolean;
 }
 
 export interface TimelineEvent {
