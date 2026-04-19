@@ -119,6 +119,16 @@ export default function AddressesScreen() {
     } catch {
       // not JSON, fall through and use the body string
     }
+    // Low-signal native/browser network strings — show the friendly fallback
+    // instead of leaking raw runtime text to the user.
+    const lowSignal = [
+      /network request failed/i,
+      /load failed/i,
+      /^a network error occurred/i,
+      /failed to fetch/i,
+      /networkerror/i,
+    ];
+    if (lowSignal.some((re) => re.test(body))) return fallback;
     if (body.length > 0 && body.length < 200) return body;
     return fallback;
   };
