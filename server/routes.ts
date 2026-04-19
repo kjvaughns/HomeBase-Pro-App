@@ -148,29 +148,29 @@ declare module "express-serve-static-core" {
 const requireAuth: RequestHandler = authenticateJWT;
 
 /**
- * Admin gate (Task #211): comma-separated allowlist in ADMIN_EMAILS env var.
- * Used by HomeBase Partner grant/revoke endpoints. Falls through requireAuth
- * first so req.authenticatedUserId is set, then checks the user's email
- * against the allowlist. No admin role column exists on `users` — keeping
- * the gate env-driven avoids a schema change for a tiny ops surface.
+ * Admin gate (Task #220). DB-backed: checks `users.is_admin` first so the
+ * signed-in account can be promoted in-app/by ops without an env redeploy.
+ * Falls back to the legacy ADMIN_EMAILS env list for backward compatibility
+ * with existing deployments.
  */
 const requireAdmin: RequestHandler = async (req, res, next) => {
   try {
     const userId = req.authenticatedUserId;
     if (!userId) return res.status(401).json({ error: "Authentication required" });
+    const user = await storage.getUser(userId);
+    if (!user) return res.status(403).json({ error: "Admin access required" });
+    if ((user as { isAdmin?: boolean | null }).isAdmin === true) {
+      return next();
+    }
     const adminEmails = (process.env.ADMIN_EMAILS ?? "")
       .split(",")
       .map((e) => e.trim().toLowerCase())
       .filter(Boolean);
-    if (adminEmails.length === 0) {
-      return res.status(403).json({ error: "Admin access is not configured" });
+    const email = user.email?.toLowerCase();
+    if (email && adminEmails.includes(email)) {
+      return next();
     }
-    const user = await storage.getUser(userId);
-    const email = user?.email?.toLowerCase();
-    if (!email || !adminEmails.includes(email)) {
-      return res.status(403).json({ error: "Admin access required" });
-    }
-    next();
+    return res.status(403).json({ error: "Admin access required" });
   } catch (err) {
     console.error("[admin] requireAdmin error:", err);
     res.status(500).json({ error: "Failed to verify admin access" });
@@ -1382,7 +1382,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         secure: process.env.NODE_ENV === "production",
         maxAge: 7 * 24 * 60 * 60 * 1000,
       });
-      res.json({ user: formatUserResponse(user), providerProfile, token });
+
+      // Task #220: enrich providerProfile with isPartner so the client's
+      // auth store has Partner status from the moment of login (mirrors
+      // the enrichment already done in /api/auth/me).
+      let enrichedProfile:
+        | (typeof providerProfile & { isPartner: boolean })
+        | typeof providerProfile = providerProfile;
+      if (providerProfile) {
+        try {
+          const [planRow] = await db
+            .select({ isPartner: providerPlans.isPartner })
+            .from(providerPlans)
+            .where(eq(providerPlans.providerId, providerProfile.id));
+          enrichedProfile = {
+            ...providerProfile,
+            isPartner: planRow?.isPartner ?? false,
+          };
+        } catch (err) {
+          console.error("[auth/login] partner lookup failed:", err);
+        }
+      }
+
+      res.json({ user: formatUserResponse(user), providerProfile: enrichedProfile, token });
     } catch (error) {
       console.error("Login error:", error);
       res.status(500).json({ error: "Failed to login" });

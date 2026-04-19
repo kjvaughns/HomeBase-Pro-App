@@ -96,6 +96,12 @@ export const users = pgTable("users", {
   phone: text("phone"),
   avatarUrl: text("avatar_url"),
   isProvider: boolean("is_provider").default(false),
+  // Admin flag (Task #220) — DB-backed replacement for the previous
+  // ADMIN_EMAILS env-only gate so admin access can be granted in-app
+  // (and by ops via SQL) without redeploying. The requireAdmin
+  // middleware accepts either this column OR a match in ADMIN_EMAILS
+  // env so existing deployments still work.
+  isAdmin: boolean("is_admin").notNull().default(false),
   stripeCustomerId: text("stripe_customer_id"),
   defaultPaymentMethodId: text("default_payment_method_id"),
   tokenVersion: integer("token_version").notNull().default(0),

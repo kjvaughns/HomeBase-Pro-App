@@ -37,15 +37,11 @@ export default function ProviderMoreScreen() {
   const { user, providerProfile, logout } = useAuthStore();
   const toggleDarkMode = useThemeStore((s) => s.toggleDarkMode);
 
-  // Client-side visibility gate for the admin link. The server-side
-  // requireAdmin middleware (env ADMIN_EMAILS) is the source of truth —
-  // this just hides the menu entry for non-admins.
-  const adminEmails = (process.env.EXPO_PUBLIC_ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-  const isAdminUser = !!user?.email &&
-    adminEmails.includes(user.email.toLowerCase());
+  // Client-side visibility gate for the admin link (Task #220).
+  // Reads the DB-backed `users.is_admin` flag from /api/auth/me so admin
+  // access can be granted in-app without an env var redeploy. The server's
+  // requireAdmin middleware is the source of truth for actual access.
+  const isAdminUser = !!user?.isAdmin;
 
   const { isSubscribed, isInGrace, daysRemainingInGrace, status: subStatus, isPartner } =
     useSubscriptionStatus();
@@ -146,7 +142,14 @@ export default function ProviderMoreScreen() {
                   {user?.email}
                 </ThemedText>
                 <View style={styles.roleRow}>
-                  <StatusPill status="success" label="Provider" size="small" />
+                  {/* When Partner is also shown, re-tone the role pill to
+                      neutral so the only green chip on the row is the
+                      premium Partner badge (Task #220 design pass). */}
+                  <StatusPill
+                    status={providerProfile?.isPartner ? "neutral" : "success"}
+                    label="Provider"
+                    size="small"
+                  />
                   {providerProfile?.isPartner ? <PartnerBadge size="small" /> : null}
                   <View style={styles.ratingRow}>
                     <Ionicons name="star" size={14} color={Colors.warning} />
@@ -229,9 +232,9 @@ export default function ProviderMoreScreen() {
               onPress={() => navigation.navigate("AccountSecurity")}
               isLast={!isAdminUser}
             />
-            {/* HomeBase Partner admin (Task #211): visible only when the
-                signed-in user's email is in EXPO_PUBLIC_ADMIN_EMAILS. The
-                server enforces the actual gate on the endpoints. */}
+            {/* HomeBase Partner admin (Task #220): visible when the
+                signed-in account has users.is_admin = true. The server
+                enforces the actual gate on the endpoints. */}
             {isAdminUser ? (
               <ListRow
                 title="HomeBase Partners"

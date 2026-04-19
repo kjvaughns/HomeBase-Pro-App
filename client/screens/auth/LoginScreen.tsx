@@ -68,8 +68,11 @@ export default function LoginScreen({ navigation }: Props) {
           rating: parseFloat(data.providerProfile.rating) || 0,
           reviewCount: data.providerProfile.reviewCount || 0,
           completedJobs: 0,
+          // Task #220: surface Partner status to drive PartnerBadge,
+          // PartnerPerksCard, and the neutral re-tone of the role pill.
+          isPartner: data.providerProfile.isPartner === true,
         } : null;
-        
+
         login({
           id: data.user.id,
           name: data.user.name,
@@ -77,6 +80,9 @@ export default function LoginScreen({ navigation }: Props) {
           phone: data.user.phone,
           avatarUrl: data.user.avatarUrl,
           isProvider: data.user.isProvider || false,
+          // Task #220: DB-backed admin flag drives the More-tab visibility
+          // of the HomeBase Partners admin row.
+          isAdmin: data.user.isAdmin === true,
         }, providerProfile, data.token ?? null);
       }
     } catch (error) {

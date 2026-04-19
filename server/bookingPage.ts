@@ -5,6 +5,7 @@ import {
   bookingLinks,
   providers,
   providerCustomServices,
+  providerPlans,
   providerServices,
   services,
   reviews,
@@ -140,6 +141,22 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
   const stripeReady = await isProviderReadyForCharges(provider.id);
   if (!stripeReady) {
     return errorPage(404, "Booking page unavailable", "This provider is finishing payment setup and isn't accepting bookings yet. Please check back soon.");
+  }
+
+  // HomeBase Partner status (Task #220) — surfaces the badge near the
+  // business name so homeowners can recognize Partner providers on the
+  // public booking page. Defaults to false when the provider has no
+  // plan row or the join returns null.
+  let isPartner = false;
+  try {
+    const [planRow] = await db
+      .select({ isPartner: providerPlans.isPartner })
+      .from(providerPlans)
+      .where(eq(providerPlans.providerId, provider.id))
+      .limit(1);
+    isPartner = planRow?.isPartner === true;
+  } catch (err) {
+    console.error("[bookingPage] partner lookup failed:", err);
   }
 
   // Fetch published custom services
@@ -374,6 +391,30 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
       font-weight: 700;
       margin-bottom: 6px;
       letter-spacing: -0.02em;
+    }
+
+    /* HomeBase Partner badge (Task #220) — solid accent pill, white mark.
+       Mirrors the in-app PartnerBadge treatment so the badge reads the
+       same on the public booking page as inside the native app. */
+    .partner-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      margin: 0 auto 10px;
+      background: var(--accent);
+      color: #ffffff;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      line-height: 1;
+    }
+    .partner-mark {
+      width: 12px;
+      height: 12px;
+      color: #ffffff;
+      display: block;
     }
 
     .page-title {
@@ -773,6 +814,7 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
         }
       </div>
       <div class="business-name">${businessName}</div>
+      ${isPartner ? `<div class="partner-badge" aria-label="HomeBase Partner"><svg class="partner-mark" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 10.5L12 3.5L21 10.5V20.5H14.5V14.5H9.5V20.5H3V10.5Z" fill="currentColor"/></svg><span>HomeBase Partner</span></div>` : ""}
       <div class="page-title">${pageTitle}</div>
       ${description ? `<p class="provider-desc">${description}</p>` : ""}
       ${reviewCount > 0 ? `

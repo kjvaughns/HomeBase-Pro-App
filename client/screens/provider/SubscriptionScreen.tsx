@@ -414,6 +414,8 @@ export default function SubscriptionScreen() {
           <View style={styles.loading}>
             <ActivityIndicator color={Colors.accent} />
           </View>
+        ) : isPartner ? (
+          <PartnerPerksCard isDark={isDark} theme={theme} />
         ) : (
           <View
             style={[
@@ -721,7 +723,7 @@ export default function SubscriptionScreen() {
           </View>
         ) : null}
 
-        {data?.firstPaidBookingAt ? (
+        {data?.firstPaidBookingAt && !isPartner ? (
           <ThemedText style={[styles.meta, { color: theme.textTertiary }]}>
             First paid booking:{" "}
             {new Date(data.firstPaidBookingAt).toLocaleDateString()}
@@ -729,6 +731,109 @@ export default function SubscriptionScreen() {
         ) : null}
       </ScrollView>
     </ThemedView>
+  );
+}
+
+// ─── Partner perks card ──────────────────────────────────────────────────────
+// Replaces the entire billing surface for HomeBase Partners (Task #220).
+// No subscribe / manage / restore / billing-history controls render — Partner
+// access is admin-granted and not billed. Shows the concrete perks they
+// receive plus the standard transaction-fee disclosure.
+const PARTNER_PERKS: Array<{
+  icon: keyof typeof Feather.glyphMap;
+  title: string;
+  body: string;
+}> = [
+  {
+    icon: "gift",
+    title: "Complimentary Pro access",
+    body: "No monthly subscription. All Pro-gated features unlocked.",
+  },
+  {
+    icon: "briefcase",
+    title: "Unlimited jobs and invoices",
+    body: "Run your full pipeline with no caps on bookings or billing.",
+  },
+  {
+    icon: "cpu",
+    title: "Smart Intake, AI Smart Match, and Dynamic Quote Engine",
+    body: "Every AI workflow is on so leads come in qualified and priced.",
+  },
+  {
+    icon: "link",
+    title: "Booking links and branded messaging",
+    body: "Public booking pages and email/SMS to clients with your brand.",
+  },
+  {
+    icon: "headphones",
+    title: "Priority support",
+    body: "Reach the HomeBase team first when you need a hand.",
+  },
+];
+
+interface PartnerPerksCardProps {
+  isDark: boolean;
+  theme: ReturnType<typeof useTheme>["theme"];
+}
+
+function PartnerPerksCard({ isDark, theme }: PartnerPerksCardProps) {
+  return (
+    <View
+      testID="subscription-card-partner"
+      style={[
+        styles.card,
+        styles.partnerCard,
+        {
+          backgroundColor: isDark ? "#1C2E24" : "#F0FAF4",
+          borderColor: Colors.accent + "40",
+        },
+      ]}
+    >
+      <View
+        style={[
+          styles.iconCircle,
+          { backgroundColor: Colors.accent + "22" },
+        ]}
+      >
+        <Feather name="award" size={28} color={Colors.accent} />
+      </View>
+
+      <ThemedText style={styles.title}>You are a HomeBase Partner</ThemedText>
+      <ThemedText style={[styles.body, { color: theme.textSecondary }]}>
+        Complimentary access to every Pro feature, granted by the HomeBase team.
+        Your perks are below.
+      </ThemedText>
+
+      <View style={styles.perkList}>
+        {PARTNER_PERKS.map((perk) => (
+          <View key={perk.title} style={styles.perkRow} testID={`perk-${perk.icon}`}>
+            <View
+              style={[
+                styles.perkIcon,
+                { backgroundColor: Colors.accent + "1F" },
+              ]}
+            >
+              <Feather name={perk.icon} size={16} color={Colors.accent} />
+            </View>
+            <View style={styles.perkText}>
+              <ThemedText style={styles.perkTitle}>{perk.title}</ThemedText>
+              <ThemedText
+                style={[styles.perkBody, { color: theme.textSecondary }]}
+              >
+                {perk.body}
+              </ThemedText>
+            </View>
+          </View>
+        ))}
+      </View>
+
+      <ThemedText
+        style={[styles.partnerFootnote, { color: theme.textTertiary }]}
+        testID="text-partner-fee-disclosure"
+      >
+        Standard platform transaction fees still apply on payouts.
+      </ThemedText>
+    </View>
   );
 }
 
@@ -821,6 +926,44 @@ const styles = StyleSheet.create({
     marginTop: Spacing.lg,
     gap: Spacing.xs,
     alignItems: "center",
+  },
+  partnerCard: {
+    alignItems: "stretch",
+  },
+  perkList: {
+    alignSelf: "stretch",
+    gap: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  perkRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.md,
+  },
+  perkIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
+  perkText: {
+    flex: 1,
+  },
+  perkTitle: {
+    ...Typography.subhead,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  perkBody: {
+    ...Typography.footnote,
+    lineHeight: 18,
+  },
+  partnerFootnote: {
+    ...Typography.caption1,
+    textAlign: "center",
+    alignSelf: "stretch",
   },
   errorBlock: {
     alignSelf: "stretch",

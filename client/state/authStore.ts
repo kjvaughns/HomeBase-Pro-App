@@ -13,6 +13,10 @@ export interface User {
   avatarUrl?: string;
   phone?: string;
   isProvider?: boolean;
+  /** Task #220: DB-backed admin flag exposed via /api/auth/me. Drives the
+   *  More-tab visibility of the HomeBase Partners admin entry. The server's
+   *  requireAdmin middleware is the source of truth for actual access. */
+  isAdmin?: boolean;
 }
 
 export interface ProviderProfile {

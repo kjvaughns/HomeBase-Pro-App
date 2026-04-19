@@ -35,6 +35,13 @@ The application consists of a client-side React Native Expo app (SDK 55, React N
 - **Forgot Password URL**: Fixed reset URL to use the request's own host rather than a hardcoded localhost.
 - **Reset Password HTML**: Created `server/templates/reset-password.html` — a styled in-app form that extracts the token from query params and POSTs to `/api/auth/reset-password`.
 
+## HomeBase Partner Activation (Task #220, April 2026)
+- **Admin gate is DB-backed**: a `users.is_admin` boolean column drives admin access. The signed-in account is promoted with `UPDATE users SET is_admin = true WHERE email = '...';`. The legacy `ADMIN_EMAILS` env var is still honored as a fallback so existing deployments keep working.
+- `/api/auth/me` returns `user.isAdmin`, and `ProviderMoreScreen` reads that flag (no longer `EXPO_PUBLIC_ADMIN_EMAILS`) to show the **HomeBase Partners** admin row.
+- **Subscription screen for Partners**: when `subscriptionSource === "partner"`, the entire billing surface is replaced with a `PartnerPerksCard` listing the included perks (Pro access, unlimited jobs/invoices, full Smart Intake/AI Smart Match/Dynamic Quote Engine, booking links + branded messaging, priority support) and a transaction-fee disclosure footnote. No subscribe/manage/restore/billing-history controls render.
+- **Public booking page**: `server/bookingPage.ts` left-joins `provider_plans.is_partner` and renders a "HomeBase Partner" pill (solid accent green, white HomeBase mark + label) directly under the business name.
+- **PartnerBadge design**: solid `Colors.accent` pill with a white-tinted HomeBase mark (uses `assets/images/android-icon-foreground.png` so the icon has no built-in padding) and bold white "Partner" label. On the More-tab profile card, the adjacent "Provider" `StatusPill` is re-toned from `success` (green) to `neutral` whenever the Partner badge is also shown so the row never reads as two competing green chips.
+
 ## Code Quality Conventions
 - **React Rules of Hooks (lint enforced)**: `eslint.config.js` pins `react-hooks/rules-of-hooks` to `error` (and keeps `react-hooks/exhaustive-deps` at `warn`). All React hooks (`useEffect`, `useLayoutEffect`, `useMemo`, etc.) must be declared at the top level of the component — BEFORE any early `return` for loading/empty/not-found states. Putting a hook after an early return changes hook order between renders, which throws "Invalid hook call" at runtime and gets swallowed by the ErrorBoundary as a generic crash (regression history: Task #103, ProviderProfileScreen; Task #104, ClientDetailScreen). Run `npm run lint` to verify before shipping.
 

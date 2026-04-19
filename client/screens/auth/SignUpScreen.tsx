@@ -84,6 +84,9 @@ export default function SignUpScreen({ navigation }: Props) {
           email: data.user.email,
           phone: data.user.phone,
           avatarUrl: data.user.avatarUrl,
+          // Task #220: pass through the DB-backed admin flag (will be false
+          // for new homeowner signups; harmless to thread through).
+          isAdmin: data.user.isAdmin === true,
         }, null, data.token ?? null);
         // SignUpScreen is only used by homeowners.
         // Providers sign up through the last step of ProviderOnboardingScreen.
