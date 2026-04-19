@@ -34,6 +34,10 @@ export function useSubscriptionStatus() {
     queryKey,
     enabled: !!providerId,
     staleTime: 60_000,
+    // Refetch on every mount so freshly-granted Partner status takes effect
+    // without needing a cold app start. Without this, the trial banner could
+    // linger for up to a minute after a grant because of staleTime caching.
+    refetchOnMount: "always",
   });
 
   // Refetch when the app returns to foreground — picks up subscription changes
@@ -53,21 +57,31 @@ export function useSubscriptionStatus() {
     return () => sub.remove();
   }, [queryClient, providerId]);
 
-  const status = query.data?.status;
-  // HomeBase Partner (Task #211): admin-granted complimentary Pro access.
-  // Server reports status="subscribed" with subscriptionSource="partner" so
-  // the paywall, grace banner, and billing UI all bypass automatically. The
-  // client uses this flag to show a partner-specific "complimentary access"
-  // state on the Subscription screen instead of price/manage controls.
-  const isPartner = query.data?.subscriptionSource === "partner";
+  // HomeBase Partner (Task #211, #220, #222): admin-granted complimentary Pro
+  // access. Server reports status="subscribed" with subscriptionSource="partner"
+  // so the paywall, grace banner, and billing UI all bypass automatically.
+  // We also OR in the auth store's providerProfile.isPartner flag (rehydrated
+  // from /api/auth/me on app start) as a defense-in-depth so a stale
+  // subscription-status cache can never show the trial banner to a Partner.
+  const isPartner =
+    query.data?.subscriptionSource === "partner" ||
+    providerProfile?.isPartner === true;
+  const rawStatus = query.data?.status;
+  // When the auth store says Partner but the cached query hasn't caught up,
+  // promote the resolved status to "subscribed" so every consumer of this
+  // hook (banners, gates, More-screen subtitle) treats the user as paid.
+  const status: SubscriptionStatus | undefined =
+    isPartner && rawStatus !== "subscribed" ? "subscribed" : rawStatus;
   return {
     ...query,
     providerId,
     status,
-    daysRemainingInGrace: query.data?.daysRemainingInGrace ?? null,
-    isFree: status === "free",
-    isInGrace: status === "grace_period",
-    isGated: status === "expired",
+    daysRemainingInGrace: isPartner
+      ? null
+      : (query.data?.daysRemainingInGrace ?? null),
+    isFree: status === "free" && !isPartner,
+    isInGrace: status === "grace_period" && !isPartner,
+    isGated: status === "expired" && !isPartner,
     isSubscribed: status === "subscribed",
     isPartner,
   };
