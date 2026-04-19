@@ -795,117 +795,19 @@ async function getPaidAmount(invoiceId: string): Promise<number> {
   return allPayments.reduce((sum, p) => sum + (p.amountCents || 0), 0);
 }
 
+/**
+ * Backwards-compat shim. The real dispatcher lives in stripeWebhookRouter.ts
+ * and enforces endpoint routing, idempotency, structured logging, and
+ * connected-account resolution. Defaults to the "connect" endpoint to match
+ * legacy behavior (this function was only ever invoked from the Connect
+ * webhook route).
+ */
 export async function handleStripeWebhook(event: Stripe.Event) {
-  const [existing] = await db
-    .select()
-    .from(stripeWebhookEvents)
-    .where(eq(stripeWebhookEvents.stripeEventId, event.id));
-
-  if (existing) {
-    console.log(`Webhook event ${event.id} already processed, skipping`);
-    return { processed: false, reason: "duplicate" };
-  }
-
-  await db.insert(stripeWebhookEvents).values({
-    stripeEventId: event.id,
-    eventType: event.type,
-    payload: JSON.stringify(event.data),
-  });
-
-  switch (event.type) {
-    case "account.updated":
-      await handleAccountUpdated(event.data.object as Stripe.Account);
-      break;
-
-    case "payment_intent.succeeded":
-      await handlePaymentIntentSucceeded(
-        event.data.object as Stripe.PaymentIntent,
-      );
-      break;
-
-    case "payment_intent.payment_failed":
-      await handlePaymentIntentFailed(
-        event.data.object as Stripe.PaymentIntent,
-      );
-      break;
-
-    case "charge.refunded":
-      await handleChargeRefunded(event.data.object as Stripe.Charge);
-      break;
-
-    case "payout.created":
-      await handlePayoutCreated(
-        event.data.object as Stripe.Payout,
-        event.account ?? null,
-      );
-      break;
-
-    case "payout.paid":
-      await handlePayoutPaid(
-        event.data.object as Stripe.Payout,
-        event.account ?? null,
-      );
-      break;
-
-    case "payout.failed":
-      await handlePayoutFailed(
-        event.data.object as Stripe.Payout,
-        event.account ?? null,
-      );
-      break;
-
-    case "checkout.session.completed": {
-      const session = event.data.object as Stripe.Checkout.Session;
-      // HomeBase Pro subscription Checkouts are tagged with metadata.subscriptionType
-      // and run in subscription mode. Branch them to the dedicated handler so they
-      // don't fall through to Connect/booking invoice logic.
-      if (
-        session.mode === "subscription" ||
-        session.metadata?.subscriptionType === "homebase_pro"
-      ) {
-        await handleSubscriptionCheckoutCompleted(session);
-      } else {
-        await handleCheckoutSessionCompleted(session);
-      }
-      break;
-    }
-
-    case "customer.subscription.updated":
-      await handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
-      break;
-
-    case "customer.subscription.deleted":
-      await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
-      break;
-
-    case "invoice.paid":
-      await handleStripeInvoicePaid(event.data.object as Stripe.Invoice);
-      break;
-
-    case "invoice.payment_failed": {
-      const inv = event.data.object as Stripe.Invoice;
-      // Subscription invoices have no homebaseInvoiceId metadata — branch them
-      // to the subscription-specific handler that pushes the user to update billing.
-      if (
-        (inv as any).subscription ||
-        inv.billing_reason === "subscription_cycle" ||
-        inv.billing_reason === "subscription_create"
-      ) {
-        await handleSubscriptionInvoicePaymentFailed(inv);
-      } else {
-        await handleStripeInvoicePaymentFailed(inv);
-      }
-      break;
-    }
-
-    default:
-      console.log(`Unhandled webhook event type: ${event.type}`);
-  }
-
-  return { processed: true };
+  const { processStripeEvent } = await import("./stripeWebhookRouter");
+  return processStripeEvent(event, "connect");
 }
 
-async function handleAccountUpdated(account: Stripe.Account) {
+export async function handleAccountUpdated(account: Stripe.Account) {
   const [connectAccount] = await db
     .select()
     .from(stripeConnectAccounts)
@@ -934,7 +836,7 @@ async function handleAccountUpdated(account: Stripe.Account) {
     .where(eq(stripeConnectAccounts.id, connectAccount.id));
 }
 
-async function handlePaymentIntentSucceeded(
+export async function handlePaymentIntentSucceeded(
   paymentIntent: Stripe.PaymentIntent,
 ) {
   const invoiceId = paymentIntent.metadata?.invoiceId;
@@ -1222,7 +1124,7 @@ async function handlePaymentIntentSucceeded(
   }
 }
 
-async function handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent) {
+export async function handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent) {
   const invoiceId = paymentIntent.metadata?.invoiceId;
 
   const [payment] = await db
@@ -1300,7 +1202,7 @@ async function handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent) {
   }
 }
 
-async function handleStripeInvoicePaid(stripeInvoice: Stripe.Invoice) {
+export async function handleStripeInvoicePaid(stripeInvoice: Stripe.Invoice) {
   const homebaseInvoiceId = stripeInvoice.metadata?.homebaseInvoiceId;
   if (!homebaseInvoiceId) return;
 
@@ -1462,7 +1364,7 @@ async function handleStripeInvoicePaid(stripeInvoice: Stripe.Invoice) {
   }
 }
 
-async function handleStripeInvoicePaymentFailed(stripeInvoice: Stripe.Invoice) {
+export async function handleStripeInvoicePaymentFailed(stripeInvoice: Stripe.Invoice) {
   const homebaseInvoiceId = stripeInvoice.metadata?.homebaseInvoiceId;
   if (!homebaseInvoiceId) return;
 
@@ -1528,7 +1430,7 @@ async function handleStripeInvoicePaymentFailed(stripeInvoice: Stripe.Invoice) {
   }
 }
 
-async function handleChargeRefunded(charge: Stripe.Charge) {
+export async function handleChargeRefunded(charge: Stripe.Charge) {
   const paymentIntentId = charge.payment_intent?.toString() ?? null;
   const chargeId = charge.id;
 
@@ -1615,7 +1517,7 @@ async function resolveProviderFromConnectAccount(
   return connectAccount?.providerId ?? null;
 }
 
-async function handlePayoutCreated(
+export async function handlePayoutCreated(
   payout: Stripe.Payout,
   connectedAccountId: string | null,
 ) {
@@ -1668,7 +1570,7 @@ async function handlePayoutCreated(
   }
 }
 
-async function handlePayoutPaid(
+export async function handlePayoutPaid(
   payout: Stripe.Payout,
   connectedAccountId: string | null,
 ) {
@@ -1710,7 +1612,7 @@ async function handlePayoutPaid(
   }
 }
 
-async function handlePayoutFailed(
+export async function handlePayoutFailed(
   payout: Stripe.Payout,
   _connectedAccountId: string | null,
 ) {
@@ -1727,7 +1629,7 @@ async function handlePayoutFailed(
   }
 }
 
-async function handleCheckoutSessionCompleted(
+export async function handleCheckoutSessionCompleted(
   session: Stripe.Checkout.Session,
 ) {
   const invoiceId = session.metadata?.invoiceId;
@@ -2030,7 +1932,7 @@ async function notifyProviderUser(
   }
 }
 
-async function handleSubscriptionCheckoutCompleted(
+export async function handleSubscriptionCheckoutCompleted(
   session: Stripe.Checkout.Session,
 ) {
   const providerId = session.metadata?.providerId;
@@ -2060,7 +1962,7 @@ async function handleSubscriptionCheckoutCompleted(
   );
 }
 
-async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
+export async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
   const providerId = subscription.metadata?.providerId;
   if (!providerId) return;
 
@@ -2082,7 +1984,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
   } as any);
 }
 
-async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
+export async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   const providerId = subscription.metadata?.providerId;
   if (!providerId) return;
 
@@ -2103,7 +2005,7 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   );
 }
 
-async function handleSubscriptionInvoicePaymentFailed(
+export async function handleSubscriptionInvoicePaymentFailed(
   stripeInvoice: Stripe.Invoice,
 ) {
   const subscriptionId = (stripeInvoice as any).subscription?.toString();

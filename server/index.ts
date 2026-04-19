@@ -10,7 +10,8 @@ import { runMigrations } from 'stripe-replit-sync';
 import { runBootMigrations } from "./dbMigrations";
 import { getStripeSync } from "./stripeClient";
 import { WebhookHandlers } from "./webhookHandlers";
-import { handleStripeWebhook } from "./stripeConnectService";
+import { processStripeEvent } from "./stripeWebhookRouter";
+import { getStripe } from "./stripeConnectService";
 import { db, pool } from "./db";
 import cron from "node-cron";
 import { eq, and, gte, lte, lt } from "drizzle-orm";
@@ -84,75 +85,150 @@ function setupCors(app: express.Application) {
   });
 }
 
-function setupStripeWebhook(app: express.Application) {
-  app.post(
-    '/api/stripe/webhook',
-    express.raw({ type: 'application/json' }),
-    async (req, res) => {
-      const signature = req.headers['stripe-signature'];
+// -----------------------------------------------------------------------------
+// Webhook signing-secret resolution
+// -----------------------------------------------------------------------------
+// We standardized on STRIPE_WEBHOOK_SECRET_PLATFORM and
+// STRIPE_WEBHOOK_SECRET_CONNECT. The legacy names (STRIPE_WEBHOOK_SECRET and
+// STRIPE_CONNECT_WEBHOOK_SECRET) are still honored as fallbacks so an env
+// rename can be rolled out without breaking deploys; a deprecation warning is
+// logged once per process when a fallback is used.
+// -----------------------------------------------------------------------------
 
-      if (!signature) {
-        return res.status(400).json({ error: 'Missing stripe-signature' });
-      }
+const _legacySecretWarned: Record<string, boolean> = {};
 
-      try {
-        const sig = Array.isArray(signature) ? signature[0] : signature;
+export function resolveWebhookSecret(
+  endpoint: "platform" | "connect",
+): string | undefined {
+  const newName =
+    endpoint === "platform"
+      ? "STRIPE_WEBHOOK_SECRET_PLATFORM"
+      : "STRIPE_WEBHOOK_SECRET_CONNECT";
+  const oldName =
+    endpoint === "platform"
+      ? "STRIPE_WEBHOOK_SECRET"
+      : "STRIPE_CONNECT_WEBHOOK_SECRET";
 
-        if (!Buffer.isBuffer(req.body)) {
-          console.error('STRIPE WEBHOOK ERROR: req.body is not a Buffer.');
-          return res.status(500).json({ error: 'Webhook processing error' });
-        }
+  const fromNew = process.env[newName];
+  if (fromNew) return fromNew;
 
-        await WebhookHandlers.processWebhook(req.body as Buffer, sig);
-        res.status(200).json({ received: true });
-      } catch (error: any) {
-        console.error('Webhook error:', error.message);
-        res.status(400).json({ error: 'Webhook processing error' });
-      }
+  const fromOld = process.env[oldName];
+  if (fromOld) {
+    if (!_legacySecretWarned[oldName]) {
+      console.warn(
+        `[webhook] DEPRECATED env var ${oldName} in use — please rename to ${newName}. ` +
+          `The old name will continue to work for now but should be migrated.`,
+      );
+      _legacySecretWarned[oldName] = true;
     }
+    return fromOld;
+  }
+
+  return undefined;
+}
+
+function setupStripeWebhook(app: express.Application) {
+  // Platform endpoint — receives events on the platform Stripe account
+  // (subscriptions, platform-billed invoices, platform Checkouts).
+  app.post(
+    "/api/stripe/webhook",
+    express.raw({ type: "application/json" }),
+    async (req, res) => {
+      const sigHeader = req.headers["stripe-signature"];
+      const endpointSecret = resolveWebhookSecret("platform");
+
+      if (!sigHeader) {
+        console.error("[stripe-webhook] endpoint=platform outcome=rejected reason=missing_signature");
+        return res.status(400).json({ error: "Missing stripe-signature header" });
+      }
+      if (!endpointSecret) {
+        console.error("[stripe-webhook] endpoint=platform outcome=rejected reason=secret_not_configured");
+        return res.status(500).json({ error: "Webhook secret not configured" });
+      }
+      if (!Buffer.isBuffer(req.body)) {
+        console.error("[stripe-webhook] endpoint=platform outcome=rejected reason=body_not_buffer");
+        return res.status(500).json({ error: "Webhook processing error" });
+      }
+
+      const sig = Array.isArray(sigHeader) ? sigHeader[0] : sigHeader;
+
+      // 1. Verify signature with the platform secret.
+      let event: any;
+      try {
+        event = getStripe().webhooks.constructEvent(req.body, sig, endpointSecret);
+      } catch (err: any) {
+        console.error(
+          `[stripe-webhook] endpoint=platform outcome=rejected reason=bad_signature message=${err?.message ?? "unknown"}`,
+        );
+        return res.status(400).json({ error: `Webhook Error: ${err?.message ?? "signature verification failed"}` });
+      }
+
+      // 2. Best-effort: keep stripe-replit-sync mirroring Stripe state into
+      //    the local stripe.* schema. Failures here MUST NOT fail the webhook
+      //    — the sync is read-only mirror data, not the source of truth.
+      try {
+        await WebhookHandlers.processWebhook(req.body as Buffer, sig);
+      } catch (err: any) {
+        console.warn(
+          `[stripe-webhook] endpoint=platform sync_mirror_error event=${event.id} message=${err?.message ?? "unknown"}`,
+        );
+      }
+
+      // 3. Run the verified event through the shared dispatcher.
+      try {
+        const result = await processStripeEvent(event, "platform");
+        return res.status(200).json(result);
+      } catch (err: any) {
+        // processStripeEvent already logged the error with stack trace.
+        return res.status(500).json({ error: err?.message ?? "Webhook processing failed" });
+      }
+    },
   );
 }
 
 function setupStripeConnectWebhook(app: express.Application) {
+  // Connect endpoint — receives "events on connected accounts".
   // MUST be registered before express.json() so req.body is the raw Buffer
   // required by Stripe's cryptographic signature verification.
-  // Signature verification is UNCONDITIONAL — no fallback in any environment.
   app.post(
     "/api/webhooks/stripe-connect",
     express.raw({ type: "application/json" }),
     async (req: Request, res: Response) => {
-      const sig = req.headers["stripe-signature"];
-      const endpointSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
+      const sigHeader = req.headers["stripe-signature"];
+      const endpointSecret = resolveWebhookSecret("connect");
 
-      if (!sig) {
+      if (!sigHeader) {
+        console.error("[stripe-webhook] endpoint=connect outcome=rejected reason=missing_signature");
         return res.status(400).json({ error: "Missing stripe-signature header" });
       }
-
       if (!endpointSecret) {
-        console.error("[webhook] STRIPE_CONNECT_WEBHOOK_SECRET is not set — Connect webhook rejected");
-        return res.status(400).json({ error: "Webhook secret not configured" });
+        console.error("[stripe-webhook] endpoint=connect outcome=rejected reason=secret_not_configured");
+        return res.status(500).json({ error: "Webhook secret not configured" });
+      }
+      if (!Buffer.isBuffer(req.body)) {
+        console.error("[stripe-webhook] endpoint=connect outcome=rejected reason=body_not_buffer");
+        return res.status(500).json({ error: "Webhook processing error" });
       }
 
-      // Use the same Stripe client the Connect service uses so test/live mode
-      // selection is consistent. Importing lazily keeps the boot order intact.
-      const { getStripe } = await import("./stripeConnectService");
-      const stripe = getStripe();
+      const sig = Array.isArray(sigHeader) ? sigHeader[0] : sigHeader;
+
       let event: any;
       try {
-        event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+        event = getStripe().webhooks.constructEvent(req.body, sig, endpointSecret);
       } catch (err: any) {
-        console.error("[webhook] Stripe Connect signature verification failed:", err.message);
-        return res.status(400).json({ error: `Webhook Error: ${err.message}` });
+        console.error(
+          `[stripe-webhook] endpoint=connect outcome=rejected reason=bad_signature message=${err?.message ?? "unknown"}`,
+        );
+        return res.status(400).json({ error: `Webhook Error: ${err?.message ?? "signature verification failed"}` });
       }
 
       try {
-        const result = await handleStripeWebhook(event);
-        res.json(result);
-      } catch (error: any) {
-        console.error("[webhook] Stripe Connect processing error:", error);
-        res.status(500).json({ error: error.message || "Webhook processing failed" });
+        const result = await processStripeEvent(event, "connect");
+        return res.status(200).json(result);
+      } catch (err: any) {
+        return res.status(500).json({ error: err?.message ?? "Webhook processing failed" });
       }
-    }
+    },
   );
 }
 
@@ -1114,10 +1190,18 @@ function validateProductionEnv() {
 
   // These must be set in production — server refuses to start without them
   // JWT_SECRET is separately enforced in server/auth.ts with process.exit(1)
-  const hardRequired: Array<[string, string]> = [
-    ["STRIPE_CONNECT_WEBHOOK_SECRET", "Stripe Connect webhook events cannot be verified — payment state will be corrupted"],
+  // Webhook secrets accept either the new standardized name or the legacy
+  // name as a fallback (see resolveWebhookSecret).
+  const hardRequired: Array<[string | string[], string]> = [
+    [
+      ["STRIPE_WEBHOOK_SECRET_CONNECT", "STRIPE_CONNECT_WEBHOOK_SECRET"],
+      "Stripe Connect webhook events cannot be verified — payment state will be corrupted",
+    ],
     ["STRIPE_SECRET_KEY", "All Stripe payment features are unavailable — invoicing, Connect, checkout all fail"],
-    ["STRIPE_WEBHOOK_SECRET", "Primary Stripe webhook events cannot be verified — payment state will be corrupted"],
+    [
+      ["STRIPE_WEBHOOK_SECRET_PLATFORM", "STRIPE_WEBHOOK_SECRET"],
+      "Primary Stripe webhook events cannot be verified — payment state will be corrupted",
+    ],
     ["STRIPE_SUBSCRIPTION_PRICE_ID", "HomeBase Pro provider subscription Checkout cannot be created — providers cannot subscribe"],
     ["RESEND_API_KEY", "Transactional email (invoices, booking confirmations, reminders) will silently fail"],
   ];
@@ -1127,25 +1211,30 @@ function validateProductionEnv() {
     [process.env.OPENAI_API_KEY ? "OPENAI_API_KEY" : "AI_INTEGRATIONS_OPENAI_API_KEY", "AI assistant features will return 500 errors"],
   ];
 
+  const isSet = (key: string | string[]): boolean =>
+    Array.isArray(key) ? key.some((k) => !!process.env[k]) : !!process.env[key];
+  const labelOf = (key: string | string[]): string =>
+    Array.isArray(key) ? key.join(" or ") : key;
+
   if (IS_PROD) {
     let fatal = false;
     for (const [key, reason] of hardRequired) {
-      if (!process.env[key]) {
-        console.error(`[startup] FATAL: ${key} is required in production — ${reason}`);
+      if (!isSet(key)) {
+        console.error(`[startup] FATAL: ${labelOf(key)} is required in production — ${reason}`);
         fatal = true;
       }
     }
     if (fatal) process.exit(1);
 
     for (const [key, reason] of softRequired) {
-      if (!process.env[key]) {
-        console.error(`[startup] ERROR: ${key} is not set — ${reason}`);
+      if (!isSet(key)) {
+        console.error(`[startup] ERROR: ${labelOf(key)} is not set — ${reason}`);
       }
     }
   } else {
     for (const [key] of [...hardRequired, ...softRequired]) {
-      if (!process.env[key]) {
-        console.warn(`[startup] WARNING: ${key} is not set (required in production)`);
+      if (!isSet(key)) {
+        console.warn(`[startup] WARNING: ${labelOf(key)} is not set (required in production)`);
       }
     }
   }

@@ -755,12 +755,17 @@ export const refundsRelations = relations(refunds, ({ one }) => ({
 }));
 
 // Stripe webhook events for idempotency
+// `endpoint` records which webhook endpoint received the event ("platform" or
+// "connect") so we can audit per-endpoint deliveries and detect cross-routing
+// (e.g. a Connect event delivered to the platform endpoint).
 export const stripeWebhookEvents = pgTable("stripe_webhook_events", {
   id: varchar("id")
     .primaryKey()
     .default(sql`gen_random_uuid()`),
   stripeEventId: text("stripe_event_id").notNull().unique(),
   eventType: text("event_type").notNull(),
+  endpoint: text("endpoint"), // 'platform' | 'connect' (nullable for legacy rows)
+  stripeAccountId: text("stripe_account_id"), // event.account, null on platform events
   processedAt: timestamp("processed_at").defaultNow().notNull(),
   payload: text("payload"), // JSON string of event data
 });
