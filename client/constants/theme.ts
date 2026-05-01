@@ -72,7 +72,7 @@ export const Spacing = {
   "5xl": 56,
   "6xl": 64,
   
-  screenPadding: 16,
+  screenPadding: 20,
   cardPadding: 16,
   sectionGap: 24,
   itemGap: 12,

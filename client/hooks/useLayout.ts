@@ -1,4 +1,5 @@
 import { useWindowDimensions } from "react-native";
+import { Spacing } from "@/constants/theme";
 
 const TABLET_BREAKPOINT = 768;
 const CONTENT_MAX_WIDTH = 680;
@@ -25,8 +26,8 @@ export function useLayout(): LayoutValues {
   const isTablet = width >= TABLET_BREAKPOINT;
   const contentMaxWidth = CONTENT_MAX_WIDTH;
   const horizontalPadding = isTablet
-    ? Math.max(20, (width - contentMaxWidth) / 2)
-    : 16;
+    ? Math.max(Spacing.screenPadding, (width - contentMaxWidth) / 2)
+    : Spacing.screenPadding;
 
   return { width, height, isTablet, contentMaxWidth, horizontalPadding };
 }
