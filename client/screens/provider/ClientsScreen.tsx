@@ -370,28 +370,34 @@ export default function ClientsScreen() {
     setRefreshing(false);
   };
 
-  const handleClientPress = (client: Client) => {
-    navigation.navigate("ClientDetail", { clientId: client.id });
-  };
+  const handleClientPress = useCallback(
+    (client: Client) => {
+      navigation.navigate("ClientDetail", { clientId: client.id });
+    },
+    [navigation],
+  );
 
-  const handleCall = (client: Client) => {
+  const handleCall = useCallback((client: Client) => {
     if (client.phone) {
       Linking.openURL(`tel:${client.phone}`);
     }
-  };
+  }, []);
 
-  const handleMessage = (client: Client) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    navigation.navigate("SendMessage", {
-      clientId: client.id,
-      clientName: client.name,
-      clientEmail: client.email,
-    });
-  };
+  const handleMessage = useCallback(
+    (client: Client) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      navigation.navigate("SendMessage", {
+        clientId: client.id,
+        clientName: client.name,
+        clientEmail: client.email,
+      });
+    },
+    [navigation],
+  );
 
-  const handleAddClient = () => {
+  const handleAddClient = useCallback(() => {
     navigation.navigate("AddClient");
-  };
+  }, [navigation]);
 
   const handleFilterChange = (id: string) => {
     setStatusFilter(id as StatusFilter);
