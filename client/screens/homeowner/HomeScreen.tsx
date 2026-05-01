@@ -316,11 +316,11 @@ export default function HomeScreen() {
           <View style={styles.quickActions}>
             {(
               [
-                { label: "Survival Kit", icon: "shield" as const, screen: "SurvivalKit" as const },
-                { label: "Health Score", icon: "activity" as const, screen: "HealthScore" as const },
-                { label: "Service History", icon: "clock" as const, screen: "ServiceHistory" as const, testID: "quick-action-service-history" },
-                { label: "HouseFax", icon: "file-text" as const, screen: "HouseFax" as const },
-              ] as const
+                { label: "Survival Kit", icon: "shield" as const, screen: "SurvivalKit" as const, testID: undefined as string | undefined },
+                { label: "Health Score", icon: "activity" as const, screen: "HealthScore" as const, testID: undefined as string | undefined },
+                { label: "Service History", icon: "clock" as const, screen: "ServiceHistory" as const, testID: "quick-action-service-history" as string | undefined },
+                { label: "HouseFax", icon: "file-text" as const, screen: "HouseFax" as const, testID: undefined as string | undefined },
+              ]
             ).map((item) => (
               <Pressable
                 key={item.label}
