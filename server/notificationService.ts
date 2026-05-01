@@ -1,4 +1,4 @@
-import { db } from './db';
+import { db, pool } from './db';
 import { eq, and } from 'drizzle-orm';
 import { notificationDeliveries, notificationPreferences, pushTokens, notifications, appointments, reviews, users, providers } from '@shared/schema';
 import {
@@ -133,6 +133,43 @@ export async function logDelivery(opts: {
   } catch (err) {
     console.error('Failed to log notification delivery:', err);
     return '';
+  }
+}
+
+/**
+ * Atomically claim the right to send a notification identified by
+ * (eventType, dedupKey, channel). Uses an INSERT … ON CONFLICT DO NOTHING
+ * against the notification_dedup_claims table whose PRIMARY KEY is
+ * (event_type, dedup_key, channel).
+ *
+ * Returns true  → this caller won the race; it MUST dispatch and then call
+ *                 logDelivery to record the outcome.
+ * Returns false → another handler already claimed this slot; skip dispatch.
+ *
+ * Typical dedup key: the Stripe PaymentIntent id (shared across concurrent
+ * payment_intent.succeeded and invoice.paid webhooks for the same payment).
+ *
+ * Task #246 — prevents duplicate payment push/email notifications.
+ */
+export async function claimNotificationDelivery(
+  eventType: string,
+  dedupKey: string,
+  channel: 'email' | 'push' | 'in_app' | 'sms',
+): Promise<boolean> {
+  try {
+    const result = await pool.query(
+      `INSERT INTO notification_dedup_claims (event_type, dedup_key, channel)
+       VALUES ($1, $2, $3)
+       ON CONFLICT DO NOTHING
+       RETURNING 1 AS claimed`,
+      [eventType, dedupKey, channel],
+    );
+    return result.rowCount !== null && result.rowCount > 0;
+  } catch (err) {
+    // If the table doesn't exist yet (migration not yet applied), fall back to
+    // allowing the dispatch rather than silently dropping the notification.
+    console.error('[claimNotificationDelivery] dedup claim failed — allowing dispatch:', err);
+    return true;
   }
 }
 

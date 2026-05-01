@@ -20,7 +20,7 @@ import {
   homes,
   appointments,
 } from "../shared/schema";
-import { dispatch, dispatchNotification, hasDeliveryForRecord, logDelivery } from "./notificationService";
+import { dispatch, dispatchNotification, claimNotificationDelivery, logDelivery } from "./notificationService";
 
 let stripe: Stripe | null = null;
 
@@ -982,36 +982,55 @@ export async function handlePaymentIntentSucceeded(
             clientEmail;
         }
       }
+      // Email to homeowner/client: atomic claim on PaymentIntent id so only
+      // one of the concurrent payment_intent.succeeded / invoice.paid webhooks
+      // sends the email (Task #246).
       if (clientEmail && provider) {
-        dispatch("invoice.paid", {
-          clientEmail,
-          clientName: clientName ?? clientEmail,
-          providerName: provider.businessName,
-          invoiceNumber: updatedInvoice.invoiceNumber,
-          amount:
-            typeof updatedInvoice.total === "string"
-              ? parseFloat(updatedInvoice.total)
-              : (updatedInvoice.total ?? 0),
-          paymentDate: new Date().toLocaleDateString(),
-          relatedRecordType: "invoice",
-          relatedRecordId: invoiceId,
-        }).catch((e: unknown) =>
-          console.error("invoice.paid dispatch error (webhook):", e),
+        const emailClaimed = await claimNotificationDelivery(
+          "invoice.paid.email",
+          paymentIntent.id,
+          "email",
         );
+        if (emailClaimed) {
+          dispatch("invoice.paid", {
+            clientEmail,
+            clientName: clientName ?? clientEmail,
+            providerName: provider.businessName,
+            invoiceNumber: updatedInvoice.invoiceNumber,
+            amount:
+              typeof updatedInvoice.total === "string"
+                ? parseFloat(updatedInvoice.total)
+                : (updatedInvoice.total ?? 0),
+            paymentDate: new Date().toLocaleDateString(),
+            relatedRecordType: "invoice",
+            relatedRecordId: invoiceId,
+          }).then(() =>
+            logDelivery({
+              channel: "email",
+              status: "sent",
+              eventType: "invoice.paid.email",
+              recipientEmail: clientEmail,
+              relatedRecordType: "invoice",
+              relatedRecordId: paymentIntent.id,
+            }),
+          ).catch((e: unknown) =>
+            console.error("invoice.paid dispatch error (webhook):", e),
+          );
+        }
       }
 
-      // Provider push: notify the provider that funds landed in their Connect
-      // account (Task #150). Dedup against handleStripeInvoicePaid so the
-      // provider only receives one push per payment (Task #235).
+      // Provider push: atomic claim on PaymentIntent id prevents concurrent
+      // payment_intent.succeeded + invoice.paid webhooks from both firing
+      // (Task #246).
       if (provider?.userId) {
-        const alreadyPushed = await hasDeliveryForRecord(
+        const providerPushClaimed = await claimNotificationDelivery(
           "invoice.paid",
-          invoiceId,
+          paymentIntent.id,
           "push",
         );
-        if (!alreadyPushed) {
+        if (providerPushClaimed) {
           const amountStr = String(updatedInvoice.total ?? "0");
-          await dispatchNotification(
+          dispatchNotification(
             provider.userId,
             "Payment received",
             `Invoice ${updatedInvoice.invoiceNumber} was paid — $${amountStr} is on the way to your bank account.`,
@@ -1024,30 +1043,32 @@ export async function handlePaymentIntentSucceeded(
               params: { invoiceId },
             },
             "invoices",
+          ).then(() =>
+            logDelivery({
+              channel: "push",
+              status: "sent",
+              eventType: "invoice.paid",
+              recipientUserId: provider.userId,
+              relatedRecordType: "invoice",
+              relatedRecordId: paymentIntent.id,
+            }),
           ).catch((e: unknown) =>
             console.error("provider invoice.paid push error (webhook):", e),
           );
-          await logDelivery({
-            channel: "push",
-            status: "sent",
-            eventType: "invoice.paid",
-            recipientUserId: provider.userId,
-            relatedRecordType: "invoice",
-            relatedRecordId: invoiceId,
-          });
         }
       }
 
       // Homeowner-side "payment confirmed" in-app + push so the notification
       // center reflects the payment and the client app invalidates its
       // invoice/job queries even if it was backgrounded (Task #235).
+      // Homeowner push: atomic claim on PaymentIntent id (Task #246).
       if (updatedInvoice.homeownerUserId) {
-        const alreadyPushed = await hasDeliveryForRecord(
+        const homeownerPushClaimed = await claimNotificationDelivery(
           "invoice.paid.homeowner",
-          invoiceId,
+          paymentIntent.id,
           "push",
         );
-        if (!alreadyPushed) {
+        if (homeownerPushClaimed) {
           const amountStr = String(updatedInvoice.total ?? "0");
           const data: Record<string, unknown> = {
             type: "invoice_paid",
@@ -1068,24 +1089,25 @@ export async function handlePaymentIntentSucceeded(
               data.appointmentId = appointmentId;
             }
           }
-          await dispatchNotification(
+          dispatchNotification(
             updatedInvoice.homeownerUserId,
             "Payment confirmed",
             `Your $${amountStr} payment to ${provider?.businessName || "your provider"} was received.`,
             "invoice_paid",
             data,
             "invoices",
+          ).then(() =>
+            logDelivery({
+              channel: "push",
+              status: "sent",
+              eventType: "invoice.paid.homeowner",
+              recipientUserId: updatedInvoice.homeownerUserId ?? undefined,
+              relatedRecordType: "invoice",
+              relatedRecordId: paymentIntent.id,
+            }),
           ).catch((e: unknown) =>
             console.error("homeowner invoice.paid push error (webhook):", e),
           );
-          await logDelivery({
-            channel: "push",
-            status: "sent",
-            eventType: "invoice.paid.homeowner",
-            recipientUserId: updatedInvoice.homeownerUserId,
-            relatedRecordType: "invoice",
-            relatedRecordId: invoiceId,
-          });
         }
       }
 
@@ -1378,38 +1400,60 @@ export async function handleStripeInvoicePaid(stripeInvoice: Stripe.Invoice) {
           homeowner.email;
       }
     }
+    // Email to homeowner/client: atomic claim on PaymentIntent id (shared with
+    // payment_intent.succeeded) so only one email fires per payment (Task #246).
+    // Fall back to homebaseInvoiceId when no PI id is available.
     if (clientEmail && provider) {
-      dispatch("invoice.paid", {
-        clientEmail,
-        clientName: clientName ?? clientEmail,
-        providerName: provider.businessName,
-        invoiceNumber: updatedInvoice.invoiceNumber,
-        amount:
-          typeof updatedInvoice.total === "string"
-            ? parseFloat(updatedInvoice.total)
-            : (updatedInvoice.total ?? 0),
-        paymentDate: new Date().toLocaleDateString(),
-        relatedRecordType: "invoice",
-        relatedRecordId: homebaseInvoiceId,
-      }).catch((e: unknown) =>
-        console.error(
-          "invoice.paid dispatch error (stripe invoice webhook):",
-          e,
-        ),
+      const emailDedupeKey = stripePaymentIntentId ?? homebaseInvoiceId;
+      const emailClaimed = await claimNotificationDelivery(
+        "invoice.paid.email",
+        emailDedupeKey,
+        "email",
       );
+      if (emailClaimed) {
+        dispatch("invoice.paid", {
+          clientEmail,
+          clientName: clientName ?? clientEmail,
+          providerName: provider.businessName,
+          invoiceNumber: updatedInvoice.invoiceNumber,
+          amount:
+            typeof updatedInvoice.total === "string"
+              ? parseFloat(updatedInvoice.total)
+              : (updatedInvoice.total ?? 0),
+          paymentDate: new Date().toLocaleDateString(),
+          relatedRecordType: "invoice",
+          relatedRecordId: homebaseInvoiceId,
+        }).then(() =>
+          logDelivery({
+            channel: "email",
+            status: "sent",
+            eventType: "invoice.paid.email",
+            recipientEmail: clientEmail,
+            relatedRecordType: "invoice",
+            relatedRecordId: emailDedupeKey,
+          }),
+        ).catch((e: unknown) =>
+          console.error(
+            "invoice.paid dispatch error (stripe invoice webhook):",
+            e,
+          ),
+        );
+      }
     }
 
-    // Provider push (Task #150). Dedup against handlePaymentIntentSucceeded so
-    // the provider only receives one push per payment (Task #235).
+    // Provider push: atomic claim on PaymentIntent id prevents concurrent
+    // payment_intent.succeeded + invoice.paid webhooks from both firing
+    // (Task #246).
     if (provider?.userId) {
-      const alreadyPushed = await hasDeliveryForRecord(
+      const pushDedupeKey = stripePaymentIntentId ?? homebaseInvoiceId;
+      const providerPushClaimed = await claimNotificationDelivery(
         "invoice.paid",
-        homebaseInvoiceId,
+        pushDedupeKey,
         "push",
       );
-      if (!alreadyPushed) {
+      if (providerPushClaimed) {
         const amountStr = String(updatedInvoice.total ?? "0");
-        await dispatchNotification(
+        dispatchNotification(
           provider.userId,
           "Payment received",
           `Invoice ${updatedInvoice.invoiceNumber} was paid — $${amountStr} is on the way to your bank account.`,
@@ -1422,31 +1466,33 @@ export async function handleStripeInvoicePaid(stripeInvoice: Stripe.Invoice) {
             params: { invoiceId: homebaseInvoiceId },
           },
           "invoices",
+        ).then(() =>
+          logDelivery({
+            channel: "push",
+            status: "sent",
+            eventType: "invoice.paid",
+            recipientUserId: provider.userId,
+            relatedRecordType: "invoice",
+            relatedRecordId: pushDedupeKey,
+          }),
         ).catch((e: unknown) =>
           console.error(
             "provider invoice.paid push error (stripe invoice webhook):",
             e,
           ),
         );
-        await logDelivery({
-          channel: "push",
-          status: "sent",
-          eventType: "invoice.paid",
-          recipientUserId: provider.userId,
-          relatedRecordType: "invoice",
-          relatedRecordId: homebaseInvoiceId,
-        });
       }
     }
 
-    // Homeowner-side "payment confirmed" in-app + push (Task #235).
+    // Homeowner push: atomic claim on PaymentIntent id (Task #246).
     if (updatedInvoice.homeownerUserId) {
-      const alreadyPushed = await hasDeliveryForRecord(
+      const homeownerDedupeKey = stripePaymentIntentId ?? homebaseInvoiceId;
+      const homeownerPushClaimed = await claimNotificationDelivery(
         "invoice.paid.homeowner",
-        homebaseInvoiceId,
+        homeownerDedupeKey,
         "push",
       );
-      if (!alreadyPushed) {
+      if (homeownerPushClaimed) {
         const amountStr = String(updatedInvoice.total ?? "0");
         const data: Record<string, unknown> = {
           type: "invoice_paid",
@@ -1467,27 +1513,28 @@ export async function handleStripeInvoicePaid(stripeInvoice: Stripe.Invoice) {
             data.appointmentId = appointmentId;
           }
         }
-        await dispatchNotification(
+        dispatchNotification(
           updatedInvoice.homeownerUserId,
           "Payment confirmed",
           `Your $${amountStr} payment to ${provider?.businessName || "your provider"} was received.`,
           "invoice_paid",
           data,
           "invoices",
+        ).then(() =>
+          logDelivery({
+            channel: "push",
+            status: "sent",
+            eventType: "invoice.paid.homeowner",
+            recipientUserId: updatedInvoice.homeownerUserId ?? undefined,
+            relatedRecordType: "invoice",
+            relatedRecordId: homeownerDedupeKey,
+          }),
         ).catch((e: unknown) =>
           console.error(
             "homeowner invoice.paid push error (stripe invoice webhook):",
             e,
           ),
         );
-        await logDelivery({
-          channel: "push",
-          status: "sent",
-          eventType: "invoice.paid.homeowner",
-          recipientUserId: updatedInvoice.homeownerUserId,
-          relatedRecordType: "invoice",
-          relatedRecordId: homebaseInvoiceId,
-        });
       }
     }
   } catch (err) {

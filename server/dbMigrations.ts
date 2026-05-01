@@ -810,6 +810,23 @@ export async function runBootMigrations(): Promise<void> {
       )
     `);
 
+    // ── notification_dedup_claims: atomic notification dedup (Task #246) ───
+    // Dedicated table for one-insert-per-notification dedup using the
+    // PRIMARY KEY as the unique constraint. The first concurrent webhook
+    // handler to INSERT wins; the second gets ON CONFLICT DO NOTHING and
+    // skips dispatch. Using a separate table avoids touching existing
+    // notification_deliveries data and provides a clean key space.
+    await runSql(
+      "notification_dedup_claims.create",
+      `CREATE TABLE IF NOT EXISTS notification_dedup_claims (
+        event_type  TEXT NOT NULL,
+        dedup_key   TEXT NOT NULL,
+        channel     TEXT NOT NULL,
+        created_at  TIMESTAMP NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (event_type, dedup_key, channel)
+      )`,
+    );
+
     const verificationErrors: string[] = [];
     for (const [label, sql] of verifications) {
       try {
