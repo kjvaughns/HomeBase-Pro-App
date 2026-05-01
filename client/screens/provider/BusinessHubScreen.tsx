@@ -259,6 +259,7 @@ export default function BusinessHubScreen() {
   const [policiesSaving, setPoliciesSaving] = useState(false);
   const [policiesError, setPoliciesError] = useState("");
   const [policiesLoaded, setPoliciesLoaded] = useState(false);
+  const [hoursLoaded, setHoursLoaded] = useState(false);
 
   // Services + booking data
   const { data: servicesData, isLoading: servicesLoading } = useQuery<{ services: ProviderService[] }>({
@@ -285,11 +286,17 @@ export default function BusinessHubScreen() {
     setServiceRadius(provider.serviceRadius != null ? String(provider.serviceRadius) : "");
     setZipCodes(provider.serviceZipCodes?.length ? provider.serviceZipCodes.join(", ") : "");
     setCities(provider.serviceCities?.length ? provider.serviceCities.join(", ") : "");
-    setHours(provider.businessHours ? { ...DEFAULT_HOURS, ...provider.businessHours } : DEFAULT_HOURS);
     if (provider.isActive !== null && provider.isActive !== undefined) {
       hydrateAvailableForWork(provider.isActive);
     }
   }, [provider, user, hydrateAvailableForWork]);
+
+  // Populate business hours from API data (once only, to protect unsaved edits from background refetches)
+  useEffect(() => {
+    if (!provider || hoursLoaded) return;
+    setHours(provider.businessHours ? { ...DEFAULT_HOURS, ...provider.businessHours } : DEFAULT_HOURS);
+    setHoursLoaded(true);
+  }, [provider, hoursLoaded]);
 
   // Populate policies from API data (once only)
   useEffect(() => {
@@ -514,6 +521,11 @@ export default function BusinessHubScreen() {
       queryClient.invalidateQueries({ queryKey: ["/api/providers"] });
       if (provider?.slug) {
         queryClient.invalidateQueries({ queryKey: ["/api/providers", provider.slug] });
+      }
+      const refetchResult = await refetchProvider();
+      if (refetchResult.data?.provider) {
+        const freshProvider = refetchResult.data.provider;
+        setHours(freshProvider.businessHours ? { ...DEFAULT_HOURS, ...freshProvider.businessHours } : DEFAULT_HOURS);
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setProfileSaved(true);
