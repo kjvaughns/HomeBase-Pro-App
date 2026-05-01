@@ -1034,10 +1034,11 @@ export default function FindScreen() {
   return (
     <ThemedView style={styles.container}>
       <FlatList
+        keyboardShouldPersistTaps="handled"
         data={featuredProviders}
         renderItem={renderProvider}
         keyExtractor={(item) => item.id}
-        ListHeaderComponent={renderHeader}
+        ListHeaderComponent={renderHeader()}
         ListFooterComponent={renderFooter}
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,

@@ -525,10 +525,11 @@ export default function ProviderListScreen() {
   return (
     <ThemedView style={styles.container}>
       <FlatList
+        keyboardShouldPersistTaps="handled"
         data={filteredProviders}
         renderItem={renderProvider}
         keyExtractor={(item) => item.id}
-        ListHeaderComponent={renderHeader}
+        ListHeaderComponent={renderHeader()}
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.md,

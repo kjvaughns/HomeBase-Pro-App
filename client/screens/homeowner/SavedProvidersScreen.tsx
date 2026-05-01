@@ -195,22 +195,6 @@ export default function SavedProvidersScreen() {
 
   const ListHeader = () => (
     <View style={styles.listHeader}>
-      <View style={[styles.searchContainer, { backgroundColor: theme.cardBackground }]}>
-        <Feather name="search" size={18} color={theme.textSecondary} />
-        <TextInput
-          style={[styles.searchInput, { color: theme.text }]}
-          placeholder="Search saved providers..."
-          placeholderTextColor={theme.textTertiary}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        {searchQuery ? (
-          <Pressable onPress={() => setSearchQuery("")}>
-            <Feather name="x" size={18} color={theme.textSecondary} />
-          </Pressable>
-        ) : null}
-      </View>
-
       <View style={styles.sortRow}>
         <ThemedText style={[styles.resultsCount, { color: theme.textSecondary }]}>
           {filteredProviders.length} provider{filteredProviders.length !== 1 ? "s" : ""}
@@ -243,7 +227,23 @@ export default function SavedProvidersScreen() {
 
   return (
     <ThemedView style={styles.container}>
+      <View style={[styles.searchContainer, { backgroundColor: theme.cardBackground }]}>
+        <Feather name="search" size={18} color={theme.textSecondary} />
+        <TextInput
+          style={[styles.searchInput, { color: theme.text }]}
+          placeholder="Search saved providers..."
+          placeholderTextColor={theme.textTertiary}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+        {searchQuery ? (
+          <Pressable onPress={() => setSearchQuery("")}>
+            <Feather name="x" size={18} color={theme.textSecondary} />
+          </Pressable>
+        ) : null}
+      </View>
       <FlatList
+        keyboardShouldPersistTaps="handled"
         data={filteredProviders}
         keyExtractor={(item) => item.id}
         renderItem={renderProviderCard}

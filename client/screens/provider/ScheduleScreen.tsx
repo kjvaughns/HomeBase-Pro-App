@@ -66,10 +66,33 @@ interface Client {
 
 const DAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
-const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS_SHORT = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
 
 const STATUS_COLOR: Record<JobStatus, string> = {
   scheduled: "#3B82F6",
@@ -114,7 +137,11 @@ function startOfDay(d: Date): Date {
 
 function formatDateLabel(date: Date): string {
   const today = new Date();
-  const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+  const tomorrow = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate() + 1,
+  );
   if (isSameDay(date, today)) return "Today";
   if (isSameDay(date, tomorrow)) return "Tomorrow";
   return `${DAYS_SHORT[date.getDay()]}, ${MONTHS_SHORT[date.getMonth()]} ${date.getDate()}`;
@@ -131,23 +158,33 @@ function formatTime(time: string): string {
 
 function getInitials(name: string): string {
   const parts = name.trim().split(" ");
-  if (parts.length >= 2) return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+  if (parts.length >= 2)
+    return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
   return name.slice(0, 2).toUpperCase();
 }
 
 function matchesFilter(status: JobStatus, filter: StatusFilter): boolean {
   if (filter === "all") return true;
   if (filter === "scheduled") return status === "scheduled";
-  if (filter === "active") return ["confirmed", "on_my_way", "arrived", "in_progress"].includes(status);
+  if (filter === "active")
+    return ["confirmed", "on_my_way", "arrived", "in_progress"].includes(
+      status,
+    );
   if (filter === "done") return status === "completed";
   return true;
 }
 
-function getQuickAction(status: JobStatus): { label: string; next: string; icon: keyof typeof Feather.glyphMap } | null {
+function getQuickAction(
+  status: JobStatus,
+): { label: string; next: string; icon: keyof typeof Feather.glyphMap } | null {
   if (status === "scheduled" || status === "confirmed") {
     return { label: "Start", next: "start", icon: "play" };
   }
-  if (status === "on_my_way" || status === "arrived" || status === "in_progress") {
+  if (
+    status === "on_my_way" ||
+    status === "arrived" ||
+    status === "in_progress"
+  ) {
     return { label: "Complete", next: "complete", icon: "check" };
   }
   return null;
@@ -193,7 +230,9 @@ function WeekStrip({ selectedDate, jobs, onDateSelect }: WeekStripProps) {
   const days = useMemo(() => {
     const result: Date[] = [];
     for (let i = -14; i < DAYS_WINDOW - 14; i++) {
-      result.push(new Date(today.getFullYear(), today.getMonth(), today.getDate() + i));
+      result.push(
+        new Date(today.getFullYear(), today.getMonth(), today.getDate() + i),
+      );
     }
     return result;
   }, []);
@@ -218,6 +257,7 @@ function WeekStrip({ selectedDate, jobs, onDateSelect }: WeekStripProps) {
     <ScrollView
       ref={scrollRef}
       horizontal
+      keyboardShouldPersistTaps="handled"
       showsHorizontalScrollIndicator={false}
       onLayout={scrollToToday}
       contentContainerStyle={styles.weekStripContent}
@@ -261,7 +301,11 @@ function WeekStrip({ selectedDate, jobs, onDateSelect }: WeekStripProps) {
               <View
                 style={[
                   styles.weekDotBadge,
-                  { backgroundColor: isSelected ? "rgba(255,255,255,0.7)" : Colors.accent },
+                  {
+                    backgroundColor: isSelected
+                      ? "rgba(255,255,255,0.7)"
+                      : Colors.accent,
+                  },
                 ]}
               >
                 <ThemedText
@@ -297,9 +341,13 @@ function TodayBanner({ jobs, getClientName }: TodayBannerProps) {
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
   const todayJobs = jobs.filter(
-    (j) => j.status !== "cancelled" && isSameDay(new Date(j.scheduledDate), now)
+    (j) =>
+      j.status !== "cancelled" && isSameDay(new Date(j.scheduledDate), now),
   );
-  const totalRevenue = todayJobs.reduce((sum, j) => sum + parseFloat(j.estimatedPrice || "0"), 0);
+  const totalRevenue = todayJobs.reduce(
+    (sum, j) => sum + parseFloat(j.estimatedPrice || "0"),
+    0,
+  );
 
   // "Next up": a job that is not completed/cancelled AND whose scheduled time is in the future
   const upcomingJob = todayJobs
@@ -310,7 +358,9 @@ function TodayBanner({ jobs, getClientName }: TodayBannerProps) {
       const jobMinutes = parseInt(hStr, 10) * 60 + parseInt(mStr || "0", 10);
       return jobMinutes >= currentMinutes;
     })
-    .sort((a, b) => (a.scheduledTime || "").localeCompare(b.scheduledTime || ""))[0];
+    .sort((a, b) =>
+      (a.scheduledTime || "").localeCompare(b.scheduledTime || ""),
+    )[0];
 
   const nextUpLabel = upcomingJob
     ? `${upcomingJob.title}${upcomingJob.scheduledTime ? ` @ ${formatTime(upcomingJob.scheduledTime)}` : ""}`
@@ -321,33 +371,62 @@ function TodayBanner({ jobs, getClientName }: TodayBannerProps) {
       <GlassCard style={styles.todayBanner}>
         <View style={styles.todayStats}>
           <View style={styles.todayStat}>
-            <View style={[styles.todayStatIcon, { backgroundColor: Colors.accentLight }]}>
+            <View
+              style={[
+                styles.todayStatIcon,
+                { backgroundColor: Colors.accentLight },
+              ]}
+            >
               <Feather name="briefcase" size={14} color={Colors.accent} />
             </View>
             <View>
-              <ThemedText style={styles.todayStatNum}>{todayJobs.length}</ThemedText>
-              <ThemedText style={[styles.todayStatLabel, { color: theme.textTertiary }]}>Jobs</ThemedText>
+              <ThemedText style={styles.todayStatNum}>
+                {todayJobs.length}
+              </ThemedText>
+              <ThemedText
+                style={[styles.todayStatLabel, { color: theme.textTertiary }]}
+              >
+                Jobs
+              </ThemedText>
             </View>
           </View>
 
-          <View style={[styles.todayDivider, { backgroundColor: theme.separator }]} />
+          <View
+            style={[styles.todayDivider, { backgroundColor: theme.separator }]}
+          />
 
           <View style={styles.todayStat}>
-            <View style={[styles.todayStatIcon, { backgroundColor: Colors.accentLight }]}>
+            <View
+              style={[
+                styles.todayStatIcon,
+                { backgroundColor: Colors.accentLight },
+              ]}
+            >
               <Feather name="dollar-sign" size={14} color={Colors.accent} />
             </View>
             <View>
               <ThemedText style={styles.todayStatNum}>
                 ${totalRevenue > 0 ? totalRevenue.toLocaleString() : "—"}
               </ThemedText>
-              <ThemedText style={[styles.todayStatLabel, { color: theme.textTertiary }]}>Expected</ThemedText>
+              <ThemedText
+                style={[styles.todayStatLabel, { color: theme.textTertiary }]}
+              >
+                Expected
+              </ThemedText>
             </View>
           </View>
 
-          <View style={[styles.todayDivider, { backgroundColor: theme.separator }]} />
+          <View
+            style={[styles.todayDivider, { backgroundColor: theme.separator }]}
+          />
 
           <View style={[styles.todayStat, { flex: 1 }]}>
-            <View style={[styles.todayStatIcon, { backgroundColor: Colors.accentLight }]}>
+            <View
+              style={[
+                styles.todayStatIcon,
+                { backgroundColor: Colors.accentLight },
+              ]}
+            >
               <Feather name="clock" size={14} color={Colors.accent} />
             </View>
             <View style={{ flex: 1 }}>
@@ -378,7 +457,13 @@ interface EnhancedJobCardProps {
   isActionLoading: boolean;
 }
 
-function EnhancedJobCard({ job, clientName, onPress, onQuickAction, isActionLoading }: EnhancedJobCardProps) {
+function EnhancedJobCard({
+  job,
+  clientName,
+  onPress,
+  onQuickAction,
+  isActionLoading,
+}: EnhancedJobCardProps) {
   const { theme } = useTheme();
   const statusColor = STATUS_COLOR[job.status];
   const quickAction = getQuickAction(job.status);
@@ -387,7 +472,9 @@ function EnhancedJobCard({ job, clientName, onPress, onQuickAction, isActionLoad
     <Pressable onPress={onPress} testID={`job-card-${job.id}`}>
       <GlassCard style={styles.jobCard} noPadding>
         <View style={styles.jobCardInner}>
-          <View style={[styles.jobStatusBar, { backgroundColor: statusColor }]} />
+          <View
+            style={[styles.jobStatusBar, { backgroundColor: statusColor }]}
+          />
 
           <View style={styles.jobCardContent}>
             <View style={styles.jobCardTop}>
@@ -395,27 +482,50 @@ function EnhancedJobCard({ job, clientName, onPress, onQuickAction, isActionLoad
               <View style={styles.jobTimeCol}>
                 {job.scheduledTime ? (
                   <>
-                    <ThemedText style={styles.jobTime}>{formatTime(job.scheduledTime).split(" ")[0]}</ThemedText>
-                    <ThemedText style={[styles.jobTimeAmPm, { color: theme.textTertiary }]}>
+                    <ThemedText style={styles.jobTime}>
+                      {formatTime(job.scheduledTime).split(" ")[0]}
+                    </ThemedText>
+                    <ThemedText
+                      style={[
+                        styles.jobTimeAmPm,
+                        { color: theme.textTertiary },
+                      ]}
+                    >
                       {formatTime(job.scheduledTime).split(" ")[1]}
                     </ThemedText>
                   </>
                 ) : (
-                  <ThemedText style={[styles.jobTimeAmPm, { color: theme.textTertiary }]}>—</ThemedText>
+                  <ThemedText
+                    style={[styles.jobTimeAmPm, { color: theme.textTertiary }]}
+                  >
+                    —
+                  </ThemedText>
                 )}
               </View>
 
               {/* Middle: Info */}
               <View style={styles.jobInfoCol}>
                 <View style={styles.jobClientRow}>
-                  <View style={[styles.jobAvatar, { backgroundColor: statusColor + "22" }]}>
-                    <ThemedText style={[styles.jobAvatarText, { color: statusColor }]}>
+                  <View
+                    style={[
+                      styles.jobAvatar,
+                      { backgroundColor: statusColor + "22" },
+                    ]}
+                  >
+                    <ThemedText
+                      style={[styles.jobAvatarText, { color: statusColor }]}
+                    >
                       {getInitials(clientName)}
                     </ThemedText>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <ThemedText style={styles.jobClientName} numberOfLines={1}>{clientName}</ThemedText>
-                    <ThemedText style={[styles.jobService, { color: Colors.accent }]} numberOfLines={1}>
+                    <ThemedText style={styles.jobClientName} numberOfLines={1}>
+                      {clientName}
+                    </ThemedText>
+                    <ThemedText
+                      style={[styles.jobService, { color: Colors.accent }]}
+                      numberOfLines={1}
+                    >
                       {job.title}
                     </ThemedText>
                   </View>
@@ -423,8 +533,15 @@ function EnhancedJobCard({ job, clientName, onPress, onQuickAction, isActionLoad
 
                 {job.address ? (
                   <View style={styles.jobAddressRow}>
-                    <Feather name="map-pin" size={11} color={theme.textTertiary} />
-                    <ThemedText style={[styles.jobAddress, { color: theme.textTertiary }]} numberOfLines={1}>
+                    <Feather
+                      name="map-pin"
+                      size={11}
+                      color={theme.textTertiary}
+                    />
+                    <ThemedText
+                      style={[styles.jobAddress, { color: theme.textTertiary }]}
+                      numberOfLines={1}
+                    >
                       {job.address}
                     </ThemedText>
                   </View>
@@ -434,11 +551,17 @@ function EnhancedJobCard({ job, clientName, onPress, onQuickAction, isActionLoad
               {/* Right: Price + Chevron */}
               <View style={styles.jobRightCol}>
                 {job.estimatedPrice ? (
-                  <ThemedText style={[styles.jobPrice, { color: Colors.accent }]}>
+                  <ThemedText
+                    style={[styles.jobPrice, { color: Colors.accent }]}
+                  >
                     ${parseFloat(job.estimatedPrice).toFixed(0)}
                   </ThemedText>
                 ) : null}
-                <Feather name="chevron-right" size={16} color={theme.textTertiary} />
+                <Feather
+                  name="chevron-right"
+                  size={16}
+                  color={theme.textTertiary}
+                />
               </View>
             </View>
 
@@ -447,18 +570,28 @@ function EnhancedJobCard({ job, clientName, onPress, onQuickAction, isActionLoad
               <View
                 style={[
                   styles.statusPillInline,
-                  { backgroundColor: statusColor + "18", borderColor: statusColor + "30" },
+                  {
+                    backgroundColor: statusColor + "18",
+                    borderColor: statusColor + "30",
+                  },
                 ]}
               >
-                <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-                <ThemedText style={[styles.statusPillText, { color: statusColor }]}>
+                <View
+                  style={[styles.statusDot, { backgroundColor: statusColor }]}
+                />
+                <ThemedText
+                  style={[styles.statusPillText, { color: statusColor }]}
+                >
                   {STATUS_LABEL[job.status]}
                 </ThemedText>
               </View>
 
               {quickAction ? (
                 <Pressable
-                  style={[styles.quickActionBtn, { backgroundColor: statusColor }]}
+                  style={[
+                    styles.quickActionBtn,
+                    { backgroundColor: statusColor },
+                  ]}
                   onPress={(e) => {
                     e.stopPropagation();
                     onQuickAction(quickAction.next);
@@ -470,8 +603,14 @@ function EnhancedJobCard({ job, clientName, onPress, onQuickAction, isActionLoad
                     <ActivityIndicator size="small" color="#FFFFFF" />
                   ) : (
                     <>
-                      <Feather name={quickAction.icon} size={12} color="#FFFFFF" />
-                      <ThemedText style={styles.quickActionText}>{quickAction.label}</ThemedText>
+                      <Feather
+                        name={quickAction.icon}
+                        size={12}
+                        color="#FFFFFF"
+                      />
+                      <ThemedText style={styles.quickActionText}>
+                        {quickAction.label}
+                      </ThemedText>
                     </>
                   )}
                 </Pressable>
@@ -515,21 +654,36 @@ function MonthView({
   const today = new Date();
 
   const getJobsForDate = (date: Date) =>
-    jobs.filter((j) => j.status !== "cancelled" && isSameDay(new Date(j.scheduledDate), date));
+    jobs.filter(
+      (j) =>
+        j.status !== "cancelled" && isSameDay(new Date(j.scheduledDate), date),
+    );
 
   const selectedDayJobs = getJobsForDate(selectedDate);
 
   return (
-    <ScrollView style={styles.monthScroll} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      keyboardShouldPersistTaps="handled"
+      style={styles.monthScroll}
+      showsVerticalScrollIndicator={false}
+    >
       {/* Month Navigation */}
       <View style={styles.monthNavRow}>
-        <Pressable style={styles.monthNavBtn} onPress={() => onMonthChange(-1)} hitSlop={8}>
+        <Pressable
+          style={styles.monthNavBtn}
+          onPress={() => onMonthChange(-1)}
+          hitSlop={8}
+        >
           <Feather name="chevron-left" size={22} color={theme.textSecondary} />
         </Pressable>
         <ThemedText style={styles.monthNavTitle}>
           {MONTHS[calendarMonth.getMonth()]} {calendarMonth.getFullYear()}
         </ThemedText>
-        <Pressable style={styles.monthNavBtn} onPress={() => onMonthChange(1)} hitSlop={8}>
+        <Pressable
+          style={styles.monthNavBtn}
+          onPress={() => onMonthChange(1)}
+          hitSlop={8}
+        >
           <Feather name="chevron-right" size={22} color={theme.textSecondary} />
         </Pressable>
       </View>
@@ -538,7 +692,9 @@ function MonthView({
       <View style={styles.calendarHeader}>
         {DAYS_SHORT.map((day) => (
           <View key={day} style={styles.calendarHeaderDay}>
-            <ThemedText style={[styles.calendarDayLabel, { color: theme.textTertiary }]}>
+            <ThemedText
+              style={[styles.calendarDayLabel, { color: theme.textTertiary }]}
+            >
               {day.slice(0, 2)}
             </ThemedText>
           </View>
@@ -549,7 +705,8 @@ function MonthView({
       {weeks.map((week, wi) => (
         <View key={wi} style={styles.calendarWeek}>
           {week.map((date, di) => {
-            if (!date) return <View key={`e-${di}`} style={styles.calendarDay} />;
+            if (!date)
+              return <View key={`e-${di}`} style={styles.calendarDay} />;
             const dayJobs = getJobsForDate(date);
             const isToday = isSameDay(date, today);
             const isSelected = isSameDay(date, selectedDate);
@@ -559,7 +716,8 @@ function MonthView({
                 key={date.toISOString()}
                 style={[
                   styles.calendarDay,
-                  isToday && !isSelected && { backgroundColor: Colors.accentLight },
+                  isToday &&
+                    !isSelected && { backgroundColor: Colors.accentLight },
                   isSelected && { backgroundColor: Colors.accent },
                 ]}
                 onPress={() => onDateSelect(date)}
@@ -580,7 +738,11 @@ function MonthView({
                         key={i}
                         style={[
                           styles.calendarDot,
-                          { backgroundColor: isSelected ? "rgba(255,255,255,0.8)" : STATUS_COLOR[j.status] },
+                          {
+                            backgroundColor: isSelected
+                              ? "rgba(255,255,255,0.8)"
+                              : STATUS_COLOR[j.status],
+                          },
                         ]}
                       />
                     ))}
@@ -594,12 +756,16 @@ function MonthView({
 
       {/* Selected Day Job List */}
       <View style={[styles.monthDayPanel, { borderTopColor: theme.separator }]}>
-        <ThemedText style={[styles.monthDayTitle, { color: theme.textSecondary }]}>
+        <ThemedText
+          style={[styles.monthDayTitle, { color: theme.textSecondary }]}
+        >
           {formatDateLabel(selectedDate).toUpperCase()}
         </ThemedText>
 
         {selectedDayJobs.length === 0 ? (
-          <ThemedText style={[styles.monthEmpty, { color: theme.textTertiary }]}>
+          <ThemedText
+            style={[styles.monthEmpty, { color: theme.textTertiary }]}
+          >
             No jobs on this day
           </ThemedText>
         ) : (
@@ -625,7 +791,8 @@ export default function ScheduleScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useFloatingTabBarHeight();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { theme } = useTheme();
   const { providerProfile } = useAuthStore();
   const queryClient = useQueryClient();
@@ -640,7 +807,11 @@ export default function ScheduleScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
-  const { data: jobsData, isLoading, refetch } = useQuery<{ jobs: Job[] }>({
+  const {
+    data: jobsData,
+    isLoading,
+    refetch,
+  } = useQuery<{ jobs: Job[] }>({
     queryKey: ["/api/provider", providerId, "jobs"],
     enabled: !!providerId,
   });
@@ -658,22 +829,28 @@ export default function ScheduleScreen() {
       const c = clients.find((cl) => cl.id === clientId);
       return c ? `${c.firstName} ${c.lastName}` : "Client";
     },
-    [clients]
+    [clients],
   );
 
   const startMutation = useMutation({
-    mutationFn: (jobId: string) => apiRequest("POST", `/api/jobs/${jobId}/start`, {}),
+    mutationFn: (jobId: string) =>
+      apiRequest("POST", `/api/jobs/${jobId}/start`, {}),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "jobs"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/provider", providerId, "jobs"],
+      });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
     onSettled: () => setActionLoadingId(null),
   });
 
   const completeMutation = useMutation({
-    mutationFn: (jobId: string) => apiRequest("POST", `/api/jobs/${jobId}/complete`, {}),
+    mutationFn: (jobId: string) =>
+      apiRequest("POST", `/api/jobs/${jobId}/complete`, {}),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "jobs"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/provider", providerId, "jobs"],
+      });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
     onSettled: () => setActionLoadingId(null),
@@ -685,7 +862,7 @@ export default function ScheduleScreen() {
       if (action === "start") startMutation.mutate(jobId);
       else if (action === "complete") completeMutation.mutate(jobId);
     },
-    [startMutation, completeMutation]
+    [startMutation, completeMutation],
   );
 
   const onRefresh = async () => {
@@ -719,7 +896,9 @@ export default function ScheduleScreen() {
         if (!isSameDay(new Date(job.scheduledDate), selectedDate)) return false;
         return matchesFilter(job.status, statusFilter);
       })
-      .sort((a, b) => (a.scheduledTime || "").localeCompare(b.scheduledTime || ""));
+      .sort((a, b) =>
+        (a.scheduledTime || "").localeCompare(b.scheduledTime || ""),
+      );
   }, [jobs, selectedDate, statusFilter]);
 
   // Build FlatList rows with a single date header
@@ -734,7 +913,11 @@ export default function ScheduleScreen() {
     if (isToday) {
       rows.push({ type: "banner", key: "banner" });
     }
-    rows.push({ type: "dateHeader", key: "dateHeader", label: formatDateLabel(selectedDate) });
+    rows.push({
+      type: "dateHeader",
+      key: "dateHeader",
+      label: formatDateLabel(selectedDate),
+    });
     if (filteredJobs.length === 0) {
       rows.push({ type: "empty", key: "empty" });
     } else {
@@ -763,17 +946,25 @@ export default function ScheduleScreen() {
               style={[
                 styles.iconBtn,
                 {
-                  backgroundColor: isCalendarMode ? Colors.accent : theme.backgroundSecondary,
+                  backgroundColor: isCalendarMode
+                    ? Colors.accent
+                    : theme.backgroundSecondary,
                 },
               ]}
               onPress={() => {
                 setViewMode(isCalendarMode ? "list" : "month");
                 setSelectedDate(today);
-                setCalendarMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+                setCalendarMonth(
+                  new Date(today.getFullYear(), today.getMonth(), 1),
+                );
               }}
               testID="button-calendar-toggle"
             >
-              <Feather name="calendar" size={16} color={isCalendarMode ? "#FFFFFF" : theme.textSecondary} />
+              <Feather
+                name="calendar"
+                size={16}
+                color={isCalendarMode ? "#FFFFFF" : theme.textSecondary}
+              />
             </Pressable>
             <Pressable
               style={[styles.addBtn, { backgroundColor: Colors.accent }]}
@@ -807,13 +998,20 @@ export default function ScheduleScreen() {
                   style={[
                     styles.chip,
                     {
-                      backgroundColor: isActive ? Colors.accent : theme.backgroundSecondary,
+                      backgroundColor: isActive
+                        ? Colors.accent
+                        : theme.backgroundSecondary,
                     },
                   ]}
                   onPress={() => setStatusFilter(chip.key)}
                   testID={`chip-status-${chip.key}`}
                 >
-                  <ThemedText style={[styles.chipText, { color: isActive ? "#FFFFFF" : theme.textSecondary }]}>
+                  <ThemedText
+                    style={[
+                      styles.chipText,
+                      { color: isActive ? "#FFFFFF" : theme.textSecondary },
+                    ]}
+                  >
                     {chip.label}
                   </ThemedText>
                 </Pressable>
@@ -835,9 +1033,15 @@ export default function ScheduleScreen() {
             onDateSelect={handleDateSelect}
             onMonthChange={(delta) => {
               setCalendarMonth((prev) => {
-                const next = new Date(prev.getFullYear(), prev.getMonth() + delta, 1);
+                const next = new Date(
+                  prev.getFullYear(),
+                  prev.getMonth() + delta,
+                  1,
+                );
                 // Sync selectedDate to the 1st of the new month so day panel stays visible
-                setSelectedDate(new Date(next.getFullYear(), next.getMonth(), 1));
+                setSelectedDate(
+                  new Date(next.getFullYear(), next.getMonth(), 1),
+                );
                 return next;
               });
             }}
@@ -851,6 +1055,7 @@ export default function ScheduleScreen() {
           </View>
         ) : (
           <FlatList
+            keyboardShouldPersistTaps="handled"
             data={listData}
             keyExtractor={(item) => item.key}
             showsVerticalScrollIndicator={false}
@@ -859,13 +1064,21 @@ export default function ScheduleScreen() {
               listData.every((r) => r.type !== "job") && styles.listEmpty,
             ]}
             refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={Colors.accent}
+              />
             }
             renderItem={({ item, index }) => {
               if (item.type === "banner") {
                 return (
                   <Animated.View entering={FadeInDown.delay(0).duration(350)}>
-                    <TodayBanner jobs={jobs} clients={clients} getClientName={getClientName} />
+                    <TodayBanner
+                      jobs={jobs}
+                      clients={clients}
+                      getClientName={getClientName}
+                    />
                   </Animated.View>
                 );
               }
@@ -873,12 +1086,27 @@ export default function ScheduleScreen() {
                 return (
                   <Animated.View entering={FadeInDown.delay(50).duration(300)}>
                     <View style={styles.dateLabelRow}>
-                      <ThemedText style={[styles.dateLabel, { color: theme.textSecondary }]}>
+                      <ThemedText
+                        style={[
+                          styles.dateLabel,
+                          { color: theme.textSecondary },
+                        ]}
+                      >
                         {item.label}
                       </ThemedText>
                       {filteredJobs.length > 0 ? (
-                        <View style={[styles.jobCountBadge, { backgroundColor: Colors.accentLight }]}>
-                          <ThemedText style={[styles.jobCountText, { color: Colors.accent }]}>
+                        <View
+                          style={[
+                            styles.jobCountBadge,
+                            { backgroundColor: Colors.accentLight },
+                          ]}
+                        >
+                          <ThemedText
+                            style={[
+                              styles.jobCountText,
+                              { color: Colors.accent },
+                            ]}
+                          >
                             {filteredJobs.length}
                           </ThemedText>
                         </View>
@@ -891,21 +1119,47 @@ export default function ScheduleScreen() {
                 return (
                   <Animated.View entering={FadeInDown.delay(80).duration(300)}>
                     <View style={styles.emptyBox}>
-                      <View style={[styles.emptyIcon, { backgroundColor: theme.backgroundSecondary }]}>
-                        <Feather name="calendar" size={28} color={theme.textTertiary} />
+                      <View
+                        style={[
+                          styles.emptyIcon,
+                          { backgroundColor: theme.backgroundSecondary },
+                        ]}
+                      >
+                        <Feather
+                          name="calendar"
+                          size={28}
+                          color={theme.textTertiary}
+                        />
                       </View>
-                      <ThemedText style={[styles.emptyTitle, { color: theme.textSecondary }]}>
-                        {statusFilter === "all" ? "Nothing scheduled" : `No ${statusFilter} jobs`}
+                      <ThemedText
+                        style={[
+                          styles.emptyTitle,
+                          { color: theme.textSecondary },
+                        ]}
+                      >
+                        {statusFilter === "all"
+                          ? "Nothing scheduled"
+                          : `No ${statusFilter} jobs`}
                       </ThemedText>
-                      <ThemedText style={[styles.emptySubtitle, { color: theme.textTertiary }]}>
+                      <ThemedText
+                        style={[
+                          styles.emptySubtitle,
+                          { color: theme.textTertiary },
+                        ]}
+                      >
                         {formatDateLabel(selectedDate)}
                       </ThemedText>
                       <Pressable
-                        style={[styles.emptyAddBtn, { backgroundColor: Colors.accent }]}
+                        style={[
+                          styles.emptyAddBtn,
+                          { backgroundColor: Colors.accent },
+                        ]}
                         onPress={handleAddJob}
                       >
                         <Feather name="plus" size={16} color="#FFFFFF" />
-                        <ThemedText style={styles.emptyAddText}>Add Job</ThemedText>
+                        <ThemedText style={styles.emptyAddText}>
+                          Add Job
+                        </ThemedText>
                       </Pressable>
                     </View>
                   </Animated.View>
@@ -913,12 +1167,16 @@ export default function ScheduleScreen() {
               }
               if (item.type === "job") {
                 return (
-                  <Animated.View entering={FadeInDown.delay(index * 40).duration(300)}>
+                  <Animated.View
+                    entering={FadeInDown.delay(index * 40).duration(300)}
+                  >
                     <EnhancedJobCard
                       job={item.job}
                       clientName={getClientName(item.job.clientId)}
                       onPress={() => handleJobPress(item.job.id)}
-                      onQuickAction={(action) => handleQuickAction(item.job.id, action)}
+                      onQuickAction={(action) =>
+                        handleQuickAction(item.job.id, action)
+                      }
                       isActionLoading={actionLoadingId === item.job.id}
                     />
                   </Animated.View>

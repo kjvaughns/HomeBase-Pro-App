@@ -558,22 +558,6 @@ export default function ServicesScreen() {
         </Pressable>
       </View>
 
-      <View style={[styles.searchContainer, { backgroundColor: theme.cardBackground }]}>
-        <Feather name="search" size={18} color={theme.textSecondary} />
-        <TextInput
-          style={[styles.searchInput, { color: theme.text }]}
-          placeholder="Search services..."
-          placeholderTextColor={theme.textSecondary}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        {searchQuery.length > 0 ? (
-          <Pressable onPress={() => setSearchQuery("")}>
-            <Feather name="x" size={18} color={theme.textSecondary} />
-          </Pressable>
-        ) : null}
-      </View>
-
       {categories.length > 1 ? (
         <View style={styles.categoriesRow}>
           {categories.map((category) => (
@@ -666,7 +650,23 @@ export default function ServicesScreen() {
 
   return (
     <ThemedView style={styles.container}>
+      <View style={[styles.searchContainer, { backgroundColor: theme.cardBackground }]}>
+        <Feather name="search" size={18} color={theme.textSecondary} />
+        <TextInput
+          style={[styles.searchInput, { color: theme.text }]}
+          placeholder="Search services..."
+          placeholderTextColor={theme.textSecondary}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+        {searchQuery.length > 0 ? (
+          <Pressable onPress={() => setSearchQuery("")}>
+            <Feather name="x" size={18} color={theme.textSecondary} />
+          </Pressable>
+        ) : null}
+      </View>
       <FlatList
+        keyboardShouldPersistTaps="handled"
         data={filteredServices}
         renderItem={renderService}
         keyExtractor={(item) => item.id}

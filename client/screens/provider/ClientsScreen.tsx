@@ -423,23 +423,6 @@ export default function ClientsScreen() {
         </View>
       </View>
 
-      <View style={[styles.searchContainer, { backgroundColor: theme.cardBackground }]}>
-        <Feather name="search" size={18} color={theme.textSecondary} />
-        <TextInput
-          style={[styles.searchInput, { color: theme.text }]}
-          placeholder="Search clients..."
-          placeholderTextColor={theme.textSecondary}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          testID="search-input"
-        />
-        {searchQuery.length > 0 ? (
-          <Pressable onPress={() => setSearchQuery("")}>
-            <Feather name="x" size={18} color={theme.textSecondary} />
-          </Pressable>
-        ) : null}
-      </View>
-
       <FilterChips
         options={STATUS_FILTERS.map((f) => ({
           ...f,
@@ -514,7 +497,24 @@ export default function ClientsScreen() {
 
   return (
     <ThemedView style={styles.container}>
+      <View style={[styles.searchContainer, { backgroundColor: theme.cardBackground }]}>
+        <Feather name="search" size={18} color={theme.textSecondary} />
+        <TextInput
+          style={[styles.searchInput, { color: theme.text }]}
+          placeholder="Search clients..."
+          placeholderTextColor={theme.textSecondary}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          testID="search-input"
+        />
+        {searchQuery.length > 0 ? (
+          <Pressable onPress={() => setSearchQuery("")}>
+            <Feather name="x" size={18} color={theme.textSecondary} />
+          </Pressable>
+        ) : null}
+      </View>
       <FlatList
+        keyboardShouldPersistTaps="handled"
         data={filteredClients}
         renderItem={renderClient}
         keyExtractor={(item) => item.id}
