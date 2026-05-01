@@ -1,5 +1,8 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import {
+  INVOICE_TERMINAL_STATUSES,
+} from "@/constants/invoiceStatuses";
+import {
   StyleSheet,
   ScrollView,
   View,
@@ -141,13 +144,7 @@ export default function InvoiceDetailScreen() {
     // the status flip the moment the homeowner finishes Stripe Checkout.
     refetchInterval: (query) => {
       const status = query.state.data?.invoice?.status as string | undefined;
-      if (
-        !status ||
-        status === "paid" ||
-        status === "void" ||
-        status === "cancelled" ||
-        status === "canceled"
-      ) {
+      if (!status || INVOICE_TERMINAL_STATUSES.has(status)) {
         return false;
       }
       return 5000;
@@ -163,14 +160,13 @@ export default function InvoiceDetailScreen() {
   // before providerId exists, and the subsequent read (with providerId) would
   // see no change and skip the invalidation.
   const prevStatusRef = useRef<string | undefined>(undefined);
-  const TERMINAL_STATUSES = new Set(["paid", "void", "cancelled", "canceled"]);
   useEffect(() => {
     if (!providerId) return;
     const currentStatus = invoiceData?.invoice?.status;
     if (
       currentStatus &&
       prevStatusRef.current !== currentStatus &&
-      TERMINAL_STATUSES.has(currentStatus)
+      INVOICE_TERMINAL_STATUSES.has(currentStatus)
     ) {
       queryClient.invalidateQueries({
         queryKey: ["/api/provider", providerId, "invoices"],

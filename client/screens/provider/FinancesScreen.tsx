@@ -1,5 +1,8 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import {
+  INVOICE_OUTSTANDING_STATUSES,
+} from "@/constants/invoiceStatuses";
+import {
   StyleSheet,
   View,
   FlatList,
@@ -351,13 +354,9 @@ export default function FinancesScreen() {
     // fall back to the longer 30s cadence once everything is settled.
     refetchInterval: (query) => {
       const list = query.state.data?.invoices ?? [];
-      const OUTSTANDING = new Set([
-        "sent",
-        "viewed",
-        "overdue",
-        "partially_paid",
-      ]);
-      const hasUnpaid = list.some((inv) => OUTSTANDING.has(inv.status));
+      const hasUnpaid = list.some((inv) =>
+        INVOICE_OUTSTANDING_STATUSES.has(inv.status),
+      );
       return hasUnpaid ? 5_000 : 30_000;
     },
     staleTime: 0,
@@ -395,9 +394,8 @@ export default function FinancesScreen() {
 
   // Outstanding = sent / viewed / overdue / partially_paid, sorted by dueDate asc
   const outstandingInvoices = useMemo<ProviderInvoice[]>(() => {
-    const OUTSTANDING = new Set(["sent", "viewed", "overdue", "partially_paid"]);
     return (invoicesData?.invoices ?? [])
-      .filter((inv) => OUTSTANDING.has(inv.status))
+      .filter((inv) => INVOICE_OUTSTANDING_STATUSES.has(inv.status))
       .sort((a, b) => {
         const dateA = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
         const dateB = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
