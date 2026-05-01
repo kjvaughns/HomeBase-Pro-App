@@ -16,6 +16,7 @@ import { GlassCard } from "@/components/GlassCard";
 import { StatusPill } from "@/components/StatusPill";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { getApiUrl, getAuthHeaders } from "@/lib/query-client";
@@ -108,6 +109,7 @@ function formatCurrency(amount: number): string {
 export default function JobDetailScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const route = useRoute<ScreenRouteProp>();
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
@@ -258,7 +260,7 @@ export default function JobDetailScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.md,
           paddingBottom: insets.bottom + Spacing.xl,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
         showsVerticalScrollIndicator={false}
       >

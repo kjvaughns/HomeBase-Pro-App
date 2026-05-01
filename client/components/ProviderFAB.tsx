@@ -5,7 +5,6 @@ import {
   Text,
   Pressable,
   Modal,
-  useWindowDimensions,
 } from "react-native";
 import Animated, {
   useSharedValue,

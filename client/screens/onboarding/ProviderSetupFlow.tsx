@@ -29,6 +29,7 @@ import { ThemedView } from "@/components/ThemedView";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { GlassCard } from "@/components/GlassCard";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, BorderRadius } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useOnboardingStore } from "@/state/onboardingStore";
@@ -144,6 +145,7 @@ function Step1CreateService({
   category: string;
 }) {
   const { theme } = useTheme();
+  const { horizontalPadding } = useLayout();
   const [priceSuggestion, setPriceSuggestion] = useState<{
     minPrice: number;
     maxPrice: number;
@@ -232,7 +234,7 @@ function Step1CreateService({
   return (
     <ScrollView
       style={styles.stepScroll}
-      contentContainerStyle={styles.stepScrollContent}
+      contentContainerStyle={[styles.stepScrollContent, { paddingHorizontal: horizontalPadding }]}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
@@ -479,6 +481,7 @@ function Step2Availability({
   onChange: (updates: Partial<SetupData>) => void;
 }) {
   const { theme } = useTheme();
+  const { horizontalPadding } = useLayout();
 
   const toggleDay = (dayId: string) => {
     Haptics.selectionAsync();
@@ -500,7 +503,7 @@ function Step2Availability({
   return (
     <ScrollView
       style={styles.stepScroll}
-      contentContainerStyle={styles.stepScrollContent}
+      contentContainerStyle={[styles.stepScrollContent, { paddingHorizontal: horizontalPadding }]}
       showsVerticalScrollIndicator={false}
     >
       <StepHeader
@@ -657,6 +660,7 @@ function Step3ProfilePolish({
   onChange: (updates: Partial<SetupData>) => void;
 }) {
   const { theme } = useTheme();
+  const { horizontalPadding } = useLayout();
   const [improving, setImproving] = useState(false);
   const [originalBio, setOriginalBio] = useState<string | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -700,7 +704,7 @@ function Step3ProfilePolish({
   return (
     <ScrollView
       style={styles.stepScroll}
-      contentContainerStyle={styles.stepScrollContent}
+      contentContainerStyle={[styles.stepScrollContent, { paddingHorizontal: horizontalPadding }]}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
@@ -801,6 +805,7 @@ function Step3ProfilePolish({
 
 function Step4BookingPreview({ data }: { data: SetupData }) {
   const { theme } = useTheme();
+  const { horizontalPadding } = useLayout();
   const categoryLabel = SERVICE_CATEGORIES.find((c) => c.id === data.category)?.label || "";
   const categoryIcon = SERVICE_CATEGORIES.find((c) => c.id === data.category)?.icon || "tool";
   const durationLabel = DURATION_OPTIONS.find((d) => d.value === data.serviceDuration)?.label || "";
@@ -813,7 +818,7 @@ function Step4BookingPreview({ data }: { data: SetupData }) {
   return (
     <ScrollView
       style={styles.stepScroll}
-      contentContainerStyle={styles.stepScrollContent}
+      contentContainerStyle={[styles.stepScrollContent, { paddingHorizontal: horizontalPadding }]}
       showsVerticalScrollIndicator={false}
     >
       <StepHeader
@@ -915,6 +920,7 @@ function Step4BookingPreview({ data }: { data: SetupData }) {
 
 function Step5Payments({ navigation }: { navigation: Props["navigation"] }) {
   const { theme } = useTheme();
+  const { horizontalPadding } = useLayout();
   const [stripeAvailable] = useState(() => {
     const key = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY;
     return typeof key === "string" && key.startsWith("pk_");
@@ -929,7 +935,7 @@ function Step5Payments({ navigation }: { navigation: Props["navigation"] }) {
   return (
     <ScrollView
       style={styles.stepScroll}
-      contentContainerStyle={styles.stepScrollContent}
+      contentContainerStyle={[styles.stepScrollContent, { paddingHorizontal: horizontalPadding }]}
       showsVerticalScrollIndicator={false}
     >
       <StepHeader
@@ -1013,11 +1019,12 @@ const VALUE_ROWS = [
 
 function Step6ValuePaywall({ onContinue }: { onContinue: () => void }) {
   const { theme } = useTheme();
+  const { horizontalPadding } = useLayout();
 
   return (
     <ScrollView
       style={styles.stepScroll}
-      contentContainerStyle={styles.stepScrollContent}
+      contentContainerStyle={[styles.stepScrollContent, { paddingHorizontal: horizontalPadding }]}
       showsVerticalScrollIndicator={false}
     >
       <StepHeader
@@ -1096,6 +1103,7 @@ function Step7YouAreLive({
   onGoToDashboard: () => void;
 }) {
   const { theme } = useTheme();
+  const { horizontalPadding } = useLayout();
   const [copied, setCopied] = useState(false);
   const scale = useSharedValue(1);
   const [apiBookingLink, setApiBookingLink] = useState<string | null>(null);
@@ -1146,7 +1154,7 @@ function Step7YouAreLive({
   return (
     <ScrollView
       style={styles.stepScroll}
-      contentContainerStyle={styles.stepScrollContent}
+      contentContainerStyle={[styles.stepScrollContent, { paddingHorizontal: horizontalPadding }]}
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.liveContainer}>
@@ -1224,6 +1232,7 @@ function Step7YouAreLive({
 }
 
 export default function ProviderSetupFlow({ navigation }: Props) {
+  const { horizontalPadding } = useLayout();
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const safeTop = insets.top || 50;
@@ -1413,7 +1422,7 @@ export default function ProviderSetupFlow({ navigation }: Props) {
 
   return (
     <ThemedView style={styles.container}>
-      <View style={[styles.topBar, { paddingTop: safeTop + Spacing.sm }]}>
+      <View style={[styles.topBar, { paddingTop: safeTop + Spacing.sm, paddingHorizontal: horizontalPadding }]}>
         <View style={styles.backArea}>
           {step > 1 ? (
             <Pressable onPress={handleBack} style={styles.backBtn} testID="button-back">
@@ -1438,7 +1447,7 @@ export default function ProviderSetupFlow({ navigation }: Props) {
       </View>
 
       {showFooterContinue ? (
-        <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.md }]}>
+        <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.md, paddingHorizontal: horizontalPadding }]}>
           {serviceError && step === 2 ? (
             <ThemedText
               style={[styles.serviceErrorText, { color: "#E53E3E" }]}
@@ -1458,7 +1467,7 @@ export default function ProviderSetupFlow({ navigation }: Props) {
       ) : null}
 
       {showFooterSkip ? (
-        <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.md }]}>
+        <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.md, paddingHorizontal: horizontalPadding }]}>
           <Pressable
             onPress={handleContinue}
             style={styles.skipBtn}

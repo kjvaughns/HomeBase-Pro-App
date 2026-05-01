@@ -25,6 +25,7 @@ import { StatusPill } from "@/components/StatusPill";
 import { Spacing, Typography, Colors, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { apiRequest } from "@/lib/query-client";
 import { recordHappyMoment } from "@/state/appReviewStore";
 
@@ -107,6 +108,7 @@ function SuccessBanner({ message, topOffset }: { message: SuccessBannerMessage; 
 export default function InvoiceDetailScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RouteParams, "InvoiceDetail">>();
   const queryClient = useQueryClient();
@@ -318,7 +320,7 @@ export default function InvoiceDetailScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,
           paddingBottom: insets.bottom + Spacing.xl,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
         showsVerticalScrollIndicator={false}
       >

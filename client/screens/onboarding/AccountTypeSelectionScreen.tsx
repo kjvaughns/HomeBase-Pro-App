@@ -8,6 +8,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, BorderRadius } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useOnboardingStore } from "@/state/onboardingStore";
@@ -18,6 +19,7 @@ const AppLogo = require("../../../assets/images/icon.png");
 type Props = NativeStackScreenProps<RootStackParamList, "AccountTypeSelection">;
 
 export default function AccountTypeSelectionScreen({ navigation }: Props) {
+  const { horizontalPadding } = useLayout();
   const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const safeTop = insets.top || 50;
@@ -171,7 +173,7 @@ export default function AccountTypeSelectionScreen({ navigation }: Props) {
         style={StyleSheet.absoluteFill}
       />
 
-      <View style={[styles.content, { paddingTop: safeTop + Spacing["3xl"] }]}>
+      <View style={[styles.content, { paddingTop: safeTop + Spacing["3xl"], paddingHorizontal: horizontalPadding }]}>
         <Animated.View
           style={[
             styles.header,
@@ -232,7 +234,7 @@ export default function AccountTypeSelectionScreen({ navigation }: Props) {
       <Animated.View
         style={[
           styles.footer,
-          { paddingBottom: insets.bottom + Spacing.lg, opacity: footerOpacity },
+          { paddingBottom: insets.bottom + Spacing.lg, paddingHorizontal: horizontalPadding, opacity: footerOpacity },
         ]}
       >
         <Pressable

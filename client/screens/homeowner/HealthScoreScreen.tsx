@@ -28,6 +28,7 @@ import { GlassCard } from "@/components/GlassCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { HomeSelector, Home } from "@/components/HomeSelector";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest, getApiUrl, getAuthHeaders } from "@/lib/query-client";
@@ -356,6 +357,7 @@ async function writeBackHealthAnswers(
 export default function HealthScoreScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const navigation = useNavigation<any>();
   const { theme } = useTheme();
   const { user } = useAuthStore();
@@ -509,7 +511,7 @@ export default function HealthScoreScreen() {
 
   const renderEntryScreen = () => (
     <ScrollView
-      contentContainerStyle={[styles.content, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + Spacing.xl + 88 }]}
+      contentContainerStyle={[styles.content, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + Spacing.xl + 88, paddingHorizontal: horizontalPadding }]}
       showsVerticalScrollIndicator={false}
     >
       <Animated.View entering={FadeInDown.delay(100).duration(400)}>
@@ -754,7 +756,7 @@ export default function HealthScoreScreen() {
             <View style={{ width: 40 }} />
           </View>
 
-          <ScrollView contentContainerStyle={styles.resultsContent} showsVerticalScrollIndicator={false}>
+          <ScrollView contentContainerStyle={[styles.resultsContent, { paddingHorizontal: horizontalPadding }]} showsVerticalScrollIndicator={false}>
             <Animated.View entering={FadeIn.delay(200).duration(600)}>
               <View style={styles.scoreSection}>
                 <ScoreRing score={currentResult.score} size={140} strokeWidth={12} animating />

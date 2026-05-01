@@ -8,6 +8,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useOnboardingStore } from "@/state/onboardingStore";
@@ -39,6 +40,7 @@ const PRIORITY_OPTIONS = [
 ];
 
 export default function HomeownerOnboardingScreen({ navigation }: Props) {
+  const { horizontalPadding } = useLayout();
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const safeTop = insets.top || 50;
@@ -191,7 +193,7 @@ export default function HomeownerOnboardingScreen({ navigation }: Props) {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingHorizontal: horizontalPadding }]}
         showsVerticalScrollIndicator={false}
       >
         <Animated.View
@@ -213,7 +215,7 @@ export default function HomeownerOnboardingScreen({ navigation }: Props) {
         </Animated.View>
       </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.lg }]}>
+      <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.lg, paddingHorizontal: horizontalPadding }]}>
         <PrimaryButton onPress={handleNext} testID="button-next">
           {currentStep === STEPS.length - 1 ? "Create Account" : "Continue"}
         </PrimaryButton>

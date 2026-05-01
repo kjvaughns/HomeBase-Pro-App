@@ -12,6 +12,7 @@ import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
@@ -109,6 +110,7 @@ const SYSTEM_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
 export default function HouseFaxScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const navigation = useNavigation<any>();
   const { theme } = useTheme();
   const { user } = useAuthStore();
@@ -763,6 +765,7 @@ export default function HouseFaxScreen() {
           {
             paddingTop: headerHeight + Spacing.lg,
             paddingBottom: insets.bottom + Spacing.xl + 88,
+            paddingHorizontal: horizontalPadding,
           },
         ]}
         showsVerticalScrollIndicator={false}

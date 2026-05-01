@@ -15,6 +15,7 @@ import { GlassCard } from "@/components/GlassCard";
 import { StatusPill } from "@/components/StatusPill";
 import { FilterChips, FilterOption } from "@/components/FilterChips";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { getApiUrl, getAuthHeaders } from "@/lib/query-client";
@@ -251,6 +252,7 @@ interface ApiClient {
 export default function ClientsScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  const { horizontalPadding } = useLayout();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { providerProfile } = useAuthStore();
   const providerId = providerProfile?.id;
@@ -497,7 +499,7 @@ export default function ClientsScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <View style={[styles.searchContainer, { backgroundColor: theme.cardBackground }]}>
+      <View style={[styles.searchContainer, { backgroundColor: theme.cardBackground, marginHorizontal: Math.max(0, horizontalPadding - Spacing.md) }]}>
         <Feather name="search" size={18} color={theme.textSecondary} />
         <TextInput
           style={[styles.searchInput, { color: theme.text }]}
@@ -524,6 +526,7 @@ export default function ClientsScreen() {
           {
             paddingTop: insets.top + Spacing.lg,
             paddingBottom: insets.bottom + 100,
+            paddingHorizontal: Math.max(0, horizontalPadding - Spacing.screenPadding),
           },
           filteredClients.length === 0 && styles.emptyContainer,
         ]}

@@ -661,7 +661,7 @@ export default function FindScreen() {
             },
           ]}
         >
-          <View style={styles.modalHeader}>
+          <View style={[styles.modalHeader, { paddingHorizontal: horizontalPadding }]}>
             <ThemedText style={styles.modalTitle}>Choose Location</ThemedText>
             <Pressable onPress={() => setShowLocationModal(false)}>
               <Feather name="x" size={24} color={theme.text} />
@@ -670,7 +670,7 @@ export default function FindScreen() {
 
           <ScrollView
             showsVerticalScrollIndicator={false}
-            style={styles.modalScroll}
+            style={[styles.modalScroll, { paddingHorizontal: horizontalPadding }]}
           >
             <View style={styles.filterSection}>
               <ThemedText style={styles.filterLabel}>Popular Cities</ThemedText>
@@ -790,7 +790,7 @@ export default function FindScreen() {
             },
           ]}
         >
-          <View style={styles.modalHeader}>
+          <View style={[styles.modalHeader, { paddingHorizontal: horizontalPadding }]}>
             <ThemedText style={styles.modalTitle}>Filter Providers</ThemedText>
             <Pressable onPress={() => setShowFilterModal(false)}>
               <Feather name="x" size={24} color={theme.text} />
@@ -799,7 +799,7 @@ export default function FindScreen() {
 
           <ScrollView
             showsVerticalScrollIndicator={false}
-            style={styles.modalScroll}
+            style={[styles.modalScroll, { paddingHorizontal: horizontalPadding }]}
           >
             <View style={styles.filterSection}>
               <ThemedText style={styles.filterLabel}>Sort By</ThemedText>
@@ -937,7 +937,7 @@ export default function FindScreen() {
             </View>
           </ScrollView>
 
-          <View style={styles.modalActions}>
+          <View style={[styles.modalActions, { paddingHorizontal: horizontalPadding }]}>
             <Pressable
               onPress={resetFilters}
               style={[styles.resetButton, { borderColor: theme.borderLight }]}

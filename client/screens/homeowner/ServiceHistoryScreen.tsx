@@ -25,6 +25,7 @@ import { StatusPill, StatusType } from "@/components/StatusPill";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { Avatar } from "@/components/Avatar";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useAuthStore } from "@/state/authStore";
@@ -119,6 +120,7 @@ const mapStatusToType = (status: string): StatusType => {
 export default function ServiceHistoryScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
   const { user } = useAuthStore();
@@ -459,7 +461,7 @@ export default function ServiceHistoryScreen() {
   if (isLoadingHomes) {
     return (
       <ThemedView style={styles.container}>
-        <View style={[styles.loadingContainer, { paddingTop: headerHeight + Spacing.xl }]}>
+        <View style={[styles.loadingContainer, { paddingTop: headerHeight + Spacing.xl, paddingHorizontal: horizontalPadding }]}>
           <ActivityIndicator size="large" color={Colors.accent} />
           <ThemedText style={[styles.loadingText, { color: theme.textSecondary }]}>
             Loading...
@@ -490,7 +492,7 @@ export default function ServiceHistoryScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <View style={[styles.header, { paddingTop: headerHeight + Spacing.md }]}>
+      <View style={[styles.header, { paddingTop: headerHeight + Spacing.md, paddingHorizontal: horizontalPadding }]}>
         <Pressable style={[styles.homeSelector, { backgroundColor: theme.cardBackground }]} onPress={() => setShowHomeSelector(true)}>
           <Feather name="home" size={18} color={Colors.accent} />
           <ThemedText style={styles.homeSelectorText}>{selectedHome ? getHomeDisplayName(selectedHome) : "Select Home"}</ThemedText>
@@ -518,7 +520,7 @@ export default function ServiceHistoryScreen() {
 
       {activeTab === "timeline" ? (
         <>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={[styles.filterContainer, { paddingHorizontal: horizontalPadding }]}>
             {FILTER_OPTIONS.map((filter) => (
               <Pressable
                 key={filter}
@@ -536,7 +538,7 @@ export default function ServiceHistoryScreen() {
             </View>
           ) : filteredEntries.length > 0 ? (
             <ScrollView
-              contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + Spacing["2xl"] }]}
+              contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + Spacing["2xl"], paddingHorizontal: horizontalPadding }]}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />}
               showsVerticalScrollIndicator={false}
             >
@@ -553,7 +555,7 @@ export default function ServiceHistoryScreen() {
         </>
       ) : (
         <ScrollView
-          contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + Spacing["2xl"] }]}
+          contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + Spacing["2xl"], paddingHorizontal: horizontalPadding }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />}
           showsVerticalScrollIndicator={false}
         >

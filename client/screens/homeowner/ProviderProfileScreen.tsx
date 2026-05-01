@@ -17,6 +17,7 @@ import { StatusPill } from "@/components/StatusPill";
 import { PartnerBadge } from "@/components/PartnerBadge";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useHomeownerStore } from "@/state/homeownerStore";
 import { useAuthStore } from "@/state/authStore";
@@ -98,6 +99,7 @@ interface CustomServicesResponse {
 export default function ProviderProfileScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const route = useRoute<ScreenRouteProp>();
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
@@ -636,7 +638,7 @@ export default function ProviderProfileScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.md,
           paddingBottom: bottomBarHeight + Spacing.lg,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
         showsVerticalScrollIndicator={false}
       >

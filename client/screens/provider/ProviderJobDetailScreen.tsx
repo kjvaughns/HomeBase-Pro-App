@@ -15,6 +15,7 @@ import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
@@ -329,6 +330,7 @@ function ChecklistSection({ checklist, onToggle, loading }: ChecklistSectionProp
 export default function ProviderJobDetailScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const { theme } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<{ ProviderJobDetail: { jobId: string } }, "ProviderJobDetail">>();
@@ -600,7 +602,7 @@ export default function ProviderJobDetailScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.md,
           paddingBottom: insets.bottom + 100,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
         showsVerticalScrollIndicator={false}
       >

@@ -7,6 +7,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { ThemedText } from "@/components/ThemedText";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, BorderRadius, Colors, Typography } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -16,6 +17,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "Welcome">;
 
 export default function WelcomeScreen({ navigation }: Props) {
   const { theme, isDark } = useTheme();
+  const { horizontalPadding } = useLayout();
   const insets = useSafeAreaInsets();
 
   const gradientColors = isDark
@@ -24,7 +26,7 @@ export default function WelcomeScreen({ navigation }: Props) {
 
   return (
     <LinearGradient colors={gradientColors} style={styles.container}>
-      <View style={[styles.content, { paddingTop: insets.top + Spacing["2xl"] }]}>
+      <View style={[styles.content, { paddingTop: insets.top + Spacing["2xl"], paddingHorizontal: horizontalPadding }]}>
         <View style={styles.logoSection}>
           <Image source={AppLogo} style={styles.logo} resizeMode="contain" />
           <ThemedText style={styles.appName}>HomeBase</ThemedText>
@@ -48,7 +50,7 @@ export default function WelcomeScreen({ navigation }: Props) {
         </View>
       </View>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.lg }]}>
+      <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.lg, paddingHorizontal: horizontalPadding }]}>
         <PrimaryButton onPress={() => navigation.navigate("SignUp")} testID="button-signup">
           Get Started
         </PrimaryButton>

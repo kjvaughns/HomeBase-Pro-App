@@ -13,6 +13,7 @@ import { GlassCard } from "@/components/GlassCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { HomeSelector, Home } from "@/components/HomeSelector";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { useAuthStore } from "@/state/authStore";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { apiRequest } from "@/lib/query-client";
@@ -305,6 +306,7 @@ const MAINTENANCE_TIPS = [
 export default function SurvivalKitScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const navigation = useNavigation<any>();
   const { theme } = useTheme();
   const { isAuthenticated } = useAuthStore();
@@ -1385,6 +1387,7 @@ export default function SurvivalKitScreen() {
           {
             paddingTop: headerHeight + Spacing.lg,
             paddingBottom: insets.bottom + Spacing.xl + 88,
+            paddingHorizontal: horizontalPadding,
           },
         ]}
         showsVerticalScrollIndicator={false}

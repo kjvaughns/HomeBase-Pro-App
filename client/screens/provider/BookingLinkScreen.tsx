@@ -24,6 +24,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { StatusPill } from "@/components/StatusPill";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest } from "@/lib/query-client";
@@ -51,6 +52,7 @@ function getPublicUrl(slug: string): string {
 export default function BookingLinkScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const { theme } = useTheme();
   const { providerProfile } = useAuthStore();
   const providerId = providerProfile?.id;
@@ -238,7 +240,7 @@ export default function BookingLinkScreen() {
           contentContainerStyle={{
             paddingTop: headerHeight + Spacing.lg,
             paddingBottom: insets.bottom + Spacing.xl,
-            paddingHorizontal: Spacing.screenPadding,
+            paddingHorizontal: horizontalPadding,
           }}
           showsVerticalScrollIndicator={false}
         >

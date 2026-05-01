@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
+import { useLayout } from "@/hooks/useLayout";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
@@ -222,6 +223,7 @@ interface WeekStripProps {
 
 function WeekStrip({ selectedDate, jobs, onDateSelect }: WeekStripProps) {
   const { theme } = useTheme();
+  const { horizontalPadding } = useLayout();
   const scrollRef = useRef<ScrollView>(null);
   const today = useMemo(() => startOfDay(new Date()), []);
   const CELL_WIDTH = 52;
@@ -260,7 +262,7 @@ function WeekStrip({ selectedDate, jobs, onDateSelect }: WeekStripProps) {
       keyboardShouldPersistTaps="handled"
       showsHorizontalScrollIndicator={false}
       onLayout={scrollToToday}
-      contentContainerStyle={styles.weekStripContent}
+      contentContainerStyle={[styles.weekStripContent, { paddingHorizontal: horizontalPadding }]}
       style={styles.weekStrip}
     >
       {days.map((date) => {
@@ -650,6 +652,7 @@ function MonthView({
   actionLoadingId,
 }: MonthViewProps) {
   const { theme } = useTheme();
+  const { horizontalPadding } = useLayout();
   const weeks = getMonthDates(calendarMonth);
   const today = new Date();
 
@@ -664,7 +667,7 @@ function MonthView({
   return (
     <ScrollView
       keyboardShouldPersistTaps="handled"
-      style={styles.monthScroll}
+      style={[styles.monthScroll, { paddingHorizontal: horizontalPadding }]}
       showsVerticalScrollIndicator={false}
     >
       {/* Month Navigation */}
@@ -790,6 +793,7 @@ function MonthView({
 export default function ScheduleScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const tabBarHeight = useFloatingTabBarHeight();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -933,7 +937,7 @@ export default function ScheduleScreen() {
   return (
     <ThemedView style={styles.container}>
       {/* ── Fixed Header ── */}
-      <View style={[styles.header, { paddingTop: headerHeight + Spacing.md }]}>
+      <View style={[styles.header, { paddingTop: headerHeight + Spacing.md, paddingHorizontal: horizontalPadding }]}>
         {/* Title Row */}
         <View style={styles.headerRow}>
           <ThemedText style={styles.headerTitle}>
@@ -1061,6 +1065,7 @@ export default function ScheduleScreen() {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={[
               styles.listContent,
+              { paddingHorizontal: horizontalPadding },
               listData.every((r) => r.type !== "job") && styles.listEmpty,
             ]}
             refreshControl={

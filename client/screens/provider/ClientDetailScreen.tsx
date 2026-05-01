@@ -15,6 +15,7 @@ import { GlassCard } from "@/components/GlassCard";
 import { StatusPill } from "@/components/StatusPill";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { getApiUrl } from "@/lib/query-client";
 import { useAuthStore } from "@/state/authStore";
@@ -210,6 +211,7 @@ function KPICard({ label, value, color }: KPICardProps) {
 export default function ClientDetailScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const { theme } = useTheme();
   const route = useRoute<RouteProp<RootStackParamList, "ClientDetail">>();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -793,7 +795,7 @@ export default function ClientDetailScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.md,
           paddingBottom: insets.bottom + Spacing.xl,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
         showsVerticalScrollIndicator={false}
       >
