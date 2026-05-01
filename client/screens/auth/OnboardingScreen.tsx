@@ -12,6 +12,7 @@ import { SecondaryButton } from "@/components/SecondaryButton";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { AddressAutocomplete, EnrichmentData } from "@/components/AddressAutocomplete";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest } from "@/lib/query-client";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
@@ -27,6 +28,7 @@ interface PropertyInfo {
 
 export default function OnboardingScreen() {
   const { theme } = useTheme();
+  const { horizontalPadding } = useLayout();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { user } = useAuthStore();
@@ -119,7 +121,7 @@ export default function OnboardingScreen() {
   if (step === "welcome") {
     return (
       <ThemedView style={styles.container}>
-        <View style={[styles.welcomeContent, { paddingTop: insets.top + Spacing["3xl"], paddingBottom: insets.bottom + Spacing.xl }]}>
+        <View style={[styles.welcomeContent, { paddingTop: insets.top + Spacing["3xl"], paddingBottom: insets.bottom + Spacing.xl, paddingHorizontal: horizontalPadding }]}>
           <View style={styles.welcomeHeader}>
             <View style={[styles.welcomeIcon, { backgroundColor: Colors.accent + "20" }]}>
               <Feather name="check-circle" size={48} color={Colors.accent} />

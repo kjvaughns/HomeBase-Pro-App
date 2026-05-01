@@ -24,6 +24,7 @@ import { GlassCard } from "@/components/GlassCard";
 import { ZipCodeAreaInput } from "@/components/ZipCodeAreaInput";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, BorderRadius } from "@/constants/theme";
 import type { OnboardingServiceData } from "@/state/onboardingStore";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -510,10 +511,11 @@ function HookPill({
 }
 
 function EmotionalHookStep({ theme }: { theme: ReturnType<typeof useTheme>["theme"] }) {
+  const { horizontalPadding } = useLayout();
   return (
     <ScrollView
       style={styles.scrollView}
-      contentContainerStyle={styles.hookScrollContent}
+      contentContainerStyle={[styles.hookScrollContent, { paddingHorizontal: horizontalPadding }]}
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.hookIconWrap}>
@@ -556,6 +558,7 @@ function BusinessStep({
   category: string;
   setCategory: (v: string) => void;
 }) {
+  const { horizontalPadding } = useLayout();
   const [nameSuggestions, setNameSuggestions] = useState<string[]>([]);
   const [loadingNames, setLoadingNames] = useState(false);
   const [suggestionsError, setSuggestionsError] = useState("");
@@ -577,7 +580,7 @@ function BusinessStep({
   return (
     <ScrollView
       style={styles.scrollView}
-      contentContainerStyle={styles.stepScrollContent}
+      contentContainerStyle={[styles.stepScrollContent, { paddingHorizontal: horizontalPadding }]}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
@@ -695,10 +698,11 @@ function ServiceBuilderStep({
   onOpenBuilder: () => void;
   onClearService: () => void;
 }) {
+  const { horizontalPadding } = useLayout();
   return (
     <ScrollView
       style={styles.scrollView}
-      contentContainerStyle={styles.stepScrollContent}
+      contentContainerStyle={[styles.stepScrollContent, { paddingHorizontal: horizontalPadding }]}
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.stepHeader}>
@@ -810,10 +814,11 @@ function ServiceAreaStep({
   serviceArea: string;
   setServiceArea: (v: string) => void;
 }) {
+  const { horizontalPadding } = useLayout();
   return (
     <ScrollView
       style={styles.scrollView}
-      contentContainerStyle={styles.stepScrollContent}
+      contentContainerStyle={[styles.stepScrollContent, { paddingHorizontal: horizontalPadding }]}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
@@ -854,6 +859,7 @@ function ScheduleStep({
   endTime: string;
   setEndTime: (v: string) => void;
 }) {
+  const { horizontalPadding } = useLayout();
   const toggleDay = (dayId: string) => {
     Haptics.selectionAsync();
     const next = activeDays.includes(dayId)
@@ -865,7 +871,7 @@ function ScheduleStep({
   return (
     <ScrollView
       style={styles.scrollView}
-      contentContainerStyle={styles.stepScrollContent}
+      contentContainerStyle={[styles.stepScrollContent, { paddingHorizontal: horizontalPadding }]}
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.stepHeader}>
@@ -965,6 +971,7 @@ function BioStep({
   category: string;
   serviceName: string;
 }) {
+  const { horizontalPadding } = useLayout();
   const MAX = 300;
   const [generatingBio, setGeneratingBio] = useState(false);
   const [polishingBio, setPolishingBio] = useState(false);
@@ -1011,7 +1018,7 @@ function BioStep({
   return (
     <ScrollView
       style={styles.scrollView}
-      contentContainerStyle={styles.stepScrollContent}
+      contentContainerStyle={[styles.stepScrollContent, { paddingHorizontal: horizontalPadding }]}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
@@ -1106,6 +1113,7 @@ function BioStep({
 // ─── Step 6: Pricing ─────────────────────────────────────────────────────────
 
 function PricingStep({ theme }: { theme: ReturnType<typeof useTheme>["theme"] }) {
+  const { horizontalPadding } = useLayout();
   const benefits = [
     { text: "Booking links and custom intake forms" },
     { text: "Client management and job tracking" },
@@ -1115,7 +1123,7 @@ function PricingStep({ theme }: { theme: ReturnType<typeof useTheme>["theme"] })
   return (
     <ScrollView
       style={styles.scrollView}
-      contentContainerStyle={styles.stepScrollContent}
+      contentContainerStyle={[styles.stepScrollContent, { paddingHorizontal: horizontalPadding }]}
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.stepHeader}>
