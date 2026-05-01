@@ -29,7 +29,7 @@ export interface Address {
 
 export interface PaymentMethod {
   id: string;
-  type: "card" | "bank" | "apple_pay";
+  type: "card" | "bank";
   label: string;
   last4: string;
   expiryMonth?: number;

@@ -102,7 +102,7 @@ const FAQ_SECTIONS: FAQSection[] = [
         id: "py-3",
         question: "What payment methods are accepted?",
         answer:
-          "We accept major credit cards, debit cards, and Apple Pay. You can manage your payment methods in your profile settings.",
+          "We accept major credit cards and debit cards. You can manage your payment methods in your profile settings.",
       },
     ],
   },

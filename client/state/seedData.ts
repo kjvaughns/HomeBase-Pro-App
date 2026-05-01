@@ -277,13 +277,6 @@ export const DEFAULT_HOMEOWNER: HomeownerProfile = {
       expiryYear: 2027,
       isDefault: true,
     },
-    {
-      id: "pm-2",
-      type: "apple_pay",
-      label: "Apple Pay",
-      last4: "1234",
-      isDefault: false,
-    },
   ],
   createdAt: "2024-06-15T10:00:00Z",
 };
