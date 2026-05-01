@@ -314,16 +314,18 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.quickActions}>
-            {[
-              { label: "Survival Kit", icon: "shield" as const, screen: "SurvivalKit" as const },
-              { label: "Health Score", icon: "activity" as const, screen: "HealthScore" as const },
-              { label: "Service History", icon: "clock" as const, screen: "ServiceHistory" as const, testID: "quick-action-service-history" },
-              { label: "HouseFax", icon: "file-text" as const, screen: "HouseFax" as const },
-            ].map((item) => (
+            {(
+              [
+                { label: "Survival Kit", icon: "shield" as const, screen: "SurvivalKit" as const },
+                { label: "Health Score", icon: "activity" as const, screen: "HealthScore" as const },
+                { label: "Service History", icon: "clock" as const, screen: "ServiceHistory" as const, testID: "quick-action-service-history" },
+                { label: "HouseFax", icon: "file-text" as const, screen: "HouseFax" as const },
+              ] as const
+            ).map((item) => (
               <Pressable
                 key={item.label}
                 style={[styles.quickAction, isTablet && styles.quickActionTablet, { backgroundColor: theme.cardBackground }]}
-                onPress={() => navigation.navigate(item.screen as any)}
+                onPress={() => navigation.navigate(item.screen)}
                 testID={item.testID}
               >
                 <View style={[styles.quickActionIcon, { backgroundColor: Colors.accentLight }]}>
