@@ -1,10 +1,12 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import {
   StyleSheet,
   View,
   FlatList,
   RefreshControl,
   Pressable,
+  AppState,
+  AppStateStatus,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -241,6 +243,20 @@ export default function FinancesScreen() {
     }, [providerId, queryClient])
   );
 
+  // Task #256: Also invalidate the invoices list when the app returns to the
+  // foreground. This covers navigation paths (e.g. deep links) where the screen
+  // may already be mounted and focused, so useFocusEffect won't fire again.
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState: AppStateStatus) => {
+      if (appStateRef.current.match(/inactive|background/) && nextState === "active" && providerId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "invoices"] });
+      }
+      appStateRef.current = nextState;
+    });
+    return () => subscription.remove();
+  }, [providerId, queryClient]);
+
   // ── Stats & Stripe status ──────────────────────────────────────────────────
 
   const { data: statsData } = useQuery<{ stats: ProviderStats }>({
@@ -344,7 +360,7 @@ export default function FinancesScreen() {
       const hasUnpaid = list.some((inv) => OUTSTANDING.has(inv.status));
       return hasUnpaid ? 5_000 : 30_000;
     },
-    staleTime: 15_000,
+    staleTime: 0,
   });
 
   const {

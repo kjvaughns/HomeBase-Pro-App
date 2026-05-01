@@ -154,6 +154,31 @@ export default function InvoiceDetailScreen() {
     },
   });
 
+  // Task #256: When the detail poll detects a status transition to a terminal
+  // state, immediately invalidate the provider invoices list cache so the list
+  // screen reflects the updated status without requiring any user action.
+  // NOTE: We only advance prevStatusRef when providerId is known to avoid a
+  // startup race where invoice data arrives before the provider profile is
+  // hydrated — without this guard, the terminal status would be recorded
+  // before providerId exists, and the subsequent read (with providerId) would
+  // see no change and skip the invalidation.
+  const prevStatusRef = useRef<string | undefined>(undefined);
+  const TERMINAL_STATUSES = new Set(["paid", "void", "cancelled", "canceled"]);
+  useEffect(() => {
+    if (!providerId) return;
+    const currentStatus = invoiceData?.invoice?.status;
+    if (
+      currentStatus &&
+      prevStatusRef.current !== currentStatus &&
+      TERMINAL_STATUSES.has(currentStatus)
+    ) {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/provider", providerId, "invoices"],
+      });
+    }
+    prevStatusRef.current = currentStatus;
+  }, [invoiceData?.invoice?.status, providerId, queryClient]);
+
   // Task #235: also refetch on focus so coming back from another screen (or
   // tapping a push notification) immediately reflects the latest status.
   useFocusEffect(
