@@ -64,6 +64,19 @@ export default function OnboardingScreen() {
     }
   };
 
+  const normalizePropertyType = (type?: string): string | undefined => {
+    if (!type) return undefined;
+    const n = type.toLowerCase().replace(/\s+/g, "_");
+    const valid = ["single_family", "condo", "townhouse", "apartment", "multi_family"];
+    if (valid.includes(n)) return n;
+    if (n.includes("single") || n.includes("house")) return "single_family";
+    if (n.includes("condo")) return "condo";
+    if (n.includes("town")) return "townhouse";
+    if (n.includes("apart")) return "apartment";
+    if (n.includes("multi") || n.includes("duplex")) return "multi_family";
+    return "single_family";
+  };
+
   const handleAddHome = async () => {
     if (!enrichmentData || !user) {
       Alert.alert("Missing Address", "Please search and select an address to continue.");
@@ -89,7 +102,7 @@ export default function OnboardingScreen() {
         bathrooms: enrichmentData.bathrooms,
         squareFeet: enrichmentData.squareFeet,
         yearBuilt: enrichmentData.yearBuilt,
-        propertyType: enrichmentData.propertyType?.replace(/ /g, "_"),
+        propertyType: normalizePropertyType(enrichmentData.propertyType),
         estimatedValue: enrichmentData.estimatedValue?.toString(),
         lotSize: enrichmentData.lotSize,
         zillowId: enrichmentData.zillowId,
