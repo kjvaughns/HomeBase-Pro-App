@@ -511,7 +511,7 @@ export default function ClientsScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <View style={[styles.searchContainer, { backgroundColor: theme.cardBackground, marginHorizontal: Math.max(0, horizontalPadding - Spacing.md) }]}>
+      <View style={[styles.searchContainer, { backgroundColor: theme.cardBackground, marginHorizontal: Math.max(0, horizontalPadding - Spacing.md), marginTop: insets.top + Spacing.md }]}>
         <Feather name="search" size={18} color={theme.textSecondary} />
         <TextInput
           style={[styles.searchInput, { color: theme.text }]}
@@ -536,7 +536,7 @@ export default function ClientsScreen() {
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={[
           {
-            paddingTop: insets.top + Spacing.lg,
+            paddingTop: Spacing.lg,
             paddingBottom: insets.bottom + 100,
             paddingHorizontal: Math.max(0, horizontalPadding - Spacing.screenPadding),
           },
