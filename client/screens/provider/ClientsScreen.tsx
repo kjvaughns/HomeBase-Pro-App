@@ -1,9 +1,9 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { StyleSheet, FlatList, RefreshControl, View, TextInput, Pressable, Linking } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useQuery } from "@tanstack/react-query";
@@ -468,33 +468,39 @@ export default function ClientsScreen() {
     </View>
   );
 
-  const renderClient = ({ item, index }: { item: Client; index: number }) => (
-    <Animated.View entering={FadeInDown.delay(index * 30).duration(300)}>
-      <ClientCard
-        client={item}
-        onPress={() => handleClientPress(item)}
-        onCall={() => handleCall(item)}
-        onMessage={() => handleMessage(item)}
-        lastMessage={lastMessageMap.get(item.id)}
-      />
-    </Animated.View>
+  const renderClient = useCallback(
+    ({ item }: { item: Client; index: number }) => (
+      <View>
+        <ClientCard
+          client={item}
+          onPress={() => handleClientPress(item)}
+          onCall={() => handleCall(item)}
+          onMessage={() => handleMessage(item)}
+          lastMessage={lastMessageMap.get(item.id)}
+        />
+      </View>
+    ),
+    [handleClientPress, handleCall, handleMessage, lastMessageMap],
   );
 
-  const renderEmpty = () => (
-    <EmptyState
-      image={require("../../../assets/images/empty-leads.png")}
-      title={statusFilter !== "all" ? "No clients match filters" : "No clients yet"}
-      description={
-        statusFilter !== "all"
-          ? "Try adjusting your filters to see more clients."
-          : "Add your first client to start building your business on HomeBase."
-      }
-      primaryAction={
-        statusFilter === "all"
-          ? { label: "Add Your First Client", onPress: handleAddClient }
-          : undefined
-      }
-    />
+  const renderEmpty = useCallback(
+    () => (
+      <EmptyState
+        image={require("../../../assets/images/empty-leads.png")}
+        title={statusFilter !== "all" ? "No clients match filters" : "No clients yet"}
+        description={
+          statusFilter !== "all"
+            ? "Try adjusting your filters to see more clients."
+            : "Add your first client to start building your business on HomeBase."
+        }
+        primaryAction={
+          statusFilter === "all"
+            ? { label: "Add Your First Client", onPress: handleAddClient }
+            : undefined
+        }
+      />
+    ),
+    [statusFilter, handleAddClient],
   );
 
   return (

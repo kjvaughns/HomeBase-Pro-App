@@ -350,18 +350,6 @@ export default function FindScreen() {
 
   const renderHeader = () => (
     <View style={styles.headerContent}>
-      <Animated.View entering={FadeInDown.delay(50).duration(400)}>
-        <TextField
-          placeholder="Search services..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          leftIcon="search"
-          rightIcon={searchQuery ? "x" : undefined}
-          onRightIconPress={() => setSearchQuery("")}
-          testID="search-input"
-        />
-      </Animated.View>
-
       <Animated.View entering={FadeInDown.delay(150).duration(400)}>
         <Pressable
           style={styles.locationRow}
@@ -1035,15 +1023,31 @@ export default function FindScreen() {
 
   return (
     <ThemedView style={styles.container}>
+      <View
+        style={[
+          styles.searchBarWrapper,
+          { paddingTop: headerHeight + Spacing.md, paddingHorizontal: horizontalPadding },
+        ]}
+      >
+        <TextField
+          placeholder="Search services..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          leftIcon="search"
+          rightIcon={searchQuery ? "x" : undefined}
+          onRightIconPress={() => setSearchQuery("")}
+          testID="search-input"
+        />
+      </View>
       <FlatList
         keyboardShouldPersistTaps="handled"
         data={featuredProviders}
         renderItem={renderProvider}
         keyExtractor={(item) => item.id}
-        ListHeaderComponent={renderHeader()}
+        ListHeaderComponent={renderHeader}
         ListFooterComponent={renderFooter}
         contentContainerStyle={{
-          paddingTop: headerHeight + Spacing.lg,
+          paddingTop: Spacing.xs,
           paddingBottom: tabBarHeight + Spacing.xl,
           paddingHorizontal: horizontalPadding,
         }}
@@ -1073,6 +1077,9 @@ export default function FindScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  searchBarWrapper: {
+    paddingBottom: Spacing.sm,
   },
   headerContent: {
     marginBottom: Spacing.md,

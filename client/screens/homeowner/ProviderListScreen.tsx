@@ -229,41 +229,6 @@ export default function ProviderListScreen() {
 
   const renderHeader = () => (
     <View style={styles.header}>
-      <View style={styles.searchRow}>
-        <View style={styles.searchField}>
-          <TextField
-            placeholder="Search providers..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            leftIcon="search"
-            rightIcon={searchQuery ? "x" : undefined}
-            onRightIconPress={() => setSearchQuery("")}
-          />
-        </View>
-        <Pressable
-          onPress={openFilterModal}
-          style={[
-            styles.filterButton,
-            {
-              backgroundColor: activeFilterCount > 0 ? Colors.accent : theme.cardBackground,
-              borderColor: activeFilterCount > 0 ? Colors.accent : theme.borderLight,
-            },
-          ]}
-          testID="filter-button"
-        >
-          <Feather
-            name="sliders"
-            size={20}
-            color={activeFilterCount > 0 ? "#fff" : theme.text}
-          />
-          {activeFilterCount > 0 ? (
-            <View style={styles.filterBadge}>
-              <ThemedText style={styles.filterBadgeText}>{activeFilterCount}</ThemedText>
-            </View>
-          ) : null}
-        </Pressable>
-      </View>
-
       <View style={styles.sortRow}>
         {SORT_OPTIONS.map((option) => (
           <Pressable
@@ -524,15 +489,56 @@ export default function ProviderListScreen() {
 
   return (
     <ThemedView style={styles.container}>
+      <View
+        style={[
+          styles.searchBarWrapper,
+          { paddingTop: headerHeight + Spacing.md, paddingHorizontal: Spacing.screenPadding },
+        ]}
+      >
+        <View style={styles.searchRow}>
+          <View style={styles.searchField}>
+            <TextField
+              placeholder="Search providers..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              leftIcon="search"
+              rightIcon={searchQuery ? "x" : undefined}
+              onRightIconPress={() => setSearchQuery("")}
+            />
+          </View>
+          <Pressable
+            onPress={openFilterModal}
+            style={[
+              styles.filterButton,
+              {
+                backgroundColor: activeFilterCount > 0 ? Colors.accent : theme.cardBackground,
+                borderColor: activeFilterCount > 0 ? Colors.accent : theme.borderLight,
+              },
+            ]}
+            testID="filter-button"
+          >
+            <Feather
+              name="sliders"
+              size={20}
+              color={activeFilterCount > 0 ? "#fff" : theme.text}
+            />
+            {activeFilterCount > 0 ? (
+              <View style={styles.filterBadge}>
+                <ThemedText style={styles.filterBadgeText}>{activeFilterCount}</ThemedText>
+              </View>
+            ) : null}
+          </Pressable>
+        </View>
+      </View>
       <FlatList
         keyboardShouldPersistTaps="handled"
         data={filteredProviders}
         renderItem={renderProvider}
         keyExtractor={(item) => item.id}
-        ListHeaderComponent={renderHeader()}
+        ListHeaderComponent={renderHeader}
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={{
-          paddingTop: headerHeight + Spacing.md,
+          paddingTop: Spacing.xs,
           paddingBottom: insets.bottom + Spacing.xl,
           paddingHorizontal: Spacing.screenPadding,
           flexGrow: 1,
@@ -547,6 +553,9 @@ export default function ProviderListScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  searchBarWrapper: {
+    paddingBottom: Spacing.sm,
   },
   header: {
     marginBottom: Spacing.md,
