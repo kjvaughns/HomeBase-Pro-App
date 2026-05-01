@@ -406,31 +406,6 @@ export default function ClientsScreen() {
 
   const renderHeader = () => (
     <View style={styles.headerContainer}>
-      <View style={styles.titleRow}>
-        <View>
-          <ThemedText type="h1">Clients</ThemedText>
-          <ThemedText type="body" style={{ color: Colors.accent }}>
-            {clients.length} Total
-          </ThemedText>
-        </View>
-        <View style={styles.titleButtons}>
-          <Pressable
-            onPress={() => setShowSortMenu(!showSortMenu)}
-            style={[styles.sortButton, { backgroundColor: theme.cardBackground }]}
-            testID="sort-button"
-          >
-            <Feather name="sliders" size={18} color={theme.text} />
-          </Pressable>
-          <Pressable
-            style={[styles.addButton, { backgroundColor: Colors.accent }]}
-            onPress={handleAddClient}
-            testID="add-client-button"
-          >
-            <Feather name="plus" size={20} color="white" />
-          </Pressable>
-        </View>
-      </View>
-
       <FilterChips
         options={STATUS_FILTERS.map((f) => ({
           ...f,
@@ -511,7 +486,33 @@ export default function ClientsScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <View style={[styles.searchContainer, { backgroundColor: theme.cardBackground, marginHorizontal: Math.max(0, horizontalPadding - Spacing.md), marginTop: insets.top + Spacing.md }]}>
+      <View style={[styles.titleSection, { paddingTop: insets.top + Spacing.md, paddingHorizontal: Spacing.screenPadding }]}>
+        <View style={styles.titleRow}>
+          <View>
+            <ThemedText type="h1">Clients</ThemedText>
+            <ThemedText type="body" style={{ color: Colors.accent }}>
+              {clients.length} Total
+            </ThemedText>
+          </View>
+          <View style={styles.titleButtons}>
+            <Pressable
+              onPress={() => setShowSortMenu(!showSortMenu)}
+              style={[styles.sortButton, { backgroundColor: theme.cardBackground }]}
+              testID="sort-button"
+            >
+              <Feather name="sliders" size={18} color={theme.text} />
+            </Pressable>
+            <Pressable
+              style={[styles.addButton, { backgroundColor: Colors.accent }]}
+              onPress={handleAddClient}
+              testID="add-client-button"
+            >
+              <Feather name="plus" size={20} color="white" />
+            </Pressable>
+          </View>
+        </View>
+      </View>
+      <View style={[styles.searchContainer, { backgroundColor: theme.cardBackground, marginHorizontal: Math.max(0, horizontalPadding - Spacing.md) }]}>
         <Feather name="search" size={18} color={theme.textSecondary} />
         <TextInput
           style={[styles.searchInput, { color: theme.text }]}
@@ -559,6 +560,9 @@ export default function ClientsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  titleSection: {
+    marginBottom: Spacing.sm,
   },
   headerContainer: {
     paddingHorizontal: Spacing.screenPadding,
