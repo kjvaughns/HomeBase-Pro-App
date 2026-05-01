@@ -5,6 +5,7 @@ import Constants from "expo-constants";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
+import { useLayout } from "@/hooks/useLayout";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather, Ionicons } from "@expo/vector-icons";
@@ -29,6 +30,7 @@ import { openAppReviewFromSettings } from "@/state/appReviewStore";
 import { apiRequest } from "@/lib/query-client";
 
 export default function ProviderMoreScreen() {
+  const { horizontalPadding } = useLayout();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useFloatingTabBarHeight();
@@ -125,7 +127,7 @@ export default function ProviderMoreScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,
           paddingBottom: tabBarHeight + Spacing.xl,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
         scrollIndicatorInsets={{ bottom: insets.bottom }}
         showsVerticalScrollIndicator={false}

@@ -43,14 +43,15 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   
-  const horizontalMargin = Math.max(16, width * 0.04);
-  const maxWidth = 400;
+  const isTablet = width >= 768;
+  const horizontalMargin = isTablet ? Math.max(24, (width - 540) / 2) : Math.max(16, width * 0.04);
+  const maxWidth = isTablet ? 540 : 400;
   const tabBarWidth = width - horizontalMargin * 2;
   const finalWidth = Math.min(tabBarWidth, maxWidth);
   
-  const iconSize = width < 375 ? 18 : 20;
-  const fontSize = width < 375 ? 9 : 10;
-  const tabHeight = width < 375 ? 52 : 60;
+  const iconSize = width < 375 ? 18 : isTablet ? 22 : 20;
+  const fontSize = width < 375 ? 9 : isTablet ? 11 : 10;
+  const tabHeight = width < 375 ? 52 : isTablet ? 64 : 60;
   const bottomOffset = Math.max(insets.bottom > 0 ? insets.bottom + 8 : 20, 20);
 
   return (

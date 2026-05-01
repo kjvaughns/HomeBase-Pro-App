@@ -8,12 +8,13 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
-  Dimensions,
+  useWindowDimensions,
 } from "react-native";
 import { openExternalUrl } from "@/lib/openExternalUrl";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
+import { useLayout } from "@/hooks/useLayout";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
@@ -367,6 +368,7 @@ function InlineDateRangePicker({
   onClose,
   theme,
 }: InlineDateRangePickerProps) {
+  const { width: windowWidth } = useWindowDimensions();
   const today = stripTime(maxDate ?? new Date());
 
   const [displayMonth, setDisplayMonth] = useState<Date>(() => {
@@ -456,7 +458,8 @@ function InlineDateRangePicker({
 
   const canApply = !!(rangeStart && rangeEnd);
 
-  const CELL_SIZE = Math.floor((Dimensions.get("window").width - Spacing.screenPadding * 2 - 24) / 7);
+  const calendarWidth = Math.min(windowWidth, 680);
+  const CELL_SIZE = Math.floor((calendarWidth - Spacing.screenPadding * 2 - 24) / 7);
 
   if (!visible) return null;
 
@@ -734,6 +737,7 @@ export default function FinancialsScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useFloatingTabBarHeight();
+  const { horizontalPadding } = useLayout();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { theme } = useTheme();
   const { providerProfile } = useAuthStore();
@@ -1351,7 +1355,7 @@ export default function FinancialsScreen() {
           contentContainerStyle={{
             paddingTop: headerHeight + Spacing.md,
             paddingBottom: tabBarHeight + Spacing.xl,
-            paddingHorizontal: Spacing.screenPadding,
+            paddingHorizontal: horizontalPadding,
           }}
           scrollIndicatorInsets={{ bottom: insets.bottom }}
           showsVerticalScrollIndicator={false}
@@ -1397,7 +1401,7 @@ export default function FinancialsScreen() {
           contentContainerStyle={{
             paddingTop: headerHeight + Spacing.md,
             paddingBottom: tabBarHeight + Spacing.xl,
-            paddingHorizontal: Spacing.screenPadding,
+            paddingHorizontal: horizontalPadding,
           }}
           scrollIndicatorInsets={{ bottom: insets.bottom }}
           showsVerticalScrollIndicator={false}
@@ -1437,7 +1441,7 @@ export default function FinancialsScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.md,
           paddingBottom: tabBarHeight + Spacing.xl,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
         scrollIndicatorInsets={{ bottom: insets.bottom }}
         showsVerticalScrollIndicator={false}

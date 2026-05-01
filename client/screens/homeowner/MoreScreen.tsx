@@ -5,6 +5,7 @@ import Constants from "expo-constants";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
+import { useLayout } from "@/hooks/useLayout";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -28,6 +29,7 @@ export default function MoreScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useFloatingTabBarHeight();
+  const { horizontalPadding, isTablet } = useLayout();
   const navigation = useNavigation<any>();
   const { theme } = useTheme();
   const {
@@ -153,7 +155,7 @@ export default function MoreScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,
           paddingBottom: tabBarHeight + Spacing.xl,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
         scrollIndicatorInsets={{ bottom: insets.bottom }}
         showsVerticalScrollIndicator={false}
@@ -168,7 +170,7 @@ export default function MoreScreen() {
               </ThemedText>
               <View style={styles.toolsGrid}>
                 <Pressable
-                  style={[styles.toolTile, { backgroundColor: theme.cardBackground }]}
+                  style={[styles.toolTile, isTablet && styles.toolTileTablet, { backgroundColor: theme.cardBackground }]}
                   onPress={() => navigation.navigate("SurvivalKit")}
                 >
                   <View style={[styles.toolIcon, { backgroundColor: Colors.accentLight }]}>
@@ -181,7 +183,7 @@ export default function MoreScreen() {
                 </Pressable>
                 
                 <Pressable
-                  style={[styles.toolTile, { backgroundColor: theme.cardBackground }]}
+                  style={[styles.toolTile, isTablet && styles.toolTileTablet, { backgroundColor: theme.cardBackground }]}
                   onPress={() => navigation.navigate("HouseFax")}
                 >
                   <View style={[styles.toolIcon, { backgroundColor: Colors.accentLight }]}>
@@ -194,7 +196,7 @@ export default function MoreScreen() {
                 </Pressable>
                 
                 <Pressable
-                  style={[styles.toolTile, { backgroundColor: theme.cardBackground }]}
+                  style={[styles.toolTile, isTablet && styles.toolTileTablet, { backgroundColor: theme.cardBackground }]}
                   onPress={() => navigation.navigate("HealthScore")}
                 >
                   <View style={[styles.toolIcon, { backgroundColor: Colors.accentLight }]}>
@@ -207,7 +209,7 @@ export default function MoreScreen() {
                 </Pressable>
                 
                 <Pressable
-                  style={[styles.toolTile, { backgroundColor: theme.cardBackground }]}
+                  style={[styles.toolTile, isTablet && styles.toolTileTablet, { backgroundColor: theme.cardBackground }]}
                   onPress={() => navigation.navigate("ServiceHistory")}
                 >
                   <View style={[styles.toolIcon, { backgroundColor: Colors.accentLight }]}>
@@ -544,6 +546,9 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     borderRadius: BorderRadius.card,
     alignItems: "center",
+  },
+  toolTileTablet: {
+    width: "30%",
   },
   toolIcon: {
     width: 44,

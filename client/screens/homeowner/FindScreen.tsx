@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
+import { useLayout } from "@/hooks/useLayout";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather, Ionicons } from "@expo/vector-icons";
@@ -122,6 +123,7 @@ export default function FindScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useFloatingTabBarHeight();
+  const { horizontalPadding, isTablet } = useLayout();
   const navigation = useNavigation<NavigationProp>();
   const { theme, isDark } = useTheme();
   const { isAuthenticated } = useAuthStore();
@@ -482,8 +484,8 @@ export default function FindScreen() {
             entering={FadeInDown.delay(250).duration(400)}
             style={styles.categoriesGrid}
           >
-            {categories.slice(0, 6).map((category) => (
-              <View key={category.id} style={styles.categoryItem}>
+            {categories.slice(0, isTablet ? 8 : 6).map((category) => (
+              <View key={category.id} style={[styles.categoryItem, isTablet && { width: "22%" }]}>
                 <CategoryCard
                   name={category.name}
                   icon={category.icon as any}
@@ -1043,7 +1045,7 @@ export default function FindScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,
           paddingBottom: tabBarHeight + Spacing.xl,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
         scrollIndicatorInsets={{ bottom: insets.bottom }}
         showsVerticalScrollIndicator={false}

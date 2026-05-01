@@ -3,6 +3,7 @@ import { StyleSheet, View, ScrollView, Pressable, RefreshControl } from "react-n
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
+import { useLayout } from "@/hooks/useLayout";
 import { useNavigation, useFocusEffect, CompositeNavigationProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
@@ -58,6 +59,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useFloatingTabBarHeight();
+  const { horizontalPadding, isTablet } = useLayout();
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
   const { user } = useAuthStore();
@@ -167,7 +169,7 @@ export default function HomeScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.xl,
           paddingBottom: tabBarHeight + Spacing.xl + 40,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -293,8 +295,8 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.categoriesGrid}>
-            {categories.slice(0, 6).map((category) => (
-              <View key={category.id} style={styles.categoryItem}>
+            {categories.slice(0, isTablet ? 8 : 6).map((category) => (
+              <View key={category.id} style={[styles.categoryItem, isTablet && styles.categoryItemTablet]}>
                 <CategoryCard
                   name={category.name}
                   icon={category.icon as any}
@@ -312,46 +314,24 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.quickActions}>
-            <Pressable
-              style={[styles.quickAction, { backgroundColor: theme.cardBackground }]}
-              onPress={() => navigation.navigate("SurvivalKit")}
-            >
-              <View style={[styles.quickActionIcon, { backgroundColor: Colors.accentLight }]}>
-                <Feather name="shield" size={20} color={Colors.accent} />
-              </View>
-              <ThemedText style={styles.quickActionText}>Survival Kit</ThemedText>
-            </Pressable>
-
-            <Pressable
-              style={[styles.quickAction, { backgroundColor: theme.cardBackground }]}
-              onPress={() => navigation.navigate("HealthScore")}
-            >
-              <View style={[styles.quickActionIcon, { backgroundColor: Colors.accentLight }]}>
-                <Feather name="activity" size={20} color={Colors.accent} />
-              </View>
-              <ThemedText style={styles.quickActionText}>Health Score</ThemedText>
-            </Pressable>
-
-            <Pressable
-              style={[styles.quickAction, { backgroundColor: theme.cardBackground }]}
-              onPress={() => navigation.navigate("ServiceHistory")}
-              testID="quick-action-service-history"
-            >
-              <View style={[styles.quickActionIcon, { backgroundColor: Colors.accentLight }]}>
-                <Feather name="clock" size={20} color={Colors.accent} />
-              </View>
-              <ThemedText style={styles.quickActionText}>Service History</ThemedText>
-            </Pressable>
-
-            <Pressable
-              style={[styles.quickAction, { backgroundColor: theme.cardBackground }]}
-              onPress={() => navigation.navigate("HouseFax")}
-            >
-              <View style={[styles.quickActionIcon, { backgroundColor: Colors.accentLight }]}>
-                <Feather name="file-text" size={20} color={Colors.accent} />
-              </View>
-              <ThemedText style={styles.quickActionText}>HouseFax</ThemedText>
-            </Pressable>
+            {[
+              { label: "Survival Kit", icon: "shield" as const, screen: "SurvivalKit" as const },
+              { label: "Health Score", icon: "activity" as const, screen: "HealthScore" as const },
+              { label: "Service History", icon: "clock" as const, screen: "ServiceHistory" as const, testID: "quick-action-service-history" },
+              { label: "HouseFax", icon: "file-text" as const, screen: "HouseFax" as const },
+            ].map((item) => (
+              <Pressable
+                key={item.label}
+                style={[styles.quickAction, isTablet && styles.quickActionTablet, { backgroundColor: theme.cardBackground }]}
+                onPress={() => navigation.navigate(item.screen as any)}
+                testID={item.testID}
+              >
+                <View style={[styles.quickActionIcon, { backgroundColor: Colors.accentLight }]}>
+                  <Feather name={item.icon} size={20} color={Colors.accent} />
+                </View>
+                <ThemedText style={styles.quickActionText}>{item.label}</ThemedText>
+              </Pressable>
+            ))}
           </View>
         </Animated.View>
       </ScrollView>
@@ -496,6 +476,9 @@ const styles = StyleSheet.create({
   categoryItem: {
     width: "31%",
   },
+  categoryItemTablet: {
+    width: "22%",
+  },
   quickActions: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -503,6 +486,7 @@ const styles = StyleSheet.create({
   },
   quickAction: {
     width: "48%",
+    flexShrink: 1,
     flexDirection: "row",
     alignItems: "center",
     padding: Spacing.md,
@@ -515,6 +499,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
+  },
+  quickActionTablet: {
+    width: "23%",
   },
   quickActionText: {
     ...Typography.subhead,

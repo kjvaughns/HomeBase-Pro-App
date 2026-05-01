@@ -11,7 +11,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 export function useFloatingTabBarHeight(): number {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const tabHeight = width < 375 ? 52 : 60;
+  const isTablet = width >= 768;
+  const tabHeight = width < 375 ? 52 : isTablet ? 64 : 60;
   const bottomOffset = Math.max(insets.bottom > 0 ? insets.bottom + 8 : 20, 20);
   return tabHeight + bottomOffset;
 }

@@ -5,7 +5,7 @@ import {
   Text,
   Pressable,
   Modal,
-  Dimensions,
+  useWindowDimensions,
 } from "react-native";
 import Animated, {
   useSharedValue,
@@ -23,6 +23,7 @@ import { useNavigation } from "@react-navigation/native";
 
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -44,6 +45,7 @@ export default function ProviderFAB() {
   const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
+  const { horizontalPadding, isTablet } = useLayout();
   
   const progress = useSharedValue(0);
   const rotation = useSharedValue(0);
@@ -116,7 +118,7 @@ export default function ProviderFAB() {
   }));
 
   const bottomOffset = Math.max(insets.bottom + 80, 100);
-  const { width: screenWidth } = Dimensions.get("window");
+  const fabRight = isTablet ? horizontalPadding + Spacing.lg : Spacing.lg;
 
   return (
     <>
@@ -134,7 +136,7 @@ export default function ProviderFAB() {
               styles.actionsContainer,
               {
                 bottom: bottomOffset + 70,
-                right: Spacing.lg,
+                right: fabRight,
               },
             ]}
           >
@@ -157,7 +159,7 @@ export default function ProviderFAB() {
           styles.fabContainer,
           {
             bottom: bottomOffset,
-            right: Spacing.lg,
+            right: fabRight,
           },
         ]}
       >
