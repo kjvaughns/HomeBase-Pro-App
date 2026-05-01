@@ -13,7 +13,7 @@ import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
-import { apiRequest, getApiUrl } from "@/lib/query-client";
+import { apiRequest } from "@/lib/query-client";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 
 interface Prediction {
@@ -82,9 +82,10 @@ export function AddressAutocomplete({
 
     setIsLoading(true);
     try {
-      const url = new URL("/api/housefax/autocomplete", getApiUrl());
-      url.searchParams.set("q", searchQuery);
-      const response = await fetch(url.href);
+      const response = await apiRequest(
+        "GET",
+        `/api/housefax/autocomplete?q=${encodeURIComponent(searchQuery)}`,
+      );
       const data = await response.json();
       setPredictions(data.predictions || []);
       setShowDropdown(true);
