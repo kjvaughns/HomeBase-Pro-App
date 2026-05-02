@@ -15,7 +15,7 @@ The homeowner portal has progressed dramatically since the April 14 baseline. **
 - `HealthScoreScreen` computes the score client-side from real wizard answers, persists it via `PUT /api/homes/:id` (`server/routes.ts:2080`), and writes back home attribute changes via `PATCH /api/homes/:id/profile`.
 - `ServiceHistoryScreen` pulls from a new `GET /api/homes/:homeId/service-history` endpoint (`server/routes.ts:6254`) joining `appointments` × `providers`. The April-era `MOCK_SERVICE_ENTRIES` / `MOCK_PAST_PROVIDERS` arrays are gone.
 - `SurvivalKitScreen` runs a 17-step wizard that pre-fills from real home profile data and persists answers via `PATCH /api/homes/:homeId/profile`.
-- `BudgeterScreen` and `SavingsSpendScreen` were converted to honest "Coming Soon" feature-preview screens (`UPCOMING_FEATURES` and `SAVINGS_FEATURES` arrays at `BudgeterScreen.tsx:20` and `SavingsSpendScreen.tsx:20`) — a substantial trust upgrade over the April mock-data state, even though they ship without a real entry point.
+- `BudgeterScreen` and `SavingsSpendScreen` were converted to honest "Coming Soon" feature-preview screens (`UPCOMING_FEATURES` and `SAVINGS_FEATURES` arrays at `BudgeterScreen.tsx:20` and `SavingsSpendScreen.tsx:20`) — a substantial trust upgrade over the April mock-data state. `BudgeterScreen` is reachable today as a guest from the `FindScreen` "Homeowner Tools" footer (`FindScreen.tsx:91–119, 975–1020`); `SavingsSpendScreen` is still unreachable (typed but not registered). See §4.1.
 
 The booking → payment → review pipeline is solid end-to-end with real Stripe Connect integration, server-computed amounts, webhook idempotency, server-side ownership checks on every mutation, and a `chargesEnabled` gate before booking with non-onboarded providers. Account deletion (`DELETE /api/auth/account`, `server/routes.ts:1796–1907`) is a comprehensive transactional cascade across users, homes, appointments, jobs, invoices, payments, reviews, push tokens, support tickets, and Stripe customers.
 
@@ -23,7 +23,7 @@ The booking → payment → review pipeline is solid end-to-end with real Stripe
 
 What remains is **second-order polish, two reachability gaps, one unimplemented sub-feature, and small cross-cutting hardening items** rather than foundation work:
 
-- `BudgeterScreen` is registered in `RootStackNavigator.tsx:351` but **no homeowner screen calls `navigation.navigate("Budgeter")`** — it ships in the bundle with no entry point. `SavingsSpendScreen` is **typed in `RootStackParamList` (`RootStackNavigator.tsx:96`) but has no import and no `<Stack.Screen>` registration** — it cannot be reached, and a stray `navigation.navigate("SavingsSpend")` would crash. Two related orphans, two different shapes.
+- `BudgeterScreen` is registered in `RootStackNavigator.tsx:351` and reachable to **guests only** via the `FindScreen` "Homeowner Tools" footer (`FindScreen.tsx:91–119, 309–312, 975–1020`) — the footer renders only when `!isAuthenticated && !isSearching`, so authenticated homeowners have no entry point to it. `SavingsSpendScreen` is **typed in `RootStackParamList` (`RootStackNavigator.tsx:96`) but has no import and no `<Stack.Screen>` registration** — it cannot be reached, and a stray `navigation.navigate("SavingsSpend")` would crash. Two related screens, two different problems: Budgeter is half-wired (guest-only entry, "Coming Soon" payload); SavingsSpend is fully orphaned.
 - `AppointmentDetailScreen.tsx:356` shows a "Coming Soon — Messaging will be available in a future update" `Alert.alert` when the homeowner taps "Message Provider", and there is no homeowner ↔ provider message thread endpoint in `server/routes.ts`. The UI affordance exists; the pipe doesn't.
 - `ProfileEditScreen` displays an `<Avatar>` but has **no upload trigger and no client-side wiring of `avatarUrl`** to the existing `PUT /api/user/:id` (server already accepts the field at `routes.ts:1944`).
 - `AddressesScreen` lets a homeowner add or delete a home but **cannot edit an existing address** — only the nickname can be changed; correcting a typo requires delete + re-add (which loses `housefax_entries` and `appointments` history references).
@@ -55,7 +55,7 @@ The task spec (`task-267.md`) requested a **Pass / Partial / Fail** verdict per 
 - **Partial** = `Partial`
 - **Fail** = `Broken`, `Stubbed-Mock`, or `Missing`
 
-The columns below use the finer-grained vocabulary so that Stubbed-Mock vs. Missing vs. Broken-with-bug-in-flight can be distinguished at a glance. Counts in Pass/Partial/Fail terms: **21 Pass, 4 Partial, 2 Fail** — Pass = `Working` (rows 1–11, 13–15, 18–20, 22–24); Partial = `Partial` (rows 12, 16, 17, 25); Fail = `Stubbed-Mock + Missing` (rows 26, 27 — Budgeter + SavingsSpend). Note: row 24 (`ServiceHistoryScreen`) is `Working` on the client but flagged with a *server-side* High severity for the §4.18 IDOR.
+The columns below use the finer-grained vocabulary so that Stubbed-Mock vs. Missing vs. Broken-with-bug-in-flight can be distinguished at a glance. Counts in Pass/Partial/Fail terms: **21 Pass, 5 Partial, 1 Fail** — Pass = `Working` (rows 1–11, 13–15, 18–20, 22–24); Partial = `Partial` (rows 12, 16, 17, 25) + row 26 (`Budgeter`, reachable as guest only with stub content); Fail = row 27 (`SavingsSpend`, typed but unregistered). Note: row 24 (`ServiceHistoryScreen`) is `Working` on the client but flagged with a *server-side* High severity for the §4.18 IDOR.
 
 The **Reachable** column uses these tags:
 
@@ -91,7 +91,7 @@ The **Reachable** column uses these tags:
 | 23 | `HealthScoreScreen` | Auth-only (RootStack via MoreScreen Tools) | Working | None | 14-question wizard; `computeScoreFromAnswers`; persists score via `PUT /api/homes/:id` (`routes.ts:2080`); writes back home attributes via `PATCH /api/homes/:id/profile`. |
 | 24 | `ServiceHistoryScreen` | Auth-only (RootStack via MoreScreen Tools) | Working | High (server) | `GET /api/homes/:homeId/service-history` (`routes.ts:6254`) joins `appointments × providers`; no mock arrays remain. **Server-side defect:** the endpoint has no ownership check (see §4.18). The screen renders correctly; the API behind it is currently exploitable. |
 | 25 | `SurvivalKitScreen` | Auth-only (RootStack via MoreScreen Tools) | Partial | Low | 17-step wizard pre-fills from real home profile; persists answers via `PATCH /api/homes/:homeId/profile`. **Sub-issue:** the maintenance task list itself is generated client-side via `generateTasksFromWizardData` and not persisted — switching devices means re-running the wizard. |
-| 26 | `BudgeterScreen` | **No** (registered, no caller) | Stubbed-Mock + Missing | Medium | Honest "Coming Soon" content (`UPCOMING_FEATURES` array, `BudgeterScreen.tsx:20`) is fine — but no homeowner code path calls `navigation.navigate("Budgeter")`, so users never see it. Imported (`RootStackNavigator.tsx:27`) and registered as `<Stack.Screen>` (`:351`). Either surface as a `MoreScreen` tile labeled "Coming soon" or delete. |
+| 26 | `BudgeterScreen` | Guest-only (FindScreen footer) | Partial / Stubbed-Mock | Medium | Honest "Coming Soon" content (`UPCOMING_FEATURES` array, `BudgeterScreen.tsx:20`). Reachable from the `FindScreen` "Homeowner Tools" guest footer (`FindScreen.tsx:91–119, 309–312, 975–1020`), which renders only when `!isAuthenticated && !isSearching`. Imported + registered (`RootStackNavigator.tsx:27, 351`). **Authenticated homeowners have no entry point** — `MoreScreen` does not surface it. Either also list it on `MoreScreen` as a disabled "Coming soon" tile, or accept the guest-funnel-only role. |
 | 27 | `SavingsSpendScreen` | **No** (typed, not registered) | Stubbed-Mock + Missing | Medium | Same UI pattern as `BudgeterScreen` (`SAVINGS_FEATURES` array at line 20), but the file is **not imported and not registered** in `RootStackNavigator` — only typed in `RootStackParamList` (`RootStackNavigator.tsx:96`). A stray `navigation.navigate("SavingsSpend")` would throw at runtime. Either wire it up or delete the type. |
 
 **Tab navigator (conditional):** the underlying `Tab.Navigator` declares 4 tabs, but `HomeTab` is mounted only when `isAuthenticated` is true (`client/navigation/HomeownerTabNavigator.tsx:168–177`). The effective tab sets are:
@@ -147,8 +147,8 @@ Guests can also reach `WelcomeScreen`, `LoginScreen`, `SignUpScreen`, `ForgotPas
 |---|---|---|---|
 | `ServiceHistoryScreen` renders `MOCK_SERVICE_ENTRIES` / `MOCK_PAST_PROVIDERS` as if it were the user's data | Critical | **Resolved (with caveat)** | Real `GET /api/homes/:homeId/service-history` (`routes.ts:6254`) joining `appointments × providers`; no mock arrays remain. **New finding:** the endpoint has no ownership check (§4.18). |
 | `SurvivalKitScreen` renders `MOCK_TASKS` / `MOCK_TIPS` as if it were a personalized plan | Critical | **Resolved (mostly)** | Wizard now pre-fills from real home profile and persists answers. Generated task list is still client-side and not cross-device persisted. |
-| `BudgeterScreen` renders `BUDGET_CATEGORIES` / `RECENT_TRANSACTIONS` as if they were the user's finances | Critical | **Resolved (different way)** | Replaced with an honest "Coming Soon" preview. Loses the trust hit but creates a reachability gap (see §4.1). |
-| `SavingsSpendScreen` renders `MOCK_CATEGORIES` / `MOCK_SAVINGS_WINS` as if they were real savings | Critical | **Resolved (different way)** | Same pattern as Budgeter — honest "Coming Soon" preview, but unreachable. |
+| `BudgeterScreen` renders `BUDGET_CATEGORIES` / `RECENT_TRANSACTIONS` as if they were the user's finances | Critical | **Resolved (different way)** | Replaced with an honest "Coming Soon" preview. Reachable as guest from `FindScreen` footer; not surfaced to authed users (see §4.1). |
+| `SavingsSpendScreen` renders `MOCK_CATEGORIES` / `MOCK_SAVINGS_WINS` as if they were real savings | Critical | **Resolved (different way)** | Honest "Coming Soon" preview, but the file is typed in `RootStackParamList` and never imported/registered — unreachable from anywhere (see §4.1). |
 | `HouseFaxScreen` shows demo data and not actual home data | High | **Resolved** | Real `GET /api/housefax/:homeId`; AI insights based on real home attributes; document tracking pulled from real invoice data. |
 | `HealthScoreScreen` score not persisted between sessions | High | **Resolved** | `PUT /api/homes/:id` persists score and `lastHealthScoreAt`; wizard answer write-back via `PATCH /api/homes/:id/profile`. |
 | `ManageScreen` — `GET /api/users/:userId/appointments` was reportedly missing | High (April) | **Resolved / never broken** | Endpoint exists at `routes.ts:3344–3359` with `requireAuth` and explicit `if (req.params.userId !== authUserId) → 403`. The April finding was a verification gap; one explorer in this round repeated the claim and was independently disproven by direct file inspection. |
@@ -164,17 +164,16 @@ Guests can also reach `WelcomeScreen`, `LoginScreen`, `SignUpScreen`, `ForgotPas
 
 ## 4. New findings (not in April 14 audits)
 
-### 4.1 `BudgeterScreen` and `SavingsSpendScreen` are dead in two different ways — **[Missing / Medium]**
+### 4.1 `BudgeterScreen` is half-wired and `SavingsSpendScreen` is fully orphaned — **[Partial / Medium]**
 
-- **`BudgeterScreen` — registered, no caller.** Imported at `RootStackNavigator.tsx:27`, typed in `RootStackParamList` at `:97`, and registered as a `<Stack.Screen>` at `:351`. But a repository-wide search for `navigate("Budgeter")` returns **zero hits** in any homeowner or shared screen. Ships in the bundle, addressable by name, never rendered.
-- **`SavingsSpendScreen` — typed but not registered.** The `RootStackParamList` declares `SavingsSpend: undefined` at `RootStackNavigator.tsx:96`, but the file is **not imported** and there is **no `<Stack.Screen name="SavingsSpend">`**. (Line 358–359 is `ServiceHistory`, not `SavingsSpend`.) A stray `navigation.navigate("SavingsSpend")` would type-check but throw at runtime with "no screen registered for that name."
-- `MoreScreen.tsx:174–213` only routes to `SurvivalKit`, `HouseFax`, `HealthScore`, and `ServiceHistory`. Neither Budgeter nor SavingsSpend appears anywhere as a user-clickable target.
-- Both files render an honest "Coming Soon" feature preview (good), but neither delivers any value to the user today.
+- **`BudgeterScreen` — guest-only entry, no authed entry.** Imported at `RootStackNavigator.tsx:27`, typed in `RootStackParamList` at `:97`, and registered as a `<Stack.Screen>` at `:351`. It is reached from the `FindScreen` "Homeowner Tools" footer: `HOME_TOOLS` declares `{ id: "budgeter", screen: "Budgeter", … }` (`FindScreen.tsx:91–119`), `handleToolPress` calls `navigation.navigate(tool.screen as any)` (`:309–312`), and `renderFooter` maps the array onto pressable tiles (`:975–1020`). **Critical caveat:** the footer is gated by `!isAuthenticated && !isSearching` (`:977`), so the screen is reachable to *guests only* — once a homeowner signs in, the tile disappears and there is no other entry point (`MoreScreen.tsx:174–213` routes only to `SurvivalKit`, `HouseFax`, `HealthScore`, `ServiceHistory`). The same guest-only constraint also applies to the existing tools (`SurvivalKit`, `HealthScore`, `HouseFax`) listed in that footer, but those are also surfaced to authed users via `MoreScreen`; only Budgeter is exclusively guest-facing.
+- **`SavingsSpendScreen` — typed but not registered.** The `RootStackParamList` declares `SavingsSpend: undefined` at `RootStackNavigator.tsx:96`, but the file is **not imported** and there is **no `<Stack.Screen name="SavingsSpend">`**. A stray `navigation.navigate("SavingsSpend")` would type-check but throw at runtime with "no screen registered for that name."
+- Both files render an honest "Coming Soon" feature preview (good). Budgeter delivers a teaser to the guest funnel today; SavingsSpend delivers nothing.
 
-**Impact:** Wasted bundle for `Budgeter`; latent runtime crash if any code accidentally navigates to `SavingsSpend`; no user reach for either.
+**Impact:** Authenticated homeowners cannot find Budgeter; the marketing teaser only reaches signed-out browsers (which is probably the opposite of intent for a "future paid feature" preview). Latent runtime crash if any code accidentally navigates to `SavingsSpend`.
 **Fix:**
-- For `Budgeter`: either (a) surface it on `MoreScreen` as a disabled tile labeled "Coming soon", or (b) delete the import + `<Stack.Screen>` entry.
-- For `SavingsSpend`: either (a) import + register the screen and surface it from `MoreScreen`, or (b) delete the `SavingsSpend: undefined` line from `RootStackParamList` and delete `SavingsSpendScreen.tsx` until a real implementation lands.
+- For `Budgeter`: surface it on `MoreScreen` as a disabled "Coming soon" tile so authed users can also see it (preferred), or accept that the guest funnel is the only intended audience and document that.
+- For `SavingsSpend`: either (a) import + register the screen and surface it from `MoreScreen` (and add it to `HOME_TOOLS` if it should also appear in the guest funnel), or (b) delete the `SavingsSpend: undefined` line from `RootStackParamList` and delete `SavingsSpendScreen.tsx` until a real implementation lands.
 
 ### 4.2 No global 401 / session-expiry interceptor — **[Partial / Medium]**
 
@@ -289,18 +288,18 @@ Guests can also reach `WelcomeScreen`, `LoginScreen`, `SignUpScreen`, `ForgotPas
 - The app has **no offline mode**. There is no service worker, no `react-query` `persistQueryClient` plugin, no `AsyncStorage`-backed query cache, and no offline mutation queue.
 - The shared React Query client (`client/lib/query-client.ts:98–110`) explicitly sets `staleTime: 1000 * 60 * 5` (5 minutes), `refetchOnWindowFocus: false`, `refetchInterval: false`, and `retry: false` for both queries and mutations. So a fetch failure (network drop, 401, 5xx) throws once with no automatic retry — the screen sees the error immediately rather than spinning. This is intentional and correct, but it means *no* network-resilience layer is doing anything if the connection comes back.
 - `@react-native-community/netinfo` is in the pre-installed Expo Go library list but is **not imported anywhere in `client/`** — confirmed by repository-wide search. There is no "you're offline" banner, no retry-on-reconnect orchestration, and no queued-mutation flush.
-- The defaults notably **do not** set `refetchOnReconnect`, so even when the device returns to connectivity, stale-but-cached queries don't auto-refresh.
+- The defaults do not explicitly set `refetchOnReconnect`. With `@tanstack/react-query` v5 (`package.json:35`) the library default for that option is `true`, so stale queries *will* re-fetch on reconnect — but only for queries that are currently mounted. There is no app-level "we're back online, here are the things you tried to do offline" affordance.
 - For the booking + payment flow this is a real concern: `POST /api/appointments` has server-side idempotency (`routes.ts:3657–3681`) so a manual retry is safe, but a homeowner who taps "Book" while offline gets a generic Alert and no queued retry. Stripe PaymentSheet handles its own offline UX.
 - HouseFax, Health Score, and Service History are read-only views that show a centered `ActivityIndicator` until the query resolves or errors; with `retry: false` an offline launch surfaces an error promptly but with no "tap to retry" affordance on most screens.
 
-**Fix:** Treat offline as Low priority for v1 (this is a connected-services product — bookings, AI chat, and payments have no offline meaning). Minimum viable improvement: install `@react-native-community/netinfo`, wrap `<App>` with a thin offline banner, and add `refetchOnReconnect: true` (and consider `retry: 1` for read-only queries) in `client/lib/query-client.ts`. Defer query persistence + mutation queueing to post-launch.
+**Fix:** Treat offline as Low priority for v1 (this is a connected-services product — bookings, AI chat, and payments have no offline meaning). Minimum viable improvement: install `@react-native-community/netinfo`, wrap `<App>` with a thin offline banner, and consider relaxing `retry: false` to `retry: 1` for read-only queries in `client/lib/query-client.ts`. (`refetchOnReconnect` already defaults to `true` in react-query v5, so reconnect-driven re-fetches happen for any currently-mounted query.) Defer query persistence + mutation queueing to post-launch.
 
 ### 4.17 Performance — **[Partial / Low]**
 
 - **Lists.** `@shopify/flash-list` is in the pre-installed library set but **not used** anywhere in `client/screens/homeowner/`. `ManageScreen`, `NotificationsScreen`, `SavedProvidersScreen`, `ProviderListScreen` all use `FlatList` (or scrolled `View` blocks) — fine at current scale (typical homeowner has ~5–20 appointments, ~5–20 notifications, < 10 saved providers), but adopting `FlashList` would be a free improvement on long-tail lists. `FindScreen` provider results use `FlatList` with no `getItemLayout` or `keyExtractor` optimization.
 - **Re-renders.** `HomeScreen`, `FindScreen`, and `MoreScreen` re-render on every theme/auth/notification cache invalidation; no `React.memo` wrappers on heavy children. With current screen depth this is invisible, but it would matter once the appointment count grows.
 - **Image loading.** `expo-image` is used in `ProviderProfileScreen` and `HomeScreen` (good — built-in caching + memory pressure handling). `ManageScreen` and `NotificationsScreen` use `Image` from `react-native` for provider logos, missing the `expo-image` cache benefit.
-- **Bundle.** Two unreachable screens (`BudgeterScreen`, `SavingsSpendScreen` — see §4.1) and one legacy navigator file (`ProfileStackNavigator.tsx`) ship in the JS bundle. Combined LOC is ~700; modest but free to remove.
+- **Bundle.** One fully orphaned screen (`SavingsSpendScreen` — typed but not registered, see §4.1) and one legacy navigator file (`ProfileStackNavigator.tsx`) ship in the JS bundle. `BudgeterScreen` is reachable to guests via `FindScreen` so it is not orphaned. Combined LOC of the actually-removable files is ~400.
 - **Heavy components.** `SurvivalKitScreen` (17-step wizard) and `HealthScoreScreen` (14-step wizard) keep all step state in memory at once — fine at this size, but worth noting if either wizard grows. `HouseFaxScreen` mounts four tabs simultaneously without `React.lazy`; based on the source there is no virtualization, but the per-tab payload is small.
 - **AI calls.** `POST /api/chat/simple` and `/api/intake/*` buffer the entire OpenAI streaming response server-side before returning (per the development guidelines for React Native streaming). Total latency is therefore OpenAI-bound; the client shows a spinner.
 - **Cold start.** Expo Go cold start is dominated by JS bundle parse; nothing exotic in the homeowner code path that would dwarf normal Expo overhead.
@@ -387,7 +386,7 @@ Guests can also reach `WelcomeScreen`, `LoginScreen`, `SignUpScreen`, `ForgotPas
 
 - **`SurvivalKitScreen`** — 17-step wizard; pre-fills from real home profile (line 466); persists answers via `PATCH /api/homes/:homeId/profile` (`:431`). **Partial / Low** — generated task list is client-side only and not cross-device persisted (see §4.10).
 
-- **`BudgeterScreen`** — Honest "Coming Soon" preview (`UPCOMING_FEATURES` array, line 20). **Stubbed-Mock + Missing / Medium** — no homeowner code path navigates to it (see §4.1).
+- **`BudgeterScreen`** — Honest "Coming Soon" preview (`UPCOMING_FEATURES` array, line 20). **Partial / Stubbed-Mock / Medium** — reachable from the `FindScreen` guest footer only; no authenticated entry point (see §4.1).
 
 - **`SavingsSpendScreen`** — Honest "Coming Soon" preview (`SAVINGS_FEATURES` array, line 20). **Stubbed-Mock + Missing / Medium** — same pattern as Budgeter (see §4.1).
 
@@ -483,7 +482,7 @@ The `replit.md` "28 tables" figure is stale — the schema actually defines 39 t
 
 | File | Constant | Type | Fix |
 |---|---|---|---|
-| `client/screens/homeowner/BudgeterScreen.tsx` | `UPCOMING_FEATURES` (line 20) | Honest "Coming Soon" preview content | Acceptable as-is once the screen is reachable; otherwise delete. |
+| `client/screens/homeowner/BudgeterScreen.tsx` | `UPCOMING_FEATURES` (line 20) | Honest "Coming Soon" preview content | Reachable today via the `FindScreen` guest footer; consider also surfacing on `MoreScreen` for authed users. |
 | `client/screens/homeowner/SavingsSpendScreen.tsx` | `SAVINGS_FEATURES` (line 20) | Honest "Coming Soon" preview content | Same as above. |
 | `client/screens/homeowner/FindScreen.tsx` | `PRESET_LOCATIONS` (line 70) | Hardcoded list of major US cities for the location picker | Acceptable — this is a UI helper, not user data. Could later be replaced by current-location detection. |
 | `client/screens/homeowner/HelpCenterScreen.tsx` | `FAQ_SECTIONS` | Hardcoded FAQ content | Acceptable at this scale — content is realistic, not lorem. |
@@ -492,7 +491,7 @@ The April baseline's `MOCK_SERVICE_ENTRIES`, `MOCK_PAST_PROVIDERS`, `MOCK_TASKS`
 
 ### 8.2 Dead screens to delete or wire
 
-- `client/screens/homeowner/BudgeterScreen.tsx` — registered, no caller. Wire from `MoreScreen` or delete.
+- `client/screens/homeowner/BudgeterScreen.tsx` — reachable as guest only (via `FindScreen` footer); also surface from `MoreScreen` for authed users, or document as a guest-funnel-only teaser.
 - `client/screens/homeowner/SavingsSpendScreen.tsx` — typed but not registered. Wire up properly, or delete file + the `SavingsSpend: undefined` line in `RootStackParamList`.
 
 ### 8.3 Stale documentation
@@ -510,7 +509,7 @@ The April baseline's `MOCK_SERVICE_ENTRIES`, `MOCK_PAST_PROVIDERS`, `MOCK_TASKS`
 | `HealthScoreScreen` persistence | None | `PUT /api/homes/:id` + write-back | ✅ Resolved |
 | `ServiceHistoryScreen` data | `MOCK_SERVICE_ENTRIES` | Real `GET /api/homes/:homeId/service-history` | ✅ Resolved |
 | `SurvivalKitScreen` data | `MOCK_TASKS` / `MOCK_TIPS` | Wizard answers persisted; tasks client-generated | ✅ Mostly resolved |
-| `BudgeterScreen` data | Hardcoded categories + transactions | Honest "Coming Soon" | ✅ Trust restored, ⚠️ registered with no caller |
+| `BudgeterScreen` data | Hardcoded categories + transactions | Honest "Coming Soon" | ✅ Trust restored, ⚠️ guest-only entry; no authed entry |
 | `SavingsSpendScreen` data | Hardcoded categories + wins | Honest "Coming Soon" | ✅ Trust restored, ⚠️ typed but not registered |
 | `ManageScreen` appointments | Reportedly missing endpoint | Endpoint exists at `routes.ts:3344` (was a verification gap) | ✅ Confirmed working |
 | Account deletion cascade | Partial (orphaned Stripe + push tokens) | Full transactional cascade | ✅ Resolved |
@@ -541,7 +540,7 @@ These items either block paid rollout (P0) or visibly damage trust if a paying h
 | # | Fix | Severity | Est. effort | Impact |
 |---|---|---|---|---|
 | **P0** | **Add ownership checks to `/api/homes/:homeId/service-history` and `/api/homes/:homeId/reminders`** (`routes.ts:6254`, `:6304`). Fetch the home, return 404 if missing and 403 if `home.userId !== req.authenticatedUserId`. Use the same block already used by `/api/housefax/:homeId` (`:2480`) and `/api/homes/:id/profile` (`:2326`). | **Critical** | 15 min | Closes the only known IDOR in the homeowner API surface; eliminates cross-tenant disclosure of service history + maintenance reminders + sensitive intake notes. |
-| P1 | **Clean up `BudgeterScreen` and `SavingsSpendScreen` (different fixes for each).** For `Budgeter`: surface as a disabled "Coming Soon" tile on `MoreScreen` OR delete the import + `<Stack.Screen>` at `RootStackNavigator.tsx:27, 351`. For `SavingsSpend`: either import + register the screen and surface it from `MoreScreen`, OR delete the `SavingsSpend: undefined` line from `RootStackParamList` (`:96`) along with `SavingsSpendScreen.tsx`. | Medium | 30 min | Resolves the two reachability orphans, removes a latent runtime crash from any future stray navigation call. |
+| P1 | **Clean up `BudgeterScreen` and `SavingsSpendScreen` (different fixes for each).** For `Budgeter`: also surface as a disabled "Coming Soon" tile on `MoreScreen` so authed homeowners (not only guests) can find it; today the only entry point is the gated `FindScreen` footer (`FindScreen.tsx:977`). For `SavingsSpend`: either import + register the screen and surface it from `MoreScreen` (and consider adding it to `HOME_TOOLS`), OR delete the `SavingsSpend: undefined` line from `RootStackParamList` (`:96`) along with `SavingsSpendScreen.tsx`. | Medium | 30 min | Closes the authed-vs-guest reachability gap on Budgeter and removes a latent runtime crash on `SavingsSpend`. |
 | P2 | **Implement homeowner ↔ provider messaging or remove the CTA.** Either build `POST /api/appointments/:id/messages` + `GET /api/appointments/:id/messages` backed by a new `appointment_messages` table, or remove the "Message Provider" button from `AppointmentDetailScreen.tsx:356`. | Medium | 6 hrs (build) / 5 min (hide) | Removes "Coming Soon" pop-up from the detail flow. |
 | P3 | **Wire avatar upload.** Add `expo-image-picker` button on `<Avatar>` in `ProfileEditScreen`; new `POST /api/user/:id/avatar` endpoint that writes to Supabase Storage and returns the URL; client sets `avatarUrl` on next `PUT /api/user/:id` (server already accepts the field at `routes.ts:1944`). | Medium | 2 hrs | Avatar UI becomes functional. |
 | P4 | **Add edit-address flow.** New "Edit" affordance per home in `AddressesScreen` that opens an autocomplete + nickname form bound to `PUT /api/homes/:id` (`routes.ts:2080`). Avoids cascading delete of `housefax_entries` + `appointments` history when correcting a typo. | Medium | 2 hrs | Address corrections become non-destructive. |
@@ -560,8 +559,8 @@ These items are Low severity. They improve perceived quality and operational hyg
 | P8 | **Pass `depositCheckoutUrl` to `BookingSuccessScreen`** + render a "Pay deposit" button when `depositStatus === "awaiting"`. Server already stores `appointments.deposit_checkout_url`. | Low | 30 min | Closes the deposit-resume gap (§4.9). |
 | P9 | **Persist `SurvivalKit` task list cross-device** — easiest path is to regenerate from server-fetched profile each mount (no schema change). | Low | 1 hr | Wizard results follow the user across devices. |
 | P10 | **Standardize loading + empty states.** Use `SkeletonLoader` for list/grid surfaces (replace center `ActivityIndicator` in `HomeScreen`, `FindScreen`, `ProviderListScreen`, `ProviderProfileScreen`, `HouseFaxScreen`); replace inline empty state in `FindScreen.tsx:597` with shared `EmptyState`. Also replace confirmation `Alert.alert`s with custom modals per the development guidelines. | Low | 3 hrs | Polishes the perceived quality of the app. |
-| P11 | **Performance quick wins (§4.17).** Swap `FlatList` → `FlashList` for `FindScreen` provider results; swap `Image` → `expo-image` for `ManageScreen` + `NotificationsScreen` thumbnails; delete the two unreachable screens (overlaps with P1). | Low | 1 hr | Free perf gains; no behavior change. |
-| P12 | **Minimum-viable offline UX (§4.16).** Install `@react-native-community/netinfo`, render a thin "You're offline" banner, set `refetchOnReconnect: true` in `client/lib/query-client.ts`. | Low | 1 hr | Users on flaky networks stop staring at silent spinners. |
+| P11 | **Performance quick wins (§4.17).** Swap `FlatList` → `FlashList` for `FindScreen` provider results; swap `Image` → `expo-image` for `ManageScreen` + `NotificationsScreen` thumbnails; delete `SavingsSpendScreen.tsx` (the only fully orphaned screen — overlaps with P1). | Low | 1 hr | Free perf gains; no behavior change. |
+| P12 | **Minimum-viable offline UX (§4.16).** Install `@react-native-community/netinfo`, render a thin "You're offline" banner; optionally relax `retry: false` → `retry: 1` for read-only queries in `client/lib/query-client.ts` (reconnect re-fetch already works via the v5 default). | Low | 1 hr | Users on flaky networks stop staring at silent spinners. |
 
 **Subtotal: ~6–7 hours.**
 
@@ -603,7 +602,7 @@ The following items should be addressed before charging real homeowners. **Item 
 1. **Hide the "Message Provider" button** on `AppointmentDetailScreen` (or implement it). Showing "Coming Soon" on a paid product is a trust hit. (P2)
 2. **Hide or implement avatar upload.** Currently the UI suggests it should work. (P3)
 3. **Add edit-address.** A user with a typo in their address loses appointment + service history if they delete. (P4)
-4. **Surface or delete `Budgeter` + `SavingsSpend`.** Currently registered, unreachable, ship in the bundle. (P1)
+4. **Close the Budgeter authed-entry gap and decide on `SavingsSpend`.** Budgeter is reachable as guest only; `SavingsSpend` is fully orphaned. (P1)
 5. **Rate-limit `/api/auth/forgot-password` + `/api/support/ticket`.** Both can be used as Resend amplification today. (P5)
 6. **Add the `x-forwarded-host` allow-list** to the password-reset URL builder. (P5)
 7. **Add Sentry.** Production crashes are currently invisible. (P7)
@@ -616,7 +615,7 @@ The remainder (deposit resume, SurvivalKit task persistence, loading/empty consi
 ## Appendix A — Orphaned / unreachable homeowner files
 
 ```
-client/screens/homeowner/BudgeterScreen.tsx       (imported + registered at RootStackNavigator.tsx:27, :351; zero call sites)
+client/screens/homeowner/BudgeterScreen.tsx       (imported + registered at RootStackNavigator.tsx:27, :351; reached from FindScreen.tsx guest footer ONLY — no authed entry from MoreScreen)
 client/screens/homeowner/SavingsSpendScreen.tsx   (NOT imported, NOT registered; only typed at RootStackNavigator.tsx:96; zero call sites; runtime crash if navigated to)
 ```
 
