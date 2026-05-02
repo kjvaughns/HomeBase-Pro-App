@@ -66,57 +66,57 @@ The **Reachable** column uses these tags:
 
 | # | Screen | Reachable | Status | Severity | One-line note |
 |---|---|---|---|---|---|
-| 1 | `HomeScreen` | Auth-only (HomeTab) | Working | None | Real `GET /api/users/:userId/appointments` (`routes.ts:3344`); pull-to-refresh; categories; quick actions. **HomeTab is conditionally mounted at `HomeownerTabNavigator.tsx:168` — guests do not see this tab at all.** |
-| 2 | `FindScreen` | Guest+Auth (FindTab) | Working | Low | Real `GET /api/providers` with lat/lng (`routes.ts:3071`); `PRESET_LOCATIONS` (`FindScreen.tsx:70`) is the only hardcoded constant — list of major US cities for the location picker, not user data. The header swaps from "HomeBase" (guest) to "Find a Pro" (auth) at `HomeownerTabNavigator.tsx:183`. |
-| 3 | `ManageScreen` | Guest+Auth (ManageTab) | Working | None | Collapsible Upcoming / Active / Past sections backed by `GET /api/users/:userId/appointments` (`routes.ts:3344`). For guests this renders an empty state CTA to sign in. The April baseline's "missing endpoint" finding is now resolved. |
-| 4 | `MoreScreen` | Guest+Auth (MoreTab) | Working | None | Tools / account / settings / support sections. Account-only items (Edit Profile, Addresses, Notifications, Account Security, Saved Providers) are hidden for guests. Account deletion modal calls `DELETE /api/auth/account` (`routes.ts:1796`). |
-| 5 | `AIChatScreen` | Auth-only (RootStack) | Working | None | `POST /api/chat/simple` (`routes.ts:4862`); rate-limited via `aiRateLimit` (`routes.ts:294`); requires auth (`requireAuth` middleware). Homeowner intake hand-off works. |
-| 6 | `SmartIntakeScreen` | Auth-only (RootStack) | Working | None | 4-step AI wizard (`/api/intake/analyze`, `/api/intake/refine`, `/api/intake/match-providers` at `routes.ts:5947 / 6012 / 6099`); all three protected by `requireAuth + aiRateLimit`. |
-| 7 | `ProviderListScreen` | Guest+Auth (RootStack) | Working | None | `GET /api/providers?categoryId=…` is public (no auth); with lat/lng for distance sorting; `EmptyState` shown on no results. |
-| 8 | `ProviderProfileScreen` | Guest+Auth (RootStack) | Working | Low | Public `GET /api/providers/:id` (`routes.ts:3127`). About / Services / Reviews tabs; Save provider triggers `AccountGateModal` for guests. Call/Text via `Linking.openURL`. Review reporting wired to moderation queue. Uses `Alert.alert` (lines 204, 207, 315, 318, 330, 333) — guidelines forbid emojis but `Alert.alert` is acceptable for system errors and confirmations. |
-| 9 | `SavedProvidersScreen` | Auth-only (RootStack) | Working | None | Real `GET /api/saved-providers` (`routes.ts:3208`, requires auth); `useMutation` for unsave with cache invalidation. Hidden from guests on `MoreScreen`. |
-| 10 | `SimpleBookingScreen` | Auth-gated mid-flow (RootStack) | Working | None | Guests can browse the wizard; `AccountGateModal` triggers before final `POST /api/appointments` (`routes.ts:3635`). Idempotency check at `routes.ts:3657–3681` prevents double-tap duplicates; deposit via Stripe Checkout (`routes.ts:3694–3787`) with rollback on failure. |
-| 11 | `BookingSuccessScreen` | Auth-only (RootStack) | Working | Low | Reachable only after a successful booking, so always auth. Uses `CommonActions.reset` to prevent back-navigation. **Sub-issue:** if the deposit Stripe Checkout redirect was closed, there is no resume CTA — user has to navigate to `AppointmentDetail` and pay from there. |
+| 1 | `HomeScreen` | Auth-only (HomeTab) | Pass | N/A | Real `GET /api/users/:userId/appointments` (`routes.ts:3344`); pull-to-refresh; categories; quick actions. **HomeTab is conditionally mounted at `HomeownerTabNavigator.tsx:168` — guests do not see this tab at all.** |
+| 2 | `FindScreen` | Guest+Auth (FindTab) | Pass | Low | Real `GET /api/providers` with lat/lng (`routes.ts:3071`); `PRESET_LOCATIONS` (`FindScreen.tsx:70`) is the only hardcoded constant — list of major US cities for the location picker, not user data. The header swaps from "HomeBase" (guest) to "Find a Pro" (auth) at `HomeownerTabNavigator.tsx:183`. |
+| 3 | `ManageScreen` | Guest+Auth (ManageTab) | Pass | N/A | Collapsible Upcoming / Active / Past sections backed by `GET /api/users/:userId/appointments` (`routes.ts:3344`). For guests this renders an empty state CTA to sign in. The April baseline's "missing endpoint" finding is now resolved. |
+| 4 | `MoreScreen` | Guest+Auth (MoreTab) | Pass | N/A | Tools / account / settings / support sections. Account-only items (Edit Profile, Addresses, Notifications, Account Security, Saved Providers) are hidden for guests. Account deletion modal calls `DELETE /api/auth/account` (`routes.ts:1796`). |
+| 5 | `AIChatScreen` | **Guest+Auth** (RootStack via `FindScreen` AI card `:368–372` + AppointmentDetail/Onboarding) | Pass | N/A | Reachable to guests because the `FindScreen` "Ask HomeBase AI" card is *not* auth-gated (only the search panel is). The screen calls `POST /api/chat/simple` (`routes.ts:4862`), which is `requireAuth + aiRateLimit` (`routes.ts:294`) — so a guest can land here but every send returns 401 until they sign in. The screen does not gate the input itself. |
+| 6 | `SmartIntakeScreen` | **Guest+Auth** (RootStack — entered from `BudgeterScreen.tsx:85`, `AIChatScreen.tsx:120`, `HouseFaxScreen.tsx:370, 583`, `HealthScoreScreen.tsx:926`, all of which are guest-reachable) | Pass | N/A | 4-step AI wizard (`/api/intake/analyze`, `/api/intake/refine`, `/api/intake/match-providers` at `routes.ts:5947 / 6012 / 6099`); all three protected by `requireAuth + aiRateLimit`. The screen reaches the booking step which does enforce auth client-side, but the wizard *itself* is reachable to guests because every entry point is. |
+| 7 | `ProviderListScreen` | Guest+Auth (RootStack) | Pass | N/A | `GET /api/providers?categoryId=…` is public (no auth); with lat/lng for distance sorting; `EmptyState` shown on no results. |
+| 8 | `ProviderProfileScreen` | Guest+Auth (RootStack) | Pass | Low | Public `GET /api/providers/:id` (`routes.ts:3127`). About / Services / Reviews tabs; Save provider triggers `AccountGateModal` for guests. Call/Text via `Linking.openURL`. Review reporting wired to moderation queue. Uses `Alert.alert` (lines 204, 207, 315, 318, 330, 333) — guidelines forbid emojis but `Alert.alert` is acceptable for system errors and confirmations. |
+| 9 | `SavedProvidersScreen` | Auth-only (RootStack) | Pass | N/A | Real `GET /api/saved-providers` (`routes.ts:3208`, requires auth); `useMutation` for unsave with cache invalidation. Hidden from guests on `MoreScreen`. |
+| 10 | `SimpleBookingScreen` | Auth-gated mid-flow (RootStack) | Pass | N/A | Guests can browse the wizard; `AccountGateModal` triggers before final `POST /api/appointments` (`routes.ts:3635`). Idempotency check at `routes.ts:3657–3681` prevents double-tap duplicates; deposit via Stripe Checkout (`routes.ts:3694–3787`) with rollback on failure. |
+| 11 | `BookingSuccessScreen` | Auth-only (RootStack) | Pass | Low | Reachable only after a successful booking, so always auth. Uses `CommonActions.reset` to prevent back-navigation. **Sub-issue:** if the deposit Stripe Checkout redirect was closed, there is no resume CTA — user has to navigate to `AppointmentDetail` and pay from there. |
 | 12 | `AppointmentDetailScreen` | Auth-only (RootStack) | Partial | Medium | `GET /api/appointment/:id` (singular, `routes.ts:3363`) with ownership check; cancel via `POST /api/appointments/:id/cancel` (`:4238`); reschedule via `POST /api/appointments/:id/reschedule` (`:4373`). **Sub-issue:** "Message Provider" CTA shows `Alert.alert("Coming Soon", "Messaging will be available in a future update.")` (`AppointmentDetailScreen.tsx:356`) — no `/api/messages` endpoint exists for homeowner ↔ provider threads. |
-| 13 | `JobDetailScreen` | Auth-only (RootStack) | Working | Low | Read-only timeline + photos; provider-uploaded photos served via `/api/jobs/:id/photos`. **Sub-issue:** if the provider does not upload, the homeowner has no in-app channel to ask. |
-| 14 | `PaymentScreen` | Auth-only (RootStack) | Working | Low | `GET /api/invoices/:id` (`routes.ts:8798`) + `POST /api/invoices/:id/checkout` (`routes.ts:11485`) hosted-checkout fallback; 5-second `refetchInterval` polling for status (functional but could be replaced by webhook-pushed invalidation). All amounts pulled server-side from the invoice DB row. `assertInvoiceAccess` ownership check. |
-| 15 | `ReviewScreen` | Auth-only (RootStack) | Working | None | `POST /api/appointments/:id/review` (`routes.ts:7406`); 409 Conflict on duplicate; provider rating recalculated server-side from full review average (`routes.ts:7469–7489`). |
+| 13 | `JobDetailScreen` | Auth-only (RootStack) | Pass | Low | Read-only timeline + photos; provider-uploaded photos served via `/api/jobs/:id/photos`. **Sub-issue:** if the provider does not upload, the homeowner has no in-app channel to ask. |
+| 14 | `PaymentScreen` | Auth-only (RootStack) | Pass | Low | `GET /api/invoices/:id` (`routes.ts:8798`) + `POST /api/invoices/:id/checkout` (`routes.ts:11485`) hosted-checkout fallback; 5-second `refetchInterval` polling for status (functional but could be replaced by webhook-pushed invalidation). All amounts pulled server-side from the invoice DB row. `assertInvoiceAccess` ownership check. |
+| 15 | `ReviewScreen` | Auth-only (RootStack) | Pass | N/A | `POST /api/appointments/:id/review` (`routes.ts:7406`); 409 Conflict on duplicate; provider rating recalculated server-side from full review average (`routes.ts:7469–7489`). |
 | 16 | `ProfileEditScreen` | Auth-only (RootStack) | Partial | Medium | `PUT /api/user/:id` (`routes.ts:1930`) for name + phone with `authStore.updateUser` sync. **Sub-issue:** Avatar UI is rendered but no upload trigger; server already accepts `avatarUrl` (`routes.ts:1944`) but the client never sets it. |
 | 17 | `AddressesScreen` | Auth-only (RootStack) | Partial | Medium | `GET /api/homes/:userId` + `POST /api/homes` + `DELETE /api/homes/:id` all wired. Google Places autocomplete works. **Sub-issue:** no `Edit address` flow — only the nickname is editable; correcting a typo means deleting the home, which orphans the `housefax_entries` and `appointments` history pointing at it. |
-| 18 | `NotificationsScreen` | Auth-only (RootStack) | Working | None | `GET /api/notifications/:userId` (`routes.ts:4550`); deep links to `AppointmentDetail`, `InvoiceDetail`, `ClientDetail`. |
-| 19 | `NotificationPreferencesScreen` | Auth-only (RootStack) | Working | None | `GET /api/notification-preferences/:userId` (`routes.ts:4704`) + `POST /api/notification-preferences` (`routes.ts:4743`). Honored by `notificationService.ts:isEmailAllowed` (line 205) and `pushEnabled` (line 538). |
-| 20 | `HelpCenterScreen` | Guest+Auth (RootStack) | Working | None | Static `FAQ_SECTIONS` is intentionally hardcoded — content is realistic, not lorem. CMS not justified at this scale. |
-| 21 | `ContactUsScreen` | Guest+Auth (RootStack) | Working | Low | `POST /api/support/ticket` (`routes.ts:13675`) is public; creates a `support_tickets` row + emails support via `sendSupportTicketEmail`. **Sub-issue:** no per-route rate limit; spam-amplification candidate. |
-| 22 | `HouseFaxScreen` | Auth-only (RootStack via MoreScreen Tools) | Working | None | `GET /api/housefax/:homeId` (`routes.ts:2480`) + `GET /api/homes/:homeId/profile` (`routes.ts:2326`); auto-derived asset lifecycle from `housefax_entries`; AI insights from real home age. Tools tile is hidden for guests on `MoreScreen`. |
-| 23 | `HealthScoreScreen` | Auth-only (RootStack via MoreScreen Tools) | Working | None | 14-question wizard; `computeScoreFromAnswers`; persists score via `PUT /api/homes/:id` (`routes.ts:2080`); writes back home attributes via `PATCH /api/homes/:id/profile`. |
-| 24 | `ServiceHistoryScreen` | Auth-only (RootStack via MoreScreen Tools) | Working | High (server) | `GET /api/homes/:homeId/service-history` (`routes.ts:6254`) joins `appointments × providers`; no mock arrays remain. **Server-side defect:** the endpoint has no ownership check (see §4.18). The screen renders correctly; the API behind it is currently exploitable. |
-| 25 | `SurvivalKitScreen` | Auth-only (RootStack via MoreScreen Tools) | Partial | Low | 17-step wizard pre-fills from real home profile; persists answers via `PATCH /api/homes/:homeId/profile`. **Sub-issue:** the maintenance task list itself is generated client-side via `generateTasksFromWizardData` and not persisted — switching devices means re-running the wizard. |
-| 26 | `BudgeterScreen` | Guest-only (FindScreen footer) | Partial / Stubbed-Mock | Medium | Honest "Coming Soon" content (`UPCOMING_FEATURES` array, `BudgeterScreen.tsx:20`). Reachable from the `FindScreen` "Homeowner Tools" guest footer (`FindScreen.tsx:91–119, 309–312, 975–1020`), which renders only when `!isAuthenticated && !isSearching`. Imported + registered (`RootStackNavigator.tsx:27, 351`). **Authenticated homeowners have no entry point** — `MoreScreen` does not surface it. Either also list it on `MoreScreen` as a disabled "Coming soon" tile, or accept the guest-funnel-only role. |
-| 27 | `SavingsSpendScreen` | **No** (typed, not registered) | Stubbed-Mock + Missing | Medium | Same UI pattern as `BudgeterScreen` (`SAVINGS_FEATURES` array at line 20), but the file is **not imported and not registered** in `RootStackNavigator` — only typed in `RootStackParamList` (`RootStackNavigator.tsx:96`). A stray `navigation.navigate("SavingsSpend")` would throw at runtime. Either wire it up or delete the type. |
+| 18 | `NotificationsScreen` | Auth-only (RootStack) | Pass | N/A | `GET /api/notifications/:userId` (`routes.ts:4550`); deep links to `AppointmentDetail`, `InvoiceDetail`, `ClientDetail`. |
+| 19 | `NotificationPreferencesScreen` | Auth-only (RootStack) | Pass | N/A | `GET /api/notification-preferences/:userId` (`routes.ts:4704`) + `POST /api/notification-preferences` (`routes.ts:4743`). Honored by `notificationService.ts:isEmailAllowed` (line 205) and the push send path (`notificationService.ts:836`, where `prefs.pushEnabled === false` aborts the send). |
+| 20 | `HelpCenterScreen` | Guest+Auth (RootStack) | Pass | N/A | Static `FAQ_SECTIONS` is intentionally hardcoded — content is realistic, not lorem. CMS not justified at this scale. |
+| 21 | `ContactUsScreen` | Guest+Auth (RootStack) | Pass | Low | `POST /api/support/ticket` (`routes.ts:13675`) is public; creates a `support_tickets` row + emails support via `sendSupportTicketEmail`. **Sub-issue:** no per-route rate limit; spam-amplification candidate. |
+| 22 | `HouseFaxScreen` | **Guest+Auth** (auth: `MoreScreen` Tools; guest: `FindScreen` footer `:91–119, 975–1020`) | Pass | N/A | `GET /api/housefax/:homeId` (`routes.ts:2480`) + `GET /api/homes/:homeId/profile` (`routes.ts:2326`); auto-derived asset lifecycle from `housefax_entries`; AI insights from real home age. Both endpoints require auth + ownership, so a guest reaches the screen and sees an empty/error state but cannot read another user's data. |
+| 23 | `HealthScoreScreen` | **Guest+Auth** (auth: `MoreScreen` Tools; guest: `FindScreen` footer) | Pass | N/A | 14-question wizard; `computeScoreFromAnswers`; persists score via `PUT /api/homes/:id` (`routes.ts:2080`); writes back home attributes via `PATCH /api/homes/:id/profile`. Persistence calls 401 for guests; the wizard itself runs client-side and is fully reachable. |
+| 24 | `ServiceHistoryScreen` | Auth-only (RootStack via `MoreScreen` Tools) | Pass | High (server) | `GET /api/homes/:homeId/service-history` (`routes.ts:6254`) joins `appointments × providers`; no mock arrays remain. **Server-side defect:** the endpoint has no ownership check (see §4.18). The screen renders correctly; the API behind it is currently exploitable. (Not present in `HOME_TOOLS` so genuinely auth-only via `MoreScreen`.) |
+| 25 | `SurvivalKitScreen` | **Guest+Auth** (auth: `MoreScreen` Tools; guest: `FindScreen` footer) | Partial | Low | 17-step wizard pre-fills from real home profile; persists answers via `PATCH /api/homes/:homeId/profile`. **Sub-issue:** the maintenance task list itself is generated client-side via `generateTasksFromWizardData` and not persisted — switching devices means re-running the wizard. Persistence call 401s for guests; the wizard UI is reachable. |
+| 26 | `BudgeterScreen` | Guest-only (`FindScreen` footer) | Partial (Stubbed-Mock) | Medium | Honest "Coming Soon" content (`UPCOMING_FEATURES` array, `BudgeterScreen.tsx:20`). Reachable from the `FindScreen` "Homeowner Tools" guest footer (`FindScreen.tsx:91–119, 309–312, 975–1020`), which renders only when `!isAuthenticated && !isSearching`. Imported + registered (`RootStackNavigator.tsx:27, 351`). **Authenticated homeowners have no entry point** — `MoreScreen` does not surface it. Either also list it on `MoreScreen` as a disabled "Coming soon" tile, or accept the guest-funnel-only role. |
+| 27 | `SavingsSpendScreen` | **No** (typed, not registered) | Fail (Stubbed-Mock + Missing) | Medium | Same UI pattern as `BudgeterScreen` (`SAVINGS_FEATURES` array at line 20), but the file is **not imported and not registered** in `RootStackNavigator` — only typed in `RootStackParamList` (`RootStackNavigator.tsx:96`). A stray `navigation.navigate("SavingsSpend")` would throw at runtime. Either wire it up or delete the type. |
 
 **Tab navigator (conditional):** the underlying `Tab.Navigator` declares 4 tabs, but `HomeTab` is mounted only when `isAuthenticated` is true (`client/navigation/HomeownerTabNavigator.tsx:168–177`). The effective tab sets are:
 
 - **Guest tabs (3):** `FindTab`, `ManageTab`, `MoreTab`. (`FindTab` becomes the landing tab.)
 - **Authenticated homeowner tabs (4):** `HomeTab`, `FindTab`, `ManageTab`, `MoreTab`.
 
-Guests can also reach `WelcomeScreen`, `LoginScreen`, `SignUpScreen`, `ForgotPasswordScreen`, `OnboardingScreen` (via "Continue as Guest" → "Browse"), `ProviderListScreen`, `ProviderProfileScreen`, `SimpleBookingScreen` (up to the `AccountGateModal` blocker), `HelpCenterScreen`, and `ContactUsScreen`. Everything else in the table above is auth-only. (See Appendix B for the full tab + MoreScreen layout.)
+Guests can reach (in addition to the rows already tagged Guest+Auth in the table above): `WelcomeScreen`, `LoginScreen`, `SignUpScreen`, `ForgotPasswordScreen`, `OnboardingScreen` (via "Continue as Guest" → "Browse"), `ProviderListScreen`, `ProviderProfileScreen`, `SimpleBookingScreen` (up to the `AccountGateModal` blocker), `HelpCenterScreen`, `ContactUsScreen`, and the four screens listed in `FindScreen.tsx` `HOME_TOOLS` + the AI card: `BudgeterScreen`, `SurvivalKitScreen`, `HealthScoreScreen`, `HouseFaxScreen`, `AIChatScreen`, plus `SmartIntakeScreen` (entered from any of the four "Tools" screens or `AIChatScreen`). Genuinely auth-only screens (no guest reachability) are: `HomeScreen`, `AppointmentDetailScreen`, `BookingSuccessScreen`, `NotificationsScreen`, `PaymentScreen`, `PaymentMethodsScreen`, `CreditsScreen`, `ProfileEditScreen`, `AddressesScreen`, `NotificationPreferencesScreen`, `SavedProvidersScreen`, `MessagesScreen`, `ServiceHistoryScreen`, plus the auth/onboarding screens. (See Appendix B for the full tab + MoreScreen layout.)
 
 ### 2.2 Auth + onboarding screens (12 files, all reachable)
 
 | # | Screen | Status | Severity | Note |
 |---|---|---|---|---|
-| A1 | `WelcomeScreen` | Working | None | Static landing; signup / login / "Browse as guest" → `Main`. |
-| A2 | `LoginScreen` | Working | None | `POST /api/auth/login` (`routes.ts:1402`); generic 401 + network error UX. Email is trimmed. |
-| A3 | `SignUpScreen` | Working | None | `POST /api/auth/signup` (`routes.ts:1182`); validates against `insertUserSchema`; forces `activeRole = "homeowner"`; `navigation.reset` to `Onboarding`. |
-| A4 | `ForgotPasswordScreen` | Working | Low | `POST /api/auth/forgot-password` (`routes.ts:1560`) is fully wired: signs a 1-hour reset JWT, builds `${protocol}://${host}/reset-password?token=…`, calls `sendPasswordResetEmail` (fire-and-forget). Reset is consumed by `POST /api/auth/reset-password` (`routes.ts:1609`). **Sub-issue:** no per-route rate limit; the `host` header is taken from `x-forwarded-host` without an allow-list (header-injection candidate that would cause an off-domain reset link). |
-| A5 | `OnboardingScreen` (post-auth address capture) | Working | Low | `POST /api/homes` (`routes.ts:1976`) with Zillow + Google Places enrichment. Nickname state defaults to `"My Home"` literal at `OnboardingScreen.tsx:37`. |
-| A6 | `AccountSecurityScreen` | Working | Low | Change email + change password + delete account; `change-password` re-issues the JWT via `setSessionToken`; some `console.log` spam (line 75). |
-| A7 | `HomeownerOnboardingScreen` | Working | None | Animated priorities + features intro; client-side `onboardingStore` only. |
-| A8 | `AccountTypeSelectionScreen` | Working | None | Role choice; routes to `HomeownerOnboarding` or provider onboarding. |
-| A9 | `FirstLaunchScreen` | Working | None | Animated splash; presentational only. |
-| A10 | `RoleGatewayScreen` | Working | Low | Post-login role chooser for dual-role users. Often bypassed by the auto-resolve in `RootStackNavigator.tsx:193` if `activeRole` is already persisted. |
-| A11 | `RoleSwitchConfirmationScreen` | Working | None | Confirmation modal; uses `navigation.reset` to swap tab navigators. |
-| A12 | `BecomeProviderScreen` | Working | Low | `POST /api/provider/register` (`routes.ts:3161`); idempotent — checks for existing profile on mount; `console.log` spam (line 72). |
+| A1 | `WelcomeScreen` | Pass | N/A | Static landing; signup / login / "Browse as guest" → `Main`. |
+| A2 | `LoginScreen` | Pass | N/A | `POST /api/auth/login` (`routes.ts:1402`); generic 401 + network error UX. Email is trimmed. |
+| A3 | `SignUpScreen` | Pass | N/A | `POST /api/auth/signup` (`routes.ts:1182`); validates against `insertUserSchema`; forces `activeRole = "homeowner"`; `navigation.reset` to `Onboarding`. |
+| A4 | `ForgotPasswordScreen` | Pass | Low | `POST /api/auth/forgot-password` (`routes.ts:1560`) is fully wired: signs a 1-hour reset JWT, builds `${protocol}://${host}/reset-password?token=…`, calls `sendPasswordResetEmail` (fire-and-forget). Reset is consumed by `POST /api/auth/reset-password` (`routes.ts:1609`). **Sub-issue:** no per-route rate limit; the `host` header is taken from `x-forwarded-host` without an allow-list (header-injection candidate that would cause an off-domain reset link). |
+| A5 | `OnboardingScreen` (post-auth address capture) | Pass | Low | `POST /api/homes` (`routes.ts:1976`) with Zillow + Google Places enrichment. Nickname state defaults to `"My Home"` literal at `OnboardingScreen.tsx:37`. |
+| A6 | `AccountSecurityScreen` | Pass | Low | Change email + change password + delete account; `change-password` re-issues the JWT via `setSessionToken`; some `console.log` spam (line 75). |
+| A7 | `HomeownerOnboardingScreen` | Pass | N/A | Animated priorities + features intro; client-side `onboardingStore` only. |
+| A8 | `AccountTypeSelectionScreen` | Pass | N/A | Role choice; routes to `HomeownerOnboarding` or provider onboarding. |
+| A9 | `FirstLaunchScreen` | Pass | N/A | Animated splash; presentational only. |
+| A10 | `RoleGatewayScreen` | Pass | Low | Post-login role chooser for dual-role users. Often bypassed by the auto-resolve in `RootStackNavigator.tsx:193` if `activeRole` is already persisted. |
+| A11 | `RoleSwitchConfirmationScreen` | Pass | N/A | Confirmation modal; uses `navigation.reset` to swap tab navigators. |
+| A12 | `BecomeProviderScreen` | Pass | Low | `POST /api/provider/register` (`routes.ts:3161`); idempotent — checks for existing profile on mount; `console.log` spam (line 72). |
 
 ### 2.3 Homeowner-relevant DB tables (used by homeowner flows)
 
@@ -324,27 +324,27 @@ Guests can also reach `WelcomeScreen`, `LoginScreen`, `SignUpScreen`, `ForgotPas
 
 ### 5.1 Tab screens (4)
 
-- **`HomeScreen`** — Greeting, upcoming appointments (real `GET /api/users/:userId/appointments` at `routes.ts:3344`), category quick-search, AI assistant entry. Pull-to-refresh wired to a real fetch. **Working / None.** Minor: `formatDate` (line 161) uses `new Date(dateStr)` which can fail on certain Android engines on non-ISO strings — server emits ISO so currently safe.
+- **`HomeScreen`** — Greeting, upcoming appointments (real `GET /api/users/:userId/appointments` at `routes.ts:3344`), category quick-search, AI assistant entry. Pull-to-refresh wired to a real fetch. **Pass / N/A.** Minor: `formatDate` (line 161) uses `new Date(dateStr)` which can fail on certain Android engines on non-ISO strings — server emits ISO so currently safe.
 
 - **`FindScreen`** — Lat/lng-based provider search; categories grid; preset locations modal. Real `GET /api/providers` (`routes.ts:3071`). **Working / Low** — `PRESET_LOCATIONS` (`FindScreen.tsx:70`) is a hardcoded list of major US cities (SF/LA/NY/etc.) for the location picker, not user data. The empty state at `:597` should use the shared `EmptyState` component.
 
-- **`ManageScreen`** — Collapsible Upcoming / Active / Past sections; `GET /api/users/:userId/appointments` (`routes.ts:3344`). **Working / None.** This screen was the centerpiece of one explorer's "missing endpoint" claim that was disproven by direct file inspection — see §3.
+- **`ManageScreen`** — Collapsible Upcoming / Active / Past sections; `GET /api/users/:userId/appointments` (`routes.ts:3344`). **Pass / N/A.** This screen was the centerpiece of one explorer's "missing endpoint" claim that was disproven by direct file inspection — see §3.
 
-- **`MoreScreen`** — Profile card, tools grid (4 tiles → SurvivalKit / HouseFax / HealthScore / ServiceHistory), account section (Edit Profile, Account Security, Addresses, Saved Providers, Notifications, Notification Preferences), settings (theme via `themeStore`), support (Help Center, Contact Us), Sign Out, Delete Account. **Working / None.** Delete account confirmation calls `DELETE /api/auth/account` and is comprehensive (`routes.ts:1796–1907`).
+- **`MoreScreen`** — Profile card, tools grid (4 tiles → SurvivalKit / HouseFax / HealthScore / ServiceHistory), account section (Edit Profile, Account Security, Addresses, Saved Providers, Notifications, Notification Preferences), settings (theme via `themeStore`), support (Help Center, Contact Us), Sign Out, Delete Account. **Pass / N/A.** Delete account confirmation calls `DELETE /api/auth/account` and is comprehensive (`routes.ts:1796–1907`).
 
 ### 5.2 Discovery + AI (4)
 
-- **`AIChatScreen`** — General home maintenance Q&A; `POST /api/chat/simple` (`routes.ts:4862`). Lead-conversion CTA correctly parses `needsService`, `category`, `problemSummary` to prefill `SmartIntake`. `aiRateLimit` (`routes.ts:294`) protects against cost abuse. **Working / None.**
+- **`AIChatScreen`** — General home maintenance Q&A; `POST /api/chat/simple` (`routes.ts:4862`). Lead-conversion CTA correctly parses `needsService`, `category`, `problemSummary` to prefill `SmartIntake`. `aiRateLimit` (`routes.ts:294`) protects against cost abuse. **Pass / N/A.**
 
-- **`SmartIntakeScreen`** — 4-step wizard (Describe → Questions → Options → Match). Three real AI endpoints (`/api/intake/analyze` 5947, `/api/intake/refine` 6012, `/api/intake/match-providers` 6099), all `requireAuth + aiRateLimit`. `handleSelectProvider` (line 245) and `handleBookWithPreselectedProvider` (line 282) both correctly forward `intakeData` to `SimpleBooking`. `calculateTrustScore` (line 6147 server) is a heuristic but uses real DB fields. **Working / None.**
+- **`SmartIntakeScreen`** — 4-step wizard (Describe → Questions → Options → Match). Three real AI endpoints (`/api/intake/analyze` 5947, `/api/intake/refine` 6012, `/api/intake/match-providers` 6099), all `requireAuth + aiRateLimit`. `handleSelectProvider` (line 245) and `handleBookWithPreselectedProvider` (line 282) both correctly forward `intakeData` to `SimpleBooking`. `calculateTrustScore` (line 6147 server) is a heuristic but uses real DB fields. **Pass / N/A.**
 
-- **`ProviderListScreen`** — `GET /api/providers?categoryId=…` with lat/lng for distance sorting. `EmptyState` shown on no results. Filters + sort. `FlatList` with `keyExtractor`. **Working / None.**
+- **`ProviderListScreen`** — `GET /api/providers?categoryId=…` with lat/lng for distance sorting. `EmptyState` shown on no results. Filters + sort. `FlatList` with `keyExtractor`. **Pass / N/A.**
 
 - **`ProviderProfileScreen`** — About / Services / Reviews tabs. Save provider via `POST /api/saved-providers`. Custom services from `/api/provider/:id/custom-services`. Call/Text via `Linking.openURL("tel:" / "sms:")`. Review reporting wired to moderation queue (Apple Guideline 1.2 satisfied). **Working / Low** — uses `Alert.alert` for system errors and report confirmations (acceptable for system-level errors).
 
 ### 5.3 Booking + post-booking (5)
 
-- **`SimpleBookingScreen`** — Service selection, calendar, intake questions, `POST /api/appointments` (`routes.ts:3635`). Idempotency dedup at `routes.ts:3657–3681` prevents double-tap duplicates. Stripe Checkout deposit flow with rollback on failure. `AccountGateModal` correctly intercepts guest users before final POST. **Working / None.**
+- **`SimpleBookingScreen`** — Service selection, calendar, intake questions, `POST /api/appointments` (`routes.ts:3635`). Idempotency dedup at `routes.ts:3657–3681` prevents double-tap duplicates. Stripe Checkout deposit flow with rollback on failure. `AccountGateModal` correctly intercepts guest users before final POST. **Pass / N/A.**
 
 - **`BookingSuccessScreen`** — Summary card, "What's next" guidance. `CommonActions.reset` correctly prevents back-navigation to the intake form. **Working / Low** — does not surface the deposit checkout URL if the Stripe tab was closed (see §4.9).
 
@@ -356,9 +356,9 @@ Guests can also reach `WelcomeScreen`, `LoginScreen`, `SignUpScreen`, `ForgotPas
 
 ### 5.4 Reviews + saved providers (2)
 
-- **`ReviewScreen`** — `POST /api/appointments/:id/review` (`routes.ts:7406`). Ownership check (`appointment.userId === authUserId`); 409 on duplicate (`routes.ts:7452–7456`); provider rating recalc from full average (`:7469–7489`). **Working / None.**
+- **`ReviewScreen`** — `POST /api/appointments/:id/review` (`routes.ts:7406`). Ownership check (`appointment.userId === authUserId`); 409 on duplicate (`routes.ts:7452–7456`); provider rating recalc from full average (`:7469–7489`). **Pass / N/A.**
 
-- **`SavedProvidersScreen`** — `GET /api/saved-providers` (`routes.ts:3208`); `useMutation` for unsave with cache invalidation; "Find a Pro" CTA on empty state. **Working / None.**
+- **`SavedProvidersScreen`** — `GET /api/saved-providers` (`routes.ts:3208`); `useMutation` for unsave with cache invalidation; "Find a Pro" CTA on empty state. **Pass / N/A.**
 
 ### 5.5 Profile + settings + support (7)
 
@@ -366,11 +366,11 @@ Guests can also reach `WelcomeScreen`, `LoginScreen`, `SignUpScreen`, `ForgotPas
 
 - **`AddressesScreen`** — `GET /api/homes/:userId` + `POST /api/homes` + `DELETE /api/homes/:id`; Google Places autocomplete. **Partial / Medium** — no edit flow (see §4.8).
 
-- **`NotificationsScreen`** — `GET /api/notifications/:userId` (`routes.ts:4550`); deep links to `AppointmentDetail`, `InvoiceDetail`, `ClientDetail`. **Working / None.**
+- **`NotificationsScreen`** — `GET /api/notifications/:userId` (`routes.ts:4550`); deep links to `AppointmentDetail`, `InvoiceDetail`, `ClientDetail`. **Pass / N/A.**
 
-- **`NotificationPreferencesScreen`** — `GET /api/notification-preferences/:userId` (`routes.ts:4704`) + `POST /api/notification-preferences` (`:4743`). Honored by `notificationService.ts:isEmailAllowed` (line 205) and `pushEnabled` (line 538). **Working / None.**
+- **`NotificationPreferencesScreen`** — `GET /api/notification-preferences/:userId` (`routes.ts:4704`) + `POST /api/notification-preferences` (`:4743`). Honored by `notificationService.ts:isEmailAllowed` (line 205) and the push send path at `notificationService.ts:836` (which aborts on `prefs.pushEnabled === false`). **Pass / N/A.**
 
-- **`HelpCenterScreen`** — Static `FAQ_SECTIONS`; intentionally hardcoded; content is realistic, not lorem. **Working / None.**
+- **`HelpCenterScreen`** — Static `FAQ_SECTIONS`; intentionally hardcoded; content is realistic, not lorem. **Pass / N/A.**
 
 - **`ContactUsScreen`** — `POST /api/support/ticket` (`routes.ts:13675`); creates `support_tickets` row + emails support. **Working / Low** — no per-route rate limit (see §4.4).
 
@@ -378,17 +378,17 @@ Guests can also reach `WelcomeScreen`, `LoginScreen`, `SignUpScreen`, `ForgotPas
 
 ### 5.6 Home tools (6)
 
-- **`HouseFaxScreen`** — `GET /api/housefax/:homeId` (`routes.ts:2480`) + `GET /api/homes/:homeId/profile` (`:2326`); auto-derived asset lifecycle from `housefax_entries`; AI insights from real home age + service gaps. Multi-tab Overview / Timeline / Assets / Insights. **Working / None.**
+- **`HouseFaxScreen`** — `GET /api/housefax/:homeId` (`routes.ts:2480`) + `GET /api/homes/:homeId/profile` (`:2326`); auto-derived asset lifecycle from `housefax_entries`; AI insights from real home age + service gaps. Multi-tab Overview / Timeline / Assets / Insights. **Pass / N/A.**
 
-- **`HealthScoreScreen`** — 14-question wizard; `computeScoreFromAnswers` (line 61); `estimateCostIfIgnored`; `buildActionPlan`. `GET /api/housefax/:homeId` for baseline (line 380); `PUT /api/homes/:id` for score persistence (`:459`); `PATCH /api/homes/:id/profile` for answer write-back (`:348`). **Working / None.**
+- **`HealthScoreScreen`** — 14-question wizard; `computeScoreFromAnswers` (line 61); `estimateCostIfIgnored`; `buildActionPlan`. `GET /api/housefax/:homeId` for baseline (line 380); `PUT /api/homes/:id` for score persistence (`:459`); `PATCH /api/homes/:id/profile` for answer write-back (`:348`). **Pass / N/A.**
 
 - **`ServiceHistoryScreen`** — `GET /api/homes/:homeId/service-history` (`routes.ts:6254`) joining `appointments × providers`. Statuses real-time. Empty state CTA → `HealthScore`. **Working (client) / High (server)** — endpoint has no ownership check (see §4.18). The screen itself is correct.
 
 - **`SurvivalKitScreen`** — 17-step wizard; pre-fills from real home profile (line 466); persists answers via `PATCH /api/homes/:homeId/profile` (`:431`). **Partial / Low** — generated task list is client-side only and not cross-device persisted (see §4.10).
 
-- **`BudgeterScreen`** — Honest "Coming Soon" preview (`UPCOMING_FEATURES` array, line 20). **Partial / Stubbed-Mock / Medium** — reachable from the `FindScreen` guest footer only; no authenticated entry point (see §4.1).
+- **`BudgeterScreen`** — Honest "Coming Soon" preview (`UPCOMING_FEATURES` array, line 20). **Partial (Stubbed-Mock) / Medium** — reachable from the `FindScreen` guest footer only; no authenticated entry point (see §4.1).
 
-- **`SavingsSpendScreen`** — Honest "Coming Soon" preview (`SAVINGS_FEATURES` array, line 20). **Stubbed-Mock + Missing / Medium** — same pattern as Budgeter (see §4.1).
+- **`SavingsSpendScreen`** — Honest "Coming Soon" preview (`SAVINGS_FEATURES` array, line 20). **Fail (Stubbed-Mock + Missing) / Medium** — same pattern as Budgeter (see §4.1).
 
 ### 5.7 Auth + onboarding (12)
 
@@ -506,7 +506,7 @@ The April baseline's `MOCK_SERVICE_ENTRIES`, `MOCK_PAST_PROVIDERS`, `MOCK_TASKS`
 | Area | April 14 | May 2026 | Delta |
 |---|---|---|---|
 | `HouseFaxScreen` data | Demo data only | Real `GET /api/housefax/:homeId` | ✅ Resolved |
-| `HealthScoreScreen` persistence | None | `PUT /api/homes/:id` + write-back | ✅ Resolved |
+| `HealthScoreScreen` persistence | N/A | `PUT /api/homes/:id` + write-back | ✅ Resolved |
 | `ServiceHistoryScreen` data | `MOCK_SERVICE_ENTRIES` | Real `GET /api/homes/:homeId/service-history` | ✅ Resolved |
 | `SurvivalKitScreen` data | `MOCK_TASKS` / `MOCK_TIPS` | Wizard answers persisted; tasks client-generated | ✅ Mostly resolved |
 | `BudgeterScreen` data | Hardcoded categories + transactions | Honest "Coming Soon" | ✅ Trust restored, ⚠️ guest-only entry; no authed entry |
@@ -514,8 +514,8 @@ The April baseline's `MOCK_SERVICE_ENTRIES`, `MOCK_PAST_PROVIDERS`, `MOCK_TASKS`
 | `ManageScreen` appointments | Reportedly missing endpoint | Endpoint exists at `routes.ts:3344` (was a verification gap) | ✅ Confirmed working |
 | Account deletion cascade | Partial (orphaned Stripe + push tokens) | Full transactional cascade | ✅ Resolved |
 | Stripe Connect deposit handling | Stubbed | Real Checkout URL with rollback | ✅ Resolved |
-| Webhook idempotency | None | `stripe_webhook_events` reservation pattern | ✅ Resolved |
-| Notification preferences honored by sender | Stored, not honored | Honored by `notificationService.ts:isEmailAllowed` + `pushEnabled` | ✅ Resolved |
+| Webhook idempotency | N/A | `stripe_webhook_events` reservation pattern | ✅ Resolved |
+| Notification preferences honored by sender | Stored, not honored | Honored by `notificationService.ts:isEmailAllowed` (line 205) + push send-path check at `notificationService.ts:836` | ✅ Resolved |
 | Push notification deep linking | Partial | `handleNotificationNavigation` covers `AppointmentDetail`, `InvoiceDetail`, `SimpleBooking`, `Notifications`, `Review` | ✅ Resolved |
 | Homeowner ↔ Provider messaging | UI-only | UI-only ("Coming Soon" alert) | ❌ Unchanged |
 | Avatar upload | UI-only | UI-only (server accepts the field) | ❌ Unchanged |
