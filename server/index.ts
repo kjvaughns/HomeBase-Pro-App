@@ -20,6 +20,11 @@ import { dispatch, hasDeliveryForRecord } from "./notificationService";
 import { registerRedirectPages } from "./redirectPages";
 
 const app = express();
+// Trust the first proxy hop so req.ip reflects the real client IP
+// (populated from X-Forwarded-For by Express when trust proxy is enabled).
+// This is required for the login rate limiter to use a reliable IP value
+// without needing to parse raw headers.
+app.set("trust proxy", 1);
 const log = console.log;
 
 if (process.env.NODE_ENV === "production") {

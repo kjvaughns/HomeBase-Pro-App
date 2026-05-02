@@ -1399,6 +1399,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // ---------------------------------------------------------------------------
+  // Brute-force protection for login
+  // Tracks failed attempts per IP (primary) and per email (secondary).
+  // After LOGIN_MAX_FAILURES failures within LOGIN_WINDOW_MS the caller is
+  // locked out for LOGIN_LOCKOUT_MS.
+  // ---------------------------------------------------------------------------
+  const LOGIN_MAX_FAILURES = 5;
+  const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+  const LOGIN_LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
+
+  interface LoginAttemptRecord {
+    count: number;
+    firstAttemptAt: number;
+    lockedUntil?: number;
+  }
+
+  const loginAttempts = new Map<string, LoginAttemptRecord>();
+
+  function getLoginKey(req: Request, email: string): string[] {
+    // req.ip is set by Express from X-Forwarded-For when trust proxy is enabled
+    // (configured in index.ts), giving a reliable, non-spoofable value for the
+    // first hop behind our known proxy.
+    const ip = req.ip || req.socket?.remoteAddress || "unknown";
+    return [`ip:${ip}`, `email:${email.trim().toLowerCase()}`];
+  }
+
+  function isLoginBlocked(keys: string[]): boolean {
+    const now = Date.now();
+    for (const key of keys) {
+      const record = loginAttempts.get(key);
+      if (!record) continue;
+      if (record.lockedUntil && now < record.lockedUntil) return true;
+      // Reset stale window
+      if (now - record.firstAttemptAt > LOGIN_WINDOW_MS) {
+        loginAttempts.delete(key);
+      }
+    }
+    return false;
+  }
+
+  function recordLoginFailure(keys: string[]): void {
+    const now = Date.now();
+    for (const key of keys) {
+      let record = loginAttempts.get(key);
+      if (!record || now - record.firstAttemptAt > LOGIN_WINDOW_MS) {
+        record = { count: 0, firstAttemptAt: now };
+      }
+      record.count += 1;
+      if (record.count >= LOGIN_MAX_FAILURES) {
+        record.lockedUntil = now + LOGIN_LOCKOUT_MS;
+      }
+      loginAttempts.set(key, record);
+    }
+  }
+
+  function recordLoginSuccess(keys: string[]): void {
+    for (const key of keys) loginAttempts.delete(key);
+  }
+
   app.post("/api/auth/login", async (req: Request, res: Response) => {
     try {
       const parsed = loginSchema.safeParse(req.body);
@@ -1406,13 +1465,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid credentials" });
       }
 
+      const attemptKeys = getLoginKey(req, parsed.data.email);
+      if (isLoginBlocked(attemptKeys)) {
+        return res.status(429).json({
+          error: "Too many failed login attempts. Please try again later.",
+        });
+      }
+
       const user = await storage.verifyPassword(
         parsed.data.email,
         parsed.data.password,
       );
       if (!user) {
+        recordLoginFailure(attemptKeys);
         return res.status(401).json({ error: "Invalid email or password" });
       }
+
+      recordLoginSuccess(attemptKeys);
 
       // Always try to fetch provider profile (authoritative source for role)
       let providerProfile = await storage.getProviderByUserId(user.id);
@@ -1570,21 +1639,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const { JWT_SECRET } = await import("./auth");
         const jwt = await import("jsonwebtoken");
         const RESET_SECRET = `${JWT_SECRET}:password-reset`;
+        // Embed the user's current tokenVersion so the token is automatically
+        // invalidated (single-use) once the password is reset and tokenVersion bumps.
         const resetToken = jwt.default.sign(
-          { userId: user.id, purpose: "password_reset" },
+          {
+            userId: user.id,
+            purpose: "password_reset",
+            tv: user.tokenVersion ?? 0,
+          },
           RESET_SECRET,
           { expiresIn: "1h" },
         );
-        const host = (req.headers["x-forwarded-host"] ||
-          req.get("host") ||
-          "home-base-pro-app.replit.app") as string;
-        const protocol =
-          (req.headers["x-forwarded-proto"] as string | undefined)
-            ?.split(",")[0]
-            ?.trim() ||
-          req.protocol ||
-          "https";
-        const resetUrl = `${protocol}://${host}/reset-password?token=${resetToken}`;
+        // Build the reset URL from a server-controlled origin, never from
+        // attacker-supplied Host / X-Forwarded-Host headers.
+        const appOrigin =
+          process.env.APP_ORIGIN ||
+          (process.env.EXPO_PUBLIC_DOMAIN
+            ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
+            : "https://home-base-pro-app.replit.app");
+        const resetUrl = `${appOrigin}/reset-password?token=${resetToken}`;
         const fullName =
           [user.firstName, user.lastName].filter(Boolean).join(" ") || "there";
         const { sendPasswordResetEmail } = await import("./emailService");
@@ -1631,11 +1704,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (decoded.purpose !== "password_reset" || !decoded.userId) {
         return res.status(400).json({ error: "Invalid reset token" });
       }
+
+      const claimedTv = decoded.tv ?? 0;
       const hashed = await bcryptHash(password, 10);
-      await db
+
+      // Atomic compare-and-swap: the UPDATE matches BOTH the user id AND the
+      // current tokenVersion that was embedded in the reset JWT.  If the reset
+      // link was already used (tokenVersion was bumped) or was never valid, zero
+      // rows are updated and we reject.  This eliminates the read-then-update
+      // race that would allow concurrent submissions of the same link to both
+      // succeed.
+      const updated = await db
         .update(users)
-        .set({ password: hashed, updatedAt: new Date() })
-        .where(eq(users.id, decoded.userId));
+        .set({
+          password: hashed,
+          // Bump tokenVersion to:
+          //  (a) invalidate all outstanding session JWTs (revoke existing logins)
+          //  (b) make every other copy of this reset link unusable immediately
+          tokenVersion: sql`token_version + 1`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(users.id, decoded.userId),
+            eq(users.tokenVersion, claimedTv),
+          ),
+        )
+        .returning({ id: users.id });
+
+      if (updated.length === 0) {
+        return res.status(400).json({
+          error: "Invalid or expired reset link. Please request a new one.",
+        });
+      }
+
       res.json({ success: true, message: "Password updated successfully" });
     } catch (error) {
       console.error("Reset password error:", error);
