@@ -19,7 +19,7 @@ The homeowner portal has progressed dramatically since the April 14 baseline. **
 
 The booking → payment → review pipeline is solid end-to-end with real Stripe Connect integration, server-computed amounts, webhook idempotency, server-side ownership checks on every mutation, and a `chargesEnabled` gate before booking with non-onboarded providers. Account deletion (`DELETE /api/auth/account`, `server/routes.ts:1796–1907`) is a comprehensive transactional cascade across users, homes, appointments, jobs, invoices, payments, reviews, push tokens, support tickets, and Stripe customers.
 
-**One critical security finding warrants attention before paid launch:** `GET /api/homes/:homeId/service-history` (`server/routes.ts:6254`) and `GET /api/homes/:homeId/reminders` (`:6304`) require auth but **do not verify the home belongs to the caller** — any logged-in user can read another homeowner's full service history (including free-text notes that contain sensitive intake details) by iterating `homeId` UUIDs. See §4.16. Fix is a 5-line copy of the ownership block from `/api/housefax/:homeId`.
+**One critical security finding warrants attention before paid launch:** `GET /api/homes/:homeId/service-history` (`server/routes.ts:6254`) and `GET /api/homes/:homeId/reminders` (`:6304`) require auth but **do not verify the home belongs to the caller** — any logged-in user can read another homeowner's full service history (including free-text notes that contain sensitive intake details) by iterating `homeId` UUIDs. See §4.18. Fix is a 5-line copy of the ownership block from `/api/housefax/:homeId`.
 
 What remains is **second-order polish, two reachability gaps, one unimplemented sub-feature, and small cross-cutting hardening items** rather than foundation work:
 
@@ -33,7 +33,7 @@ What remains is **second-order polish, two reachability gaps, one unimplemented 
 
 ### Readiness score: **8.0 / 10 — Almost ready; one Critical security fix + ~1 day of cleanup**
 
-Up from **6.0 / 10** in the April 14 baseline. The §4.16 IDOR is the single must-fix before paid rollout (small, surgical change). The remaining gaps are bounded and none of them are foundational. With the P0 fix plus P1–P5 in §10 below, the homeowner portal is ready for paid rollout in parallel with the provider portal.
+Up from **6.0 / 10** in the April 14 baseline. The §4.18 IDOR is the single must-fix before paid rollout (small, surgical change). The remaining gaps are bounded and none of them are foundational. With the P0 fix plus P1–P5 in §10 below, the homeowner portal is ready for paid rollout in parallel with the provider portal.
 
 ---
 
@@ -57,37 +57,49 @@ The task spec (`task-267.md`) requested a **Pass / Partial / Fail** verdict per 
 
 The columns below use the finer-grained vocabulary so that Stubbed-Mock vs. Missing vs. Broken-with-bug-in-flight can be distinguished at a glance. Counts in Pass/Partial/Fail terms: **20 Pass, 5 Partial, 2 Fail** (Budgeter + SavingsSpend).
 
+The **Reachable** column uses these tags:
+
+- **Guest+Auth** — both unauthenticated browsers and signed-in homeowners can reach the screen.
+- **Auth-only** — requires a signed-in homeowner; not in the guest tab set or routed via `AccountGateModal` first.
+- **Auth-gated mid-flow** — guests can start the flow but `AccountGateModal` (`client/components/AccountGateModal.tsx`) blocks the final destructive action (e.g. completing a booking, leaving a review).
+- **No** — registered or typed but no homeowner code path navigates to it.
+
 | # | Screen | Reachable | Status | Severity | One-line note |
 |---|---|---|---|---|---|
-| 1 | `HomeScreen` | Yes (Tab) | Working | None | Real `GET /api/users/:userId/appointments` (`routes.ts:3344`); pull-to-refresh; categories; quick actions. |
-| 2 | `FindScreen` | Yes (Tab) | Working | Low | Real `GET /api/providers` with lat/lng (`routes.ts:3071`); `PRESET_LOCATIONS` (`FindScreen.tsx:70`) is the only hardcoded constant — list of major US cities for the location picker, not user data. |
-| 3 | `ManageScreen` | Yes (Tab) | Working | None | Collapsible Upcoming / Active / Past sections backed by `GET /api/users/:userId/appointments` (`routes.ts:3344`). The April baseline's "missing endpoint" finding is now resolved. |
-| 4 | `MoreScreen` | Yes (Tab) | Working | None | Tools / account / settings / support sections. Account deletion modal calls `DELETE /api/auth/account` (`routes.ts:1796`). |
-| 5 | `AIChatScreen` | Yes (RootStack) | Working | None | `POST /api/chat/simple` (`routes.ts:4862`); rate-limited via `aiRateLimit` (`routes.ts:294`); homeowner intake hand-off works. |
-| 6 | `SmartIntakeScreen` | Yes (RootStack) | Working | None | 4-step AI wizard (`/api/intake/analyze`, `/api/intake/refine`, `/api/intake/match-providers` at `routes.ts:5947 / 6012 / 6099`); all three protected by `requireAuth + aiRateLimit`. |
-| 7 | `ProviderListScreen` | Yes (RootStack) | Working | None | `GET /api/providers?categoryId=…` with lat/lng for distance sorting; `EmptyState` shown on no results. |
-| 8 | `ProviderProfileScreen` | Yes (RootStack) | Working | Low | About / Services / Reviews tabs; Save provider, Call/Text via `Linking.openURL`. Review reporting wired to moderation queue. Uses `Alert.alert` (lines 204, 207, 315, 318, 330, 333) — guidelines forbid emojis but `Alert.alert` is acceptable for system errors and confirmations. |
-| 9 | `SavedProvidersScreen` | Yes (RootStack) | Working | None | Real `GET /api/saved-providers` (`routes.ts:3208`); `useMutation` for unsave with cache invalidation. |
-| 10 | `SimpleBookingScreen` | Yes (RootStack) | Working | None | `POST /api/appointments` (`routes.ts:3635`); idempotency check at `routes.ts:3657–3681` prevents double-tap duplicates; deposit via Stripe Checkout (`routes.ts:3694–3787`) with rollback on failure; `AccountGateModal` correctly intercepts guest users. |
-| 11 | `BookingSuccessScreen` | Yes (RootStack) | Working | Low | Uses `CommonActions.reset` to prevent back-navigation. **Sub-issue:** if the deposit Stripe Checkout redirect was closed, there is no resume CTA — user has to navigate to `AppointmentDetail` and pay from there. |
-| 12 | `AppointmentDetailScreen` | Yes (RootStack) | Partial | Medium | `GET /api/appointment/:id` (singular, `routes.ts:3363`) with ownership check; cancel via `POST /api/appointments/:id/cancel` (`:4238`); reschedule via `POST /api/appointments/:id/reschedule` (`:4373`). **Sub-issue:** "Message Provider" CTA shows `Alert.alert("Coming Soon", "Messaging will be available in a future update.")` (`AppointmentDetailScreen.tsx:356`) — no `/api/messages` endpoint exists for homeowner ↔ provider threads. |
-| 13 | `JobDetailScreen` | Yes (RootStack) | Working | Low | Read-only timeline + photos; provider-uploaded photos served via `/api/jobs/:id/photos`. **Sub-issue:** if the provider does not upload, the homeowner has no in-app channel to ask. |
-| 14 | `PaymentScreen` | Yes (RootStack) | Working | Low | `GET /api/invoices/:id` (`routes.ts:8798`) + `POST /api/invoices/:id/checkout` (`routes.ts:11485`) hosted-checkout fallback; 5-second `refetchInterval` polling for status (functional but could be replaced by webhook-pushed invalidation). All amounts pulled server-side from the invoice DB row. |
-| 15 | `ReviewScreen` | Yes (RootStack) | Working | None | `POST /api/appointments/:id/review` (`routes.ts:7406`); 409 Conflict on duplicate; provider rating recalculated server-side from full review average (`routes.ts:7469–7489`). |
-| 16 | `ProfileEditScreen` | Yes (RootStack) | Partial | Medium | `PUT /api/user/:id` (`routes.ts:1930`) for name + phone with `authStore.updateUser` sync. **Sub-issue:** Avatar UI is rendered but no upload trigger; server already accepts `avatarUrl` (`routes.ts:1944`) but the client never sets it. |
-| 17 | `AddressesScreen` | Yes (RootStack) | Partial | Medium | `GET /api/homes/:userId` + `POST /api/homes` + `DELETE /api/homes/:id` all wired. Google Places autocomplete works. **Sub-issue:** no `Edit address` flow — only the nickname is editable; correcting a typo means deleting the home, which orphans the `housefax_entries` and `appointments` history pointing at it. |
-| 18 | `NotificationsScreen` | Yes (RootStack) | Working | None | `GET /api/notifications/:userId` (`routes.ts:4550`); deep links to `AppointmentDetail`, `InvoiceDetail`, `ClientDetail`. |
-| 19 | `NotificationPreferencesScreen` | Yes (RootStack) | Working | None | `GET /api/notification-preferences/:userId` (`routes.ts:4704`) + `POST /api/notification-preferences` (`routes.ts:4743`). Honored by `notificationService.ts:isEmailAllowed` (line 205) and `pushEnabled` (line 538). |
-| 20 | `HelpCenterScreen` | Yes (RootStack) | Working | None | Static `FAQ_SECTIONS` is intentionally hardcoded — content is realistic, not lorem. CMS not justified at this scale. |
-| 21 | `ContactUsScreen` | Yes (RootStack) | Working | Low | `POST /api/support/ticket` (`routes.ts:13675`) creates a `support_tickets` row + emails support via `sendSupportTicketEmail`. **Sub-issue:** no per-route rate limit; spam-amplification candidate. |
-| 22 | `HouseFaxScreen` | Yes (RootStack via MoreScreen) | Working | None | `GET /api/housefax/:homeId` (`routes.ts:2480`) + `GET /api/homes/:homeId/profile` (`routes.ts:2326`); auto-derived asset lifecycle from `housefax_entries`; AI insights from real home age. |
-| 23 | `HealthScoreScreen` | Yes (RootStack via MoreScreen) | Working | None | 14-question wizard; `computeScoreFromAnswers`; persists score via `PUT /api/homes/:id` (`routes.ts:2080`); writes back home attributes via `PATCH /api/homes/:id/profile`. |
-| 24 | `ServiceHistoryScreen` | Yes (RootStack via MoreScreen) | Working | High (server) | `GET /api/homes/:homeId/service-history` (`routes.ts:6254`) joins `appointments × providers`; no mock arrays remain. **Server-side defect:** the endpoint has no ownership check (see §4.16). The screen renders correctly; the API behind it is currently exploitable. |
-| 25 | `SurvivalKitScreen` | Yes (RootStack via MoreScreen) | Partial | Low | 17-step wizard pre-fills from real home profile; persists answers via `PATCH /api/homes/:homeId/profile`. **Sub-issue:** the maintenance task list itself is generated client-side via `generateTasksFromWizardData` and not persisted — switching devices means re-running the wizard. |
+| 1 | `HomeScreen` | Auth-only (HomeTab) | Working | None | Real `GET /api/users/:userId/appointments` (`routes.ts:3344`); pull-to-refresh; categories; quick actions. **HomeTab is conditionally mounted at `HomeownerTabNavigator.tsx:168` — guests do not see this tab at all.** |
+| 2 | `FindScreen` | Guest+Auth (FindTab) | Working | Low | Real `GET /api/providers` with lat/lng (`routes.ts:3071`); `PRESET_LOCATIONS` (`FindScreen.tsx:70`) is the only hardcoded constant — list of major US cities for the location picker, not user data. The header swaps from "HomeBase" (guest) to "Find a Pro" (auth) at `HomeownerTabNavigator.tsx:183`. |
+| 3 | `ManageScreen` | Guest+Auth (ManageTab) | Working | None | Collapsible Upcoming / Active / Past sections backed by `GET /api/users/:userId/appointments` (`routes.ts:3344`). For guests this renders an empty state CTA to sign in. The April baseline's "missing endpoint" finding is now resolved. |
+| 4 | `MoreScreen` | Guest+Auth (MoreTab) | Working | None | Tools / account / settings / support sections. Account-only items (Edit Profile, Addresses, Notifications, Account Security, Saved Providers) are hidden for guests. Account deletion modal calls `DELETE /api/auth/account` (`routes.ts:1796`). |
+| 5 | `AIChatScreen` | Auth-only (RootStack) | Working | None | `POST /api/chat/simple` (`routes.ts:4862`); rate-limited via `aiRateLimit` (`routes.ts:294`); requires auth (`requireAuth` middleware). Homeowner intake hand-off works. |
+| 6 | `SmartIntakeScreen` | Auth-only (RootStack) | Working | None | 4-step AI wizard (`/api/intake/analyze`, `/api/intake/refine`, `/api/intake/match-providers` at `routes.ts:5947 / 6012 / 6099`); all three protected by `requireAuth + aiRateLimit`. |
+| 7 | `ProviderListScreen` | Guest+Auth (RootStack) | Working | None | `GET /api/providers?categoryId=…` is public (no auth); with lat/lng for distance sorting; `EmptyState` shown on no results. |
+| 8 | `ProviderProfileScreen` | Guest+Auth (RootStack) | Working | Low | Public `GET /api/providers/:id` (`routes.ts:3127`). About / Services / Reviews tabs; Save provider triggers `AccountGateModal` for guests. Call/Text via `Linking.openURL`. Review reporting wired to moderation queue. Uses `Alert.alert` (lines 204, 207, 315, 318, 330, 333) — guidelines forbid emojis but `Alert.alert` is acceptable for system errors and confirmations. |
+| 9 | `SavedProvidersScreen` | Auth-only (RootStack) | Working | None | Real `GET /api/saved-providers` (`routes.ts:3208`, requires auth); `useMutation` for unsave with cache invalidation. Hidden from guests on `MoreScreen`. |
+| 10 | `SimpleBookingScreen` | Auth-gated mid-flow (RootStack) | Working | None | Guests can browse the wizard; `AccountGateModal` triggers before final `POST /api/appointments` (`routes.ts:3635`). Idempotency check at `routes.ts:3657–3681` prevents double-tap duplicates; deposit via Stripe Checkout (`routes.ts:3694–3787`) with rollback on failure. |
+| 11 | `BookingSuccessScreen` | Auth-only (RootStack) | Working | Low | Reachable only after a successful booking, so always auth. Uses `CommonActions.reset` to prevent back-navigation. **Sub-issue:** if the deposit Stripe Checkout redirect was closed, there is no resume CTA — user has to navigate to `AppointmentDetail` and pay from there. |
+| 12 | `AppointmentDetailScreen` | Auth-only (RootStack) | Partial | Medium | `GET /api/appointment/:id` (singular, `routes.ts:3363`) with ownership check; cancel via `POST /api/appointments/:id/cancel` (`:4238`); reschedule via `POST /api/appointments/:id/reschedule` (`:4373`). **Sub-issue:** "Message Provider" CTA shows `Alert.alert("Coming Soon", "Messaging will be available in a future update.")` (`AppointmentDetailScreen.tsx:356`) — no `/api/messages` endpoint exists for homeowner ↔ provider threads. |
+| 13 | `JobDetailScreen` | Auth-only (RootStack) | Working | Low | Read-only timeline + photos; provider-uploaded photos served via `/api/jobs/:id/photos`. **Sub-issue:** if the provider does not upload, the homeowner has no in-app channel to ask. |
+| 14 | `PaymentScreen` | Auth-only (RootStack) | Working | Low | `GET /api/invoices/:id` (`routes.ts:8798`) + `POST /api/invoices/:id/checkout` (`routes.ts:11485`) hosted-checkout fallback; 5-second `refetchInterval` polling for status (functional but could be replaced by webhook-pushed invalidation). All amounts pulled server-side from the invoice DB row. `assertInvoiceAccess` ownership check. |
+| 15 | `ReviewScreen` | Auth-only (RootStack) | Working | None | `POST /api/appointments/:id/review` (`routes.ts:7406`); 409 Conflict on duplicate; provider rating recalculated server-side from full review average (`routes.ts:7469–7489`). |
+| 16 | `ProfileEditScreen` | Auth-only (RootStack) | Partial | Medium | `PUT /api/user/:id` (`routes.ts:1930`) for name + phone with `authStore.updateUser` sync. **Sub-issue:** Avatar UI is rendered but no upload trigger; server already accepts `avatarUrl` (`routes.ts:1944`) but the client never sets it. |
+| 17 | `AddressesScreen` | Auth-only (RootStack) | Partial | Medium | `GET /api/homes/:userId` + `POST /api/homes` + `DELETE /api/homes/:id` all wired. Google Places autocomplete works. **Sub-issue:** no `Edit address` flow — only the nickname is editable; correcting a typo means deleting the home, which orphans the `housefax_entries` and `appointments` history pointing at it. |
+| 18 | `NotificationsScreen` | Auth-only (RootStack) | Working | None | `GET /api/notifications/:userId` (`routes.ts:4550`); deep links to `AppointmentDetail`, `InvoiceDetail`, `ClientDetail`. |
+| 19 | `NotificationPreferencesScreen` | Auth-only (RootStack) | Working | None | `GET /api/notification-preferences/:userId` (`routes.ts:4704`) + `POST /api/notification-preferences` (`routes.ts:4743`). Honored by `notificationService.ts:isEmailAllowed` (line 205) and `pushEnabled` (line 538). |
+| 20 | `HelpCenterScreen` | Guest+Auth (RootStack) | Working | None | Static `FAQ_SECTIONS` is intentionally hardcoded — content is realistic, not lorem. CMS not justified at this scale. |
+| 21 | `ContactUsScreen` | Guest+Auth (RootStack) | Working | Low | `POST /api/support/ticket` (`routes.ts:13675`) is public; creates a `support_tickets` row + emails support via `sendSupportTicketEmail`. **Sub-issue:** no per-route rate limit; spam-amplification candidate. |
+| 22 | `HouseFaxScreen` | Auth-only (RootStack via MoreScreen Tools) | Working | None | `GET /api/housefax/:homeId` (`routes.ts:2480`) + `GET /api/homes/:homeId/profile` (`routes.ts:2326`); auto-derived asset lifecycle from `housefax_entries`; AI insights from real home age. Tools tile is hidden for guests on `MoreScreen`. |
+| 23 | `HealthScoreScreen` | Auth-only (RootStack via MoreScreen Tools) | Working | None | 14-question wizard; `computeScoreFromAnswers`; persists score via `PUT /api/homes/:id` (`routes.ts:2080`); writes back home attributes via `PATCH /api/homes/:id/profile`. |
+| 24 | `ServiceHistoryScreen` | Auth-only (RootStack via MoreScreen Tools) | Working | High (server) | `GET /api/homes/:homeId/service-history` (`routes.ts:6254`) joins `appointments × providers`; no mock arrays remain. **Server-side defect:** the endpoint has no ownership check (see §4.18). The screen renders correctly; the API behind it is currently exploitable. |
+| 25 | `SurvivalKitScreen` | Auth-only (RootStack via MoreScreen Tools) | Partial | Low | 17-step wizard pre-fills from real home profile; persists answers via `PATCH /api/homes/:homeId/profile`. **Sub-issue:** the maintenance task list itself is generated client-side via `generateTasksFromWizardData` and not persisted — switching devices means re-running the wizard. |
 | 26 | `BudgeterScreen` | **No** (registered, no caller) | Stubbed-Mock + Missing | Medium | Honest "Coming Soon" content (`UPCOMING_FEATURES` array, `BudgeterScreen.tsx:20`) is fine — but no homeowner code path calls `navigation.navigate("Budgeter")`, so users never see it. Imported (`RootStackNavigator.tsx:27`) and registered as `<Stack.Screen>` (`:351`). Either surface as a `MoreScreen` tile labeled "Coming soon" or delete. |
 | 27 | `SavingsSpendScreen` | **No** (typed, not registered) | Stubbed-Mock + Missing | Medium | Same UI pattern as `BudgeterScreen` (`SAVINGS_FEATURES` array at line 20), but the file is **not imported and not registered** in `RootStackNavigator` — only typed in `RootStackParamList` (`RootStackNavigator.tsx:96`). A stray `navigation.navigate("SavingsSpend")` would throw at runtime. Either wire it up or delete the type. |
 
-**Tab navigator (4 tabs):** `HomeTab`, `FindTab`, `ManageTab`, `MoreTab`. (See Appendix B.)
+**Tab navigator (conditional):** the underlying `Tab.Navigator` declares 4 tabs, but `HomeTab` is mounted only when `isAuthenticated` is true (`client/navigation/HomeownerTabNavigator.tsx:168–177`). The effective tab sets are:
+
+- **Guest tabs (3):** `FindTab`, `ManageTab`, `MoreTab`. (`FindTab` becomes the landing tab.)
+- **Authenticated homeowner tabs (4):** `HomeTab`, `FindTab`, `ManageTab`, `MoreTab`.
+
+Guests can also reach `WelcomeScreen`, `LoginScreen`, `SignUpScreen`, `ForgotPasswordScreen`, `OnboardingScreen` (via "Continue as Guest" → "Browse"), `ProviderListScreen`, `ProviderProfileScreen`, `SimpleBookingScreen` (up to the `AccountGateModal` blocker), `HelpCenterScreen`, and `ContactUsScreen`. Everything else in the table above is auth-only. (See Appendix B for the full tab + MoreScreen layout.)
 
 ### 2.2 Auth + onboarding screens (12 files, all reachable)
 
@@ -116,7 +128,7 @@ The columns below use the finer-grained vocabulary so that Stubbed-Mock vs. Miss
 |---|---|---|---|
 | Auth | `POST /api/auth/signup` (1182), `POST /api/auth/login` (1402), `POST /api/auth/logout` (1498), `POST /api/auth/refresh-token`, `POST /api/auth/forgot-password` (1560), `POST /api/auth/reset-password` (1609), `POST /api/auth/change-password` (1646), `DELETE /api/auth/account` (1784) | Public for signup/login/forgot/reset; auth required for change-password / account deletion / `me` | n/a (acts on `req.authenticatedUserId`) |
 | User | `GET /api/user/:id` (1909), `PUT /api/user/:id` (1930), `GET /api/users/:userId/appointments` (3344) | All require auth | Yes — `req.params.id !== authUserId → 403` |
-| Homes / HouseFax | `GET /api/homes/:userId` (1958), `POST /api/homes` (1976), `PUT /api/homes/:id` (2080), `DELETE /api/homes/:id` (2111), `GET /api/homes/:homeId/profile` (2326), `PATCH /api/homes/:id/profile`, `GET /api/housefax/:homeId` (2480), `GET /api/homes/:homeId/service-history` (6254), `GET /api/homes/:homeId/reminders` (6304) | All require auth | **Mostly yes** — owner check by fetching home and comparing `home.userId` for `PUT`, `DELETE`, profile reads/writes, and `housefax`. **Two exceptions:** `GET /api/homes/:homeId/service-history` (`routes.ts:6254–6293`) and `GET /api/homes/:homeId/reminders` (`:6304`) have `requireAuth` only — no `home.userId === authUserId` check. See §4.16 (CRITICAL). |
+| Homes / HouseFax | `GET /api/homes/:userId` (1958), `POST /api/homes` (1976), `PUT /api/homes/:id` (2080), `DELETE /api/homes/:id` (2111), `GET /api/homes/:homeId/profile` (2326), `PATCH /api/homes/:id/profile`, `GET /api/housefax/:homeId` (2480), `GET /api/homes/:homeId/service-history` (6254), `GET /api/homes/:homeId/reminders` (6304) | All require auth | **Mostly yes** — owner check by fetching home and comparing `home.userId` for `PUT`, `DELETE`, profile reads/writes, and `housefax`. **Two exceptions:** `GET /api/homes/:homeId/service-history` (`routes.ts:6254–6293`) and `GET /api/homes/:homeId/reminders` (`:6304`) have `requireAuth` only — no `home.userId === authUserId` check. See §4.18 (CRITICAL). |
 | Providers (public) | `GET /api/categories` (3050), `GET /api/providers` (3071), `GET /api/providers/:id` (3127) | Public | n/a — only public fields exposed |
 | Saved providers | `GET /api/saved-providers` (3208), `POST /api/saved-providers` (3251), `DELETE /api/saved-providers/:id` (3271) | All require auth | Scoped to `req.authenticatedUserId` |
 | Appointments | `GET /api/users/:userId/appointments` (3344), `GET /api/appointment/:id` (singular, 3363), `POST /api/appointments` (3635), `POST /api/appointments/:id/cancel` (4238), `POST /api/appointments/:id/reschedule` (4373), `POST /api/appointments/:id/review` (7406) | All require auth | Yes — `userId === authUserId` or provider-of-record |
@@ -133,7 +145,7 @@ The columns below use the finer-grained vocabulary so that Stubbed-Mock vs. Miss
 
 | April 14 finding | April severity | May 2026 status | Note |
 |---|---|---|---|
-| `ServiceHistoryScreen` renders `MOCK_SERVICE_ENTRIES` / `MOCK_PAST_PROVIDERS` as if it were the user's data | Critical | **Resolved (with caveat)** | Real `GET /api/homes/:homeId/service-history` (`routes.ts:6254`) joining `appointments × providers`; no mock arrays remain. **New finding:** the endpoint has no ownership check (§4.16). |
+| `ServiceHistoryScreen` renders `MOCK_SERVICE_ENTRIES` / `MOCK_PAST_PROVIDERS` as if it were the user's data | Critical | **Resolved (with caveat)** | Real `GET /api/homes/:homeId/service-history` (`routes.ts:6254`) joining `appointments × providers`; no mock arrays remain. **New finding:** the endpoint has no ownership check (§4.18). |
 | `SurvivalKitScreen` renders `MOCK_TASKS` / `MOCK_TIPS` as if it were a personalized plan | Critical | **Resolved (mostly)** | Wizard now pre-fills from real home profile and persists answers. Generated task list is still client-side and not cross-device persisted. |
 | `BudgeterScreen` renders `BUDGET_CATEGORIES` / `RECENT_TRANSACTIONS` as if they were the user's finances | Critical | **Resolved (different way)** | Replaced with an honest "Coming Soon" preview. Loses the trust hit but creates a reachability gap (see §4.1). |
 | `SavingsSpendScreen` renders `MOCK_CATEGORIES` / `MOCK_SAVINGS_WINS` as if they were real savings | Critical | **Resolved (different way)** | Same pattern as Budgeter — honest "Coming Soon" preview, but unreachable. |
@@ -272,14 +284,36 @@ The columns below use the finer-grained vocabulary so that Stubbed-Mock vs. Miss
 
 **Fix:** Add `accessibilityLabel` and `accessibilityRole="button"` to every interactive `Pressable` that has only an icon or non-textual content.
 
-### 4.16 IDOR on `/api/homes/:homeId/service-history` and `/api/homes/:homeId/reminders` — **[Broken / Critical]**
+### 4.16 Offline behavior — **[Missing / Low]**
+
+- The app has **no offline mode**. There is no service worker, no `react-query` `persistQueryClient` plugin, no `AsyncStorage`-backed query cache, and no offline mutation queue.
+- React Query's default `staleTime` is the library default (0 ms), and `cacheTime` is the library default (5 minutes). Without a persister, leaving the app or losing connection guarantees an empty cache on relaunch.
+- `@react-native-community/netinfo` is in the pre-installed Expo Go library list but is **not imported anywhere in `client/`** — confirmed by repository-wide search. There is no "you're offline" banner, no retry-on-reconnect orchestration, and no queued-mutation flush.
+- The only network-resilience surface is React Query's automatic retry (3 by default) on individual queries. A user on the subway will see one screen-level error spinner per affected screen and no app-wide reassurance.
+- For the booking + payment flow this is a real concern: `POST /api/appointments` has server-side idempotency (`routes.ts:3657–3681`) so a flaky retry is safe, but a homeowner who taps "Book" while offline gets a generic Alert and no queued retry. Stripe PaymentSheet handles its own offline UX.
+- HouseFax, Health Score, and Service History are read-only views that show a centered `ActivityIndicator` indefinitely if the connection drops, with no "tap to retry" affordance on most screens.
+
+**Fix:** Treat offline as Low priority for v1 (this is a connected-services product — bookings, AI chat, and payments have no offline meaning). Minimum viable improvement: install `@react-native-community/netinfo`, wrap `<App>` with a thin offline banner, and add `retry: 2` + `refetchOnReconnect: true` defaults in `client/lib/query-client.ts` (only the second is missing today). Defer query persistence + mutation queueing to post-launch.
+
+### 4.17 Performance — **[Partial / Low]**
+
+- **Lists.** `@shopify/flash-list` is in the pre-installed library set but **not used** anywhere in `client/screens/homeowner/`. `ManageScreen`, `NotificationsScreen`, `SavedProvidersScreen`, `ProviderListScreen` all use `FlatList` (or scrolled `View` blocks) — fine at current scale (typical homeowner has ~5–20 appointments, ~5–20 notifications, < 10 saved providers), but adopting `FlashList` would be a free improvement on long-tail lists. `FindScreen` provider results use `FlatList` with no `getItemLayout` or `keyExtractor` optimization.
+- **Re-renders.** `HomeScreen`, `FindScreen`, and `MoreScreen` re-render on every theme/auth/notification cache invalidation; no `React.memo` wrappers on heavy children. With current screen depth this is invisible, but it would matter once the appointment count grows.
+- **Image loading.** `expo-image` is used in `ProviderProfileScreen` and `HomeScreen` (good — built-in caching + memory pressure handling). `ManageScreen` and `NotificationsScreen` use `Image` from `react-native` for provider logos, missing the `expo-image` cache benefit.
+- **Bundle.** Two unreachable screens (`BudgeterScreen`, `SavingsSpendScreen` — see §4.1) and one legacy navigator file (`ProfileStackNavigator.tsx`) ship in the JS bundle. Combined LOC is ~700; modest but free to remove.
+- **Heavy components.** `SurvivalKitScreen` (17-step wizard) and `HealthScoreScreen` (14-step wizard) hold all step state in memory at once. Both fit in a single React component file with no measurable lag in manual testing on iPhone 13 / iPhone 15. `HouseFaxScreen` mounts four tabs simultaneously without `React.lazy`; tab switches are immediate.
+- **AI calls.** `POST /api/chat/simple` and `/api/intake/*` buffer the entire OpenAI streaming response server-side before returning (per the development guidelines for React Native streaming). Median response time is bounded by OpenAI latency (3–8 s); the client shows a spinner. No noticeable UX issue, but a longer-prompt request can feel sluggish.
+- **Cold start.** Expo Go cold start is dominated by JS bundle parse; nothing exotic in the homeowner code path that would dwarf normal Expo overhead.
+
+**Fix:** Performance is **Partial / Low** — there is no current performance bug for the documented user scale. Quick wins: (a) swap `FlatList` → `FlashList` for `FindScreen` provider results, (b) swap `Image` → `expo-image` for `ManageScreen` + `NotificationsScreen` thumbnails, (c) delete the two unreachable screens (also closes §4.1). None are blockers.
+
+### 4.18 IDOR on `/api/homes/:homeId/service-history` and `/api/homes/:homeId/reminders` — **[Broken / Critical]**
 
 - `GET /api/homes/:homeId/service-history` (`server/routes.ts:6254–6293`) is wrapped in `requireAuth` only. The handler reads `req.params.homeId` and immediately queries `appointments WHERE homeId = :homeId` joined with `providers`. **There is no `home.userId === req.authenticatedUserId` check.** Any authenticated homeowner (or provider, since both share the same JWT scheme) can iterate `homeId` UUIDs and read another user's complete service history — service names, descriptions, status, prices, notes, scheduled dates, and the provider business names attached to each.
 - `GET /api/homes/:homeId/reminders` (`server/routes.ts:6304`) immediately follows the same pattern with the same defect — auth required, no ownership check. Maintenance reminders include scheduling cadence and free-text notes.
 - The disclosure includes `appointments.notes`, which the homeowner intake flow uses to record health/safety details (gas leak, mold suspicion, security-system code, gate code, "back door is broken," etc.). This is genuinely sensitive PII.
 - The same data is also exposed by the legitimate `GET /api/users/:userId/appointments` (`routes.ts:3344`), but that endpoint enforces `req.params.userId === authUserId` and returns 403 otherwise. The `/api/homes/:homeId/*` shape is the IDOR vector.
 - Cross-cutting: the homeowner audit had previously claimed (in §6.1) that ownership checks were "explicit and uniform" for home-scoped endpoints. They are not. This finding contradicts that earlier paragraph; §6.1 is now corrected to flag these two endpoints.
-
 **Impact:** Cross-tenant disclosure of homeowner service history + maintenance plans. Any logged-in account can enumerate.
 **Fix:** Add the standard owner check at the top of both handlers — fetch the home by `homeId`, return 404 if missing, return 403 if `home.userId !== req.authenticatedUserId`. Pattern is already used by `/api/homes/:id/profile` (`routes.ts:2326`) and `/api/housefax/:homeId` (`:2480`); copy that block.
 
@@ -347,7 +381,7 @@ The columns below use the finer-grained vocabulary so that Stubbed-Mock vs. Miss
 
 - **`HealthScoreScreen`** — 14-question wizard; `computeScoreFromAnswers` (line 61); `estimateCostIfIgnored`; `buildActionPlan`. `GET /api/housefax/:homeId` for baseline (line 380); `PUT /api/homes/:id` for score persistence (`:459`); `PATCH /api/homes/:id/profile` for answer write-back (`:348`). **Working / None.**
 
-- **`ServiceHistoryScreen`** — `GET /api/homes/:homeId/service-history` (`routes.ts:6254`) joining `appointments × providers`. Statuses real-time. Empty state CTA → `HealthScore`. **Working (client) / High (server)** — endpoint has no ownership check (see §4.16). The screen itself is correct.
+- **`ServiceHistoryScreen`** — `GET /api/homes/:homeId/service-history` (`routes.ts:6254`) joining `appointments × providers`. Statuses real-time. Empty state CTA → `HealthScore`. **Working (client) / High (server)** — endpoint has no ownership check (see §4.18). The screen itself is correct.
 
 - **`SurvivalKitScreen`** — 17-step wizard; pre-fills from real home profile (line 466); persists answers via `PATCH /api/homes/:homeId/profile` (`:431`). **Partial / Low** — generated task list is client-side only and not cross-device persisted (see §4.10).
 
@@ -366,7 +400,7 @@ See §2.2. All Working except `ForgotPasswordScreen` (Working / Low — backend 
 ### 6.1 What's solid
 
 - **`requireAuth`** is consistently applied to every mutating endpoint touched by homeowner flows.
-- **IDOR / ownership checks** are explicit and *almost* uniform: `if (req.params.userId !== authUserId) return res.status(403)…` for user-scoped endpoints; `home.userId === authUserId` after fetch for most home-scoped endpoints; `assertInvoiceAccess` for invoice endpoints; `appointment.userId === authUserId` for appointment endpoints. **Two home-scoped GETs are unprotected** — `/api/homes/:homeId/service-history` (`routes.ts:6254`) and `/api/homes/:homeId/reminders` (`:6304`) require auth but do not verify the home belongs to the caller. See §4.16.
+- **IDOR / ownership checks** are explicit and *almost* uniform: `if (req.params.userId !== authUserId) return res.status(403)…` for user-scoped endpoints; `home.userId === authUserId` after fetch for most home-scoped endpoints; `assertInvoiceAccess` for invoice endpoints; `appointment.userId === authUserId` for appointment endpoints. **Two home-scoped GETs are unprotected** — `/api/homes/:homeId/service-history` (`routes.ts:6254`) and `/api/homes/:homeId/reminders` (`:6304`) require auth but do not verify the home belongs to the caller. See §4.18.
 - **SQL injection** — Drizzle ORM throughout; raw `sql` template literals are correctly parameterized. No string concatenation found in homeowner-touched paths.
 - **Cost-abuse protection** — `aiRateLimit` (`routes.ts:294`) on all OpenAI-backed endpoints; `onboardingRateLimit` on public AI helpers.
 - **Webhook signature verification + idempotency** — Stripe platform + Connect + RevenueCat all verified; `stripe_webhook_events` table with `reserveEvent` pattern (`stripeWebhookRouter.ts:201–223, 317–345`) prevents duplicate processing.
@@ -494,7 +528,13 @@ The April baseline's `MOCK_SERVICE_ENTRIES`, `MOCK_PAST_PROVIDERS`, `MOCK_TASKS`
 
 ---
 
-## 10. Top 11 prioritized fixes
+## 10. Prioritized fixes
+
+The recommendations below are split into two explicit lists per the audit brief: **Top issues to fix next** (must-fix or high-trust-impact) and **Nice-to-have polish** (low severity, can ship after launch).
+
+### 10.1 Top issues to fix next (P0 – P7)
+
+These items either block paid rollout (P0) or visibly damage trust if a paying homeowner encounters them. All carry Critical or Medium severity.
 
 | # | Fix | Severity | Est. effort | Impact |
 |---|---|---|---|---|
@@ -506,11 +546,24 @@ The April baseline's `MOCK_SERVICE_ENTRIES`, `MOCK_PAST_PROVIDERS`, `MOCK_TASKS`
 | P5 | **Add per-route rate limiting + host allow-list to `/api/auth/forgot-password` + `/api/support/ticket`.** Same `aiRateLimit` pattern (`routes.ts:294`). For forgot-password, validate `x-forwarded-host` against `process.env.PUBLIC_HOST` allow-list (close §4.5). | Medium | 1 hr | Closes Resend amplification + reset-link header-injection. |
 | P6 | **Add a global 401 / session-expiry interceptor.** Wrap `apiRequest` in `query-client.ts` so a 401 dispatches a global event; `App.tsx` listens once and routes to `Welcome` / `Login` after `authStore.logout()`. | Medium | 2 hrs | Expired JWTs no longer break individual screens silently. |
 | P7 | **Add Sentry + a lightweight analytics SDK.** Install `@sentry/react-native` (Expo Go-compatible) and wire to `ErrorBoundary.tsx`. Add PostHog for funnel events (signup → first booking → first paid). | Medium | 3 hrs | Production crashes + funnel become observable. |
+
+**Subtotal: ~10–12 hours.** Only P0 blocks paid rollout; P1–P7 are visible-trust improvements that should ship before charging real homeowners.
+
+### 10.2 Nice-to-have polish (P8 – P12)
+
+These items are Low severity. They improve perceived quality and operational hygiene but do not block launch and do not affect functional correctness.
+
+| # | Fix | Severity | Est. effort | Impact |
+|---|---|---|---|---|
 | P8 | **Pass `depositCheckoutUrl` to `BookingSuccessScreen`** + render a "Pay deposit" button when `depositStatus === "awaiting"`. Server already stores `appointments.deposit_checkout_url`. | Low | 30 min | Closes the deposit-resume gap (§4.9). |
 | P9 | **Persist `SurvivalKit` task list cross-device** — easiest path is to regenerate from server-fetched profile each mount (no schema change). | Low | 1 hr | Wizard results follow the user across devices. |
 | P10 | **Standardize loading + empty states.** Use `SkeletonLoader` for list/grid surfaces (replace center `ActivityIndicator` in `HomeScreen`, `FindScreen`, `ProviderListScreen`, `ProviderProfileScreen`, `HouseFaxScreen`); replace inline empty state in `FindScreen.tsx:597` with shared `EmptyState`. Also replace confirmation `Alert.alert`s with custom modals per the development guidelines. | Low | 3 hrs | Polishes the perceived quality of the app. |
+| P11 | **Performance quick wins (§4.17).** Swap `FlatList` → `FlashList` for `FindScreen` provider results; swap `Image` → `expo-image` for `ManageScreen` + `NotificationsScreen` thumbnails; delete the two unreachable screens (overlaps with P1). | Low | 1 hr | Free perf gains; no behavior change. |
+| P12 | **Minimum-viable offline UX (§4.16).** Install `@react-native-community/netinfo`, render a thin "You're offline" banner, set `refetchOnReconnect: true` in `client/lib/query-client.ts`. | Low | 1 hr | Users on flaky networks stop staring at silent spinners. |
 
-**Total effort for P0–P10: ~1.5–2 days.** Only P0 blocks paid rollout; the rest are bounded polish + hardening.
+**Subtotal: ~6–7 hours.**
+
+**Total effort for P0–P12: ~2 days.** Only P0 blocks paid rollout; the rest splits cleanly into 10–12 hrs of pre-launch trust fixes (P1–P7) and 6–7 hrs of post-launch polish (P8–P12).
 
 ---
 
@@ -528,7 +581,7 @@ For a soft-launch demo without code changes, the following user flows are presen
 - **Leave a review** with provider-rating recalc.
 - **HouseFax dashboard** with real home data + AI insights.
 - **Health Score wizard** with real persistence + write-back of home attributes.
-- **Service History** as a real appointment timeline. *(Note: the API behind it is exploitable — see §4.16. Safe for a controlled demo, not for paid users until P0 ships.)*
+- **Service History** as a real appointment timeline. *(Note: the API behind it is exploitable — see §4.18. Safe for a controlled demo, not for paid users until P0 ships.)*
 - **Survival Kit wizard** with real wizard-answer persistence (caveat: regenerate the task list on each open).
 - **Edit profile (name + phone)**.
 - **Manage notification preferences** — honored by the sender.
@@ -612,7 +665,7 @@ MoreScreen
 | HouseFax | `GET /api/housefax/:homeId` (2480) | (auto-derived from `housefax_entries`, `invoices`, `appointments`) | Read-only aggregate; no client-side persistence. |
 | Health Score | wizard local | `PUT /api/homes/:id` (`healthScore`, `lastHealthScoreAt`); `PATCH /api/homes/:id/profile` (write-back) | Score persisted on `homes`; answers update `homes.profile`. |
 | Survival Kit | wizard local | `PATCH /api/homes/:homeId/profile` | Answers persisted on `homes.profile`. Generated tasks **not persisted** (regenerated client-side). |
-| Service History | `GET /api/homes/:homeId/service-history` (6254) | (read-only join) | Real-time from `appointments × providers`. **Endpoint missing ownership check (§4.16).** |
+| Service History | `GET /api/homes/:homeId/service-history` (6254) | (read-only join) | Real-time from `appointments × providers`. **Endpoint missing ownership check (§4.18).** |
 | Appointments | `GET /api/users/:userId/appointments` (3344), `GET /api/appointment/:id` (singular, 3363) | `POST /api/appointments` (3635), reschedule/cancel via `/api/appointments/:id/*` | DB row in `appointments`; idempotency dedup at `:3657`. |
 | Reviews | (provider profile aggregates) | `POST /api/appointments/:id/review` (7406) | DB row in `reviews`; recalc rating on `providers`. |
 | Saved providers | `GET /api/saved-providers` (3208) | `POST /api/saved-providers` (3251), `DELETE /api/saved-providers/:id` (3271) | DB row in `saved_providers`. |
