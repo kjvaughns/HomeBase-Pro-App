@@ -55,7 +55,7 @@ The task spec (`task-267.md`) requested a **Pass / Partial / Fail** verdict per 
 - **Partial** = `Partial`
 - **Fail** = `Broken`, `Stubbed-Mock`, or `Missing`
 
-The columns below use the finer-grained vocabulary so that Stubbed-Mock vs. Missing vs. Broken-with-bug-in-flight can be distinguished at a glance. Counts in Pass/Partial/Fail terms: **20 Pass, 5 Partial, 2 Fail** (Budgeter + SavingsSpend).
+The columns below use the finer-grained vocabulary so that Stubbed-Mock vs. Missing vs. Broken-with-bug-in-flight can be distinguished at a glance. Counts in Pass/Partial/Fail terms: **21 Pass, 4 Partial, 2 Fail** — Pass = `Working` (rows 1–11, 13–15, 18–20, 22–24); Partial = `Partial` (rows 12, 16, 17, 25); Fail = `Stubbed-Mock + Missing` (rows 26, 27 — Budgeter + SavingsSpend). Note: row 24 (`ServiceHistoryScreen`) is `Working` on the client but flagged with a *server-side* High severity for the §4.18 IDOR.
 
 The **Reachable** column uses these tags:
 
@@ -180,7 +180,7 @@ Guests can also reach `WelcomeScreen`, `LoginScreen`, `SignUpScreen`, `ForgotPas
 
 - `client/lib/query-client.ts` injects the JWT and surfaces 401 as a generic `Error` from `throwIfResNotOk`.
 - There is no top-level handler in `App.tsx` that listens for `error.status === 401` to call `authStore.logout()` + `navigation.reset({ routes: [{ name: "Login" }] })`.
-- When a JWT expires mid-session (24h default), every authenticated screen breaks individually with whatever generic error UI it implements — `HomeScreen` shows nothing, `ManageScreen` shows an empty list, `PaymentScreen` retries forever via its 5-second poll. The user has to force-quit and relaunch.
+- When a JWT expires mid-session (24h default), every authenticated screen breaks individually with whatever generic error UI it implements — `HomeScreen` shows nothing, `ManageScreen` shows an empty list, `PaymentScreen` shows a one-shot error (the 5-second poll is gated on `query.state.data?.invoice?.status` at `PaymentScreen.tsx:69–81`, so a 401 throws once and stops; `retry: false` is set globally in `client/lib/query-client.ts:105`). The user has to force-quit and relaunch.
 
 **Fix:** Wrap `apiRequest` so a 401 dispatches a global `auth:expired` event; `App.tsx` listens once and routes to `Welcome`/`Login`.
 
@@ -287,13 +287,13 @@ Guests can also reach `WelcomeScreen`, `LoginScreen`, `SignUpScreen`, `ForgotPas
 ### 4.16 Offline behavior — **[Missing / Low]**
 
 - The app has **no offline mode**. There is no service worker, no `react-query` `persistQueryClient` plugin, no `AsyncStorage`-backed query cache, and no offline mutation queue.
-- React Query's default `staleTime` is the library default (0 ms), and `cacheTime` is the library default (5 minutes). Without a persister, leaving the app or losing connection guarantees an empty cache on relaunch.
+- The shared React Query client (`client/lib/query-client.ts:98–110`) explicitly sets `staleTime: 1000 * 60 * 5` (5 minutes), `refetchOnWindowFocus: false`, `refetchInterval: false`, and `retry: false` for both queries and mutations. So a fetch failure (network drop, 401, 5xx) throws once with no automatic retry — the screen sees the error immediately rather than spinning. This is intentional and correct, but it means *no* network-resilience layer is doing anything if the connection comes back.
 - `@react-native-community/netinfo` is in the pre-installed Expo Go library list but is **not imported anywhere in `client/`** — confirmed by repository-wide search. There is no "you're offline" banner, no retry-on-reconnect orchestration, and no queued-mutation flush.
-- The only network-resilience surface is React Query's automatic retry (3 by default) on individual queries. A user on the subway will see one screen-level error spinner per affected screen and no app-wide reassurance.
-- For the booking + payment flow this is a real concern: `POST /api/appointments` has server-side idempotency (`routes.ts:3657–3681`) so a flaky retry is safe, but a homeowner who taps "Book" while offline gets a generic Alert and no queued retry. Stripe PaymentSheet handles its own offline UX.
-- HouseFax, Health Score, and Service History are read-only views that show a centered `ActivityIndicator` indefinitely if the connection drops, with no "tap to retry" affordance on most screens.
+- The defaults notably **do not** set `refetchOnReconnect`, so even when the device returns to connectivity, stale-but-cached queries don't auto-refresh.
+- For the booking + payment flow this is a real concern: `POST /api/appointments` has server-side idempotency (`routes.ts:3657–3681`) so a manual retry is safe, but a homeowner who taps "Book" while offline gets a generic Alert and no queued retry. Stripe PaymentSheet handles its own offline UX.
+- HouseFax, Health Score, and Service History are read-only views that show a centered `ActivityIndicator` until the query resolves or errors; with `retry: false` an offline launch surfaces an error promptly but with no "tap to retry" affordance on most screens.
 
-**Fix:** Treat offline as Low priority for v1 (this is a connected-services product — bookings, AI chat, and payments have no offline meaning). Minimum viable improvement: install `@react-native-community/netinfo`, wrap `<App>` with a thin offline banner, and add `retry: 2` + `refetchOnReconnect: true` defaults in `client/lib/query-client.ts` (only the second is missing today). Defer query persistence + mutation queueing to post-launch.
+**Fix:** Treat offline as Low priority for v1 (this is a connected-services product — bookings, AI chat, and payments have no offline meaning). Minimum viable improvement: install `@react-native-community/netinfo`, wrap `<App>` with a thin offline banner, and add `refetchOnReconnect: true` (and consider `retry: 1` for read-only queries) in `client/lib/query-client.ts`. Defer query persistence + mutation queueing to post-launch.
 
 ### 4.17 Performance — **[Partial / Low]**
 
@@ -301,11 +301,13 @@ Guests can also reach `WelcomeScreen`, `LoginScreen`, `SignUpScreen`, `ForgotPas
 - **Re-renders.** `HomeScreen`, `FindScreen`, and `MoreScreen` re-render on every theme/auth/notification cache invalidation; no `React.memo` wrappers on heavy children. With current screen depth this is invisible, but it would matter once the appointment count grows.
 - **Image loading.** `expo-image` is used in `ProviderProfileScreen` and `HomeScreen` (good — built-in caching + memory pressure handling). `ManageScreen` and `NotificationsScreen` use `Image` from `react-native` for provider logos, missing the `expo-image` cache benefit.
 - **Bundle.** Two unreachable screens (`BudgeterScreen`, `SavingsSpendScreen` — see §4.1) and one legacy navigator file (`ProfileStackNavigator.tsx`) ship in the JS bundle. Combined LOC is ~700; modest but free to remove.
-- **Heavy components.** `SurvivalKitScreen` (17-step wizard) and `HealthScoreScreen` (14-step wizard) hold all step state in memory at once. Both fit in a single React component file with no measurable lag in manual testing on iPhone 13 / iPhone 15. `HouseFaxScreen` mounts four tabs simultaneously without `React.lazy`; tab switches are immediate.
-- **AI calls.** `POST /api/chat/simple` and `/api/intake/*` buffer the entire OpenAI streaming response server-side before returning (per the development guidelines for React Native streaming). Median response time is bounded by OpenAI latency (3–8 s); the client shows a spinner. No noticeable UX issue, but a longer-prompt request can feel sluggish.
+- **Heavy components.** `SurvivalKitScreen` (17-step wizard) and `HealthScoreScreen` (14-step wizard) keep all step state in memory at once — fine at this size, but worth noting if either wizard grows. `HouseFaxScreen` mounts four tabs simultaneously without `React.lazy`; based on the source there is no virtualization, but the per-tab payload is small.
+- **AI calls.** `POST /api/chat/simple` and `/api/intake/*` buffer the entire OpenAI streaming response server-side before returning (per the development guidelines for React Native streaming). Total latency is therefore OpenAI-bound; the client shows a spinner.
 - **Cold start.** Expo Go cold start is dominated by JS bundle parse; nothing exotic in the homeowner code path that would dwarf normal Expo overhead.
 
-**Fix:** Performance is **Partial / Low** — there is no current performance bug for the documented user scale. Quick wins: (a) swap `FlatList` → `FlashList` for `FindScreen` provider results, (b) swap `Image` → `expo-image` for `ManageScreen` + `NotificationsScreen` thumbnails, (c) delete the two unreachable screens (also closes §4.1). None are blockers.
+**Methodology note.** This audit is a static code review only — no app instrumentation, no profiler runs, no device measurements. Performance findings above are read off the source (which library is imported, whether virtualization is used, where heavy state lives). All quantitative claims have been removed.
+
+**Fix:** Performance is **Partial / Low** — there is no current performance bug visible in the source. Quick wins (all source-level): (a) swap `FlatList` → `FlashList` for `FindScreen` provider results, (b) swap `Image` → `expo-image` for `ManageScreen` + `NotificationsScreen` thumbnails, (c) delete the two unreachable screens (also closes §4.1). None are blockers; all should be confirmed against a real device profile before treating them as wins.
 
 ### 4.18 IDOR on `/api/homes/:homeId/service-history` and `/api/homes/:homeId/reminders` — **[Broken / Critical]**
 
