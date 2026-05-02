@@ -10117,6 +10117,7 @@ Respond with JSON only:
   app.post(
     "/api/payments",
     requireAuth,
+    requireAdmin,
     async (req: Request, res: Response) => {
       try {
         const parsed = insertPaymentSchema.safeParse(req.body);
@@ -11084,6 +11085,9 @@ Respond with JSON only:
   );
 
   // Create or update provider plan
+  // NOTE: platformFeePercent and platformFeeFixedCents are platform-controlled
+  // billing policy. Providers may only set planTier on their own record.
+  // Fee fields can only be changed by an admin.
   app.post(
     "/api/providers/:providerId/plan",
     requireAuth,
@@ -11091,8 +11095,15 @@ Respond with JSON only:
       try {
         const { providerId } = req.params;
         if (!(await assertProviderOwnership(req, providerId, res))) return;
-        const { planTier, platformFeePercent, platformFeeFixedCents } =
-          req.body;
+
+        // Providers may only update planTier — never fee rates.
+        // Reject requests that attempt to set admin-controlled fee fields.
+        const { planTier, platformFeePercent, platformFeeFixedCents } = req.body;
+        if (platformFeePercent !== undefined || platformFeeFixedCents !== undefined) {
+          return res.status(403).json({
+            error: "Platform fee rates are not provider-configurable",
+          });
+        }
 
         const [existing] = await db
           .select()
@@ -11104,8 +11115,51 @@ Respond with JSON only:
             .update(providerPlans)
             .set({
               planTier: planTier || existing.planTier,
+              updatedAt: new Date(),
+            })
+            .where(eq(providerPlans.id, existing.id))
+            .returning();
+          res.json({ plan: updated });
+        } else {
+          const [created] = await db
+            .insert(providerPlans)
+            .values({
+              providerId,
+              planTier: planTier || "free",
+            })
+            .returning();
+          res.status(201).json({ plan: created });
+        }
+      } catch (error: any) {
+        console.error("Update provider plan error:", error);
+        res
+          .status(500)
+          .json({ error: error.message || "Failed to update provider plan" });
+      }
+    },
+  );
+
+  // Admin-only endpoint to set platform fee rates for a provider plan
+  app.post(
+    "/api/admin/providers/:providerId/plan/fees",
+    requireAuth,
+    requireAdmin,
+    async (req: Request<{ providerId: string }>, res: Response) => {
+      try {
+        const { providerId } = req.params;
+        const { platformFeePercent, platformFeeFixedCents } = req.body;
+
+        const [existing] = await db
+          .select()
+          .from(providerPlans)
+          .where(eq(providerPlans.providerId, providerId));
+
+        if (existing) {
+          const [updated] = await db
+            .update(providerPlans)
+            .set({
               platformFeePercent:
-                platformFeePercent || existing.platformFeePercent,
+                platformFeePercent ?? existing.platformFeePercent,
               platformFeeFixedCents:
                 platformFeeFixedCents ?? existing.platformFeeFixedCents,
               updatedAt: new Date(),
@@ -11118,7 +11172,6 @@ Respond with JSON only:
             .insert(providerPlans)
             .values({
               providerId,
-              planTier: planTier || "free",
               platformFeePercent: platformFeePercent || "3.00",
               platformFeeFixedCents: platformFeeFixedCents || 0,
             })
@@ -11126,10 +11179,10 @@ Respond with JSON only:
           res.status(201).json({ plan: created });
         }
       } catch (error: any) {
-        console.error("Update provider plan error:", error);
+        console.error("Admin update provider fee error:", error);
         res
           .status(500)
-          .json({ error: error.message || "Failed to update provider plan" });
+          .json({ error: error.message || "Failed to update provider fees" });
       }
     },
   );
@@ -11176,14 +11229,14 @@ Respond with JSON only:
     },
   );
 
-  // Mark provider as subscribed (called when activation flow completes via website)
+  // Mark provider as subscribed (admin-only — must be triggered by verified billing event, not self-service)
   app.post(
     "/api/providers/:providerId/activate-subscription",
     requireAuth,
+    requireAdmin,
     async (req: Request<{ providerId: string }>, res: Response) => {
       try {
         const { providerId } = req.params;
-        if (!(await assertProviderOwnership(req, providerId, res))) return;
         const [existing] = await db
           .select()
           .from(providerPlans)
@@ -11623,15 +11676,28 @@ Respond with JSON only:
       try {
         const authUserId = req.authenticatedUserId!;
 
-        const { pmId } = req.params;
-        const stripe = getStripe();
-        await stripe.paymentMethods.detach(pmId);
-
         const [user] = await db
           .select()
           .from(users)
           .where(eq(users.id, authUserId));
-        if (user?.defaultPaymentMethodId === pmId) {
+
+        if (!user?.stripeCustomerId) {
+          return res.status(400).json({ error: "No Stripe customer found" });
+        }
+
+        const { pmId } = req.params;
+        const stripe = getStripe();
+
+        // Verify the payment method belongs to this user's Stripe customer
+        // before detaching, to prevent IDOR attacks on other users' cards.
+        const pm = await stripe.paymentMethods.retrieve(pmId);
+        if (pm.customer !== user.stripeCustomerId) {
+          return res.status(403).json({ error: "Forbidden" });
+        }
+
+        await stripe.paymentMethods.detach(pmId);
+
+        if (user.defaultPaymentMethodId === pmId) {
           await db
             .update(users)
             .set({ defaultPaymentMethodId: null, updatedAt: new Date() })
@@ -11914,16 +11980,16 @@ Respond with JSON only:
     },
   );
 
-  // Add credits to user wallet (for RevenueCat integration)
+  // Add credits to user wallet (admin-only — credits must originate from verified
+  // RevenueCat webhooks or other trusted server-side billing events, never
+  // from a self-service client call)
   app.post(
     "/api/users/:userId/credits/add",
     requireAuth,
+    requireAdmin,
     async (req: Request<{ userId: string }>, res: Response) => {
       try {
         const { userId } = req.params;
-        if (userId !== req.authenticatedUserId) {
-          return res.status(403).json({ error: "Access denied" });
-        }
         const { amountCents, reason } = req.body;
 
         if (!amountCents || amountCents <= 0) {
