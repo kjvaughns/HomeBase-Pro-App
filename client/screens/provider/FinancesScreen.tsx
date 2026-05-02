@@ -409,9 +409,30 @@ export default function FinancesScreen() {
     setRefreshing(false);
   }, [refetchPayouts, refetchPayments, refetchRefunds, refetchInvoices]);
 
-  // ── Renderers ─────────────────────────────────────────────────────────────
+  // ── Memoised navigation/action callbacks ──────────────────────────────────
 
-  const renderPayout = ({ item, index }: { item: StripePayout; index: number }) => (
+  const handleAddInvoice = useCallback(() => {
+    Haptics.selectionAsync();
+    navigation.navigate("AddInvoice");
+  }, [navigation]);
+
+  const handleConnectStripe = useCallback(() => {
+    navigation.navigate("StripeConnect");
+  }, [navigation]);
+
+  const handleInvoicePress = useCallback((invoiceId: string) => {
+    Haptics.selectionAsync();
+    navigation.navigate("InvoiceDetail", { invoiceId });
+  }, [navigation]);
+
+  const handleTabChange = useCallback((tab: TabKey) => {
+    Haptics.selectionAsync();
+    setActiveTab(tab);
+  }, []);
+
+  // ── Renderers (stable references via useCallback) ────────────────────────
+
+  const renderPayout = useCallback(({ item, index }: { item: StripePayout; index: number }) => (
     <Animated.View entering={FadeInDown.delay(index * 40).duration(300)}>
       <View style={[styles.row, { backgroundColor: theme.cardBackground }]} testID={`payout-${item.id}`}>
         <View style={[styles.rowIcon, { backgroundColor: Colors.accentLight }]}>
@@ -437,9 +458,9 @@ export default function FinancesScreen() {
         </View>
       </View>
     </Animated.View>
-  );
+  ), [theme.cardBackground, theme.textSecondary]);
 
-  const renderPayment = ({ item, index }: { item: StripePayment; index: number }) => (
+  const renderPayment = useCallback(({ item, index }: { item: StripePayment; index: number }) => (
     <Animated.View entering={FadeInDown.delay(index * 40).duration(300)}>
       <Pressable
         style={[styles.row, { backgroundColor: theme.cardBackground }]}
@@ -469,9 +490,9 @@ export default function FinancesScreen() {
         </View>
       </Pressable>
     </Animated.View>
-  );
+  ), [theme.cardBackground, theme.textSecondary, navigation]);
 
-  const renderRefund = ({ item, index }: { item: StripeRefund; index: number }) => (
+  const renderRefund = useCallback(({ item, index }: { item: StripeRefund; index: number }) => (
     <Animated.View entering={FadeInDown.delay(index * 40).duration(300)}>
       <View style={[styles.row, { backgroundColor: theme.cardBackground }]} testID={`refund-${item.refundId}`}>
         <View style={[styles.rowIcon, { backgroundColor: "#FF3B3014" }]}>
@@ -500,11 +521,11 @@ export default function FinancesScreen() {
         </View>
       </View>
     </Animated.View>
-  );
+  ), [theme.cardBackground, theme.textSecondary]);
 
-  // ── Shared header + tab bar ────────────────────────────────────────────────
+  // ── Shared header element (memoised so FlatList doesn't remount it) ───────
 
-  const SharedListHeader = () => (
+  const sharedHeader = useMemo(() => (
     <View>
       {/* Revenue summary card */}
       <Animated.View entering={FadeInDown.delay(50).duration(400)}>
@@ -513,10 +534,7 @@ export default function FinancesScreen() {
             <ThemedText style={[styles.balanceLabel, { color: theme.textSecondary }]}>
               Revenue This Month
             </ThemedText>
-            <Pressable
-              style={styles.newInvoiceBtn}
-              onPress={() => { Haptics.selectionAsync(); navigation.navigate("AddInvoice"); }}
-            >
+            <Pressable style={styles.newInvoiceBtn} onPress={handleAddInvoice}>
               <Feather name="plus" size={14} color={Colors.accent} />
               <ThemedText style={[styles.newInvoiceBtnText, { color: Colors.accent }]}>
                 New Invoice
@@ -581,10 +599,7 @@ export default function FinancesScreen() {
               ))}
             </View>
           ) : (invoicesData?.invoices ?? []).length === 0 ? (
-            <Pressable
-              style={styles.outstandingEmpty}
-              onPress={() => { Haptics.selectionAsync(); navigation.navigate("AddInvoice"); }}
-            >
+            <Pressable style={styles.outstandingEmpty} onPress={handleAddInvoice}>
               <Feather name="file-plus" size={18} color={Colors.accent} />
               <ThemedText style={[styles.outstandingEmptyText, { color: Colors.accent }]}>
                 Create your first invoice
@@ -605,7 +620,7 @@ export default function FinancesScreen() {
                         ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.separator }
                         : null,
                     ]}
-                    onPress={() => { Haptics.selectionAsync(); navigation.navigate("InvoiceDetail", { invoiceId: inv.id }); }}
+                    onPress={() => handleInvoicePress(inv.id)}
                     testID={`outstanding-invoice-${inv.id}`}
                   >
                     <View style={[styles.outstandingIcon, { backgroundColor: isOverdue ? "#FF3B3014" : Colors.accentLight }]}>
@@ -647,7 +662,7 @@ export default function FinancesScreen() {
         <Animated.View entering={FadeInDown.delay(100).duration(400)}>
           <Pressable
             style={[styles.stripeCtaCard, { backgroundColor: theme.cardBackground, borderColor: Colors.accent + "30" }]}
-            onPress={() => navigation.navigate("StripeConnect")}
+            onPress={handleConnectStripe}
           >
             <View style={styles.stripeCtaRow}>
               <View style={[styles.stripeCtaIcon, { backgroundColor: Colors.accentLight }]}>
@@ -679,7 +694,7 @@ export default function FinancesScreen() {
               <Pressable
                 key={tab}
                 style={styles.tabItem}
-                onPress={() => { Haptics.selectionAsync(); setActiveTab(tab); }}
+                onPress={() => handleTabChange(tab)}
                 testID={`tab-${tab}`}
               >
                 <ThemedText
@@ -701,21 +716,44 @@ export default function FinancesScreen() {
         </View>
       </Animated.View>
     </View>
-  );
+  ), [
+    theme.cardBackground,
+    theme.textSecondary,
+    theme.separator,
+    stats.revenueMTD,
+    stats.jobsCompleted,
+    stripePayouts,
+    stripeRefunds,
+    outstandingInvoices,
+    invoicesLoading,
+    invoicesData,
+    clientNameMap,
+    isConnected,
+    stripeStatus,
+    activeTab,
+    handleAddInvoice,
+    handleConnectStripe,
+    handleInvoicePress,
+    handleTabChange,
+  ]);
 
-  const contentStyle = {
+  // ── Stable derived props for FlatList ─────────────────────────────────────
+
+  const contentStyle = useMemo(() => ({
     paddingTop: headerHeight + Spacing.md,
     paddingBottom: tabBarHeight + Spacing.xl,
     paddingHorizontal: Spacing.screenPadding,
-  };
+  }), [headerHeight, tabBarHeight]);
 
-  const scrollIndicatorInsets = { bottom: insets.bottom };
+  const scrollIndicatorInsets = useMemo(() => ({ bottom: insets.bottom }), [insets.bottom]);
 
-  const refreshControl = (
+  const refreshControl = useMemo(() => (
     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
-  );
+  ), [refreshing, onRefresh]);
 
-  const noStripeEmpty = (
+  // ── Empty state elements (memoised) ───────────────────────────────────────
+
+  const noStripeEmpty = useMemo(() => (
     <View style={styles.emptyContainer}>
       <EmptyState
         image={require("../../../assets/images/empty-bookings.png")}
@@ -723,99 +761,48 @@ export default function FinancesScreen() {
         description="Complete your Stripe setup to view payouts, payments, and refunds."
         primaryAction={{
           label: "Set Up Stripe",
-          onPress: () => navigation.navigate("StripeConnect"),
+          onPress: handleConnectStripe,
         }}
       />
     </View>
-  );
+  ), [handleConnectStripe]);
 
-  // ── Per-tab skeleton lists ─────────────────────────────────────────────────
+  const skeletonList = useMemo(() => (
+    <View>
+      {SKELETON_KEYS.map((k) => <SkeletonRow key={k} theme={theme} />)}
+    </View>
+  ), [theme]);
 
-  if (activeTab === "payouts") {
-    const PayoutEmpty = () => {
-      if (payoutsLoading) {
-        return (
-          <View>
-            {SKELETON_KEYS.map((k) => <SkeletonRow key={k} theme={theme} />)}
-          </View>
-        );
-      }
-      if (!isConnected) return noStripeEmpty;
-      return (
-        <View style={styles.emptyContainer}>
-          <EmptyState
-            image={require("../../../assets/images/empty-bookings.png")}
-            title="No payouts yet"
-            description="Payouts from completed invoices will appear here."
-          />
-        </View>
-      );
-    };
-
+  const payoutEmpty = useMemo(() => {
+    if (payoutsLoading) return skeletonList;
+    if (!isConnected) return noStripeEmpty;
     return (
-      <ThemedView style={styles.container}>
-        <FlatList<StripePayout>
-          data={stripePayouts}
-          renderItem={renderPayout}
-          keyExtractor={(item) => item.id}
-          ListHeaderComponent={<SharedListHeader />}
-          ListEmptyComponent={<PayoutEmpty />}
-          contentContainerStyle={contentStyle}
-          scrollIndicatorInsets={scrollIndicatorInsets}
-          showsVerticalScrollIndicator={false}
-          refreshControl={refreshControl}
+      <View style={styles.emptyContainer}>
+        <EmptyState
+          image={require("../../../assets/images/empty-bookings.png")}
+          title="No payouts yet"
+          description="Payouts from completed invoices will appear here."
         />
-      </ThemedView>
+      </View>
     );
-  }
+  }, [payoutsLoading, isConnected, skeletonList, noStripeEmpty]);
 
-  if (activeTab === "payments") {
-    const PaymentEmpty = () => {
-      if (paymentsLoading) {
-        return (
-          <View>
-            {SKELETON_KEYS.map((k) => <SkeletonRow key={k} theme={theme} />)}
-          </View>
-        );
-      }
-      if (!isConnected) return noStripeEmpty;
-      return (
-        <View style={styles.emptyContainer}>
-          <EmptyState
-            image={require("../../../assets/images/empty-bookings.png")}
-            title="No payments yet"
-            description="Completed payments from clients will appear here."
-          />
-        </View>
-      );
-    };
-
+  const paymentEmpty = useMemo(() => {
+    if (paymentsLoading) return skeletonList;
+    if (!isConnected) return noStripeEmpty;
     return (
-      <ThemedView style={styles.container}>
-        <FlatList<StripePayment>
-          data={stripePayments}
-          renderItem={renderPayment}
-          keyExtractor={(item) => item.chargeId}
-          ListHeaderComponent={<SharedListHeader />}
-          ListEmptyComponent={<PaymentEmpty />}
-          contentContainerStyle={contentStyle}
-          scrollIndicatorInsets={scrollIndicatorInsets}
-          showsVerticalScrollIndicator={false}
-          refreshControl={refreshControl}
+      <View style={styles.emptyContainer}>
+        <EmptyState
+          image={require("../../../assets/images/empty-bookings.png")}
+          title="No payments yet"
+          description="Completed payments from clients will appear here."
         />
-      </ThemedView>
+      </View>
     );
-  }
+  }, [paymentsLoading, isConnected, skeletonList, noStripeEmpty]);
 
-  // activeTab === "refunds"
-  const RefundEmpty = () => {
-    if (refundsLoading) {
-      return (
-        <View>
-          {SKELETON_KEYS.map((k) => <SkeletonRow key={k} theme={theme} />)}
-        </View>
-      );
-    }
+  const refundEmpty = useMemo(() => {
+    if (refundsLoading) return skeletonList;
     if (!isConnected) return noStripeEmpty;
     return (
       <View style={styles.emptyContainer}>
@@ -826,16 +813,55 @@ export default function FinancesScreen() {
         />
       </View>
     );
-  };
+  }, [refundsLoading, isConnected, skeletonList, noStripeEmpty]);
 
+  // ── Render single FlatList based on activeTab ─────────────────────────────
+
+  if (activeTab === "payouts") {
+    return (
+      <ThemedView style={styles.container}>
+        <FlatList<StripePayout>
+          data={stripePayouts}
+          renderItem={renderPayout}
+          keyExtractor={keyExtractorPayout}
+          ListHeaderComponent={sharedHeader}
+          ListEmptyComponent={payoutEmpty}
+          contentContainerStyle={contentStyle}
+          scrollIndicatorInsets={scrollIndicatorInsets}
+          showsVerticalScrollIndicator={false}
+          refreshControl={refreshControl}
+        />
+      </ThemedView>
+    );
+  }
+
+  if (activeTab === "payments") {
+    return (
+      <ThemedView style={styles.container}>
+        <FlatList<StripePayment>
+          data={stripePayments}
+          renderItem={renderPayment}
+          keyExtractor={keyExtractorPayment}
+          ListHeaderComponent={sharedHeader}
+          ListEmptyComponent={paymentEmpty}
+          contentContainerStyle={contentStyle}
+          scrollIndicatorInsets={scrollIndicatorInsets}
+          showsVerticalScrollIndicator={false}
+          refreshControl={refreshControl}
+        />
+      </ThemedView>
+    );
+  }
+
+  // activeTab === "refunds"
   return (
     <ThemedView style={styles.container}>
       <FlatList<StripeRefund>
         data={stripeRefunds}
         renderItem={renderRefund}
-        keyExtractor={(item) => item.refundId}
-        ListHeaderComponent={<SharedListHeader />}
-        ListEmptyComponent={<RefundEmpty />}
+        keyExtractor={keyExtractorRefund}
+        ListHeaderComponent={sharedHeader}
+        ListEmptyComponent={refundEmpty}
         contentContainerStyle={contentStyle}
         scrollIndicatorInsets={scrollIndicatorInsets}
         showsVerticalScrollIndicator={false}
@@ -844,6 +870,12 @@ export default function FinancesScreen() {
     </ThemedView>
   );
 }
+
+// ─── Stable module-level keyExtractors (avoid re-allocation on every render) ─
+
+const keyExtractorPayout = (item: StripePayout) => item.id;
+const keyExtractorPayment = (item: StripePayment) => item.chargeId;
+const keyExtractorRefund = (item: StripeRefund) => item.refundId;
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
