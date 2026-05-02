@@ -321,8 +321,9 @@ const onboardingRateLimitMap = new Map<
 >();
 
 // IP-based rate limiter factory for unauthenticated abuse-prone endpoints
-// (forgot-password, support/ticket). Uses x-forwarded-for first hop, falls
-// back to socket address. Each endpoint gets its own bucket so they don't
+// (forgot-password, support/ticket). Uses req.socket.remoteAddress only —
+// X-Forwarded-For is intentionally ignored because clients can spoof it to
+// bypass per-IP limits. Each endpoint gets its own bucket so they don't
 // interfere with each other.
 function createIpRateLimit(opts: {
   bucket: Map<string, { count: number; resetAt: number }>;
@@ -331,12 +332,7 @@ function createIpRateLimit(opts: {
   message?: string;
 }): RequestHandler {
   return (req, res, next) => {
-    const ip =
-      (req.headers["x-forwarded-for"] as string | undefined)
-        ?.split(",")[0]
-        ?.trim() ||
-      req.socket.remoteAddress ||
-      "unknown";
+    const ip = req.socket.remoteAddress || "unknown";
     const now = Date.now();
     const entry = opts.bucket.get(ip);
     if (!entry || entry.resetAt < now) {
@@ -381,13 +377,22 @@ const supportTicketRateLimit = createIpRateLimit({
     "Too many support requests. Please wait an hour and try again.",
 });
 
+const publicBookingRateLimitMap = new Map<
+  string,
+  { count: number; resetAt: number }
+>();
+const publicBookingRateLimit = createIpRateLimit({
+  bucket: publicBookingRateLimitMap,
+  windowMs: 60 * 60 * 1000, // 1 hour
+  limit: 10,
+  message:
+    "Too many booking submissions. Please wait an hour and try again.",
+});
+
 const onboardingRateLimit: RequestHandler = (req, res, next) => {
-  const ip =
-    (req.headers["x-forwarded-for"] as string | undefined)
-      ?.split(",")[0]
-      ?.trim() ||
-    req.socket.remoteAddress ||
-    "unknown";
+  // Use only the socket address — X-Forwarded-For is spoofable and must not
+  // be trusted for rate-limit keying on unauthenticated public routes.
+  const ip = req.socket.remoteAddress || "unknown";
   const now = Date.now();
   const windowMs = 10 * 60 * 1000;
   const limit = 30;
@@ -10612,9 +10617,11 @@ Respond with JSON only:
   // Get Stripe Connect status for provider
   app.get(
     "/api/stripe/connect/status/:providerId",
+    requireAuth,
     async (req: Request<{ providerId: string }>, res: Response) => {
       try {
         const { providerId } = req.params;
+        if (!(await assertProviderOwnership(req, providerId, res))) return;
         const result = await getConnectStatus(providerId);
         res.json(result);
       } catch (error: any) {
@@ -11070,9 +11077,11 @@ Respond with JSON only:
   // Get Connect account status for provider
   app.get(
     "/api/connect/status/:providerId",
+    requireAuth,
     async (req: Request<{ providerId: string }>, res: Response) => {
       try {
         const { providerId } = req.params;
+        if (!(await assertProviderOwnership(req, providerId, res))) return;
         const result = await getConnectStatus(providerId);
         res.json(result);
       } catch (error: any) {
@@ -12554,6 +12563,7 @@ Respond with JSON only:
   // Submit intake form (public - creates intake submission)
   app.post(
     "/api/providers/:slug/submit",
+    publicBookingRateLimit,
     async (req: Request<{ slug: string }>, res: Response) => {
       try {
         const { slug } = req.params;
@@ -12566,10 +12576,11 @@ Respond with JSON only:
           answersJson,
           photosJson,
           preferredTimesJson,
-          homeownerUserId,
           categoryId,
         } = req.body;
 
+        // homeownerUserId from an unauthenticated request body cannot be
+        // verified and is stripped to prevent identity forgery.
         const result = await handleMarketplaceBooking({
           slug,
           clientName,
@@ -12581,7 +12592,7 @@ Respond with JSON only:
           photosJson,
           preferredTimesJson,
           categoryId,
-          homeownerUserId,
+          homeownerUserId: null,
         });
 
         if (!result.ok) {
@@ -12756,6 +12767,7 @@ Respond with JSON only:
   // POST /api/booking/:slug — submit a booking request
   app.post(
     "/api/booking/:slug",
+    publicBookingRateLimit,
     async (req: Request<{ slug: string }>, res: Response) => {
       try {
         const { slug } = req.params;
@@ -12769,9 +12781,10 @@ Respond with JSON only:
           categoryId,
           answersJson,
           photosJson,
-          homeownerUserId,
         } = req.body;
 
+        // homeownerUserId from an unauthenticated request body cannot be
+        // verified and is stripped to prevent identity forgery.
         const result = await handleMarketplaceBooking({
           slug,
           clientName,
@@ -12783,7 +12796,7 @@ Respond with JSON only:
           photosJson,
           preferredTimesJson,
           categoryId,
-          homeownerUserId,
+          homeownerUserId: null,
         });
 
         if (!result.ok) {
@@ -14064,6 +14077,18 @@ Respond with JSON only:
 
       if (!name || !email || !category || !subject || !message) {
         return res.status(400).json({ error: "All fields are required" });
+      }
+
+      // Enforce field length limits to prevent oversized payloads from
+      // creating unbounded DB rows or outbound email content.
+      if (
+        String(name).length > 200 ||
+        String(email).length > 254 ||
+        String(category).length > 100 ||
+        String(subject).length > 300 ||
+        String(message).length > 5000
+      ) {
+        return res.status(400).json({ error: "One or more fields exceed the allowed length." });
       }
 
       // Optionally read userId from auth token (non-fatal if absent)

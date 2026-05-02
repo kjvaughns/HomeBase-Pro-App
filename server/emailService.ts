@@ -1273,10 +1273,12 @@ export async function sendSupportTicketEmail(data: {
 
     const html = buildEmailBase("Support Request Received", body);
 
+    // Send only to the support inbox — do NOT CC the user-supplied email
+    // address, as doing so would allow unauthenticated callers to relay
+    // HomeBase-branded email to arbitrary recipients (phishing/spam vector).
     const result = await client.emails.send({
       from: fromEmail || "HomeBase <noreply@resend.dev>",
       to: "support@homebaseproapp.com",
-      cc: data.email,
       subject: `[Support #${data.ticketId.slice(0, 8).toUpperCase()}] ${data.category}: ${data.subject}`,
       html,
     });
