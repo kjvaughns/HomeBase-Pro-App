@@ -265,7 +265,7 @@ export default function ClientDetailScreen() {
   const statusColor = useMemo(() => {
     switch (clientStatus) {
       case "active": return Colors.accent;
-      case "lead": return "#3B82F6";
+      case "lead": return Colors.info;
       case "inactive": return theme.textSecondary;
       default: return theme.textSecondary;
     }
@@ -587,10 +587,10 @@ export default function ClientDetailScreen() {
                     </ThemedText>
                   </View>
                   <View style={[styles.statusBadge, {
-                    backgroundColor: msg.status === "sent" ? "#22C55E20" : msg.status === "failed" ? "#EF444420" : "#F59E0B20"
+                    backgroundColor: msg.status === "sent" ? Colors.successLight : msg.status === "failed" ? Colors.errorLight : Colors.warningLight
                   }]}>
                     <ThemedText type="caption" style={{
-                      color: msg.status === "sent" ? "#22C55E" : msg.status === "failed" ? "#EF4444" : "#F59E0B",
+                      color: msg.status === "sent" ? Colors.success : msg.status === "failed" ? Colors.error : Colors.warning,
                       textTransform: "capitalize"
                     }}>
                       {msg.status === "pending_sms" ? "Pending" : msg.status}
@@ -686,7 +686,7 @@ export default function ClientDetailScreen() {
               <ThemedText
                 type="h1"
                 style={{
-                  color: (home.healthScore ?? 0) >= 80 ? Colors.accent : (home.healthScore ?? 0) >= 60 ? "#F59E0B" : "#EF4444",
+                  color: (home.healthScore ?? 0) >= 80 ? Colors.accent : (home.healthScore ?? 0) >= 60 ? Colors.warning : Colors.error,
                 }}
               >
                 {home.healthScore}
@@ -714,7 +714,7 @@ export default function ClientDetailScreen() {
             </ThemedText>
             {home.notableRisks.map((risk: string, index: number) => (
               <View key={index} style={styles.riskRow}>
-                <Feather name="alert-triangle" size={14} color="#F59E0B" />
+                <Feather name="alert-triangle" size={14} color={Colors.warning} />
                 <ThemedText type="body" style={{ marginLeft: Spacing.sm }}>
                   {risk}
                 </ThemedText>

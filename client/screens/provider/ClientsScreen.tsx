@@ -109,7 +109,7 @@ function ClientCard({ client, onPress, onCall, onMessage, lastMessage }: ClientC
   const statusColor = useMemo(() => {
     switch (client.status) {
       case "active": return Colors.accent;
-      case "lead": return "#3B82F6";
+      case "lead": return Colors.info;
       case "inactive": return theme.textSecondary;
       default: return theme.textSecondary;
     }

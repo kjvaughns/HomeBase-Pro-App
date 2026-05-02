@@ -1,12 +1,22 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { StyleSheet, View, ScrollView, Pressable, Alert, ActivityIndicator, Switch, TextInput } from "react-native";
+import { StyleSheet, View, ScrollView, Pressable, Alert, ActivityIndicator, Switch, TextInput, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
-import * as Haptics from "expo-haptics";
+import * as HapticsRaw from "expo-haptics";
+
+const Haptics = Platform.OS === "web"
+  ? {
+      selectionAsync: () => {},
+      notificationAsync: (_t?: unknown) => {},
+      impactAsync: (_t?: unknown) => {},
+      NotificationFeedbackType: HapticsRaw.NotificationFeedbackType,
+      ImpactFeedbackStyle: HapticsRaw.ImpactFeedbackStyle,
+    }
+  : HapticsRaw;
 import { useQuery, useMutation } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
@@ -746,7 +756,7 @@ export default function SimpleBookingScreen() {
           <Animated.View entering={FadeInDown.delay(290)}>
             <GlassCard style={styles.alertCardWarning}>
               <View style={styles.alertRow}>
-                <Feather name="alert-circle" size={18} color="#F59E0B" />
+                <Feather name="alert-circle" size={18} color={Colors.warning} />
                 <ThemedText style={{ marginLeft: Spacing.sm, flex: 1 }}>
                   Add a home address so the provider knows where to come.
                 </ThemedText>
@@ -953,7 +963,7 @@ export default function SimpleBookingScreen() {
         <PrimaryButton
           onPress={handleBook}
           disabled={!canBook || bookMutation.isPending}
-          style={[styles.bookBtn, isQuoteOnly && { backgroundColor: "#AF52DE" }]}
+          style={[styles.bookBtn, isQuoteOnly && { backgroundColor: Colors.info }]}
         >
           {bookMutation.isPending ? "Submitting..." : isQuoteOnly ? "Request a Quote" : "Request Appointment"}
         </PrimaryButton>
@@ -1035,7 +1045,7 @@ const styles = StyleSheet.create({
   alertCardWarning: {
     marginBottom: Spacing.md,
     borderWidth: 1,
-    borderColor: "#F59E0B",
+    borderColor: Colors.warning,
   },
   alertRow: {
     flexDirection: "row",

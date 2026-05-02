@@ -1285,12 +1285,12 @@ export default function SurvivalKitScreen() {
             <GlassCard style={styles.costsCard}>
               <ThemedText style={styles.costsTitle}>Cost Breakdown by Category</ThemedText>
               {[
-                { category: "HVAC", amount: 650, color: "#3B82F6" },
-                { category: "Plumbing", amount: 350, color: "#8B5CF6" },
-                { category: "Electrical", amount: 200, color: "#F59E0B" },
-                { category: "Roof", amount: 400, color: Colors.accent },
-                { category: "Lawn", amount: 480, color: "#EC4899" },
-                { category: "Pest Control", amount: 320, color: "#6B7280" },
+                { category: "HVAC", amount: 650, color: Colors.chart[1] },
+                { category: "Plumbing", amount: 350, color: Colors.chart[4] },
+                { category: "Electrical", amount: 200, color: Colors.chart[2] },
+                { category: "Roof", amount: 400, color: Colors.chart[0] },
+                { category: "Lawn", amount: 480, color: Colors.chart[5] },
+                { category: "Pest Control", amount: 320, color: Colors.neutral },
               ].map((item) => (
                 <View key={item.category} style={styles.costRow}>
                   <View style={[styles.costDot, { backgroundColor: item.color }]} />

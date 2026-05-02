@@ -245,7 +245,7 @@ export default function PaymentScreen() {
               styles.returnNotice,
               {
                 backgroundColor: status === "cancelled" ? "#FEF3C7" : "#D1FAE5",
-                borderColor: status === "cancelled" ? "#F59E0B" : "#10B981",
+                borderColor: status === "cancelled" ? Colors.warning : Colors.success,
               },
             ]}
             testID="banner-payment-return"

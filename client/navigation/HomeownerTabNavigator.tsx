@@ -2,7 +2,7 @@ import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
-import { Platform, StyleSheet, View, useWindowDimensions, Pressable, Text } from "react-native";
+import { Platform, StyleSheet, View, useWindowDimensions, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import HomeScreen from "@/screens/homeowner/HomeScreen";
@@ -11,6 +11,7 @@ import ManageScreen from "@/screens/homeowner/ManageScreen";
 import MoreScreen from "@/screens/homeowner/MoreScreen";
 import { useTheme } from "@/hooks/useTheme";
 import { HeaderTitle } from "@/components/HeaderTitle";
+import { ThemedText } from "@/components/ThemedText";
 import { useAuthStore } from "@/state/authStore";
 import { Colors, Typography } from "@/constants/theme";
 
@@ -130,7 +131,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
               accessibilityState={isFocused ? { selected: true } : {}}
             >
               <Feather name={iconName} size={iconSize} color={color} style={styles.icon} />
-              <Text style={[styles.tabText, { fontSize, color }]}>{label}</Text>
+              <ThemedText style={[styles.tabText, { fontSize, color }]}>{label}</ThemedText>
             </Pressable>
           );
         })}

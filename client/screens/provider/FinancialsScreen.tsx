@@ -265,7 +265,7 @@ function BarChart({
               {isMax ? (
                 <ThemedText
                   style={{
-                    fontSize: 7,
+                    fontSize: 11,
                     fontWeight: "700",
                     color: Colors.accent,
                     marginBottom: 2,
@@ -301,7 +301,7 @@ function BarChart({
               {showLabel ? (
                 <ThemedText
                   style={{
-                    fontSize: 8,
+                    fontSize: 11,
                     color: theme.textSecondary,
                     textAlign: "center",
                   }}

@@ -261,7 +261,7 @@ export default function HouseFaxScreen() {
   const renderHealthScoreCard = () => (
     <View style={[styles.scoreCard, { backgroundColor: theme.cardBackground }]}>
       <View style={styles.scoreCircleContainer}>
-        <View style={[styles.scoreCircle, { borderColor: healthScore >= 70 ? Colors.accent : healthScore >= 40 ? "#F59E0B" : "#EF4444" }]}>
+        <View style={[styles.scoreCircle, { borderColor: healthScore >= 70 ? Colors.accent : healthScore >= 40 ? Colors.warning : Colors.error }]}>
           <ThemedText style={styles.scoreNumber}>{healthScore}</ThemedText>
           <ThemedText style={[styles.scoreLabel, { color: theme.textSecondary }]}>/ 100</ThemedText>
         </View>
@@ -315,8 +315,10 @@ export default function HouseFaxScreen() {
   const renderProfileTab = () => {
     if (!homeProfile) {
       return (
-        <View style={{ paddingVertical: Spacing.xl, alignItems: "center" }}>
-          <ActivityIndicator color={Colors.accent} />
+        <View style={{ paddingVertical: Spacing.xl, gap: Spacing.md }}>
+          <SkeletonLoader width="60%" height={28} />
+          <SkeletonCard />
+          <SkeletonCard />
         </View>
       );
     }
@@ -715,7 +717,7 @@ export default function HouseFaxScreen() {
             Your home health score of {healthScore} is calculated based on service coverage, recency, and documentation.
           </ThemedText>
           <View style={styles.compareBar}>
-            <View style={[styles.compareBarFill, { width: `${healthScore}%`, backgroundColor: healthScore >= 70 ? Colors.accent : healthScore >= 40 ? "#F59E0B" : "#EF4444" }]} />
+            <View style={[styles.compareBarFill, { width: `${healthScore}%`, backgroundColor: healthScore >= 70 ? Colors.accent : healthScore >= 40 ? Colors.warning : Colors.error }]} />
           </View>
           <View style={styles.compareLabels}>
             <ThemedText style={[styles.compareLabel, { color: theme.textSecondary }]}>0</ThemedText>

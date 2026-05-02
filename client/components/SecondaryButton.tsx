@@ -67,6 +67,7 @@ export function SecondaryButton({
         styles.button,
         {
           backgroundColor: theme.backgroundSecondary,
+          borderColor: theme.border,
           opacity: disabled ? 0.5 : 1,
         },
         style,
@@ -91,6 +92,7 @@ const styles = StyleSheet.create({
   button: {
     height: Spacing.buttonHeight,
     borderRadius: BorderRadius.button,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",

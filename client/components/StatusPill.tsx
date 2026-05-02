@@ -2,7 +2,7 @@ import React from "react";
 import { StyleSheet, View } from "react-native";
 
 import { ThemedText } from "@/components/ThemedText";
-import { Spacing, BorderRadius, Colors } from "@/constants/theme";
+import { Spacing, BorderRadius, Colors, Typography } from "@/constants/theme";
 
 export type StatusType = "success" | "warning" | "error" | "info" | "neutral" | "pending" | "scheduled" | "inProgress" | "completed" | "cancelled";
 
@@ -16,21 +16,21 @@ const getStatusColors = (status: StatusType): { bg: string; text: string } => {
   switch (status) {
     case "success":
     case "completed":
-      return { bg: `${Colors.accent}14`, text: Colors.accent };
+      return { bg: Colors.successLight, text: Colors.success };
     case "warning":
     case "pending":
-      return { bg: `${Colors.warning}14`, text: Colors.warning };
+      return { bg: Colors.warningLight, text: Colors.warning };
     case "error":
     case "cancelled":
-      return { bg: `${Colors.error}14`, text: Colors.error };
+      return { bg: Colors.errorLight, text: Colors.error };
     case "info":
     case "scheduled":
-      return { bg: "rgba(59, 130, 246, 0.12)", text: "#3B82F6" };
+      return { bg: Colors.infoLight, text: Colors.info };
     case "inProgress":
-      return { bg: `${Colors.accent}14`, text: Colors.accent };
+      return { bg: Colors.accentLight, text: Colors.accent };
     case "neutral":
     default:
-      return { bg: "rgba(128, 128, 128, 0.12)", text: "#808080" };
+      return { bg: Colors.neutralLight, text: Colors.neutral };
   }
 };
 
@@ -50,11 +50,11 @@ export function StatusPill({ status, label, size = "default" }: StatusPillProps)
       ]}
     >
       <ThemedText
+        type={isSmall ? "caption2" : "caption1"}
         style={[
           styles.label,
           {
             color: colors.text,
-            fontSize: isSmall ? 11 : 12,
           },
         ]}
       >
@@ -66,7 +66,7 @@ export function StatusPill({ status, label, size = "default" }: StatusPillProps)
 
 const styles = StyleSheet.create({
   pill: {
-    borderRadius: BorderRadius.sm,
+    borderRadius: BorderRadius.full,
     alignSelf: "flex-start",
   },
   label: {

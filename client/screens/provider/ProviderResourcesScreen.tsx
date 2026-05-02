@@ -165,7 +165,7 @@ export default function ProviderResourcesScreen() {
       case "tool":
         return Colors.warning;
       default:
-        return "#3B82F6";
+        return Colors.info;
     }
   };
 

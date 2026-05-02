@@ -2,7 +2,7 @@ import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
-import { Platform, StyleSheet, View, useWindowDimensions, Text, Pressable } from "react-native";
+import { Platform, StyleSheet, View, useWindowDimensions, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import ProviderHomeScreen from "@/screens/provider/ProviderHomeScreen";
@@ -12,6 +12,7 @@ import FinancialsScreen from "@/screens/provider/FinancialsScreen";
 import ProviderMoreScreen from "@/screens/provider/ProviderMoreScreen";
 import { useTheme } from "@/hooks/useTheme";
 import { HeaderTitle } from "@/components/HeaderTitle";
+import { ThemedText } from "@/components/ThemedText";
 import ProviderFAB from "@/components/ProviderFAB";
 import { Colors, Spacing, Typography, BorderRadius } from "@/constants/theme";
 
@@ -135,7 +136,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
               testID={`tab-${route.name}`}
             >
               <Feather name={iconName} size={iconSize} color={color} style={styles.icon} />
-              <Text style={[styles.tabText, { fontSize, color }]}>{label}</Text>
+              <ThemedText style={[styles.tabText, { fontSize, color }]}>{label}</ThemedText>
             </Pressable>
           );
         })}

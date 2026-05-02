@@ -96,11 +96,11 @@ const MONTHS_SHORT = [
 ];
 
 const STATUS_COLOR: Record<JobStatus, string> = {
-  scheduled: "#3B82F6",
-  confirmed: "#F59E0B",
-  on_my_way: "#F59E0B",
-  arrived: "#F59E0B",
-  in_progress: "#F59E0B",
+  scheduled: Colors.info,
+  confirmed: Colors.warning,
+  on_my_way: Colors.warning,
+  arrived: Colors.warning,
+  in_progress: Colors.warning,
   completed: Colors.accent,
   cancelled: "#9CA3AF",
 };

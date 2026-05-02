@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import {
   StyleSheet,
   View,
-  Text,
   Pressable,
   Modal,
 } from "react-native";
@@ -20,6 +19,7 @@ import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 
+import { ThemedText } from "@/components/ThemedText";
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { useLayout } from "@/hooks/useLayout";
@@ -238,14 +238,14 @@ function FABActionItem({
           },
         ]}
       >
-        <Text
+        <ThemedText
           style={[
             styles.actionLabelText,
             { color: theme.text },
           ]}
         >
           {action.label}
-        </Text>
+        </ThemedText>
       </View>
       <Pressable
         onPress={action.onPress}

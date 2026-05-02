@@ -141,7 +141,7 @@ export default function ProviderMoreScreen() {
         scrollIndicatorInsets={{ bottom: insets.bottom }}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+        <Animated.View entering={FadeInDown.delay(0).duration(220)}>
           <GlassCard style={styles.profileCard} onPress={() => navigation.navigate("BusinessHub")}>
             <View style={styles.profileContent}>
               <Avatar uri={user?.avatarUrl} name={user?.name} size="large" showBadge />
@@ -175,7 +175,7 @@ export default function ProviderMoreScreen() {
           </GlassCard>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(200).duration(400)}>
+        <Animated.View entering={FadeInDown.delay(40).duration(220)}>
           <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
             Business
           </ThemedText>
@@ -231,7 +231,7 @@ export default function ProviderMoreScreen() {
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(300).duration(400)}>
+        <Animated.View entering={FadeInDown.delay(60).duration(220)}>
           <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
             Account
           </ThemedText>
@@ -267,7 +267,7 @@ export default function ProviderMoreScreen() {
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(400).duration(400)}>
+        <Animated.View entering={FadeInDown.delay(80).duration(220)}>
           <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
             Settings
           </ThemedText>
@@ -293,7 +293,7 @@ export default function ProviderMoreScreen() {
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(500).duration(400)}>
+        <Animated.View entering={FadeInDown.delay(100).duration(220)}>
           <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
             Appearance
           </ThemedText>
@@ -318,7 +318,7 @@ export default function ProviderMoreScreen() {
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(600).duration(400)}>
+        <Animated.View entering={FadeInDown.delay(120).duration(220)}>
           <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
             Support
           </ThemedText>
@@ -365,7 +365,7 @@ export default function ProviderMoreScreen() {
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(700).duration(400)}>
+        <Animated.View entering={FadeInDown.delay(140).duration(220)}>
           <View style={[styles.section, { backgroundColor: theme.cardBackground, marginTop: Spacing.lg }]}>
             <ListRow
               title="Sign Out"
@@ -379,7 +379,7 @@ export default function ProviderMoreScreen() {
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(800).duration(400)}>
+        <Animated.View entering={FadeInDown.delay(160).duration(220)}>
           <ThemedText style={[styles.version, { color: theme.textTertiary }]}>
             Version {Constants.expoConfig?.version ?? "1.0.0"}
           </ThemedText>

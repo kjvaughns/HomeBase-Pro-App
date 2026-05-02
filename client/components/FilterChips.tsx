@@ -101,7 +101,9 @@ const styles = StyleSheet.create({
   chip: {
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.lg,
+    minHeight: 44,
+    justifyContent: "center",
+    borderRadius: BorderRadius.full,
   },
   chipText: {
     fontWeight: "500",

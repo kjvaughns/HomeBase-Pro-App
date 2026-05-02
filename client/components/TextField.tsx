@@ -31,10 +31,10 @@ export function TextField({
     ? Colors.error
     : isFocused
     ? Colors.accent
-    : "transparent";
+    : theme.border;
 
   const backgroundColor = isFocused
-    ? theme.backgroundSecondary
+    ? theme.backgroundElevated
     : theme.backgroundSecondary;
 
   return (
@@ -52,7 +52,7 @@ export function TextField({
           {
             backgroundColor,
             borderColor,
-            borderWidth: isFocused || error ? 1.5 : 0,
+            borderWidth: isFocused || error ? 1.5 : StyleSheet.hairlineWidth,
           },
         ]}
       >

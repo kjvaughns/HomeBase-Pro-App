@@ -161,11 +161,11 @@ interface JobChecklistItem {
 }
 
 const STATUS_CONFIG: Record<DisplayStatus, { label: string; color: string; icon: keyof typeof Feather.glyphMap }> = {
-  scheduled: { label: "Scheduled", color: "#3B82F6", icon: "calendar" },
+  scheduled: { label: "Scheduled", color: Colors.info, icon: "calendar" },
   confirmed: { label: "Confirmed", color: "#8B5CF6", icon: "check-circle" },
-  on_my_way: { label: "On My Way", color: "#F59E0B", icon: "navigation" },
-  arrived: { label: "Arrived", color: "#F59E0B", icon: "map-pin" },
-  in_progress: { label: "In Progress", color: "#F59E0B", icon: "tool" },
+  on_my_way: { label: "On My Way", color: Colors.warning, icon: "navigation" },
+  arrived: { label: "Arrived", color: Colors.warning, icon: "map-pin" },
+  in_progress: { label: "In Progress", color: Colors.warning, icon: "tool" },
   completed: { label: "Completed", color: Colors.accent, icon: "check" },
   cancelled: { label: "Cancelled", color: "#EF4444", icon: "x-circle" },
 };

@@ -634,7 +634,7 @@ export default function HealthScoreScreen() {
                 <View style={[styles.wizardProgressFill, { width: `${((wizardStep + 1) / WIZARD_STEPS.length) * 100}%` }]} />
               </View>
               <ThemedText style={[styles.wizardProgressText, { color: theme.textSecondary }]}>
-                {wizardStep + 1} of {WIZARD_STEPS.length}
+                Question {wizardStep + 1} of {WIZARD_STEPS.length}
               </ThemedText>
             </View>
             <Pressable onPress={() => setShowWizard(false)} style={styles.wizardCloseButton}>
@@ -724,11 +724,9 @@ export default function HealthScoreScreen() {
             <PrimaryButton onPress={handleWizardNext} style={styles.wizardNextButton}>
               {wizardStep < WIZARD_STEPS.length - 1 ? "Continue" : "Get My Score"}
             </PrimaryButton>
-            {step.type !== "toggle" && !answers[step.id] ? (
-              <Pressable onPress={handleWizardNext} style={styles.skipButton}>
-                <ThemedText style={[styles.skipText, { color: theme.textSecondary }]}>Skip this question</ThemedText>
-              </Pressable>
-            ) : null}
+            <Pressable onPress={handleWizardNext} style={styles.skipButton}>
+              <ThemedText style={[styles.skipText, { color: theme.textSecondary }]}>I don't know — skip this question</ThemedText>
+            </Pressable>
           </View>
         </ThemedView>
       </Modal>

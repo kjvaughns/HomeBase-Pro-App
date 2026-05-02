@@ -364,11 +364,12 @@ export default function StripeConnectScreen() {
           </GlassCard>
         </Animated.View>
 
+        {__DEV__ ? (
         <Animated.View entering={FadeInDown.delay(200).duration(400)}>
           <GlassCard style={styles.section}>
             <View style={styles.sectionHeader}>
               <Feather name="file-plus" size={24} color={Colors.accent} />
-              <ThemedText type="h3">Create Test Invoice</ThemedText>
+              <ThemedText type="h3">Create Invoice</ThemedText>
             </View>
 
             <ThemedText style={[styles.sectionSubtitle, { color: theme.textSecondary }]}>
@@ -416,14 +417,14 @@ export default function StripeConnectScreen() {
                   label="Service Description"
                   value={invoiceDescription}
                   onChangeText={setInvoiceDescription}
-                  placeholder="e.g. Plumbing Repair"
+                  placeholder="What service are you billing for?"
                 />
 
                 <TextField
                   label="Amount ($)"
                   value={invoiceAmount}
                   onChangeText={setInvoiceAmount}
-                  placeholder="50.00"
+                  placeholder="0.00"
                   keyboardType="decimal-pad"
                 />
 
@@ -458,6 +459,7 @@ export default function StripeConnectScreen() {
             )}
           </GlassCard>
         </Animated.View>
+        ) : null}
 
         <Animated.View entering={FadeInDown.delay(300).duration(400)}>
           <GlassCard style={styles.section}>
@@ -469,7 +471,7 @@ export default function StripeConnectScreen() {
             {invoices.length === 0 ? (
               <View style={styles.noClients}>
                 <ThemedText style={{ color: theme.textSecondary }}>
-                  No invoices yet. Create one above to test.
+                  No invoices yet. Create your first invoice above.
                 </ThemedText>
               </View>
             ) : (

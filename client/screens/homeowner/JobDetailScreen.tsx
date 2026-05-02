@@ -194,6 +194,12 @@ export default function JobDetailScreen() {
           <ThemedText style={[styles.emptyText, { color: theme.textSecondary }]}>
             Appointment not found
           </ThemedText>
+          <Pressable
+            onPress={() => queryClient.invalidateQueries({ queryKey: ["/api/appointments", jobId] })}
+            style={{ marginTop: Spacing.md, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.sm }}
+          >
+            <ThemedText style={{ color: Colors.accent, fontWeight: "600" }}>Try again</ThemedText>
+          </Pressable>
         </View>
       </ThemedView>
     );
@@ -357,7 +363,7 @@ export default function JobDetailScreen() {
                       {invoice.invoiceNumber || `Invoice #${invoice.id.slice(-6)}`}
                     </ThemedText>
                     <ThemedText style={[styles.invoiceStatus, {
-                      color: invoice.status === "paid" ? Colors.accent : "#F59E0B"
+                      color: invoice.status === "paid" ? Colors.accent : Colors.warning
                     }]}>
                       {invoice.status === "paid" ? "Paid" : invoice.status === "sent" ? "Payment Due" : invoice.status.toUpperCase()}
                     </ThemedText>

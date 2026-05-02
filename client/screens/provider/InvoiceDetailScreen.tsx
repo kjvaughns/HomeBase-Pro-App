@@ -320,10 +320,27 @@ export default function InvoiceDetailScreen() {
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
-  if (isLoading || !invoice) {
+  if (isLoading) {
     return (
       <ThemedView style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.accent} />
+      </ThemedView>
+    );
+  }
+
+  if (!invoice) {
+    return (
+      <ThemedView style={styles.loadingContainer}>
+        <Feather name="alert-circle" size={40} color={theme.textTertiary} />
+        <ThemedText style={{ color: theme.textSecondary, marginTop: Spacing.md, textAlign: "center" }}>
+          We couldn't load this invoice.
+        </ThemedText>
+        <Pressable
+          onPress={() => refetchInvoice()}
+          style={{ marginTop: Spacing.lg, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.sm }}
+        >
+          <ThemedText style={{ color: Colors.accent, fontWeight: "600" }}>Try again</ThemedText>
+        </Pressable>
       </ThemedView>
     );
   }
@@ -347,8 +364,8 @@ export default function InvoiceDetailScreen() {
       >
         {/* Stripe not-ready banner */}
         {!stripeReady && connectData !== undefined ? (
-          <View style={[styles.stripeBanner, { backgroundColor: "#FFF3CD", borderColor: "#FBBF24" }]}>
-            <Feather name="alert-triangle" size={16} color="#B45309" />
+          <View style={[styles.stripeBanner, { backgroundColor: Colors.warningLight, borderColor: Colors.warning }]}>
+            <Feather name="alert-triangle" size={16} color={Colors.warning} />
             <ThemedText style={styles.stripeBannerText}>
               Online payments are unavailable. Complete Stripe onboarding to accept payments.
             </ThemedText>

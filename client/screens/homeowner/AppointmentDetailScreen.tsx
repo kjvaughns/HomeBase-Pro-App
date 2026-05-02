@@ -665,7 +665,7 @@ export default function AppointmentDetailScreen() {
                               ? Colors.accent
                               : effectiveInvoice.status === "cancelled"
                               ? theme.textTertiary
-                              : "#F59E0B",
+                              : Colors.warning,
                         },
                       ]}
                     >

@@ -21,6 +21,20 @@ const sizes = {
   xl: 104,
 };
 
+function hashName(name: string): number {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash << 5) - hash + name.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+function colorForName(name: string): string {
+  const palette = Colors.avatarPalette;
+  return palette[hashName(name) % palette.length];
+}
+
 export function Avatar({
   uri,
   name,
@@ -62,7 +76,7 @@ export function Avatar({
               width: dimension,
               height: dimension,
               borderRadius: dimension / 2,
-              backgroundColor: Colors.accent,
+              backgroundColor: colorForName(name),
             },
           ]}
         >
