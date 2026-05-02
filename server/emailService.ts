@@ -61,6 +61,15 @@ async function getResendClient() {
   };
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function fmtUsd(amount: number): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -112,8 +121,8 @@ function buildEmailBase(
 
 function infoRow(label: string, value: string): string {
   return `<div style="display:flex;justify-content:space-between;margin-bottom:10px;">
-    <span style="color:#6b7280;font-size:14px;">${label}</span>
-    <span style="color:#111827;font-weight:600;font-size:14px;">${value}</span>
+    <span style="color:#6b7280;font-size:14px;">${escapeHtml(label)}</span>
+    <span style="color:#111827;font-weight:600;font-size:14px;">${escapeHtml(value)}</span>
   </div>`;
 }
 
@@ -122,7 +131,7 @@ function infoBox(rows: string): string {
 }
 
 function greeting(name: string): string {
-  return `<p style="color:#374151;font-size:16px;margin:0 0 20px;">Hi ${name},</p>`;
+  return `<p style="color:#374151;font-size:16px;margin:0 0 20px;">Hi ${escapeHtml(name)},</p>`;
 }
 
 function paragraph(text: string): string {
@@ -283,26 +292,26 @@ export async function sendBookingConfirmationEmail(
   const issueSection = data.description
     ? `<div style="background:#f0fdf4;border-radius:8px;padding:16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
         <p style="color:#166534;font-weight:600;font-size:13px;margin:0 0 6px;">Your Issue</p>
-        <p style="color:#15803d;font-size:13px;margin:0;line-height:1.5;">${data.description}</p>
+        <p style="color:#15803d;font-size:13px;margin:0;line-height:1.5;">${escapeHtml(data.description)}</p>
       </div>`
     : "";
   const intakeSection = data.intakeAnswers
     ? `<div style="background:#f0fdf4;border-radius:8px;padding:16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
         <p style="color:#166534;font-weight:600;font-size:13px;margin:0 0 6px;">Your Request Details</p>
-        <p style="color:#15803d;font-size:13px;margin:0;line-height:1.5;">${data.intakeAnswers}</p>
+        <p style="color:#15803d;font-size:13px;margin:0;line-height:1.5;">${escapeHtml(data.intakeAnswers)}</p>
       </div>`
     : "";
   const addOnsSection =
     data.addOns && data.addOns.length > 0
       ? `<div style="background:#f9fafb;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
         <p style="color:#374151;font-weight:600;font-size:13px;margin:0 0 8px;">Add-ons Included</p>
-        ${data.addOns.map((a) => `<div style="color:#6b7280;font-size:13px;padding:3px 0;">&bull; ${a}</div>`).join("")}
+        ${data.addOns.map((a) => `<div style="color:#6b7280;font-size:13px;padding:3px 0;">&bull; ${escapeHtml(a)}</div>`).join("")}
       </div>`
       : "";
   const serviceDescSection = data.serviceDescription
     ? `<div style="background:#f9fafb;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
         <p style="color:#374151;font-weight:600;font-size:13px;margin:0 0 6px;">About This Service</p>
-        <p style="color:#6b7280;font-size:13px;margin:0;line-height:1.5;">${data.serviceDescription}</p>
+        <p style="color:#6b7280;font-size:13px;margin:0;line-height:1.5;">${escapeHtml(data.serviceDescription)}</p>
       </div>`
     : "";
   const nextStepsSection = `<div style="background:#f0fdf4;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
@@ -335,7 +344,7 @@ export async function sendBookingConfirmationEmail(
     serviceDescSection +
     nextStepsSection +
     `<div style="background:#fffbeb;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #f59e0b;">
-      <p style="color:#92400e;font-size:13px;margin:0;"><strong>Need to reschedule?</strong> Contact ${data.providerName} at least 24 hours before your appointment.</p>
+      <p style="color:#92400e;font-size:13px;margin:0;"><strong>Need to reschedule?</strong> Contact ${escapeHtml(data.providerName)} at least 24 hours before your appointment.</p>
     </div>` +
     appDownloadSection();
   return sendEmail(
@@ -377,7 +386,7 @@ export async function sendBookingCancelledEmail(
   const body =
     greeting(data.clientName) +
     paragraph(
-      `Your ${data.serviceName} appointment with ${data.providerName} has been cancelled.`,
+      `Your ${escapeHtml(data.serviceName)} appointment with ${escapeHtml(data.providerName)} has been cancelled.`,
     ) +
     infoBox(
       infoRow("Service", data.serviceName) +
@@ -385,7 +394,7 @@ export async function sendBookingCancelledEmail(
         infoRow("Date", data.appointmentDate) +
         infoRow("Time", data.appointmentTime) +
         (reason
-          ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb;"><span style="color:#6b7280;font-size:14px;">Reason: </span><span style="color:#111827;font-size:14px;">${reason}</span></div>`
+          ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb;"><span style="color:#6b7280;font-size:14px;">Reason: </span><span style="color:#111827;font-size:14px;">${escapeHtml(reason)}</span></div>`
           : ""),
     ) +
     paragraph(
@@ -407,9 +416,9 @@ export async function sendBookingRescheduledEmail(
   const body =
     greeting(data.clientName) +
     paragraph(
-      `Your ${data.serviceName} appointment with ${data.providerName} has been rescheduled.`,
+      `Your ${escapeHtml(data.serviceName)} appointment with ${escapeHtml(data.providerName)} has been rescheduled.`,
     ) +
-    `<p style="color:#6b7280;font-size:13px;text-decoration:line-through;margin:0 0 4px;">Previously: ${oldDate} at ${oldTime}</p>` +
+    `<p style="color:#6b7280;font-size:13px;text-decoration:line-through;margin:0 0 4px;">Previously: ${escapeHtml(oldDate)} at ${escapeHtml(oldTime)}</p>` +
     infoBox(
       `<p style="color:#38AE5F;font-weight:600;font-size:13px;margin:0 0 12px;">New schedule</p>` +
         infoRow("Service", data.serviceName) +
@@ -440,13 +449,13 @@ export async function sendBookingRequestReceivedEmail(data: {
   const issueSection = data.description
     ? `<div style="background:#f0fdf4;border-radius:8px;padding:16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
         <p style="color:#166534;font-weight:600;font-size:13px;margin:0 0 6px;">Your Request</p>
-        <p style="color:#15803d;font-size:13px;margin:0;line-height:1.5;">${data.description}</p>
+        <p style="color:#15803d;font-size:13px;margin:0;line-height:1.5;">${escapeHtml(data.description)}</p>
       </div>`
     : "";
   const body =
     greeting(data.clientName) +
     paragraph(
-      `Thanks! We sent your booking request to ${data.providerName}. They will review the details and get back to you shortly to confirm.`,
+      `Thanks! We sent your booking request to ${escapeHtml(data.providerName)}. They will review the details and get back to you shortly to confirm.`,
     ) +
     infoBox(
       (data.confirmationNumber
@@ -464,7 +473,7 @@ export async function sendBookingRequestReceivedEmail(data: {
     ) +
     issueSection +
     `<div style="background:#fffbeb;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #f59e0b;">
-      <p style="color:#92400e;font-size:13px;margin:0;">${data.providerName} typically responds within a few hours. You will receive a confirmation email once your booking is accepted.</p>
+      <p style="color:#92400e;font-size:13px;margin:0;">${escapeHtml(data.providerName)} typically responds within a few hours. You will receive a confirmation email once your booking is accepted.</p>
     </div>` +
     appDownloadSection();
   return sendEmail(
@@ -488,12 +497,9 @@ interface ReviewReplyEmailData {
 export async function sendReviewReplyEmail(
   data: ReviewReplyEmailData,
 ): Promise<SendResult> {
-  const provider = data.providerName || "Your service provider";
-  const service = data.serviceName ? ` for ${data.serviceName}` : "";
-  const safeReply = (data.replyText || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  const provider = escapeHtml(data.providerName || "Your service provider");
+  const service = data.serviceName ? ` for ${escapeHtml(data.serviceName)}` : "";
+  const safeReply = escapeHtml(data.replyText || "");
   const body =
     greeting(data.clientName) +
     paragraph(
@@ -541,7 +547,7 @@ export async function sendInvoiceEmail(
     .map(
       (item) => `
     <tr>
-      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;color:#374151;font-size:13px;">${item.description}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;color:#374151;font-size:13px;">${escapeHtml(item.description)}</td>
       <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:center;color:#374151;font-size:13px;">${item.quantity}</td>
       <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;color:#374151;font-size:13px;">$${item.unitPrice.toFixed(2)}</td>
       <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;color:#374151;font-size:13px;">$${item.total.toFixed(2)}</td>
@@ -552,7 +558,7 @@ export async function sendInvoiceEmail(
   const body =
     greeting(data.clientName) +
     paragraph(
-      `You have received a new invoice from <strong>${data.providerName}</strong>. Please find the details below.`,
+      `You have received a new invoice from <strong>${escapeHtml(data.providerName)}</strong>. Please find the details below.`,
     ) +
     infoBox(
       infoRow("Invoice #", data.invoiceNumber) +
@@ -581,7 +587,7 @@ export async function sendInvoiceEmail(
   return sendEmail(
     data.clientEmail,
     `Invoice ${data.invoiceNumber} from ${data.providerName} &ndash; ${fmtUsd(data.amount)}`,
-    buildEmailBase(`Invoice from ${data.providerName}`, body),
+    buildEmailBase(`Invoice from ${escapeHtml(data.providerName)}`, body),
   );
 }
 
@@ -674,7 +680,7 @@ export async function sendPaymentReceiptEmail(
       </div>`,
     ) +
     paragraph(
-      `Keep this email as your receipt. If you have any questions about this payment, please contact ${data.providerName} directly.`,
+      `Keep this email as your receipt. If you have any questions about this payment, please contact ${escapeHtml(data.providerName)} directly.`,
     ) +
     appDownloadSection();
 
@@ -702,7 +708,7 @@ export async function sendPaymentFailedEmail(data: {
   const body =
     greeting(data.clientName) +
     `<div style="background:#fef2f2;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #ef4444;">
-      <p style="color:#991b1b;font-size:14px;margin:0;"><strong>Payment failed.</strong> We were unable to process your payment for invoice ${data.invoiceNumber}.</p>
+      <p style="color:#991b1b;font-size:14px;margin:0;"><strong>Payment failed.</strong> We were unable to process your payment for invoice ${escapeHtml(data.invoiceNumber)}.</p>
     </div>` +
     infoBox(
       infoRow("Invoice #", data.invoiceNumber) +
@@ -739,7 +745,7 @@ export async function sendReviewRequestEmail(data: {
   const body =
     greeting(data.clientName) +
     paragraph(
-      `Thank you for choosing ${data.providerName} for your ${data.serviceName}! We hope everything went smoothly. Your feedback helps other homeowners find great service providers.`,
+      `Thank you for choosing ${escapeHtml(data.providerName)} for your ${escapeHtml(data.serviceName)}! We hope everything went smoothly. Your feedback helps other homeowners find great service providers.`,
     ) +
     paragraph(
       "Would you mind leaving a quick review? It only takes a minute and means a lot to your provider.",
@@ -911,23 +917,23 @@ export async function sendIntakeSubmissionNotification(
   const body =
     greeting(data.providerName) +
     paragraph(
-      `You've received a new service request via ${data.bookingLinkName || "your booking page"}! Here are the details:`,
+      `You've received a new service request via ${escapeHtml(data.bookingLinkName || "your booking page")}! Here are the details:`,
     ) +
     infoBox(
       `<div style="margin-bottom:14px;">
         <span style="color:#6b7280;font-size:11px;text-transform:uppercase;font-weight:500;">Client</span>
-        <p style="color:#111827;font-weight:600;margin:3px 0 0;font-size:15px;">${data.clientName}</p>
+        <p style="color:#111827;font-weight:600;margin:3px 0 0;font-size:15px;">${escapeHtml(data.clientName)}</p>
       </div>` +
         (data.clientEmail
-          ? `<div style="margin-bottom:14px;"><span style="color:#6b7280;font-size:11px;text-transform:uppercase;font-weight:500;">Email</span><p style="color:#111827;margin:3px 0 0;"><a href="mailto:${data.clientEmail}" style="color:#38AE5F;">${data.clientEmail}</a></p></div>`
+          ? `<div style="margin-bottom:14px;"><span style="color:#6b7280;font-size:11px;text-transform:uppercase;font-weight:500;">Email</span><p style="color:#111827;margin:3px 0 0;"><a href="mailto:${escapeHtml(data.clientEmail)}" style="color:#38AE5F;">${escapeHtml(data.clientEmail)}</a></p></div>`
           : "") +
         (data.clientPhone
-          ? `<div style="margin-bottom:14px;"><span style="color:#6b7280;font-size:11px;text-transform:uppercase;font-weight:500;">Phone</span><p style="color:#111827;margin:3px 0 0;"><a href="tel:${data.clientPhone}" style="color:#38AE5F;">${data.clientPhone}</a></p></div>`
+          ? `<div style="margin-bottom:14px;"><span style="color:#6b7280;font-size:11px;text-transform:uppercase;font-weight:500;">Phone</span><p style="color:#111827;margin:3px 0 0;"><a href="tel:${escapeHtml(data.clientPhone)}" style="color:#38AE5F;">${escapeHtml(data.clientPhone)}</a></p></div>`
           : "") +
         (data.address
-          ? `<div style="margin-bottom:14px;"><span style="color:#6b7280;font-size:11px;text-transform:uppercase;font-weight:500;">Address</span><p style="color:#111827;margin:3px 0 0;">${data.address}</p></div>`
+          ? `<div style="margin-bottom:14px;"><span style="color:#6b7280;font-size:11px;text-transform:uppercase;font-weight:500;">Address</span><p style="color:#111827;margin:3px 0 0;">${escapeHtml(data.address)}</p></div>`
           : "") +
-        `<div><span style="color:#6b7280;font-size:11px;text-transform:uppercase;font-weight:500;">Problem Description</span><p style="color:#111827;margin:3px 0 0;line-height:1.5;">${data.problemDescription}</p></div>`,
+        `<div><span style="color:#6b7280;font-size:11px;text-transform:uppercase;font-weight:500;">Problem Description</span><p style="color:#111827;margin:3px 0 0;line-height:1.5;">${escapeHtml(data.problemDescription)}</p></div>`,
     ) +
     paragraph("Respond quickly to increase your chances of winning this job.");
 
@@ -956,13 +962,13 @@ export async function sendProviderBookingNotificationEmail(data: {
   const issueSection = data.description
     ? `<div style="background:#f0fdf4;border-radius:8px;padding:16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
         <p style="color:#166534;font-weight:600;font-size:13px;margin:0 0 6px;">Client's Issue</p>
-        <p style="color:#15803d;font-size:13px;margin:0;line-height:1.5;">${data.description}</p>
+        <p style="color:#15803d;font-size:13px;margin:0;line-height:1.5;">${escapeHtml(data.description)}</p>
       </div>`
     : "";
   const body =
     greeting(data.providerName) +
     paragraph(
-      `${data.clientName} has booked a ${data.serviceName} with you. Here are the details:`,
+      `${escapeHtml(data.clientName)} has booked a ${escapeHtml(data.serviceName)} with you. Here are the details:`,
     ) +
     infoBox(
       infoRow("Client", data.clientName) +
@@ -1023,20 +1029,20 @@ export async function sendProviderScheduledJobEmail(data: {
   const issueSection = data.description
     ? `<div style="background:#f0fdf4;border-radius:8px;padding:16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
         <p style="color:#166534;font-weight:600;font-size:13px;margin:0 0 6px;">Your Issue / Request</p>
-        <p style="color:#15803d;font-size:13px;margin:0;line-height:1.5;">${data.description}</p>
+        <p style="color:#15803d;font-size:13px;margin:0;line-height:1.5;">${escapeHtml(data.description)}</p>
       </div>`
     : "";
   const addOnsSection =
     data.addOns && data.addOns.length > 0
       ? `<div style="background:#f9fafb;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
         <p style="color:#374151;font-weight:600;font-size:13px;margin:0 0 8px;">Add-ons Included</p>
-        ${data.addOns.map((a) => `<div style="display:flex;justify-content:space-between;color:#6b7280;font-size:13px;padding:3px 0;"><span>&bull; ${a.name}</span><span>${fmtUsd(a.price)}</span></div>`).join("")}
+        ${data.addOns.map((a) => `<div style="display:flex;justify-content:space-between;color:#6b7280;font-size:13px;padding:3px 0;"><span>&bull; ${escapeHtml(a.name)}</span><span>${fmtUsd(a.price)}</span></div>`).join("")}
       </div>`
       : "";
   const serviceDescSection = data.serviceDescription
     ? `<div style="background:#f9fafb;border-radius:8px;padding:14px 16px;margin-bottom:20px;">
         <p style="color:#374151;font-weight:600;font-size:13px;margin:0 0 6px;">About This Service</p>
-        <p style="color:#6b7280;font-size:13px;margin:0;line-height:1.5;">${data.serviceDescription}</p>
+        <p style="color:#6b7280;font-size:13px;margin:0;line-height:1.5;">${escapeHtml(data.serviceDescription)}</p>
       </div>`
     : "";
   const nextSteps = `<div style="background:#f0fdf4;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #38AE5F;">
@@ -1049,10 +1055,10 @@ export async function sendProviderScheduledJobEmail(data: {
   </div>`;
   const contactRows = [
     data.providerPhone
-      ? `<span style="color:#6b7280;font-size:13px;">${data.providerPhone}</span>`
+      ? `<span style="color:#6b7280;font-size:13px;">${escapeHtml(data.providerPhone)}</span>`
       : "",
     data.providerEmail
-      ? `<span style="color:#6b7280;font-size:13px;">${data.providerEmail}</span>`
+      ? `<span style="color:#6b7280;font-size:13px;">${escapeHtml(data.providerEmail)}</span>`
       : "",
   ]
     .filter(Boolean)
@@ -1060,15 +1066,15 @@ export async function sendProviderScheduledJobEmail(data: {
   const contactSection = contactRows
     ? `<div style="background:#fffbeb;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #f59e0b;">
         <p style="color:#92400e;font-size:13px;margin:0 0 4px;"><strong>Need to reschedule?</strong></p>
-        <p style="color:#92400e;font-size:13px;margin:0;">Contact ${data.providerName}: ${contactRows}</p>
+        <p style="color:#92400e;font-size:13px;margin:0;">Contact ${escapeHtml(data.providerName)}: ${contactRows}</p>
       </div>`
     : `<div style="background:#fffbeb;border-radius:8px;padding:14px 16px;margin-bottom:20px;border-left:4px solid #f59e0b;">
-        <p style="color:#92400e;font-size:13px;margin:0;"><strong>Need to reschedule?</strong> Contact ${data.providerName} at least 24 hours before your appointment.</p>
+        <p style="color:#92400e;font-size:13px;margin:0;"><strong>Need to reschedule?</strong> Contact ${escapeHtml(data.providerName)} at least 24 hours before your appointment.</p>
       </div>`;
   const body =
     greeting(data.clientName) +
     paragraph(
-      `Your appointment has been confirmed by <strong>${data.providerName}</strong>. Here are the details:`,
+      `Your appointment has been confirmed by <strong>${escapeHtml(data.providerName)}</strong>. Here are the details:`,
     ) +
     infoBox(
       infoRow("Service", data.serviceName) +
@@ -1117,54 +1123,56 @@ export async function sendJobStatusChangedEmail(data: {
     lead: string;
     closing: string;
   };
+  const sProv = escapeHtml(data.providerName);
+  const sSvc = escapeHtml(data.serviceName);
   const stepCopy: Record<string, StepCopy> = {
     confirmed: {
       subject: `Your ${data.serviceName} appointment is confirmed`,
       headline: "Appointment Confirmed",
-      lead: `Good news — ${data.providerName} has confirmed your ${data.serviceName} appointment. We'll send you a heads-up when they're on their way.`,
-      closing: `You can view full details or reach out to ${data.providerName} any time from the HomeBase app.`,
+      lead: `Good news — ${sProv} has confirmed your ${sSvc} appointment. We'll send you a heads-up when they're on their way.`,
+      closing: `You can view full details or reach out to ${sProv} any time from the HomeBase app.`,
     },
     on_my_way: {
       subject: `${data.providerName} is on the way`,
       headline: "On The Way",
-      lead: `${data.providerName} has just left and is heading to your appointment for ${data.serviceName}. They should be with you shortly.`,
+      lead: `${sProv} has just left and is heading to your appointment for ${sSvc}. They should be with you shortly.`,
       closing: `If you need to reach them before they arrive, you can message directly in the HomeBase app.`,
     },
     arrived: {
       subject: `${data.providerName} has arrived`,
       headline: "Your Provider Has Arrived",
-      lead: `${data.providerName} has arrived for your ${data.serviceName} appointment.`,
+      lead: `${sProv} has arrived for your ${sSvc} appointment.`,
       closing: `If you're not at the property, you can reach them from the HomeBase app.`,
     },
     in_progress: {
       subject: `Work has started on your ${data.serviceName}`,
       headline: "Work In Progress",
-      lead: `${data.providerName} has started working on your ${data.serviceName}. We'll let you know when the job is complete.`,
+      lead: `${sProv} has started working on your ${sSvc}. We'll let you know when the job is complete.`,
       closing: `Any questions along the way? Reach out from the HomeBase app.`,
     },
     completed: {
       subject: `Your ${data.serviceName} is complete`,
       headline: "Service Complete",
-      lead: `${data.providerName} has finished your ${data.serviceName}. Thank you for booking with HomeBase!`,
-      closing: `You can review the visit, pay any open invoice, or rebook ${data.providerName} any time from the HomeBase app.`,
+      lead: `${sProv} has finished your ${sSvc}. Thank you for booking with HomeBase!`,
+      closing: `You can review the visit, pay any open invoice, or rebook ${sProv} any time from the HomeBase app.`,
     },
     cancelled: {
       subject: `Your ${data.serviceName} appointment was cancelled`,
       headline: "Appointment Cancelled",
-      lead: `Your ${data.serviceName} appointment with ${data.providerName} has been cancelled.`,
-      closing: `If this wasn't expected, please reach out to ${data.providerName} through the HomeBase app.`,
+      lead: `Your ${sSvc} appointment with ${sProv} has been cancelled.`,
+      closing: `If this wasn't expected, please reach out to ${sProv} through the HomeBase app.`,
     },
   };
 
   const copy = stepCopy[data.newStatus];
-  const label = statusLabel[data.newStatus] ?? data.newStatus;
+  const label = statusLabel[data.newStatus] ?? escapeHtml(data.newStatus);
 
   const headline = copy?.headline ?? "Job Status Update";
   const subject =
     copy?.subject ?? `Job Update: ${data.serviceName} is now ${label}`;
   const lead =
     copy?.lead ??
-    `The status of your ${data.serviceName} job with ${data.providerName} has been updated to ${label}.`;
+    `The status of your ${sSvc} job with ${sProv} has been updated to ${label}.`;
   const closing =
     copy?.closing ??
     `If you have any questions, please reach out through the HomeBase app.`;
@@ -1210,10 +1218,10 @@ export async function sendRebookingNudgeEmail(data: {
   const body =
     greeting(data.clientName) +
     paragraph(
-      `Great news — your ${data.serviceName} with ${data.providerName} is complete! Ready to schedule your next visit?`,
+      `Great news — your ${escapeHtml(data.serviceName)} with ${escapeHtml(data.providerName)} is complete! Ready to schedule your next visit?`,
     ) +
     paragraph(
-      `Keeping up with regular maintenance can save you money in the long run. Book ${data.providerName} again in just a few taps.`,
+      `Keeping up with regular maintenance can save you money in the long run. Book ${escapeHtml(data.providerName)} again in just a few taps.`,
     );
   return sendEmail(
     data.clientEmail,
@@ -1253,7 +1261,7 @@ export async function sendSupportTicketEmail(data: {
           infoRow("Subject", data.subject) +
           `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb;">
           <span style="color:#6b7280;font-size:14px;">Message</span>
-          <p style="color:#111827;font-size:14px;line-height:1.6;margin:6px 0 0;">${data.message.replace(/\n/g, "<br/>")}</p>
+          <p style="color:#111827;font-size:14px;line-height:1.6;margin:6px 0 0;">${escapeHtml(data.message).replace(/\n/g, "<br/>")}</p>
         </div>`,
       ) +
       paragraph(
@@ -1294,7 +1302,7 @@ export async function sendProviderClientMessage(
   try {
     const { client, fromEmail } = await getResendClient();
 
-    const bodyHtml = data.body.replace(/\n/g, "<br/>");
+    const bodyHtml = escapeHtml(data.body).replace(/\n/g, "<br/>");
 
     const html = `
       <!DOCTYPE html>
@@ -1307,13 +1315,13 @@ export async function sendProviderClientMessage(
         <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
           <div style="background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
             <div style="background: #38AE5F; padding: 32px; text-align: center;">
-              <h1 style="color: white; margin: 0; font-size: 22px;">${data.providerName}</h1>
+              <h1 style="color: white; margin: 0; font-size: 22px;">${escapeHtml(data.providerName)}</h1>
               <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px;">Sent via HomeBase</p>
             </div>
 
             <div style="padding: 32px;">
               <p style="color: #374151; font-size: 16px; margin-bottom: 24px;">
-                Hi ${data.clientName},
+                Hi ${escapeHtml(data.clientName)},
               </p>
 
               <div style="color: #374151; font-size: 15px; line-height: 1.7; margin-bottom: 24px;">
@@ -1322,7 +1330,7 @@ export async function sendProviderClientMessage(
 
               <div style="border-top: 1px solid #e5e7eb; padding-top: 20px; margin-top: 24px;">
                 <p style="color: #6b7280; font-size: 13px; margin: 0;">
-                  This message was sent to you by <strong>${data.providerName}</strong> through HomeBase. To reply, simply respond to this email.
+                  This message was sent to you by <strong>${escapeHtml(data.providerName)}</strong> through HomeBase. To reply, simply respond to this email.
                 </p>
               </div>
             </div>
