@@ -3924,6 +3924,19 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
           });
         }
 
+        // Enforce that the appointment is created for the authenticated user only.
+        // Override any client-supplied userId with the authenticated user's ID.
+        const authUserId = req.authenticatedUserId!;
+        parsed.data.userId = authUserId;
+
+        // If a homeId was supplied, verify it belongs to the authenticated user.
+        if (parsed.data.homeId) {
+          const home = await storage.getHome(parsed.data.homeId);
+          if (!home || home.userId !== authUserId) {
+            return res.status(403).json({ error: "Access denied to the specified home" });
+          }
+        }
+
         // Task #226: route-level idempotency. If an appointment already
         // exists for this (user, provider, slot), return it immediately
         // without re-running the downstream client-create / job-create /
@@ -5083,7 +5096,7 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
 
         if (homeId) {
           const home = await storage.getHome(homeId);
-          if (home) {
+          if (home && home.userId === req.authenticatedUserId) {
             const houseFaxContext = buildHouseFaxContext(home);
             systemPrompt = `${HOMEBASE_SYSTEM_PROMPT}\n\n## Current Home Context (HouseFax)\nYou are speaking with a homeowner about their property. Reference this information naturally in your responses:\n\n${houseFaxContext}`;
           }
@@ -5150,7 +5163,7 @@ Be conversational and helpful. If they just have a question, answer it. If they 
 
         if (homeId) {
           const home = await storage.getHome(homeId);
-          if (home) {
+          if (home && home.userId === req.authenticatedUserId) {
             const houseFaxContext = buildHouseFaxContext(home);
             systemPrompt = `${ENHANCED_CHAT_PROMPT}\n\n## Current Home Context (HouseFax)\nYou are speaking with a homeowner about their property. Use this information to give personalized advice:\n\n${houseFaxContext}`;
           }
@@ -6526,6 +6539,10 @@ Respond with JSON only:
     async (req: Request<{ homeId: string }>, res: Response) => {
       try {
         const { homeId } = req.params;
+        const home = await storage.getHome(homeId);
+        if (!home || home.userId !== req.authenticatedUserId) {
+          return res.status(404).json({ error: "Home not found" });
+        }
         const serviceHistory = await db
           .select({
             id: appointments.id,
@@ -6566,6 +6583,10 @@ Respond with JSON only:
     async (req: Request<{ homeId: string }>, res: Response) => {
       try {
         const { homeId } = req.params;
+        const home = await storage.getHome(homeId);
+        if (!home || home.userId !== req.authenticatedUserId) {
+          return res.status(404).json({ error: "Home not found" });
+        }
         const reminders = await db
           .select()
           .from(maintenanceReminders)
@@ -6587,8 +6608,13 @@ Respond with JSON only:
     async (req: Request<{ homeId: string }>, res: Response) => {
       try {
         const { homeId } = req.params;
-        const { title, description, category, frequency, nextDueAt, userId } =
+        const home = await storage.getHome(homeId);
+        if (!home || home.userId !== req.authenticatedUserId) {
+          return res.status(404).json({ error: "Home not found" });
+        }
+        const { title, description, category, frequency, nextDueAt } =
           req.body;
+        const userId = req.authenticatedUserId!;
 
         const [reminder] = await db
           .insert(maintenanceReminders)
@@ -6624,6 +6650,12 @@ Respond with JSON only:
           .from(maintenanceReminders)
           .where(eq(maintenanceReminders.id, id));
         if (!existing) {
+          return res.status(404).json({ error: "Reminder not found" });
+        }
+
+        // Verify the authenticated user owns the home this reminder belongs to
+        const home = await storage.getHome(existing.homeId);
+        if (!home || home.userId !== req.authenticatedUserId) {
           return res.status(404).json({ error: "Reminder not found" });
         }
 
@@ -7793,6 +7825,8 @@ Respond with JSON only:
         if (!client) {
           return res.status(404).json({ error: "Client not found" });
         }
+        // Verify the authenticated user owns the provider that this client belongs to
+        if (!(await assertProviderOwnership(req, client.providerId, res))) return;
         // Get client's jobs and invoices
         const jobs = await storage.getJobsByClient(req.params.id);
         const invoices = await storage.getInvoicesByClient(req.params.id);
@@ -7838,6 +7872,11 @@ Respond with JSON only:
         return res
           .status(400)
           .json({ error: "Invalid input", details: parsed.error.issues });
+      }
+
+      // Verify the authenticated user owns the provider they are creating a client for
+      if (parsed.data.providerId) {
+        if (!(await assertProviderOwnership(req, parsed.data.providerId, res))) return;
       }
 
       // Check for existing client with same email for this provider
@@ -8031,6 +8070,17 @@ Respond with JSON only:
         const job = await storage.getJob(req.params.id);
         if (!job) {
           return res.status(404).json({ error: "Job not found" });
+        }
+        // Allow access only to the provider who owns the job or the homeowner linked via appointment
+        const providerRecord = await storage.getProviderByUserId(req.authenticatedUserId!);
+        const isProvider = providerRecord != null && job.providerId === providerRecord.id;
+        let isHomeowner = false;
+        if (!isProvider && job.appointmentId) {
+          const linkedAppointment = await storage.getAppointment(job.appointmentId);
+          isHomeowner = linkedAppointment?.userId === req.authenticatedUserId;
+        }
+        if (!isProvider && !isHomeowner) {
+          return res.status(403).json({ error: "Access denied" });
         }
         let isRecurring = false;
         let recurringFrequency: string | null = null;
