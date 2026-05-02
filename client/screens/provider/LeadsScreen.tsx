@@ -12,7 +12,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { markLeadsBadgeViewed } from "@/hooks/useLeadsBadgeCount";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -267,6 +268,13 @@ export default function LeadsScreen() {
     refetch();
     refetchSubmissions();
   }, [refetch, refetchSubmissions]);
+
+  // Clear the Leads tab badge as soon as the provider opens this screen.
+  useFocusEffect(
+    useCallback(() => {
+      void markLeadsBadgeViewed(providerId);
+    }, [providerId]),
+  );
 
   const openAcceptModal = (submission: IntakeSubmission) => {
     // Prefill scheduled date from the first preferred time the client requested

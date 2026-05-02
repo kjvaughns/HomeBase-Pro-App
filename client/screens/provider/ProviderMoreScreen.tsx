@@ -74,15 +74,6 @@ export default function ProviderMoreScreen() {
   });
   const stripeReady = !!stripeStatusData?.chargesEnabled;
 
-  const { data: leadsData } = useQuery<{ leads: { id: string; status: string }[] }>({
-    queryKey: ["/api/providers", providerId, "leads"],
-    enabled: !!providerId,
-    refetchInterval: 60_000,
-  });
-  const newLeadCount = (leadsData?.leads ?? []).filter(
-    (l) => l.status === "new" || l.status === "pending",
-  ).length;
-
   useEffect(() => {
     if (providerProfile?.isActive !== undefined && providerProfile?.isActive !== null) {
       hydrateAvailableForWork(providerProfile.isActive);
@@ -212,14 +203,6 @@ export default function ProviderMoreScreen() {
               subtitle="Profile, services, booking links, and policies"
               leftIcon="briefcase"
               onPress={() => navigation.navigate("BusinessHub")}
-            />
-            <ListRow
-              title="Leads"
-              subtitle="Inbound requests and intake submissions"
-              leftIcon="inbox"
-              badge={newLeadCount}
-              onPress={() => navigation.navigate("Leads")}
-              testID="row-leads"
             />
             <ListRow
               title="Communications"

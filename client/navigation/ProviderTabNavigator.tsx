@@ -8,18 +8,21 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ProviderHomeScreen from "@/screens/provider/ProviderHomeScreen";
 import ClientsScreen from "@/screens/provider/ClientsScreen";
 import ScheduleScreen from "@/screens/provider/ScheduleScreen";
+import LeadsScreen from "@/screens/provider/LeadsScreen";
 import FinancialsScreen from "@/screens/provider/FinancialsScreen";
 import ProviderMoreScreen from "@/screens/provider/ProviderMoreScreen";
 import { useTheme } from "@/hooks/useTheme";
 import { HeaderTitle } from "@/components/HeaderTitle";
 import { ThemedText } from "@/components/ThemedText";
 import ProviderFAB from "@/components/ProviderFAB";
+import { useLeadsBadgeCount } from "@/hooks/useLeadsBadgeCount";
 import { Colors, Spacing, Typography, BorderRadius } from "@/constants/theme";
 
 export type ProviderTabParamList = {
   HomeTab: undefined;
   ClientsTab: undefined;
   ScheduleTab: undefined;
+  LeadsTab: undefined;
   FinancialsTab: undefined;
   MoreTab: undefined;
 };
@@ -34,6 +37,8 @@ function getIconName(routeName: string): keyof typeof Feather.glyphMap {
       return "users";
     case "ScheduleTab":
       return "calendar";
+    case "LeadsTab":
+      return "inbox";
     case "FinancialsTab":
       return "bar-chart-2";
     case "MoreTab":
@@ -125,6 +130,10 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 
           const iconName = getIconName(route.name);
           const color = isFocused ? Colors.accent : theme.tabIconDefault;
+          const badgeCount: number | undefined =
+            typeof options.tabBarBadge === "number" && options.tabBarBadge > 0
+              ? options.tabBarBadge
+              : undefined;
 
           return (
             <Pressable
@@ -135,7 +144,25 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
               accessibilityState={isFocused ? { selected: true } : {}}
               testID={`tab-${route.name}`}
             >
-              <Feather name={iconName} size={iconSize} color={color} style={styles.icon} />
+              <View style={styles.iconWrap}>
+                <Feather name={iconName} size={iconSize} color={color} style={styles.icon} />
+                {badgeCount ? (
+                  <View
+                    style={[
+                      styles.badge,
+                      {
+                        backgroundColor: Colors.accent,
+                        borderColor: isDark ? "rgba(28,28,30,0.95)" : "rgba(255,255,255,0.95)",
+                      },
+                    ]}
+                    testID={`tab-badge-${route.name}`}
+                  >
+                    <ThemedText style={styles.badgeText}>
+                      {badgeCount > 99 ? "99+" : String(badgeCount)}
+                    </ThemedText>
+                  </View>
+                ) : null}
+              </View>
               <ThemedText style={[styles.tabText, { fontSize, color }]}>{label}</ThemedText>
             </Pressable>
           );
@@ -147,6 +174,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 
 export default function ProviderTabNavigator() {
   const { theme, isDark } = useTheme();
+  const leadsBadge = useLeadsBadgeCount();
 
   return (
     <View style={{ flex: 1 }}>
@@ -193,6 +221,15 @@ export default function ProviderTabNavigator() {
           options={{
             title: "Schedule",
             headerTitle: "Schedule",
+          }}
+        />
+        <Tab.Screen
+          name="LeadsTab"
+          component={LeadsScreen}
+          options={{
+            title: "Leads",
+            headerTitle: "Leads",
+            tabBarBadge: leadsBadge > 0 ? leadsBadge : undefined,
           }}
         />
         <Tab.Screen
@@ -249,8 +286,30 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingVertical: 6,
   },
-  icon: {
+  iconWrap: {
+    position: "relative",
     marginBottom: 2,
+  },
+  icon: {
+    marginBottom: 0,
+  },
+  badge: {
+    position: "absolute",
+    top: -6,
+    right: -10,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+  },
+  badgeText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "700",
+    lineHeight: 12,
   },
   tabText: {
     fontWeight: "500",

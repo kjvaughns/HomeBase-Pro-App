@@ -5,7 +5,7 @@ import type { NavigatorScreenParams } from "@react-navigation/native";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 import HomeownerTabNavigator, { type HomeownerTabParamList } from "@/navigation/HomeownerTabNavigator";
-import ProviderTabNavigator from "@/navigation/ProviderTabNavigator";
+import ProviderTabNavigator, { type ProviderTabParamList } from "@/navigation/ProviderTabNavigator";
 import RoleSwitchConfirmationScreen from "@/screens/RoleSwitchConfirmationScreen";
 import BecomeProviderScreen from "@/screens/BecomeProviderScreen";
 import FirstLaunchScreen from "@/screens/onboarding/FirstLaunchScreen";
@@ -79,7 +79,10 @@ export type RootStackParamList = {
   SignUp: undefined;
   ForgotPassword: undefined;
   Onboarding: undefined;
-  Main: NavigatorScreenParams<HomeownerTabParamList> | undefined;
+  Main:
+    | NavigatorScreenParams<HomeownerTabParamList>
+    | NavigatorScreenParams<ProviderTabParamList>
+    | undefined;
   RoleSwitchConfirmation: { targetRole: UserRole };
   BecomeProvider: undefined;
   AIChat: undefined;

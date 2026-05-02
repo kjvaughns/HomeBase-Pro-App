@@ -160,6 +160,30 @@ export function invalidateQueriesForNotification(
       // homeowner's in-flight pushes still trigger cache invalidation.
       type === "invoice";
 
+    // Refresh the leads + intake-submission queries when a new-lead push
+    // arrives so the Leads-tab badge updates without a manual pull. The
+    // server currently emits `booking_request` (and `booking_confirmed`
+    // for instant bookings) — both should refresh the leads view.
+    const isLeadEvent =
+      type === "new_lead" ||
+      type === "lead_received" ||
+      type === "booking_request" ||
+      type === "booking_confirmed" ||
+      type === "booking.request_provider" ||
+      type === "intake_submission";
+    if (isLeadEvent) {
+      queryClient.invalidateQueries({
+        predicate: (q) => {
+          const k = q.queryKey;
+          return (
+            Array.isArray(k) &&
+            (k[0] === "/api/providers" || k[0] === "/api/provider") &&
+            (k.includes("leads") || k.includes("intake-submissions"))
+          );
+        },
+      });
+    }
+
     if (isInvoiceEvent) {
       // Specific invoice + provider/homeowner invoice lists
       if (invoiceId) {
@@ -216,6 +240,14 @@ export function handleNotificationNavigation(
       });
     } else if (screen === "Notifications") {
       navigation.navigate("Notifications");
+    } else if (
+      screen === "Leads" ||
+      screen === "LeadsTab" ||
+      // Server currently sends `screen: "ProviderIntakeSubmissions"` for
+      // new-booking-request pushes; route those into the Leads tab too.
+      screen === "ProviderIntakeSubmissions"
+    ) {
+      navigation.navigate("Main", { screen: "LeadsTab" });
     } else if (screen === "Review") {
       const appointmentId = (params?.appointmentId as string | undefined)
         ?? (data.appointmentId as string | undefined);
