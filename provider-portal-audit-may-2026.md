@@ -31,41 +31,51 @@ Up from **6.5 / 10** in the April 14 baseline. The remaining gaps are bounded; n
 
 ### 2.1 Provider screens (33 files)
 
-| # | Screen | Wired into nav? | Verdict |
-|---|---|---|---|
-| 1 | `AccountingScreen` | No | **DEAD CODE** — superseded by `FinancialsScreen` |
-| 2 | `AddClientScreen` | Yes (RootStack) | Working |
-| 3 | `AddInvoiceScreen` | Yes (RootStack) | Working |
-| 4 | `AddJobScreen` | Yes (RootStack) | Working (uses real custom services) |
-| 5 | `AdminPartnersScreen` | Yes (RootStack) | Working (admin-only) |
-| 6 | `BookingLinkScreen` | Yes (RootStack) | Working |
-| 7 | `BookingPoliciesScreen` | No | **DEAD CODE** — duplicates `BusinessHubScreen` Policies tab |
-| 8 | `BusinessDetailsScreen` | Yes (RootStack) | **DUPLICATE** — overlaps `BusinessHubScreen` Profile tab |
-| 9 | `BusinessHubScreen` | Yes (RootStack) | Working — the canonical multi-tab business config screen |
-| 10 | `ClientDetailScreen` | Yes (RootStack) | Working — but Client `ltv` always shows `$0` |
-| 11 | `ClientsScreen` | Yes (Tab) | Working |
-| 12 | `CommunicationsScreen` | Yes (RootStack) | Partial — broadcast SMS works; no message history |
-| 13 | `FinancesScreen` | No | **DEAD CODE** — superseded by `FinancialsScreen` |
-| 14 | `FinancialsScreen` | Yes (Tab) | Working (`stripe-payouts` query, CSV export) |
-| 15 | `InvoiceDetailScreen` | Yes (RootStack) | Working |
-| 16 | `LeadsScreen` | **No** | **ORPHAN — not registered anywhere; unreachable** |
-| 17 | `MoneyScreen` | No | **DEAD CODE** — superseded by `FinancialsScreen` |
-| 18 | `NewServiceScreen` | No | **DEAD CODE** — superseded by `ServiceBlueprintWizardScreen` |
-| 19 | `ProviderAIAssistantScreen` | Yes (RootStack) | Working (real data); voice button is fake; chat history not persisted |
-| 20 | `ProviderHomeScreen` | Yes (Tab) | Working |
-| 21 | `ProviderJobDetailScreen` | Yes (RootStack) | Working — checklist & photos persist (regression fixed) |
-| 22 | `ProviderMoreScreen` | Yes (Tab) | Working — availability toggle now persists via `PATCH /api/provider/:id` |
-| 23 | `ProviderResourcesScreen` | Yes (RootStack) | Working |
-| 24 | `PublicProfileScreen` | Yes (RootStack) | Working (read-only preview) |
-| 25 | `ReviewsScreen` | Yes (RootStack) | Partial — provider can reply; no "Request a review" CTA |
-| 26 | `ScheduleScreen` | Yes (Tab) | Working |
-| 27 | `SendMessageScreen` | Yes (RootStack) | Working (uses `KeyboardAvoidingView` from keyboard-controller) |
-| 28 | `ServiceBlueprintWizardScreen` | Yes (RootStack as `NewService` & `EditService`) | Working |
-| 29 | `ServicePreviewScreen` | **No** (typed in `RootStackParamList` but no `<Stack.Screen>`) | **ORPHAN** — and still hardcodes "Do you have pets?" intake preview |
-| 30 | `ServicesScreen` | Yes (RootStack) | Working |
-| 31 | `ServiceSummaryScreen` | Yes (RootStack) | Working |
-| 32 | `StripeConnectScreen` | Yes (RootStack) | Working — but ships with `"Test Service"` / `"50.00"` defaults |
-| 33 | `SubscriptionScreen` | Yes (RootStack) | Working — real status via `useSubscriptionStatus` hook |
+**Status vocabulary used throughout this report:**
+
+- **Working** — fully functional with real data, no known bugs.
+- **Partial** — primary path works, but a sub-feature is missing or stubbed.
+- **Broken** — primary path fails (crash, persistence loss, or UI deadlock).
+- **Stubbed-Mock** — uses hardcoded sample data instead of real backend.
+- **Missing** — file unreachable from navigator (orphan / dead code).
+
+**Severity vocabulary:** Critical (blocks core funnel) / High (visible trust hit) / Medium (UX gap) / Low (polish) / None (no issue).
+
+| # | Screen | Wired into nav? | Status | Severity | 1-line note |
+|---|---|---|---|---|---|
+| 1 | `AccountingScreen` | No | Missing | Low | Dead — superseded by `FinancialsScreen`; delete (`client/screens/provider/AccountingScreen.tsx`). |
+| 2 | `AddClientScreen` | Yes (RootStack) | Working | None | Simple form; saves via `POST /api/clients`. |
+| 3 | `AddInvoiceScreen` | Yes (RootStack) | Working | None | Validation blocks; Stripe-aware. |
+| 4 | `AddJobScreen` | Yes (RootStack) | Working | None | Uses real custom services (`AddJobScreen.tsx:40`). |
+| 5 | `AdminPartnersScreen` | Yes (RootStack) | Working | None | Admin-only partner grant/revoke. |
+| 6 | `BookingLinkScreen` | Yes (RootStack) | Working | Low | Two query keys for same data — minor cache fragmentation. |
+| 7 | `BookingPoliciesScreen` | No | Missing | Low | Dead — duplicates `BusinessHubScreen` Policies tab; delete (`client/screens/provider/BookingPoliciesScreen.tsx`). |
+| 8 | `BusinessDetailsScreen` | Yes (RootStack) | Partial | Medium | Duplicates `BusinessHubScreen` Profile tab; both `PATCH /api/provider/:id` → write-race risk (`client/screens/provider/BusinessDetailsScreen.tsx`). |
+| 9 | `BusinessHubScreen` | Yes (RootStack) | Working | None | Canonical multi-tab business config screen. |
+| 10 | `ClientDetailScreen` | Yes (RootStack) | Partial | High | Renders `client.ltv` (`ClientDetailScreen.tsx:330`) but server never computes it — always shows `$0`. |
+| 11 | `ClientsScreen` | Yes (Tab) | Working | None | Real `clients` + `last-messages` queries; clean empty state. |
+| 12 | `CommunicationsScreen` | Yes (RootStack) | Partial | Medium | Broadcast SMS sender works; no inbox / message history (`client/screens/provider/CommunicationsScreen.tsx`). |
+| 13 | `FinancesScreen` | No | Missing | Low | Dead — superseded by `FinancialsScreen`; delete (`client/screens/provider/FinancesScreen.tsx`). |
+| 14 | `FinancialsScreen` | Yes (Tab) | Working | None | `stripe-payouts` query, CSV export, date filters. |
+| 15 | `InvoiceDetailScreen` | Yes (RootStack) | Working | None | Send / mark paid / cancel / remind. |
+| 16 | `LeadsScreen` | **No** | Missing | **Critical** | Built but no `<Stack.Screen>` and not in tab nav — entire public-link lead pipeline is dark (`client/screens/provider/LeadsScreen.tsx`; not in `client/navigation/RootStackNavigator.tsx` lines 233–624 or `client/navigation/ProviderTabNavigator.tsx` lines 173–212). |
+| 17 | `MoneyScreen` | No | Missing | Low | Dead — superseded by `FinancialsScreen`; delete (`client/screens/provider/MoneyScreen.tsx`). |
+| 18 | `NewServiceScreen` | No | Missing | Low | Dead — `NewService` route now points to `ServiceBlueprintWizardScreen`; delete (`client/screens/provider/NewServiceScreen.tsx`). |
+| 19 | `ProviderAIAssistantScreen` | Yes (RootStack) | Partial | High | Real data via 5 API queries; mic button is decorative — comment "Voice input not yet integrated" (`ProviderAIAssistantScreen.tsx:228`); chat history not persisted (in-memory `useState` only). |
+| 20 | `ProviderHomeScreen` | Yes (Tab) | Working | None | Real stats/insights/jobs; pull-to-refresh; skeletons. |
+| 21 | `ProviderJobDetailScreen` | Yes (RootStack) | Working | Medium | Checklist & photos persist (`ProviderJobDetailScreen.tsx:406`, `:549`); but checklist is the same generic 6-item list for every job. |
+| 22 | `ProviderMoreScreen` | Yes (Tab) | Working | None | Availability toggle now persists via `PATCH /api/provider/:id` (`providerStore.ts:813–817` + `ProviderMoreScreen.tsx:91`). |
+| 23 | `ProviderResourcesScreen` | Yes (RootStack) | Working | None | Offline cache, skeletons, retry. |
+| 24 | `PublicProfileScreen` | Yes (RootStack) | Working | None | Read-only public-page preview. |
+| 25 | `ReviewsScreen` | Yes (RootStack) | Partial | Medium | Reply works; no aggregate rating; no "Request a review" CTA (`client/screens/provider/ReviewsScreen.tsx`). |
+| 26 | `ScheduleScreen` | Yes (Tab) | Working | None | Calendar; opens `ProviderJobDetailScreen`. |
+| 27 | `SendMessageScreen` | Yes (RootStack) | Working | None | `KeyboardAvoidingView` fixed (`SendMessageScreen.tsx:144`); uses real `message_templates`. |
+| 28 | `ServiceBlueprintWizardScreen` | Yes (RootStack as `NewService` & `EditService`) | Working | None | Multi-step wizard with AI suggestions. |
+| 29 | `ServicePreviewScreen` | **No** (typed in `RootStackParamList` but no `<Stack.Screen>`) | Stubbed-Mock + Missing | Medium | Hardcodes "1. Do you have pets? (Yes/No)" (`ServicePreviewScreen.tsx:151`); not registered though imported (`RootStackNavigator.tsx:50` + `:143`); no `<Stack.Screen>` in lines 233–624. |
+| 30 | `ServicesScreen` | Yes (RootStack) | Working | None | Grid view, publish/unpublish toggle. |
+| 31 | `ServiceSummaryScreen` | Yes (RootStack) | Working | None | Reorder / delete utility. |
+| 32 | `StripeConnectScreen` | Yes (RootStack) | Stubbed-Mock | High | Ships with `useState("Test Service")` (`StripeConnectScreen.tsx:57`) and `useState("50.00")` (`:58`); also resets to these on success (`:172`). |
+| 33 | `SubscriptionScreen` | Yes (RootStack) | Working | None | Real RevenueCat status via `useSubscriptionStatus` hook. |
 
 **Tab navigator (5 tabs):** `HomeTab`, `ClientsTab`, `ScheduleTab`, `FinancialsTab`, `MoreTab`.
 **RootStack provider screens:** 24 push-modal stack screens (counts above).
@@ -130,142 +140,158 @@ The April 14 baseline flagged 4 critical and 7 high items. Status today:
 
 ## 4. New findings (not in April 14 audits)
 
-### 4.1 `LeadsScreen` is fully built but completely unreachable — Critical
+Each finding is tagged with **[Status / Severity]** and cites the exact file and (where useful) line numbers.
 
-`client/screens/provider/LeadsScreen.tsx` is a complete, polished screen (queries `leads` and `intake-submissions`, renders empty states with `assets/images/empty-leads.png`, accept/decline/quote actions). But:
+### 4.1 `LeadsScreen` is fully built but completely unreachable — **[Missing / Critical]**
 
-- It is **not** registered in `RootStackNavigator.tsx` (no `<Stack.Screen name="Leads" …>`).
-- It is **not** a tab in `ProviderTabNavigator.tsx` (only Home / Clients / Schedule / Financials / More).
-- No `navigation.navigate('Leads')` call exists in `ProviderHomeScreen`, `BusinessHubScreen`, or `ProviderMoreScreen`.
+**File:** `client/screens/provider/LeadsScreen.tsx` (entire screen).
+**Evidence:**
 
-The corresponding backend endpoints (`/api/providers/:providerId/leads`, `/api/leads/:id/accept|decline`, `/api/intake/submissions`) are live and functional. **Providers literally cannot view, accept, or decline incoming leads from the public booking page through the app today.** This is the single highest-impact regression in this audit.
+- Not registered in `client/navigation/RootStackNavigator.tsx` (no `<Stack.Screen name="Leads" …>` in the 56 stack entries between lines 233 and 624).
+- Not a tab in `client/navigation/ProviderTabNavigator.tsx` (only `HomeTab`, `ClientsTab`, `ScheduleTab`, `FinancialsTab`, `MoreTab` — lines 173–212).
+- No `navigation.navigate('Leads')` call exists in `ProviderHomeScreen.tsx`, `BusinessHubScreen.tsx`, or `ProviderMoreScreen.tsx`.
 
-### 4.2 Provider store still seeds the app with mock data — High
+Backend endpoints (`/api/providers/:providerId/leads`, `/api/leads/:id/accept|decline`, `/api/intake/submissions`) are live. **Providers cannot view, accept, or decline incoming leads from their public booking page through the app.** Highest-impact regression in this audit.
 
-`client/state/providerStore.ts`:
+### 4.2 Provider store still seeds the app with mock data — **[Stubbed-Mock / High]**
 
-- Lines 243–544 define `initialJobs`, `initialMessages`, `initialInvoices`, `initialPayouts`, `initialClients`, `initialClientActivities`, `initialClientNotes` — ~290 lines of fake data with names like "John Smith" and amounts like `$485.00`.
-- Lines 961–965 of the same file write those arrays into the default Zustand state.
+**File:** `client/state/providerStore.ts`.
+**Evidence:**
 
-If the API queries fail or are slow on first load, real providers will briefly see fictional clients, jobs, and invoices in their dashboard. Even when API data does load, the store keeps the mock entries in any code path that reads from the store directly rather than React Query. This is also visible to anyone who inspects the JS bundle. Strip these blocks and start with empty arrays.
+- Lines 243–544: `initialJobs` (line 243), `initialMessages` (line 279), `initialInvoices` (line 329), `initialPayouts` (line 344), `initialClients` (line 354), `initialClientActivities` (line 531), `initialClientNotes` (line 544) — ~290 lines of sample data with names like "John Smith" and amounts like `$485.00`.
+- Lines 961–965: those arrays are written into the default Zustand state (`jobs: initialJobs, messages: initialMessages, invoices: initialInvoices, payouts: initialPayouts, clients: initialClients`).
 
-### 4.3 `StripeConnectScreen` ships with test invoice defaults — High
+If API queries fail or are slow on first load, real providers see fictional records. Strip the blocks and start with empty arrays.
 
-`client/screens/provider/StripeConnectScreen.tsx`:
+### 4.3 `StripeConnectScreen` ships with test invoice defaults — **[Stubbed-Mock / High]**
 
-```ts
-const [invoiceDescription, setInvoiceDescription] = useState("Test Service");
-const [invoiceAmount, setInvoiceAmount] = useState("50.00");
-```
+**File:** `client/screens/provider/StripeConnectScreen.tsx`.
+**Evidence:**
 
-Plus `setInvoiceDescription("Test Service")` after submit (line 172). A real provider opening this screen sees pre-filled "Test Service" + "$50.00" in the invoice form. This is a trust hit and should be empty defaults with placeholders only.
+- Line 57: `const [invoiceDescription, setInvoiceDescription] = useState("Test Service");`
+- Line 58: `const [invoiceAmount, setInvoiceAmount] = useState("50.00");`
+- Line 172: `setInvoiceDescription("Test Service");` (resets to the same value on success).
 
-### 4.4 `ServicePreviewScreen` still hard-codes a fake intake question — Medium
+Real providers see pre-filled "Test Service" + "$50.00" in the invoice form. Defaults should be empty strings with placeholder text only.
 
-`ServicePreviewScreen.tsx` lines 145–152:
+### 4.4 `ServicePreviewScreen` hard-codes a fake intake question — **[Stubbed-Mock / Medium]**
 
-```tsx
-<ThemedText style={styles.sectionTitle}>INTAKE QUESTIONS</ThemedText>
-<ThemedText type="caption">Homeowners will be asked these questions during booking:</ThemedText>
-<View style={[styles.questionPreview, …]}>
-  <ThemedText type="body">1. Do you have pets? (Yes/No)</ThemedText>
-</View>
-```
+**File:** `client/screens/provider/ServicePreviewScreen.tsx`.
+**Evidence:**
 
-The screen also doesn't render add-ons, booking mode, deposit policy, or the actual service's `intakeQuestionsJson`. This was flagged in April; still unfixed. Compounded by §4.5: the screen is also not registered in the navigator.
+- Lines 145–152: hardcoded `<ThemedText type="body">1. Do you have pets? (Yes/No)</ThemedText>` block.
+- Lines 31–38: default sample service object literal (`name: "Sample Service"`, `category: "Cleaning"`, etc.).
 
-### 4.5 `ServicePreviewScreen` is typed but not registered — Medium
+Screen also omits add-ons, booking mode, deposit policy, and the actual service's `intakeQuestionsJson`.
 
-`RootStackNavigator.tsx` line 50 imports `ServicePreviewScreen` and line 143 declares `ServicePreview: { service: any }` in `RootStackParamList`, but there is no `<Stack.Screen name="ServicePreview" …>`. Any `navigation.navigate("ServicePreview", …)` call would crash. The wizard doesn't call it today, but the import dangles.
+### 4.5 `ServicePreviewScreen` is typed but not registered — **[Missing / Medium]**
 
-### 4.6 Three duplicate "business config" screens — Medium
+**File:** `client/navigation/RootStackNavigator.tsx`.
+**Evidence:**
 
-`BusinessHubScreen` (the canonical multi-tab editor) overlaps with:
+- Line 50: `import ServicePreviewScreen from "@/screens/provider/ServicePreviewScreen";`
+- Line 143: `ServicePreview: { service: any };` in `RootStackParamList`.
+- No `<Stack.Screen name="ServicePreview" …>` exists between lines 233 and 624.
 
-- `BusinessDetailsScreen` (still registered in RootStack, edits the same `provider` fields),
-- `BookingPoliciesScreen` (orphaned, edits the same `bookingPolicies` JSON).
+Any `navigation.navigate("ServicePreview", …)` call would crash at runtime. Wizard doesn't currently call it.
 
-If a provider opens `BusinessDetails`, edits a field, and saves, then opens `BusinessHub` and saves a different tab, the writes can race because both screens `PATCH /api/provider/:id` against the full row. Pick `BusinessHub` as the source of truth, delete the other two.
+### 4.6 Three duplicate "business config" screens — **[Partial / Medium]**
 
-### 4.7 `provider_message_templates` vs `message_templates` — Medium
+**Files:**
 
-Two separate Drizzle tables, both alive in the schema. Server endpoints reference `message_templates`; the frontend `SendMessageScreen` queries `/api/providers/:id/message-templates`. The duplicated `provider_message_templates` table appears dead. Reconcile and drop one.
+- `client/screens/provider/BusinessHubScreen.tsx` — canonical multi-tab editor.
+- `client/screens/provider/BusinessDetailsScreen.tsx` — still registered in `RootStackNavigator.tsx`; edits same `provider` fields via `PATCH /api/provider/:id`.
+- `client/screens/provider/BookingPoliciesScreen.tsx` — orphaned; edits same `bookingPolicies` JSON via `POST /api/provider/...`.
 
-### 4.8 `replit.md` says 28 tables, schema has 39 — Low (doc drift)
+Both BusinessHub and BusinessDetails write the full row, so concurrent saves race. Pick `BusinessHub` as canonical and delete the other two.
 
-Update `replit.md`'s "managing 28 tables" to the correct 39, or split into "core 28" + "operational 11" if intentional.
+### 4.7 `provider_message_templates` vs `message_templates` — **[Partial / Medium]**
 
-### 4.9 Missing endpoints flagged but unused — Low
+**File:** `shared/schema.ts`.
+**Evidence:**
 
-- **`GET /api/push-tokens`** does not exist; `NotificationPreferences` cannot list a user's registered devices. Acceptable if intentional, but the UI implies a list.
-- **`POST /api/reviews/request`** does not exist; provider-initiated review requests have no API.
+- Line 1474: `provider_message_templates` (with `eventType` column).
+- Line 1579: `message_templates` (simpler).
 
-### 4.10 Inconsistent validation — Low
+Server (`server/routes.ts` lines 13309 and 13336) and frontend `SendMessageScreen` use `message_templates`. The other table is dead code in the schema. Drop one.
 
-Several provider mutation routes (`POST /api/provider/onboard-complete`, `POST /api/booking-links`, `POST /api/leads/:id/accept`) bypass Zod (`insertProviderSchema`, `insertBookingLinkSchema`, etc.) in favor of manual `req.body.x` extraction. Risk of malformed writes. Standardize on Zod across all provider routes.
+### 4.8 `replit.md` says 28 tables, schema has 39 — **[Stubbed-Mock / Low]** (doc drift)
 
-### 4.11 `getProviderByUserId` ownership check is single-provider-only — Low (latent)
+**Files:** `replit.md` (line referencing "28 tables"), `shared/schema.ts` (37 tables), `shared/models/chat.ts` (2 tables: `conversations`, `messages`). Update the doc.
 
-`server/routes.ts` lines 3774–3778 use `getProviderByUserId` for the stats ownership check. If a user is ever associated with two `providers` rows (e.g. partial onboarding + retry), the second one returns 403. Not currently triggered in production but worth refactoring to compare against the row directly.
+### 4.9 Missing endpoints flagged but unused — **[Missing / Low]**
 
-### 4.12 AI Assistant chat history is in-memory only — Low
+- **`GET /api/push-tokens`** — does not exist in `server/routes.ts`; `NotificationPreferences` UI implies a registered-device list it cannot render.
+- **`POST /api/reviews/request`** — does not exist; provider-initiated review requests have no API entry point even though `server/notificationService.ts` line 46 supports a `review.request` event.
 
-`ProviderAIAssistantScreen` keeps messages in `useState`. Closing the screen wipes history. No `POST /api/ai/conversations` persistence. Acceptable for an MVP coach but worth flagging.
+### 4.10 Inconsistent validation — **[Partial / Low]**
+
+**File:** `server/routes.ts`.
+**Examples:** `POST /api/provider/onboard-complete`, `POST /api/booking-links`, `POST /api/leads/:id/accept` extract `req.body.*` manually instead of using the Zod schemas (`insertProviderSchema`, `insertBookingLinkSchema`, etc.). Risk of malformed writes.
+
+### 4.11 `getProviderByUserId` ownership check is single-provider-only — **[Partial / Low]** (latent)
+
+**File:** `server/routes.ts` lines 3774–3778. If a user is ever associated with two `providers` rows (partial onboarding + retry), the second one returns 403 on `/api/provider/:id/stats`. Not currently triggered in production.
+
+### 4.12 AI Assistant chat history is in-memory only — **[Partial / Low]**
+
+**File:** `client/screens/provider/ProviderAIAssistantScreen.tsx`. Messages live in `useState`; closing the screen wipes history. No persistence endpoint.
 
 ---
 
 ## 5. Per-screen findings (33 screens)
 
+> The canonical per-screen verdict table is in §2.1. The narratives below add data-source detail and file:line refs only for screens where more context is useful. Status + Severity tags repeated here for traceability.
+
 ### 5.1 Tab screens
 
-| Screen | Data sources | Status | Notes |
-|---|---|---|---|
-| `ProviderHomeScreen` | `stats`, `insights`, `jobs` queries; `SkeletonLoader`; pull-to-refresh | Working | "Go Online" toggle correctly wired through `syncAvailableForWork`. |
-| `ClientsScreen` | `clients`, `last-messages` | Working | Clean empty state via `assets/images/empty-leads.png`. |
-| `ScheduleScreen` | `jobs`, `clients` | Working | Calendar view; opens `ProviderJobDetailScreen`. |
-| `FinancialsScreen` | `stats`, `invoices`, `stripe-payouts` | Working | CSV export, date range filters, real Stripe payout list. Empty for providers without Connect onboarding. |
-| `ProviderMoreScreen` | `connectStatus` | Working | Availability toggle persists; settings fan-out. |
+| Screen | Data sources | Status | Severity | Notes (with file:line) |
+|---|---|---|---|---|
+| `ProviderHomeScreen` | `stats`, `insights`, `jobs` queries; `SkeletonLoader`; pull-to-refresh | Working | None | "Go Online" toggle wired through `syncAvailableForWork` (`client/state/providerStore.ts:813–817`). |
+| `ClientsScreen` | `clients`, `last-messages` | Working | None | Clean empty state via `assets/images/empty-leads.png`. |
+| `ScheduleScreen` | `jobs`, `clients` | Working | None | Calendar; opens `ProviderJobDetailScreen`. |
+| `FinancialsScreen` | `stats`, `invoices`, `stripe-payouts` | Working | None | CSV export, date filters, real Stripe payout list (`client/screens/provider/FinancialsScreen.tsx`). Empty for providers without Connect onboarding. |
+| `ProviderMoreScreen` | `connectStatus` | Working | None | Availability toggle persists (`client/screens/provider/ProviderMoreScreen.tsx:91`); settings fan-out. |
 
 ### 5.2 Stack screens (registered)
 
-| Screen | Status | Notes |
-|---|---|---|
-| `AddClientScreen` | Working | Simple form, `PrimaryButton` with loading state. |
-| `AddJobScreen` | Working | Uses real custom services; supports inline client creation. |
-| `AddInvoiceScreen` | Working | Validation error blocks; Stripe-aware. |
-| `BookingLinkScreen` | Working | Copy/share/regenerate. Uses two query keys for the same data (`["bookingLinks", providerId]` and `["/api/provider", providerId, "booking-links"]`) — minor inconsistency carried over from April. |
-| `BusinessHubScreen` | Working | The canonical Profile / Services / Hours / Policies editor. |
-| `BusinessDetailsScreen` | Duplicate | See §4.6. |
-| `ClientDetailScreen` | Working with caveat | `client.ltv` always 0 — see §3 row 9. |
-| `CommunicationsScreen` | Partial | Broadcast SMS sender works; no inbox / message history. |
-| `InvoiceDetailScreen` | Working | Send / mark paid / cancel / remind; clear status pills. |
-| `NewService` (alias of `ServiceBlueprintWizardScreen`) | Working | Multi-step wizard; AI service descriptions; saves to `provider_custom_services`. |
-| `EditService` (alias of `ServiceBlueprintWizardScreen`) | Working | Same wizard in edit mode. |
-| `ServicesScreen` | Working | Grid view of services, publish/unpublish toggle. |
-| `ServiceSummaryScreen` | Working | Reorder / delete utility. |
-| `PublicProfileScreen` | Working | Read-only public-page preview. |
-| `ProviderJobDetailScreen` | Working | Checklist persists; photos upload to Supabase. Checklist is still the same 6-item generic list for every job (UX1 from April — still unaddressed). |
-| `ProviderAIAssistantScreen` | Mostly working | Real data via 5 API queries; `KeyboardAvoidingView` fixed; voice mic still fake; chat history not persisted. |
-| `ReviewsScreen` | Partial | Reply works; no aggregate rating display; no "Request a review" CTA. |
-| `ProviderResourcesScreen` | Working | Offline cache, skeletons, retry. |
-| `StripeConnectScreen` | Working with caveats | "Test Service"/"50.00" defaults must go (see §4.3). |
-| `BookingLinkScreen` | Working | (Listed twice for clarity; only one screen file.) |
-| `SendMessageScreen` | Working | Uses real `message_templates`; `KeyboardAvoidingView` fixed. |
-| `SubscriptionScreen` | Working | Real RevenueCat status; restore purchases; Apple/Google manage links. |
-| `AdminPartnersScreen` | Working (admin only) | Grant / revoke partner status. |
+| Screen | Status | Severity | Notes (with file:line) |
+|---|---|---|---|
+| `AddClientScreen` | Working | None | Simple form, `PrimaryButton` loading state. |
+| `AddJobScreen` | Working | None | Uses real custom services (`client/screens/provider/AddJobScreen.tsx:40`); supports inline client creation. |
+| `AddInvoiceScreen` | Working | None | Validation blocks; Stripe-aware. |
+| `BookingLinkScreen` | Working | Low | Copy/share/regenerate; uses two query keys for the same data (`["bookingLinks", providerId]` and `["/api/provider", providerId, "booking-links"]`) — minor inconsistency from April. |
+| `BusinessHubScreen` | Working | None | Canonical Profile / Services / Hours / Policies editor (`client/screens/provider/BusinessHubScreen.tsx`). |
+| `BusinessDetailsScreen` | Partial | Medium | Duplicate of BusinessHub Profile tab; both `PATCH /api/provider/:id` (`client/screens/provider/BusinessDetailsScreen.tsx`) — write-race risk. See §4.6. |
+| `ClientDetailScreen` | Partial | High | `client.ltv` displayed (`client/screens/provider/ClientDetailScreen.tsx:330`) but server returns `0` — see §3 row 9. |
+| `CommunicationsScreen` | Partial | Medium | Broadcast SMS sender works; no inbox/history (`client/screens/provider/CommunicationsScreen.tsx`). |
+| `InvoiceDetailScreen` | Working | None | Send / mark paid / cancel / remind; clear status pills. |
+| `NewService` (→ `ServiceBlueprintWizardScreen`) | Working | None | Multi-step wizard; AI descriptions; saves to `provider_custom_services`. |
+| `EditService` (→ `ServiceBlueprintWizardScreen`) | Working | None | Same wizard in edit mode. |
+| `ServicesScreen` | Working | None | Grid view; publish/unpublish toggle. |
+| `ServiceSummaryScreen` | Working | None | Reorder / delete utility. |
+| `PublicProfileScreen` | Working | None | Read-only public-page preview. |
+| `ProviderJobDetailScreen` | Partial | Medium | Checklist persists (`client/screens/provider/ProviderJobDetailScreen.tsx:406`) and photos upload (`:549`); but checklist is the same generic 6-item list for every job (April UX1 unaddressed). |
+| `ProviderAIAssistantScreen` | Partial | High | Real data via 5 API queries; `KeyboardAvoidingView` fixed (`client/screens/provider/ProviderAIAssistantScreen.tsx:345`); voice mic decorative — comment "Voice input not yet integrated" (`:228`); chat history in-memory only. |
+| `ReviewsScreen` | Partial | Medium | Reply works (`client/screens/provider/ReviewsScreen.tsx`); no aggregate rating; no "Request a review" CTA. |
+| `ProviderResourcesScreen` | Working | None | Offline cache, skeletons, retry. |
+| `StripeConnectScreen` | Stubbed-Mock | High | "Test Service"/"50.00" defaults at `client/screens/provider/StripeConnectScreen.tsx:57–58` and `:172`. See §4.3. |
+| `SendMessageScreen` | Working | None | Real `message_templates`; `KeyboardAvoidingView` fixed (`client/screens/provider/SendMessageScreen.tsx:144`). |
+| `SubscriptionScreen` | Working | None | Real RevenueCat status via `useSubscriptionStatus`; restore purchases; Apple/Google manage links. |
+| `AdminPartnersScreen` | Working | None | Admin-only grant/revoke partner status. |
 
 ### 5.3 Orphan / dead / not registered
 
-| Screen | Why | Recommendation |
-|---|---|---|
-| `LeadsScreen` | Built but not in any navigator. **Critical.** | Register in RootStack and add an entry point from `ProviderHomeScreen` (e.g. a "Leads" card with badge count from `/api/providers/:id/leads`). |
-| `ServicePreviewScreen` | Imported and typed but no `<Stack.Screen>`; also still has hardcoded sample intake question. | Either register it and have the wizard's "Preview" button navigate to it (and replace mock content with real intake/add-ons/booking mode), or delete. |
-| `AccountingScreen` | Superseded by `FinancialsScreen`. | Delete. |
-| `MoneyScreen` | Superseded by `FinancialsScreen`. | Delete. |
-| `FinancesScreen` | Superseded by `FinancialsScreen`. | Delete. |
-| `BookingPoliciesScreen` | Duplicates BusinessHub's Policies tab. | Delete. |
-| `BusinessDetailsScreen` | Duplicates BusinessHub's Profile tab. Still registered in RootStack — risk of conflicting writes. | Delete and route any links to `BusinessHub`. |
-| `NewServiceScreen` | Older single-screen version; navigator now routes `NewService` and `EditService` to `ServiceBlueprintWizardScreen`. | Delete. |
+| Screen | Status | Severity | File | Reason | Recommendation |
+|---|---|---|---|---|---|
+| `LeadsScreen` | Missing | **Critical** | `client/screens/provider/LeadsScreen.tsx` | Not in `RootStackNavigator.tsx` (lines 233–624) or `ProviderTabNavigator.tsx` (lines 173–212). | Register in RootStack and add an entry point from `ProviderHomeScreen` (e.g. a "Leads" card with badge count from `/api/providers/:id/leads`). |
+| `ServicePreviewScreen` | Missing + Stubbed-Mock | Medium | `client/screens/provider/ServicePreviewScreen.tsx` (`:151` hardcoded intake) + `client/navigation/RootStackNavigator.tsx:50` import + `:143` typed without `<Stack.Screen>` | Imported and typed but not registered; also hardcodes "Do you have pets?". | Either register it and replace mock content with real intake/add-ons/booking mode, or delete. |
+| `AccountingScreen` | Missing | Low | `client/screens/provider/AccountingScreen.tsx` | Superseded by `FinancialsScreen`. | Delete. |
+| `MoneyScreen` | Missing | Low | `client/screens/provider/MoneyScreen.tsx` | Superseded by `FinancialsScreen`. | Delete. |
+| `FinancesScreen` | Missing | Low | `client/screens/provider/FinancesScreen.tsx` | Superseded by `FinancialsScreen`. | Delete. |
+| `BookingPoliciesScreen` | Missing | Low | `client/screens/provider/BookingPoliciesScreen.tsx` | Duplicates BusinessHub's Policies tab. | Delete. |
+| `BusinessDetailsScreen` | Partial | Medium | `client/screens/provider/BusinessDetailsScreen.tsx` (still registered in RootStack) | Duplicates BusinessHub's Profile tab; conflicting `PATCH` write-race risk. | Delete and route any links to `BusinessHub`. |
+| `NewServiceScreen` | Missing | Low | `client/screens/provider/NewServiceScreen.tsx` | Older single-screen version; navigator now routes `NewService`/`EditService` to `ServiceBlueprintWizardScreen`. | Delete. |
 
 ---
 
@@ -281,14 +307,14 @@ Several provider mutation routes (`POST /api/provider/onboard-complete`, `POST /
 
 ### 6.2 Endpoint issues
 
-| ID | Issue | Impact |
-|---|---|---|
-| BE-1 | `LeadsScreen` not registered → all `/api/leads/*` and `/api/providers/:id/leads` endpoints have **no UI consumer**. | Public-link leads are invisible to providers. |
-| BE-2 | `POST /api/reviews/request` does not exist. | Providers cannot solicit reviews via API. |
-| BE-3 | `GET /api/push-tokens` does not exist. | UI implies a device list but cannot render one. |
-| BE-4 | `getProviderByUserId` ownership check on `/api/provider/:id/stats` returns 403 for second provider profile of same user. | Latent multi-profile bug. |
-| BE-5 | Inconsistent Zod validation across provider mutation routes. | Risk of malformed writes. |
-| BE-6 | Two query keys for the same data in `BookingLinkScreen`. | Minor cache fragmentation; carried over from April. |
+| ID | Status | Severity | Issue (with file:line) | Impact |
+|---|---|---|---|---|
+| BE-1 | Missing | Critical | `LeadsScreen` not registered → all `/api/leads/*` and `/api/providers/:id/leads` endpoints (in `server/routes.ts`) have no UI consumer. | Public-link leads are invisible to providers. |
+| BE-2 | Missing | Medium | `POST /api/reviews/request` does not exist in `server/routes.ts`. | Providers cannot solicit reviews via API. |
+| BE-3 | Missing | Low | `GET /api/push-tokens` does not exist in `server/routes.ts`. | UI implies a device list but cannot render one. |
+| BE-4 | Partial | Low | `getProviderByUserId` ownership check on `/api/provider/:id/stats` (`server/routes.ts:3774–3778`) returns 403 for second provider profile of the same user. | Latent multi-profile bug. |
+| BE-5 | Partial | Low | Inconsistent Zod validation across provider mutation routes (e.g., `POST /api/provider/onboard-complete`, `POST /api/booking-links`, `POST /api/leads/:id/accept` in `server/routes.ts`). | Risk of malformed writes. |
+| BE-6 | Partial | Low | Two query keys for the same data in `client/screens/provider/BookingLinkScreen.tsx`. | Minor cache fragmentation; carried over from April. |
 
 ### 6.3 Schema migration status
 
