@@ -132,7 +132,7 @@ Guests can reach (in addition to the rows already tagged Guest+Auth in the table
 
 | Group | Endpoints | Auth | IDOR check |
 |---|---|---|---|
-| Auth | `POST /api/auth/signup` (1182), `POST /api/auth/login` (1402), `POST /api/auth/logout` (1498), `POST /api/auth/refresh-token`, `POST /api/auth/forgot-password` (1560), `POST /api/auth/reset-password` (1609), `POST /api/auth/change-password` (1646), `DELETE /api/auth/account` (1784) | Public for signup/login/forgot/reset; auth required for change-password / account deletion / `me` | n/a (acts on `req.authenticatedUserId`) |
+| Auth | `POST /api/auth/signup` (1182), `POST /api/auth/login` (1402), `POST /api/auth/logout` (1498), `POST /api/auth/refresh` (1523), `POST /api/auth/forgot-password` (1560), `POST /api/auth/reset-password` (1609), `POST /api/auth/change-password` (1646), `DELETE /api/auth/account` (1784) | Public for signup/login/forgot/reset; auth required for change-password / account deletion / `me` | n/a (acts on `req.authenticatedUserId`) |
 | User | `GET /api/user/:id` (1909), `PUT /api/user/:id` (1930), `GET /api/users/:userId/appointments` (3344) | All require auth | Yes — `req.params.id !== authUserId → 403` |
 | Homes / HouseFax | `GET /api/homes/:userId` (1958), `POST /api/homes` (1976), `PUT /api/homes/:id` (2080), `DELETE /api/homes/:id` (2111), `GET /api/homes/:homeId/profile` (2326), `PATCH /api/homes/:id/profile`, `GET /api/housefax/:homeId` (2480), `GET /api/homes/:homeId/service-history` (6254), `GET /api/homes/:homeId/reminders` (6304) | All require auth | **Mostly yes** — owner check by fetching home and comparing `home.userId` for `PUT`, `DELETE`, profile reads/writes, and `housefax`. **Two exceptions:** `GET /api/homes/:homeId/service-history` (`routes.ts:6254–6293`) and `GET /api/homes/:homeId/reminders` (`:6304`) have `requireAuth` only — no `home.userId === authUserId` check. See §4.18 (CRITICAL). |
 | Providers (public) | `GET /api/categories` (3050), `GET /api/providers` (3071), `GET /api/providers/:id` (3127) | Public | n/a — only public fields exposed |
@@ -457,7 +457,7 @@ The `replit.md` "28 tables" figure is stale — the schema actually defines 39 t
 1. `Manage` tab → upcoming + active + past via `GET /api/users/:userId/appointments`. ✅
 2. Tap an appointment → `AppointmentDetail`. ✅
 3. Cancel — confirmation `Alert.alert` → `POST /api/appointments/:id/cancel` with cancellation-fee logic. ✅
-4. Reschedule — `checkRescheduleAllowed` → date picker → `PATCH /api/appointments/:id`. ✅
+4. Reschedule — `checkRescheduleAllowed` → date picker → `POST /api/appointments/:id/reschedule` (`routes.ts:4373`). ✅
 5. Message provider — **broken UX**: `Alert.alert("Coming Soon", …)` (§4.6).
 
 ### 7.3 Home health workflow — "what should I do for my home?"
