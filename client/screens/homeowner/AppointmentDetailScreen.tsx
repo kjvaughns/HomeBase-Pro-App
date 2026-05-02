@@ -352,10 +352,6 @@ export default function AppointmentDetailScreen() {
     await performCancel(false);
   }, [appointment, performCancel]);
 
-  const handleMessage = () => {
-    Alert.alert("Coming Soon", "Messaging will be available in a future update.");
-  };
-
   const handleConditionUpdate = useCallback(async () => {
     if (!conditionUpdate.trim() || !appointment) return;
 
@@ -841,10 +837,6 @@ export default function AppointmentDetailScreen() {
               {hasReview ? "View Your Review" : "Leave a Review"}
             </PrimaryButton>
           ) : null}
-
-          <SecondaryButton onPress={handleMessage}>
-            Message Provider
-          </SecondaryButton>
 
           {appointment.status === "completed" && appointment.provider ? (
             <PrimaryButton

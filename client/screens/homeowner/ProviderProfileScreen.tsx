@@ -13,6 +13,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { Avatar } from "@/components/Avatar";
+import { SkeletonCard, SkeletonLoader } from "@/components/SkeletonLoader";
 import { StatusPill } from "@/components/StatusPill";
 import { PartnerBadge } from "@/components/PartnerBadge";
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -248,11 +249,18 @@ export default function ProviderProfileScreen() {
 
   if (isApiLoading && !passedProvider && !apiData) {
     return (
-      <ThemedView style={[styles.container, styles.loadingContainer]}>
-        <ActivityIndicator size="large" color={Colors.accent} />
-        <ThemedText style={[styles.loadingText, { color: theme.textSecondary }]}>
-          Loading provider...
-        </ThemedText>
+      <ThemedView style={styles.container}>
+        <ScrollView contentContainerStyle={styles.skeletonContainer} showsVerticalScrollIndicator={false}>
+          <SkeletonLoader width="100%" height={180} borderRadius={20} />
+          <View style={{ marginTop: Spacing.lg }}>
+            <SkeletonLoader width="60%" height={24} />
+            <SkeletonLoader width="40%" height={16} style={{ marginTop: Spacing.sm }} />
+          </View>
+          <View style={{ marginTop: Spacing.xl }}>
+            <SkeletonCard />
+            <SkeletonCard />
+          </View>
+        </ScrollView>
       </ThemedView>
     );
   }
@@ -789,6 +797,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     gap: Spacing.md,
+  },
+  skeletonContainer: {
+    paddingTop: Spacing["2xl"],
+    paddingHorizontal: Spacing.screenPadding,
+    paddingBottom: Spacing.xl,
   },
   loadingText: {
     ...Typography.body,

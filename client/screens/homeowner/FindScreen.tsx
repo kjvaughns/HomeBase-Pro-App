@@ -30,6 +30,7 @@ import { ProviderCard } from "@/components/ProviderCard";
 import { SectionHeader } from "@/components/SectionHeader";
 import { AccountGateModal } from "@/components/AccountGateModal";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { SkeletonLoader } from "@/components/SkeletonLoader";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
@@ -495,11 +496,7 @@ export default function FindScreen() {
               : "Featured Pros"}
           </ThemedText>
           {providersLoading && !isSearching ? (
-            <ActivityIndicator
-              size="small"
-              color={Colors.accent}
-              style={{ marginRight: Spacing.sm }}
-            />
+            <SkeletonLoader width={60} height={20} style={{ marginRight: Spacing.sm }} />
           ) : null}
           {isSearching ? null : (
             <Pressable

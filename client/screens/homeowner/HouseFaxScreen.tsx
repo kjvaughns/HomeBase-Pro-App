@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from "react";
 import { StyleSheet, View, ScrollView, Pressable, ActivityIndicator, RefreshControl, Image, Modal } from "react-native";
+import { SkeletonCard, SkeletonLoader } from "@/components/SkeletonLoader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
@@ -728,12 +729,15 @@ export default function HouseFaxScreen() {
   if (isLoadingHomes) {
     return (
       <ThemedView style={styles.container}>
-        <View style={[styles.loadingContainer, { paddingTop: headerHeight + Spacing.xl }]}>
-          <ActivityIndicator size="large" color={Colors.accent} />
-          <ThemedText style={[styles.loadingText, { color: theme.textSecondary }]}>
-            Loading your homes...
-          </ThemedText>
-        </View>
+        <ScrollView
+          contentContainerStyle={[styles.skeletonContainer, { paddingTop: headerHeight + Spacing.xl }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <SkeletonLoader width="60%" height={28} style={{ marginBottom: Spacing.lg }} />
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </ScrollView>
       </ThemedView>
     );
   }
@@ -816,10 +820,9 @@ export default function HouseFaxScreen() {
 
         {isLoadingFax ? (
           <View style={styles.faxLoading}>
-            <ActivityIndicator size="small" color={Colors.accent} />
-            <ThemedText style={[styles.faxLoadingText, { color: theme.textSecondary }]}>
-              Loading HouseFax data...
-            </ThemedText>
+            <SkeletonLoader width="100%" height={120} borderRadius={16} />
+            <SkeletonLoader width="80%" height={16} style={{ marginTop: Spacing.md }} />
+            <SkeletonLoader width="60%" height={14} style={{ marginTop: Spacing.sm }} />
           </View>
         ) : null}
 
@@ -868,6 +871,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: Spacing.screenPadding,
+  },
+  skeletonContainer: {
+    paddingHorizontal: Spacing.screenPadding,
+    paddingBottom: Spacing.xl,
   },
   loadingText: {
     ...Typography.body,

@@ -93,7 +93,6 @@ export type RootStackParamList = {
   SurvivalKit: undefined;
   HealthScore: undefined;
   HouseFax: undefined;
-  SavingsSpend: undefined;
   Budgeter: undefined;
   ServiceHistory: undefined;
   ProviderList: { categoryId: string; categoryName: string };
@@ -121,7 +120,11 @@ export type RootStackParamList = {
       category: string;
     };
   };
-  BookingSuccess: { jobId: string; awaitingDeposit?: boolean };
+  BookingSuccess: {
+    jobId: string;
+    awaitingDeposit?: boolean;
+    depositCheckoutUrl?: string;
+  };
   JobDetail: { jobId: string };
   AppointmentDetail: { appointmentId: string };
   Payment: { jobId?: string; invoiceId: string; status?: "paid" | "cancelled" };

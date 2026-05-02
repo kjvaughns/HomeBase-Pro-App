@@ -15,6 +15,7 @@ import { ThemedView } from "@/components/ThemedView";
 import { TextField } from "@/components/TextField";
 import { ProviderCard } from "@/components/ProviderCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { SkeletonCard } from "@/components/SkeletonLoader";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -466,11 +467,10 @@ export default function ProviderListScreen() {
   const renderEmpty = () => {
     if (providersLoading) {
       return (
-        <View style={styles.emptyContainer}>
-          <ActivityIndicator size="large" color={Colors.accent} />
-          <ThemedText style={[styles.emptyText, { color: theme.textTertiary, marginTop: Spacing.md }]}>
-            Loading providers...
-          </ThemedText>
+        <View style={styles.skeletonContainer}>
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
         </View>
       );
     }
@@ -638,6 +638,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: Spacing["2xl"],
+  },
+  skeletonContainer: {
+    paddingTop: Spacing.lg,
+    paddingHorizontal: Spacing.screenPadding,
   },
   emptyTitle: {
     ...Typography.headline,

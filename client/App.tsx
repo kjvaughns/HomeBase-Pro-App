@@ -15,6 +15,7 @@ import { queryClient } from "@/lib/query-client";
 
 import RootStackNavigator from "@/navigation/RootStackNavigator";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { OfflineBanner } from "@/components/OfflineBanner";
 import { useThemeStore } from "@/state/themeStore";
 import { useOnboardingStore } from "@/state/onboardingStore";
 import { initAppReviewTracker } from "@/state/appReviewStore";
@@ -134,6 +135,7 @@ export default function App() {
           <GestureHandlerRootView style={styles.root}>
             <KeyboardProvider>
               <AppContent />
+              <OfflineBanner />
             </KeyboardProvider>
           </GestureHandlerRootView>
         </SafeAreaProvider>

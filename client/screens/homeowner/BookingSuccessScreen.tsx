@@ -35,7 +35,8 @@ export default function BookingSuccessScreen() {
   const route = useRoute<ScreenRouteProp>();
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
-  const { jobId, awaitingDeposit } = route.params;
+  const { jobId, awaitingDeposit, depositCheckoutUrl } = route.params;
+  const [resumingPayment, setResumingPayment] = React.useState(false);
 
   const { data: aptData, isLoading } = useQuery<{ appointment: AppointmentRecord }>({
     queryKey: ["/api/appointments", jobId],
@@ -148,6 +149,28 @@ export default function BookingSuccessScreen() {
       </View>
 
       <Animated.View entering={FadeIn.delay(700).duration(400)} style={styles.actions}>
+        {awaitingDeposit && depositCheckoutUrl ? (
+          <PrimaryButton
+            onPress={async () => {
+              if (resumingPayment) return;
+              setResumingPayment(true);
+              try {
+                const { openExternalUrl } = await import("@/lib/openExternalUrl");
+                await openExternalUrl(depositCheckoutUrl);
+              } catch {
+                // Best effort — homeowner can retry from this screen.
+              } finally {
+                setResumingPayment(false);
+              }
+            }}
+            loading={resumingPayment}
+            disabled={resumingPayment}
+            style={styles.actionBtn}
+            testID="button-pay-deposit"
+          >
+            Pay Deposit
+          </PrimaryButton>
+        ) : null}
         <PrimaryButton onPress={handleViewJob} style={styles.actionBtn}>
           View Appointment
         </PrimaryButton>

@@ -220,6 +220,25 @@ export default function MoreScreen() {
                     Past services
                   </ThemedText>
                 </Pressable>
+
+                <Pressable
+                  style={[styles.toolTile, isTablet && styles.toolTileTablet, { backgroundColor: theme.cardBackground }]}
+                  onPress={() => navigation.navigate("Budgeter")}
+                  testID="tile-budgeter"
+                >
+                  <View style={[styles.toolIcon, { backgroundColor: Colors.accentLight }]}>
+                    <Feather name="dollar-sign" size={20} color={Colors.accent} />
+                  </View>
+                  <View style={styles.toolTitleRow}>
+                    <ThemedText style={styles.toolTitle}>Budgeter</ThemedText>
+                    <View style={[styles.comingSoonBadge, { backgroundColor: theme.backgroundSecondary }]}>
+                      <ThemedText style={[styles.comingSoonText, { color: theme.textSecondary }]}>Soon</ThemedText>
+                    </View>
+                  </View>
+                  <ThemedText style={[styles.toolSubtitle, { color: theme.textSecondary }]}>
+                    Home spending
+                  </ThemedText>
+                </Pressable>
               </View>
             </Animated.View>
 
@@ -562,6 +581,21 @@ const styles = StyleSheet.create({
     ...Typography.subhead,
     fontWeight: "600",
     marginBottom: 2,
+  },
+  toolTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    marginBottom: 2,
+  },
+  comingSoonBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  comingSoonText: {
+    ...Typography.caption2,
+    fontWeight: "600",
   },
   toolSubtitle: {
     ...Typography.caption1,

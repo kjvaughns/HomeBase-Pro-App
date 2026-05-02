@@ -11,12 +11,11 @@ import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { TextField } from "@/components/TextField";
 import { PrimaryButton } from "@/components/PrimaryButton";
-import { SecondaryButton } from "@/components/SecondaryButton";
 import { AddressAutocomplete, EnrichmentData } from "@/components/AddressAutocomplete";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
-import { apiRequest, getApiUrl } from "@/lib/query-client";
+import { apiRequest } from "@/lib/query-client";
 
 interface Home {
   id: string;
@@ -55,6 +54,8 @@ export default function AddressesScreen() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingHome, setEditingHome] = useState<Home | null>(null);
   const [enrichmentData, setEnrichmentData] = useState<EnrichmentData | null>(null);
+  const [editEnrichmentData, setEditEnrichmentData] = useState<EnrichmentData | null>(null);
+  const [showEditAddressInput, setShowEditAddressInput] = useState(false);
   const [nickname, setNickname] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -187,22 +188,72 @@ export default function AddressesScreen() {
     }
   };
 
-  const handleUpdateNickname = async () => {
+  const closeEditModal = () => {
+    setEditingHome(null);
+    setNickname("");
+    setEditEnrichmentData(null);
+    setShowEditAddressInput(false);
+    setEditError(null);
+  };
+
+  const handleEditAddressSelected = (data: EnrichmentData) => {
+    setEditEnrichmentData(data);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const handleUpdateHome = async () => {
     if (!editingHome) return;
 
     setIsSaving(true);
     setEditError(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
     try {
-      await apiRequest("PUT", `/api/homes/${editingHome.id}`, { label: nickname });
-      setEditingHome(null);
-      setNickname("");
+      const update: Record<string, unknown> = { label: nickname };
+
+      // If the user picked a new address, include the full enrichment payload
+      // so the backend overwrites the existing property data instead of just
+      // the nickname. Server PUT /api/homes/:id accepts these fields via the
+      // {...rest} spread.
+      if (editEnrichmentData) {
+        Object.assign(update, {
+          street: editEnrichmentData.street,
+          city: editEnrichmentData.city,
+          state: editEnrichmentData.state,
+          zip: editEnrichmentData.zipCode,
+          formattedAddress: editEnrichmentData.formattedAddress,
+          placeId: editEnrichmentData.placeId,
+          latitude: editEnrichmentData.latitude?.toString(),
+          longitude: editEnrichmentData.longitude?.toString(),
+          neighborhoodName: editEnrichmentData.neighborhoodName,
+          countyName: editEnrichmentData.countyName,
+          bedrooms: editEnrichmentData.bedrooms,
+          bathrooms: editEnrichmentData.bathrooms,
+          squareFeet: editEnrichmentData.squareFeet,
+          yearBuilt: editEnrichmentData.yearBuilt,
+          propertyType: normalizePropertyType(editEnrichmentData.propertyType),
+          estimatedValue: editEnrichmentData.estimatedValue?.toString(),
+          lotSize: editEnrichmentData.lotSize?.toString(),
+          zillowId: editEnrichmentData.zillowId,
+          zillowUrl: editEnrichmentData.zillowUrl,
+          taxAssessedValue: editEnrichmentData.taxAssessedValue?.toString(),
+          lastSoldDate:
+            editEnrichmentData.lastSoldDate != null
+              ? String(editEnrichmentData.lastSoldDate)
+              : undefined,
+          lastSoldPrice: editEnrichmentData.lastSoldPrice?.toString(),
+        });
+      }
+
+      await apiRequest("PUT", `/api/homes/${editingHome.id}`, update);
+      closeEditModal();
       await fetchHomes();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       console.error("Failed to update home:", error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setEditError(
-        parseApiError(error, "Couldn't update the nickname. Please try again."),
+        parseApiError(error, "Couldn't update this home. Please try again."),
       );
     } finally {
       setIsSaving(false);
@@ -473,33 +524,117 @@ export default function AddressesScreen() {
   );
 
   const renderEditModal = () => (
-    <Modal visible={!!editingHome} animationType="slide" transparent>
-      <View style={styles.editModalOverlay}>
-        <View style={[styles.editModalContent, { backgroundColor: theme.cardBackground }]}>
-          <ThemedText style={styles.editModalTitle}>Edit Nickname</ThemedText>
-          <TextField
-            placeholder="Home nickname"
-            value={nickname}
-            onChangeText={setNickname}
-            autoFocus
-          />
-          {editError ? (
-            <ThemedText style={styles.inlineError} testID="text-edit-home-error">
-              {editError}
-            </ThemedText>
-          ) : null}
-          <View style={styles.editModalActions}>
-            <SecondaryButton onPress={() => { setEditingHome(null); setNickname(""); setEditError(null); }} style={styles.editModalBtn}>Cancel</SecondaryButton>
-            <PrimaryButton
-              onPress={handleUpdateNickname}
-              disabled={!nickname || isSaving}
-              style={styles.editModalBtn}
-            >
-              {isSaving ? "Saving..." : "Save"}
-            </PrimaryButton>
-          </View>
+    <Modal visible={!!editingHome} animationType="slide" presentationStyle="pageSheet">
+      <ThemedView style={styles.modalContainer}>
+        <View style={[styles.modalHeader, { paddingTop: insets.top + Spacing.md }]}>
+          <Pressable onPress={closeEditModal}>
+            <ThemedText style={[styles.modalCancel, { color: Colors.accent }]}>Cancel</ThemedText>
+          </Pressable>
+          <ThemedText style={styles.modalTitle}>Edit Home</ThemedText>
+          <View style={{ width: 60 }} />
         </View>
-      </View>
+
+        <ScrollView
+          contentContainerStyle={styles.modalContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.formSection}>
+            <ThemedText style={[styles.formLabel, { color: theme.textSecondary }]}>Home Nickname</ThemedText>
+            <TextField
+              placeholder="e.g., Main House, Beach House"
+              value={nickname}
+              onChangeText={setNickname}
+              testID="input-edit-nickname"
+            />
+          </View>
+
+          <View style={styles.formSection}>
+            <ThemedText style={[styles.formLabel, { color: theme.textSecondary }]}>Address</ThemedText>
+            {!showEditAddressInput && !editEnrichmentData ? (
+              <View style={[styles.currentAddressBox, { borderColor: theme.borderLight }]}>
+                <View style={styles.currentAddressRow}>
+                  <Feather name="map-pin" size={14} color={theme.textSecondary} />
+                  <ThemedText
+                    style={[styles.currentAddressText, { color: theme.textSecondary }]}
+                    numberOfLines={2}
+                  >
+                    {editingHome?.formattedAddress ||
+                      `${editingHome?.street ?? ""}, ${editingHome?.city ?? ""}, ${editingHome?.state ?? ""} ${editingHome?.zip ?? ""}`}
+                  </ThemedText>
+                </View>
+                <Pressable
+                  onPress={() => setShowEditAddressInput(true)}
+                  testID="button-change-address"
+                >
+                  <ThemedText style={[styles.changeAddressLink, { color: Colors.accent }]}>
+                    Change address
+                  </ThemedText>
+                </Pressable>
+              </View>
+            ) : (
+              <AddressAutocomplete
+                onAddressSelected={handleEditAddressSelected}
+                placeholder="Start typing your address..."
+                testID="input-edit-address"
+              />
+            )}
+          </View>
+
+          {editEnrichmentData ? (
+            <Animated.View entering={FadeInDown.duration(400)}>
+              <GlassCard style={styles.enrichedCard}>
+                <View style={styles.enrichedHeader}>
+                  <Feather name="check-circle" size={20} color={Colors.accent} />
+                  <ThemedText style={styles.enrichedTitle}>New Property Found</ThemedText>
+                </View>
+
+                <View style={styles.enrichedDetails}>
+                  {editEnrichmentData.bedrooms ? (
+                    <View style={styles.enrichedItem}>
+                      <ThemedText style={styles.enrichedValue}>{editEnrichmentData.bedrooms}</ThemedText>
+                      <ThemedText style={[styles.enrichedLabel, { color: theme.textSecondary }]}>Beds</ThemedText>
+                    </View>
+                  ) : null}
+                  {editEnrichmentData.bathrooms ? (
+                    <View style={styles.enrichedItem}>
+                      <ThemedText style={styles.enrichedValue}>{editEnrichmentData.bathrooms}</ThemedText>
+                      <ThemedText style={[styles.enrichedLabel, { color: theme.textSecondary }]}>Baths</ThemedText>
+                    </View>
+                  ) : null}
+                  {editEnrichmentData.squareFeet ? (
+                    <View style={styles.enrichedItem}>
+                      <ThemedText style={styles.enrichedValue}>{editEnrichmentData.squareFeet.toLocaleString()}</ThemedText>
+                      <ThemedText style={[styles.enrichedLabel, { color: theme.textSecondary }]}>Sq Ft</ThemedText>
+                    </View>
+                  ) : null}
+                  {editEnrichmentData.yearBuilt ? (
+                    <View style={styles.enrichedItem}>
+                      <ThemedText style={styles.enrichedValue}>{editEnrichmentData.yearBuilt}</ThemedText>
+                      <ThemedText style={[styles.enrichedLabel, { color: theme.textSecondary }]}>Built</ThemedText>
+                    </View>
+                  ) : null}
+                </View>
+              </GlassCard>
+            </Animated.View>
+          ) : null}
+
+          <View style={[styles.modalActions, { paddingBottom: insets.bottom + Spacing.lg }]}>
+            <PrimaryButton
+              onPress={handleUpdateHome}
+              disabled={!nickname || isSaving}
+              testID="button-save-edit-home"
+            >
+              {isSaving ? "Saving..." : "Save Changes"}
+            </PrimaryButton>
+            {editError ? (
+              <ThemedText style={styles.inlineError} testID="text-edit-home-error">
+                {editError}
+              </ThemedText>
+            ) : null}
+          </View>
+        </ScrollView>
+      </ThemedView>
     </Modal>
   );
 
@@ -783,29 +918,23 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: Spacing.md,
   },
-  editModalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: Spacing.lg,
-  },
-  editModalContent: {
-    width: "100%",
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-  },
-  editModalTitle: {
-    ...Typography.headline,
-    marginBottom: Spacing.md,
-    textAlign: "center",
-  },
-  editModalActions: {
-    flexDirection: "row",
+  currentAddressBox: {
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
     gap: Spacing.sm,
-    marginTop: Spacing.lg,
   },
-  editModalBtn: {
+  currentAddressRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.xs,
+  },
+  currentAddressText: {
+    ...Typography.subhead,
     flex: 1,
+  },
+  changeAddressLink: {
+    ...Typography.footnote,
+    fontWeight: "600",
   },
 });

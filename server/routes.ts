@@ -320,6 +320,67 @@ const onboardingRateLimitMap = new Map<
   { count: number; resetAt: number }
 >();
 
+// IP-based rate limiter factory for unauthenticated abuse-prone endpoints
+// (forgot-password, support/ticket). Uses x-forwarded-for first hop, falls
+// back to socket address. Each endpoint gets its own bucket so they don't
+// interfere with each other.
+function createIpRateLimit(opts: {
+  bucket: Map<string, { count: number; resetAt: number }>;
+  windowMs: number;
+  limit: number;
+  message?: string;
+}): RequestHandler {
+  return (req, res, next) => {
+    const ip =
+      (req.headers["x-forwarded-for"] as string | undefined)
+        ?.split(",")[0]
+        ?.trim() ||
+      req.socket.remoteAddress ||
+      "unknown";
+    const now = Date.now();
+    const entry = opts.bucket.get(ip);
+    if (!entry || entry.resetAt < now) {
+      opts.bucket.set(ip, { count: 1, resetAt: now + opts.windowMs });
+      next();
+      return;
+    }
+    if (entry.count >= opts.limit) {
+      res.status(429).json({
+        error:
+          opts.message ||
+          "Too many requests. Please wait a few minutes and try again.",
+      });
+      return;
+    }
+    entry.count += 1;
+    next();
+  };
+}
+
+const forgotPasswordRateLimitMap = new Map<
+  string,
+  { count: number; resetAt: number }
+>();
+const forgotPasswordRateLimit = createIpRateLimit({
+  bucket: forgotPasswordRateLimitMap,
+  windowMs: 60 * 60 * 1000, // 1 hour
+  limit: 5,
+  message:
+    "Too many password reset requests. Please wait an hour and try again.",
+});
+
+const supportTicketRateLimitMap = new Map<
+  string,
+  { count: number; resetAt: number }
+>();
+const supportTicketRateLimit = createIpRateLimit({
+  bucket: supportTicketRateLimitMap,
+  windowMs: 60 * 60 * 1000, // 1 hour
+  limit: 5,
+  message:
+    "Too many support requests. Please wait an hour and try again.",
+});
+
 const onboardingRateLimit: RequestHandler = (req, res, next) => {
   const ip =
     (req.headers["x-forwarded-for"] as string | undefined)
@@ -1626,7 +1687,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
-  app.post("/api/auth/forgot-password", async (req: Request, res: Response) => {
+  app.post("/api/auth/forgot-password", forgotPasswordRateLimit, async (req: Request, res: Response) => {
     try {
       const { email } = req.body;
       if (!email || typeof email !== "string") {
@@ -2053,6 +2114,113 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Update user error:", error);
         res.status(500).json({ error: "Failed to update user" });
+      }
+    },
+  );
+
+  // Upload homeowner avatar — accepts a base64 data URL, saves to Supabase
+  // Storage (or local /uploads in dev), and persists the public URL on the
+  // user row. Mirrors the provider logo endpoint at /api/provider/:id/logo.
+  app.post(
+    "/api/user/:id/avatar",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const authUserId = req.authenticatedUserId!;
+        if (req.params.id !== authUserId) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+
+        const { base64 } = req.body as { base64?: string };
+        if (!base64 || typeof base64 !== "string") {
+          return res.status(400).json({ error: "base64 image data required" });
+        }
+
+        const ALLOWED_MIME_PREFIXES_AVATAR = [
+          "data:image/jpeg;base64,",
+          "data:image/jpg;base64,",
+          "data:image/png;base64,",
+          "data:image/webp;base64,",
+        ];
+        const prefix = ALLOWED_MIME_PREFIXES_AVATAR.find((p) =>
+          base64.startsWith(p),
+        );
+        if (!prefix) {
+          return res
+            .status(400)
+            .json({ error: "Invalid image format. Use JPEG, PNG, or WebP." });
+        }
+
+        const ext =
+          prefix.includes("jpeg") || prefix.includes("jpg")
+            ? "jpg"
+            : prefix.includes("png")
+              ? "png"
+              : "webp";
+        const mimeType =
+          ext === "jpg"
+            ? "image/jpeg"
+            : ext === "png"
+              ? "image/png"
+              : "image/webp";
+        const base64Data = base64.slice(prefix.length);
+        const buffer = Buffer.from(base64Data, "base64");
+
+        // Cap at 5 MB to prevent storage abuse.
+        const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
+        if (buffer.length > MAX_AVATAR_BYTES) {
+          return res
+            .status(413)
+            .json({ error: "Image is too large (max 5 MB)" });
+        }
+
+        const filename = `user-${req.params.id}-avatar-${Date.now()}.${ext}`;
+        let avatarUrl: string;
+
+        const isDev = process.env.NODE_ENV === "development";
+        let supabaseClient: typeof import("./lib/supabase").supabase | null =
+          null;
+        try {
+          supabaseClient = (await import("./lib/supabase")).supabase;
+        } catch {}
+
+        if (supabaseClient) {
+          const { error: uploadError } = await supabaseClient.storage
+            .from("job-photos")
+            .upload(`avatars/${filename}`, buffer, {
+              contentType: mimeType,
+              upsert: true,
+            });
+          if (uploadError) {
+            console.error("Avatar Supabase upload error:", uploadError);
+            throw new Error("Failed to upload avatar to storage");
+          }
+          const { data: publicUrlData } = supabaseClient.storage
+            .from("job-photos")
+            .getPublicUrl(`avatars/${filename}`);
+          avatarUrl = publicUrlData.publicUrl;
+        } else if (isDev) {
+          const uploadDir = path.resolve(process.cwd(), "uploads", "avatars");
+          if (!fs.existsSync(uploadDir))
+            fs.mkdirSync(uploadDir, { recursive: true });
+          fs.writeFileSync(path.join(uploadDir, filename), buffer);
+          const protocol = req.protocol;
+          const host = req.get("host") || "";
+          avatarUrl = `${protocol}://${host}/uploads/avatars/${filename}`;
+        } else {
+          return res.status(503).json({ error: "Storage not configured" });
+        }
+
+        const updated = await storage.updateUser(req.params.id, { avatarUrl });
+        if (!updated) {
+          return res.status(404).json({ error: "User not found" });
+        }
+        res.json({ avatarUrl, user: formatUserResponse(updated) });
+      } catch (error: any) {
+        console.error("User avatar upload error:", error);
+        res
+          .status(500)
+          .json({ error: error?.message || "Failed to upload avatar" });
       }
     },
   );
@@ -13774,7 +13942,7 @@ Respond with JSON only:
 
   // ─── Support Ticket endpoint ─────────────────────────────────────────────────
 
-  app.post("/api/support/ticket", async (req: Request, res: Response) => {
+  app.post("/api/support/ticket", supportTicketRateLimit, async (req: Request, res: Response) => {
     try {
       const { name, email, category, subject, message } = req.body;
 

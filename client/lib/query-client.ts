@@ -2,6 +2,34 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { Platform } from "react-native";
 import { useAuthStore } from "@/state/authStore";
 
+// Tracks whether we have already kicked off a global session-expiry logout.
+// Without this latch, parallel queries failing 401 in the same render cycle
+// would each call `logout()` and clobber the post-logout navigation state.
+let sessionExpiryHandled = false;
+let lastSessionTokenSeen: string | null = null;
+
+function handleSessionExpiry() {
+  // Only react when the user actually has a session — we don't want a 401
+  // from /api/auth/login (wrong password) to log out a logged-out user.
+  const { sessionToken } = useAuthStore.getState();
+  if (!sessionToken) return;
+  if (sessionExpiryHandled && lastSessionTokenSeen === sessionToken) return;
+  sessionExpiryHandled = true;
+  lastSessionTokenSeen = sessionToken;
+  // Defer to a microtask so React Query can settle the failing query first.
+  setTimeout(() => {
+    try {
+      useAuthStore.getState().logout();
+    } catch (err) {
+      console.error("[query-client] session expiry logout failed:", err);
+    }
+    // Re-arm so a future session can also expire cleanly.
+    setTimeout(() => {
+      sessionExpiryHandled = false;
+    }, 1000);
+  }, 0);
+}
+
 /**
  * Gets the base URL for the Express API server.
  * EXPO_PUBLIC_DOMAIN may be set with or without a protocol prefix.
@@ -69,6 +97,10 @@ export async function apiRequest(
     credentials: "include",
   });
 
+  if (res.status === 401) {
+    handleSessionExpiry();
+  }
+
   await throwIfResNotOk(res);
   return res;
 }
@@ -87,8 +119,14 @@ export const getQueryFn: <T>(options: {
       headers: { ...getAuthHeaders(), "X-Client-Platform": Platform.OS },
     });
 
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
+    if (res.status === 401) {
+      // Always trigger global expiry handling for authenticated queries —
+      // even when on401 is "returnNull", a 401 here means the session is
+      // invalid and the user needs to be routed back to Welcome / Login.
+      handleSessionExpiry();
+      if (unauthorizedBehavior === "returnNull") {
+        return null;
+      }
     }
 
     await throwIfResNotOk(res);
@@ -102,7 +140,7 @@ export const queryClient = new QueryClient({
       refetchInterval: false,
       refetchOnWindowFocus: false,
       staleTime: 1000 * 60 * 5,
-      retry: false,
+      retry: 1,
     },
     mutations: {
       retry: false,

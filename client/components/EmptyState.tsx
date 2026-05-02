@@ -1,5 +1,6 @@
 import React from "react";
-import { StyleSheet, View, Image, ImageSourcePropType } from "react-native";
+import { StyleSheet, View, ImageSourcePropType } from "react-native";
+import { Image } from "expo-image";
 
 import { ThemedText } from "@/components/ThemedText";
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -32,7 +33,7 @@ export function EmptyState({
 
   return (
     <View style={styles.container}>
-      <Image source={image} style={styles.image} resizeMode="contain" />
+      <Image source={image} style={styles.image} contentFit="contain" />
 
       <ThemedText type="h2" style={styles.title}>
         {title}

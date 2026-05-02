@@ -402,25 +402,14 @@ export default function SimpleBookingScreen() {
           const { openExternalUrl } = await import("@/lib/openExternalUrl");
           await openExternalUrl(data.depositCheckoutUrl);
         } catch {
-          Alert.alert(
-            "Payment Required",
-            "We couldn't open the deposit payment page. Open this booking from My Appointments to retry the payment.",
-            [
-              {
-                text: "View Appointment",
-                onPress: () =>
-                  (navigation as unknown as { navigate: (n: string, p: unknown) => void }).navigate(
-                    "AppointmentDetail",
-                    { appointmentId },
-                  ),
-              },
-            ],
-          );
-          return;
+          // Browser launch failed — still route to BookingSuccess so the
+          // homeowner can retry the deposit payment from a stable screen
+          // rather than being stuck on a half-submitted booking form.
         }
         navigation.navigate("BookingSuccess", {
           jobId: appointmentId,
           awaitingDeposit: true,
+          depositCheckoutUrl: data.depositCheckoutUrl,
         });
         return;
       }
