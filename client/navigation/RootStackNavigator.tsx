@@ -47,9 +47,8 @@ import ServicesScreen from "@/screens/provider/ServicesScreen";
 import ServiceBlueprintWizardScreen from "@/screens/provider/ServiceBlueprintWizardScreen";
 import ServiceSummaryScreen from "@/screens/provider/ServiceSummaryScreen";
 import PublicProfileScreen from "@/screens/provider/PublicProfileScreen";
-import ServicePreviewScreen from "@/screens/provider/ServicePreviewScreen";
 import ProviderJobDetailScreen from "@/screens/provider/ProviderJobDetailScreen";
-import BusinessDetailsScreen from "@/screens/provider/BusinessDetailsScreen";
+import LeadsScreen from "@/screens/provider/LeadsScreen";
 import ReviewsScreen from "@/screens/provider/ReviewsScreen";
 import ProviderResourcesScreen from "@/screens/provider/ProviderResourcesScreen";
 import ProviderAIAssistantScreen from "@/screens/provider/ProviderAIAssistantScreen";
@@ -143,14 +142,13 @@ export type RootStackParamList = {
   NewService: { onboardingMode?: boolean } | undefined;
   ServiceSummary: { serviceId: string; service: Record<string, unknown> };
   EditService: { serviceId: string; service?: Record<string, unknown>; initialStep?: number };
-  ServicePreview: { service: any };
   BusinessProfile: undefined;
   PreviewBookingPage: { providerId?: string };
   SavedProviders: undefined;
   HelpCenter: undefined;
   ContactUs: undefined;
   ProviderJobDetail: { jobId: string };
-  BusinessDetails: undefined;
+  Leads: undefined;
   Reviews: undefined;
   ProviderResources: undefined;
   ProviderAIAssistant: undefined;
@@ -548,10 +546,10 @@ export default function RootStackNavigator() {
         }}
       />
       <Stack.Screen
-        name="BusinessDetails"
-        component={BusinessDetailsScreen}
+        name="Leads"
+        component={LeadsScreen}
         options={{
-          headerTitle: "Business Details",
+          headerTitle: "Leads",
         }}
       />
       <Stack.Screen

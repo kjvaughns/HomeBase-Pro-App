@@ -51,6 +51,13 @@ interface ProviderService {
   bookingMode: string | null;
 }
 
+interface DepositPolicy {
+  depositRequired?: boolean;
+  depositAmount?: number | string | null;
+  depositPercentage?: number | null;
+  cancellationPolicy?: string | null;
+}
+
 interface IntakeQuestion {
   id: string;
   question: string;
@@ -141,10 +148,12 @@ function getDurationLabel(minutes: number | null): string | null {
 
 function ServicePreviewModal({
   service,
+  depositPolicy,
   visible,
   onClose,
 }: {
   service: ProviderService | null;
+  depositPolicy?: DepositPolicy | null;
   visible: boolean;
   onClose: () => void;
 }) {
@@ -231,6 +240,26 @@ function ServicePreviewModal({
                   )}
                 </View>
               ))}
+            </GlassCard>
+          ) : null}
+
+          {depositPolicy?.depositRequired ? (
+            <GlassCard style={previewStyles.sectionCard}>
+              <ThemedText style={[previewStyles.sectionLabel, { color: theme.textSecondary }]}>DEPOSIT POLICY</ThemedText>
+              <View style={[previewStyles.questionRow, { borderColor: theme.borderLight }]}>
+                <ThemedText style={[previewStyles.questionText, { color: theme.text }]} testID="text-deposit-policy">
+                  {depositPolicy.depositPercentage
+                    ? `A ${depositPolicy.depositPercentage}% deposit is required to confirm your booking.`
+                    : depositPolicy.depositAmount
+                    ? `A $${Number(depositPolicy.depositAmount).toFixed(2)} deposit is required to confirm your booking.`
+                    : "A deposit is required to confirm your booking."}
+                </ThemedText>
+                {depositPolicy.cancellationPolicy ? (
+                  <ThemedText style={{ color: theme.textSecondary, fontSize: 13, marginTop: 6 }}>
+                    {depositPolicy.cancellationPolicy}
+                  </ThemedText>
+                ) : null}
+              </View>
             </GlassCard>
           ) : null}
 
@@ -691,6 +720,7 @@ export default function ServicesScreen() {
       />
       <ServicePreviewModal
         service={previewService}
+        depositPolicy={(providerProfile as any)?.bookingPolicies as DepositPolicy | null}
         visible={previewVisible}
         onClose={() => setPreviewVisible(false)}
       />

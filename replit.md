@@ -20,7 +20,7 @@ The application consists of a client-side React Native Expo app and an Express.j
 - **Homeowner Tools**: Features include a "Survival Kit" for maintenance plans, "HouseFax Ledger" for expense tracking and property history, "Home Health Score" assessment, and "Service History."
 - **Data Management**: Full CRUD operations for appointments, clients, jobs, and invoices, with real-time tracking.
 - **Payment Processing**: Integration with Stripe Connect for invoicing, payment processing, and platform fees.
-- **Database**: PostgreSQL with Drizzle ORM, managing 28 tables including users, homes, providers, appointments, clients, jobs, invoices, and booking links.
+- **Database**: PostgreSQL with Drizzle ORM, managing 39 tables including users, homes, providers, appointments, clients, jobs, invoices, and booking links.
 - **API Endpoints**: A comprehensive RESTful API supports all application functionalities.
 - **Onboarding & First-Launch Experience**: Animated onboarding flows tailored for Homeowners and Service Providers, allowing role selection and quick role switching.
 - **Reset Password Flow**: Full password reset via email using JWT tokens and a styled in-app form.

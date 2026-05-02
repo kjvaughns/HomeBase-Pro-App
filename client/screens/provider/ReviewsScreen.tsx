@@ -10,6 +10,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -27,6 +28,14 @@ import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest } from "@/lib/query-client";
 import { recordHappyMoment } from "@/state/appReviewStore";
+
+interface CompletedClient {
+  clientId: string;
+  clientName: string;
+  clientEmail: string | null;
+  appointmentId: string | null;
+  serviceName: string | null;
+}
 
 interface Review {
   id: string;
@@ -59,6 +68,9 @@ export default function ReviewsScreen() {
   const [replyError, setReplyError] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [requestingClientId, setRequestingClientId] = useState<string | null>(null);
+  const [requestError, setRequestError] = useState<string | null>(null);
 
   const providerId = providerProfile?.id;
 
@@ -66,6 +78,24 @@ export default function ReviewsScreen() {
     queryKey: ["/api/provider", providerId, "reviews"],
     enabled: !!providerId,
   });
+
+  const { data: clientsData } = useQuery<{ clients: Array<{ id: string; firstName: string; lastName?: string | null; email?: string | null }> }>({
+    queryKey: ["/api/provider", providerId, "clients"],
+    enabled: !!providerId && showRequestModal,
+  });
+
+  const sendRequest = async (clientId: string) => {
+    setRequestingClientId(clientId);
+    setRequestError(null);
+    try {
+      await apiRequest("POST", "/api/reviews/request", { clientId });
+      setShowRequestModal(false);
+    } catch (err: any) {
+      setRequestError(err?.message || "Could not send the request. Please try again.");
+    } finally {
+      setRequestingClientId(null);
+    }
+  };
 
   const allReviews = data?.reviews || [];
 
@@ -370,6 +400,15 @@ export default function ReviewsScreen() {
               })}
             </View>
           ) : null}
+
+          <View style={{ marginTop: Spacing.md }}>
+            <PrimaryButton
+              testID="button-request-review"
+              onPress={() => setShowRequestModal(true)}
+            >
+              Request a Review
+            </PrimaryButton>
+          </View>
         </GlassCard>
       </Animated.View>
 
@@ -537,6 +576,96 @@ export default function ReviewsScreen() {
             </View>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal
+        visible={showRequestModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowRequestModal(false)}
+      >
+        <View style={styles.modalRoot}>
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={() => setShowRequestModal(false)}
+          />
+          <View
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: theme.backgroundDefault,
+                paddingBottom: insets.bottom + Spacing.lg,
+                maxHeight: "75%",
+              },
+            ]}
+          >
+            <View style={styles.modalHandle} />
+            <ThemedText style={styles.modalTitle}>Request a Review</ThemedText>
+            <ThemedText
+              style={[Typography.subhead as object, { color: theme.textSecondary, marginBottom: Spacing.md }]}
+            >
+              Pick a client to email a review link to. We'll use their most recent completed job.
+            </ThemedText>
+            {requestError ? (
+              <ThemedText style={[styles.errorText, { color: Colors.error, marginBottom: Spacing.sm }]}>
+                {requestError}
+              </ThemedText>
+            ) : null}
+            <ScrollView style={{ maxHeight: 360 }}>
+              {(clientsData?.clients || []).length === 0 ? (
+                <ThemedText style={{ color: theme.textSecondary, padding: Spacing.md }}>
+                  No clients yet. Add a client first.
+                </ThemedText>
+              ) : (
+                (clientsData?.clients || []).map((c) => {
+                  const fullName = `${c.firstName} ${c.lastName || ""}`.trim();
+                  const isLoadingThis = requestingClientId === c.id;
+                  return (
+                    <Pressable
+                      key={c.id}
+                      onPress={() => !requestingClientId && sendRequest(c.id)}
+                      disabled={!!requestingClientId}
+                      testID={`row-request-review-client-${c.id}`}
+                      style={{
+                        paddingVertical: Spacing.md,
+                        paddingHorizontal: Spacing.sm,
+                        borderBottomWidth: StyleSheet.hairlineWidth,
+                        borderBottomColor: theme.borderLight,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        opacity: requestingClientId && !isLoadingThis ? 0.4 : 1,
+                      }}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <ThemedText style={{ fontWeight: "600" }}>{fullName || "Unnamed client"}</ThemedText>
+                        {c.email ? (
+                          <ThemedText style={{ color: theme.textSecondary, fontSize: 13 }}>
+                            {c.email}
+                          </ThemedText>
+                        ) : null}
+                      </View>
+                      {isLoadingThis ? (
+                        <ActivityIndicator color={Colors.accent} />
+                      ) : (
+                        <Ionicons name="paper-plane-outline" size={20} color={Colors.accent} />
+                      )}
+                    </Pressable>
+                  );
+                })
+              )}
+            </ScrollView>
+            <Pressable
+              onPress={() => setShowRequestModal(false)}
+              style={[styles.cancelButton, { borderColor: theme.borderLight, marginTop: Spacing.md, alignSelf: "stretch", alignItems: "center" }]}
+              testID="button-close-request-modal"
+            >
+              <ThemedText style={[styles.cancelButtonText, { color: theme.textSecondary }]}>
+                Close
+              </ThemedText>
+            </Pressable>
+          </View>
+        </View>
       </Modal>
     </ThemedView>
   );

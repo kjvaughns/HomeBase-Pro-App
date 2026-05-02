@@ -228,21 +228,6 @@ export async function runBootMigrations(): Promise<void> {
       )
     `);
 
-    // ── provider_message_templates ────────────────────────────────────────
-    await runSql("table.provider_message_templates", `
-      CREATE TABLE IF NOT EXISTS provider_message_templates (
-        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
-        provider_id VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
-        name TEXT NOT NULL,
-        subject TEXT,
-        body TEXT NOT NULL,
-        event_type TEXT,
-        is_default BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
-        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
-      )
-    `);
-
     // ── provider_messages ─────────────────────────────────────────────────
     await runSql("table.provider_messages", `
       CREATE TABLE IF NOT EXISTS provider_messages (
@@ -258,6 +243,14 @@ export async function runBootMigrations(): Promise<void> {
         resend_message_id TEXT,
         created_at TIMESTAMP DEFAULT NOW() NOT NULL
       )
+    `);
+
+    // ── drop legacy provider_message_templates ────────────────────────────
+    // The duplicate provider_message_templates table was superseded by
+    // message_templates. Dropping it on every boot keeps deployed databases
+    // in sync with shared/schema.ts (39-table canonical count).
+    await runSql("drop.provider_message_templates", `
+      DROP TABLE IF EXISTS provider_message_templates CASCADE
     `);
 
     // ── message_templates ─────────────────────────────────────────────────

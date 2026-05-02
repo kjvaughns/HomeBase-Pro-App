@@ -167,6 +167,15 @@ export default function ProviderHomeScreen() {
     enabled: !!providerId,
   });
 
+  const { data: leadsData } = useQuery<{ leads: { id: string; status: string }[] }>({
+    queryKey: ["/api/providers", providerId, "leads"],
+    enabled: !!providerId,
+    refetchInterval: 60_000,
+  });
+  const newLeadCount = (leadsData?.leads ?? []).filter(
+    (l) => l.status === "new" || l.status === "pending",
+  ).length;
+
   const { data: insightsData, isLoading: insightsLoading, isError: insightsError } = useQuery<{ insights: ProviderInsights }>({
     queryKey: ["/api/provider", providerId, "insights"],
     enabled: !!providerId,
@@ -409,7 +418,7 @@ export default function ProviderHomeScreen() {
           <Animated.View entering={FadeInDown.delay(50).duration(400)}>
             <Pressable
               onPress={() =>
-                navigation.navigate(stripeReady ? "BusinessDetails" : "StripeConnect")
+                navigation.navigate(stripeReady ? "BusinessHub" : "StripeConnect")
               }
               testID="banner-unlisted"
             >
@@ -505,6 +514,67 @@ export default function ProviderHomeScreen() {
             </View>
           )}
         </Animated.View>
+
+        {newLeadCount > 0 ? (
+          <Animated.View entering={FadeInDown.delay(250).duration(400)}>
+            <Pressable
+              testID="card-leads-banner"
+              onPress={() => navigation.navigate("Leads")}
+            >
+              <GlassCard
+                style={[
+                  styles.greetingCard,
+                  { borderColor: Colors.accent, borderWidth: 1 },
+                ]}
+              >
+                <View style={styles.greetingContent}>
+                  <View
+                    style={[
+                      styles.statIcon,
+                      { backgroundColor: Colors.accentLight },
+                    ]}
+                  >
+                    <Feather name="inbox" size={18} color={Colors.accent} />
+                  </View>
+                  <View style={styles.greetingText}>
+                    <ThemedText style={styles.greetingName}>
+                      {newLeadCount} new {newLeadCount === 1 ? "lead" : "leads"}
+                    </ThemedText>
+                    <ThemedText
+                      style={[
+                        styles.greetingLabel,
+                        { color: theme.textSecondary },
+                      ]}
+                    >
+                      Tap to review and accept
+                    </ThemedText>
+                  </View>
+                  <View
+                    style={{
+                      backgroundColor: Colors.error,
+                      borderRadius: 12,
+                      minWidth: 24,
+                      height: 24,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      paddingHorizontal: 6,
+                    }}
+                  >
+                    <ThemedText
+                      style={{
+                        color: "#fff",
+                        fontSize: 12,
+                        fontWeight: "700",
+                      }}
+                    >
+                      {newLeadCount > 99 ? "99+" : newLeadCount}
+                    </ThemedText>
+                  </View>
+                </View>
+              </GlassCard>
+            </Pressable>
+          </Animated.View>
+        ) : null}
 
         {showGettingStarted ? (
           <Animated.View entering={FadeInDown.delay(300).duration(400)}>

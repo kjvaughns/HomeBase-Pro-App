@@ -54,8 +54,8 @@ export default function StripeConnectScreen() {
   const providerId = providerProfile?.id;
 
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
-  const [invoiceDescription, setInvoiceDescription] = useState("Test Service");
-  const [invoiceAmount, setInvoiceAmount] = useState("50.00");
+  const [invoiceDescription, setInvoiceDescription] = useState("");
+  const [invoiceAmount, setInvoiceAmount] = useState("");
   const appState = useRef(AppState.currentState);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -169,8 +169,8 @@ export default function StripeConnectScreen() {
     onSuccess: () => {
       Alert.alert("Success", "Invoice created!");
       refetchInvoices();
-      setInvoiceDescription("Test Service");
-      setInvoiceAmount("50.00");
+      setInvoiceDescription("");
+      setInvoiceAmount("");
     },
     onError: (error: any) => {
       Alert.alert("Error", error.message || "Failed to create invoice");

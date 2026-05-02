@@ -1422,6 +1422,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
             newService = svc;
           }
 
+          // 4. Seed 5 default message templates so the provider has a starting
+          //    point for client-facing comms (Settings → Message Templates).
+          await tx.insert(messageTemplates).values([
+            {
+              providerId: newProvider.id,
+              name: "Booking Confirmation",
+              channel: "email",
+              subject: "Your booking is confirmed",
+              body: "Hi {{client_first_name}},\n\nThanks for booking {{service_name}} with {{business_name}}. We're confirmed for {{appointment_date}} at {{appointment_time}}.\n\nReply to this email if you need to make changes.\n\n— {{business_name}}",
+            },
+            {
+              providerId: newProvider.id,
+              name: "Reminder",
+              channel: "sms",
+              subject: null,
+              body: "Hi {{client_first_name}}, this is a reminder of your {{service_name}} appointment with {{business_name}} on {{appointment_date}} at {{appointment_time}}. Reply if you need to reschedule.",
+            },
+            {
+              providerId: newProvider.id,
+              name: "Quote",
+              channel: "email",
+              subject: "Your quote from {{business_name}}",
+              body: "Hi {{client_first_name}},\n\nThanks for your interest in {{service_name}}. Here is your quote:\n\n{{quote_details}}\n\nReply to this email to accept the quote or ask any questions.\n\n— {{business_name}}",
+            },
+            {
+              providerId: newProvider.id,
+              name: "Invoice",
+              channel: "email",
+              subject: "Your invoice from {{business_name}}",
+              body: "Hi {{client_first_name}},\n\nAttached is your invoice for {{service_name}}. You can pay securely using the link in the email.\n\nThanks!\n— {{business_name}}",
+            },
+            {
+              providerId: newProvider.id,
+              name: "Review Request",
+              channel: "email",
+              subject: "How did we do?",
+              body: "Hi {{client_first_name}},\n\nThanks for choosing {{business_name}} for your {{service_name}}. Would you mind taking a minute to leave us a review? It really helps.\n\n{{review_url}}\n\n— {{business_name}}",
+            },
+          ]);
+
           return { user: newUser, provider: newProvider, service: newService };
         });
 
@@ -7708,6 +7748,120 @@ Respond with JSON only:
     },
   );
 
+  // Provider-initiated: ask a client to leave a review for a completed
+  // appointment. Accepts { appointmentId } and/or { clientId }; if only a
+  // clientId is provided, the most recent completed appointment for that
+  // client is used.
+  app.post(
+    "/api/reviews/request",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const authUserId = req.authenticatedUserId!;
+        const { appointmentId, clientId } = req.body ?? {};
+
+        let appointment: typeof appointments.$inferSelect | undefined;
+
+        if (appointmentId && typeof appointmentId === "string") {
+          const [row] = await db
+            .select()
+            .from(appointments)
+            .where(eq(appointments.id, appointmentId))
+            .limit(1);
+          appointment = row;
+        }
+
+        if (!appointment && clientId && typeof clientId === "string") {
+          const client = await storage.getClient(clientId);
+          if (!client) {
+            return res.status(404).json({ error: "Client not found" });
+          }
+          if (!(await assertProviderOwnership(req, client.providerId, res))) return;
+          if (!client.homeownerUserId) {
+            return res.status(400).json({
+              error: "This client has no linked homeowner account yet, so we can't send a review request.",
+            });
+          }
+          const [row] = await db
+            .select()
+            .from(appointments)
+            .where(
+              and(
+                eq(appointments.providerId, client.providerId),
+                eq(appointments.userId, client.homeownerUserId),
+                eq(appointments.status, "completed"),
+              ),
+            )
+            .orderBy(desc(appointments.scheduledDate))
+            .limit(1);
+          appointment = row;
+        }
+
+        if (!appointment) {
+          return res.status(400).json({
+            error: "No completed appointment found for this client. Mark a job complete first.",
+          });
+        }
+
+        // Ownership: caller must own the provider on the appointment.
+        if (!(await assertProviderOwnership(req, appointment.providerId, res))) return;
+
+        // Don't re-request if a review already exists.
+        const [existingReview] = await db
+          .select({ id: reviews.id })
+          .from(reviews)
+          .where(eq(reviews.appointmentId, appointment.id))
+          .limit(1);
+        if (existingReview) {
+          return res.status(409).json({ error: "This client already submitted a review." });
+        }
+
+        const [homeowner] = appointment.userId
+          ? await db.select().from(users).where(eq(users.id, appointment.userId)).limit(1)
+          : [];
+        const [provider] = await db
+          .select()
+          .from(providers)
+          .where(eq(providers.id, appointment.providerId))
+          .limit(1);
+
+        if (!homeowner?.email) {
+          return res.status(400).json({
+            error: "This client doesn't have an email on file, so we can't send a review request.",
+          });
+        }
+
+        const baseUrl =
+          process.env.PUBLIC_BASE_URL ||
+          (process.env.REPLIT_DEV_DOMAIN
+            ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+            : "https://homebaseproapp.com");
+        const reviewUrl = `${baseUrl}/open-app?path=review&jobId=${encodeURIComponent(appointment.id)}`;
+        const providerName = provider?.businessName || "your provider";
+        const serviceName = appointment.serviceName || "your service";
+        const clientName =
+          `${homeowner.firstName || ""} ${homeowner.lastName || ""}`.trim() ||
+          homeowner.email;
+
+        await dispatch("review.request", {
+          clientEmail: homeowner.email,
+          clientName,
+          providerName,
+          serviceName,
+          reviewUrl,
+          recipientUserId: homeowner.id,
+          relatedRecordType: "appointment",
+          relatedRecordId: appointment.id,
+        });
+
+        res.status(200).json({ success: true, appointmentId: appointment.id });
+      } catch (error) {
+        console.error("Request review error:", error);
+        res.status(500).json({ error: "Failed to send review request" });
+      }
+    },
+  );
+
   // Submit a review for an appointment
   app.post(
     "/api/appointments/:id/review",
@@ -7859,7 +8013,21 @@ Respond with JSON only:
           }
         }
 
-        res.json({ client: { ...client, home }, jobs, invoices });
+        // Compute lifetime value server-side: sum of completed-job final
+        // prices + paid invoice totals. Single source of truth for LTV.
+        const completedJobsTotal = jobs.reduce((sum, j) => {
+          if (j.status !== "completed") return sum;
+          const v = j.finalPrice ? parseFloat(String(j.finalPrice)) : 0;
+          return sum + (Number.isFinite(v) ? v : 0);
+        }, 0);
+        const paidInvoicesTotal = invoices.reduce((sum, inv) => {
+          if (inv.status !== "paid") return sum;
+          const v = inv.totalAmount ? parseFloat(String(inv.totalAmount)) : 0;
+          return sum + (Number.isFinite(v) ? v : 0);
+        }, 0);
+        const ltv = Math.round((completedJobsTotal + paidInvoicesTotal) * 100) / 100;
+
+        res.json({ client: { ...client, home, ltv }, jobs, invoices });
       } catch (error) {
         console.error("Get client error:", error);
         res.status(500).json({ error: "Failed to get client" });

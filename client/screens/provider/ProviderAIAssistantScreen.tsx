@@ -14,14 +14,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { Feather } from "@expo/vector-icons";
 import * as Speech from "expo-speech";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withTiming,
-  withSequence,
-  cancelAnimation,
-} from "react-native-reanimated";
 
 import { useTheme } from "@/hooks/useTheme";
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from "@/constants/theme";
@@ -66,33 +58,10 @@ export default function ProviderAIAssistantScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
   // Cache business context so we don't re-fetch on every message send
   const cachedContextRef = useRef<string | null>(null);
-  
-  const pulseScale = useSharedValue(1);
-  
-  useEffect(() => {
-    if (isListening) {
-      pulseScale.value = withRepeat(
-        withSequence(
-          withTiming(1.3, { duration: 600 }),
-          withTiming(1, { duration: 600 })
-        ),
-        -1,
-        true
-      );
-    } else {
-      cancelAnimation(pulseScale);
-      pulseScale.value = withTiming(1, { duration: 200 });
-    }
-  }, [isListening]);
-  
-  const pulseStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pulseScale.value }],
-  }));
 
   const getBusinessContext = async (): Promise<string> => {
     // Return cached context if available (avoids refetching on every message)
@@ -217,18 +186,6 @@ Provider Business Context:
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
-    }
-  };
-  
-  const handleVoicePress = () => {
-    if (isListening) {
-      setIsListening(false);
-    } else {
-      setIsListening(true);
-      // Voice input is not yet integrated — just toggle the listening indicator
-      setTimeout(() => {
-        setIsListening(false);
-      }, 3000);
     }
   };
   
@@ -381,38 +338,7 @@ Provider Business Context:
           },
         ]}
       >
-        {isListening && (
-          <View style={styles.listeningIndicator}>
-            <Animated.View style={[styles.pulseDot, pulseStyle]} />
-            <Text style={[styles.listeningText, { color: Colors.accent }]}>
-              Listening...
-            </Text>
-          </View>
-        )}
-        
         <View style={styles.inputRow}>
-          <Pressable
-            onPress={handleVoicePress}
-            style={({ pressed }) => [
-              styles.voiceButton,
-              {
-                backgroundColor: isListening
-                  ? Colors.accent
-                  : isDark
-                  ? theme.backgroundSecondary
-                  : theme.backgroundDefault,
-              },
-              pressed && { opacity: 0.7 },
-            ]}
-            testID="voice-button"
-          >
-            <Feather
-              name={isListening ? "mic-off" : "mic"}
-              size={20}
-              color={isListening ? "#FFFFFF" : theme.text}
-            />
-          </Pressable>
-          
           <TextInput
             style={[
               styles.input,
@@ -558,34 +484,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     borderTopWidth: 1,
   },
-  listeningIndicator: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingBottom: Spacing.sm,
-  },
-  pulseDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: Colors.accent,
-    marginRight: Spacing.sm,
-  },
-  listeningText: {
-    ...Typography.subhead,
-    fontWeight: "500",
-  },
   inputRow: {
     flexDirection: "row",
     alignItems: "flex-end",
     gap: Spacing.sm,
-  },
-  voiceButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
   },
   input: {
     flex: 1,

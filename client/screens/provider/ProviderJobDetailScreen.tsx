@@ -143,6 +143,7 @@ interface ApiJob {
   recurringFrequency?: string | null;
   checklist?: JobChecklistItem[] | null;
   homeId?: string | null;
+  appointmentId?: string | null;
 }
 
 interface ApiClient {
@@ -513,6 +514,29 @@ export default function ProviderJobDetailScreen() {
     }
   }, [job, navigation]);
 
+  const requestReviewMutation = useMutation({
+    mutationFn: async () => {
+      if (!job) throw new Error("Missing job");
+      return apiRequest("POST", "/api/reviews/request", {
+        appointmentId: job.appointmentId ?? undefined,
+        clientId: job.clientId,
+      });
+    },
+    onSuccess: () => {
+      Alert.alert("Review Request Sent", "We've emailed your client a link to leave a review.");
+    },
+    onError: (err: any) => {
+      Alert.alert(
+        "Couldn't send request",
+        err?.message || "Please try again in a moment.",
+      );
+    },
+  });
+
+  const handleRequestReview = useCallback(() => {
+    requestReviewMutation.mutate();
+  }, [requestReviewMutation]);
+
   const handleUploadPhotos = useCallback(async () => {
     if (Platform.OS === "web") {
       Alert.alert("Not Available", "Photo upload is available on mobile devices via Expo Go.");
@@ -803,9 +827,20 @@ export default function ProviderJobDetailScreen() {
 
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing.md, backgroundColor: theme.backgroundRoot }]}>
         {resolvedDisplayStatus === "completed" ? (
-          <PrimaryButton onPress={handleCreateInvoice} style={styles.actionButton}>
-            Create Invoice
-          </PrimaryButton>
+          <>
+            <PrimaryButton onPress={handleCreateInvoice} style={styles.actionButton}>
+              Create Invoice
+            </PrimaryButton>
+            <PrimaryButton
+              onPress={handleRequestReview}
+              style={styles.actionButton}
+              loading={requestReviewMutation.isPending}
+              disabled={requestReviewMutation.isPending}
+              testID="button-request-review-job"
+            >
+              Request a Review
+            </PrimaryButton>
+          </>
         ) : nextAction ? (
           <PrimaryButton
             onPress={() => handleUpdateStatus(nextAction.status)}

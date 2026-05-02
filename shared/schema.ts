@@ -1471,22 +1471,6 @@ export const notificationPreferences = pgTable("notification_preferences", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const providerMessageTemplates = pgTable("provider_message_templates", {
-  id: varchar("id")
-    .primaryKey()
-    .default(sql`gen_random_uuid()`),
-  providerId: varchar("provider_id")
-    .notNull()
-    .references(() => providers.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
-  subject: text("subject"),
-  body: text("body").notNull(),
-  eventType: text("event_type"), // booking_confirmation, invoice_sent, etc.
-  isDefault: boolean("is_default").default(false),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
 export const notificationDeliveries = pgTable("notification_deliveries", {
   id: varchar("id")
     .primaryKey()
@@ -1510,8 +1494,6 @@ export const notificationDeliveries = pgTable("notification_deliveries", {
 export type PushToken = typeof pushTokens.$inferSelect;
 export type NotificationPreference =
   typeof notificationPreferences.$inferSelect;
-export type ProviderMessageTemplate =
-  typeof providerMessageTemplates.$inferSelect;
 export type NotificationDelivery = typeof notificationDeliveries.$inferSelect;
 
 // ─── Provider Messages ────────────────────────────────────────────────────────
