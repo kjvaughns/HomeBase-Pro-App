@@ -729,6 +729,91 @@ export default function SubscriptionScreen() {
             {new Date(data.firstPaidBookingAt).toLocaleDateString()}
           </ThemedText>
         ) : null}
+
+        {__DEV__ && useIAP ? (
+          <View
+            style={[
+              styles.debugBlock,
+              {
+                backgroundColor: isDark ? "#1A1A1A" : "#F5F5F5",
+                borderColor: isDark ? "#333" : "#E0E0E0",
+              },
+            ]}
+            testID="revenuecat-debug-panel"
+          >
+            <ThemedText
+              style={[styles.debugTitle, { color: theme.textSecondary }]}
+            >
+              RevenueCat debug (dev only)
+            </ThemedText>
+            {/* EXPO_PUBLIC_REVENUECAT_API_KEY is a publishable RevenueCat
+                SDK key (appl_…), NOT a secret. Showing a short prefix is
+                safe and helps confirm the device is pointed at the right
+                project. Do not replace with a server/secret key. */}
+            <ThemedText
+              style={[styles.debugLine, { color: theme.textTertiary }]}
+              testID="text-debug-api-key"
+            >
+              API key:{" "}
+              {process.env.EXPO_PUBLIC_REVENUECAT_API_KEY
+                ? `${process.env.EXPO_PUBLIC_REVENUECAT_API_KEY.slice(0, 8)}…`
+                : "(not set)"}
+            </ThemedText>
+            <ThemedText
+              style={[styles.debugLine, { color: theme.textTertiary }]}
+              testID="text-debug-entitlement"
+            >
+              Entitlement: pro
+            </ThemedText>
+            <ThemedText
+              style={[styles.debugLine, { color: theme.textTertiary }]}
+              testID="text-debug-offering-state"
+            >
+              Offering state: {offeringState.kind}
+            </ThemedText>
+            {offeringState.kind === "ok" ? (
+              <>
+                <ThemedText
+                  style={[styles.debugLine, { color: theme.textTertiary }]}
+                  testID="text-debug-current-offering"
+                >
+                  Current offering: {offeringState.offering.identifier}
+                </ThemedText>
+                <ThemedText
+                  style={[styles.debugLine, { color: theme.textTertiary }]}
+                >
+                  Packages ({offeringState.offering.availablePackages.length}):
+                </ThemedText>
+                {offeringState.offering.availablePackages.map((pkg) => (
+                  <ThemedText
+                    key={pkg.identifier}
+                    style={[styles.debugLine, { color: theme.textTertiary }]}
+                    testID={`text-debug-package-${pkg.identifier}`}
+                  >
+                    {"  • "}
+                    {pkg.identifier} → {pkg.product.identifier} (
+                    {pkg.product.priceString})
+                  </ThemedText>
+                ))}
+              </>
+            ) : offeringState.kind === "empty" ? (
+              <ThemedText
+                style={[styles.debugLine, { color: theme.textTertiary }]}
+              >
+                Empty: {offeringState.reason}
+              </ThemedText>
+            ) : offeringState.kind === "error" ? (
+              <ThemedText
+                style={[styles.debugLine, { color: theme.textTertiary }]}
+              >
+                Error loading offering
+                {offeringState.errorCode
+                  ? ` (code ${offeringState.errorCode})`
+                  : ""}
+              </ThemedText>
+            ) : null}
+          </View>
+        ) : null}
       </ScrollView>
     </ThemedView>
   );
@@ -840,6 +925,21 @@ function PartnerPerksCard({ isDark, theme }: PartnerPerksCardProps) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   loading: { paddingVertical: Spacing.xl * 2, alignItems: "center" },
+  debugBlock: {
+    marginTop: Spacing.lg,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.card,
+    borderWidth: 1,
+  },
+  debugTitle: {
+    ...Typography.caption1,
+    fontWeight: "700",
+    marginBottom: Spacing.xs,
+  },
+  debugLine: {
+    ...Typography.caption2,
+    marginTop: 2,
+  },
   card: {
     borderRadius: BorderRadius.card,
     borderWidth: 1.5,
