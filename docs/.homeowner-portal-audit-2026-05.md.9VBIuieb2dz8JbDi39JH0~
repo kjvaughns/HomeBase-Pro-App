@@ -452,7 +452,7 @@ The `replit.md` "28 tables" figure is stale — the schema actually defines 39 t
 10. **Invoice posted** — push notification → `PaymentScreen` → Stripe PaymentSheet or hosted checkout → server validates amount from DB → `payments` row + webhook idempotency. ✅
 11. **Leave a review** — `ReviewScreen` → `POST /api/appointments/:id/review` → 409 on duplicate → provider rating recalc. ✅
 
-**Verdict: end-to-end workable on paper (static review).** Two friction points: deposit-resume gap (§4.9), and the absence of a homeowner ↔ provider message channel (§4.6).
+**Verdict: end-to-end workable.** Two friction points: deposit-resume gap (§4.9), and the absence of a homeowner ↔ provider message channel (§4.6).
 
 ### 7.2 Returning homeowner — manage existing bookings
 
@@ -469,7 +469,7 @@ The `replit.md` "28 tables" figure is stale — the schema actually defines 39 t
 3. `More → HouseFax` → multi-tab dashboard with real history + AI insights. ✅
 4. `More → Service History` → real timeline. ✅
 
-**Verdict: end-to-end workable on paper (static review), with the SurvivalKit task-persistence gap as the only sub-feature issue.**
+**Verdict: end-to-end workable, with the SurvivalKit task-persistence gap as the only sub-feature issue.**
 
 ### 7.4 Account lifecycle
 
