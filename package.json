@@ -39,7 +39,7 @@
     "@types/node-cron": "^3.0.11",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
-    "drizzle-orm": "^0.39.3",
+    "drizzle-orm": "^0.45.2",
     "drizzle-zod": "^0.7.1",
     "eas-cli": "^18.4.0",
     "expo": "~55.0.9",
@@ -110,5 +110,23 @@
     "prettier": "3.6.2",
     "typescript": "~5.9.2"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "@xmldom/xmldom": "0.8.13",
+    "node-forge": "^1.4.0",
+    "minimatch": "^5.1.8",
+    "tar": "^7.5.8",
+    "picomatch@<3": "^2.3.2",
+    "ajv": "^8.18.0",
+    "esbuild": "^0.25.0",
+    "follow-redirects": "^1.16.0",
+    "postcss": "^8.5.10",
+    "yaml": "^2.8.3",
+    "brace-expansion@<2": "^1.1.13",
+    "path-to-regexp": "^8.4.0",
+    "picomatch@>=4": "^4.0.4",
+    "brace-expansion@>=2": "^2.0.3",
+    "uuid": "^14.0.0",
+    "diff": "^8.0.3"
+  }
 }
