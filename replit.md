@@ -27,6 +27,9 @@ The application consists of a client-side React Native Expo app and an Express.j
 - **iPad Responsive UI**: Implemented responsive layouts for iPad, including dynamic content width, optimized tab bar dimensions, and improved grid column layouts.
 - **Stripe Webhook Architecture**: Features two webhook endpoints (`/api/stripe/webhook/platform` and `/api/stripe/webhook/connect`) for platform and Connect events, with a unified dispatcher for signature verification, idempotency, and connected-account resolution.
 
+## Recent Changes
+- 2026-05-02: New canonical design audit at `docs/homebase-design-audit-2026-05.md` supersedes the April 14 design audits; feeds the queued "HomeBase design fixes pass (P0 / P1 / P2)" task.
+
 ## External Dependencies
 - **Supabase**: PostgreSQL database hosting.
 - **Drizzle ORM**: Type-safe database interaction.
