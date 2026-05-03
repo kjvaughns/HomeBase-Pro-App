@@ -609,7 +609,7 @@ export default function ProviderJobDetailScreen() {
       // overwritten when the request fails.
       updateJobMutation.mutate(newDisplayStatus);
     }
-  }, [job, updateJobMutation, completeJobMutation]);
+  }, [job, updateJobMutation, completeJobMutation, blockOffline]);
 
   const [rescheduleStep, setRescheduleStep] = useState<"closed" | "date" | "time">(
     "closed",
@@ -772,7 +772,7 @@ export default function ProviderJobDetailScreen() {
         },
       ],
     );
-  }, [job, weatherHoldMutation]);
+  }, [job, weatherHoldMutation, blockOffline]);
 
   const handleRestore = useCallback(() => {
     if (blockOffline()) return;
@@ -871,7 +871,7 @@ export default function ProviderJobDetailScreen() {
   }
   const { data: jobInvoiceData } = useQuery<{ invoice: JobInvoice | null }>({
     queryKey: ["/api/jobs", jobId, "invoice"],
-    enabled: !!jobId,
+    enabled: !!jobId && isOnline,
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/jobs/${jobId}/invoice`);
       if (!res.ok) {
