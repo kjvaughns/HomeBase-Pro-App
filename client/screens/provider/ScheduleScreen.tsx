@@ -1590,8 +1590,48 @@ export default function ScheduleScreen() {
 
       {/* ── Content ── */}
       <View style={[styles.content, { paddingBottom: tabBarHeight, paddingHorizontal: isRouteMode ? horizontalPadding : 0 }]}>
+        {!isOnline && offlineSnapshot && (isCalendarMode || isRouteMode) ? (
+          <View
+            style={[
+              styles.offlineBanner,
+              {
+                borderColor: theme.border,
+                backgroundColor: theme.backgroundSecondary,
+                marginHorizontal: isRouteMode ? 0 : Spacing.lg,
+                marginBottom: Spacing.sm,
+              },
+            ]}
+            testID="banner-schedule-offline-mode"
+          >
+            <View style={styles.offlineBannerIconWrap}>
+              <Feather name="wifi-off" size={16} color={theme.text} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <ThemedText style={styles.offlineBannerTitle}>
+                Offline — read-only
+              </ThemedText>
+              <ThemedText
+                style={[
+                  styles.offlineBannerSubtitle,
+                  { color: theme.textSecondary },
+                ]}
+              >
+                Last updated {formatLastUpdated(offlineSnapshot.savedAt)}. Reconnect to make changes.
+              </ThemedText>
+            </View>
+          </View>
+        ) : null}
         {isRouteMode ? (
-          providerId ? (
+          !isOnline ? (
+            <View style={styles.loadingBox}>
+              <ThemedText
+                type="caption"
+                style={{ color: theme.textSecondary, textAlign: "center", paddingHorizontal: Spacing.lg }}
+              >
+                Route optimization is unavailable offline. Reconnect to plan today's route.
+              </ThemedText>
+            </View>
+          ) : providerId ? (
             <RouteView
               providerId={providerId}
               date={today}
