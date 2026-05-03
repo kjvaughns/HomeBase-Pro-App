@@ -444,6 +444,20 @@ export default function SubscriptionScreen() {
               {copy.body}
             </ThemedText>
 
+            {/* Plan pricing card — visible for all non-subscribed states so
+                providers can see the plan name, billing period, and price
+                before tapping Subscribe. Hidden for subscribed providers
+                and Partners since there is no upsell needed. */}
+            {showSubscribeButton ? (
+              <PlanCard
+                loadingOffering={useIAP && offeringState.kind === "loading"}
+                priceLabel={useIAP ? nativePriceLabel : null}
+                useIAP={useIAP}
+                isDark={isDark}
+                theme={theme}
+              />
+            ) : null}
+
             {/* Apple 3.1.2(c): EULA + Privacy must be visible BEFORE the
                 purchase confirmation, not just in a footer. We render the
                 same legal row above the Subscribe/Manage button on every
@@ -863,6 +877,73 @@ export default function SubscriptionScreen() {
   );
 }
 
+// ─── Plan pricing card ───────────────────────────────────────────────────────
+// Shown between the status card body and the subscribe button for all
+// non-subscribed, non-partner states. Surfaces the plan name, billing
+// period, and price at a glance so providers know what they are buying.
+interface PlanCardProps {
+  loadingOffering: boolean;
+  priceLabel: string | null;
+  useIAP: boolean;
+  isDark: boolean;
+  theme: ReturnType<typeof useTheme>["theme"];
+}
+
+function PlanCard({ loadingOffering, priceLabel, useIAP, isDark, theme }: PlanCardProps) {
+  // On native: show the localized price from StoreKit/Play Billing when
+  // available, "Price unavailable" when the offering failed to load (the
+  // retry block below the card lets providers try again), and a spinner
+  // while loading. On web: Stripe owns the canonical price, so show the
+  // static "Billed monthly" label instead of a potentially stale amount.
+  const displayPrice = priceLabel
+    ? `${priceLabel} / month`
+    : useIAP
+      ? "Price unavailable"
+      : "Billed monthly";
+
+  return (
+    <View
+      style={[
+        styles.planCard,
+        {
+          backgroundColor: isDark
+            ? "rgba(56, 174, 95, 0.10)"
+            : "rgba(56, 174, 95, 0.07)",
+          borderColor: Colors.accent + "33",
+        },
+      ]}
+      testID="plan-card"
+    >
+      <View style={styles.planCardLeft}>
+        <ThemedText style={styles.planName} testID="text-plan-name">
+          HomeBase Pro
+        </ThemedText>
+        <ThemedText
+          style={[styles.planPeriod, { color: theme.textSecondary }]}
+          testID="text-plan-period"
+        >
+          Monthly
+        </ThemedText>
+      </View>
+
+      <View style={styles.planCardRight}>
+        {loadingOffering ? (
+          <View style={styles.planPriceSkeleton} testID="plan-price-skeleton">
+            <ActivityIndicator size="small" color={Colors.accent} />
+          </View>
+        ) : (
+          <ThemedText
+            style={[styles.planPrice, { color: Colors.accent }]}
+            testID="text-plan-price"
+          >
+            {displayPrice}
+          </ThemedText>
+        )}
+      </View>
+    </View>
+  );
+}
+
 // ─── Partner perks card ──────────────────────────────────────────────────────
 // Replaces the entire billing surface for HomeBase Partners (Task #220).
 // No subscribe / manage / restore / billing-history controls render — Partner
@@ -1151,5 +1232,41 @@ const styles = StyleSheet.create({
   skeletonText: {
     ...Typography.callout,
     fontWeight: "600",
+  },
+  planCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    alignSelf: "stretch",
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+  },
+  planCardLeft: {
+    flex: 1,
+    gap: Spacing.xxs,
+  },
+  planCardRight: {
+    alignItems: "flex-end",
+    justifyContent: "center",
+    marginLeft: Spacing.sm,
+  },
+  planName: {
+    ...Typography.subhead,
+    fontWeight: "700",
+  },
+  planPeriod: {
+    ...Typography.caption1,
+  },
+  planPrice: {
+    ...Typography.subhead,
+    fontWeight: "700",
+    textAlign: "right",
+  },
+  planPriceSkeleton: {
+    width: 60,
+    alignItems: "center",
   },
 });
