@@ -27,6 +27,7 @@ import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { QuickAddJobSheet } from "@/components/QuickAddJobSheet";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -221,7 +222,12 @@ interface WeekStripProps {
   onDateSelect: (date: Date) => void;
 }
 
-function WeekStrip({ selectedDate, jobs, onDateSelect }: WeekStripProps) {
+function WeekStrip({
+  selectedDate,
+  jobs,
+  onDateSelect,
+  onDateLongPress,
+}: WeekStripProps & { onDateLongPress?: (date: Date) => void }) {
   const { theme } = useTheme();
   const { horizontalPadding } = useLayout();
   const scrollRef = useRef<ScrollView>(null);
@@ -279,6 +285,9 @@ function WeekStrip({ selectedDate, jobs, onDateSelect }: WeekStripProps) {
               isSelected && { backgroundColor: Colors.accent },
             ]}
             onPress={() => onDateSelect(date)}
+            onLongPress={() => onDateLongPress?.(date)}
+            delayLongPress={350}
+            testID={`week-day-${date.toISOString().slice(0, 10)}`}
           >
             <ThemedText
               style={[
@@ -455,6 +464,7 @@ interface EnhancedJobCardProps {
   job: Job;
   clientName: string;
   onPress: () => void;
+  onLongPress?: () => void;
   onQuickAction: (action: string) => void;
   isActionLoading: boolean;
 }
@@ -463,6 +473,7 @@ function EnhancedJobCard({
   job,
   clientName,
   onPress,
+  onLongPress,
   onQuickAction,
   isActionLoading,
 }: EnhancedJobCardProps) {
@@ -471,7 +482,12 @@ function EnhancedJobCard({
   const quickAction = getQuickAction(job.status);
 
   return (
-    <Pressable onPress={onPress} testID={`job-card-${job.id}`}>
+    <Pressable
+      onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={350}
+      testID={`job-card-${job.id}`}
+    >
       <GlassCard style={styles.jobCard} noPadding>
         <View style={styles.jobCardInner}>
           <View
@@ -634,8 +650,10 @@ interface MonthViewProps {
   clients: Client[];
   getClientName: (id: string) => string;
   onDateSelect: (date: Date) => void;
+  onDateLongPress: (date: Date) => void;
   onMonthChange: (delta: number) => void;
   onJobPress: (jobId: string) => void;
+  onJobLongPress: (jobId: string) => void;
   onQuickAction: (jobId: string, action: string) => void;
   actionLoadingId: string | null;
 }
@@ -646,8 +664,10 @@ function MonthView({
   jobs,
   getClientName,
   onDateSelect,
+  onDateLongPress,
   onMonthChange,
   onJobPress,
+  onJobLongPress,
   onQuickAction,
   actionLoadingId,
 }: MonthViewProps) {
@@ -724,6 +744,9 @@ function MonthView({
                   isSelected && { backgroundColor: Colors.accent },
                 ]}
                 onPress={() => onDateSelect(date)}
+                onLongPress={() => onDateLongPress(date)}
+                delayLongPress={350}
+                testID={`month-day-${date.toISOString().slice(0, 10)}`}
               >
                 <ThemedText
                   style={[
@@ -778,6 +801,7 @@ function MonthView({
               job={job}
               clientName={getClientName(job.clientId)}
               onPress={() => onJobPress(job.id)}
+              onLongPress={() => onJobLongPress(job.id)}
               onQuickAction={(action) => onQuickAction(job.id, action)}
               isActionLoading={actionLoadingId === job.id}
             />
@@ -810,6 +834,11 @@ export default function ScheduleScreen() {
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [quickAdd, setQuickAdd] = useState<{
+    visible: boolean;
+    date: Date;
+    time: string;
+  }>({ visible: false, date: today, time: "09:00" });
 
   const {
     data: jobsData,
@@ -882,6 +911,59 @@ export default function ScheduleScreen() {
   const handleAddJob = () => {
     navigation.navigate("AddJob");
   };
+
+  const computeDefaultTime = useCallback(
+    (date: Date): string => {
+      // Start from the next half-hour boundary if today, otherwise 9:00.
+      const now = new Date();
+      let candidate = 9 * 60;
+      if (isSameDay(date, now)) {
+        const total = now.getHours() * 60 + now.getMinutes();
+        candidate = Math.ceil((total + 1) / 30) * 30;
+      }
+      // If the day already has jobs, slot the new one after the latest one
+      // (using its scheduled time + estimated duration, rounded up to the
+      // next half-hour) to reduce conflicts with the existing schedule.
+      const dayJobs = jobs.filter(
+        (j) =>
+          j.status !== "cancelled" &&
+          isSameDay(new Date(j.scheduledDate), date) &&
+          !!j.scheduledTime,
+      );
+      for (const j of dayJobs) {
+        if (!j.scheduledTime) continue;
+        const [hStr, mStr] = j.scheduledTime.split(":");
+        const start = parseInt(hStr, 10) * 60 + parseInt(mStr || "0", 10);
+        const end = start + (j.estimatedDuration ?? 60);
+        if (end > candidate) candidate = Math.ceil(end / 30) * 30;
+      }
+      const clamped = Math.min(Math.max(candidate, 9 * 60), 20 * 60);
+      const h = Math.floor(clamped / 60);
+      const m = clamped % 60;
+      return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+    },
+    [jobs],
+  );
+
+  const openQuickAddForDate = useCallback(
+    (date: Date) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      setQuickAdd({
+        visible: true,
+        date: startOfDay(date),
+        time: computeDefaultTime(date),
+      });
+    },
+    [computeDefaultTime],
+  );
+
+  const handleJobLongPress = useCallback(
+    (jobId: string) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      navigation.navigate("ProviderJobDetail", { jobId });
+    },
+    [navigation],
+  );
 
   const handleDateSelect = (date: Date) => {
     setSelectedDate(date);
@@ -987,6 +1069,7 @@ export default function ScheduleScreen() {
               selectedDate={selectedDate}
               jobs={jobs}
               onDateSelect={handleDateSelect}
+              onDateLongPress={openQuickAddForDate}
             />
           </View>
         ) : null}
@@ -1035,6 +1118,8 @@ export default function ScheduleScreen() {
             clients={clients}
             getClientName={getClientName}
             onDateSelect={handleDateSelect}
+            onDateLongPress={openQuickAddForDate}
+            onJobLongPress={handleJobLongPress}
             onMonthChange={(delta) => {
               setCalendarMonth((prev) => {
                 const next = new Date(
@@ -1179,6 +1264,7 @@ export default function ScheduleScreen() {
                       job={item.job}
                       clientName={getClientName(item.job.clientId)}
                       onPress={() => handleJobPress(item.job.id)}
+                      onLongPress={() => handleJobLongPress(item.job.id)}
                       onQuickAction={(action) =>
                         handleQuickAction(item.job.id, action)
                       }
@@ -1192,6 +1278,13 @@ export default function ScheduleScreen() {
           />
         )}
       </View>
+
+      <QuickAddJobSheet
+        visible={quickAdd.visible}
+        onClose={() => setQuickAdd((s) => ({ ...s, visible: false }))}
+        defaultDate={quickAdd.date}
+        defaultTime={quickAdd.time}
+      />
     </ThemedView>
   );
 }
