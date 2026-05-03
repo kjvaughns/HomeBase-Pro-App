@@ -1014,6 +1014,15 @@ var init_schema = __esm({
       reference: text("reference"),
       // transaction ID or check number
       notes: text("notes"),
+      // Task #295: manual payment metadata. `photoUrl` stores receipt proof in
+      // the `job-photos` Supabase bucket; `receivedAt` is the date the payment
+      // was actually collected (defaults to createdAt for stripe rows). The
+      // void columns power the soft-delete + audit trail for manual entries.
+      photoUrl: text("photo_url"),
+      receivedAt: timestamp("received_at"),
+      createdBy: varchar("created_by").references(() => users.id, { onDelete: "set null" }),
+      voidedAt: timestamp("voided_at"),
+      voidedBy: varchar("voided_by").references(() => users.id, { onDelete: "set null" }),
       createdAt: timestamp("created_at").defaultNow().notNull()
     }, (table) => ({
       // Task #245: enforce idempotency on webhook-driven payment upserts. A
@@ -7640,12 +7649,66 @@ var DatabaseStorage = class {
     return db.select().from(payments).where(eq5(payments.providerId, providerId)).orderBy(desc(payments.createdAt));
   }
   async getPaymentsByInvoice(invoiceId) {
-    return db.select().from(payments).where(eq5(payments.invoiceId, invoiceId));
+    return db.select().from(payments).where(eq5(payments.invoiceId, invoiceId)).orderBy(desc(payments.receivedAt));
   }
   async createPayment(payment) {
     const [newPayment] = await db.insert(payments).values(payment).returning();
     await this.markInvoicePaid(payment.invoiceId);
     return newPayment;
+  }
+  // ── Task #295: manual (cash/check/other) payment helpers ──────────────
+  // The plain `createPayment` above auto-marks the invoice as fully paid,
+  // which is correct for Stripe webhook upserts (one payment == full
+  // settlement). Manual payments support partial collection, so we
+  // recompute status from the sum of non-voided rows instead.
+  async recomputeInvoiceStatusFromPayments(invoiceId) {
+    const [invoice] = await db.select().from(invoices).where(eq5(invoices.id, invoiceId));
+    if (!invoice) return void 0;
+    if (invoice.status === "void" || invoice.status === "cancelled" || invoice.status === "refunded") {
+      return invoice;
+    }
+    const rows = await db.select({ amountCents: payments.amountCents }).from(payments).where(and3(eq5(payments.invoiceId, invoiceId), sql3`${payments.voidedAt} IS NULL`));
+    const collectedCents = rows.reduce((sum, r) => sum + (r.amountCents ?? 0), 0);
+    const totalCents = invoice.totalCents ?? 0;
+    let nextStatus = invoice.status;
+    let nextPaidAt = invoice.paidAt ?? null;
+    if (totalCents > 0 && collectedCents >= totalCents) {
+      nextStatus = "paid";
+      nextPaidAt = invoice.paidAt ?? /* @__PURE__ */ new Date();
+    } else if (collectedCents > 0) {
+      nextStatus = "partially_paid";
+      nextPaidAt = null;
+    } else {
+      nextStatus = invoice.sentAt ? "sent" : "draft";
+      nextPaidAt = null;
+    }
+    if (nextStatus === invoice.status && nextPaidAt === invoice.paidAt) {
+      return invoice;
+    }
+    const [updated] = await db.update(invoices).set({ status: nextStatus, paidAt: nextPaidAt }).where(eq5(invoices.id, invoiceId)).returning();
+    return updated;
+  }
+  async createManualPayment(payment) {
+    const [row] = await db.insert(payments).values(payment).returning();
+    await this.recomputeInvoiceStatusFromPayments(payment.invoiceId);
+    return row;
+  }
+  async updateManualPayment(id, patch) {
+    const [row] = await db.update(payments).set(patch).where(eq5(payments.id, id)).returning();
+    if (row) await this.recomputeInvoiceStatusFromPayments(row.invoiceId);
+    return row || void 0;
+  }
+  async voidPayment(id, voidedBy) {
+    const [row] = await db.update(payments).set({ voidedAt: /* @__PURE__ */ new Date(), voidedBy, status: "refunded" }).where(eq5(payments.id, id)).returning();
+    if (row) await this.recomputeInvoiceStatusFromPayments(row.invoiceId);
+    return row || void 0;
+  }
+  async getPayment(id) {
+    const [row] = await db.select().from(payments).where(eq5(payments.id, id));
+    return row || void 0;
+  }
+  async getManualPayments(providerId) {
+    return db.select().from(payments).where(and3(eq5(payments.providerId, providerId), sql3`${payments.method} <> 'stripe'`)).orderBy(desc(payments.receivedAt));
   }
   // Provider dashboard stats
   async getProviderStats(providerId, startDate, endDate) {
@@ -7716,11 +7779,81 @@ var DatabaseStorage = class {
     const upcomingJobs = upcomingJobsList.length;
     return { revenueMTD, jobsCompleted, activeClients, upcomingJobs, averageJobValue, revenueByPeriod };
   }
-  // Provider business insights (for dashboard Business Insights section)
+  // Provider business insights — real numbers for the dashboard metric grid
+  // and an 8-week revenue trend. Also returns internal fields used by the
+  // milestone-notification pipeline (allTimeRevenue, clientGrowthPct, rating,
+  // reviewCount) so the route handler can fire those without a second query.
   async getProviderInsights(providerId) {
     const now = /* @__PURE__ */ new Date();
-    const completedJobRows = await db.select({ finalPrice: jobs.finalPrice }).from(jobs).where(and3(eq5(jobs.providerId, providerId), eq5(jobs.status, "completed")));
-    const allTimeRevenue = completedJobRows.reduce((sum, j) => sum + parseFloat(j.finalPrice || "0"), 0);
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+    const prevMonthCutoff = new Date(
+      now.getFullYear(),
+      now.getMonth() - 1,
+      now.getDate(),
+      23,
+      59,
+      59,
+      999
+    );
+    const completedJobRows = await db.select({
+      finalPrice: jobs.finalPrice,
+      completedAt: jobs.completedAt,
+      clientId: jobs.clientId
+    }).from(jobs).where(and3(eq5(jobs.providerId, providerId), eq5(jobs.status, "completed")));
+    const allTimeRevenue = completedJobRows.reduce(
+      (sum, j) => sum + parseFloat(j.finalPrice || "0"),
+      0
+    );
+    const inWindow = (d, start, end) => !!d && d >= start && d <= end;
+    const currentJobs = completedJobRows.filter(
+      (j) => inWindow(j.completedAt, startOfMonth, now)
+    );
+    const priorJobs = completedJobRows.filter(
+      (j) => inWindow(j.completedAt, startOfPrevMonth, prevMonthCutoff)
+    );
+    const sumPrices = (rows) => rows.reduce((s, j) => s + parseFloat(j.finalPrice || "0"), 0);
+    const revenueMtd = sumPrices(currentJobs);
+    const revenuePrev = sumPrices(priorJobs);
+    const jobsCompleted = currentJobs.length;
+    const jobsCompletedPrev = priorJobs.length;
+    const avgJobValue = jobsCompleted > 0 ? revenueMtd / jobsCompleted : 0;
+    const avgJobValuePrev = jobsCompletedPrev > 0 ? revenuePrev / jobsCompletedPrev : 0;
+    const activeClientsThis = new Set(
+      currentJobs.map((j) => j.clientId).filter(Boolean)
+    ).size;
+    const activeClientsPrev = new Set(
+      priorJobs.map((j) => j.clientId).filter(Boolean)
+    ).size;
+    const pctDelta = (current, prior) => {
+      if (prior <= 0) {
+        if (current <= 0) return null;
+        return 100;
+      }
+      return Math.round((current - prior) / prior * 100);
+    };
+    const startOfThisWeek = (() => {
+      const d = new Date(now);
+      d.setHours(0, 0, 0, 0);
+      const day = d.getDay();
+      const diffToMonday = (day + 6) % 7;
+      d.setDate(d.getDate() - diffToMonday);
+      return d;
+    })();
+    const weeklyRevenueSeries = [];
+    for (let i = 7; i >= 0; i--) {
+      const weekStart = new Date(startOfThisWeek);
+      weekStart.setDate(weekStart.getDate() - i * 7);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      weekEnd.setHours(23, 59, 59, 999);
+      const value = completedJobRows.filter((j) => inWindow(j.completedAt, weekStart, weekEnd)).reduce((s, j) => s + parseFloat(j.finalPrice || "0"), 0);
+      const label = weekStart.toLocaleDateString("en-US", {
+        month: "numeric",
+        day: "numeric"
+      });
+      weeklyRevenueSeries.push({ label, value });
+    }
     const quarterMonth = Math.floor(now.getMonth() / 3) * 3;
     const startOfThisQuarter = new Date(now.getFullYear(), quarterMonth, 1, 0, 0, 0, 0);
     const startOfLastQuarter = new Date(now.getFullYear(), quarterMonth - 3, 1, 0, 0, 0, 0);
@@ -7733,14 +7866,24 @@ var DatabaseStorage = class {
         lte(clients.createdAt, endOfLastQuarter)
       )
     );
-    const clientCountThisQuarter = clientsThisQuarter.length;
-    const clientCountLastQuarter = clientsLastQuarter.length;
-    const clientGrowthPct = clientCountLastQuarter > 0 ? Math.round((clientCountThisQuarter - clientCountLastQuarter) / clientCountLastQuarter * 100) : clientCountThisQuarter > 0 ? 100 : 0;
+    const clientGrowthPct = clientsLastQuarter.length > 0 ? Math.round(
+      (clientsThisQuarter.length - clientsLastQuarter.length) / clientsLastQuarter.length * 100
+    ) : clientsThisQuarter.length > 0 ? 100 : 0;
     const [providerRow] = await db.select({ rating: providers.rating, reviewCount: providers.reviewCount }).from(providers).where(eq5(providers.id, providerId));
+    const totalClientsRow = await db.select({ id: clients.id }).from(clients).where(eq5(clients.providerId, providerId));
+    const hasAnyData = completedJobRows.length > 0 || totalClientsRow.length > 0;
     return {
+      revenueMtd,
+      revenueMtdDelta: pctDelta(revenueMtd, revenuePrev),
+      jobsCompleted,
+      jobsCompletedDelta: pctDelta(jobsCompleted, jobsCompletedPrev),
+      activeClients: activeClientsThis,
+      activeClientsDelta: pctDelta(activeClientsThis, activeClientsPrev),
+      avgJobValue,
+      avgJobValueDelta: pctDelta(avgJobValue, avgJobValuePrev),
+      weeklyRevenueSeries,
+      hasAnyData,
       allTimeRevenue,
-      clientCountThisQuarter,
-      clientCountLastQuarter,
       clientGrowthPct,
       rating: providerRow?.rating ?? "0",
       reviewCount: providerRow?.reviewCount ?? 0
@@ -8830,7 +8973,6 @@ var requireAdmin = async (req, res, next) => {
   }
 };
 var aiRateLimitMap = /* @__PURE__ */ new Map();
-var insightsAiCache = /* @__PURE__ */ new Map();
 var REVENUE_MILESTONES = [
   1e4,
   25e3,
@@ -14193,63 +14335,20 @@ Respond with JSON only:
           return;
         }
         const insights = await storage.getProviderInsights(req.params.id);
-        const businessName = providerRow.businessName || "your business";
-        let aiMessages;
-        const cached = insightsAiCache.get(req.params.id);
-        if (cached && cached.expiresAt > Date.now()) {
-          aiMessages = {
-            revenue: cached.revenue,
-            growth: cached.growth,
-            rating: cached.rating
-          };
-        } else {
-          try {
-            const aiResp = await openai.chat.completions.create({
-              model: "gpt-4o-mini",
-              messages: [
-                {
-                  role: "system",
-                  content: "You are a business coach for home service providers. Write short, specific, motivating insight captions (max 10 words each). Celebrate real numbers. No emojis. No bullet points. No numbering."
-                },
-                {
-                  role: "user",
-                  content: `Business: ${businessName}
-All-time revenue: $${Math.round(insights.allTimeRevenue).toLocaleString()}
-New clients this quarter: ${insights.clientCountThisQuarter} (${insights.clientGrowthPct > 0 ? "+" : ""}${insights.clientGrowthPct}% vs last quarter)
-Rating: ${insights.rating} stars from ${insights.reviewCount} reviews
-
-Write exactly 3 lines:
-Line 1: revenue caption celebrating $${Math.round(insights.allTimeRevenue / 1e3)}K milestone
-Line 2: client growth caption for ${insights.clientGrowthPct > 0 ? "+" : ""}${insights.clientGrowthPct}% growth
-Line 3: rating caption for ${insights.rating} stars`
-                }
-              ],
-              max_tokens: 120,
-              temperature: 0.75
-            });
-            const lines = (aiResp.choices[0]?.message?.content || "").split("\n").map((l) => l.replace(/^[\d\.\-\*\s]+/, "").trim()).filter(Boolean);
-            aiMessages = {
-              revenue: lines[0] || `$${Math.round(insights.allTimeRevenue / 1e3)}K earned all-time`,
-              growth: lines[1] || `${insights.clientGrowthPct > 0 ? "+" : ""}${insights.clientGrowthPct}% client growth this quarter`,
-              rating: lines[2] || `${insights.rating} stars from ${insights.reviewCount} reviews`
-            };
-            insightsAiCache.set(req.params.id, {
-              ...aiMessages,
-              expiresAt: Date.now() + 60 * 60 * 1e3
-            });
-          } catch (aiErr) {
-            console.error("Insights AI generation error:", aiErr);
-            aiMessages = {
-              revenue: `$${Math.round(insights.allTimeRevenue / 1e3)}K earned all-time`,
-              growth: `${insights.clientGrowthPct > 0 ? "+" : ""}${insights.clientGrowthPct}% client growth this quarter`,
-              rating: `${insights.rating} stars from ${insights.reviewCount} reviews`
-            };
-          }
-        }
-        fireInsightNotifications(req.authenticatedUserId, insights).catch(
-          console.error
-        );
-        res.json({ insights: { ...insights, aiMessages } });
+        fireInsightNotifications(req.authenticatedUserId, {
+          allTimeRevenue: insights.allTimeRevenue,
+          clientGrowthPct: insights.clientGrowthPct,
+          rating: insights.rating,
+          reviewCount: insights.reviewCount
+        }).catch(console.error);
+        const {
+          allTimeRevenue,
+          clientGrowthPct,
+          rating,
+          reviewCount,
+          ...dashboardInsights
+        } = insights;
+        res.json({ insights: dashboardInsights });
       } catch (error) {
         console.error("Get provider insights error:", error);
         res.status(500).json({ error: "Failed to get provider insights" });
@@ -14576,12 +14675,18 @@ Line 3: rating caption for ${insights.rating} stars`
           const v = j.finalPrice ? parseFloat(String(j.finalPrice)) : 0;
           return sum + (Number.isFinite(v) ? v : 0);
         }, 0);
-        const paidInvoicesTotal = invoices2.reduce((sum, inv) => {
-          if (inv.status !== "paid") return sum;
-          const v = inv.totalAmount ? parseFloat(String(inv.totalAmount)) : 0;
-          return sum + (Number.isFinite(v) ? v : 0);
-        }, 0);
-        const ltv = Math.round((completedJobsTotal + paidInvoicesTotal) * 100) / 100;
+        let collectedTotal = 0;
+        if (invoices2.length > 0) {
+          const invoiceIds = invoices2.map((i) => i.id);
+          const collectedRows = await db.select({ amountCents: payments.amountCents }).from(payments).where(
+            and5(
+              inArray3(payments.invoiceId, invoiceIds),
+              sql5`${payments.voidedAt} IS NULL`
+            )
+          );
+          collectedTotal = collectedRows.reduce((s, r) => s + (r.amountCents ?? 0), 0) / 100;
+        }
+        const ltv = Math.round((completedJobsTotal + collectedTotal) * 100) / 100;
         res.json({ client: { ...client, home, ltv }, jobs: jobs2, invoices: invoices2 });
       } catch (error) {
         console.error("Get client error:", error);
@@ -16503,6 +16608,222 @@ Line 3: rating caption for ${insights.rating} stars`
       } catch (error) {
         console.error("Mark invoice paid error:", error);
         res.status(500).json({ error: "Failed to mark invoice as paid" });
+      }
+    }
+  );
+  async function uploadPaymentPhoto(dataUri, invoiceId) {
+    if (!dataUri || !dataUri.startsWith("data:")) return null;
+    const match = dataUri.match(/^data:(image\/(png|jpe?g|webp));base64,(.+)$/);
+    if (!match) return null;
+    const mimeType = match[1];
+    const ext = match[2] === "jpeg" ? "jpg" : match[2];
+    const buffer = Buffer.from(match[3], "base64");
+    const MAX_BYTES = 5 * 1024 * 1024;
+    if (buffer.length > MAX_BYTES) {
+      throw new Error("Photo is too large (max 5 MB)");
+    }
+    let supabaseClient = null;
+    try {
+      supabaseClient = (await Promise.resolve().then(() => (init_supabase(), supabase_exports))).supabase;
+    } catch {
+    }
+    const filename = `payment-receipts/inv-${invoiceId}-${Date.now()}.${ext}`;
+    if (supabaseClient) {
+      const { error: upErr } = await supabaseClient.storage.from("job-photos").upload(filename, buffer, { contentType: mimeType, upsert: false });
+      if (upErr) {
+        console.error("Payment photo upload error:", upErr);
+        throw new Error("Failed to upload payment photo");
+      }
+      const { data } = supabaseClient.storage.from("job-photos").getPublicUrl(filename);
+      return data.publicUrl;
+    }
+    if (process.env.NODE_ENV === "development") {
+      const dir = path.resolve(process.cwd(), "uploads", "payment-receipts");
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      const base = path.basename(filename);
+      fs.writeFileSync(path.join(dir, base), buffer);
+      return `/uploads/payment-receipts/${base}`;
+    }
+    return null;
+  }
+  app2.get(
+    "/api/invoices/:id/payments",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const inv = await assertInvoiceAccess(req, req.params.id, res);
+        if (!inv) return;
+        const list = await storage.getPaymentsByInvoice(req.params.id);
+        res.json({ payments: list });
+      } catch (error) {
+        console.error("List invoice payments error:", error);
+        res.status(500).json({ error: "Failed to load payments" });
+      }
+    }
+  );
+  app2.post(
+    "/api/invoices/:id/payments",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const invoice = await storage.getInvoice(req.params.id);
+        if (!invoice) {
+          return res.status(404).json({ error: "Invoice not found" });
+        }
+        if (!await assertProviderOwnership(req, invoice.providerId, res)) return;
+        if (invoice.status === "cancelled" || invoice.status === "void") {
+          return res.status(400).json({ error: "Cannot record a payment on a closed invoice" });
+        }
+        const {
+          amountCents,
+          method,
+          receivedAt,
+          reference,
+          notes,
+          photoDataUri
+        } = req.body ?? {};
+        const cents = Number(amountCents);
+        if (!Number.isFinite(cents) || cents <= 0) {
+          return res.status(400).json({ error: "amountCents must be a positive number" });
+        }
+        const allowedMethods = ["cash", "check", "card", "bank_transfer", "other"];
+        if (!allowedMethods.includes(method)) {
+          return res.status(400).json({
+            error: `method must be one of ${allowedMethods.join(", ")}`
+          });
+        }
+        let photoUrl = null;
+        if (photoDataUri) {
+          try {
+            photoUrl = await uploadPaymentPhoto(photoDataUri, invoice.id);
+          } catch (e) {
+            return res.status(400).json({ error: e?.message || "Failed to upload photo" });
+          }
+        }
+        const payment = await storage.createManualPayment({
+          invoiceId: invoice.id,
+          providerId: invoice.providerId,
+          amountCents: Math.round(cents),
+          amount: (cents / 100).toFixed(2),
+          method,
+          status: "succeeded",
+          reference: reference || null,
+          notes: notes || null,
+          photoUrl,
+          receivedAt: receivedAt ? new Date(receivedAt) : /* @__PURE__ */ new Date(),
+          createdBy: req.authenticatedUserId ?? null
+        });
+        const updatedInvoice = await storage.getInvoice(invoice.id);
+        res.status(201).json({ payment, invoice: updatedInvoice });
+      } catch (error) {
+        console.error("Record manual payment error:", error);
+        res.status(500).json({ error: "Failed to record payment" });
+      }
+    }
+  );
+  app2.patch(
+    "/api/payments/:id",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const existing = await storage.getPayment(req.params.id);
+        if (!existing) {
+          return res.status(404).json({ error: "Payment not found" });
+        }
+        if (!await assertProviderOwnership(req, existing.providerId, res)) return;
+        if (existing.method === "stripe") {
+          return res.status(400).json({ error: "Stripe payments cannot be edited manually" });
+        }
+        if (existing.voidedAt) {
+          return res.status(400).json({ error: "Voided payments cannot be edited" });
+        }
+        const patch = {};
+        const { amountCents, method, receivedAt, reference, notes, photoDataUri } = req.body ?? {};
+        if (amountCents !== void 0) {
+          const cents = Number(amountCents);
+          if (!Number.isFinite(cents) || cents <= 0) {
+            return res.status(400).json({ error: "amountCents must be a positive number" });
+          }
+          patch.amountCents = Math.round(cents);
+          patch.amount = (cents / 100).toFixed(2);
+        }
+        if (method !== void 0) {
+          const allowed = ["cash", "check", "card", "bank_transfer", "other"];
+          if (!allowed.includes(method)) {
+            return res.status(400).json({
+              error: `method must be one of ${allowed.join(", ")}`
+            });
+          }
+          patch.method = method;
+        }
+        if (receivedAt !== void 0) {
+          patch.receivedAt = receivedAt ? new Date(receivedAt) : null;
+        }
+        if (reference !== void 0) patch.reference = reference || null;
+        if (notes !== void 0) patch.notes = notes || null;
+        if (photoDataUri !== void 0) {
+          if (photoDataUri === null || photoDataUri === "") {
+            patch.photoUrl = null;
+          } else {
+            try {
+              patch.photoUrl = await uploadPaymentPhoto(
+                photoDataUri,
+                existing.invoiceId
+              );
+            } catch (e) {
+              return res.status(400).json({ error: e?.message || "Failed to upload photo" });
+            }
+          }
+        }
+        const payment = await storage.updateManualPayment(existing.id, patch);
+        const invoice = await storage.getInvoice(existing.invoiceId);
+        res.json({ payment, invoice });
+      } catch (error) {
+        console.error("Edit payment error:", error);
+        res.status(500).json({ error: "Failed to update payment" });
+      }
+    }
+  );
+  app2.post(
+    "/api/payments/:id/void",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const existing = await storage.getPayment(req.params.id);
+        if (!existing) {
+          return res.status(404).json({ error: "Payment not found" });
+        }
+        if (!await assertProviderOwnership(req, existing.providerId, res)) return;
+        if (existing.method === "stripe") {
+          return res.status(400).json({ error: "Stripe payments must be refunded via Stripe" });
+        }
+        if (existing.voidedAt) {
+          return res.json({ payment: existing });
+        }
+        const payment = await storage.voidPayment(
+          existing.id,
+          req.authenticatedUserId
+        );
+        const invoice = await storage.getInvoice(existing.invoiceId);
+        res.json({ payment, invoice });
+      } catch (error) {
+        console.error("Void payment error:", error);
+        res.status(500).json({ error: "Failed to void payment" });
+      }
+    }
+  );
+  app2.get(
+    "/api/providers/:providerId/manual-payments",
+    requireAuth,
+    async (req, res) => {
+      try {
+        if (!await assertProviderOwnership(req, req.params.providerId, res))
+          return;
+        const list = await storage.getManualPayments(req.params.providerId);
+        res.json({ payments: list });
+      } catch (error) {
+        console.error("List manual payments error:", error);
+        res.status(500).json({ error: "Failed to load payments" });
       }
     }
   );
@@ -19675,6 +19996,15 @@ async function runBootMigrations() {
     await runSql("refunds.amount_cents", `ALTER TABLE refunds ADD COLUMN IF NOT EXISTS amount_cents INTEGER NOT NULL DEFAULT 0`);
     await runSql("invoice_line_items.amount_cents", `ALTER TABLE invoice_line_items ADD COLUMN IF NOT EXISTS amount_cents INTEGER NOT NULL DEFAULT 0`);
     await runSql("payments.amount_cents", `ALTER TABLE payments ADD COLUMN IF NOT EXISTS amount_cents INTEGER NOT NULL DEFAULT 0`);
+    await runSql("payments.photo_url", `ALTER TABLE payments ADD COLUMN IF NOT EXISTS photo_url TEXT`);
+    await runSql("payments.received_at", `ALTER TABLE payments ADD COLUMN IF NOT EXISTS received_at TIMESTAMP`);
+    await runSql("payments.created_by", `ALTER TABLE payments ADD COLUMN IF NOT EXISTS created_by VARCHAR REFERENCES users(id) ON DELETE SET NULL`);
+    await runSql("payments.voided_at", `ALTER TABLE payments ADD COLUMN IF NOT EXISTS voided_at TIMESTAMP`);
+    await runSql("payments.voided_by", `ALTER TABLE payments ADD COLUMN IF NOT EXISTS voided_by VARCHAR REFERENCES users(id) ON DELETE SET NULL`);
+    await runSql(
+      "payments.received_at.backfill",
+      `UPDATE payments SET received_at = created_at WHERE received_at IS NULL`
+    );
     await runSql("payments.status", `ALTER TABLE payments ADD COLUMN IF NOT EXISTS status payment_status DEFAULT 'requires_payment'`);
     await runSql(
       "payment_method.add_stripe",

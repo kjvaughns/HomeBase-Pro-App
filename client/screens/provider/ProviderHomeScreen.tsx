@@ -5,7 +5,7 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import { useLayout } from "@/hooks/useLayout";
 import { useNavigation } from "@react-navigation/native";
-import { Feather, Ionicons } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/query-client";
@@ -17,6 +17,7 @@ import { Avatar } from "@/components/Avatar";
 import { GlassCard } from "@/components/GlassCard";
 import { JobCard } from "@/components/JobCard";
 import { SectionHeader } from "@/components/SectionHeader";
+import { StatCard } from "@/components/StatCard";
 import { GracePeriodBanner } from "@/components/GracePeriodBanner";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
@@ -49,17 +50,82 @@ interface ProviderStats {
 }
 
 interface ProviderInsights {
-  allTimeRevenue: number;
-  clientCountThisQuarter: number;
-  clientCountLastQuarter: number;
-  clientGrowthPct: number;
-  rating: string;
-  reviewCount: number;
-  aiMessages?: {
-    revenue: string;
-    growth: string;
-    rating: string;
-  };
+  revenueMtd: number;
+  revenueMtdDelta: number | null;
+  jobsCompleted: number;
+  jobsCompletedDelta: number | null;
+  activeClients: number;
+  activeClientsDelta: number | null;
+  avgJobValue: number;
+  avgJobValueDelta: number | null;
+  weeklyRevenueSeries: { label: string; value: number }[];
+  hasAnyData: boolean;
+}
+
+function formatDollarsCompact(amount: number): string {
+  if (amount >= 1000) {
+    const k = amount / 1000;
+    const rounded = k >= 10 ? Math.round(k) : Math.round(k * 10) / 10;
+    return `$${rounded}K`;
+  }
+  return `$${Math.round(amount)}`;
+}
+
+function MiniBarChart({
+  data,
+  theme,
+}: {
+  data: { label: string; value: number }[];
+  theme: ReturnType<typeof useTheme>["theme"];
+}) {
+  const CHART_HEIGHT = 64;
+  const EMPTY_BAR_H = 4;
+  const max = Math.max(...data.map((d) => d.value), 1);
+  return (
+    <View>
+      <View
+        style={{
+          height: CHART_HEIGHT,
+          flexDirection: "row",
+          alignItems: "flex-end",
+          gap: 4,
+        }}
+      >
+        {data.map((item, i) => {
+          const hasValue = item.value > 0;
+          const h = hasValue
+            ? Math.max(EMPTY_BAR_H + 2, (item.value / max) * CHART_HEIGHT)
+            : EMPTY_BAR_H;
+          return (
+            <View
+              key={i}
+              style={{
+                flex: 1,
+                height: h,
+                borderRadius: 3,
+                backgroundColor: hasValue ? Colors.accent : theme.separator,
+                opacity: hasValue ? 1 : 0.5,
+              }}
+            />
+          );
+        })}
+      </View>
+      <View style={{ flexDirection: "row", gap: 4, marginTop: 4 }}>
+        {data.map((item, i) => (
+          <View key={i} style={{ flex: 1, alignItems: "center" }}>
+            {i === 0 || i === data.length - 1 ? (
+              <ThemedText
+                style={{ fontSize: 10, color: theme.textSecondary }}
+                numberOfLines={1}
+              >
+                {item.label}
+              </ThemedText>
+            ) : null}
+          </View>
+        ))}
+      </View>
+    </View>
+  );
 }
 
 interface Job {
@@ -761,59 +827,100 @@ export default function ProviderHomeScreen() {
 
         <Animated.View entering={FadeInDown.delay(inProgressJobs.length > 0 ? 450 : 350).duration(400)}>
           <SectionHeader title="Business Insights" />
-          <GlassCard style={styles.insightsCard}>
-            {[
-              {
-                icon: "trending-up" as const,
-                title: "Revenue Milestone",
-                value: insightsLoading
-                  ? "Analyzing your earnings..."
-                  : insightsError || !insightsData?.insights
-                  ? "No data yet"
-                  : insightsData.insights.aiMessages?.revenue
-                  || `$${(insightsData.insights.allTimeRevenue / 1000).toFixed(0)}K earned all-time`,
-              },
-              {
-                icon: "users" as const,
-                title: "Client Growth",
-                value: insightsLoading
-                  ? "Calculating growth..."
-                  : insightsError || !insightsData?.insights
-                  ? "No data yet"
-                  : insightsData.insights.aiMessages?.growth
-                  || `${insightsData.insights.clientGrowthPct > 0 ? "+" : ""}${insightsData.insights.clientGrowthPct}% this quarter`,
-              },
-              {
-                icon: "star" as const,
-                title: "Top Rated",
-                value: insightsLoading
-                  ? "Reviewing your ratings..."
-                  : insightsError || !insightsData?.insights
-                  ? "No reviews yet"
-                  : insightsData.insights.aiMessages?.rating
-                  || `${insightsData.insights.rating} stars from ${insightsData.insights.reviewCount}+ reviews`,
-              },
-            ].map((row, i) => (
-              <View key={row.title}>
-                {i > 0 && <View style={[styles.insightDivider, { backgroundColor: theme.separator }]} />}
-                <View style={styles.insightRow}>
-                  <View style={[styles.insightIcon, { backgroundColor: Colors.accentLight }]}>
-                    {row.icon === "star" ? (
-                      <Ionicons name="star" size={16} color={Colors.accent} />
-                    ) : (
-                      <Feather name={row.icon} size={16} color={Colors.accent} />
-                    )}
-                  </View>
-                  <View style={styles.insightContent}>
-                    <ThemedText style={styles.insightTitle}>{row.title}</ThemedText>
-                    <ThemedText style={[styles.insightValue, { color: insightsLoading ? theme.separator : theme.textSecondary }]}>
-                      {row.value}
-                    </ThemedText>
-                  </View>
-                </View>
+          {insightsLoading ? (
+            <View>
+              <View style={styles.insightGridRow}>
+                <View style={[styles.insightSkeletonTile, { backgroundColor: theme.separator }]} />
+                <View style={[styles.insightSkeletonTile, { backgroundColor: theme.separator }]} />
               </View>
-            ))}
-          </GlassCard>
+              <View style={styles.insightGridRow}>
+                <View style={[styles.insightSkeletonTile, { backgroundColor: theme.separator }]} />
+                <View style={[styles.insightSkeletonTile, { backgroundColor: theme.separator }]} />
+              </View>
+              <View style={[styles.insightChartSkeleton, { backgroundColor: theme.separator }]} />
+            </View>
+          ) : insightsError || !insightsData?.insights ? (
+            <GlassCard style={styles.insightsEmptyCard}>
+              <ThemedText style={[styles.insightsEmptyText, { color: theme.textSecondary }]}>
+                Insights are temporarily unavailable. Pull to refresh.
+              </ThemedText>
+            </GlassCard>
+          ) : !insightsData.insights.hasAnyData ? (
+            <GlassCard style={styles.insightsEmptyCard}>
+              <Feather name="bar-chart-2" size={28} color={theme.textSecondary} style={{ marginBottom: Spacing.sm }} />
+              <ThemedText style={[styles.insightsEmptyText, { color: theme.textSecondary }]}>
+                Your first numbers will show up here as you complete jobs.
+              </ThemedText>
+            </GlassCard>
+          ) : (
+            <View>
+              <View style={styles.insightGridRow}>
+                <StatCard
+                  title="Revenue MTD"
+                  value={formatDollarsCompact(insightsData.insights.revenueMtd)}
+                  icon="dollar-sign"
+                  trend={
+                    insightsData.insights.revenueMtdDelta !== null
+                      ? {
+                          value: Math.abs(insightsData.insights.revenueMtdDelta),
+                          positive: insightsData.insights.revenueMtdDelta >= 0,
+                        }
+                      : undefined
+                  }
+                />
+                <StatCard
+                  title="Jobs Completed"
+                  value={insightsData.insights.jobsCompleted}
+                  icon="check-circle"
+                  trend={
+                    insightsData.insights.jobsCompletedDelta !== null
+                      ? {
+                          value: Math.abs(insightsData.insights.jobsCompletedDelta),
+                          positive: insightsData.insights.jobsCompletedDelta >= 0,
+                        }
+                      : undefined
+                  }
+                />
+              </View>
+              <View style={styles.insightGridRow}>
+                <StatCard
+                  title="Active Clients"
+                  value={insightsData.insights.activeClients}
+                  icon="users"
+                  trend={
+                    insightsData.insights.activeClientsDelta !== null
+                      ? {
+                          value: Math.abs(insightsData.insights.activeClientsDelta),
+                          positive: insightsData.insights.activeClientsDelta >= 0,
+                        }
+                      : undefined
+                  }
+                />
+                <StatCard
+                  title="Avg Job Value"
+                  value={formatDollarsCompact(insightsData.insights.avgJobValue)}
+                  icon="trending-up"
+                  trend={
+                    insightsData.insights.avgJobValueDelta !== null
+                      ? {
+                          value: Math.abs(insightsData.insights.avgJobValueDelta),
+                          positive: insightsData.insights.avgJobValueDelta >= 0,
+                        }
+                      : undefined
+                  }
+                />
+              </View>
+              <GlassCard style={styles.insightChartCard}>
+                <View style={styles.insightChartHeader}>
+                  <ThemedText style={styles.insightChartTitle}>Revenue, last 8 weeks</ThemedText>
+                </View>
+                <MiniBarChart
+                  data={insightsData.insights.weeklyRevenueSeries}
+                  theme={theme}
+                />
+              </GlassCard>
+            </View>
+          )}
         </Animated.View>
 
         <Animated.View
@@ -1020,38 +1127,40 @@ const styles = StyleSheet.create({
     ...Typography.footnote,
     fontWeight: "600",
   },
-  insightsCard: {
-    padding: 0,
-    overflow: "hidden",
-  },
-  insightRow: {
+  insightGridRow: {
     flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
     gap: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
-  insightIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: BorderRadius.md,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  insightContent: {
+  insightSkeletonTile: {
     flex: 1,
+    height: 110,
+    borderRadius: BorderRadius.card,
+    opacity: 0.4,
   },
-  insightTitle: {
+  insightChartSkeleton: {
+    height: 100,
+    borderRadius: BorderRadius.card,
+    opacity: 0.4,
+    marginTop: Spacing.xs,
+  },
+  insightsEmptyCard: {
+    alignItems: "center",
+    paddingVertical: Spacing.xl,
+  },
+  insightsEmptyText: {
+    ...Typography.body,
+    textAlign: "center",
+  },
+  insightChartCard: {
+    marginTop: Spacing.xs,
+  },
+  insightChartHeader: {
+    marginBottom: Spacing.sm,
+  },
+  insightChartTitle: {
     ...Typography.callout,
     fontWeight: "600",
-  },
-  insightValue: {
-    ...Typography.caption1,
-    marginTop: 1,
-  },
-  insightDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginLeft: Spacing.md + 32 + Spacing.sm,
   },
   publishRow: {
     flexDirection: "row",

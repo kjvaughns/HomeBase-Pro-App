@@ -713,35 +713,127 @@ export class DatabaseStorage implements IStorage {
     return { revenueMTD, jobsCompleted, activeClients, upcomingJobs, averageJobValue, revenueByPeriod };
   }
 
-  // Provider business insights (for dashboard Business Insights section)
+  // Provider business insights — real numbers for the dashboard metric grid
+  // and an 8-week revenue trend. Also returns internal fields used by the
+  // milestone-notification pipeline (allTimeRevenue, clientGrowthPct, rating,
+  // reviewCount) so the route handler can fire those without a second query.
   async getProviderInsights(providerId: string): Promise<{
+    revenueMtd: number;
+    revenueMtdDelta: number | null;
+    jobsCompleted: number;
+    jobsCompletedDelta: number | null;
+    activeClients: number;
+    activeClientsDelta: number | null;
+    avgJobValue: number;
+    avgJobValueDelta: number | null;
+    weeklyRevenueSeries: { label: string; value: number }[];
+    hasAnyData: boolean;
     allTimeRevenue: number;
-    clientCountThisQuarter: number;
-    clientCountLastQuarter: number;
     clientGrowthPct: number;
     rating: string;
     reviewCount: number;
   }> {
     const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+    // Same-day-of-month cutoff so MTD is compared against the matching window
+    // of the prior month rather than the full prior month.
+    const prevMonthCutoff = new Date(
+      now.getFullYear(),
+      now.getMonth() - 1,
+      now.getDate(),
+      23,
+      59,
+      59,
+      999,
+    );
 
-    // All-time revenue from completed jobs' final prices (source of truth for total earnings)
     const completedJobRows = await db
-      .select({ finalPrice: jobs.finalPrice })
+      .select({
+        finalPrice: jobs.finalPrice,
+        completedAt: jobs.completedAt,
+        clientId: jobs.clientId,
+      })
       .from(jobs)
       .where(and(eq(jobs.providerId, providerId), eq(jobs.status, "completed")));
-    const allTimeRevenue = completedJobRows.reduce((sum, j) => sum + parseFloat(j.finalPrice || "0"), 0);
 
-    // Quarter boundaries
+    const allTimeRevenue = completedJobRows.reduce(
+      (sum, j) => sum + parseFloat(j.finalPrice || "0"),
+      0,
+    );
+
+    const inWindow = (d: Date | null, start: Date, end: Date) =>
+      !!d && d >= start && d <= end;
+
+    const currentJobs = completedJobRows.filter((j) =>
+      inWindow(j.completedAt as Date | null, startOfMonth, now),
+    );
+    const priorJobs = completedJobRows.filter((j) =>
+      inWindow(j.completedAt as Date | null, startOfPrevMonth, prevMonthCutoff),
+    );
+
+    const sumPrices = (rows: typeof completedJobRows) =>
+      rows.reduce((s, j) => s + parseFloat(j.finalPrice || "0"), 0);
+
+    const revenueMtd = sumPrices(currentJobs);
+    const revenuePrev = sumPrices(priorJobs);
+    const jobsCompleted = currentJobs.length;
+    const jobsCompletedPrev = priorJobs.length;
+    const avgJobValue = jobsCompleted > 0 ? revenueMtd / jobsCompleted : 0;
+    const avgJobValuePrev =
+      jobsCompletedPrev > 0 ? revenuePrev / jobsCompletedPrev : 0;
+
+    const activeClientsThis = new Set(
+      currentJobs.map((j) => j.clientId).filter(Boolean) as string[],
+    ).size;
+    const activeClientsPrev = new Set(
+      priorJobs.map((j) => j.clientId).filter(Boolean) as string[],
+    ).size;
+
+    const pctDelta = (current: number, prior: number): number | null => {
+      if (prior <= 0) {
+        if (current <= 0) return null;
+        return 100;
+      }
+      return Math.round(((current - prior) / prior) * 100);
+    };
+
+    // 8-week revenue trend ending this week. Week boundary = Monday.
+    const startOfThisWeek = (() => {
+      const d = new Date(now);
+      d.setHours(0, 0, 0, 0);
+      const day = d.getDay();
+      const diffToMonday = (day + 6) % 7;
+      d.setDate(d.getDate() - diffToMonday);
+      return d;
+    })();
+    const weeklyRevenueSeries: { label: string; value: number }[] = [];
+    for (let i = 7; i >= 0; i--) {
+      const weekStart = new Date(startOfThisWeek);
+      weekStart.setDate(weekStart.getDate() - i * 7);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      weekEnd.setHours(23, 59, 59, 999);
+      const value = completedJobRows
+        .filter((j) => inWindow(j.completedAt as Date | null, weekStart, weekEnd))
+        .reduce((s, j) => s + parseFloat(j.finalPrice || "0"), 0);
+      const label = weekStart.toLocaleDateString("en-US", {
+        month: "numeric",
+        day: "numeric",
+      });
+      weeklyRevenueSeries.push({ label, value });
+    }
+
+    // Quarterly client-growth metric kept for the existing milestone
+    // notification pipeline (not exposed in the dashboard tiles anymore).
     const quarterMonth = Math.floor(now.getMonth() / 3) * 3;
     const startOfThisQuarter = new Date(now.getFullYear(), quarterMonth, 1, 0, 0, 0, 0);
     const startOfLastQuarter = new Date(now.getFullYear(), quarterMonth - 3, 1, 0, 0, 0, 0);
     const endOfLastQuarter = new Date(startOfThisQuarter.getTime() - 1);
-
     const clientsThisQuarter = await db
       .select({ id: clients.id })
       .from(clients)
       .where(and(eq(clients.providerId, providerId), gte(clients.createdAt, startOfThisQuarter)));
-
     const clientsLastQuarter = await db
       .select({ id: clients.id })
       .from(clients)
@@ -749,16 +841,17 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(clients.providerId, providerId),
           gte(clients.createdAt, startOfLastQuarter),
-          lte(clients.createdAt, endOfLastQuarter)
-        )
+          lte(clients.createdAt, endOfLastQuarter),
+        ),
       );
-
-    const clientCountThisQuarter = clientsThisQuarter.length;
-    const clientCountLastQuarter = clientsLastQuarter.length;
     const clientGrowthPct =
-      clientCountLastQuarter > 0
-        ? Math.round(((clientCountThisQuarter - clientCountLastQuarter) / clientCountLastQuarter) * 100)
-        : clientCountThisQuarter > 0
+      clientsLastQuarter.length > 0
+        ? Math.round(
+            ((clientsThisQuarter.length - clientsLastQuarter.length) /
+              clientsLastQuarter.length) *
+              100,
+          )
+        : clientsThisQuarter.length > 0
         ? 100
         : 0;
 
@@ -767,10 +860,26 @@ export class DatabaseStorage implements IStorage {
       .from(providers)
       .where(eq(providers.id, providerId));
 
+    const totalClientsRow = await db
+      .select({ id: clients.id })
+      .from(clients)
+      .where(eq(clients.providerId, providerId));
+
+    const hasAnyData =
+      completedJobRows.length > 0 || totalClientsRow.length > 0;
+
     return {
+      revenueMtd,
+      revenueMtdDelta: pctDelta(revenueMtd, revenuePrev),
+      jobsCompleted,
+      jobsCompletedDelta: pctDelta(jobsCompleted, jobsCompletedPrev),
+      activeClients: activeClientsThis,
+      activeClientsDelta: pctDelta(activeClientsThis, activeClientsPrev),
+      avgJobValue,
+      avgJobValueDelta: pctDelta(avgJobValue, avgJobValuePrev),
+      weeklyRevenueSeries,
+      hasAnyData,
       allTimeRevenue,
-      clientCountThisQuarter,
-      clientCountLastQuarter,
       clientGrowthPct,
       rating: providerRow?.rating ?? "0",
       reviewCount: providerRow?.reviewCount ?? 0,

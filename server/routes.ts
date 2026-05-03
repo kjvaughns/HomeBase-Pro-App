@@ -202,16 +202,6 @@ const requireAdmin: RequestHandler = async (req, res, next) => {
 
 const aiRateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
-const insightsAiCache = new Map<
-  string,
-  {
-    revenue: string;
-    growth: string;
-    rating: string;
-    expiresAt: number;
-  }
->();
-
 const REVENUE_MILESTONES = [
   10000, 25000, 50000, 100000, 150000, 200000, 300000, 500000,
 ];
@@ -7586,78 +7576,22 @@ Respond with JSON only:
           return;
         }
         const insights = await storage.getProviderInsights(req.params.id);
-        const businessName = providerRow.businessName || "your business";
 
-        // Generate AI messages (cached per provider for 1 hour)
-        let aiMessages: { revenue: string; growth: string; rating: string };
-        const cached = insightsAiCache.get(req.params.id);
-        if (cached && cached.expiresAt > Date.now()) {
-          aiMessages = {
-            revenue: cached.revenue,
-            growth: cached.growth,
-            rating: cached.rating,
-          };
-        } else {
-          try {
-            const aiResp = await openai.chat.completions.create({
-              model: "gpt-4o-mini",
-              messages: [
-                {
-                  role: "system",
-                  content:
-                    "You are a business coach for home service providers. Write short, specific, motivating insight captions (max 10 words each). Celebrate real numbers. No emojis. No bullet points. No numbering.",
-                },
-                {
-                  role: "user",
-                  content:
-                    `Business: ${businessName}\n` +
-                    `All-time revenue: $${Math.round(insights.allTimeRevenue).toLocaleString()}\n` +
-                    `New clients this quarter: ${insights.clientCountThisQuarter} (${insights.clientGrowthPct > 0 ? "+" : ""}${insights.clientGrowthPct}% vs last quarter)\n` +
-                    `Rating: ${insights.rating} stars from ${insights.reviewCount} reviews\n\n` +
-                    `Write exactly 3 lines:\n` +
-                    `Line 1: revenue caption celebrating $${Math.round(insights.allTimeRevenue / 1000)}K milestone\n` +
-                    `Line 2: client growth caption for ${insights.clientGrowthPct > 0 ? "+" : ""}${insights.clientGrowthPct}% growth\n` +
-                    `Line 3: rating caption for ${insights.rating} stars`,
-                },
-              ],
-              max_tokens: 120,
-              temperature: 0.75,
-            });
-            const lines = (aiResp.choices[0]?.message?.content || "")
-              .split("\n")
-              .map((l) => l.replace(/^[\d\.\-\*\s]+/, "").trim())
-              .filter(Boolean);
-            aiMessages = {
-              revenue:
-                lines[0] ||
-                `$${Math.round(insights.allTimeRevenue / 1000)}K earned all-time`,
-              growth:
-                lines[1] ||
-                `${insights.clientGrowthPct > 0 ? "+" : ""}${insights.clientGrowthPct}% client growth this quarter`,
-              rating:
-                lines[2] ||
-                `${insights.rating} stars from ${insights.reviewCount} reviews`,
-            };
-            insightsAiCache.set(req.params.id, {
-              ...aiMessages,
-              expiresAt: Date.now() + 60 * 60 * 1000,
-            });
-          } catch (aiErr) {
-            console.error("Insights AI generation error:", aiErr);
-            aiMessages = {
-              revenue: `$${Math.round(insights.allTimeRevenue / 1000)}K earned all-time`,
-              growth: `${insights.clientGrowthPct > 0 ? "+" : ""}${insights.clientGrowthPct}% client growth this quarter`,
-              rating: `${insights.rating} stars from ${insights.reviewCount} reviews`,
-            };
-          }
-        }
+        fireInsightNotifications(req.authenticatedUserId!, {
+          allTimeRevenue: insights.allTimeRevenue,
+          clientGrowthPct: insights.clientGrowthPct,
+          rating: insights.rating,
+          reviewCount: insights.reviewCount,
+        }).catch(console.error);
 
-        // Fire milestone notifications fire-and-forget
-        fireInsightNotifications(req.authenticatedUserId!, insights).catch(
-          console.error,
-        );
-
-        res.json({ insights: { ...insights, aiMessages } });
+        const {
+          allTimeRevenue,
+          clientGrowthPct,
+          rating,
+          reviewCount,
+          ...dashboardInsights
+        } = insights;
+        res.json({ insights: dashboardInsights });
       } catch (error) {
         console.error("Get provider insights error:", error);
         res.status(500).json({ error: "Failed to get provider insights" });
