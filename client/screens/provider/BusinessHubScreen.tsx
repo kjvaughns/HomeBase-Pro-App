@@ -139,6 +139,7 @@ interface ProviderRecord {
   licenseNumber: string | null;
   rating: string | null;
   reviewCount: number | null;
+  capabilityTags: string[] | null;
 }
 
 function getPricingLabel(type: string): string {
@@ -156,7 +157,7 @@ export default function BusinessHubScreen() {
   const tabBarHeight = useFloatingTabBarHeight();
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
-  const { user, providerProfile, createProviderProfile } = useAuthStore();
+  const { user, providerProfile, createProviderProfile, clearProviderProfile } = useAuthStore();
   const queryClient = useQueryClient();
   const availableForWork = useProviderStore((s) => s.availableForWork);
   const syncAvailableForWork = useProviderStore((s) => s.syncAvailableForWork);
@@ -165,7 +166,105 @@ export default function BusinessHubScreen() {
 
   const [activeTab, setActiveTab] = useState<HubTab>("profile");
 
-  const providerId = providerProfile?.id;
+  const cachedProviderId = providerProfile?.id;
+
+  // Resolve the authoritative provider for the signed-in user before any
+  // provider-scoped query fires (a stale cached id would scope every tab
+  // to the wrong record).
+  const {
+    data: recoveredProviderData,
+    isLoading: recoveryLoading,
+    isFetching: recoveryFetching,
+    isError: recoveryError,
+    refetch: refetchRecovery,
+  } = useQuery<{ provider: ProviderRecord | null }>({
+    queryKey: ["/api/provider/user", user?.id],
+    enabled: !!user?.id,
+    // Authoritative reconciliation: always refetch when Business Hub mounts
+    // so onboarding, cross-device edits, or admin changes can't leave a
+    // cached `{ provider: null }` or stale payload in place.
+    staleTime: 0,
+    refetchOnMount: "always",
+    retry: (failureCount, error) => {
+      const status = (error as { status?: number } | undefined)?.status;
+      if (status === 404 || status === 403) return false;
+      return failureCount < 2;
+    },
+    retryDelay: 1500,
+    queryFn: async () => {
+      // Use raw fetch (not apiRequest) so we can distinguish 404
+      // ("no provider record yet" → onboarding) from real failures.
+      // apiRequest throws on every non-2xx without preserving status.
+      const url = new URL(`/api/provider/user/${user?.id}`, getApiUrl());
+      const response = await fetch(url, {
+        headers: { ...getAuthHeaders(), "X-Client-Platform": Platform.OS },
+        credentials: "include",
+      });
+      if (response.status === 401) {
+        // Preserve the global session-expiry flow used by apiRequest/getQueryFn.
+        const { handleSessionExpiry } = await import("@/lib/sessionExpiry");
+        handleSessionExpiry();
+      }
+      if (response.status === 404) return { provider: null };
+      if (!response.ok) {
+        const err = new Error(`Failed to load provider (${response.status})`) as Error & { status?: number };
+        err.status = response.status;
+        throw err;
+      }
+      return response.json();
+    },
+  });
+
+  const recoveredProvider = recoveredProviderData?.provider;
+  const recoverySettled = !!user?.id && !recoveryLoading && !recoveryFetching;
+  // Latch the confirmed provider id so background refetches don't briefly
+  // disable dependent queries.
+  const [confirmedProviderId, setConfirmedProviderId] = useState<string | undefined>();
+  useEffect(() => {
+    if (recoverySettled && recoveredProvider?.id) {
+      setConfirmedProviderId(recoveredProvider.id);
+    } else if (recoverySettled && recoveredProviderData && !recoveredProvider) {
+      setConfirmedProviderId(undefined);
+    }
+  }, [recoverySettled, recoveredProvider, recoveredProviderData]);
+  const providerId = confirmedProviderId ?? (!user?.id ? cachedProviderId : undefined);
+
+  useEffect(() => {
+    // Recovery settled with no provider record on the server — clear any
+    // stale local providerProfile so other provider screens don't keep
+    // querying a deleted/wrong record.
+    if (recoverySettled && recoveredProviderData && !recoveredProvider && cachedProviderId) {
+      clearProviderProfile();
+      return;
+    }
+    if (!recoveredProvider) return;
+    const recoveredServices = recoveredProvider.capabilityTags ?? [];
+    const recoveredName = recoveredProvider.businessName || "";
+    // Reconcile id AND key display fields — other provider screens read
+    // businessName/services/rating from authStore.providerProfile, so a
+    // cached-but-stale value (e.g. after admin edit on another device)
+    // would otherwise persist until the next /api/auth/me sync.
+    const idMatches = recoveredProvider.id === cachedProviderId;
+    const fieldsMatch =
+      idMatches &&
+      providerProfile?.businessName === recoveredName &&
+      JSON.stringify(providerProfile?.services ?? []) === JSON.stringify(recoveredServices) &&
+      providerProfile?.status === "approved";
+    if (fieldsMatch) return;
+    createProviderProfile({
+      ...(providerProfile ?? {}),
+      id: recoveredProvider.id,
+      userId: recoveredProvider.userId,
+      businessName: recoveredName || providerProfile?.businessName || "",
+      services: recoveredServices,
+      // A provider row exists for this signed-in user → status is approved.
+      // isActive only reflects the "available for work" toggle.
+      status: "approved",
+      rating: parseFloat(recoveredProvider.rating ?? "0") || 0,
+      reviewCount: recoveredProvider.reviewCount ?? 0,
+      completedJobs: providerProfile?.completedJobs ?? 0,
+    });
+  }, [recoveredProvider, recoveredProviderData, recoverySettled, cachedProviderId, providerProfile, createProviderProfile, clearProviderProfile]);
 
   const { data: stripeStatusData } = useQuery<{ chargesEnabled: boolean; payoutsEnabled: boolean }>({
     queryKey: ["/api/stripe/connect/status", providerId],
@@ -178,53 +277,13 @@ export default function BusinessHubScreen() {
   });
   const stripeReady = !!stripeStatusData?.chargesEnabled;
 
-  // Load provider data from API (for profile + policies)
-  const {
-    data: providerData,
-    isLoading: providerLoading,
-    isError: providerError,
-    refetch: refetchProvider,
-  } = useQuery<{ provider: ProviderRecord }>({
-    queryKey: ["/api/provider", providerId],
-    enabled: !!providerId,
-    retry: 2,
-    retryDelay: 1500,
-  });
-  const provider = providerData?.provider;
-
-  // Auto-recover: if providerProfile is missing OR the stored ID returns 404, fetch by userId
-  const {
-    data: recoveredProviderData,
-    isError: recoveryError,
-    refetch: refetchRecovery,
-  } = useQuery<{ provider: any }>({
-    queryKey: ["/api/provider/user", user?.id],
-    // Run when: no providerId stored, OR when the main fetch errored (stale/wrong ID in store)
-    enabled: !!user?.id && (!providerId || providerError),
-    retry: 2,
-    retryDelay: 1500,
-  });
-
-  useEffect(() => {
-    const recovered = recoveredProviderData?.provider;
-    if (!recovered) return;
-    // Only update the store when the recovered ID differs from what's currently stored
-    if (recovered.id !== providerId) {
-      createProviderProfile({
-        id: recovered.id,
-        userId: recovered.userId,
-        businessName: recovered.businessName || "",
-        services: recovered.capabilityTags || recovered.services || [],
-        status: recovered.isActive ? "approved" : "pending",
-        rating: parseFloat(recovered.rating) || 0,
-        reviewCount: recovered.reviewCount || 0,
-        completedJobs: 0,
-        serviceArea: recovered.serviceArea,
-      });
-    }
-    // Always invalidate/refetch the main provider query with the recovered ID
-    queryClient.invalidateQueries({ queryKey: ["/api/provider", recovered.id] });
-  }, [recoveredProviderData]);
+  // Reuse the recovered provider record for profile + policies — same
+  // shape, already fetched, scoped to the signed-in user. This avoids a
+  // redundant GET /api/provider/:id round-trip.
+  const provider = recoveredProvider;
+  const providerLoading = recoveryLoading;
+  const providerError = recoveryError;
+  const refetchProvider = refetchRecovery;
 
   // Profile tab state
   const [businessName, setBusinessName] = useState("");
@@ -291,16 +350,17 @@ export default function BusinessHubScreen() {
     }
   }, [provider, user, hydrateAvailableForWork]);
 
-  // Populate business hours from API data (once only, to protect unsaved edits from background refetches)
+  // Populate business hours / policies once recovery has settled with a
+  // fresh authoritative response — populating from a stale cached payload
+  // and then latching `*Loaded` would refuse the real server value.
   useEffect(() => {
-    if (!provider || hoursLoaded) return;
+    if (!recoverySettled || !provider || hoursLoaded) return;
     setHours(provider.businessHours ? { ...DEFAULT_HOURS, ...provider.businessHours } : DEFAULT_HOURS);
     setHoursLoaded(true);
-  }, [provider, hoursLoaded]);
+  }, [recoverySettled, provider, hoursLoaded]);
 
-  // Populate policies from API data (once only)
   useEffect(() => {
-    if (!provider || policiesLoaded) return;
+    if (!recoverySettled || !provider || policiesLoaded) return;
     if (provider.bookingPolicies) {
       const bp: BookingPoliciesData = provider.bookingPolicies;
       setPolicies({ ...DEFAULT_POLICIES, ...bp });
@@ -309,7 +369,15 @@ export default function BusinessHubScreen() {
       }
     }
     setPoliciesLoaded(true);
-  }, [provider, policiesLoaded]);
+  }, [recoverySettled, provider, policiesLoaded]);
+
+  // If the authoritative provider id changes (recovery corrected a stale
+  // cached id), reset the load latches so hours/policies repopulate from
+  // the new record on the next render.
+  useEffect(() => {
+    setHoursLoaded(false);
+    setPoliciesLoaded(false);
+  }, [providerId]);
 
   const handleTabPress = (tab: HubTab) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -368,6 +436,7 @@ export default function BusinessHubScreen() {
         const data = await resp.json();
         setAvatarUri(data.avatarUrl);
         queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId] });
+        queryClient.invalidateQueries({ queryKey: ["/api/provider/user", user?.id] });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     } catch (err) {
@@ -547,6 +616,7 @@ export default function BusinessHubScreen() {
         bookingPolicies: { ...policies, instantBooking },
       });
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/provider/user", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/providers", providerId] });
       queryClient.invalidateQueries({ queryKey: ["/api/providers"] });
       if (provider?.slug) {
@@ -1455,7 +1525,31 @@ export default function BusinessHubScreen() {
       </View>
 
       <View style={[styles.content, { paddingBottom: tabBarHeight + Spacing.md }]}>
-        {!providerLoading && !provider && (providerError || recoveryError || (!providerId && recoveredProviderData !== undefined && !recoveredProviderData?.provider)) ? (
+        {/* Show a spinner only on the initial authoritative lookup; once we
+            have a confirmed provider id, background refetches keep the tab
+            UI rendered with the latched id. */}
+        {!recoverySettled && !!user?.id && !confirmedProviderId ? (
+          <View style={styles.errorContainer}>
+            <ActivityIndicator size="large" color={Colors.accent} />
+          </View>
+        ) : recoverySettled && !provider && !recoveryError ? (
+          <View style={styles.errorContainer}>
+            <Feather name="briefcase" size={40} color={theme.textSecondary} />
+            <ThemedText style={styles.errorTitle}>
+              Set up your business profile
+            </ThemedText>
+            <ThemedText style={[styles.errorBody, { color: theme.textSecondary }]}>
+              You don't have a provider profile yet. Get started by completing onboarding.
+            </ThemedText>
+            <PrimaryButton
+              onPress={() => navigation.navigate("ProviderOnboarding" as never)}
+              style={styles.retryButton}
+              testID="button-start-onboarding"
+            >
+              Start Onboarding
+            </PrimaryButton>
+          </View>
+        ) : recoverySettled && !provider && recoveryError ? (
           <View style={styles.errorContainer}>
             <Feather name="alert-circle" size={40} color={Colors.error} />
             <ThemedText style={styles.errorTitle}>
@@ -1465,10 +1559,7 @@ export default function BusinessHubScreen() {
               There was a problem connecting to your account data. Please try again.
             </ThemedText>
             <PrimaryButton
-              onPress={() => {
-                refetchProvider();
-                refetchRecovery();
-              }}
+              onPress={() => refetchRecovery()}
               style={styles.retryButton}
               testID="button-retry-provider"
             >

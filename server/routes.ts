@@ -34,6 +34,7 @@ import {
   maintenanceReminders,
   homes,
   reviews,
+  type Provider,
 } from "@shared/schema";
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
@@ -449,6 +450,39 @@ function parseUserName(name?: string): {
   return {
     firstName: parts[0],
     lastName: parts.slice(1).join(" "),
+  };
+}
+
+/**
+ * Serialize a provider row for client consumption: tolerantly parse jsonb
+ * columns whether the driver returns strings or already-parsed objects
+ * (no double-parse). `capabilityTags` is always an array; the optional
+ * service-area arrays are normalized to arrays when present and left null
+ * when absent (Business Hub treats null as "not configured").
+ */
+function normalizeProviderForResponse(provider: Provider) {
+  const tolerantParse = (value: unknown): unknown => {
+    if (value == null) return null;
+    if (typeof value !== "string") return value;
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  };
+  return {
+    ...provider,
+    bookingPolicies: tolerantParse(provider.bookingPolicies) ?? null,
+    businessHours: tolerantParse(provider.businessHours) ?? null,
+    capabilityTags: Array.isArray(provider.capabilityTags)
+      ? provider.capabilityTags
+      : [],
+    serviceZipCodes: Array.isArray(provider.serviceZipCodes)
+      ? provider.serviceZipCodes
+      : null,
+    serviceCities: Array.isArray(provider.serviceCities)
+      ? provider.serviceCities
+      : null,
   };
 }
 
@@ -7268,25 +7302,18 @@ Respond with JSON only:
     requireAuth,
     async (req: Request<UserIdParams>, res: Response) => {
       try {
+        // Owner-only: this endpoint resolves the signed-in user's own
+        // provider record (used to recover from a stale local providerId).
+        if (req.params.userId !== req.authenticatedUserId) {
+          return res
+            .status(403)
+            .json({ error: "Forbidden: you may only look up your own provider record" });
+        }
         const provider = await storage.getProviderByUserId(req.params.userId);
         if (!provider) {
           return res.status(404).json({ error: "Provider not found" });
         }
-        const parsed = { ...provider } as any;
-        if (
-          parsed.bookingPolicies &&
-          typeof parsed.bookingPolicies === "string"
-        ) {
-          try {
-            parsed.bookingPolicies = JSON.parse(parsed.bookingPolicies);
-          } catch {}
-        }
-        if (parsed.businessHours && typeof parsed.businessHours === "string") {
-          try {
-            parsed.businessHours = JSON.parse(parsed.businessHours);
-          } catch {}
-        }
-        res.json({ provider: parsed });
+        res.json({ provider: normalizeProviderForResponse(provider) });
       } catch (error) {
         console.error("Get provider error:", error);
         res.status(500).json({ error: "Failed to get provider" });
@@ -7309,28 +7336,7 @@ Respond with JSON only:
             .status(403)
             .json({ error: "Forbidden: you do not own this provider profile" });
         }
-        const bookingPolicies =
-          provider.bookingPolicies &&
-          typeof provider.bookingPolicies === "string"
-            ? (() => {
-                try {
-                  return JSON.parse(provider.bookingPolicies as string);
-                } catch {
-                  return provider.bookingPolicies;
-                }
-              })()
-            : provider.bookingPolicies;
-        const businessHours =
-          provider.businessHours && typeof provider.businessHours === "string"
-            ? (() => {
-                try {
-                  return JSON.parse(provider.businessHours as string);
-                } catch {
-                  return provider.businessHours;
-                }
-              })()
-            : provider.businessHours;
-        res.json({ provider: { ...provider, bookingPolicies, businessHours } });
+        res.json({ provider: normalizeProviderForResponse(provider) });
       } catch (error) {
         console.error("Get provider by ID error:", error);
         res.status(500).json({ error: "Failed to get provider" });
@@ -7495,24 +7501,7 @@ Respond with JSON only:
         if (!provider) {
           return res.status(404).json({ error: "Provider not found" });
         }
-
-        // Parse JSON fields back to objects for the response
-        const parsed = { ...provider } as any;
-        if (
-          parsed.bookingPolicies &&
-          typeof parsed.bookingPolicies === "string"
-        ) {
-          try {
-            parsed.bookingPolicies = JSON.parse(parsed.bookingPolicies);
-          } catch {}
-        }
-        if (parsed.businessHours && typeof parsed.businessHours === "string") {
-          try {
-            parsed.businessHours = JSON.parse(parsed.businessHours);
-          } catch {}
-        }
-
-        res.json({ provider: parsed });
+        res.json({ provider: normalizeProviderForResponse(provider) });
       } catch (error: any) {
         console.error("Patch provider error:", error);
         res

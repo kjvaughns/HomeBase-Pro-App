@@ -81,6 +81,7 @@ interface AuthState {
   updateUser: (updates: Partial<User>) => void;
   setSessionToken: (token: string | null) => void;
   createProviderProfile: (profile: ProviderProfile) => void;
+  clearProviderProfile: () => void;
   updateProviderStatus: (status: ProviderStatus) => void;
   updateProviderProfile: (updates: Partial<ProviderProfile>) => void;
   setCrewMemberships: (memberships: CrewMembership[]) => void;
@@ -235,6 +236,10 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     saveToStorage(get());
   },
 
+  clearProviderProfile: () => {
+    set({ providerProfile: null });
+    saveToStorage(get());
+  },
   createProviderProfile: (profile: ProviderProfile) => {
     set({ providerProfile: profile });
     saveToStorage(get());
@@ -306,23 +311,44 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
           }
         : null;
 
+      // /api/auth/me is authoritative for the provider record:
+      // - If present, always overwrite id/userId/businessName from the
+      //   server (a stale local id silently scopes provider screens to the
+      //   wrong record). Status is forced to "approved" because the
+      //   existence of a provider row means the user IS a provider;
+      //   isActive only reflects the "available for work" toggle.
+      // - If absent, clear the local profile — keeping a stale persisted
+      //   record around scopes provider screens to a deleted row.
       const nextProfile: ProviderProfile | null = data.providerProfile
         ? {
             ...(providerProfile ?? {
-              id: data.providerProfile.id,
-              userId: data.providerProfile.userId,
-              businessName: data.providerProfile.businessName,
-              services: data.providerProfile.capabilityTags || [],
-              status: data.providerProfile.isActive
-                ? ("approved" as const)
-                : ("pending" as const),
-              rating: parseFloat(data.providerProfile.rating) || 0,
-              reviewCount: data.providerProfile.reviewCount || 0,
+              status: "approved" as const,
+              rating: 0,
+              reviewCount: 0,
               completedJobs: 0,
             }),
+            id: data.providerProfile.id,
+            userId: data.providerProfile.userId,
+            businessName:
+              data.providerProfile.businessName ??
+              providerProfile?.businessName ??
+              "",
+            services:
+              data.providerProfile.capabilityTags ??
+              providerProfile?.services ??
+              [],
+            status: "approved" as const,
+            rating:
+              parseFloat(data.providerProfile.rating) ||
+              providerProfile?.rating ||
+              0,
+            reviewCount:
+              data.providerProfile.reviewCount ??
+              providerProfile?.reviewCount ??
+              0,
             isPartner: data.providerProfile.isPartner === true,
           }
-        : providerProfile;
+        : null;
 
       const nextMemberships: CrewMembership[] = Array.isArray(
         data.crewMemberships,
