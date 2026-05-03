@@ -15,7 +15,6 @@ import { Feather } from "@expo/vector-icons";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
-import { GlassCard } from "@/components/GlassCard";
 import { useTheme } from "@/hooks/useTheme";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import { Colors, Spacing, Typography, BorderRadius } from "@/constants/theme";
@@ -31,8 +30,24 @@ interface CrewJob {
   address: string | null;
 }
 
+const STATUS_CONFIG: Record<string, { color: string; bg: string }> = {
+  scheduled:    { color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
+  confirmed:    { color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
+  in_progress:  { color: Colors.accent, bg: Colors.accentLight },
+  completed:    { color: "#6B7280", bg: "rgba(107,114,128,0.12)" },
+  cancelled:    { color: "#EF4444", bg: "rgba(239,68,68,0.12)" },
+  weather_held: { color: "#F59E0B", bg: "rgba(245,158,11,0.12)" },
+};
+
 function dateKey(d: Date): string {
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+function formatTime(t: string | null): string {
+  if (!t) return "—";
+  const [h, m] = t.split(":").map(Number);
+  const ampm = h >= 12 ? "PM" : "AM";
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
 export default function CrewScheduleScreen() {
@@ -40,8 +55,7 @@ export default function CrewScheduleScreen() {
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useFloatingTabBarHeight();
   const { theme } = useTheme();
-  const navigation =
-    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { activeCrewProviderId } = useAuthStore();
   const [offset, setOffset] = useState(0);
 
@@ -56,27 +70,23 @@ export default function CrewScheduleScreen() {
     queryKey: [`/api/crew/me/jobs?providerId=${activeCrewProviderId ?? ""}`],
     enabled: !!activeCrewProviderId,
   });
-  const jobs = data?.jobs || [];
+  const jobs = data?.jobs ?? [];
 
   const grouped = useMemo(() => {
     const map = new Map<string, CrewJob[]>();
     for (const j of jobs) {
-      if (!j.scheduledDate) continue;
-      if (j.status === "cancelled") continue;
-      const d = new Date(j.scheduledDate);
-      const k = dateKey(d);
-      const arr = map.get(k) || [];
+      if (!j.scheduledDate || j.status === "cancelled") continue;
+      const k = dateKey(new Date(j.scheduledDate));
+      const arr = map.get(k) ?? [];
       arr.push(j);
       map.set(k, arr);
     }
     return map;
   }, [jobs]);
 
-  const dayJobs = (grouped.get(dateKey(selected)) || []).sort((a, b) => {
-    const at = a.scheduledTime || "";
-    const bt = b.scheduledTime || "";
-    return at.localeCompare(bt);
-  });
+  const dayJobs = (grouped.get(dateKey(selected)) ?? []).sort((a, b) =>
+    (a.scheduledTime ?? "").localeCompare(b.scheduledTime ?? ""),
+  );
 
   const days = useMemo(() => {
     const arr: Date[] = [];
@@ -92,29 +102,36 @@ export default function CrewScheduleScreen() {
 
   const todayKey = dateKey(new Date());
 
+  const selectedDayLabel = selected.toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+
   return (
     <ThemedView style={styles.container}>
-      <View
-        style={{
-          paddingTop: headerHeight + Spacing.sm,
-          paddingHorizontal: Spacing.screenPadding,
-        }}
-      >
+      <View style={{ paddingTop: headerHeight + Spacing.sm }}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.dayStrip}
+          contentContainerStyle={[
+            styles.dayStrip,
+            { paddingHorizontal: Spacing.screenPadding },
+          ]}
         >
           {days.map((d) => {
             const k = dateKey(d);
             const isSelected = k === dateKey(selected);
             const isToday = k === todayKey;
-            const hasJobs = (grouped.get(k) || []).length > 0;
+            const jobCount = (grouped.get(k) ?? []).length;
+
             return (
               <Pressable
                 key={k}
                 onPress={() => {
-                  const ms = d.getTime() - new Date(new Date().setHours(0, 0, 0, 0)).getTime();
+                  const ms =
+                    d.getTime() -
+                    new Date(new Date().setHours(0, 0, 0, 0)).getTime();
                   setOffset(Math.round(ms / 86400000));
                 }}
                 style={[
@@ -130,11 +147,7 @@ export default function CrewScheduleScreen() {
                 <ThemedText
                   style={[
                     styles.dayDow,
-                    {
-                      color: isSelected
-                        ? "#FFFFFF"
-                        : theme.textSecondary,
-                    },
+                    { color: isSelected ? "#FFF" : theme.textSecondary },
                   ]}
                 >
                   {d.toLocaleDateString(undefined, { weekday: "short" })}
@@ -142,41 +155,49 @@ export default function CrewScheduleScreen() {
                 <ThemedText
                   style={[
                     styles.dayNum,
-                    { color: isSelected ? "#FFFFFF" : theme.text },
+                    {
+                      color: isSelected
+                        ? "#FFF"
+                        : isToday
+                        ? Colors.accent
+                        : theme.text,
+                    },
                   ]}
                 >
                   {d.getDate()}
                 </ThemedText>
-                {isToday ? (
+                {isToday && !isSelected ? (
+                  <View style={[styles.dot, { backgroundColor: Colors.accent }]} />
+                ) : jobCount > 0 && !isSelected ? (
+                  <View style={[styles.dot, { backgroundColor: theme.textTertiary }]} />
+                ) : isSelected && jobCount > 0 ? (
                   <View
-                    style={[
-                      styles.todayDot,
-                      {
-                        backgroundColor: isSelected ? "#FFFFFF" : Colors.accent,
-                      },
-                    ]}
+                    style={[styles.dot, { backgroundColor: "rgba(255,255,255,0.7)" }]}
                   />
-                ) : hasJobs ? (
-                  <View
-                    style={[
-                      styles.hasDot,
-                      {
-                        backgroundColor: isSelected
-                          ? "#FFFFFF"
-                          : theme.textTertiary,
-                      },
-                    ]}
-                  />
-                ) : null}
+                ) : (
+                  <View style={styles.dot} />
+                )}
               </Pressable>
             );
           })}
         </ScrollView>
+
+        <ThemedText
+          style={[
+            styles.dayLabel,
+            {
+              color: theme.textSecondary,
+              paddingHorizontal: Spacing.screenPadding,
+            },
+          ]}
+        >
+          {selectedDayLabel}
+        </ThemedText>
       </View>
 
       <ScrollView
         contentContainerStyle={{
-          paddingTop: Spacing.md,
+          paddingTop: Spacing.lg,
           paddingBottom: tabBarHeight + Spacing.xl,
           paddingHorizontal: Spacing.screenPadding,
         }}
@@ -184,50 +205,98 @@ export default function CrewScheduleScreen() {
         showsVerticalScrollIndicator={false}
       >
         {isLoading ? (
-          <ActivityIndicator color={Colors.accent} />
+          <ActivityIndicator color={Colors.accent} style={{ marginTop: Spacing.xl }} />
         ) : dayJobs.length === 0 ? (
-          <ThemedText
-            style={[styles.empty, { color: theme.textTertiary }]}
-            testID="text-crew-no-jobs-this-day"
+          <View
+            style={[styles.emptyBox, { backgroundColor: theme.backgroundSecondary }]}
           >
-            No jobs assigned to you on this day.
-          </ThemedText>
+            <Feather name="sun" size={20} color={theme.textTertiary} />
+            <ThemedText style={[styles.emptyText, { color: theme.textSecondary }]}>
+              No jobs scheduled for this day
+            </ThemedText>
+          </View>
         ) : (
-          dayJobs.map((j) => (
-            <Pressable
-              key={j.id}
-              onPress={() =>
-                navigation.navigate("CrewJobDetail", { jobId: j.id })
-              }
-              testID={`crew-schedule-job-${j.id}`}
-            >
-              <GlassCard style={styles.jobCard}>
-                <View style={styles.jobHead}>
-                  <ThemedText style={styles.jobTime}>
-                    {j.scheduledTime ?? "—"}
-                  </ThemedText>
-                  <ThemedText style={styles.jobTitle} numberOfLines={1}>
-                    {j.title}
-                  </ThemedText>
-                </View>
-                {j.address ? (
-                  <View style={styles.metaRow}>
-                    <Feather
-                      name="map-pin"
-                      size={13}
-                      color={theme.textTertiary}
-                    />
+          <View style={styles.timeline}>
+            {dayJobs.map((j, idx) => {
+              const cfg = STATUS_CONFIG[j.status] ?? {
+                color: "#6B7280",
+                bg: "rgba(107,114,128,0.12)",
+              };
+              const isLast = idx === dayJobs.length - 1;
+              return (
+                <View key={j.id} style={styles.timelineRow}>
+                  <View style={styles.timeCol}>
                     <ThemedText
-                      style={[styles.metaText, { color: theme.textSecondary }]}
-                      numberOfLines={1}
+                      style={[styles.timeText, { color: theme.textSecondary }]}
                     >
-                      {j.address}
+                      {formatTime(j.scheduledTime)}
                     </ThemedText>
+                    {!isLast ? (
+                      <View
+                        style={[
+                          styles.connector,
+                          { backgroundColor: theme.separator },
+                        ]}
+                      />
+                    ) : null}
                   </View>
-                ) : null}
-              </GlassCard>
-            </Pressable>
-          ))
+
+                  <View
+                    style={[
+                      styles.timeDot,
+                      {
+                        backgroundColor: cfg.color,
+                        borderColor: theme.backgroundRoot,
+                      },
+                    ]}
+                  />
+
+                  <Pressable
+                    onPress={() =>
+                      navigation.navigate("CrewJobDetail", { jobId: j.id })
+                    }
+                    style={({ pressed }) => [
+                      styles.timelineCard,
+                      {
+                        backgroundColor: theme.cardBackground,
+                        opacity: pressed ? 0.88 : 1,
+                      },
+                    ]}
+                    testID={`crew-schedule-job-${j.id}`}
+                  >
+                    <View style={[styles.cardBar, { backgroundColor: cfg.color }]} />
+                    <View style={styles.cardContent}>
+                      <ThemedText style={styles.cardTitle} numberOfLines={1}>
+                        {j.title}
+                      </ThemedText>
+                      {j.address ? (
+                        <View style={styles.addrRow}>
+                          <Feather
+                            name="map-pin"
+                            size={11}
+                            color={theme.textTertiary}
+                          />
+                          <ThemedText
+                            style={[styles.addrText, { color: theme.textSecondary }]}
+                            numberOfLines={1}
+                          >
+                            {j.address}
+                          </ThemedText>
+                        </View>
+                      ) : null}
+                    </View>
+                    <View style={styles.chevronWrap}>
+                      <Feather
+                        name="chevron-right"
+                        size={14}
+                        color={theme.textTertiary}
+                      />
+                    </View>
+                  </Pressable>
+                </View>
+              );
+            })}
+          </View>
         )}
       </ScrollView>
     </ThemedView>
@@ -236,12 +305,10 @@ export default function CrewScheduleScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  dayStrip: {
-    gap: Spacing.sm,
-    paddingVertical: Spacing.sm,
-  },
+
+  dayStrip: { gap: Spacing.sm, paddingVertical: Spacing.sm },
   dayChip: {
-    width: 56,
+    width: 52,
     paddingVertical: 10,
     borderRadius: BorderRadius.md,
     alignItems: "center",
@@ -252,52 +319,80 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textTransform: "uppercase",
   },
-  dayNum: {
-    ...Typography.body,
-    fontWeight: "700",
+  dayNum: { ...Typography.body, fontWeight: "700" },
+  dot: { width: 4, height: 4, borderRadius: 2, marginTop: 2 },
+
+  dayLabel: {
+    ...Typography.caption,
+    fontWeight: "500",
+    marginTop: Spacing.sm,
+    marginBottom: 2,
   },
-  todayDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    marginTop: 2,
-  },
-  hasDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    marginTop: 2,
-  },
-  empty: {
-    ...Typography.body,
-    paddingVertical: Spacing.xl,
-    textAlign: "center",
-  },
-  jobCard: {
-    marginBottom: Spacing.sm,
-    padding: Spacing.md,
-  },
-  jobHead: {
+
+  emptyBox: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.md,
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    marginTop: Spacing.sm,
   },
-  jobTime: {
-    ...Typography.body,
-    fontWeight: "700",
-    minWidth: 60,
+  emptyText: { ...Typography.body },
+
+  timeline: { gap: 0 },
+  timelineRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: Spacing.md,
   },
-  jobTitle: {
-    ...Typography.body,
+  timeCol: {
+    width: 68,
+    alignItems: "flex-end",
+    paddingRight: Spacing.sm,
+    position: "relative",
+  },
+  timeText: {
+    ...Typography.caption,
+    fontWeight: "600",
+    lineHeight: 20,
+  },
+  connector: {
+    position: "absolute",
+    top: 20,
+    right: 7,
+    width: 1.5,
+    bottom: -Spacing.md,
+  },
+  timeDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 2,
+    marginTop: 5,
+    marginRight: Spacing.sm,
+    flexShrink: 0,
+  },
+  timelineCard: {
     flex: 1,
-  },
-  metaRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginTop: 4,
+    borderRadius: BorderRadius.md,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
-  metaText: {
-    ...Typography.caption,
+  cardBar: { width: 3, alignSelf: "stretch" },
+  cardContent: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: Spacing.sm,
+    gap: 3,
   },
+  cardTitle: { ...Typography.body, fontWeight: "600" },
+  addrRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  addrText: { ...Typography.caption, flex: 1 },
+  chevronWrap: { paddingHorizontal: Spacing.xs },
 });
