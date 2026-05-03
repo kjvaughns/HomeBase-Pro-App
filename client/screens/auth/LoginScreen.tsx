@@ -197,6 +197,18 @@ export default function LoginScreen({ navigation }: Props) {
               </ThemedText>
             </Pressable>
           </View>
+          <Pressable
+            onPress={() => navigation.navigate("CrewInviteAccept", {})}
+            style={styles.crewInviteRow}
+            testID="link-crew-invite"
+          >
+            <ThemedText style={[styles.crewInviteText, { color: theme.textSecondary }]}>
+              Have a crew invite?{" "}
+              <ThemedText style={[styles.crewInviteLink, { color: Colors.accent }]}>
+                Use it here
+              </ThemedText>
+            </ThemedText>
+          </Pressable>
         </View>
       </KeyboardAwareScrollViewCompat>
     </ThemedView>
@@ -246,6 +258,17 @@ const styles = StyleSheet.create({
   },
   signupLink: {
     ...Typography.callout,
+    fontWeight: "600",
+  },
+  crewInviteRow: {
+    alignSelf: "center",
+    paddingVertical: Spacing.xs,
+  },
+  crewInviteText: {
+    ...Typography.footnote,
+  },
+  crewInviteLink: {
+    ...Typography.footnote,
     fontWeight: "600",
   },
 });

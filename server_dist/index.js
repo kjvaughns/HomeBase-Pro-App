@@ -15408,6 +15408,79 @@ Respond with JSON only:
       }
     }
   );
+  app2.post(
+    "/api/crew/invites/accept-public",
+    async (req, res) => {
+      try {
+        const { token, password, name, phone } = req.body ?? {};
+        if (!token || typeof token !== "string") {
+          return res.status(400).json({ error: "Invite token is required" });
+        }
+        if (!password || typeof password !== "string" || password.length < 8) {
+          return res.status(400).json({ error: "Password must be at least 8 characters" });
+        }
+        const { JWT_SECRET: JWT_SECRET2 } = await Promise.resolve().then(() => (init_auth(), auth_exports));
+        const jwt2 = await import("jsonwebtoken");
+        const INVITE_SECRET = `${JWT_SECRET2}:crew-invite`;
+        let decoded;
+        try {
+          decoded = jwt2.default.verify(token, INVITE_SECRET);
+        } catch {
+          return res.status(400).json({ error: "Invalid or expired invite link." });
+        }
+        if (decoded.purpose !== "crew_invite" || !decoded.crewMemberId || !decoded.email) {
+          return res.status(400).json({ error: "Invalid invite token" });
+        }
+        const inviteEmail = String(decoded.email).trim().toLowerCase();
+        const crew = await storage.getCrewMember(decoded.crewMemberId);
+        if (!crew)
+          return res.status(404).json({ error: "Crew row no longer exists" });
+        const existing = await storage.getUserByEmail(inviteEmail);
+        if (existing) {
+          return res.status(409).json({
+            error: "An account with this email already exists. Please sign in instead.",
+            existingAccount: true
+          });
+        }
+        if (crew.invitedUserId) {
+          return res.status(409).json({
+            error: "This invite is already linked to another account"
+          });
+        }
+        const nameFields = parseUserName(
+          typeof name === "string" && name.trim() ? name : crew.name
+        );
+        const hashedPassword = await bcryptHash(password, BCRYPT_SALT_ROUNDS);
+        const user = await storage.createUser({
+          ...nameFields,
+          email: inviteEmail,
+          password: hashedPassword,
+          phone: typeof phone === "string" && phone.trim() ? phone.trim() : crew.phone || null,
+          isProvider: false
+        });
+        await storage.updateCrewMember(crew.id, { invitedUserId: user.id });
+        const authToken = generateToken(
+          user.id,
+          "homeowner",
+          user.tokenVersion ?? 0
+        );
+        res.cookie("token", authToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          maxAge: 7 * 24 * 60 * 60 * 1e3
+        });
+        const memberships = await getCrewMembershipsForUser(user.id);
+        res.status(201).json({
+          user: formatUserResponse(user),
+          token: authToken,
+          crewMemberships: memberships
+        });
+      } catch (error) {
+        console.error("Public crew invite accept error:", error);
+        res.status(500).json({ error: "Failed to accept invite" });
+      }
+    }
+  );
   app2.get(
     "/api/crew/me/memberships",
     requireAuth,

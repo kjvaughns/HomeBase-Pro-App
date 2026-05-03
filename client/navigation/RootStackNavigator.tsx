@@ -19,6 +19,7 @@ import WelcomeScreen from "@/screens/auth/WelcomeScreen";
 import LoginScreen from "@/screens/auth/LoginScreen";
 import SignUpScreen from "@/screens/auth/SignUpScreen";
 import ForgotPasswordScreen from "@/screens/auth/ForgotPasswordScreen";
+import CrewInviteAcceptScreen from "@/screens/auth/CrewInviteAcceptScreen";
 import OnboardingScreen from "@/screens/auth/OnboardingScreen";
 import AIChatScreen from "@/screens/homeowner/AIChatScreen";
 import SmartIntakeScreen from "@/screens/homeowner/SmartIntakeScreen";
@@ -86,6 +87,7 @@ export type RootStackParamList = {
   Login: undefined;
   SignUp: undefined;
   ForgotPassword: undefined;
+  CrewInviteAccept: { token?: string } | undefined;
   Onboarding: undefined;
   Main:
     | NavigatorScreenParams<HomeownerTabParamList>
@@ -314,6 +316,11 @@ export default function RootStackNavigator() {
             name="ForgotPassword"
             component={ForgotPasswordScreen}
             options={{ headerTitle: "Reset Password" }}
+          />
+          <Stack.Screen
+            name="CrewInviteAccept"
+            component={CrewInviteAcceptScreen}
+            options={{ headerTitle: "Accept Crew Invite" }}
           />
         </>
       ) : null}
