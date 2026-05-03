@@ -12,6 +12,7 @@ import FirstLaunchScreen from "@/screens/onboarding/FirstLaunchScreen";
 import AccountTypeSelectionScreen from "@/screens/onboarding/AccountTypeSelectionScreen";
 import HomeownerOnboardingScreen from "@/screens/onboarding/HomeownerOnboardingScreen";
 import ProviderOnboardingScreen from "@/screens/onboarding/ProviderOnboardingScreen";
+import EssentialSetupScreen from "@/screens/onboarding/EssentialSetupScreen";
 import ProviderSetupFlow from "@/screens/onboarding/ProviderSetupFlow";
 import WelcomeScreen from "@/screens/auth/WelcomeScreen";
 import LoginScreen from "@/screens/auth/LoginScreen";
@@ -73,6 +74,7 @@ export type RootStackParamList = {
   AccountTypeSelection: undefined;
   HomeownerOnboarding: undefined;
   ProviderOnboarding: undefined;
+  EssentialSetup: undefined;
   ProviderSetupFlow: undefined;
   Welcome: undefined;
   Login: undefined;
@@ -261,6 +263,11 @@ export default function RootStackNavigator() {
           <Stack.Screen
             name="ProviderOnboarding"
             component={ProviderOnboardingScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="EssentialSetup"
+            component={EssentialSetupScreen}
             options={{ headerShown: false }}
           />
           <Stack.Screen

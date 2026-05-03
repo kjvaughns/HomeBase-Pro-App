@@ -13,6 +13,7 @@ import { Spacing, Colors, BorderRadius } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useOnboardingStore } from "@/state/onboardingStore";
 import { recordHappyMoment } from "@/state/appReviewStore";
+import { trackEvent, AnalyticsEvents } from "@/lib/analytics";
 
 const AppLogo = require("../../../assets/images/icon.png");
 
@@ -83,6 +84,7 @@ export default function AccountTypeSelectionScreen({ navigation }: Props) {
   }, []);
 
   const handleHomeowner = () => {
+    trackEvent(AnalyticsEvents.SignupStarted, { role: "homeowner" });
     setAccountType("homeowner");
     setHasCompletedFirstLaunch(true);
     recordHappyMoment("homeowner_onboarding_complete").catch(() => {});
@@ -93,8 +95,9 @@ export default function AccountTypeSelectionScreen({ navigation }: Props) {
   };
 
   const handleProvider = () => {
+    trackEvent(AnalyticsEvents.SignupStarted, { role: "provider" });
     setAccountType("provider");
-    navigation.navigate("ProviderOnboarding");
+    navigation.navigate("EssentialSetup");
   };
 
   const RoleCard = ({
@@ -239,16 +242,28 @@ export default function AccountTypeSelectionScreen({ navigation }: Props) {
       >
         <Pressable
           onPress={() => navigation.navigate("Login")}
-          style={styles.signInRow}
+          style={({ pressed }) => [
+            styles.loginButton,
+            {
+              backgroundColor: isDark
+                ? "rgba(255,255,255,0.06)"
+                : "rgba(0,0,0,0.04)",
+              borderColor: isDark
+                ? "rgba(255,255,255,0.10)"
+                : "rgba(0,0,0,0.08)",
+              transform: [{ scale: pressed ? 0.98 : 1 }],
+            },
+          ]}
           testID="button-sign-in"
         >
-          <ThemedText style={[styles.signInText, { color: theme.textTertiary }]}>
-            Already have an account?{" "}
-          </ThemedText>
-          <ThemedText style={[styles.signInText, { color: Colors.accent, fontWeight: "600" }]}>
-            Sign in
+          <Feather name="log-in" size={18} color={Colors.accent} />
+          <ThemedText style={[styles.loginButtonText, { color: Colors.accent }]}>
+            Log in
           </ThemedText>
         </Pressable>
+        <ThemedText style={[styles.signInText, { color: theme.textTertiary, marginTop: Spacing.sm }]}>
+          Already have an account? Tap above to sign in.
+        </ThemedText>
       </Animated.View>
     </View>
   );
@@ -340,6 +355,21 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
   },
   signInText: {
-    fontSize: 14,
+    fontSize: 13,
+  },
+  loginButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    width: "100%",
+    paddingVertical: 14,
+    borderRadius: BorderRadius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  loginButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    letterSpacing: -0.2,
   },
 });

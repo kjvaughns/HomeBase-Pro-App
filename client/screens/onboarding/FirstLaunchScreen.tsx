@@ -1,10 +1,14 @@
-import React, { useEffect, useRef } from "react";
-import { StyleSheet, View, Animated, Image } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { StyleSheet, View, Animated, Image, Pressable } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
+import { Feather } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
+import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
-import { Colors, BorderRadius } from "@/constants/theme";
+import { useLayout } from "@/hooks/useLayout";
+import { Colors, BorderRadius, Spacing } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 const AppLogo = require("../../../assets/images/icon.png");
@@ -13,9 +17,25 @@ type Props = NativeStackScreenProps<RootStackParamList, "FirstLaunch">;
 
 export default function FirstLaunchScreen({ navigation }: Props) {
   const { theme, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
+  const { horizontalPadding } = useLayout();
 
   const logoScale = useRef(new Animated.Value(0.78)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
+  const ctaOpacity = useRef(new Animated.Value(0)).current;
+  const [advanced, setAdvanced] = useState(false);
+
+  const goNext = () => {
+    if (advanced) return;
+    setAdvanced(true);
+    navigation.navigate("AccountTypeSelection");
+  };
+
+  const goLogin = () => {
+    if (advanced) return;
+    setAdvanced(true);
+    navigation.navigate("Login");
+  };
 
   useEffect(() => {
     Animated.sequence([
@@ -32,10 +52,12 @@ export default function FirstLaunchScreen({ navigation }: Props) {
           useNativeDriver: false,
         }),
       ]),
-      Animated.delay(500),
-    ]).start(() => {
-      navigation.navigate("AccountTypeSelection");
-    });
+      Animated.timing(ctaOpacity, {
+        toValue: 1,
+        duration: 320,
+        useNativeDriver: false,
+      }),
+    ]).start();
   }, []);
 
   return (
@@ -70,6 +92,62 @@ export default function FirstLaunchScreen({ navigation }: Props) {
         >
           <Image source={AppLogo} style={styles.logo} resizeMode="contain" />
         </View>
+        <ThemedText style={[styles.brand, { color: theme.text }]}>
+          HomeBase
+        </ThemedText>
+        <ThemedText
+          style={[styles.tagline, { color: theme.textSecondary }]}
+        >
+          Home services, simplified.
+        </ThemedText>
+      </Animated.View>
+
+      <Animated.View
+        style={[
+          styles.ctaArea,
+          {
+            opacity: ctaOpacity,
+            paddingHorizontal: horizontalPadding,
+            paddingBottom: insets.bottom + Spacing.lg,
+          },
+        ]}
+      >
+        <Pressable
+          onPress={goNext}
+          style={({ pressed }) => [
+            styles.primaryButton,
+            {
+              backgroundColor: Colors.accent,
+              transform: [{ scale: pressed ? 0.98 : 1 }],
+            },
+          ]}
+          testID="button-get-started"
+        >
+          <ThemedText style={styles.primaryButtonText}>Get started</ThemedText>
+        </Pressable>
+        <Pressable
+          onPress={goLogin}
+          style={({ pressed }) => [
+            styles.loginButton,
+            {
+              backgroundColor: isDark
+                ? "rgba(255,255,255,0.06)"
+                : "rgba(0,0,0,0.04)",
+              borderColor: isDark
+                ? "rgba(255,255,255,0.10)"
+                : "rgba(0,0,0,0.08)",
+              transform: [{ scale: pressed ? 0.98 : 1 }],
+            },
+          ]}
+          testID="button-first-launch-login"
+        >
+          <Feather name="log-in" size={18} color={Colors.accent} />
+          <ThemedText
+            style={[styles.loginButtonText, { color: Colors.accent }]}
+          >
+            Log in
+          </ThemedText>
+        </Pressable>
       </Animated.View>
     </View>
   );
@@ -79,11 +157,55 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "space-between",
+    paddingTop: 120,
   },
   logoContainer: {
     alignItems: "center",
     justifyContent: "center",
+    flex: 1,
+  },
+  brand: {
+    fontSize: 28,
+    fontWeight: "700",
+    letterSpacing: -0.4,
+    marginTop: Spacing.lg,
+  },
+  tagline: {
+    fontSize: 15,
+    marginTop: 6,
+  },
+  ctaArea: {
+    width: "100%",
+    gap: Spacing.sm,
+  },
+  primaryButton: {
+    width: "100%",
+    paddingVertical: 16,
+    borderRadius: BorderRadius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 17,
+    fontWeight: "600",
+    letterSpacing: -0.2,
+  },
+  loginButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    width: "100%",
+    paddingVertical: 14,
+    borderRadius: BorderRadius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  loginButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    letterSpacing: -0.2,
   },
   logoRing: {
     width: 120,

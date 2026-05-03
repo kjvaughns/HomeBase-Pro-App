@@ -1422,6 +1422,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
             newService = svc;
           }
 
+          // 3b. Create a default booking link so the provider has a shareable
+          //     URL the moment onboarding completes (Task #298).
+          const slugBase = (businessName || "pro")
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "")
+            .slice(0, 40) || "pro";
+          const slugSuffix = Math.random().toString(36).slice(2, 8);
+          await tx.insert(bookingLinks).values({
+            providerId: newProvider.id,
+            slug: `${slugBase}-${slugSuffix}`,
+            status: "active",
+            isActive: true,
+            instantBooking: false,
+            showPricing: true,
+          });
+
           // 4. Seed 5 default message templates so the provider has a starting
           //    point for client-facing comms (Settings → Message Templates).
           await tx.insert(messageTemplates).values([

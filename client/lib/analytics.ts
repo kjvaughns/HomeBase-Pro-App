@@ -47,7 +47,9 @@ export function resetAnalytics() {
 }
 
 export const AnalyticsEvents = {
+  SignupStarted: "signup_started",
   SignupCompleted: "signup_completed",
   BookingCreated: "booking_created",
   InvoicePaid: "invoice_paid",
+  ProviderFirstBookingLinkReady: "provider_first_booking_link_ready",
 } as const;

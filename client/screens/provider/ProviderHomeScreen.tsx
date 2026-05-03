@@ -308,8 +308,25 @@ export default function ProviderHomeScreen() {
     },
   });
   const hasServices = (providerProfile?.services?.length ?? 0) > 0;
+  const hasMultipleServices = (providerProfile?.services?.length ?? 0) > 1;
   const hasClients = clients.length > 0;
   const hasBookingLink = (bookingLinksData?.bookingLinks?.length ?? 0) > 0;
+  const providerRecord = freshProviderData?.provider;
+  const hasBio = !!(providerRecord?.description?.trim?.());
+  const businessHoursValue = providerRecord?.businessHours;
+  const hasBusinessHours =
+    !!businessHoursValue &&
+    typeof businessHoursValue === "object" &&
+    Object.values(businessHoursValue as Record<string, any>).some(
+      (d) => d && (d as any).enabled,
+    );
+  const bookingPolicies = providerRecord?.bookingPolicies as
+    | { instantBooking?: boolean; depositRequired?: boolean }
+    | undefined;
+  const hasCustomPolicies =
+    !!bookingPolicies &&
+    (bookingPolicies.instantBooking === true ||
+      bookingPolicies.depositRequired === true);
 
   const allGettingStartedSteps = [
     {
@@ -338,11 +355,44 @@ export default function ProviderHomeScreen() {
     },
     {
       key: "booking",
-      label: "Create a booking link",
-      subtitle: "Let clients book you online",
+      label: "Share your booking link",
+      subtitle: "Send clients a link to book online",
       icon: "link" as const,
       done: hasBookingLink,
       onPress: () => navigation.navigate("MoreTab"),
+    },
+    {
+      key: "bio",
+      label: "Polish your bio",
+      subtitle: "AI can draft one in seconds",
+      icon: "edit-3" as const,
+      done: hasBio,
+      onPress: () => navigation.navigate("BusinessHub"),
+    },
+    {
+      key: "hours",
+      label: "Set your business hours",
+      subtitle: "Tell clients when you're available",
+      icon: "clock" as const,
+      done: hasBusinessHours,
+      onPress: () => navigation.navigate("BusinessHub"),
+    },
+    {
+      key: "policies",
+      label: "Booking policies & deposits",
+      subtitle: "Optional — instant booking, deposits, cancellations",
+      icon: "shield" as const,
+      done: hasCustomPolicies,
+      onPress: () => navigation.navigate("BusinessHub"),
+    },
+    {
+      key: "more-services",
+      label: "Add more services",
+      subtitle: "AI service blueprint can scaffold the next one",
+      icon: "plus-circle" as const,
+      done: hasMultipleServices,
+      onPress: () =>
+        navigation.navigate("NewService", { onboardingMode: false }),
     },
   ];
 
