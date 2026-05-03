@@ -48,6 +48,7 @@ import AddInvoiceScreen from "@/screens/provider/AddInvoiceScreen";
 import InvoiceDetailScreen from "@/screens/provider/InvoiceDetailScreen";
 import EstimatesListScreen from "@/screens/provider/EstimatesListScreen";
 import AddEstimateScreen from "@/screens/provider/AddEstimateScreen";
+import QuickQuoteScreen from "@/screens/provider/QuickQuoteScreen";
 import EstimateDetailScreen from "@/screens/provider/EstimateDetailScreen";
 import ServicesScreen from "@/screens/provider/ServicesScreen";
 import ServiceBlueprintWizardScreen from "@/screens/provider/ServiceBlueprintWizardScreen";
@@ -152,7 +153,14 @@ export type RootStackParamList = {
   AddInvoice: { clientId?: string } | undefined;
   InvoiceDetail: { invoiceId: string };
   EstimatesList: undefined;
-  AddEstimate: { clientId?: string } | undefined;
+  AddEstimate:
+    | {
+        clientId?: string;
+        prefillItems?: { description: string; qty: string; unitPrice: string }[];
+        prefillNotes?: string;
+      }
+    | undefined;
+  QuickQuote: undefined;
   EstimateDetail: { estimateId: string };
   Services: undefined;
   NewService: { onboardingMode?: boolean } | undefined;
@@ -521,6 +529,11 @@ export default function RootStackNavigator() {
         name="AddEstimate"
         component={AddEstimateScreen}
         options={{ headerTitle: "New Estimate" }}
+      />
+      <Stack.Screen
+        name="QuickQuote"
+        component={QuickQuoteScreen}
+        options={{ headerTitle: "Quick Quote" }}
       />
       <Stack.Screen
         name="EstimateDetail"

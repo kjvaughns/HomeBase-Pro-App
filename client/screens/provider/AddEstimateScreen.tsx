@@ -66,7 +66,12 @@ export default function AddEstimateScreen() {
   const { theme } = useTheme();
 
   const providerId = providerProfile?.id;
-  const preselectedClientId = (route.params as any)?.clientId as string | undefined;
+  const params = (route.params ?? {}) as {
+    clientId?: string;
+    prefillItems?: { description: string; qty: string; unitPrice: string }[];
+    prefillNotes?: string;
+  };
+  const preselectedClientId = params.clientId;
 
   const { data: clientsData } = useQuery<{ clients: Client[] }>({
     queryKey: ["/api/provider", providerId, "clients"],
@@ -77,8 +82,12 @@ export default function AddEstimateScreen() {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(
     preselectedClientId || null,
   );
-  const [lineItems, setLineItems] = useState<LineItem[]>([newLineItem()]);
-  const [notes, setNotes] = useState("");
+  const [lineItems, setLineItems] = useState<LineItem[]>(
+    params.prefillItems && params.prefillItems.length > 0
+      ? params.prefillItems.map((it) => ({ key: Math.random().toString(36).slice(2), ...it }))
+      : [newLineItem()],
+  );
+  const [notes, setNotes] = useState(params.prefillNotes ?? "");
   const [expiresAt, setExpiresAt] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);

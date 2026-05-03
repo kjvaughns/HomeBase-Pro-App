@@ -186,6 +186,22 @@ export default function ProviderHomeScreen() {
 
   const providerId = providerProfile?.id;
 
+  const { data: quickQuotesData } = useQuery<{
+    quotes: {
+      id: string;
+      address: string;
+      formattedAddress?: string | null;
+      serviceName: string;
+      finalPrice: string;
+      status: string;
+      createdAt: string;
+    }[];
+  }>({
+    queryKey: ["/api/provider", providerId, "quick-quotes"],
+    enabled: !!providerId,
+  });
+  const recentQuickQuotes = (quickQuotesData?.quotes ?? []).slice(0, 3);
+
   // Auto-recover: if providerProfile is null in the store, try fetching from API
   const { data: fetchedProviderData, isLoading: profileLoading } = useQuery<{ provider: any }>({
     queryKey: ["/api/provider/user", user?.id],
@@ -924,6 +940,68 @@ export default function ProviderHomeScreen() {
         </Animated.View>
 
         <Animated.View
+          entering={FadeInDown.delay(inProgressJobs.length > 0 ? 450 : 350).duration(400)}
+        >
+          <Pressable
+            style={[
+              styles.quickQuoteCta,
+              { backgroundColor: Colors.accentLight, borderColor: Colors.accent + "40" },
+            ]}
+            onPress={() => navigation.navigate("QuickQuote")}
+            testID="button-home-quick-quote"
+          >
+            <View style={[styles.quickQuoteIcon, { backgroundColor: Colors.accent }]}>
+              <Feather name="zap" size={16} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <ThemedText style={{ fontWeight: "700", color: Colors.accent }}>
+                Quick Quote
+              </ThemedText>
+              <ThemedText style={{ color: theme.textSecondary, fontSize: 12 }}>
+                Get an instant price from just an address
+              </ThemedText>
+            </View>
+            <Feather name="chevron-right" size={18} color={Colors.accent} />
+          </Pressable>
+        </Animated.View>
+
+        {recentQuickQuotes.length > 0 ? (
+          <Animated.View
+            entering={FadeInDown.delay(inProgressJobs.length > 0 ? 475 : 375).duration(400)}
+          >
+            <SectionHeader
+              title="Recent Quotes"
+              actionLabel="New Quote"
+              onAction={() => navigation.navigate("QuickQuote")}
+            />
+            {recentQuickQuotes.map((q) => (
+              <Pressable
+                key={q.id}
+                onPress={() => navigation.navigate("QuickQuote")}
+                testID={`home-quote-${q.id}`}
+              >
+                <GlassCard style={styles.recentQuoteCard}>
+                  <View style={{ flex: 1 }}>
+                    <ThemedText style={{ fontWeight: "600" }} numberOfLines={1}>
+                      {q.serviceName}
+                    </ThemedText>
+                    <ThemedText
+                      style={{ color: theme.textSecondary, fontSize: 12 }}
+                      numberOfLines={1}
+                    >
+                      {q.formattedAddress || q.address}
+                    </ThemedText>
+                  </View>
+                  <ThemedText style={{ color: Colors.accent, fontWeight: "700" }}>
+                    ${Math.round(parseFloat(q.finalPrice)).toLocaleString()}
+                  </ThemedText>
+                </GlassCard>
+              </Pressable>
+            ))}
+          </Animated.View>
+        ) : null}
+
+        <Animated.View
           entering={FadeInDown.delay(inProgressJobs.length > 0 ? 500 : 400).duration(400)}
         >
           <SectionHeader
@@ -977,6 +1055,30 @@ export default function ProviderHomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  quickQuoteCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  quickQuoteIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  recentQuoteCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
   container: {
     flex: 1,
   },

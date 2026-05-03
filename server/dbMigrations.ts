@@ -278,6 +278,37 @@ export async function runBootMigrations(): Promise<void> {
       )
     `);
 
+    // ── quick_quotes (Task #300): provider-initiated AI quotes from address ─
+    await runSql("table.quick_quotes", `
+      CREATE TABLE IF NOT EXISTS quick_quotes (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+        provider_id VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+        address TEXT NOT NULL,
+        formatted_address TEXT,
+        place_id TEXT,
+        latitude DECIMAL(10,7),
+        longitude DECIMAL(10,7),
+        lot_size INTEGER,
+        square_feet INTEGER,
+        custom_service_id VARCHAR REFERENCES provider_custom_services(id) ON DELETE SET NULL,
+        service_name TEXT NOT NULL,
+        low_price DECIMAL(10,2) NOT NULL,
+        mid_price DECIMAL(10,2) NOT NULL,
+        high_price DECIMAL(10,2) NOT NULL,
+        final_price DECIMAL(10,2) NOT NULL,
+        pricing_basis TEXT,
+        ai_insight TEXT,
+        notes TEXT,
+        sent_via TEXT,
+        status TEXT NOT NULL DEFAULT 'draft',
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+    await runSql("quick_quotes.provider_id_idx", `
+      CREATE INDEX IF NOT EXISTS quick_quotes_provider_id_idx
+        ON quick_quotes (provider_id, created_at DESC)
+    `);
+
     // ── support_tickets ───────────────────────────────────────────────────
     await runSql("table.support_tickets", `
       CREATE TABLE IF NOT EXISTS support_tickets (

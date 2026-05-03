@@ -46,10 +46,47 @@ interface HouseFaxEnrichmentResult {
   errors?: string[];
 }
 
+// In-memory cache for Zillow lookups, keyed by normalized address.
+// TTL is 24h — property data rarely changes day-to-day, and this avoids
+// repeated RapidAPI calls when a provider quotes the same address twice.
+const ZILLOW_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const ZILLOW_CACHE_MAX_ENTRIES = 500;
+const zillowCache = new Map<string, { value: ZillowPropertyData | null; expires: number }>();
+
+function normalizeAddressKey(address: string): string {
+  return address.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function readZillowCache(address: string): ZillowPropertyData | null | undefined {
+  const key = normalizeAddressKey(address);
+  const hit = zillowCache.get(key);
+  if (!hit) return undefined;
+  if (hit.expires < Date.now()) {
+    zillowCache.delete(key);
+    return undefined;
+  }
+  return hit.value;
+}
+
+function writeZillowCache(address: string, value: ZillowPropertyData | null): void {
+  const key = normalizeAddressKey(address);
+  if (zillowCache.size >= ZILLOW_CACHE_MAX_ENTRIES) {
+    const oldest = zillowCache.keys().next().value;
+    if (oldest) zillowCache.delete(oldest);
+  }
+  zillowCache.set(key, { value, expires: Date.now() + ZILLOW_CACHE_TTL_MS });
+}
+
 // Zillow API via RapidAPI - using Real Estate 101 property-details endpoint
 export async function fetchZillowPropertyData(address: string): Promise<ZillowPropertyData | null> {
+  const cached = readZillowCache(address);
+  if (cached !== undefined) {
+    console.log('Zillow cache HIT for:', address);
+    return cached;
+  }
+
   const rapidApiKey = process.env.RAPIDAPI_KEY;
-  
+
   if (!rapidApiKey) {
     console.error('RAPIDAPI_KEY not configured');
     return null;
@@ -78,6 +115,7 @@ export async function fetchZillowPropertyData(address: string): Promise<ZillowPr
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Zillow API failed:', response.status, errorText);
+      writeZillowCache(address, null);
       return null;
     }
 
@@ -95,6 +133,7 @@ export async function fetchZillowPropertyData(address: string): Promise<ZillowPr
     
     if (!property || typeof property !== 'object') {
       console.log('Invalid property data structure for:', address);
+      writeZillowCache(address, null);
       return null;
     }
 
@@ -125,7 +164,7 @@ export async function fetchZillowPropertyData(address: string): Promise<ZillowPr
       lotSizeValue = property.lotSize || property.lotAreaValue || property.lotSqft;
     }
 
-    return {
+    const result: ZillowPropertyData = {
       zpid: String(property.zpid || property.zillowId || property.id || ''),
       address: addressStr,
       bedrooms: property.bedrooms || property.beds || property.bedroomCount,
@@ -141,6 +180,8 @@ export async function fetchZillowPropertyData(address: string): Promise<ZillowPr
       homeStatus: property.homeStatus || property.status,
       url: property.url || property.hdpUrl || property.zillowUrl
     };
+    writeZillowCache(address, result);
+    return result;
 
   } catch (error) {
     console.error('Zillow API error:', error);

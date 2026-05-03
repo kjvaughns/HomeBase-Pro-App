@@ -1982,3 +1982,55 @@ export const insertSupportTicketSchema = createInsertSchema(
 
 export type SupportTicket = typeof supportTickets.$inferSelect;
 export type InsertSupportTicket = z.infer<typeof insertSupportTicketSchema>;
+
+// ─── Quick Quotes (Task #300) ─────────────────────────────────────────────────
+
+export const quickQuotes = pgTable("quick_quotes", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  address: text("address").notNull(),
+  formattedAddress: text("formatted_address"),
+  placeId: text("place_id"),
+  latitude: decimal("latitude", { precision: 10, scale: 7 }),
+  longitude: decimal("longitude", { precision: 10, scale: 7 }),
+  lotSize: integer("lot_size"),
+  squareFeet: integer("square_feet"),
+  customServiceId: varchar("custom_service_id").references(
+    () => providerCustomServices.id,
+    { onDelete: "set null" },
+  ),
+  serviceName: text("service_name").notNull(),
+  lowPrice: decimal("low_price", { precision: 10, scale: 2 }).notNull(),
+  midPrice: decimal("mid_price", { precision: 10, scale: 2 }).notNull(),
+  highPrice: decimal("high_price", { precision: 10, scale: 2 }).notNull(),
+  finalPrice: decimal("final_price", { precision: 10, scale: 2 }).notNull(),
+  pricingBasis: text("pricing_basis"),
+  aiInsight: text("ai_insight"),
+  notes: text("notes"),
+  sentVia: text("sent_via"),
+  status: text("status").notNull().default("draft"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const quickQuotesRelations = relations(quickQuotes, ({ one }) => ({
+  provider: one(providers, {
+    fields: [quickQuotes.providerId],
+    references: [providers.id],
+  }),
+  customService: one(providerCustomServices, {
+    fields: [quickQuotes.customServiceId],
+    references: [providerCustomServices.id],
+  }),
+}));
+
+export const insertQuickQuoteSchema = createInsertSchema(quickQuotes).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type QuickQuote = typeof quickQuotes.$inferSelect;
+export type InsertQuickQuote = z.infer<typeof insertQuickQuoteSchema>;

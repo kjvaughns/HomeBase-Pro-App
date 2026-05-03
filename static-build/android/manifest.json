@@ -1,11 +1,11 @@
 {
-  "id": "0805bc7b-0940-43b0-aa49-6327a5d31aac",
-  "createdAt": "2026-05-03T02:27:36.207Z",
+  "id": "187244d8-6eef-4018-9429-67f6bef4cfe6",
+  "createdAt": "2026-05-03T04:15:23.204Z",
   "runtimeVersion": "1.1.0",
   "launchAsset": {
-    "key": "bundle-1777775256207-34927",
+    "key": "bundle-1777781723204-4860",
     "contentType": "application/javascript",
-    "url": "https://71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo.spock.replit.dev/1777775256207-34927/_expo/static/js/android/bundle.js"
+    "url": "https://71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo-97bmg21e.spock.replit.dev/1777781723204-4860/_expo/static/js/android/bundle.js"
   },
   "assets": [],
   "metadata": {},
@@ -161,7 +161,7 @@
         "adaptiveIcon": {
           "backgroundColor": "#38AE5F",
           "foregroundImage": "./assets/images/icon.png",
-          "foregroundImageUrl": "http://71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo.spock.replit.dev/assets/./assets/images/icon.png"
+          "foregroundImageUrl": "http://71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo-97bmg21e.spock.replit.dev/assets/./assets/images/icon.png"
         },
         "edgeToEdgeEnabled": true,
         "predictiveBackGestureEnabled": false,
@@ -274,11 +274,11 @@
         "android",
         "web"
       ],
-      "iconUrl": "http://71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo.spock.replit.dev/assets/./assets/images/icon.png",
-      "hostUri": "71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo.spock.replit.dev/android"
+      "iconUrl": "http://71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo-97bmg21e.spock.replit.dev/assets/./assets/images/icon.png",
+      "hostUri": "71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo-97bmg21e.spock.replit.dev/android"
     },
     "expoGo": {
-      "debuggerHost": "71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo.spock.replit.dev/android",
+      "debuggerHost": "71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo-97bmg21e.spock.replit.dev/android",
       "developer": {
         "tool": "expo-cli",
         "projectRoot": "/home/runner/workspace"
@@ -288,6 +288,6 @@
       },
       "mainModuleName": "client/index"
     },
-    "scopeKey": "@anonymous/homebase-e77d15e7-bf14-4691-9d6a-3af8fdcc414c"
+    "scopeKey": "@anonymous/homebase-4c298f46-985a-4d15-80d6-6787afd2533a"
   }
 }

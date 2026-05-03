@@ -60,6 +60,15 @@ export default function ProviderFAB() {
       },
     },
     {
+      id: "quote",
+      label: "Quick Quote",
+      icon: "zap",
+      onPress: () => {
+        handleClose();
+        navigation.navigate("QuickQuote");
+      },
+    },
+    {
       id: "invoice",
       label: "Invoice",
       icon: "file-text",

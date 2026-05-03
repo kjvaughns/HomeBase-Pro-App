@@ -130,6 +130,7 @@ import {
   pushTokens,
   notificationPreferences,
   housefaxEntries,
+  quickQuotes,
   supportTickets,
   savedProviders,
   reviewReports,
@@ -148,6 +149,11 @@ import {
   type JobInput,
   type RoutePoint,
 } from "./routeOptimizationService";
+import {
+  computeQuoteRange,
+  generatePricingInsight,
+  type CustomServiceLite,
+} from "./quickQuoteService";
 
 import { generateToken, authenticateJWT } from "./auth";
 const BCRYPT_SALT_ROUNDS = 10;
@@ -16724,6 +16730,256 @@ Respond with JSON only:
       res.status(500).json({ error: "Failed to submit support ticket" });
     }
   });
+
+  // ============ QUICK QUOTES (Task #300) ============
+  // Provider-initiated quote generator. Given an address + a custom service,
+  // compute a low/mid/high price range from the service's pricing rules and
+  // (optionally) lot size from HouseFax enrichment. Quotes are persisted so
+  // the provider can see a "Recent quotes" list on home screen.
+
+  app.post(
+    "/api/provider/:providerId/quick-quotes/preview",
+    requireAuth,
+    async (req: Request<ProviderIdParams>, res: Response) => {
+      try {
+        if (!(await assertProviderOwnership(req, req.params.providerId, res)))
+          return;
+
+        const { address, customServiceId } = req.body as {
+          address?: string;
+          customServiceId?: string;
+        };
+        if (!address || !customServiceId) {
+          return res
+            .status(400)
+            .json({ error: "address and customServiceId are required" });
+        }
+
+        const [service] = await db
+          .select()
+          .from(providerCustomServices)
+          .where(eq(providerCustomServices.id, customServiceId));
+        if (!service) {
+          return res.status(404).json({ error: "Service not found" });
+        }
+        if (service.providerId !== req.params.providerId) {
+          return res.status(403).json({ error: "Forbidden" });
+        }
+
+        // Best-effort enrichment — tolerate failure so a quote can still be
+        // produced when Zillow/Google are down or the address is unmappable.
+        // Caller may also pass overrideLotSize / overrideSquareFeet for the
+        // manual-entry fallback when no enrichment data is available.
+        const overrideLot = Number((req.body as { overrideLotSize?: unknown }).overrideLotSize);
+        const overrideSqft = Number((req.body as { overrideSquareFeet?: unknown }).overrideSquareFeet);
+        type Enrichment = {
+          zillow?: {
+            lotSize?: number;
+            livingArea?: number;
+            bedrooms?: number;
+            bathrooms?: number;
+            yearBuilt?: number;
+            propertyType?: string;
+          };
+          google?: { formattedAddress?: string; placeId?: string; latitude?: number; longitude?: number };
+        };
+        let enrichment: Enrichment | null = null;
+        try {
+          enrichment = (await enrichPropertyData(address)) as Enrichment;
+        } catch (err) {
+          console.warn(
+            "[quick-quotes] enrichment failed:",
+            err instanceof Error ? err.message : err,
+          );
+        }
+        const zillow = enrichment?.zillow ?? {};
+        const google = enrichment?.google ?? {};
+        const lotSize: number | null = Number.isFinite(overrideLot) && overrideLot > 0
+          ? overrideLot
+          : typeof zillow.lotSize === "number" ? zillow.lotSize : null;
+        const livingSqft: number | null = Number.isFinite(overrideSqft) && overrideSqft > 0
+          ? overrideSqft
+          : typeof zillow.livingArea === "number" ? zillow.livingArea : null;
+
+        const lite: CustomServiceLite = {
+          id: service.id,
+          name: service.name,
+          category: service.category,
+          pricingType: service.pricingType as CustomServiceLite["pricingType"],
+          basePrice: service.basePrice,
+          priceFrom: service.priceFrom,
+          priceTo: service.priceTo,
+          priceTiersJson: service.priceTiersJson,
+          duration: service.duration,
+        };
+        const range = computeQuoteRange(lite, lotSize, livingSqft);
+        const insight = await generatePricingInsight({
+          serviceName: service.name,
+          category: service.category,
+          lotSizeSqft: lotSize,
+          livingSqft,
+          range,
+          property: {
+            bedrooms: zillow.bedrooms ?? null,
+            bathrooms: zillow.bathrooms ?? null,
+            yearBuilt: zillow.yearBuilt ?? null,
+            propertyType: zillow.propertyType ?? null,
+          },
+        });
+
+        res.json({
+          formattedAddress: google.formattedAddress ?? address,
+          placeId: google.placeId ?? null,
+          latitude: google.latitude ?? null,
+          longitude: google.longitude ?? null,
+          lotSize,
+          squareFeet: livingSqft,
+          service: {
+            id: service.id,
+            name: service.name,
+            category: service.category,
+            pricingType: service.pricingType,
+          },
+          range,
+          aiInsight: insight,
+        });
+      } catch (error) {
+        console.error("Quick quote preview error:", error);
+        res.status(500).json({ error: "Failed to generate quote" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/provider/:providerId/quick-quotes",
+    requireAuth,
+    async (req: Request<ProviderIdParams>, res: Response) => {
+      try {
+        if (!(await assertProviderOwnership(req, req.params.providerId, res)))
+          return;
+        const rows = await db
+          .select()
+          .from(quickQuotes)
+          .where(eq(quickQuotes.providerId, req.params.providerId))
+          .orderBy(desc(quickQuotes.createdAt))
+          .limit(50);
+        res.json({ quotes: rows });
+      } catch (error) {
+        console.error("List quick quotes error:", error);
+        res.status(500).json({ error: "Failed to list quotes" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/provider/:providerId/quick-quotes",
+    requireAuth,
+    async (req: Request<ProviderIdParams>, res: Response) => {
+      try {
+        if (!(await assertProviderOwnership(req, req.params.providerId, res)))
+          return;
+
+        const {
+          address,
+          formattedAddress,
+          placeId,
+          latitude,
+          longitude,
+          lotSize,
+          squareFeet,
+          customServiceId,
+          serviceName,
+          lowPrice,
+          midPrice,
+          highPrice,
+          finalPrice,
+          pricingBasis,
+          aiInsight,
+          notes,
+          sentVia,
+          status,
+        } = req.body ?? {};
+
+        if (!address || !serviceName) {
+          return res
+            .status(400)
+            .json({ error: "address and serviceName are required" });
+        }
+        // Verify the customServiceId (if supplied) belongs to this provider so
+        // a caller can't store a quote referencing another provider's service.
+        if (customServiceId) {
+          const [svc] = await db
+            .select({ providerId: providerCustomServices.providerId })
+            .from(providerCustomServices)
+            .where(eq(providerCustomServices.id, String(customServiceId)));
+          if (!svc) return res.status(404).json({ error: "Service not found" });
+          if (svc.providerId !== req.params.providerId) {
+            return res.status(403).json({ error: "Forbidden" });
+          }
+        }
+        const lp = parseFloat(String(lowPrice ?? 0));
+        const mp = parseFloat(String(midPrice ?? 0));
+        const hp = parseFloat(String(highPrice ?? 0));
+        const fp = parseFloat(String(finalPrice ?? mp));
+        if (![lp, mp, hp, fp].every((n) => Number.isFinite(n) && n >= 0)) {
+          return res.status(400).json({ error: "Invalid price values" });
+        }
+
+        const [row] = await db
+          .insert(quickQuotes)
+          .values({
+            providerId: req.params.providerId,
+            address: String(address),
+            formattedAddress: formattedAddress ?? null,
+            placeId: placeId ?? null,
+            latitude: latitude != null ? String(latitude) : null,
+            longitude: longitude != null ? String(longitude) : null,
+            lotSize: typeof lotSize === "number" ? lotSize : null,
+            squareFeet: typeof squareFeet === "number" ? squareFeet : null,
+            customServiceId: customServiceId ?? null,
+            serviceName: String(serviceName),
+            lowPrice: lp.toFixed(2),
+            midPrice: mp.toFixed(2),
+            highPrice: hp.toFixed(2),
+            finalPrice: fp.toFixed(2),
+            pricingBasis: pricingBasis ?? null,
+            aiInsight: aiInsight ?? null,
+            notes: notes ?? null,
+            sentVia: sentVia ?? null,
+            status: status ?? "draft",
+          })
+          .returning();
+        res.status(201).json({ quote: row });
+      } catch (error) {
+        console.error("Create quick quote error:", error);
+        res.status(500).json({ error: "Failed to save quote" });
+      }
+    },
+  );
+
+  app.delete(
+    "/api/provider/:providerId/quick-quotes/:id",
+    requireAuth,
+    async (req: Request<ProviderIdParams & IdParams>, res: Response) => {
+      try {
+        if (!(await assertProviderOwnership(req, req.params.providerId, res)))
+          return;
+        const [row] = await db
+          .select({ id: quickQuotes.id, providerId: quickQuotes.providerId })
+          .from(quickQuotes)
+          .where(eq(quickQuotes.id, req.params.id));
+        if (!row) return res.status(404).json({ error: "Quote not found" });
+        if (row.providerId !== req.params.providerId) {
+          return res.status(403).json({ error: "Forbidden" });
+        }
+        await db.delete(quickQuotes).where(eq(quickQuotes.id, req.params.id));
+        res.json({ success: true });
+      } catch (error) {
+        console.error("Delete quick quote error:", error);
+        res.status(500).json({ error: "Failed to delete quote" });
+      }
+    },
+  );
 
   const httpServer = createServer(app);
 

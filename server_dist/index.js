@@ -64,6 +64,7 @@ __export(schema_exports, {
   insertProviderMessageSchema: () => insertProviderMessageSchema,
   insertProviderPlanSchema: () => insertProviderPlanSchema,
   insertProviderSchema: () => insertProviderSchema,
+  insertQuickQuoteSchema: () => insertQuickQuoteSchema,
   insertStripeConnectAccountSchema: () => insertStripeConnectAccountSchema,
   insertSupportTicketSchema: () => insertSupportTicketSchema,
   insertUserCreditsSchema: () => insertUserCreditsSchema,
@@ -118,6 +119,8 @@ __export(schema_exports, {
   providers: () => providers,
   providersRelations: () => providersRelations,
   pushTokens: () => pushTokens,
+  quickQuotes: () => quickQuotes,
+  quickQuotesRelations: () => quickQuotesRelations,
   quoteModeEnum: () => quoteModeEnum,
   refundStatusEnum: () => refundStatusEnum,
   refunds: () => refunds,
@@ -159,7 +162,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-var propertyTypeEnum, appointmentStatusEnum, urgencyEnum, jobSizeEnum, jobStatusEnum, invoiceStatusEnum, estimateStatusEnum, paymentMethodEnum, paymentStatusEnum, payoutStatusEnum, connectOnboardingStatusEnum, providerPlanTierEnum, users, usersRelations, homes, homesRelations, serviceCategories, serviceCategoriesRelations, services, servicesRelations, providers, providersRelations, crewMembers, crewMembersRelations, providerServices, providerServicesRelations, pricingTypeEnum, providerCustomServices, providerCustomServicesRelations, insertProviderCustomServiceSchema, appointments, appointmentsRelations, reviews, reviewsRelations, savedProviders, savedProvidersRelations, reviewReports, reviewReportsRelations, notifications, notificationsRelations, maintenanceReminderFrequencyEnum, maintenanceReminders, maintenanceRemindersRelations, providerPlans2, providerPlansRelations, stripeConnectAccounts, stripeConnectAccountsRelations, userCredits, userCreditsRelations, creditLedger, creditLedgerRelations, payouts, payoutsRelations, refundStatusEnum, refunds, refundsRelations, stripeWebhookEvents, invoiceLineItems, estimateLineItems, invoiceLineItemsRelations, clients, clientsRelations, jobs, jobsRelations, jobSeries, jobSeriesRelations, invoices, invoicesRelations, estimates, estimatesRelations, estimateLineItemsRelations, payments, paymentsRelations, bookingLinkStatusEnum, quoteModeEnum, intakeStatusEnum, bookingLinks, bookingLinksRelations, intakeSubmissions, intakeSubmissionsRelations, insertUserSchema, loginSchema, insertHomeSchema, homeProfileUpdateSchema, homeFieldChanges, homeFieldChangesRelations, insertAppointmentSchema, insertClientSchema, insertJobSchema, insertInvoiceSchema, insertPaymentSchema, insertProviderSchema, insertProviderPlanSchema, insertStripeConnectAccountSchema, insertInvoiceLineItemSchema, insertEstimateSchema, insertEstimateLineItemSchema, insertPayoutSchema, insertUserCreditsSchema, insertCreditLedgerSchema, insertCrewMemberSchema, insertBookingLinkSchema, insertIntakeSubmissionSchema, notificationChannelEnum, notificationDeliveryStatusEnum, pushTokens, notificationPreferences, notificationDeliveries, messageChannelEnum, messageStatusEnum, providerMessages, providerMessagesRelations, insertProviderMessageSchema, messageTemplates, messageTemplatesRelations, insertMessageTemplateSchema, leads, insertLeadSchema, insertNotificationPreferenceSchema, housefaxEntries, housefaxEntriesRelations, insertHousefaxEntrySchema, supportTickets, supportTicketsRelations, insertSupportTicketSchema;
+var propertyTypeEnum, appointmentStatusEnum, urgencyEnum, jobSizeEnum, jobStatusEnum, invoiceStatusEnum, estimateStatusEnum, paymentMethodEnum, paymentStatusEnum, payoutStatusEnum, connectOnboardingStatusEnum, providerPlanTierEnum, users, usersRelations, homes, homesRelations, serviceCategories, serviceCategoriesRelations, services, servicesRelations, providers, providersRelations, crewMembers, crewMembersRelations, providerServices, providerServicesRelations, pricingTypeEnum, providerCustomServices, providerCustomServicesRelations, insertProviderCustomServiceSchema, appointments, appointmentsRelations, reviews, reviewsRelations, savedProviders, savedProvidersRelations, reviewReports, reviewReportsRelations, notifications, notificationsRelations, maintenanceReminderFrequencyEnum, maintenanceReminders, maintenanceRemindersRelations, providerPlans2, providerPlansRelations, stripeConnectAccounts, stripeConnectAccountsRelations, userCredits, userCreditsRelations, creditLedger, creditLedgerRelations, payouts, payoutsRelations, refundStatusEnum, refunds, refundsRelations, stripeWebhookEvents, invoiceLineItems, estimateLineItems, invoiceLineItemsRelations, clients, clientsRelations, jobs, jobsRelations, jobSeries, jobSeriesRelations, invoices, invoicesRelations, estimates, estimatesRelations, estimateLineItemsRelations, payments, paymentsRelations, bookingLinkStatusEnum, quoteModeEnum, intakeStatusEnum, bookingLinks, bookingLinksRelations, intakeSubmissions, intakeSubmissionsRelations, insertUserSchema, loginSchema, insertHomeSchema, homeProfileUpdateSchema, homeFieldChanges, homeFieldChangesRelations, insertAppointmentSchema, insertClientSchema, insertJobSchema, insertInvoiceSchema, insertPaymentSchema, insertProviderSchema, insertProviderPlanSchema, insertStripeConnectAccountSchema, insertInvoiceLineItemSchema, insertEstimateSchema, insertEstimateLineItemSchema, insertPayoutSchema, insertUserCreditsSchema, insertCreditLedgerSchema, insertCrewMemberSchema, insertBookingLinkSchema, insertIntakeSubmissionSchema, notificationChannelEnum, notificationDeliveryStatusEnum, pushTokens, notificationPreferences, notificationDeliveries, messageChannelEnum, messageStatusEnum, providerMessages, providerMessagesRelations, insertProviderMessageSchema, messageTemplates, messageTemplatesRelations, insertMessageTemplateSchema, leads, insertLeadSchema, insertNotificationPreferenceSchema, housefaxEntries, housefaxEntriesRelations, insertHousefaxEntrySchema, supportTickets, supportTicketsRelations, insertSupportTicketSchema, quickQuotes, quickQuotesRelations, insertQuickQuoteSchema;
 var init_schema = __esm({
   "shared/schema.ts"() {
     "use strict";
@@ -1703,6 +1706,46 @@ var init_schema = __esm({
     insertSupportTicketSchema = createInsertSchema(
       supportTickets
     ).omit({
+      id: true,
+      createdAt: true
+    });
+    quickQuotes = pgTable("quick_quotes", {
+      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+      providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+      address: text("address").notNull(),
+      formattedAddress: text("formatted_address"),
+      placeId: text("place_id"),
+      latitude: decimal("latitude", { precision: 10, scale: 7 }),
+      longitude: decimal("longitude", { precision: 10, scale: 7 }),
+      lotSize: integer("lot_size"),
+      squareFeet: integer("square_feet"),
+      customServiceId: varchar("custom_service_id").references(
+        () => providerCustomServices.id,
+        { onDelete: "set null" }
+      ),
+      serviceName: text("service_name").notNull(),
+      lowPrice: decimal("low_price", { precision: 10, scale: 2 }).notNull(),
+      midPrice: decimal("mid_price", { precision: 10, scale: 2 }).notNull(),
+      highPrice: decimal("high_price", { precision: 10, scale: 2 }).notNull(),
+      finalPrice: decimal("final_price", { precision: 10, scale: 2 }).notNull(),
+      pricingBasis: text("pricing_basis"),
+      aiInsight: text("ai_insight"),
+      notes: text("notes"),
+      sentVia: text("sent_via"),
+      status: text("status").notNull().default("draft"),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    quickQuotesRelations = relations(quickQuotes, ({ one }) => ({
+      provider: one(providers, {
+        fields: [quickQuotes.providerId],
+        references: [providers.id]
+      }),
+      customService: one(providerCustomServices, {
+        fields: [quickQuotes.customServiceId],
+        references: [providerCustomServices.id]
+      })
+    }));
+    insertQuickQuoteSchema = createInsertSchema(quickQuotes).omit({
       id: true,
       createdAt: true
     });
@@ -8825,7 +8868,36 @@ function haversineMiles(aLat, aLng, bLat, bLng) {
 }
 
 // server/housefaxService.ts
+var ZILLOW_CACHE_TTL_MS = 24 * 60 * 60 * 1e3;
+var ZILLOW_CACHE_MAX_ENTRIES = 500;
+var zillowCache = /* @__PURE__ */ new Map();
+function normalizeAddressKey(address) {
+  return address.trim().toLowerCase().replace(/\s+/g, " ");
+}
+function readZillowCache(address) {
+  const key = normalizeAddressKey(address);
+  const hit = zillowCache.get(key);
+  if (!hit) return void 0;
+  if (hit.expires < Date.now()) {
+    zillowCache.delete(key);
+    return void 0;
+  }
+  return hit.value;
+}
+function writeZillowCache(address, value) {
+  const key = normalizeAddressKey(address);
+  if (zillowCache.size >= ZILLOW_CACHE_MAX_ENTRIES) {
+    const oldest = zillowCache.keys().next().value;
+    if (oldest) zillowCache.delete(oldest);
+  }
+  zillowCache.set(key, { value, expires: Date.now() + ZILLOW_CACHE_TTL_MS });
+}
 async function fetchZillowPropertyData(address) {
+  const cached = readZillowCache(address);
+  if (cached !== void 0) {
+    console.log("Zillow cache HIT for:", address);
+    return cached;
+  }
   const rapidApiKey = process.env.RAPIDAPI_KEY;
   if (!rapidApiKey) {
     console.error("RAPIDAPI_KEY not configured");
@@ -8845,6 +8917,7 @@ async function fetchZillowPropertyData(address) {
     if (!response.ok) {
       const errorText = await response.text();
       console.error("Zillow API failed:", response.status, errorText);
+      writeZillowCache(address, null);
       return null;
     }
     const data = await response.json();
@@ -8855,6 +8928,7 @@ async function fetchZillowPropertyData(address) {
     const property = data.property || data.data || data;
     if (!property || typeof property !== "object") {
       console.log("Invalid property data structure for:", address);
+      writeZillowCache(address, null);
       return null;
     }
     console.log("Zillow data received for property");
@@ -8877,7 +8951,7 @@ async function fetchZillowPropertyData(address) {
     } else {
       lotSizeValue = property.lotSize || property.lotAreaValue || property.lotSqft;
     }
-    return {
+    const result = {
       zpid: String(property.zpid || property.zillowId || property.id || ""),
       address: addressStr,
       bedrooms: property.bedrooms || property.beds || property.bedroomCount,
@@ -8893,6 +8967,8 @@ async function fetchZillowPropertyData(address) {
       homeStatus: property.homeStatus || property.status,
       url: property.url || property.hdpUrl || property.zillowUrl
     };
+    writeZillowCache(address, result);
+    return result;
   } catch (error) {
     console.error("Zillow API error:", error);
     return null;
@@ -9441,6 +9517,122 @@ async function buildRoute(opts) {
     totalMinutes,
     driveTimeSource: source
   };
+}
+
+// server/quickQuoteService.ts
+var DEFAULT_LOW_FACTOR = 0.85;
+var DEFAULT_HIGH_FACTOR = 1.2;
+function num(v) {
+  if (v == null) return null;
+  const n = typeof v === "number" ? v : parseFloat(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+function tierForSize(tiers, size) {
+  if (!size) return null;
+  for (const t of tiers) {
+    const min = t.minSqft ?? 0;
+    const max = t.maxSqft ?? Infinity;
+    if (size >= min && size <= max && num(t.price ?? null) != null) return t;
+  }
+  return null;
+}
+function parseTiers(json2) {
+  if (!json2) return [];
+  try {
+    const parsed = JSON.parse(json2);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+function computeQuoteRange(service, lotSizeSqft, livingSqft) {
+  const tiers = parseTiers(service.priceTiersJson);
+  const cat = (service.category || "").toLowerCase();
+  const isOutdoor = /lawn|yard|landscap|snow|tree|pool|exterior/.test(cat);
+  const sizeForTier = isOutdoor ? lotSizeSqft ?? livingSqft : livingSqft ?? lotSizeSqft;
+  const tier = tierForSize(tiers, sizeForTier);
+  if (tier && num(tier.price) != null) {
+    const mid = num(tier.price);
+    return {
+      low: Math.round(mid * DEFAULT_LOW_FACTOR),
+      mid: Math.round(mid),
+      high: Math.round(mid * DEFAULT_HIGH_FACTOR),
+      basis: `Tier "${tier.label ?? `${tier.minSqft ?? 0}-${tier.maxSqft ?? "+"} sqft`}"`
+    };
+  }
+  const from = num(service.priceFrom);
+  const to = num(service.priceTo);
+  if (from != null && to != null && to >= from) {
+    return {
+      low: Math.round(from),
+      mid: Math.round((from + to) / 2),
+      high: Math.round(to),
+      basis: "Service price range"
+    };
+  }
+  const base = num(service.basePrice);
+  if (base != null) {
+    if (isOutdoor && sizeForTier && sizeForTier > 0) {
+      const baseline = 5e3;
+      const ratio = Math.min(3, Math.max(0.5, sizeForTier / baseline));
+      const scaled = base * ratio;
+      return {
+        low: Math.round(scaled * DEFAULT_LOW_FACTOR),
+        mid: Math.round(scaled),
+        high: Math.round(scaled * DEFAULT_HIGH_FACTOR),
+        basis: `Base price scaled for ${sizeForTier.toLocaleString()} sqft`
+      };
+    }
+    return {
+      low: Math.round(base * DEFAULT_LOW_FACTOR),
+      mid: Math.round(base),
+      high: Math.round(base * DEFAULT_HIGH_FACTOR),
+      basis: service.pricingType === "hourly" ? "Hourly base rate" : "Base price"
+    };
+  }
+  const fallback = sizeForTier && sizeForTier > 0 ? Math.max(75, Math.round(sizeForTier * 0.04)) : 150;
+  return {
+    low: Math.round(fallback * DEFAULT_LOW_FACTOR),
+    mid: fallback,
+    high: Math.round(fallback * DEFAULT_HIGH_FACTOR),
+    basis: "Estimated \u2014 set a price on this service for sharper quotes"
+  };
+}
+async function generatePricingInsight(params) {
+  if (!openai.apiKey) return null;
+  const { serviceName, category, lotSizeSqft, livingSqft, range, property } = params;
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: "You are a pricing assistant for home service providers. Reply with ONE short sentence (max 22 words) explaining the quote, referencing the most relevant property attribute. No greetings, no markdown, no addresses."
+        },
+        {
+          role: "user",
+          content: JSON.stringify({
+            service: serviceName,
+            category: category ?? null,
+            lotSqft: lotSizeSqft,
+            livingSqft,
+            bedrooms: property?.bedrooms ?? null,
+            bathrooms: property?.bathrooms ?? null,
+            yearBuilt: property?.yearBuilt ?? null,
+            propertyType: property?.propertyType ?? null,
+            quote: { low: range.low, mid: range.mid, high: range.high, basis: range.basis }
+          })
+        }
+      ],
+      max_tokens: 70,
+      temperature: 0.4
+    });
+    const text2 = completion.choices[0]?.message?.content?.trim() ?? "";
+    return text2 || null;
+  } catch (err) {
+    console.warn("[quickQuoteService] insight generation failed:", err instanceof Error ? err.message : err);
+    return null;
+  }
 }
 
 // server/routes.ts
@@ -21318,6 +21510,193 @@ Respond with JSON only:
       res.status(500).json({ error: "Failed to submit support ticket" });
     }
   });
+  app2.post(
+    "/api/provider/:providerId/quick-quotes/preview",
+    requireAuth,
+    async (req, res) => {
+      try {
+        if (!await assertProviderOwnership(req, req.params.providerId, res))
+          return;
+        const { address, customServiceId } = req.body;
+        if (!address || !customServiceId) {
+          return res.status(400).json({ error: "address and customServiceId are required" });
+        }
+        const [service] = await db.select().from(providerCustomServices).where(eq10(providerCustomServices.id, customServiceId));
+        if (!service) {
+          return res.status(404).json({ error: "Service not found" });
+        }
+        if (service.providerId !== req.params.providerId) {
+          return res.status(403).json({ error: "Forbidden" });
+        }
+        const overrideLot = Number(req.body.overrideLotSize);
+        const overrideSqft = Number(req.body.overrideSquareFeet);
+        let enrichment = null;
+        try {
+          enrichment = await enrichPropertyData(address);
+        } catch (err) {
+          console.warn(
+            "[quick-quotes] enrichment failed:",
+            err instanceof Error ? err.message : err
+          );
+        }
+        const zillow = enrichment?.zillow ?? {};
+        const google = enrichment?.google ?? {};
+        const lotSize = Number.isFinite(overrideLot) && overrideLot > 0 ? overrideLot : typeof zillow.lotSize === "number" ? zillow.lotSize : null;
+        const livingSqft = Number.isFinite(overrideSqft) && overrideSqft > 0 ? overrideSqft : typeof zillow.livingArea === "number" ? zillow.livingArea : null;
+        const lite = {
+          id: service.id,
+          name: service.name,
+          category: service.category,
+          pricingType: service.pricingType,
+          basePrice: service.basePrice,
+          priceFrom: service.priceFrom,
+          priceTo: service.priceTo,
+          priceTiersJson: service.priceTiersJson,
+          duration: service.duration
+        };
+        const range = computeQuoteRange(lite, lotSize, livingSqft);
+        const insight = await generatePricingInsight({
+          serviceName: service.name,
+          category: service.category,
+          lotSizeSqft: lotSize,
+          livingSqft,
+          range,
+          property: {
+            bedrooms: zillow.bedrooms ?? null,
+            bathrooms: zillow.bathrooms ?? null,
+            yearBuilt: zillow.yearBuilt ?? null,
+            propertyType: zillow.propertyType ?? null
+          }
+        });
+        res.json({
+          formattedAddress: google.formattedAddress ?? address,
+          placeId: google.placeId ?? null,
+          latitude: google.latitude ?? null,
+          longitude: google.longitude ?? null,
+          lotSize,
+          squareFeet: livingSqft,
+          service: {
+            id: service.id,
+            name: service.name,
+            category: service.category,
+            pricingType: service.pricingType
+          },
+          range,
+          aiInsight: insight
+        });
+      } catch (error) {
+        console.error("Quick quote preview error:", error);
+        res.status(500).json({ error: "Failed to generate quote" });
+      }
+    }
+  );
+  app2.get(
+    "/api/provider/:providerId/quick-quotes",
+    requireAuth,
+    async (req, res) => {
+      try {
+        if (!await assertProviderOwnership(req, req.params.providerId, res))
+          return;
+        const rows = await db.select().from(quickQuotes).where(eq10(quickQuotes.providerId, req.params.providerId)).orderBy(desc3(quickQuotes.createdAt)).limit(50);
+        res.json({ quotes: rows });
+      } catch (error) {
+        console.error("List quick quotes error:", error);
+        res.status(500).json({ error: "Failed to list quotes" });
+      }
+    }
+  );
+  app2.post(
+    "/api/provider/:providerId/quick-quotes",
+    requireAuth,
+    async (req, res) => {
+      try {
+        if (!await assertProviderOwnership(req, req.params.providerId, res))
+          return;
+        const {
+          address,
+          formattedAddress,
+          placeId,
+          latitude,
+          longitude,
+          lotSize,
+          squareFeet,
+          customServiceId,
+          serviceName,
+          lowPrice,
+          midPrice,
+          highPrice,
+          finalPrice,
+          pricingBasis,
+          aiInsight,
+          notes,
+          sentVia,
+          status
+        } = req.body ?? {};
+        if (!address || !serviceName) {
+          return res.status(400).json({ error: "address and serviceName are required" });
+        }
+        if (customServiceId) {
+          const [svc] = await db.select({ providerId: providerCustomServices.providerId }).from(providerCustomServices).where(eq10(providerCustomServices.id, String(customServiceId)));
+          if (!svc) return res.status(404).json({ error: "Service not found" });
+          if (svc.providerId !== req.params.providerId) {
+            return res.status(403).json({ error: "Forbidden" });
+          }
+        }
+        const lp = parseFloat(String(lowPrice ?? 0));
+        const mp = parseFloat(String(midPrice ?? 0));
+        const hp = parseFloat(String(highPrice ?? 0));
+        const fp = parseFloat(String(finalPrice ?? mp));
+        if (![lp, mp, hp, fp].every((n) => Number.isFinite(n) && n >= 0)) {
+          return res.status(400).json({ error: "Invalid price values" });
+        }
+        const [row] = await db.insert(quickQuotes).values({
+          providerId: req.params.providerId,
+          address: String(address),
+          formattedAddress: formattedAddress ?? null,
+          placeId: placeId ?? null,
+          latitude: latitude != null ? String(latitude) : null,
+          longitude: longitude != null ? String(longitude) : null,
+          lotSize: typeof lotSize === "number" ? lotSize : null,
+          squareFeet: typeof squareFeet === "number" ? squareFeet : null,
+          customServiceId: customServiceId ?? null,
+          serviceName: String(serviceName),
+          lowPrice: lp.toFixed(2),
+          midPrice: mp.toFixed(2),
+          highPrice: hp.toFixed(2),
+          finalPrice: fp.toFixed(2),
+          pricingBasis: pricingBasis ?? null,
+          aiInsight: aiInsight ?? null,
+          notes: notes ?? null,
+          sentVia: sentVia ?? null,
+          status: status ?? "draft"
+        }).returning();
+        res.status(201).json({ quote: row });
+      } catch (error) {
+        console.error("Create quick quote error:", error);
+        res.status(500).json({ error: "Failed to save quote" });
+      }
+    }
+  );
+  app2.delete(
+    "/api/provider/:providerId/quick-quotes/:id",
+    requireAuth,
+    async (req, res) => {
+      try {
+        if (!await assertProviderOwnership(req, req.params.providerId, res))
+          return;
+        const [row] = await db.select({ id: quickQuotes.id, providerId: quickQuotes.providerId }).from(quickQuotes).where(eq10(quickQuotes.id, req.params.id));
+        if (!row) return res.status(404).json({ error: "Quote not found" });
+        if (row.providerId !== req.params.providerId) {
+          return res.status(403).json({ error: "Forbidden" });
+        }
+        await db.delete(quickQuotes).where(eq10(quickQuotes.id, req.params.id));
+        res.json({ success: true });
+      } catch (error) {
+        console.error("Delete quick quote error:", error);
+        res.status(500).json({ error: "Failed to delete quote" });
+      }
+    }
+  );
   const httpServer = createServer(app2);
   return httpServer;
 }
@@ -21523,6 +21902,35 @@ async function runBootMigrations() {
         created_at TIMESTAMP DEFAULT NOW() NOT NULL,
         updated_at TIMESTAMP DEFAULT NOW() NOT NULL
       )
+    `);
+    await runSql("table.quick_quotes", `
+      CREATE TABLE IF NOT EXISTS quick_quotes (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+        provider_id VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+        address TEXT NOT NULL,
+        formatted_address TEXT,
+        place_id TEXT,
+        latitude DECIMAL(10,7),
+        longitude DECIMAL(10,7),
+        lot_size INTEGER,
+        square_feet INTEGER,
+        custom_service_id VARCHAR REFERENCES provider_custom_services(id) ON DELETE SET NULL,
+        service_name TEXT NOT NULL,
+        low_price DECIMAL(10,2) NOT NULL,
+        mid_price DECIMAL(10,2) NOT NULL,
+        high_price DECIMAL(10,2) NOT NULL,
+        final_price DECIMAL(10,2) NOT NULL,
+        pricing_basis TEXT,
+        ai_insight TEXT,
+        notes TEXT,
+        sent_via TEXT,
+        status TEXT NOT NULL DEFAULT 'draft',
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+    await runSql("quick_quotes.provider_id_idx", `
+      CREATE INDEX IF NOT EXISTS quick_quotes_provider_id_idx
+        ON quick_quotes (provider_id, created_at DESC)
     `);
     await runSql("table.support_tickets", `
       CREATE TABLE IF NOT EXISTS support_tickets (
@@ -22135,9 +22543,9 @@ function safeJson(value) {
 }
 function formatMoney(n) {
   if (n == null || n === "") return null;
-  const num = typeof n === "number" ? n : parseFloat(String(n));
-  if (!isFinite(num)) return null;
-  return "$" + num.toLocaleString(void 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const num2 = typeof n === "number" ? n : parseFloat(String(n));
+  if (!isFinite(num2)) return null;
+  return "$" + num2.toLocaleString(void 0, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function formatDateTime(date, time) {
   if (!date) return null;
