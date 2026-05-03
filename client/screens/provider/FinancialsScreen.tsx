@@ -891,8 +891,8 @@ function NextPayoutCard({
           <ThemedText style={nextPayoutStyles.label}>No payout scheduled</ThemedText>
           <ThemedText style={nextPayoutStyles.summaryLine}>
             {pendingCents > 0
-              ? `${formatCents(pendingCents)} building since your last payout`
-              : "Pending payments will appear here"}
+              ? `New payments since your last payout: ${formatCents(pendingCents)}.`
+              : "Pending payments will appear here."}
             {bankLine ? ` \u2192 ${bankLine}` : ""}
           </ThemedText>
           <Pressable
@@ -925,7 +925,17 @@ function NextPayoutCard({
           {formatPayoutLongDate(next.arrivalDate)} \u2014 {formatCents(next.amountCents)}
           {bankLine ? ` \u2192 ${bankLine}` : ""}
         </ThemedText>
-        <Pressable onPress={onHowItWorks} hitSlop={8} testID="button-how-payouts-work">
+        {/* Inner Pressable — RN's responder system grants the touch to the
+            deepest pressable, so tapping this opens the modal without also
+            firing the outer card's onPress. */}
+        <Pressable
+          onPress={(e) => {
+            e.stopPropagation?.();
+            onHowItWorks();
+          }}
+          hitSlop={8}
+          testID="button-how-payouts-work"
+        >
           <ThemedText style={[nextPayoutStyles.helpLink, { color: Colors.accent }]}>
             How payouts work
           </ThemedText>
@@ -1284,7 +1294,9 @@ export default function FinancialsScreen() {
   // After the user taps the card we land on the Payouts list. Once the data
   // is loaded and the FlatList is mounted, scroll to the matching row. If
   // the id isn't present (Stripe list-window mismatch) we fall back to the
-  // top of the list so they at least see the most recent payouts.
+  // top of the list. We only clear the pending target on a definitive
+  // outcome (success scroll, fallback-to-top, or onScrollToIndexFailed
+  // recovery in the FlatList prop), so transient timing failures get retried.
   const stripePayoutsLoaded = !payoutsLoading;
   useEffect(() => {
     if (!pendingScrollPayoutId) return;
@@ -1293,20 +1305,24 @@ export default function FinancialsScreen() {
     const list = payoutsData?.payouts ?? [];
     const idx = list.findIndex((p) => p.id === pendingScrollPayoutId);
     const timer = setTimeout(() => {
-      try {
-        if (idx >= 0) {
+      if (idx >= 0) {
+        try {
           payoutsListRef.current?.scrollToIndex({
             index: idx,
             animated: true,
             viewPosition: 0.2,
           });
-        } else {
-          payoutsListRef.current?.scrollToOffset({ offset: 0, animated: true });
+          setPendingScrollPayoutId(null);
+        } catch {
+          // Leave pendingScrollPayoutId set so onScrollToIndexFailed (or
+          // the next render) gets another shot.
         }
-      } catch {
-        // scrollToIndex can throw if the list hasn't measured yet — safe to ignore
+      } else {
+        // Id not in the current Stripe list window — show the top instead
+        // and stop trying.
+        payoutsListRef.current?.scrollToOffset({ offset: 0, animated: true });
+        setPendingScrollPayoutId(null);
       }
-      setPendingScrollPayoutId(null);
     }, 250);
     return () => clearTimeout(timer);
   }, [
@@ -1874,12 +1890,25 @@ export default function FinancialsScreen() {
         ListHeaderComponent={<SharedHeader />}
         ListEmptyComponent={<PayoutsEmpty />}
         onScrollToIndexFailed={({ index, averageItemLength }) => {
-          // Items aren't measured yet — retry after a tick using estimated offset.
+          // Items aren't measured yet — jump to the estimated offset, then
+          // re-attempt the precise scroll once the list has rendered there.
           setTimeout(() => {
             payoutsListRef.current?.scrollToOffset({
               offset: Math.max(0, index * (averageItemLength || 80)),
               animated: true,
             });
+            setTimeout(() => {
+              try {
+                payoutsListRef.current?.scrollToIndex({
+                  index,
+                  animated: true,
+                  viewPosition: 0.2,
+                });
+              } catch {
+                // Still not measured — accept the estimated offset.
+              }
+              setPendingScrollPayoutId(null);
+            }, 200);
           }, 80);
         }}
         contentContainerStyle={{
