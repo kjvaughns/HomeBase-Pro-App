@@ -897,9 +897,7 @@ function PlanCard({ loadingOffering, priceLabel, useIAP, isDark, theme }: PlanCa
   // static "Billed monthly" label instead of a potentially stale amount.
   const displayPrice = priceLabel
     ? `${priceLabel} / month`
-    : useIAP
-      ? "Price unavailable"
-      : "Billed monthly";
+    : "$29.99 / month";
 
   return (
     <View
