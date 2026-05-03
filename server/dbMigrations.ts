@@ -359,6 +359,7 @@ export async function runBootMigrations(): Promise<void> {
       ["provider_custom_services.add_ons_json",          `ALTER TABLE provider_custom_services ADD COLUMN IF NOT EXISTS add_ons_json TEXT`],
       ["provider_custom_services.booking_mode",          `ALTER TABLE provider_custom_services ADD COLUMN IF NOT EXISTS booking_mode TEXT DEFAULT 'instant'`],
       ["provider_custom_services.ai_pricing_insight",    `ALTER TABLE provider_custom_services ADD COLUMN IF NOT EXISTS ai_pricing_insight TEXT`],
+      ["provider_custom_services.checklist_template_json", `ALTER TABLE provider_custom_services ADD COLUMN IF NOT EXISTS checklist_template_json JSONB`],
     ];
     for (const [label, sql] of customServiceAlters) {
       await runSql(label, sql);

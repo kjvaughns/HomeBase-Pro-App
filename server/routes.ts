@@ -33,7 +33,7 @@ import {
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
 import { db, pool } from "./db";
-import { sql, eq, and, or, desc, inArray, gte, ilike, isNull } from "drizzle-orm";
+import { sql, eq, and, or, desc, inArray, notInArray, gte, ilike, isNull } from "drizzle-orm";
 import {
   sendInvoiceEmail,
   sendProviderClientMessage,
@@ -608,6 +608,7 @@ async function convertIntakeToClientJob(
       address: address || null,
       estimatedPrice: estimatedPrice || null,
       notes: notes || null,
+      checklist: [],
     })
     .returning();
 
@@ -4195,12 +4196,17 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
                 : null;
             let apptCustomServiceId: string | null = null;
             let apptSvcIntakeQuestionsJson: string | null = null;
+            let apptSvcChecklistTemplate:
+              | { id: string; label: string }[]
+              | null = null;
             if (rawCustomSvcId) {
               const [ownedSvc] = await db
                 .select({
                   id: providerCustomServices.id,
                   intakeQuestionsJson:
                     providerCustomServices.intakeQuestionsJson,
+                  checklistTemplateJson:
+                    providerCustomServices.checklistTemplateJson,
                 })
                 .from(providerCustomServices)
                 .where(
@@ -4216,6 +4222,11 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
               if (ownedSvc) {
                 apptCustomServiceId = rawCustomSvcId;
                 apptSvcIntakeQuestionsJson = ownedSvc.intakeQuestionsJson;
+                apptSvcChecklistTemplate = Array.isArray(
+                  ownedSvc.checklistTemplateJson,
+                )
+                  ? ownedSvc.checklistTemplateJson
+                  : null;
               }
             }
 
@@ -4252,6 +4263,24 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
               addOns: apptAddOns,
             });
 
+            // Materialize the service's checklist template (or []) so this
+            // homeowner-portal-originated job carries the same per-service
+            // checklist snapshot as provider-created jobs.
+            const apptInitialChecklist = Array.isArray(apptSvcChecklistTemplate)
+              ? apptSvcChecklistTemplate
+                  .filter(
+                    (it) =>
+                      it &&
+                      typeof it.label === "string" &&
+                      it.label.trim().length > 0,
+                  )
+                  .map((it, i) => ({
+                    id: String(it.id ?? `c_${Date.now()}_${i}`),
+                    label: String(it.label).slice(0, 200),
+                    completed: false,
+                  }))
+              : [];
+
             await db.insert(jobs).values({
               providerId: parsed.data.providerId,
               clientId,
@@ -4266,6 +4295,7 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
               status: "scheduled",
               estimatedPrice: parsed.data.estimatedPrice ?? null,
               notes: `Booked via homeowner portal.`,
+              checklist: apptInitialChecklist,
             });
           } catch (jobErr) {
             console.error("Job creation error (non-fatal):", jobErr);
@@ -5872,6 +5902,7 @@ Return a JSON object with exactly these fields:
   "addOns": [
     {"id": string, "name": string, "description": string, "price": number}
   ],
+  "checklistTemplate": [string],
   "bookingMode": "instant" | "starts_at" | "quote_only",
   "aiPricingInsight": "one sentence identifying a specific profit leak or pricing opportunity for this service type"
 }
@@ -5879,6 +5910,7 @@ Return a JSON object with exactly these fields:
 Rules:
 - intakeQuestions: 3-5 questions specific to this exact service. Include property size where relevant.
 - addOns: 2-4 high-value add-ons with realistic prices for ${providerLocation || "US"} market
+- checklistTemplate: 5-8 short, ordered, on-site steps a tech would actually do for this service (e.g., "Lay drop cloths", "Mask trim", "Cut in edges"). Plain strings, no numbering.
 - bookingMode: use "instant" for straightforward flat-rate services, "starts_at" for variable pricing, "quote_only" for complex/large jobs
 - priceTiers: only include if type is "variable"
 - All prices in USD, no $ sign, just numbers
@@ -6078,6 +6110,7 @@ Return a JSON object with exactly these fields:
   "addOns": [
     {"id": string, "name": string, "description": string, "price": number}
   ],
+  "checklistTemplate": [string],
   "bookingMode": "instant" | "starts_at" | "quote_only",
   "aiPricingInsight": "one sentence identifying a pricing opportunity for this service type"
 }
@@ -6085,6 +6118,7 @@ Return a JSON object with exactly these fields:
 Rules:
 - intakeQuestions: 3-5 questions specific to this exact service
 - addOns: 2-4 high-value add-ons with realistic prices
+- checklistTemplate: 5-8 short, ordered, on-site steps a tech would actually do for this service. Plain strings, no numbering.
 - bookingMode: use "instant" for flat-rate, "starts_at" for variable, "quote_only" for complex jobs
 - priceTiers: only include if type is "variable"
 - All prices in USD as numbers only`;
@@ -6956,8 +6990,10 @@ Respond with JSON only:
           recurringPrice,
           intakeQuestionsJson,
           addOnsJson,
+          checklistTemplateJson,
           bookingMode,
           aiPricingInsight,
+          applyChecklistToFutureJobs,
         } = req.body;
         const allowedUpdate: Partial<
           typeof providerCustomServices.$inferInsert
@@ -6982,6 +7018,8 @@ Respond with JSON only:
         if (intakeQuestionsJson !== undefined)
           allowedUpdate.intakeQuestionsJson = intakeQuestionsJson;
         if (addOnsJson !== undefined) allowedUpdate.addOnsJson = addOnsJson;
+        if (checklistTemplateJson !== undefined)
+          allowedUpdate.checklistTemplateJson = checklistTemplateJson;
         const VALID_BOOKING_MODES = ["instant", "starts_at", "quote_only"];
         if (bookingMode !== undefined) {
           if (!VALID_BOOKING_MODES.includes(bookingMode)) {
@@ -6998,7 +7036,49 @@ Respond with JSON only:
           .set({ ...allowedUpdate, updatedAt: new Date() })
           .where(eq(providerCustomServices.id, req.params.id))
           .returning();
-        res.json({ service: svc });
+
+        // Optional bulk-apply: when the provider opted in via the wizard's
+        // "Apply to existing future jobs" toggle and a checklist template
+        // was sent in the same payload, propagate it to every future job
+        // created from this service that hasn't started yet (status not
+        // completed/cancelled, scheduled today or later). Existing
+        // checklists are overwritten on purpose — that is the explicit
+        // intent of the opt-in. Failures are logged but don't fail the
+        // service update itself.
+        let appliedToJobs = 0;
+        if (
+          applyChecklistToFutureJobs === true &&
+          Array.isArray(checklistTemplateJson)
+        ) {
+          const templateItems = (checklistTemplateJson as unknown[])
+            .filter(
+              (it): it is { id?: unknown; label?: unknown } =>
+                typeof it === "object" && it !== null,
+            )
+            .map((it, i) => ({
+              id: String(it.id ?? `c_${Date.now()}_${i}`),
+              label: String(it.label ?? "").slice(0, 200),
+              completed: false,
+            }))
+            .filter((it) => it.label.length > 0);
+          const todayStart = new Date();
+          todayStart.setHours(0, 0, 0, 0);
+          const updated = await db
+            .update(jobs)
+            .set({ checklist: templateItems })
+            .where(
+              and(
+                eq(jobs.customServiceId, req.params.id),
+                eq(jobs.providerId, req.params.providerId),
+                notInArray(jobs.status, ["completed", "cancelled"]),
+                gte(jobs.scheduledDate, todayStart),
+              ),
+            )
+            .returning({ id: jobs.id });
+          appliedToJobs = updated.length;
+        }
+
+        res.json({ service: svc, appliedToJobs });
       } catch (error) {
         console.error("Update custom service error:", error);
         res.status(500).json({ error: "Failed to update service" });
@@ -8600,69 +8680,40 @@ Respond with JSON only:
           return res.status(403).json({ error: "Access denied" });
         }
 
-        // Return cached checklist if it exists
+        // The job's persisted checklist is authoritative — even an empty
+        // array is a valid intentional state. Only legacy rows where the
+        // column is null get a one-time backfill from the parent
+        // service's template. No AI fallback.
         const existingChecklist = job.checklist as
           | { id: string; label: string; completed: boolean }[]
           | null;
-        if (
-          existingChecklist &&
-          Array.isArray(existingChecklist) &&
-          existingChecklist.length > 0
-        ) {
+        if (Array.isArray(existingChecklist)) {
           return res.json({ checklist: existingChecklist });
         }
 
-        // Generate checklist with OpenAI
-        const prompt = [
-          `You are a home services task manager. Generate a practical 6-8 step checklist for a service provider performing this job.`,
-          `Job type: ${job.title}`,
-          job.description ? `Client's issue: ${job.description}` : "",
-          `Return ONLY a valid JSON array of strings with no markdown, no extra keys, and no explanation. Each string is a clear, actionable step.`,
-          `Example: ["Arrive and introduce yourself", "Assess the issue", "Complete the repair", ...]`,
-        ]
-          .filter(Boolean)
-          .join("\n");
-
-        const aiResponse = await openai.chat.completions.create({
-          model: "gpt-4o-mini",
-          messages: [{ role: "user", content: prompt }],
-          temperature: 0.4,
-          max_tokens: 400,
-        });
-
-        const raw = aiResponse.choices[0]?.message?.content?.trim() || "[]";
-        let labels: string[] = [];
-        try {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed))
-            labels = parsed.filter((s: unknown) => typeof s === "string");
-        } catch {
-          // Fallback if GPT returns non-JSON
-          labels = raw
-            .split("\n")
-            .map((l) => l.replace(/^[-\d.]+\s*/, "").trim())
-            .filter(Boolean)
-            .slice(0, 8);
+        let checklist: { id: string; label: string; completed: boolean }[] = [];
+        if (job.customServiceId) {
+          const [svcRow] = await db
+            .select({
+              checklistTemplateJson:
+                providerCustomServices.checklistTemplateJson,
+            })
+            .from(providerCustomServices)
+            .where(eq(providerCustomServices.id, job.customServiceId));
+          if (Array.isArray(svcRow?.checklistTemplateJson)) {
+            checklist = svcRow!
+              .checklistTemplateJson!.filter(
+                (it) =>
+                  it && typeof it.label === "string" && it.label.trim().length > 0,
+              )
+              .map((it, i) => ({
+                id: String(it.id ?? `c_${Date.now()}_${i}`),
+                label: String(it.label).slice(0, 200),
+                completed: false,
+              }));
+          }
         }
 
-        if (labels.length === 0) {
-          labels = [
-            "Arrive at location",
-            "Assess the issue",
-            "Discuss scope with client",
-            "Complete main work",
-            "Clean up area",
-            "Walkthrough with client",
-          ];
-        }
-
-        const checklist = labels.map((label, i) => ({
-          id: String(i + 1),
-          label,
-          completed: false,
-        }));
-
-        // Persist to DB
         await db
           .update(jobs)
           .set({ checklist })
@@ -8974,6 +9025,7 @@ Respond with JSON only:
         basePrice: string | null;
         priceFrom: string | null;
         intakeQuestionsJson: string | null;
+        checklistTemplateJson: { id: string; label: string }[] | null;
         isRecurring: boolean | null;
         recurringFrequency: string | null;
         recurringPrice: string | null;
@@ -8987,6 +9039,7 @@ Respond with JSON only:
             basePrice: providerCustomServices.basePrice,
             priceFrom: providerCustomServices.priceFrom,
             intakeQuestionsJson: providerCustomServices.intakeQuestionsJson,
+            checklistTemplateJson: providerCustomServices.checklistTemplateJson,
             isRecurring: providerCustomServices.isRecurring,
             recurringFrequency: providerCustomServices.recurringFrequency,
             recurringPrice: providerCustomServices.recurringPrice,
@@ -9109,12 +9162,44 @@ Respond with JSON only:
 
       // Atomic transaction: create job and appointment together so booking data model is
       // always consistent. If appointment creation fails the job is rolled back too.
+      // Materialize the new job's checklist into an array (never null) so
+      // the column unambiguously records the provider's intent at
+      // creation time. Client-supplied items win; otherwise copy the
+      // snapshotted service template; otherwise []. The "apply to
+      // existing future jobs" opt-in is the only mechanism that rewrites
+      // a job's checklist after creation.
+      let initialChecklist: { id: string; label: string; completed: boolean }[] = [];
+      const incomingChecklist = (parsed.data as { checklist?: unknown })
+        .checklist;
+      if (Array.isArray(incomingChecklist)) {
+        initialChecklist = (incomingChecklist as unknown[])
+          .filter(
+            (it): it is { id?: unknown; label?: unknown; completed?: unknown } =>
+              typeof it === "object" && it !== null,
+          )
+          .map((it, i) => ({
+            id: String(it.id ?? `c_${Date.now()}_${i}`),
+            label: String(it.label ?? "").slice(0, 200),
+            completed: Boolean(it.completed),
+          }))
+          .filter((it) => it.label.length > 0);
+      } else if (Array.isArray(svcSnapshot?.checklistTemplateJson)) {
+        initialChecklist = svcSnapshot!.checklistTemplateJson!
+          .filter((it) => it && typeof it.label === "string" && it.label.trim().length > 0)
+          .map((it, i) => ({
+            id: String(it.id ?? `c_${Date.now()}_${i}`),
+            label: String(it.label).slice(0, 200),
+            completed: false,
+          }));
+      }
+
       const { job: newJob, appointment } = await db.transaction(async (tx) => {
         const jobValues = {
           ...parsed.data,
           customServiceId: verifiedCustomServiceId,
           estimatedPrice: effectivePrice ?? parsed.data.estimatedPrice,
           description: finalJobDescription,
+          checklist: initialChecklist,
           // Belt-and-suspenders: insertJobSchema already strips seriesId,
           // but null it out here too so any future schema regression can't
           // let a client attach the new job to another provider's series.
@@ -14210,7 +14295,8 @@ Respond with JSON only:
             clientId = newC.id;
           }
 
-          // Create job
+          // Create job. Leads are not bound to a custom service, so
+          // initialize checklist to [] (provider can add steps inline).
           const [newJob] = await tx
             .insert(jobs)
             .values({
@@ -14226,6 +14312,7 @@ Respond with JSON only:
               status: "scheduled",
               estimatedPrice: estimatedPrice ? String(estimatedPrice) : null,
               notes: notes || null,
+              checklist: [],
             })
             .returning();
 

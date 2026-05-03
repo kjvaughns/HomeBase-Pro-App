@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { StyleSheet, View, ScrollView, Pressable, Linking, Alert, ActivityIndicator, Image, Platform } from "react-native";
+import { StyleSheet, View, ScrollView, Pressable, Linking, Alert, ActivityIndicator, Image, Platform, TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, RouteProp, useNavigation } from "@react-navigation/native";
@@ -267,12 +267,23 @@ function StatusBanner({ status }: StatusBannerProps) {
 interface ChecklistSectionProps {
   checklist: JobChecklistItem[];
   onToggle: (id: string) => void;
+  onAddStep: (label: string) => void;
   loading?: boolean;
 }
 
-function ChecklistSection({ checklist, onToggle, loading }: ChecklistSectionProps) {
+function ChecklistSection({ checklist, onToggle, onAddStep, loading }: ChecklistSectionProps) {
   const { theme } = useTheme();
   const completedCount = checklist.filter((item) => item.completed).length;
+  const [adding, setAdding] = useState(false);
+  const [newStepText, setNewStepText] = useState("");
+
+  const submitNewStep = () => {
+    const label = newStepText.trim();
+    if (!label) return;
+    onAddStep(label);
+    setNewStepText("");
+    setAdding(false);
+  };
 
   return (
     <GlassCard style={styles.section}>
@@ -286,46 +297,91 @@ function ChecklistSection({ checklist, onToggle, loading }: ChecklistSectionProp
           </ThemedText>
         )}
       </View>
-      {loading ? (
-        <View style={{ paddingVertical: Spacing.lg, alignItems: "center" }}>
-          <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-            Generating smart checklist...
+      {checklist.length > 0
+        ? checklist.map((item) => (
+            <Pressable
+              key={item.id}
+              style={styles.checklistItem}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                onToggle(item.id);
+              }}
+              testID={`checklist-item-${item.id}`}
+            >
+              <View
+                style={[
+                  styles.checkbox,
+                  item.completed && { backgroundColor: Colors.accent, borderColor: Colors.accent },
+                  !item.completed && { borderColor: theme.textSecondary },
+                ]}
+              >
+                {item.completed ? <Feather name="check" size={14} color="#FFFFFF" /> : null}
+              </View>
+              <ThemedText
+                type="body"
+                style={[
+                  { flex: 1 },
+                  item.completed && { textDecorationLine: "line-through", color: theme.textSecondary },
+                ]}
+              >
+                {item.label}
+              </ThemedText>
+            </Pressable>
+          ))
+        : !adding && !loading ? (
+          <ThemedText type="caption" style={{ color: theme.textSecondary, marginBottom: Spacing.sm }}>
+            No checklist for this service yet.
           </ThemedText>
-        </View>
-      ) : checklist.length > 0 ? (
-        checklist.map((item) => (
-          <Pressable
-            key={item.id}
-            style={styles.checklistItem}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              onToggle(item.id);
+        ) : null}
+
+      {adding ? (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginTop: Spacing.sm }}>
+          <TextInput
+            value={newStepText}
+            onChangeText={setNewStepText}
+            placeholder="e.g., Lay drop cloths"
+            placeholderTextColor={theme.textTertiary}
+            autoFocus
+            returnKeyType="done"
+            onSubmitEditing={submitNewStep}
+            style={{
+              flex: 1,
+              borderWidth: 1,
+              borderColor: theme.borderLight,
+              borderRadius: BorderRadius.sm,
+              paddingHorizontal: Spacing.sm,
+              paddingVertical: Spacing.xs,
+              color: theme.text,
             }}
+            testID="input-new-checklist-step"
+          />
+          <Pressable
+            onPress={submitNewStep}
+            disabled={!newStepText.trim()}
+            hitSlop={8}
+            testID="button-confirm-add-step"
           >
-            <View
-              style={[
-                styles.checkbox,
-                item.completed && { backgroundColor: Colors.accent, borderColor: Colors.accent },
-                !item.completed && { borderColor: theme.textSecondary },
-              ]}
-            >
-              {item.completed ? <Feather name="check" size={14} color="#FFFFFF" /> : null}
-            </View>
-            <ThemedText
-              type="body"
-              style={[
-                { flex: 1 },
-                item.completed && { textDecorationLine: "line-through", color: theme.textSecondary },
-              ]}
-            >
-              {item.label}
-            </ThemedText>
+            <Feather name="check" size={20} color={newStepText.trim() ? Colors.accent : theme.textTertiary} />
           </Pressable>
-        ))
+          <Pressable
+            onPress={() => { setAdding(false); setNewStepText(""); }}
+            hitSlop={8}
+            testID="button-cancel-add-step"
+          >
+            <Feather name="x" size={20} color={theme.textTertiary} />
+          </Pressable>
+        </View>
       ) : (
-        <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-          No checklist items
-        </ThemedText>
+        <Pressable
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setAdding(true); }}
+          style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: Spacing.sm, alignSelf: "flex-start" }}
+          testID="button-add-checklist-step-job"
+        >
+          <Feather name="plus" size={16} color={Colors.accent} />
+          <ThemedText type="body" style={{ color: Colors.accent, fontWeight: "600" }}>
+            Add a step
+          </ThemedText>
+        </Pressable>
       )}
     </GlassCard>
   );
@@ -346,7 +402,6 @@ export default function ProviderJobDetailScreen() {
   const [displayStatus, setDisplayStatus] = useState<DisplayStatus | null>(null);
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
-  const [checklistLoading, setChecklistLoading] = useState(false);
   const checklistFetched = useRef(false);
 
   const { data: jobData, isLoading } = useQuery<{ job: ApiJob }>({
@@ -369,48 +424,62 @@ export default function ProviderJobDetailScreen() {
 
   const [localChecklist, setLocalChecklist] = useState<JobChecklistItem[]>([]);
 
-  // Fetch (or generate) AI checklist on mount, once job is loaded
+  // The job's persisted checklist is authoritative. An empty array is a
+  // valid state (the provider intentionally cleared it or the service had
+  // no template at job-creation time) and must NOT be rehydrated from the
+  // current service template. Only legacy rows where checklist is null
+  // get a one-time server-side backfill from the parent service template.
   useEffect(() => {
     if (!job || checklistFetched.current) return;
-    // If job already has a checklist from the server, use it immediately
-    if (job.checklist && Array.isArray(job.checklist) && job.checklist.length > 0) {
+    if (Array.isArray(job.checklist)) {
       setLocalChecklist(job.checklist);
       checklistFetched.current = true;
       return;
     }
     checklistFetched.current = true;
-    setChecklistLoading(true);
     const url = new URL(`/api/jobs/${jobId}/generate-checklist`, getApiUrl());
     apiRequest("POST", url.toString(), {})
-      .then(r => r.json())
+      .then((r) => r.json())
       .then((data: { checklist?: JobChecklistItem[] }) => {
-        if (data.checklist && Array.isArray(data.checklist)) {
-          setLocalChecklist(data.checklist);
-        }
+        if (Array.isArray(data?.checklist)) setLocalChecklist(data.checklist);
       })
-      .catch(() => {
-        // Fallback to generic checklist on error
-        setLocalChecklist([
-          { id: "1", label: "Arrive at location", completed: false },
-          { id: "2", label: "Assess the issue", completed: false },
-          { id: "3", label: "Discuss scope with client", completed: false },
-          { id: "4", label: "Complete main work", completed: false },
-          { id: "5", label: "Clean up area", completed: false },
-          { id: "6", label: "Walkthrough with client", completed: false },
-        ]);
-      })
-      .finally(() => setChecklistLoading(false));
+      .catch(() => setLocalChecklist([]));
   }, [job, jobId]);
 
-  const handleToggleChecklist = useCallback((id: string) => {
-    setLocalChecklist((prev) => {
-      const updated = prev.map((item) => (item.id === id ? { ...item, completed: !item.completed } : item));
-      // Fire-and-forget state persistence
+  const persistChecklist = useCallback(
+    (next: JobChecklistItem[]) => {
       const url = new URL(`/api/jobs/${jobId}/checklist-state`, getApiUrl());
-      apiRequest("PATCH", url.toString(), { checklist: updated }).catch(() => {});
-      return updated;
-    });
-  }, [jobId]);
+      apiRequest("PATCH", url.toString(), { checklist: next }).catch(() => {});
+    },
+    [jobId],
+  );
+
+  const handleToggleChecklist = useCallback(
+    (id: string) => {
+      setLocalChecklist((prev) => {
+        const updated = prev.map((item) =>
+          item.id === id ? { ...item, completed: !item.completed } : item,
+        );
+        persistChecklist(updated);
+        return updated;
+      });
+    },
+    [persistChecklist],
+  );
+
+  const handleAddChecklistStep = useCallback(
+    (label: string) => {
+      setLocalChecklist((prev) => {
+        const next: JobChecklistItem[] = [
+          ...prev,
+          { id: `c_${Date.now()}`, label, completed: false },
+        ];
+        persistChecklist(next);
+        return next;
+      });
+    },
+    [persistChecklist],
+  );
 
   const updateJobMutation = useMutation({
     mutationFn: async (newStatus: DBJobStatus) => {
@@ -865,7 +934,11 @@ export default function ProviderJobDetailScreen() {
 
         {resolvedDisplayStatus !== "cancelled" && resolvedDisplayStatus !== "completed" ? (
           <Animated.View entering={FadeInDown.delay(400).duration(400)}>
-            <ChecklistSection checklist={localChecklist} onToggle={handleToggleChecklist} loading={checklistLoading} />
+            <ChecklistSection
+              checklist={localChecklist}
+              onToggle={handleToggleChecklist}
+              onAddStep={handleAddChecklistStep}
+            />
           </Animated.View>
         ) : null}
 

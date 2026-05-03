@@ -18,6 +18,7 @@ import {
   homes,
   jobs,
   jobSeries,
+  providerCustomServices,
   providers,
   type Job,
 } from "../shared/schema";
@@ -385,6 +386,31 @@ export async function materializeOccurrences(
     .where(eq(providers.id, series.providerId));
   const hours = parseBusinessHours(provider?.businessHours);
 
+  // Snapshot the parent service's checklist template once per generation
+  // pass so each materialized occurrence is initialized with the same
+  // per-service steps a one-off provider-created job would get. Use [] when
+  // the series is not bound to a custom service or the template is empty.
+  let seriesInitialChecklist: { id: string; label: string; completed: boolean }[] = [];
+  if (series.customServiceId) {
+    const [svcRow] = await db
+      .select({
+        checklistTemplateJson: providerCustomServices.checklistTemplateJson,
+      })
+      .from(providerCustomServices)
+      .where(eq(providerCustomServices.id, series.customServiceId));
+    if (Array.isArray(svcRow?.checklistTemplateJson)) {
+      seriesInitialChecklist = svcRow!
+        .checklistTemplateJson!.filter(
+          (it) => it && typeof it.label === "string" && it.label.trim().length > 0,
+        )
+        .map((it, i) => ({
+          id: String(it.id ?? `c_${Date.now()}_${i}`),
+          label: String(it.label).slice(0, 200),
+          completed: false,
+        }));
+    }
+  }
+
   // Resolve homeowner once per generation pass — the client-home linkage
   // does not change between occurrences in the same series.
   const homeowner = await resolveHomeowner(series.clientId);
@@ -465,6 +491,7 @@ export async function materializeOccurrences(
             address: series.address ?? undefined,
             estimatedPrice: series.estimatedPrice ?? undefined,
             status: "scheduled",
+            checklist: seriesInitialChecklist,
           })
           .returning();
 

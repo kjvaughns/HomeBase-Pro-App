@@ -139,6 +139,12 @@ export default function ServiceSummaryScreen() {
 
   const questions = parseJSON<Array<{ question: string; required?: boolean }>>(service.intakeQuestionsJson, []);
   const addOns = parseJSON<Array<{ name: string; price: number }>>(service.addOnsJson, []);
+  const checklistTemplate = Array.isArray(
+    (service as { checklistTemplateJson?: unknown }).checklistTemplateJson,
+  )
+    ? ((service as { checklistTemplateJson?: { id: string; label: string }[] })
+        .checklistTemplateJson ?? [])
+    : [];
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -281,10 +287,26 @@ export default function ServiceSummaryScreen() {
             />
             <View style={[styles.divider, { backgroundColor: theme.borderLight }]} />
             <SectionRow
+              icon="check-square"
+              label="DEFAULT CHECKLIST"
+              title={
+                checklistTemplate.length > 0
+                  ? `${checklistTemplate.length} step${checklistTemplate.length !== 1 ? "s" : ""}`
+                  : "None added"
+              }
+              subtitle={
+                checklistTemplate.length > 0
+                  ? checklistTemplate.map((s) => s.label).slice(0, 2).join(", ")
+                  : "Tap to add per-job steps"
+              }
+              onEdit={() => navigateToStep(4)}
+            />
+            <View style={[styles.divider, { backgroundColor: theme.borderLight }]} />
+            <SectionRow
               icon={bookingIcon}
               label="BOOKING MODE"
               title={bookingLabel}
-              onEdit={() => navigateToStep(4)}
+              onEdit={() => navigateToStep(5)}
             />
           </GlassCard>
         </Animated.View>

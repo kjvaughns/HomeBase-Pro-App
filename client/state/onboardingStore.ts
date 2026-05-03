@@ -18,6 +18,9 @@ export interface OnboardingServiceData {
   priceUnit: string;
   duration: number;
   bookingMode: "instant" | "starts_at" | "quote_only";
+  /** Per-service default checklist captured during onboarding. Materialized
+   *  into the persisted service record once the provider account exists. */
+  checklistTemplate?: { id: string; label: string }[];
 }
 
 interface OnboardingState {

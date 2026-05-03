@@ -50,6 +50,11 @@ interface AddOn {
   price: number;
 }
 
+interface ChecklistStep {
+  id: string;
+  label: string;
+}
+
 interface AIBlueprint {
   pricingModel: {
     type: "flat" | "variable" | "service_call" | "quote";
@@ -60,6 +65,7 @@ interface AIBlueprint {
   };
   intakeQuestions: IntakeQuestion[];
   addOns: AddOn[];
+  checklistTemplate: string[];
   bookingMode: "instant" | "starts_at" | "quote_only";
   aiPricingInsight: string;
 }
@@ -111,7 +117,7 @@ const BOOKING_MODES = [
   },
 ];
 
-const WIZARD_STEPS = ["Service", "Pricing", "Questions", "Add-ons", "Booking", "Review"];
+const WIZARD_STEPS = ["Service", "Pricing", "Questions", "Add-ons", "Checklist", "Booking", "Review"];
 
 function ProgressBar({ step, total }: { step: number; total: number }) {
   const { theme } = useTheme();
@@ -189,7 +195,17 @@ export default function ServiceBlueprintWizardScreen() {
   const [suggestedAddons, setSuggestedAddons] = useState<AddOn[]>([]);
   const [suggestionsAVisible, setSuggestionsAVisible] = useState(false);
 
-  // Step 4: Booking
+  // Step 4: Checklist (per-service default checklist template)
+  const [checklistSteps, setChecklistSteps] = useState<ChecklistStep[]>([]);
+  const [addingChecklistStep, setAddingChecklistStep] = useState(false);
+  const [newChecklistStepText, setNewChecklistStepText] = useState("");
+  const [suggestedChecklistSteps, setSuggestedChecklistSteps] = useState<ChecklistStep[]>([]);
+  const [suggestionsCVisible, setSuggestionsCVisible] = useState(false);
+  // Edit-mode opt-in: when true, the PUT request also rewrites every future
+  // scheduled job that uses this service to the new checklist template.
+  const [applyChecklistToFuture, setApplyChecklistToFuture] = useState(false);
+
+  // Step 5: Booking
   const [bookingMode, setBookingMode] = useState<"instant" | "starts_at" | "quote_only">("instant");
 
   // Step 0: AI description generation
@@ -235,6 +251,18 @@ export default function ServiceBlueprintWizardScreen() {
         const parsed = JSON.parse(String(svc.addOnsJson));
         if (Array.isArray(parsed)) setAddOns(parsed);
       } catch {}
+    }
+    const tpl = (svc as { checklistTemplateJson?: unknown }).checklistTemplateJson;
+    if (Array.isArray(tpl)) {
+      setChecklistSteps(
+        (tpl as Array<{ id?: unknown; label?: unknown }>)
+          .filter((it) => typeof it === "object" && it !== null)
+          .map((it, i) => ({
+            id: String(it.id ?? `c_${Date.now()}_${i}`),
+            label: String(it.label ?? "").slice(0, 200),
+          }))
+          .filter((it) => it.label.length > 0),
+      );
     }
     if (svc.bookingMode) {
       const bm = String(svc.bookingMode);
@@ -370,6 +398,57 @@ export default function ServiceBlueprintWizardScreen() {
     setSuggestionsAVisible(true);
   };
 
+  const handleSuggestChecklistSteps = async () => {
+    const bp = await fetchAIBlueprint();
+    if (!bp) return;
+    const incoming = Array.isArray(bp.checklistTemplate)
+      ? bp.checklistTemplate
+      : [];
+    const alreadyAdded = new Set(
+      checklistSteps.map((s) => s.label.toLowerCase()),
+    );
+    const fresh: ChecklistStep[] = incoming
+      .filter((s) => typeof s === "string" && s.trim().length > 0)
+      .filter((s) => !alreadyAdded.has(s.trim().toLowerCase()))
+      .map((s, i) => ({ id: `cs_${Date.now()}_${i}`, label: s.trim() }));
+    setSuggestedChecklistSteps(fresh);
+    setSuggestionsCVisible(true);
+  };
+
+  const addChecklistStep = () => {
+    const label = newChecklistStepText.trim();
+    if (!label) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setChecklistSteps((prev) => [
+      ...prev,
+      { id: `c_${Date.now()}`, label },
+    ]);
+    setNewChecklistStepText("");
+    setAddingChecklistStep(false);
+  };
+
+  const addSuggestedChecklistStep = (s: ChecklistStep) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setChecklistSteps((prev) => [...prev, { ...s, id: `c_${Date.now()}` }]);
+    setSuggestedChecklistSteps((prev) => prev.filter((x) => x.id !== s.id));
+  };
+
+  const removeChecklistStep = (id: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setChecklistSteps((prev) => prev.filter((s) => s.id !== id));
+  };
+
+  const moveChecklistStep = (index: number, direction: -1 | 1) => {
+    setChecklistSteps((prev) => {
+      const target = index + direction;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      return next;
+    });
+  };
+
   const addQuestion = () => {
     if (!newQuestionText.trim()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -440,6 +519,7 @@ export default function ServiceBlueprintWizardScreen() {
         priceUnit: priceUnit.trim() || "per job",
         duration: 60,
         bookingMode: pricingType === "quote" ? "quote_only" : bookingMode,
+        checklistTemplate: checklistSteps.map((s) => ({ id: s.id, label: s.label })),
       });
       navigation.goBack();
       return;
@@ -467,12 +547,17 @@ export default function ServiceBlueprintWizardScreen() {
         isAddon: false,
         intakeQuestionsJson: JSON.stringify(questions),
         addOnsJson: JSON.stringify(addOns),
+        checklistTemplateJson: checklistSteps.map((s) => ({ id: s.id, label: s.label })),
         bookingMode: apiBookingMode,
         aiPricingInsight: aiBlueprint?.aiPricingInsight || null,
       };
 
       if (isEditMode) {
-        await apiRequest("PUT", `/api/provider/${providerId}/custom-services/${editServiceId}`, payload);
+        await apiRequest(
+          "PUT",
+          `/api/provider/${providerId}/custom-services/${editServiceId}`,
+          { ...payload, applyChecklistToFutureJobs: applyChecklistToFuture },
+        );
       } else {
         await apiRequest("POST", `/api/provider/${providerId}/custom-services`, payload);
       }
@@ -1095,8 +1180,8 @@ export default function ServiceBlueprintWizardScreen() {
     </KeyboardAwareScrollViewCompat>
   );
 
-  // ─── Step 4: Booking ─────────────────────────────────────────────────────────
-  const renderStep4 = () => (
+  // ─── Step 4: Checklist ───────────────────────────────────────────────────────
+  const renderChecklistStep = () => (
     <KeyboardAwareScrollViewCompat
       style={styles.flex}
       contentContainerStyle={[styles.stepContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 120 }]}
@@ -1105,6 +1190,202 @@ export default function ServiceBlueprintWizardScreen() {
     >
       <View style={styles.stepInner}>
         <Pressable onPress={() => setStep(3)} style={styles.backRow}>
+          <Feather name="arrow-left" size={16} color={Colors.accent} />
+          <ThemedText style={[styles.backText, { color: Colors.accent }]}>Back</ThemedText>
+        </Pressable>
+        <ThemedText type="h2" style={styles.stepHeading}>Default checklist</ThemedText>
+        <ThemedText style={[styles.stepSubheading, { color: theme.textSecondary }]}>
+          The on-site steps you usually run for this service. Every new job copies this list — leave it empty to start each job blank.
+        </ThemedText>
+
+        {checklistSteps.length > 0 ? (
+          <GlassCard style={styles.listCard}>
+            {checklistSteps.map((s, i) => (
+              <View
+                key={s.id}
+                style={[
+                  styles.listRow,
+                  { borderBottomColor: theme.borderLight },
+                  i < checklistSteps.length - 1 && styles.listRowBorder,
+                ]}
+              >
+                <View style={[styles.listNum, { backgroundColor: Colors.accent + "20" }]}>
+                  <ThemedText style={[styles.listNumText, { color: Colors.accent }]}>{i + 1}</ThemedText>
+                </View>
+                <View style={styles.listInfo}>
+                  <ThemedText style={[styles.listName, { color: theme.text }]}>{s.label}</ThemedText>
+                </View>
+                <Pressable
+                  onPress={() => moveChecklistStep(i, -1)}
+                  disabled={i === 0}
+                  hitSlop={6}
+                  style={{ opacity: i === 0 ? 0.3 : 1, paddingHorizontal: 4 }}
+                  testID={`button-move-checklist-step-up-${i}`}
+                >
+                  <Feather name="arrow-up" size={15} color={theme.textTertiary} />
+                </Pressable>
+                <Pressable
+                  onPress={() => moveChecklistStep(i, 1)}
+                  disabled={i === checklistSteps.length - 1}
+                  hitSlop={6}
+                  style={{ opacity: i === checklistSteps.length - 1 ? 0.3 : 1, paddingHorizontal: 4 }}
+                  testID={`button-move-checklist-step-down-${i}`}
+                >
+                  <Feather name="arrow-down" size={15} color={theme.textTertiary} />
+                </Pressable>
+                <Pressable
+                  onPress={() => removeChecklistStep(s.id)}
+                  hitSlop={8}
+                  style={{ paddingLeft: 4 }}
+                  testID={`button-remove-checklist-step-${i}`}
+                >
+                  <Feather name="trash-2" size={15} color={theme.textTertiary} />
+                </Pressable>
+              </View>
+            ))}
+          </GlassCard>
+        ) : null}
+
+        {addingChecklistStep ? (
+          <Animated.View entering={FadeIn.duration(200)}>
+            <GlassCard style={styles.addFormCard}>
+              <View style={[styles.inputBox, { borderColor: theme.border, backgroundColor: theme.backgroundElevated }]}>
+                <TextInput
+                  style={[styles.inputText, { color: theme.text }]}
+                  placeholder="e.g., Lay drop cloths"
+                  placeholderTextColor={theme.textTertiary}
+                  value={newChecklistStepText}
+                  onChangeText={setNewChecklistStepText}
+                  autoFocus
+                  returnKeyType="done"
+                  onSubmitEditing={addChecklistStep}
+                  testID="input-checklist-step"
+                />
+              </View>
+              <View style={[styles.addFormBtns, { justifyContent: "flex-end" }]}>
+                <Pressable
+                  onPress={() => { setAddingChecklistStep(false); setNewChecklistStepText(""); }}
+                  style={[styles.addFormCancelBtn, { borderColor: theme.borderLight }]}
+                >
+                  <ThemedText style={[styles.addFormCancelText, { color: theme.textSecondary }]}>Cancel</ThemedText>
+                </Pressable>
+                <Pressable
+                  onPress={addChecklistStep}
+                  disabled={!newChecklistStepText.trim()}
+                  style={[styles.addFormConfirmBtn, { backgroundColor: newChecklistStepText.trim() ? Colors.accent : Colors.accent + "40" }]}
+                  testID="button-confirm-add-checklist-step"
+                >
+                  <ThemedText style={styles.addFormConfirmText}>Add</ThemedText>
+                </Pressable>
+              </View>
+            </GlassCard>
+          </Animated.View>
+        ) : (
+          <Pressable
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setAddingChecklistStep(true); }}
+            style={[styles.addBtn, { borderColor: theme.borderLight, backgroundColor: theme.backgroundElevated }]}
+            testID="button-add-checklist-step"
+          >
+            <Feather name="plus" size={16} color={Colors.accent} />
+            <ThemedText style={[styles.addBtnText, { color: Colors.accent }]}>Add a step</ThemedText>
+          </Pressable>
+        )}
+
+        {suggestionsCVisible && suggestedChecklistSteps.length > 0 ? (
+          <Animated.View entering={FadeIn.duration(250)}>
+            <View style={styles.suggestHeader}>
+              <View style={styles.suggestHeaderLeft}>
+                <Feather name="cpu" size={13} color={Colors.accent} />
+                <ThemedText style={[styles.suggestHeaderText, { color: Colors.accent }]}>
+                  Suggested for {serviceName}
+                </ThemedText>
+              </View>
+              <Pressable onPress={() => setSuggestionsCVisible(false)} hitSlop={8}>
+                <Feather name="x" size={14} color={theme.textTertiary} />
+              </Pressable>
+            </View>
+            <GlassCard style={styles.listCard}>
+              {suggestedChecklistSteps.map((s, i) => (
+                <View
+                  key={s.id}
+                  style={[
+                    styles.listRow,
+                    { borderBottomColor: theme.borderLight },
+                    i < suggestedChecklistSteps.length - 1 && styles.listRowBorder,
+                  ]}
+                >
+                  <View style={styles.listInfo}>
+                    <ThemedText style={[styles.listName, { color: theme.text }]}>{s.label}</ThemedText>
+                  </View>
+                  <Pressable
+                    onPress={() => addSuggestedChecklistStep(s)}
+                    style={[styles.addSuggestBtn, { backgroundColor: Colors.accent + "15", borderColor: Colors.accent + "40" }]}
+                    testID={`button-add-suggested-checklist-step-${i}`}
+                  >
+                    <Feather name="plus" size={14} color={Colors.accent} />
+                    <ThemedText style={[styles.addSuggestText, { color: Colors.accent }]}>Add</ThemedText>
+                  </Pressable>
+                </View>
+              ))}
+            </GlassCard>
+          </Animated.View>
+        ) : null}
+
+        {aiError.length > 0 ? (
+          <ThemedText style={styles.aiErrorText}>{aiError}</ThemedText>
+        ) : null}
+
+        {!suggestionsCVisible ? (
+          <Pressable
+            onPress={handleSuggestChecklistSteps}
+            disabled={loadingAI}
+            style={[styles.aiDescBtn, { backgroundColor: Colors.accent + "10", borderColor: Colors.accent + "30" }]}
+            testID="button-suggest-checklist-steps"
+          >
+            {loadingAI ? (
+              <ActivityIndicator size="small" color={Colors.accent} />
+            ) : (
+              <Feather name="cpu" size={13} color={Colors.accent} />
+            )}
+            <ThemedText style={[styles.aiDescBtnText, { color: Colors.accent }]}>
+              {loadingAI ? "Getting suggestions..." : `Suggest steps for ${serviceName || "this service"}`}
+            </ThemedText>
+          </Pressable>
+        ) : null}
+
+        {isEditMode ? (
+          <View style={[styles.applyToFutureRow, { borderColor: theme.borderLight, backgroundColor: theme.backgroundElevated }]}>
+            <View style={{ flex: 1 }}>
+              <ThemedText style={[styles.applyToFutureLabel, { color: theme.text }]}>
+                Apply to existing future jobs
+              </ThemedText>
+              <ThemedText style={[styles.applyToFutureHint, { color: theme.textSecondary }]}>
+                Rewrite the checklist on every upcoming job that uses this service.
+              </ThemedText>
+            </View>
+            <Switch
+              value={applyChecklistToFuture}
+              onValueChange={setApplyChecklistToFuture}
+              trackColor={{ false: theme.borderLight, true: Colors.accent }}
+              thumbColor="#fff"
+              testID="switch-apply-checklist-to-future"
+            />
+          </View>
+        ) : null}
+      </View>
+    </KeyboardAwareScrollViewCompat>
+  );
+
+  // ─── Step 5: Booking ─────────────────────────────────────────────────────────
+  const renderStep4 = () => (
+    <KeyboardAwareScrollViewCompat
+      style={styles.flex}
+      contentContainerStyle={[styles.stepContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 120 }]}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="always"
+    >
+      <View style={styles.stepInner}>
+        <Pressable onPress={() => setStep(4)} style={styles.backRow}>
           <Feather name="arrow-left" size={16} color={Colors.accent} />
           <ThemedText style={[styles.backText, { color: Colors.accent }]}>Back</ThemedText>
         </Pressable>
@@ -1172,7 +1453,7 @@ export default function ServiceBlueprintWizardScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.stepInner}>
-          <Pressable onPress={() => setStep(4)} style={styles.backRow}>
+          <Pressable onPress={() => setStep(5)} style={styles.backRow}>
             <Feather name="arrow-left" size={16} color={Colors.accent} />
             <ThemedText style={[styles.backText, { color: Colors.accent }]}>Back</ThemedText>
           </Pressable>
@@ -1262,13 +1543,30 @@ export default function ServiceBlueprintWizardScreen() {
 
             <View style={styles.reviewRow}>
               <View style={[styles.reviewIcon, { backgroundColor: Colors.accent + "15" }]}>
+                <Feather name="check-square" size={16} color={Colors.accent} />
+              </View>
+              <View style={styles.reviewInfo}>
+                <ThemedText style={[styles.reviewLabel, { color: theme.textTertiary }]}>CHECKLIST</ThemedText>
+                <ThemedText style={[styles.reviewValue, { color: theme.text }]}>
+                  {checklistSteps.length > 0 ? `${checklistSteps.length} step${checklistSteps.length !== 1 ? "s" : ""}` : "None — jobs start blank"}
+                </ThemedText>
+              </View>
+              <Pressable onPress={() => setStep(4)} hitSlop={8}>
+                <Feather name="edit-2" size={15} color={theme.textTertiary} />
+              </Pressable>
+            </View>
+
+            <View style={[styles.reviewDivider, { backgroundColor: theme.borderLight }]} />
+
+            <View style={styles.reviewRow}>
+              <View style={[styles.reviewIcon, { backgroundColor: Colors.accent + "15" }]}>
                 <Feather name="calendar" size={16} color={Colors.accent} />
               </View>
               <View style={styles.reviewInfo}>
                 <ThemedText style={[styles.reviewLabel, { color: theme.textTertiary }]}>BOOKING</ThemedText>
                 <ThemedText style={[styles.reviewValue, { color: theme.text }]}>{bookingLabel}</ThemedText>
               </View>
-              <Pressable onPress={() => setStep(4)} hitSlop={8}>
+              <Pressable onPress={() => setStep(5)} hitSlop={8}>
                 <Feather name="edit-2" size={15} color={theme.textTertiary} />
               </Pressable>
             </View>
@@ -1428,6 +1726,7 @@ export default function ServiceBlueprintWizardScreen() {
     true,
     true,
     true,
+    true,
     serviceName.trim().length > 0,
   ];
 
@@ -1447,18 +1746,20 @@ export default function ServiceBlueprintWizardScreen() {
         quickEditLabel,
         quickEditLabel,
         quickEditLabel,
+        quickEditLabel,
       ]
     : [
         "Continue to Pricing",
         "Continue to Questions",
         "Continue to Add-ons",
+        "Continue to Checklist",
         "Continue to Booking",
         isEditMode ? "Review Changes" : "Review My Service",
         finalStepLabel,
       ];
 
   const handleCTA = () => {
-    if (!isQuickEdit && step < 5) {
+    if (!isQuickEdit && step < 6) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       setStep(step + 1);
     } else {
@@ -1486,8 +1787,9 @@ export default function ServiceBlueprintWizardScreen() {
       {step === 1 ? renderStep1() : null}
       {step === 2 ? renderStep2() : null}
       {step === 3 ? renderStep3() : null}
-      {step === 4 ? renderStep4() : null}
-      {step === 5 ? renderStep5() : null}
+      {step === 4 ? renderChecklistStep() : null}
+      {step === 5 ? renderStep4() : null}
+      {step === 6 ? renderStep5() : null}
 
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing.sm, borderTopColor: theme.borderLight, backgroundColor: theme.backgroundDefault }]}>
         <PrimaryButton
@@ -1756,6 +2058,17 @@ const styles = StyleSheet.create({
   reviewValue: { ...Typography.subhead, fontWeight: "700" },
   reviewMeta: { ...Typography.caption },
   reviewDivider: { height: StyleSheet.hairlineWidth, marginLeft: Spacing.md + 36 + Spacing.md },
+  applyToFutureRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    marginTop: Spacing.sm,
+  },
+  applyToFutureLabel: { ...Typography.subhead, fontWeight: "600" },
+  applyToFutureHint: { ...Typography.caption, marginTop: 2 },
   saveErrorText: { ...Typography.caption, color: "#FF3B30", textAlign: "center" },
   deleteServiceBtn: {
     flexDirection: "row",
