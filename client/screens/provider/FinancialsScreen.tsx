@@ -17,7 +17,8 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import { useLayout } from "@/hooks/useLayout";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { useNavigation, useFocusEffect, useRoute, type RouteProp } from "@react-navigation/native";
+import type { ProviderTabParamList } from "@/navigation/ProviderTabNavigator";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeIn, FadeOut } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -1098,14 +1099,32 @@ export default function FinancialsScreen() {
   const tabBarHeight = useFloatingTabBarHeight();
   const { horizontalPadding } = useLayout();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<ProviderTabParamList, "FinancialsTab">>();
   const { theme } = useTheme();
   const { providerProfile } = useAuthStore();
   const queryClient = useQueryClient();
 
   const providerId = providerProfile?.id ?? "";
-  const [sectionTab, setSectionTab] = useState<SectionTab>("overview");
-  const [transactionTab, setTransactionTab] = useState<TransactionTab>("invoices");
-  const [transactionFilter, setTransactionFilter] = useState<"all" | "invoices" | "estimates">("all");
+  const [sectionTab, setSectionTab] = useState<SectionTab>(route.params?.initialSection ?? "overview");
+  const [transactionTab, setTransactionTab] = useState<TransactionTab>(route.params?.initialTransactionTab ?? "invoices");
+  const [transactionFilter, setTransactionFilter] = useState<"all" | "invoices" | "estimates">(
+    route.params?.initialTransactionFilter ?? "all",
+  );
+
+  useEffect(() => {
+    const p = route.params;
+    if (!p) return;
+    if (p.initialSection) setSectionTab(p.initialSection);
+    if (p.initialTransactionTab) setTransactionTab(p.initialTransactionTab);
+    if (p.initialTransactionFilter) setTransactionFilter(p.initialTransactionFilter);
+    if (p.initialSection || p.initialTransactionTab || p.initialTransactionFilter) {
+      navigation.setParams({
+        initialSection: undefined,
+        initialTransactionTab: undefined,
+        initialTransactionFilter: undefined,
+      } as Partial<NonNullable<typeof p>>);
+    }
+  }, [route.params, navigation]);
   const [dateRange, setDateRange] = useState<DateRange>("month");
   const [refreshing, setRefreshing] = useState(false);
   const [showInlinePicker, setShowInlinePicker] = useState(false);

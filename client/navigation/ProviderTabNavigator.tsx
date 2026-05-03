@@ -24,7 +24,7 @@ export type ProviderTabParamList = {
   HomeTab: undefined;
   ClientsTab: { initialFilter?: ClientsTabFilter } | undefined;
   ScheduleTab: undefined;
-  FinancialsTab: undefined;
+  FinancialsTab: { initialSection?: "overview" | "transactions" | "more"; initialTransactionTab?: "invoices" | "payouts"; initialTransactionFilter?: "all" | "invoices" | "estimates" } | undefined;
   MoreTab: undefined;
 };
 

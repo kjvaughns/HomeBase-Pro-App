@@ -246,10 +246,6 @@ export default function AddInvoiceScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       if (result.kind === "estimate") {
         queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "estimates"] });
-        if (result.id) {
-          navigation.replace("EstimateDetail", { estimateId: result.id });
-          return;
-        }
       } else {
         queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "invoices"] });
         queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "stats"] });

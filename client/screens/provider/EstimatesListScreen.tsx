@@ -17,7 +17,16 @@ export default function EstimatesListScreen() {
             name: "Main",
             state: {
               index: 0,
-              routes: [{ name: "FinancialsTab" }],
+              routes: [
+                {
+                  name: "FinancialsTab",
+                  params: {
+                    initialSection: "transactions",
+                    initialTransactionTab: "invoices",
+                    initialTransactionFilter: "estimates",
+                  },
+                },
+              ],
             },
           },
         ],
