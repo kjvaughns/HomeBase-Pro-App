@@ -10,6 +10,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useLayout } from "@/hooks/useLayout";
 import { Colors, BorderRadius, Spacing } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { useOnboardingStore } from "@/state/onboardingStore";
 
 const AppLogo = require("../../../assets/images/icon.png");
 
@@ -25,15 +26,21 @@ export default function FirstLaunchScreen({ navigation }: Props) {
   const ctaOpacity = useRef(new Animated.Value(0)).current;
   const [advanced, setAdvanced] = useState(false);
 
+  const { setHasCompletedFirstLaunch } = useOnboardingStore();
+
   const goNext = () => {
     if (advanced) return;
     setAdvanced(true);
+    // Persist that the value-prop / first-launch screen has been seen so
+    // returning unauthenticated users skip straight to AccountType / Login.
+    setHasCompletedFirstLaunch(true);
     navigation.navigate("AccountTypeSelection");
   };
 
   const goLogin = () => {
     if (advanced) return;
     setAdvanced(true);
+    setHasCompletedFirstLaunch(true);
     navigation.navigate("Login");
   };
 

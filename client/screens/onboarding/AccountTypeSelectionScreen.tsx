@@ -83,7 +83,10 @@ export default function AccountTypeSelectionScreen({ navigation }: Props) {
     ]).start();
   }, []);
 
+  const startSignupTimer = useOnboardingStore((s) => s.startSignupTimer);
+
   const handleHomeowner = () => {
+    startSignupTimer();
     trackEvent(AnalyticsEvents.SignupStarted, { role: "homeowner" });
     setAccountType("homeowner");
     setHasCompletedFirstLaunch(true);
@@ -95,6 +98,7 @@ export default function AccountTypeSelectionScreen({ navigation }: Props) {
   };
 
   const handleProvider = () => {
+    startSignupTimer();
     trackEvent(AnalyticsEvents.SignupStarted, { role: "provider" });
     setAccountType("provider");
     navigation.navigate("EssentialSetup");

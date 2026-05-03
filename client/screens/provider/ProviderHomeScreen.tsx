@@ -23,7 +23,23 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useProviderStore } from "@/state/providerStore";
+import { useOnboardingStore } from "@/state/onboardingStore";
 import { isUpcomingJob } from "@/lib/jobUtils";
+
+type BusinessHourEntry = { enabled?: boolean; open?: string; close?: string };
+type BusinessHoursMap = Record<string, BusinessHourEntry | undefined>;
+type BookingPoliciesShape = {
+  instantBooking?: boolean;
+  depositRequired?: boolean;
+  depositAmount?: number;
+};
+
+function isAnyBusinessHourEnabled(
+  hours: BusinessHoursMap | null | undefined,
+): boolean {
+  if (!hours || typeof hours !== "object") return false;
+  return Object.values(hours).some((d) => !!d && d.enabled === true);
+}
 
 interface ProviderStats {
   revenueMTD: number;
@@ -310,23 +326,46 @@ export default function ProviderHomeScreen() {
   const hasServices = (providerProfile?.services?.length ?? 0) > 0;
   const hasMultipleServices = (providerProfile?.services?.length ?? 0) > 1;
   const hasClients = clients.length > 0;
+  const firstBookingLink = bookingLinksData?.bookingLinks?.[0];
   const hasBookingLink = (bookingLinksData?.bookingLinks?.length ?? 0) > 0;
-  const providerRecord = freshProviderData?.provider;
-  const hasBio = !!(providerRecord?.description?.trim?.());
-  const businessHoursValue = providerRecord?.businessHours;
-  const hasBusinessHours =
-    !!businessHoursValue &&
-    typeof businessHoursValue === "object" &&
-    Object.values(businessHoursValue as Record<string, any>).some(
-      (d) => d && (d as any).enabled,
-    );
-  const bookingPolicies = providerRecord?.bookingPolicies as
-    | { instantBooking?: boolean; depositRequired?: boolean }
+  const providerRecord = freshProviderData?.provider as
+    | {
+        description?: string | null;
+        businessHours?: BusinessHoursMap | null;
+        bookingPolicies?: BookingPoliciesShape | null;
+      }
     | undefined;
+  const hasBio = !!providerRecord?.description?.trim?.();
+  const hasBusinessHours = isAnyBusinessHourEnabled(
+    providerRecord?.businessHours,
+  );
+  const bookingPolicies = providerRecord?.bookingPolicies ?? undefined;
   const hasCustomPolicies =
     !!bookingPolicies &&
     (bookingPolicies.instantBooking === true ||
       bookingPolicies.depositRequired === true);
+  const intakeQuestionsRaw = firstBookingLink?.intakeQuestions;
+  const hasIntakeQuestions = (() => {
+    if (!intakeQuestionsRaw) return false;
+    if (Array.isArray(intakeQuestionsRaw))
+      return intakeQuestionsRaw.length > 0;
+    if (typeof intakeQuestionsRaw === "string") {
+      try {
+        const parsed = JSON.parse(intakeQuestionsRaw);
+        return Array.isArray(parsed) && parsed.length > 0;
+      } catch {
+        return intakeQuestionsRaw.trim().length > 0;
+      }
+    }
+    return false;
+  })();
+
+  const dismissedChecklistSteps = useOnboardingStore(
+    (s) => s.dismissedChecklistSteps,
+  );
+  const dismissChecklistStep = useOnboardingStore(
+    (s) => s.dismissChecklistStep,
+  );
 
   const allGettingStartedSteps = [
     {
@@ -386,6 +425,14 @@ export default function ProviderHomeScreen() {
       onPress: () => navigation.navigate("BusinessHub"),
     },
     {
+      key: "intake-questions",
+      label: "Add intake questions",
+      subtitle: "Capture details before clients book",
+      icon: "help-circle" as const,
+      done: hasIntakeQuestions,
+      onPress: () => navigation.navigate("BookingLink"),
+    },
+    {
       key: "more-services",
       label: "Add more services",
       subtitle: "AI service blueprint can scaffold the next one",
@@ -396,7 +443,9 @@ export default function ProviderHomeScreen() {
     },
   ];
 
-  const gettingStartedSteps = allGettingStartedSteps.filter((s) => !s.done);
+  const gettingStartedSteps = allGettingStartedSteps.filter(
+    (s) => !s.done && !dismissedChecklistSteps.includes(s.key),
+  );
   const showGettingStarted = !isLoading && gettingStartedSteps.length > 0;
 
   // Loading — trying to recover the provider profile from API
@@ -631,7 +680,7 @@ export default function ProviderHomeScreen() {
             <SectionHeader title="Getting Started" />
             <GlassCard style={styles.checklistCard}>
               {gettingStartedSteps.map((step, index) => (
-                <Pressable
+                <View
                   key={step.key}
                   style={[
                     styles.checklistRow,
@@ -640,37 +689,52 @@ export default function ProviderHomeScreen() {
                       borderBottomColor: theme.separator,
                     },
                   ]}
-                  onPress={step.done ? undefined : step.onPress}
-                  testID={`checklist-${step.key}`}
                 >
-                  <View
-                    style={[
-                      styles.checklistIcon,
-                      { backgroundColor: step.done ? Colors.accentLight : theme.backgroundSecondary },
-                    ]}
+                  <Pressable
+                    style={styles.checklistRowMain}
+                    onPress={step.done ? undefined : step.onPress}
+                    testID={`checklist-${step.key}`}
                   >
-                    <Feather
-                      name={step.done ? "check" : step.icon}
-                      size={16}
-                      color={step.done ? Colors.accent : theme.textSecondary}
-                    />
-                  </View>
-                  <View style={styles.checklistText}>
-                    <ThemedText
-                      style={[styles.checklistLabel, step.done && { color: theme.textSecondary }]}
+                    <View
+                      style={[
+                        styles.checklistIcon,
+                        { backgroundColor: step.done ? Colors.accentLight : theme.backgroundSecondary },
+                      ]}
                     >
-                      {step.label}
-                    </ThemedText>
-                    <ThemedText style={[styles.checklistSubtitle, { color: theme.textSecondary }]}>
-                      {step.subtitle}
-                    </ThemedText>
-                  </View>
-                  {step.done ? (
-                    <ThemedText style={[styles.doneLabel, { color: Colors.accent }]}>Done</ThemedText>
-                  ) : (
-                    <Feather name="chevron-right" size={16} color={theme.textTertiary} />
-                  )}
-                </Pressable>
+                      <Feather
+                        name={step.done ? "check" : step.icon}
+                        size={16}
+                        color={step.done ? Colors.accent : theme.textSecondary}
+                      />
+                    </View>
+                    <View style={styles.checklistText}>
+                      <ThemedText
+                        style={[styles.checklistLabel, step.done && { color: theme.textSecondary }]}
+                      >
+                        {step.label}
+                      </ThemedText>
+                      <ThemedText style={[styles.checklistSubtitle, { color: theme.textSecondary }]}>
+                        {step.subtitle}
+                      </ThemedText>
+                    </View>
+                    {step.done ? (
+                      <ThemedText style={[styles.doneLabel, { color: Colors.accent }]}>Done</ThemedText>
+                    ) : (
+                      <Feather name="chevron-right" size={16} color={theme.textTertiary} />
+                    )}
+                  </Pressable>
+                  {!step.done ? (
+                    <Pressable
+                      onPress={() => dismissChecklistStep(step.key)}
+                      style={styles.checklistDismiss}
+                      hitSlop={10}
+                      testID={`checklist-dismiss-${step.key}`}
+                      accessibilityLabel={`Dismiss ${step.label}`}
+                    >
+                      <Feather name="x" size={14} color={theme.textTertiary} />
+                    </Pressable>
+                  ) : null}
+                </View>
               ))}
             </GlassCard>
           </Animated.View>
@@ -914,9 +978,20 @@ const styles = StyleSheet.create({
   checklistRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: Spacing.md,
+  },
+  checklistRowMain: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingLeft: Spacing.md,
     paddingVertical: Spacing.md,
     gap: Spacing.sm,
+  },
+  checklistDismiss: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    alignItems: "center",
+    justifyContent: "center",
   },
   checklistIcon: {
     width: 32,

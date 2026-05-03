@@ -47,8 +47,13 @@ export default function EssentialSetupScreen({ navigation }: Props) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const { horizontalPadding } = useLayout();
-  const { setHasCompletedFirstLaunch, setHasCompletedProviderSetup } =
-    useOnboardingStore();
+  const {
+    setHasCompletedFirstLaunch,
+    setHasCompletedProviderSetup,
+    signupStartedAt,
+    startSignupTimer,
+    clearSignupTimer,
+  } = useOnboardingStore();
   const { login, activateProviderMode, setNeedsRoleSelection } = useAuthStore();
 
   const [businessName, setBusinessName] = useState("");
@@ -61,15 +66,23 @@ export default function EssentialSetupScreen({ navigation }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
-  const [signupStartedAt] = useState(() => Date.now());
+
+  // If a user lands here directly (e.g. via deep link) without having
+  // tapped a role card we still want a meaningful elapsed time, so start
+  // the timer on mount as a fallback. startSignupTimer is a no-op if
+  // the timer has already been started.
+  React.useEffect(() => {
+    startSignupTimer();
+  }, [startSignupTimer]);
 
   const validate = () => {
     const e: Record<string, string> = {};
     if (!businessName.trim()) e.businessName = "Business name is required";
     if (!category) e.category = "Pick your primary service";
     if (!/^\d{5}(-\d{4})?$/.test(zip.trim())) e.zip = "Enter a valid ZIP";
-    if (startingPrice && Number.isNaN(parseFloat(startingPrice)))
-      e.startingPrice = "Enter a number";
+    const priceNum = parseFloat(startingPrice);
+    if (!startingPrice.trim() || Number.isNaN(priceNum) || priceNum <= 0)
+      e.startingPrice = "Enter a starting price (e.g. 125)";
     if (!accountName.trim()) e.accountName = "Your name is required";
     if (!/\S+@\S+\.\S+/.test(email.trim())) e.email = "Enter a valid email";
     if (password.length < 8) e.password = "At least 8 characters";
@@ -93,7 +106,6 @@ export default function EssentialSetupScreen({ navigation }: Props) {
       const categoryLabel =
         SERVICE_CATEGORIES.find((c) => c.id === category)?.label || "Service";
       const priceNum = parseFloat(startingPrice);
-      const hasPrice = !Number.isNaN(priceNum) && priceNum > 0;
 
       const response = await apiRequest(
         "POST",
@@ -108,8 +120,8 @@ export default function EssentialSetupScreen({ navigation }: Props) {
           initialService: {
             name: categoryLabel,
             category: categoryLabel,
-            quoteRequired: !hasPrice,
-            price: hasPrice ? priceNum : undefined,
+            quoteRequired: false,
+            price: priceNum,
             duration: 60,
           },
         },
@@ -156,13 +168,19 @@ export default function EssentialSetupScreen({ navigation }: Props) {
       setHasCompletedProviderSetup(true);
       setNeedsRoleSelection(false);
 
-      const elapsedMs = Date.now() - signupStartedAt;
+      // Measure end-to-end time from the original `signup_started` tap
+      // (persisted in onboardingStore) — falls back to `now` if the
+      // timer was never started so we still emit a finite value.
+      const startedAt = signupStartedAt ?? Date.now();
+      const elapsedMs = Math.max(0, Date.now() - startedAt);
       trackEvent(AnalyticsEvents.SignupCompleted, { role: "provider" });
       trackEvent(AnalyticsEvents.ProviderFirstBookingLinkReady, {
         providerId: data.provider.id,
         elapsedMs,
         elapsedSeconds: Math.round(elapsedMs / 1000),
+        timerStarted: signupStartedAt !== null,
       });
+      clearSignupTimer();
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       if (message.includes("409") || message.includes("exists")) {
@@ -310,7 +328,7 @@ export default function EssentialSetupScreen({ navigation }: Props) {
             <ThemedText
               style={[styles.helperText, { color: theme.textTertiary }]}
             >
-              Leave blank for quote-only
+              Shown on your booking link
             </ThemedText>
           </View>
         </View>
