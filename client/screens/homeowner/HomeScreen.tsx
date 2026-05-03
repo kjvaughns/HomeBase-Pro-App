@@ -68,11 +68,17 @@ export default function HomeScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
 
-  const { data: appointmentsData, refetch } = useQuery<{ appointments: Appointment[] }>({
+  const {
+    data: appointmentsData,
+    refetch,
+    isLoading: isLoadingAppointments,
+    isError: appointmentsError,
+  } = useQuery<{ appointments: Appointment[] }>({
     queryKey: ["/api/users", user?.id, "appointments"],
     enabled: !!user?.id,
   });
   const appointments: Appointment[] = appointmentsData?.appointments ?? [];
+  const showAppointmentsLoader = !!user?.id && isLoadingAppointments && !appointmentsData;
 
   useFocusEffect(
     useCallback(() => {
@@ -221,7 +227,35 @@ export default function HomeScreen() {
         ) : null}
 
         <Animated.View entering={FadeInDown.delay(300).duration(400)}>
-          {recentAppointments.length > 0 ? (
+          {showAppointmentsLoader ? (
+            <GlassCard style={styles.firstBookingCard} testID="card-home-appointments-loading">
+              <View style={styles.firstBookingCardContent}>
+                <View style={[styles.firstBookingIconRing, { backgroundColor: Colors.accentLight }]}>
+                  <Feather name="loader" size={20} color={Colors.accent} />
+                </View>
+                <View style={styles.firstBookingContent}>
+                  <ThemedText style={styles.firstBookingTitle}>Loading your bookings…</ThemedText>
+                </View>
+              </View>
+            </GlassCard>
+          ) : appointmentsError ? (
+            <Pressable onPress={() => refetch()} testID="card-home-appointments-retry">
+              <GlassCard style={styles.firstBookingCard}>
+                <View style={styles.firstBookingCardContent}>
+                  <View style={[styles.firstBookingIconRing, { backgroundColor: Colors.accentLight }]}>
+                    <Feather name="alert-circle" size={20} color={Colors.accent} />
+                  </View>
+                  <View style={styles.firstBookingContent}>
+                    <ThemedText style={styles.firstBookingTitle}>Couldn't load bookings</ThemedText>
+                    <ThemedText style={[styles.firstBookingSubtext, { color: theme.textSecondary }]}>
+                      Tap to retry
+                    </ThemedText>
+                  </View>
+                  <Feather name="refresh-cw" size={18} color={theme.textSecondary} />
+                </View>
+              </GlassCard>
+            </Pressable>
+          ) : recentAppointments.length > 0 ? (
             <>
               <View style={styles.sectionHeader}>
                 <ThemedText style={styles.sectionTitle}>Recent Bookings</ThemedText>

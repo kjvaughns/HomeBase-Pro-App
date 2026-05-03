@@ -244,14 +244,12 @@ export function handleNotificationNavigation(
       screen === "Leads" ||
       screen === "LeadsTab" ||
       // Server currently sends `screen: "ProviderIntakeSubmissions"` for
-      // new-booking-request pushes; route those into the Clients tab's
-      // Leads filter (Task #330 folded the standalone Leads tab into Clients).
+      // new-booking-request pushes. Task #330 removed the standalone Leads
+      // bottom tab but kept the rich Leads stack screen (intake submissions
+      // + accept/decline actions) — push deep links still land there.
       screen === "ProviderIntakeSubmissions"
     ) {
-      navigation.navigate("Main", {
-        screen: "ClientsTab",
-        params: { initialFilter: "lead" },
-      });
+      navigation.navigate("Leads");
     } else if (screen === "Review") {
       const appointmentId = (params?.appointmentId as string | undefined)
         ?? (data.appointmentId as string | undefined);

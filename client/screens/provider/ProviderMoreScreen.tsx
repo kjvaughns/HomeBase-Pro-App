@@ -56,6 +56,10 @@ export default function ProviderMoreScreen() {
     setShowCrewPicker(true);
   };
 
+  // Every authenticated HomeBase user has homeowner mode available — the
+  // homeowner portal is the default surface and providers are an opt-in
+  // overlay (see authStore.ts hydrate() role precedence). The switch row
+  // is therefore always shown for an authenticated provider session.
   const handleSwitchToHomeowner = () => {
     setActiveRole("homeowner");
     navigation.reset({ index: 0, routes: [{ name: "Main" }] });

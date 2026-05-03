@@ -705,7 +705,7 @@ export default function ProviderHomeScreen() {
           <Animated.View entering={FadeInDown.delay(250).duration(400)}>
             <Pressable
               testID="card-leads-banner"
-              onPress={() => navigation.navigate("Main", { screen: "ClientsTab", params: { initialFilter: "lead" } })}
+              onPress={() => navigation.navigate("Leads")}
             >
               <GlassCard
                 style={[
