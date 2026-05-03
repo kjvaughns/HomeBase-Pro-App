@@ -9831,6 +9831,25 @@ function parseUserName(name) {
     lastName: parts.slice(1).join(" ")
   };
 }
+function normalizeProviderForResponse(provider) {
+  const tolerantParse = (value) => {
+    if (value == null) return null;
+    if (typeof value !== "string") return value;
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  };
+  return {
+    ...provider,
+    bookingPolicies: tolerantParse(provider.bookingPolicies) ?? null,
+    businessHours: tolerantParse(provider.businessHours) ?? null,
+    capabilityTags: Array.isArray(provider.capabilityTags) ? provider.capabilityTags : [],
+    serviceZipCodes: Array.isArray(provider.serviceZipCodes) ? provider.serviceZipCodes : null,
+    serviceCities: Array.isArray(provider.serviceCities) ? provider.serviceCities : null
+  };
+}
 function formatHomeResponse(home) {
   const { label, street, zip, ...rest } = home;
   return {
@@ -14770,24 +14789,14 @@ Respond with JSON only:
     requireAuth,
     async (req, res) => {
       try {
+        if (req.params.userId !== req.authenticatedUserId) {
+          return res.status(403).json({ error: "Forbidden: you may only look up your own provider record" });
+        }
         const provider = await storage.getProviderByUserId(req.params.userId);
         if (!provider) {
           return res.status(404).json({ error: "Provider not found" });
         }
-        const parsed = { ...provider };
-        if (parsed.bookingPolicies && typeof parsed.bookingPolicies === "string") {
-          try {
-            parsed.bookingPolicies = JSON.parse(parsed.bookingPolicies);
-          } catch {
-          }
-        }
-        if (parsed.businessHours && typeof parsed.businessHours === "string") {
-          try {
-            parsed.businessHours = JSON.parse(parsed.businessHours);
-          } catch {
-          }
-        }
-        res.json({ provider: parsed });
+        res.json({ provider: normalizeProviderForResponse(provider) });
       } catch (error) {
         console.error("Get provider error:", error);
         res.status(500).json({ error: "Failed to get provider" });
@@ -14806,21 +14815,7 @@ Respond with JSON only:
         if (provider.userId !== req.authenticatedUserId) {
           return res.status(403).json({ error: "Forbidden: you do not own this provider profile" });
         }
-        const bookingPolicies = provider.bookingPolicies && typeof provider.bookingPolicies === "string" ? (() => {
-          try {
-            return JSON.parse(provider.bookingPolicies);
-          } catch {
-            return provider.bookingPolicies;
-          }
-        })() : provider.bookingPolicies;
-        const businessHours = provider.businessHours && typeof provider.businessHours === "string" ? (() => {
-          try {
-            return JSON.parse(provider.businessHours);
-          } catch {
-            return provider.businessHours;
-          }
-        })() : provider.businessHours;
-        res.json({ provider: { ...provider, bookingPolicies, businessHours } });
+        res.json({ provider: normalizeProviderForResponse(provider) });
       } catch (error) {
         console.error("Get provider by ID error:", error);
         res.status(500).json({ error: "Failed to get provider" });
@@ -14936,20 +14931,7 @@ Respond with JSON only:
         if (!provider) {
           return res.status(404).json({ error: "Provider not found" });
         }
-        const parsed = { ...provider };
-        if (parsed.bookingPolicies && typeof parsed.bookingPolicies === "string") {
-          try {
-            parsed.bookingPolicies = JSON.parse(parsed.bookingPolicies);
-          } catch {
-          }
-        }
-        if (parsed.businessHours && typeof parsed.businessHours === "string") {
-          try {
-            parsed.businessHours = JSON.parse(parsed.businessHours);
-          } catch {
-          }
-        }
-        res.json({ provider: parsed });
+        res.json({ provider: normalizeProviderForResponse(provider) });
       } catch (error) {
         console.error("Patch provider error:", error);
         res.status(500).json({ error: error.message || "Failed to update provider" });

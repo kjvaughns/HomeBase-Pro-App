@@ -1927,7 +1927,7 @@ export default function FinancialsScreen() {
             <View style={{ flex: 1 }}>
               <ThemedText style={{ fontWeight: "600" }}>Estimates</ThemedText>
               <ThemedText style={{ color: theme.textSecondary, fontSize: 13 }}>
-                {estimates.length} total · {estimatesOutstandingCents > 0
+                {estimates.filter((e) => e.status !== "converted").length} total · {estimatesOutstandingCents > 0
                   ? `${formatCents(estimatesOutstandingCents)} pending`
                   : "no pending"}
               </ThemedText>
