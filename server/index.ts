@@ -470,6 +470,21 @@ function configureExpoAndLanding(app: express.Application) {
     res.redirect(301, `/providers/${req.params.slug}`);
   });
 
+  // Public estimate viewer — served at /estimates/:token (SSR, Task #296)
+  app.get("/estimates/:token", async (req: Request<{ token: string }>, res: Response) => {
+    try {
+      const { renderEstimateViewer } = await import("./estimateViewer");
+      const { html, status } = await renderEstimateViewer(req.params.token);
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.status(status).send(html);
+    } catch (err: any) {
+      console.error("Estimate viewer render error:", err);
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.status(500).send("<!DOCTYPE html><html><body><h1>Internal Server Error</h1></body></html>");
+    }
+  });
+
   // Public booking page — served at /providers/:slug (SSR)
   app.get("/providers/:slug", async (req: Request<{ slug: string }>, res: Response) => {
     try {

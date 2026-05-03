@@ -25,6 +25,9 @@ import {
   insertJobSchema,
   insertCrewMemberSchema,
   insertInvoiceSchema,
+  insertEstimateSchema,
+  estimates as estimatesTbl,
+  estimateLineItems as estimateLineItemsTbl,
   insertPaymentSchema,
   appointments,
   crewMembers,
@@ -11579,6 +11582,484 @@ Respond with JSON only:
         res
           .status(500)
           .json({ error: error.message || "Failed to generate payment link" });
+      }
+    },
+  );
+
+  // ============ ESTIMATES ROUTES (Task #296) ============
+  // Estimates mirror the invoice CRUD shape but never touch Stripe.
+  // Lifecycle: draft → sent → viewed (when public viewer is opened) →
+  // accepted | declined | expired. Once accepted, the provider may
+  // POST /api/estimates/:id/convert to spawn a real invoice.
+
+  // Build a normalized line-item array from a free-form request body.
+  function normalizeEstimateLineItems(input: any[]): {
+    items: { name: string; description: string | null; quantity: number; unitPriceCents: number; amountCents: number }[];
+    subtotalCents: number;
+  } {
+    const items = (Array.isArray(input) ? input : []).map((raw: any) => {
+      const name = String(raw.name || raw.description || "Service").slice(0, 200);
+      const description = raw.description ? String(raw.description) : null;
+      const qty = Number(raw.quantity) || 1;
+      const unitPrice = Number(raw.unitPrice) || 0;
+      const unitPriceCents = Math.round(unitPrice * 100);
+      const amountCents = Math.round(qty * unitPriceCents);
+      return { name, description, quantity: qty, unitPriceCents, amountCents };
+    });
+    const subtotalCents = items.reduce((s, it) => s + it.amountCents, 0);
+    return { items, subtotalCents };
+  }
+
+  function generateEstimateToken(): string {
+    // 32 random bytes → 43-char base64url. Public viewer URL is
+    // /estimates/<token>, so unguessability is the only protection.
+    const { randomBytes } = require("crypto");
+    return randomBytes(32)
+      .toString("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+  }
+
+  function publicEstimateUrl(req: Request, token: string): string {
+    const proto = (req.headers["x-forwarded-proto"] as string) || req.protocol || "https";
+    const host = req.headers.host;
+    return `${proto}://${host}/estimates/${token}`;
+  }
+
+  // List estimates for a provider
+  app.get(
+    "/api/provider/:providerId/estimates",
+    requireAuth,
+    async (req: Request<ProviderIdParams>, res: Response) => {
+      try {
+        if (!(await assertProviderOwnership(req, req.params.providerId, res))) return;
+        const rows = await storage.getEstimates(req.params.providerId);
+        res.json({ estimates: rows });
+      } catch (error) {
+        console.error("Get estimates error:", error);
+        res.status(500).json({ error: "Failed to get estimates" });
+      }
+    },
+  );
+
+  // List estimates for a single client (used by ClientDetail)
+  app.get(
+    "/api/clients/:clientId/estimates",
+    requireAuth,
+    async (req: Request<{ clientId: string }>, res: Response) => {
+      try {
+        const client = await storage.getClient(req.params.clientId);
+        if (!client) return res.status(404).json({ error: "Client not found" });
+        if (!(await assertProviderOwnership(req, client.providerId, res))) return;
+        const rows = await storage.getEstimatesByClient(req.params.clientId);
+        res.json({ estimates: rows });
+      } catch (error) {
+        console.error("Get client estimates error:", error);
+        res.status(500).json({ error: "Failed to get estimates" });
+      }
+    },
+  );
+
+  // Next estimate number — provider-scoped sequence
+  app.get(
+    "/api/provider/:providerId/next-estimate-number",
+    requireAuth,
+    async (req: Request<ProviderIdParams>, res: Response) => {
+      try {
+        if (!(await assertProviderOwnership(req, req.params.providerId, res))) return;
+        const estimateNumber = await storage.getNextEstimateNumber(req.params.providerId);
+        res.json({ estimateNumber });
+      } catch (error) {
+        console.error("Get next estimate number error:", error);
+        res.status(500).json({ error: "Failed to get estimate number" });
+      }
+    },
+  );
+
+  // Get a single estimate (provider or homeowner with the same auth model
+  // as invoices). Includes normalized line items.
+  app.get(
+    "/api/estimates/:id",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const authUserId = req.authenticatedUserId!;
+        const estimate = await storage.getEstimate(req.params.id);
+        if (!estimate) return res.status(404).json({ error: "Estimate not found" });
+        const providerRecord = await storage.getProviderByUserId(authUserId);
+        const isProvider = providerRecord && estimate.providerId === providerRecord.id;
+        const isHomeowner = estimate.homeownerUserId === authUserId;
+        if (!isProvider && !isHomeowner) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+        const lineItems = await storage.getEstimateLineItems(estimate.id);
+        res.json({ estimate, lineItems });
+      } catch (error) {
+        console.error("Get estimate error:", error);
+        res.status(500).json({ error: "Failed to get estimate" });
+      }
+    },
+  );
+
+  // Create estimate (draft). Stripe is NEVER touched.
+  app.post(
+    "/api/estimates",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const providerId: string | undefined = req.body.providerId;
+        if (!providerId) return res.status(400).json({ error: "providerId is required" });
+        if (!(await assertProviderOwnership(req, providerId, res))) return;
+        if (!(await checkSubscriptionGate(providerId, res))) return;
+
+        const estimateNumber: string =
+          req.body.estimateNumber || (await storage.getNextEstimateNumber(providerId));
+        const { items, subtotalCents } = normalizeEstimateLineItems(req.body.lineItems);
+
+        const data = {
+          providerId,
+          clientId: req.body.clientId || null,
+          homeownerUserId: req.body.homeownerUserId || null,
+          jobId: req.body.jobId || null,
+          estimateNumber,
+          currency: "usd",
+          subtotalCents,
+          taxCents: 0,
+          discountCents: 0,
+          totalCents: subtotalCents,
+          status: "draft" as const,
+          notes: req.body.notes || null,
+          expiresAt: req.body.expiresAt ? new Date(req.body.expiresAt) : null,
+        };
+        const parsed = insertEstimateSchema.safeParse(data);
+        if (!parsed.success) {
+          return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
+        }
+        const created = await storage.createEstimate({
+          ...parsed.data,
+          publicToken: generateEstimateToken(),
+        });
+        await storage.replaceEstimateLineItems(created.id, items);
+        res.status(201).json({ estimate: created });
+      } catch (error) {
+        console.error("Create estimate error:", error);
+        res.status(500).json({ error: "Failed to create estimate" });
+      }
+    },
+  );
+
+  // Update an estimate (draft or sent only — locked once accepted/declined/converted).
+  app.put(
+    "/api/estimates/:id",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const existing = await storage.getEstimate(req.params.id);
+        if (!existing) return res.status(404).json({ error: "Estimate not found" });
+        if (!(await assertProviderOwnership(req, existing.providerId, res))) return;
+
+        const TERMINAL = new Set(["accepted", "declined", "expired", "converted"]);
+        if (TERMINAL.has(existing.status as string)) {
+          return res.status(409).json({
+            error: `Estimate is ${existing.status} and can no longer be edited`,
+          });
+        }
+
+        const update: Partial<typeof existing> = {};
+        if (req.body.notes !== undefined) update.notes = req.body.notes;
+        if (req.body.expiresAt !== undefined) {
+          update.expiresAt = req.body.expiresAt ? new Date(req.body.expiresAt) : null;
+        }
+        if (Array.isArray(req.body.lineItems)) {
+          const { items, subtotalCents } = normalizeEstimateLineItems(req.body.lineItems);
+          update.subtotalCents = subtotalCents;
+          update.totalCents = subtotalCents;
+          await storage.replaceEstimateLineItems(existing.id, items);
+        }
+        const updated = await storage.updateEstimate(existing.id, update);
+        res.json({ estimate: updated });
+      } catch (error) {
+        console.error("Update estimate error:", error);
+        res.status(500).json({ error: "Failed to update estimate" });
+      }
+    },
+  );
+
+  // Delete a draft estimate.
+  app.delete(
+    "/api/estimates/:id",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const existing = await storage.getEstimate(req.params.id);
+        if (!existing) return res.status(404).json({ error: "Estimate not found" });
+        if (!(await assertProviderOwnership(req, existing.providerId, res))) return;
+        if (existing.status !== "draft") {
+          return res.status(409).json({ error: "Only draft estimates can be deleted" });
+        }
+        await storage.deleteEstimate(existing.id);
+        res.status(204).end();
+      } catch (error) {
+        console.error("Delete estimate error:", error);
+        res.status(500).json({ error: "Failed to delete estimate" });
+      }
+    },
+  );
+
+  // Send estimate — emails the homeowner with the public viewer link.
+  app.post(
+    "/api/estimates/:id/send",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const existing = await storage.getEstimate(req.params.id);
+        if (!existing) return res.status(404).json({ error: "Estimate not found" });
+        if (!(await assertProviderOwnership(req, existing.providerId, res))) return;
+        if (
+          existing.status !== "draft" &&
+          existing.status !== "sent" &&
+          existing.status !== "viewed"
+        ) {
+          return res.status(409).json({
+            error: `Cannot send estimate in status ${existing.status}`,
+          });
+        }
+
+        const updated = await storage.updateEstimate(existing.id, {
+          status: "sent",
+          sentAt: existing.sentAt ?? new Date(),
+        });
+
+        // Best-effort email — we don't fail the request if SMTP is unhappy.
+        let emailSent = false;
+        let emailError: string | undefined;
+        try {
+          if (existing.clientId) {
+            const client = await storage.getClient(existing.clientId);
+            const provider = await storage.getProvider(existing.providerId);
+            if (client?.email && provider) {
+              const lineItems = await storage.getEstimateLineItems(existing.id);
+              const result = await dispatchWithResult("estimate.sent", {
+                clientEmail: client.email,
+                clientName: [client.firstName, client.lastName].filter(Boolean).join(" ") || "Client",
+                providerName: provider.businessName || "Service Provider",
+                invoiceNumber: existing.estimateNumber, // reused field
+                amount: (existing.totalCents ?? 0) / 100,
+                dueDate: existing.expiresAt
+                  ? new Date(existing.expiresAt).toLocaleDateString()
+                  : undefined,
+                lineItems: lineItems.map((li) => ({
+                  description: li.name,
+                  quantity: Number(li.quantity ?? 1),
+                  unitPrice: (li.unitPriceCents ?? 0) / 100,
+                  total: (li.amountCents ?? 0) / 100,
+                })),
+                paymentLink: publicEstimateUrl(req, existing.publicToken),
+                relatedRecordType: "estimate",
+                relatedRecordId: existing.id,
+              });
+              emailSent = result.emailSent;
+              emailError = result.emailError;
+            }
+          }
+        } catch (e: any) {
+          emailError = e?.message || "Failed to send estimate email";
+        }
+
+        res.json({
+          estimate: updated,
+          viewerUrl: publicEstimateUrl(req, existing.publicToken),
+          emailSent,
+          emailError,
+        });
+      } catch (error) {
+        console.error("Send estimate error:", error);
+        res.status(500).json({ error: "Failed to send estimate" });
+      }
+    },
+  );
+
+  // Public estimate JSON (used by the SSR viewer page).
+  app.get(
+    "/api/estimates/public/:token",
+    async (req: Request<{ token: string }>, res: Response) => {
+      try {
+        const estimate = await storage.getEstimateByPublicToken(req.params.token);
+        if (!estimate) return res.status(404).json({ error: "Estimate not found" });
+        // Mark as viewed the first time someone opens it (only if currently sent).
+        if (estimate.status === "sent") {
+          await storage.updateEstimate(estimate.id, {
+            status: "viewed",
+            viewedAt: new Date(),
+          });
+        }
+        const lineItems = await storage.getEstimateLineItems(estimate.id);
+        const provider = await storage.getProvider(estimate.providerId);
+        res.json({
+          estimate,
+          lineItems,
+          providerName: provider?.businessName || "Service Provider",
+        });
+      } catch (error) {
+        console.error("Public estimate fetch error:", error);
+        res.status(500).json({ error: "Failed to load estimate" });
+      }
+    },
+  );
+
+  // Public accept/decline (called from the SSR viewer page; no auth).
+  app.post(
+    "/api/estimates/public/:token/decision",
+    async (req: Request<{ token: string }>, res: Response) => {
+      try {
+        const decision = String(req.body.decision || "");
+        if (decision !== "accepted" && decision !== "declined") {
+          return res.status(400).json({ error: "decision must be 'accepted' or 'declined'" });
+        }
+        const estimate = await storage.getEstimateByPublicToken(req.params.token);
+        if (!estimate) return res.status(404).json({ error: "Estimate not found" });
+        if (
+          estimate.status === "accepted" ||
+          estimate.status === "declined" ||
+          estimate.status === "converted"
+        ) {
+          return res.status(409).json({ error: `Estimate already ${estimate.status}` });
+        }
+        if (estimate.expiresAt && new Date(estimate.expiresAt) < new Date()) {
+          await storage.updateEstimate(estimate.id, {
+            status: "expired",
+            decidedAt: new Date(),
+          });
+          return res.status(410).json({ error: "Estimate has expired" });
+        }
+
+        const lineItems = await storage.getEstimateLineItems(estimate.id);
+        const updated = await storage.updateEstimate(estimate.id, {
+          status: decision,
+          decidedAt: new Date(),
+          acceptedSnapshot: JSON.stringify({
+            lineItems,
+            totalCents: estimate.totalCents,
+          }),
+        });
+
+        // Notify the provider asynchronously.
+        try {
+          const provider = await storage.getProvider(estimate.providerId);
+          const providerUser = provider ? await storage.getUser(provider.userId) : null;
+          const client = estimate.clientId ? await storage.getClient(estimate.clientId) : null;
+          if (providerUser?.email) {
+            dispatch(decision === "accepted" ? "estimate.accepted" : "estimate.declined", {
+              providerEmail: providerUser.email,
+              providerName: provider?.businessName || "there",
+              clientName: client
+                ? [client.firstName, client.lastName].filter(Boolean).join(" ") || "Your client"
+                : "Your client",
+              invoiceNumber: estimate.estimateNumber,
+              amount: (estimate.totalCents ?? 0) / 100,
+              relatedRecordType: "estimate",
+              relatedRecordId: estimate.id,
+            }).catch((e) => console.error("estimate decision dispatch:", e));
+
+            // In-app + push for the provider, surfaced in the Notifications tab.
+            if (provider) {
+              dispatchNotification(
+                provider.userId,
+                decision === "accepted" ? "Estimate accepted" : "Estimate declined",
+                `${client ? [client.firstName, client.lastName].filter(Boolean).join(" ") || "A client" : "A client"} ${decision} estimate ${estimate.estimateNumber}.`,
+                decision === "accepted" ? "estimate_accepted" : "estimate_declined",
+                { type: decision === "accepted" ? "estimate_accepted" : "estimate_declined", estimateId: estimate.id, screen: "EstimateDetail", params: { estimateId: estimate.id } },
+                "invoices",
+              ).catch((e) => console.error("estimate notification:", e));
+            }
+          }
+        } catch (e) {
+          console.error("Estimate decision side-effects failed:", e);
+        }
+
+        res.json({ estimate: updated });
+      } catch (error) {
+        console.error("Estimate decision error:", error);
+        res.status(500).json({ error: "Failed to record decision" });
+      }
+    },
+  );
+
+  // Convert an accepted estimate into a real invoice. Stripe is still NOT
+  // touched here — the resulting invoice is a regular draft that the
+  // provider can then send through the existing invoice flow (which IS
+  // backed by Stripe).
+  app.post(
+    "/api/estimates/:id/convert",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const existing = await storage.getEstimate(req.params.id);
+        if (!existing) return res.status(404).json({ error: "Estimate not found" });
+        if (!(await assertProviderOwnership(req, existing.providerId, res))) return;
+        if (existing.status !== "accepted") {
+          return res.status(409).json({
+            error: "Only accepted estimates can be converted to an invoice",
+          });
+        }
+        if (existing.convertedInvoiceId) {
+          const invoice = await storage.getInvoice(existing.convertedInvoiceId);
+          return res.json({ invoice, estimate: existing });
+        }
+
+        const lineItems = await storage.getEstimateLineItems(existing.id);
+        const lineItemsJson = JSON.stringify(
+          lineItems.map((li) => ({
+            description: li.name,
+            quantity: Number(li.quantity ?? 1),
+            unitPrice: (li.unitPriceCents ?? 0) / 100,
+            total: (li.amountCents ?? 0) / 100,
+          })),
+        );
+
+        const subtotalCents = existing.totalCents ?? 0;
+        const plan = await getProviderPlan(existing.providerId);
+        const fee = calculatePlatformFee(
+          subtotalCents,
+          plan.platformFeePercent || "3.00",
+          plan.platformFeeFixedCents || 0,
+        );
+        const invoiceNumber = await storage.getNextInvoiceNumber(existing.providerId);
+        const invoice = await storage.createInvoice({
+          providerId: existing.providerId,
+          clientId: existing.clientId,
+          homeownerUserId: existing.homeownerUserId,
+          jobId: existing.jobId,
+          invoiceNumber,
+          currency: "usd",
+          subtotalCents,
+          taxCents: 0,
+          discountCents: 0,
+          platformFeeCents: fee.totalCents,
+          totalCents: subtotalCents,
+          amount: (subtotalCents / 100).toFixed(2),
+          total: (subtotalCents / 100).toFixed(2),
+          status: "draft",
+          notes: existing.notes,
+          lineItems: lineItemsJson,
+        } as any);
+
+        // Link both directions and flip the estimate to converted.
+        await db
+          .update(invoices)
+          .set({ estimateId: existing.id })
+          .where(eq(invoices.id, invoice.id));
+        const updated = await storage.updateEstimate(existing.id, {
+          status: "converted",
+          convertedAt: new Date(),
+          convertedInvoiceId: invoice.id,
+        });
+
+        res.status(201).json({ invoice, estimate: updated });
+      } catch (error) {
+        console.error("Convert estimate error:", error);
+        res.status(500).json({ error: "Failed to convert estimate" });
       }
     },
   );

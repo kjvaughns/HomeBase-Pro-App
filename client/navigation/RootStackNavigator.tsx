@@ -43,6 +43,9 @@ import AddClientScreen from "@/screens/provider/AddClientScreen";
 import AddJobScreen from "@/screens/provider/AddJobScreen";
 import AddInvoiceScreen from "@/screens/provider/AddInvoiceScreen";
 import InvoiceDetailScreen from "@/screens/provider/InvoiceDetailScreen";
+import EstimatesListScreen from "@/screens/provider/EstimatesListScreen";
+import AddEstimateScreen from "@/screens/provider/AddEstimateScreen";
+import EstimateDetailScreen from "@/screens/provider/EstimateDetailScreen";
 import ServicesScreen from "@/screens/provider/ServicesScreen";
 import ServiceBlueprintWizardScreen from "@/screens/provider/ServiceBlueprintWizardScreen";
 import ServiceSummaryScreen from "@/screens/provider/ServiceSummaryScreen";
@@ -143,6 +146,9 @@ export type RootStackParamList = {
   AddJob: { clientId?: string } | undefined;
   AddInvoice: { clientId?: string } | undefined;
   InvoiceDetail: { invoiceId: string };
+  EstimatesList: undefined;
+  AddEstimate: { clientId?: string } | undefined;
+  EstimateDetail: { estimateId: string };
   Services: undefined;
   NewService: { onboardingMode?: boolean } | undefined;
   ServiceSummary: { serviceId: string; service: Record<string, unknown> };
@@ -489,6 +495,21 @@ export default function RootStackNavigator() {
         options={{
           headerTitle: "Invoice",
         }}
+      />
+      <Stack.Screen
+        name="EstimatesList"
+        component={EstimatesListScreen}
+        options={{ headerTitle: "Estimates" }}
+      />
+      <Stack.Screen
+        name="AddEstimate"
+        component={AddEstimateScreen}
+        options={{ headerTitle: "New Estimate" }}
+      />
+      <Stack.Screen
+        name="EstimateDetail"
+        component={EstimateDetailScreen}
+        options={{ headerTitle: "Estimate" }}
       />
       <Stack.Screen
         name="Services"

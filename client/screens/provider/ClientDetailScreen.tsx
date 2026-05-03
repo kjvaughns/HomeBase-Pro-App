@@ -31,7 +31,7 @@ interface ProviderMessageRecord {
   createdAt: string;
 }
 
-type TabType = "overview" | "jobs" | "invoices" | "notes" | "home" | "messages";
+type TabType = "overview" | "jobs" | "invoices" | "estimates" | "notes" | "home" | "messages";
 
 interface ClientRecord {
   id: string;
@@ -260,6 +260,27 @@ export default function ClientDetailScreen() {
   const client: ClientRecord | null = clientDetailData?.client || null;
   const jobs: JobRecord[] = clientDetailData?.jobs || [];
   const invoices: InvoiceRecord[] = clientDetailData?.invoices || [];
+
+  // Task #296 — fetch estimates for this client (only when the tab is open).
+  const { data: clientEstimatesData } = useQuery<{
+    estimates: {
+      id: string; estimateNumber: string; status: string;
+      totalCents: number; expiresAt?: string | null;
+    }[];
+  }>({
+    queryKey: ["/api/clients", clientId, "estimates"],
+    enabled: !!clientId && activeTab === "estimates",
+    queryFn: async () => {
+      const url = new URL(`/api/clients/${clientId}/estimates`, getApiUrl());
+      const res = await fetch(url.toString(), {
+        headers: { Authorization: `Bearer ${useAuthStore.getState().sessionToken}` },
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to load estimates");
+      return res.json();
+    },
+  });
+  const estimates = clientEstimatesData?.estimates ?? [];
   const activities: { id: string; description: string; timestamp: string }[] = [];
   const notes: { id: string; content: string; createdAt: string; isInternal?: boolean; createdBy?: string }[] = [];
 
@@ -511,6 +532,69 @@ export default function ClientDetailScreen() {
       ) : (
         <ThemedText type="body" style={{ color: theme.textSecondary }}>
           No invoices recorded
+        </ThemedText>
+      )}
+    </Animated.View>
+  );
+
+  const renderEstimates = () => (
+    <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.sm }}>
+        <ThemedText type="label" style={{ color: theme.textSecondary }}>
+          ESTIMATES ({estimates.length})
+        </ThemedText>
+        <Pressable
+          onPress={() => navigation.navigate("AddEstimate", { clientId: clientId! })}
+          style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.sm, paddingVertical: 6, backgroundColor: Colors.accent, borderRadius: 8 }}
+          testID="button-new-estimate-from-client"
+        >
+          <Feather name="plus" size={14} color="#fff" />
+          <ThemedText type="caption" style={{ color: "#fff", marginLeft: 4, fontWeight: "600" }}>New</ThemedText>
+        </Pressable>
+      </View>
+      {estimates.length > 0 ? (
+        estimates.map((est) => {
+          const tone =
+            est.status === "accepted" || est.status === "converted" ? "#10b981"
+            : est.status === "declined" || est.status === "expired" ? "#ef4444"
+            : est.status === "sent" || est.status === "viewed" ? "#3b82f6"
+            : "#6b7280";
+          return (
+            <Pressable
+              key={est.id}
+              onPress={() => navigation.navigate("EstimateDetail", { estimateId: est.id })}
+              style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+              testID={`client-estimate-${est.id}`}
+            >
+              <GlassCard style={styles.invoiceCard}>
+                <View style={styles.invoiceHeader}>
+                  <ThemedText type="body" style={{ fontWeight: "600" }}>{est.estimateNumber}</ThemedText>
+                  <View style={styles.invoiceHeaderRight}>
+                    <View style={[styles.invoiceStatus, { backgroundColor: tone + "20" }]}>
+                      <ThemedText type="caption" style={{ color: tone, fontWeight: "600" }}>
+                        {est.status.toUpperCase()}
+                      </ThemedText>
+                    </View>
+                    <Feather name="chevron-right" size={14} color={theme.textTertiary} />
+                  </View>
+                </View>
+                <View style={styles.invoiceDetails}>
+                  <ThemedText type="body" style={{ color: Colors.accent }}>
+                    {formatCurrency((est.totalCents ?? 0) / 100)}
+                  </ThemedText>
+                  {est.expiresAt ? (
+                    <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+                      Expires: {formatDate(est.expiresAt)}
+                    </ThemedText>
+                  ) : null}
+                </View>
+              </GlassCard>
+            </Pressable>
+          );
+        })
+      ) : (
+        <ThemedText type="body" style={{ color: theme.textSecondary }}>
+          No estimates yet
         </ThemedText>
       )}
     </Animated.View>
@@ -915,6 +999,11 @@ export default function ClientDetailScreen() {
             onPress={() => setActiveTab("invoices")}
           />
           <TabButton
+            label="Estimates"
+            active={activeTab === "estimates"}
+            onPress={() => setActiveTab("estimates")}
+          />
+          <TabButton
             label="Notes"
             active={activeTab === "notes"}
             onPress={() => setActiveTab("notes")}
@@ -935,6 +1024,7 @@ export default function ClientDetailScreen() {
           {activeTab === "overview" && renderOverview()}
           {activeTab === "jobs" && renderJobs()}
           {activeTab === "invoices" && renderInvoices()}
+          {activeTab === "estimates" && renderEstimates()}
           {activeTab === "notes" && renderNotes()}
           {activeTab === "home" && renderHome()}
           {activeTab === "messages" && renderMessages()}

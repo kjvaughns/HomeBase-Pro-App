@@ -52,6 +52,21 @@ export const invoiceStatusEnum = pgEnum("invoice_status", [
   "refunded",
   "cancelled",
 ]);
+// Task #296: Estimates as a first-class object (separate from invoices).
+// Lifecycle: draft -> sent -> viewed -> accepted | declined | expired,
+// then optionally accepted -> converted (when promoted into an invoice).
+// Stripe is NEVER charged for an estimate — payment only happens after
+// conversion to an invoice.
+export const estimateStatusEnum = pgEnum("estimate_status", [
+  "draft",
+  "sent",
+  "viewed",
+  "accepted",
+  "declined",
+  "expired",
+  "converted",
+]);
+
 export const paymentMethodEnum = pgEnum("payment_method", [
   "cash",
   "card",
@@ -835,6 +850,23 @@ export const invoiceLineItems = pgTable("invoice_line_items", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Task #296: Estimate line items mirror invoice line items but live on
+// estimates. Kept as a separate table so estimate edits never disturb the
+// invoice once the estimate is converted.
+export const estimateLineItems = pgTable("estimate_line_items", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  estimateId: varchar("estimate_id").notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  quantity: decimal("quantity", { precision: 10, scale: 2 }).default("1"),
+  unitPriceCents: integer("unit_price_cents").notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  metadata: text("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const invoiceLineItemsRelations = relations(
   invoiceLineItems,
   ({ one }) => ({
@@ -1090,6 +1122,84 @@ export const invoicesRelations = relations(invoices, ({ one, many }) => ({
   payments: many(payments),
   lineItemsNormalized: many(invoiceLineItems),
 }));
+
+// Task #296: Estimates — proposals sent to clients before any work or
+// payment. Kept entirely separate from invoices (no Stripe fields).
+// `convertedInvoiceId` is set when an accepted estimate is promoted into
+// an invoice (status moves to 'converted').
+export const estimates = pgTable("estimates", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  clientId: varchar("client_id").references(() => clients.id, {
+    onDelete: "set null",
+  }),
+  homeownerUserId: varchar("homeowner_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  jobId: varchar("job_id").references(() => jobs.id, { onDelete: "set null" }),
+
+  estimateNumber: text("estimate_number").notNull(),
+  currency: text("currency").default("usd"),
+
+  subtotalCents: integer("subtotal_cents").notNull().default(0),
+  taxCents: integer("tax_cents").default(0),
+  discountCents: integer("discount_cents").default(0),
+  totalCents: integer("total_cents").notNull().default(0),
+
+  status: estimateStatusEnum("status").default("draft"),
+  expiresAt: timestamp("expires_at"),
+  notes: text("notes"),
+  // Snapshot of line items at the moment of acceptance/decline so the
+  // client-facing record stays stable even if the provider edits later.
+  acceptedSnapshot: text("accepted_snapshot"),
+
+  // Public viewer token (random, unguessable) used by the homeowner to
+  // open the estimate without authenticating.
+  publicToken: text("public_token").notNull().unique(),
+
+  // Convert link: when an accepted estimate is promoted into an invoice
+  // we record the invoice id here. The reverse pointer (invoices.estimateId)
+  // is added in the migration so the FK isn't a circular Drizzle reference.
+  convertedInvoiceId: varchar("converted_invoice_id"),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  sentAt: timestamp("sent_at"),
+  viewedAt: timestamp("viewed_at"),
+  decidedAt: timestamp("decided_at"),
+  convertedAt: timestamp("converted_at"),
+});
+
+export const estimatesRelations = relations(estimates, ({ one, many }) => ({
+  provider: one(providers, {
+    fields: [estimates.providerId],
+    references: [providers.id],
+  }),
+  client: one(clients, {
+    fields: [estimates.clientId],
+    references: [clients.id],
+  }),
+  homeownerUser: one(users, {
+    fields: [estimates.homeownerUserId],
+    references: [users.id],
+  }),
+  job: one(jobs, { fields: [estimates.jobId], references: [jobs.id] }),
+  lineItems: many(estimateLineItems),
+}));
+
+export const estimateLineItemsRelations = relations(
+  estimateLineItems,
+  ({ one }) => ({
+    estimate: one(estimates, {
+      fields: [estimateLineItems.estimateId],
+      references: [estimates.id],
+    }),
+  }),
+);
 
 // Payments received (enhanced for Stripe Connect)
 export const payments = pgTable("payments", {
@@ -1463,6 +1573,24 @@ export const insertInvoiceLineItemSchema = createInsertSchema(
   createdAt: true,
 });
 
+export const insertEstimateSchema = createInsertSchema(estimates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  sentAt: true,
+  viewedAt: true,
+  decidedAt: true,
+  convertedAt: true,
+  publicToken: true,
+});
+
+export const insertEstimateLineItemSchema = createInsertSchema(
+  estimateLineItems,
+).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertPayoutSchema = createInsertSchema(payouts).omit({
   id: true,
   createdAt: true,
@@ -1528,6 +1656,10 @@ export type InsertStripeConnectAccount = z.infer<
 >;
 export type InvoiceLineItem = typeof invoiceLineItems.$inferSelect;
 export type InsertInvoiceLineItem = z.infer<typeof insertInvoiceLineItemSchema>;
+export type Estimate = typeof estimates.$inferSelect;
+export type InsertEstimate = z.infer<typeof insertEstimateSchema>;
+export type EstimateLineItem = typeof estimateLineItems.$inferSelect;
+export type InsertEstimateLineItem = z.infer<typeof insertEstimateLineItemSchema>;
 export type Payout = typeof payouts.$inferSelect;
 export type InsertPayout = z.infer<typeof insertPayoutSchema>;
 export type UserCredits = typeof userCredits.$inferSelect;

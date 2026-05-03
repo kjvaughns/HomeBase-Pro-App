@@ -96,7 +96,17 @@ interface InvoiceRecord {
 }
 
 type SectionTab = "overview" | "transactions" | "more";
-type TransactionTab = "invoices" | "payments" | "payouts";
+type TransactionTab = "invoices" | "estimates" | "payments" | "payouts";
+
+interface EstimateRecord {
+  id: string;
+  estimateNumber: string;
+  status: string;
+  totalCents: number;
+  clientId: string | null;
+  expiresAt?: string | null;
+  createdAt: string;
+}
 
 interface ManualPaymentRecord {
   id: string;
@@ -1184,6 +1194,29 @@ export default function FinancialsScreen() {
     staleTime: 30_000,
   });
 
+  // Task #296 — Estimates list. Loaded alongside invoices so the Overview
+  // tile can show the count without an extra round trip.
+  const {
+    data: estimatesData,
+    isLoading: estimatesLoading,
+    refetch: refetchEstimates,
+  } = useQuery<{ estimates: EstimateRecord[] }>({
+    queryKey: ["/api/provider", providerId, "estimates"],
+    queryFn: async () => {
+      const url = new URL(`/api/provider/${providerId}/estimates`, getApiUrl());
+      const res = await fetch(url.toString(), { headers: getAuthHeaders() });
+      if (res.status === 404) return { estimates: [] };
+      if (!res.ok) throw new Error("Failed to fetch estimates");
+      return res.json();
+    },
+    enabled: !!providerId,
+    staleTime: 30_000,
+  });
+  const estimates = estimatesData?.estimates ?? [];
+  const estimatesOutstandingCents = estimates
+    .filter((e) => e.status === "sent" || e.status === "viewed")
+    .reduce((s, e) => s + (e.totalCents ?? 0), 0);
+
   interface ClientRecord { id: string; firstName: string; lastName: string; }
 
   const { data: clientsData } = useQuery<{ clients: ClientRecord[] }>({
@@ -1382,6 +1415,7 @@ export default function FinancialsScreen() {
 
   const TRANS_TABS: { key: TransactionTab; label: string }[] = [
     { key: "invoices", label: "Invoices" },
+    { key: "estimates", label: "Estimates" },
     { key: "payments", label: "Payments" },
     { key: "payouts", label: "Payouts" },
   ];
@@ -1762,6 +1796,33 @@ export default function FinancialsScreen() {
           </View>
         </View>
       </Animated.View>
+
+      {/* Task #296 — Estimates summary tile */}
+      <Animated.View entering={FadeInDown.delay(160).duration(400)}>
+        <Pressable
+          onPress={() => {
+            Haptics.selectionAsync();
+            setSectionTab("transactions");
+            setTransactionTab("estimates");
+          }}
+          testID="tile-estimates-summary"
+        >
+          <GlassCard style={{ padding: Spacing.md, marginTop: Spacing.md, flexDirection: "row", alignItems: "center", gap: Spacing.md }}>
+            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.accentLight, alignItems: "center", justifyContent: "center" }}>
+              <Feather name="file-text" size={18} color={Colors.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <ThemedText style={{ fontWeight: "600" }}>Estimates</ThemedText>
+              <ThemedText style={{ color: theme.textSecondary, fontSize: 13 }}>
+                {estimates.length} total · {estimatesOutstandingCents > 0
+                  ? `${formatCents(estimatesOutstandingCents)} pending`
+                  : "no pending"}
+              </ThemedText>
+            </View>
+            <Feather name="chevron-right" size={16} color={theme.textTertiary} />
+          </GlassCard>
+        </Pressable>
+      </Animated.View>
     </View>
   );
 
@@ -1856,6 +1917,15 @@ export default function FinancialsScreen() {
               style={[styles.addInvoiceBtn, { backgroundColor: Colors.accentLight }]}
               onPress={() => { Haptics.selectionAsync(); navigation.navigate("AddInvoice"); }}
               testID="button-add-invoice"
+            >
+              <Feather name="plus" size={15} color={Colors.accent} />
+            </Pressable>
+          ) : null}
+          {transactionTab === "estimates" ? (
+            <Pressable
+              style={[styles.addInvoiceBtn, { backgroundColor: Colors.accentLight }]}
+              onPress={() => { Haptics.selectionAsync(); navigation.navigate("AddEstimate"); }}
+              testID="button-add-estimate"
             >
               <Feather name="plus" size={15} color={Colors.accent} />
             </Pressable>
@@ -1973,6 +2043,85 @@ export default function FinancialsScreen() {
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
+          }
+        />
+      </ThemedView>
+    );
+  }
+
+  // Transactions — Estimates tab (Task #296)
+  if (transactionTab === "estimates") {
+    const EstimatesEmpty = () => {
+      if (estimatesLoading) {
+        return <View>{SKELETON_KEYS.map((k) => <SkeletonRow key={k} theme={theme} />)}</View>;
+      }
+      return (
+        <View style={styles.emptyContainer}>
+          <EmptyState
+            image={require("../../../assets/images/empty-bookings.png")}
+            title="No estimates yet"
+            description="Send your first estimate and track responses here."
+            primaryAction={{
+              label: "New Estimate",
+              onPress: () => navigation.navigate("AddEstimate"),
+            }}
+          />
+        </View>
+      );
+    };
+
+    const renderEstimate = ({ item }: { item: EstimateRecord }) => {
+      const tone =
+        item.status === "accepted" || item.status === "converted" ? "#10b981"
+        : item.status === "declined" || item.status === "expired" ? "#ef4444"
+        : item.status === "sent" || item.status === "viewed" ? "#3b82f6"
+        : "#6b7280";
+      const clientName = item.clientId ? clientMap.get(item.clientId) : null;
+      return (
+        <Pressable
+          style={({ pressed }) => [styles.row, { opacity: pressed ? 0.85 : 1 }]}
+          onPress={() => navigation.navigate("EstimateDetail", { estimateId: item.id })}
+          testID={`estimate-row-${item.id}`}
+        >
+          <View style={[styles.rowIcon, { backgroundColor: Colors.accentLight }]}>
+            <Feather name="file" size={16} color={Colors.accent} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <ThemedText style={styles.rowTitle}>{clientName ?? `Estimate ${item.estimateNumber}`}</ThemedText>
+            <ThemedText style={{ fontSize: 12, color: theme.textSecondary }}>
+              {item.estimateNumber}{item.expiresAt ? ` · Expires ${formatDate(item.expiresAt)}` : ""}
+            </ThemedText>
+          </View>
+          <View style={{ alignItems: "flex-end", gap: 4 }}>
+            <ThemedText style={styles.rowAmount}>{formatCents(item.totalCents)}</ThemedText>
+            <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, backgroundColor: tone + "20" }}>
+              <ThemedText style={{ fontSize: 11, fontWeight: "700", color: tone }}>
+                {item.status.toUpperCase()}
+              </ThemedText>
+            </View>
+          </View>
+        </Pressable>
+      );
+    };
+
+    return (
+      <ThemedView style={styles.container}>
+        {howModal}
+        <FlatList<EstimateRecord>
+          data={estimates}
+          renderItem={renderEstimate}
+          keyExtractor={(item) => item.id}
+          ListHeaderComponent={<SharedHeader />}
+          ListEmptyComponent={<EstimatesEmpty />}
+          contentContainerStyle={{
+            paddingTop: headerHeight + Spacing.md,
+            paddingBottom: tabBarHeight + Spacing.xl,
+            paddingHorizontal: horizontalPadding,
+          }}
+          scrollIndicatorInsets={{ bottom: insets.bottom }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={() => { refetchEstimates(); onRefresh(); }} tintColor={Colors.accent} />
           }
         />
       </ThemedView>

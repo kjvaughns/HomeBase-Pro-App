@@ -597,6 +597,109 @@ export async function sendInvoiceCreatedEmail(
   return sendInvoiceEmail(data);
 }
 
+// ── Task #296: Estimate emails ──────────────────────────────────────────
+// `viewerUrl` is the public token-based estimate page where the homeowner
+// can accept or decline (NOT a Stripe payment link).
+export async function sendEstimateEmail(data: {
+  clientEmail: string;
+  clientName: string;
+  providerName: string;
+  estimateNumber: string;
+  amount: number;
+  expiresAt?: string;
+  lineItems: Array<{ description: string; quantity: number; unitPrice: number; total: number }>;
+  viewerUrl: string;
+}): Promise<SendResult> {
+  const lineItemsHtml = data.lineItems
+    .map(
+      (item) => `
+    <tr>
+      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;color:#374151;font-size:13px;">${escapeHtml(item.description)}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:center;color:#374151;font-size:13px;">${item.quantity}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;color:#374151;font-size:13px;">$${item.unitPrice.toFixed(2)}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;color:#374151;font-size:13px;">$${item.total.toFixed(2)}</td>
+    </tr>`,
+    )
+    .join("");
+
+  const body =
+    greeting(data.clientName) +
+    paragraph(
+      `<strong>${escapeHtml(data.providerName)}</strong> has prepared an estimate for you. Review the details and let them know if you'd like to accept.`,
+    ) +
+    infoBox(
+      infoRow("Estimate #", data.estimateNumber) +
+        (data.expiresAt ? infoRow("Valid Until", data.expiresAt) : "") +
+        `<div style="display:flex;justify-content:space-between;padding-top:12px;border-top:1px solid #e5e7eb;">
+        <span style="color:#6b7280;font-size:14px;">Estimated Total</span>
+        <span style="color:#38AE5F;font-weight:700;font-size:20px;">${fmtUsd(data.amount)}</span>
+      </div>`,
+    ) +
+    `<table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+      <thead>
+        <tr style="background:#f3f4f6;">
+          <th style="padding:10px 12px;text-align:left;color:#374151;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Description</th>
+          <th style="padding:10px 12px;text-align:center;color:#374151;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Qty</th>
+          <th style="padding:10px 12px;text-align:right;color:#374151;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Price</th>
+          <th style="padding:10px 12px;text-align:right;color:#374151;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Total</th>
+        </tr>
+      </thead>
+      <tbody>${lineItemsHtml}</tbody>
+    </table>` +
+    (data.viewerUrl
+      ? `<a href="${data.viewerUrl}" style="display:block;background:#38AE5F;color:#fff;text-align:center;padding:16px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;margin-bottom:24px;">Review &amp; Respond</a>`
+      : "") +
+    appDownloadSection();
+
+  return sendEmail(
+    data.clientEmail,
+    `Estimate ${data.estimateNumber} from ${data.providerName} &ndash; ${fmtUsd(data.amount)}`,
+    buildEmailBase(`Estimate from ${escapeHtml(data.providerName)}`, body),
+  );
+}
+
+export async function sendEstimateDecisionEmail(data: {
+  recipientEmail: string;
+  recipientName: string;
+  clientName: string;
+  estimateNumber: string;
+  amount: number;
+  decision: 'accepted' | 'declined' | 'expired';
+}): Promise<SendResult> {
+  const verb =
+    data.decision === 'accepted' ? 'accepted'
+    : data.decision === 'declined' ? 'declined'
+    : 'expired without a response';
+  const subjectVerb =
+    data.decision === 'accepted' ? 'Accepted'
+    : data.decision === 'declined' ? 'Declined'
+    : 'Expired';
+  const body =
+    greeting(data.recipientName) +
+    paragraph(
+      `<strong>${escapeHtml(data.clientName)}</strong> has ${verb} your estimate <strong>${escapeHtml(data.estimateNumber)}</strong>.`,
+    ) +
+    infoBox(
+      infoRow("Estimate #", data.estimateNumber) +
+        infoRow("Total", fmtUsd(data.amount)) +
+        infoRow("Status", subjectVerb),
+    ) +
+    paragraph(
+      data.decision === 'accepted'
+        ? `You can now convert this estimate into an invoice from the HomeBase app to collect payment.`
+        : data.decision === 'declined'
+          ? `No further action is required. You can follow up with the client if you'd like to revise the estimate.`
+          : `The estimate is no longer valid. You can resend or duplicate it if needed.`,
+    ) +
+    appDownloadSection();
+
+  return sendEmail(
+    data.recipientEmail,
+    `Estimate ${data.estimateNumber} ${subjectVerb}`,
+    buildEmailBase(`Estimate ${subjectVerb}`, body),
+  );
+}
+
 export async function sendInvoiceReminderEmail(data: {
   clientEmail: string;
   clientName: string;

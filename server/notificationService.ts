@@ -24,6 +24,8 @@ import {
   sendSubscriptionGraceStartEmail,
   sendSubscriptionGraceReminderEmail,
   sendSubscriptionExpiredEmail,
+  sendEstimateEmail,
+  sendEstimateDecisionEmail,
 } from './emailService';
 
 export type NotificationEvent =
@@ -50,7 +52,11 @@ export type NotificationEvent =
   | 'stripe.connected'
   | 'subscription.grace_start'
   | 'subscription.grace_reminder'
-  | 'subscription.expired';
+  | 'subscription.expired'
+  | 'estimate.sent'
+  | 'estimate.accepted'
+  | 'estimate.declined'
+  | 'estimate.expired';
 
 export interface DispatchPayload {
   recipientUserId?: string;
@@ -429,6 +435,61 @@ async function _dispatch(event: NotificationEvent, payload: DispatchPayload): Pr
         relatedRecordId: payload.relatedRecordId,
       });
       const result = await sendInvoicePaidEmail({ clientEmail, clientName, providerName, invoiceNumber, amount, paymentDate, paymentMethod });
+      await updateDelivery(deliveryId, result.success ? 'sent' : 'failed', result.messageId, result.error);
+      break;
+    }
+
+    // ── Task #296: Estimate events ────────────────────────────────────
+    case 'estimate.sent': {
+      const { clientEmail, clientName, providerName, invoiceNumber, amount, dueDate, lineItems, paymentLink } = payload;
+      if (!clientEmail || !clientName) {
+        return { emailSent: false, emailError: 'Missing client email or name' };
+      }
+      const deliveryId = await logDelivery({
+        channel: 'email', status: 'queued', eventType: event,
+        recipientEmail: clientEmail,
+        relatedRecordType: 'estimate',
+        relatedRecordId: payload.relatedRecordId,
+      });
+      // Reuses the invoice-shaped fields: invoiceNumber=estimateNumber,
+      // dueDate=expiresAt, paymentLink=public viewer URL.
+      const result = await sendEstimateEmail({
+        clientEmail, clientName, providerName,
+        estimateNumber: invoiceNumber || '',
+        amount: amount || 0,
+        expiresAt: dueDate,
+        lineItems: lineItems || [],
+        viewerUrl: paymentLink || '',
+      });
+      await updateDelivery(deliveryId, result.success ? 'sent' : 'failed', result.messageId, result.error);
+      return { emailSent: result.success, emailError: result.error };
+    }
+
+    case 'estimate.accepted':
+    case 'estimate.declined':
+    case 'estimate.expired': {
+      const { clientEmail, clientName, providerEmail, providerName, invoiceNumber, amount } = payload;
+      // Notify the PROVIDER (decision/expiry concerns them).
+      const recipient = providerEmail;
+      if (!recipient) break;
+      const deliveryId = await logDelivery({
+        channel: 'email', status: 'queued', eventType: event,
+        recipientEmail: recipient,
+        relatedRecordType: 'estimate',
+        relatedRecordId: payload.relatedRecordId,
+      });
+      const decision: 'accepted' | 'declined' | 'expired' =
+        event === 'estimate.accepted' ? 'accepted'
+        : event === 'estimate.declined' ? 'declined'
+        : 'expired';
+      const result = await sendEstimateDecisionEmail({
+        recipientEmail: recipient,
+        recipientName: providerName || 'there',
+        clientName: clientName || 'Your client',
+        estimateNumber: invoiceNumber || '',
+        amount: amount || 0,
+        decision,
+      });
       await updateDelivery(deliveryId, result.success ? 'sent' : 'failed', result.messageId, result.error);
       break;
     }

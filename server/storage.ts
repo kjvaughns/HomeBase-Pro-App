@@ -12,6 +12,8 @@ import {
   clients,
   jobs,
   invoices,
+  estimates,
+  estimateLineItems,
   payments,
   bookingLinks,
   intakeSubmissions,
@@ -34,6 +36,10 @@ import {
   type InsertJob,
   type Invoice,
   type InsertInvoice,
+  type Estimate,
+  type InsertEstimate,
+  type EstimateLineItem,
+  type InsertEstimateLineItem,
   type Payment,
   type InsertPayment,
   type BookingLink,
@@ -947,6 +953,95 @@ export class DatabaseStorage implements IStorage {
       .where(eq(invoices.providerId, providerId));
     const nextNum = existingInvoices.length + 1;
     return `INV-${String(nextNum).padStart(4, "0")}`;
+  }
+
+  // ── Task #296: Estimate methods ───────────────────────────────────────
+  async getNextEstimateNumber(providerId: string): Promise<string> {
+    const rows = await db
+      .select({ estimateNumber: estimates.estimateNumber })
+      .from(estimates)
+      .where(eq(estimates.providerId, providerId));
+    const nextNum = rows.length + 1;
+    return `EST-${String(nextNum).padStart(4, "0")}`;
+  }
+
+  async getEstimates(providerId: string): Promise<Estimate[]> {
+    return db
+      .select()
+      .from(estimates)
+      .where(eq(estimates.providerId, providerId))
+      .orderBy(desc(estimates.createdAt));
+  }
+
+  async getEstimatesByClient(clientId: string): Promise<Estimate[]> {
+    return db
+      .select()
+      .from(estimates)
+      .where(eq(estimates.clientId, clientId))
+      .orderBy(desc(estimates.createdAt));
+  }
+
+  async getEstimate(id: string): Promise<Estimate | undefined> {
+    const [row] = await db.select().from(estimates).where(eq(estimates.id, id));
+    return row || undefined;
+  }
+
+  async getEstimateByPublicToken(token: string): Promise<Estimate | undefined> {
+    const [row] = await db
+      .select()
+      .from(estimates)
+      .where(eq(estimates.publicToken, token));
+    return row || undefined;
+  }
+
+  async createEstimate(
+    data: InsertEstimate & { publicToken: string },
+  ): Promise<Estimate> {
+    const [row] = await db.insert(estimates).values(data).returning();
+    return row;
+  }
+
+  async updateEstimate(
+    id: string,
+    data: Partial<Estimate>,
+  ): Promise<Estimate | undefined> {
+    const [row] = await db
+      .update(estimates)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(estimates.id, id))
+      .returning();
+    return row || undefined;
+  }
+
+  async deleteEstimate(id: string): Promise<boolean> {
+    const result = await db
+      .delete(estimates)
+      .where(eq(estimates.id, id))
+      .returning();
+    return result.length > 0;
+  }
+
+  async getEstimateLineItems(estimateId: string): Promise<EstimateLineItem[]> {
+    return db
+      .select()
+      .from(estimateLineItems)
+      .where(eq(estimateLineItems.estimateId, estimateId))
+      .orderBy(estimateLineItems.createdAt);
+  }
+
+  async replaceEstimateLineItems(
+    estimateId: string,
+    items: InsertEstimateLineItem[],
+  ): Promise<EstimateLineItem[]> {
+    await db
+      .delete(estimateLineItems)
+      .where(eq(estimateLineItems.estimateId, estimateId));
+    if (items.length === 0) return [];
+    const inserted = await db
+      .insert(estimateLineItems)
+      .values(items.map((it) => ({ ...it, estimateId })))
+      .returning();
+    return inserted;
   }
 
   // Booking Links
