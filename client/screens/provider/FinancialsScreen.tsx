@@ -18,7 +18,6 @@ import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import { useLayout } from "@/hooks/useLayout";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useNavigation, useFocusEffect, useRoute, type RouteProp } from "@react-navigation/native";
-import type { ProviderTabParamList } from "@/navigation/ProviderTabNavigator";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeIn, FadeOut } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -1093,13 +1092,20 @@ const howModalStyles = StyleSheet.create({
 
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
+type FinancialsTabParams = {
+  initialSection?: "overview" | "transactions" | "more";
+  initialTransactionTab?: "invoices" | "payouts";
+  initialTransactionFilter?: "all" | "invoices" | "estimates";
+};
+type FinancialsRouteParamList = { FinancialsTab: FinancialsTabParams | undefined };
+
 export default function FinancialsScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useFloatingTabBarHeight();
   const { horizontalPadding } = useLayout();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const route = useRoute<RouteProp<ProviderTabParamList, "FinancialsTab">>();
+  const route = useRoute<RouteProp<FinancialsRouteParamList, "FinancialsTab">>();
   const { theme } = useTheme();
   const { providerProfile } = useAuthStore();
   const queryClient = useQueryClient();
