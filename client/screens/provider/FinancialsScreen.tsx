@@ -33,6 +33,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { estimateStatusLabel, estimateStatusTone } from "@/constants/estimateStatuses";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -96,7 +97,11 @@ interface InvoiceRecord {
 }
 
 type SectionTab = "overview" | "transactions" | "more";
-type TransactionTab = "invoices" | "estimates" | "payments" | "payouts";
+type TransactionTab = "invoices" | "payouts";
+
+type UnifiedTxRow =
+  | { kind: "invoice"; date: string; data: InvoiceRecord }
+  | { kind: "estimate"; date: string; data: EstimateRecord };
 
 interface EstimateRecord {
   id: string;
@@ -1415,12 +1420,84 @@ export default function FinancialsScreen() {
 
   const TRANS_TABS: { key: TransactionTab; label: string }[] = [
     { key: "invoices", label: "Invoices" },
-    { key: "estimates", label: "Estimates" },
-    { key: "payments", label: "Payments" },
     { key: "payouts", label: "Payouts" },
   ];
 
+  const unifiedRows: UnifiedTxRow[] = useMemo(() => {
+    const inv: UnifiedTxRow[] = invoices.map((i) => ({
+      kind: "invoice",
+      date: i.sentAt || i.createdAt,
+      data: i,
+    }));
+    const est: UnifiedTxRow[] = estimates.map((e) => ({
+      kind: "estimate",
+      date: e.createdAt,
+      data: e,
+    }));
+    return [...inv, ...est].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
+  }, [invoices, estimates]);
+
+  const manualPaymentsThisMonth = useMemo(() => {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const active = manualPayments.filter((p) => !p.voidedAt);
+    const monthly = active.filter((p) => {
+      const t = new Date(p.receivedAt || p.createdAt).getTime();
+      return t >= startOfMonth;
+    });
+    const totalCents = monthly.reduce((s, p) => s + (p.amountCents ?? 0), 0);
+    return { count: active.length, totalCents };
+  }, [manualPayments]);
+
   // ── Row renderers ──────────────────────────────────────────────────────────
+
+  const estimateToneToStatus = (tone: ReturnType<typeof estimateStatusTone>): StatusType => {
+    switch (tone) {
+      case "success": return "success";
+      case "danger": return "error";
+      case "info": return "info";
+      case "warning": return "warning";
+      default: return "neutral";
+    }
+  };
+
+  const renderUnifiedRow = ({ item, index }: { item: UnifiedTxRow; index: number }) => {
+    if (item.kind === "invoice") {
+      return renderInvoice({ item: item.data, index });
+    }
+    const est = item.data;
+    const clientName = est.clientId ? clientMap.get(est.clientId) : null;
+    const tone = estimateStatusTone(est.status);
+    const label = `Estimate \u00b7 ${estimateStatusLabel(est.status)}`;
+    return (
+      <Animated.View entering={FadeInDown.delay(index * 40).duration(300)}>
+        <Pressable
+          style={[styles.row, { backgroundColor: theme.cardBackground }]}
+          onPress={() => navigation.navigate("EstimateDetail", { estimateId: est.id })}
+          testID={`estimate-row-${est.id}`}
+        >
+          <View style={[styles.rowIcon, { backgroundColor: Colors.accentLight }]}>
+            <Feather name="file" size={16} color={Colors.accent} />
+          </View>
+          <View style={styles.rowInfo}>
+            <ThemedText style={styles.rowTitle}>
+              {clientName ?? `Estimate ${est.estimateNumber}`}
+            </ThemedText>
+            <ThemedText style={[styles.rowSub, { color: theme.textSecondary }]}>
+              {est.estimateNumber}
+              {est.expiresAt ? ` \u00b7 Expires ${formatDate(est.expiresAt)}` : ""}
+            </ThemedText>
+          </View>
+          <View style={styles.rowRight}>
+            <ThemedText style={styles.rowAmount}>{formatCents(est.totalCents)}</ThemedText>
+            <StatusPill status={estimateToneToStatus(tone)} label={label} size="small" />
+          </View>
+        </Pressable>
+      </Animated.View>
+    );
+  };
 
   const renderInvoice = ({ item, index }: { item: InvoiceRecord; index: number }) => {
     const isOverdue =
@@ -1797,13 +1874,13 @@ export default function FinancialsScreen() {
         </View>
       </Animated.View>
 
-      {/* Task #296 — Estimates summary tile */}
+      {/* Task #296 — Estimates summary tile (taps into the unified Transactions list) */}
       <Animated.View entering={FadeInDown.delay(160).duration(400)}>
         <Pressable
           onPress={() => {
             Haptics.selectionAsync();
             setSectionTab("transactions");
-            setTransactionTab("estimates");
+            setTransactionTab("invoices");
           }}
           testID="tile-estimates-summary"
         >
@@ -1817,6 +1894,32 @@ export default function FinancialsScreen() {
                 {estimates.length} total · {estimatesOutstandingCents > 0
                   ? `${formatCents(estimatesOutstandingCents)} pending`
                   : "no pending"}
+              </ThemedText>
+            </View>
+            <Feather name="chevron-right" size={16} color={theme.textTertiary} />
+          </GlassCard>
+        </Pressable>
+      </Animated.View>
+
+      {/* Task #336 — Manual Payments summary tile (cash / check / etc.) */}
+      <Animated.View entering={FadeInDown.delay(180).duration(400)}>
+        <Pressable
+          onPress={() => {
+            Haptics.selectionAsync();
+            navigation.navigate("ManualPaymentsList");
+          }}
+          testID="tile-manual-payments-summary"
+        >
+          <GlassCard style={{ padding: Spacing.md, marginTop: Spacing.md, flexDirection: "row", alignItems: "center", gap: Spacing.md }}>
+            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.accentLight, alignItems: "center", justifyContent: "center" }}>
+              <Feather name="dollar-sign" size={18} color={Colors.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <ThemedText style={{ fontWeight: "600" }}>Manual Payments</ThemedText>
+              <ThemedText style={{ color: theme.textSecondary, fontSize: 13 }}>
+                {manualPaymentsThisMonth.count} total · {manualPaymentsThisMonth.totalCents > 0
+                  ? `${formatCents(manualPaymentsThisMonth.totalCents)} this month`
+                  : "none this month"}
               </ThemedText>
             </View>
             <Feather name="chevron-right" size={16} color={theme.textTertiary} />
@@ -1921,15 +2024,6 @@ export default function FinancialsScreen() {
               <Feather name="plus" size={15} color={Colors.accent} />
             </Pressable>
           ) : null}
-          {transactionTab === "estimates" ? (
-            <Pressable
-              style={[styles.addInvoiceBtn, { backgroundColor: Colors.accentLight }]}
-              onPress={() => { Haptics.selectionAsync(); navigation.navigate("AddEstimate"); }}
-              testID="button-add-estimate"
-            >
-              <Feather name="plus" size={15} color={Colors.accent} />
-            </Pressable>
-          ) : null}
         </View>
       </Animated.View>
 
@@ -2004,10 +2098,10 @@ export default function FinancialsScreen() {
     );
   }
 
-  // Transactions — Invoices tab
+  // Transactions — Invoices tab (unified: invoices + estimates)
   if (transactionTab === "invoices") {
     const IncomeEmpty = () => {
-      if (invoicesLoading) {
+      if (invoicesLoading || estimatesLoading) {
         return <View>{SKELETON_KEYS.map((k) => <SkeletonRow key={k} theme={theme} />)}</View>;
       }
       return (
@@ -2015,7 +2109,7 @@ export default function FinancialsScreen() {
           <EmptyState
             image={require("../../../assets/images/empty-bookings.png")}
             title="No invoices yet"
-            description="Create your first invoice to start tracking income."
+            description="Create your first invoice or estimate to start tracking income."
             primaryAction={{
               label: "New Invoice",
               onPress: () => navigation.navigate("AddInvoice"),
@@ -2028,10 +2122,12 @@ export default function FinancialsScreen() {
     return (
       <ThemedView style={styles.container}>
         {howModal}
-        <FlatList<InvoiceRecord>
-          data={invoices}
-          renderItem={renderInvoice}
-          keyExtractor={(item) => item.id}
+        <FlatList<UnifiedTxRow>
+          data={unifiedRows}
+          renderItem={renderUnifiedRow}
+          keyExtractor={(item) =>
+            item.kind === "invoice" ? `inv-${item.data.id}` : `est-${item.data.id}`
+          }
           ListHeaderComponent={<SharedHeader />}
           ListEmptyComponent={<IncomeEmpty />}
           contentContainerStyle={{
@@ -2042,126 +2138,11 @@ export default function FinancialsScreen() {
           scrollIndicatorInsets={{ bottom: insets.bottom }}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
-          }
-        />
-      </ThemedView>
-    );
-  }
-
-  // Transactions — Estimates tab (Task #296)
-  if (transactionTab === "estimates") {
-    const EstimatesEmpty = () => {
-      if (estimatesLoading) {
-        return <View>{SKELETON_KEYS.map((k) => <SkeletonRow key={k} theme={theme} />)}</View>;
-      }
-      return (
-        <View style={styles.emptyContainer}>
-          <EmptyState
-            image={require("../../../assets/images/empty-bookings.png")}
-            title="No estimates yet"
-            description="Send your first estimate and track responses here."
-            primaryAction={{
-              label: "New Estimate",
-              onPress: () => navigation.navigate("AddEstimate"),
-            }}
-          />
-        </View>
-      );
-    };
-
-    const renderEstimate = ({ item }: { item: EstimateRecord }) => {
-      const tone =
-        item.status === "accepted" || item.status === "converted" ? "#10b981"
-        : item.status === "declined" || item.status === "expired" ? "#ef4444"
-        : item.status === "sent" || item.status === "viewed" ? "#3b82f6"
-        : "#6b7280";
-      const clientName = item.clientId ? clientMap.get(item.clientId) : null;
-      return (
-        <Pressable
-          style={({ pressed }) => [styles.row, { opacity: pressed ? 0.85 : 1 }]}
-          onPress={() => navigation.navigate("EstimateDetail", { estimateId: item.id })}
-          testID={`estimate-row-${item.id}`}
-        >
-          <View style={[styles.rowIcon, { backgroundColor: Colors.accentLight }]}>
-            <Feather name="file" size={16} color={Colors.accent} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <ThemedText style={styles.rowTitle}>{clientName ?? `Estimate ${item.estimateNumber}`}</ThemedText>
-            <ThemedText style={{ fontSize: 12, color: theme.textSecondary }}>
-              {item.estimateNumber}{item.expiresAt ? ` · Expires ${formatDate(item.expiresAt)}` : ""}
-            </ThemedText>
-          </View>
-          <View style={{ alignItems: "flex-end", gap: 4 }}>
-            <ThemedText style={styles.rowAmount}>{formatCents(item.totalCents)}</ThemedText>
-            <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, backgroundColor: tone + "20" }}>
-              <ThemedText style={{ fontSize: 11, fontWeight: "700", color: tone }}>
-                {item.status.toUpperCase()}
-              </ThemedText>
-            </View>
-          </View>
-        </Pressable>
-      );
-    };
-
-    return (
-      <ThemedView style={styles.container}>
-        {howModal}
-        <FlatList<EstimateRecord>
-          data={estimates}
-          renderItem={renderEstimate}
-          keyExtractor={(item) => item.id}
-          ListHeaderComponent={<SharedHeader />}
-          ListEmptyComponent={<EstimatesEmpty />}
-          contentContainerStyle={{
-            paddingTop: headerHeight + Spacing.md,
-            paddingBottom: tabBarHeight + Spacing.xl,
-            paddingHorizontal: horizontalPadding,
-          }}
-          scrollIndicatorInsets={{ bottom: insets.bottom }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => { refetchEstimates(); onRefresh(); }} tintColor={Colors.accent} />
-          }
-        />
-      </ThemedView>
-    );
-  }
-
-  // Transactions — Payments tab (manual cash/check/etc)
-  if (transactionTab === "payments") {
-    const PaymentsEmpty = () => {
-      if (manualPaymentsLoading) {
-        return <View>{SKELETON_KEYS.map((k) => <SkeletonRow key={k} theme={theme} />)}</View>;
-      }
-      return (
-        <View style={styles.emptyContainer}>
-          <EmptyState
-            image={require("../../../assets/images/empty-bookings.png")}
-            title="No payments recorded"
-            description="Cash, check, and other manual payments you record will show up here."
-          />
-        </View>
-      );
-    };
-    return (
-      <ThemedView style={styles.container}>
-        {howModal}
-        <FlatList<ManualPaymentRecord>
-          data={manualPayments}
-          renderItem={renderManualPayment}
-          keyExtractor={(item) => item.id}
-          ListHeaderComponent={<SharedHeader />}
-          ListEmptyComponent={<PaymentsEmpty />}
-          contentContainerStyle={{
-            paddingTop: headerHeight + Spacing.md,
-            paddingBottom: tabBarHeight + Spacing.xl,
-            paddingHorizontal: horizontalPadding,
-          }}
-          scrollIndicatorInsets={{ bottom: insets.bottom }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => { refetchEstimates(); onRefresh(); }}
+              tintColor={Colors.accent}
+            />
           }
         />
       </ThemedView>

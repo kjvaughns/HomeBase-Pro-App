@@ -7,6 +7,7 @@ import {
   TextInput as RNTextInput,
   Modal,
   Platform,
+  Switch,
 } from "react-native";
 import { useSafeAreaInsets, type EdgeInsets } from "react-native-safe-area-context";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
@@ -140,6 +141,7 @@ export default function AddInvoiceScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [notes, setNotes] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  const [sendAsEstimate, setSendAsEstimate] = useState(false);
 
   // Client picker modal state
   const [clientPickerVisible, setClientPickerVisible] = useState(false);
@@ -209,42 +211,60 @@ export default function AddInvoiceScreen() {
     return msg.includes("SUBSCRIPTION_REQUIRED") || msg.startsWith("403");
   };
 
-  const createMutation = useMutation({
-    mutationFn: async (data: ReturnType<typeof buildPayload>) => {
-      const response = await apiRequest("POST", "/api/invoices/create-and-send", data);
-      return response.json();
-    },
-    onSuccess: () => {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "invoices"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "stats"] });
-      navigation.goBack();
-    },
-    onError: (err) => {
-      if (isSubscriptionError(err)) {
-        setShowSubscriptionGate(true);
-        return;
-      }
-      setFormError("Failed to create invoice. Please try again.");
-    },
+  const buildEstimatePayload = () => ({
+    providerId: providerId!,
+    clientId: selectedClientId!,
+    notes: notes.trim() || undefined,
+    expiresAt: dueDate ? dueDate.toISOString() : undefined,
+    lineItems: lineItems.map((item) => ({
+      description: item.description || "Service",
+      quantity: parseFloat(item.qty) || 1,
+      unitPrice: parseFloat(item.unitPrice) || 0,
+    })),
   });
 
-  const saveDraftMutation = useMutation({
-    mutationFn: async (data: ReturnType<typeof buildPayload>) => {
-      const response = await apiRequest("POST", "/api/invoices", data);
-      return response.json();
+  type MutateVars = { asEstimate: boolean; sendImmediately: boolean };
+
+  const createMutation = useMutation({
+    mutationFn: async ({ asEstimate, sendImmediately }: MutateVars) => {
+      if (asEstimate) {
+        const created = await apiRequest("POST", "/api/estimates", buildEstimatePayload()).then((r) => r.json());
+        if (sendImmediately && created?.estimate?.id) {
+          await apiRequest("POST", `/api/estimates/${created.estimate.id}/send`, {}).then((r) => r.json());
+        }
+        return { kind: "estimate" as const, id: created?.estimate?.id as string | undefined };
+      }
+      const response = sendImmediately
+        ? await apiRequest("POST", "/api/invoices/create-and-send", buildPayload(true))
+        : await apiRequest("POST", "/api/invoices", buildPayload(false));
+      const data = await response.json();
+      return { kind: "invoice" as const, id: data?.invoice?.id as string | undefined };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "invoices"] });
+      if (result.kind === "estimate") {
+        queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "estimates"] });
+        if (result.id) {
+          (navigation as unknown as { replace: (name: string, params: object) => void })
+            .replace("EstimateDetail", { estimateId: result.id });
+          return;
+        }
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "invoices"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "stats"] });
+      }
       navigation.goBack();
     },
-    onError: (err) => {
+    onError: (err, variables) => {
       if (isSubscriptionError(err)) {
         setShowSubscriptionGate(true);
         return;
       }
-      setFormError("Failed to save invoice. Please try again.");
+      setFormError(
+        variables.asEstimate
+          ? "Failed to save estimate. Please try again."
+          : "Failed to create invoice. Please try again.",
+      );
     },
   });
 
@@ -263,7 +283,7 @@ export default function AddInvoiceScreen() {
       setShowSubscriptionGate(true);
       return;
     }
-    createMutation.mutate(buildPayload(true));
+    createMutation.mutate({ asEstimate: sendAsEstimate, sendImmediately: true });
   };
 
   const handleSaveDraft = () => {
@@ -272,7 +292,7 @@ export default function AddInvoiceScreen() {
       setShowSubscriptionGate(true);
       return;
     }
-    saveDraftMutation.mutate(buildPayload(false));
+    createMutation.mutate({ asEstimate: sendAsEstimate, sendImmediately: false });
   };
 
   const handleJobSelect = (jobId: string) => {
@@ -302,7 +322,7 @@ export default function AddInvoiceScreen() {
   const formatDate = (date: Date) =>
     date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
-  const anyLoading = createMutation.isPending || saveDraftMutation.isPending;
+  const anyLoading = createMutation.isPending;
 
   return (
     <ThemedView style={styles.container}>
@@ -314,6 +334,28 @@ export default function AddInvoiceScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
+        {/* Send as estimate toggle */}
+        <GlassCard style={styles.section}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md }}>
+            <View style={{ flex: 1 }}>
+              <ThemedText style={{ fontWeight: "600" }}>Send as estimate</ThemedText>
+              <ThemedText style={{ color: theme.textTertiary, fontSize: 13, marginTop: 2 }}>
+                {sendAsEstimate
+                  ? "Client can review and accept before you bill them."
+                  : "Off — this will be sent as an invoice with payment."}
+              </ThemedText>
+            </View>
+            <Switch
+              value={sendAsEstimate}
+              onValueChange={(v) => { setSendAsEstimate(v); Haptics.selectionAsync(); }}
+              trackColor={{ false: theme.backgroundTertiary, true: Colors.accent }}
+              thumbColor="#FFFFFF"
+              ios_backgroundColor={theme.backgroundTertiary}
+              testID="switch-send-as-estimate"
+            />
+          </View>
+        </GlassCard>
+
         {/* Client */}
         <GlassCard style={styles.section}>
           <FormSectionHeader icon="users" title="Client" />
@@ -510,7 +552,9 @@ export default function AddInvoiceScreen() {
         <GlassCard style={styles.section}>
           <FormSectionHeader icon="calendar" title="Schedule" />
 
-          <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Due Date</ThemedText>
+          <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+            {sendAsEstimate ? "Expires" : "Due Date"}
+          </ThemedText>
           <Pressable
             style={[styles.datePill, { backgroundColor: theme.backgroundSecondary }]}
             onPress={() => setShowDatePicker(true)}
@@ -518,7 +562,11 @@ export default function AddInvoiceScreen() {
           >
             <Feather name="calendar" size={15} color={dueDate ? Colors.accent : theme.textTertiary} />
             <ThemedText style={[styles.datePillText, { color: dueDate ? theme.text : theme.textTertiary }]}>
-              {dueDate ? formatDate(dueDate) : "Select due date (optional)"}
+              {dueDate
+                ? formatDate(dueDate)
+                : sendAsEstimate
+                  ? "Optional expiration date"
+                  : "Select due date (optional)"}
             </ThemedText>
             {dueDate ? (
               <Pressable onPress={() => setDueDate(null)} hitSlop={8}>
@@ -555,11 +603,11 @@ export default function AddInvoiceScreen() {
             disabled={anyLoading || clients.length === 0}
             testID="button-create-send"
           >
-            Send Invoice
+            {sendAsEstimate ? "Send Estimate" : "Send Invoice"}
           </PrimaryButton>
           <SecondaryButton
             onPress={handleSaveDraft}
-            loading={saveDraftMutation.isPending}
+            loading={createMutation.isPending}
             disabled={anyLoading || clients.length === 0}
             testID="button-save-draft"
           >

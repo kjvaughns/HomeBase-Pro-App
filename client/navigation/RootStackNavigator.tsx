@@ -46,6 +46,7 @@ import AddClientScreen from "@/screens/provider/AddClientScreen";
 import AddJobScreen from "@/screens/provider/AddJobScreen";
 import AddInvoiceScreen from "@/screens/provider/AddInvoiceScreen";
 import InvoiceDetailScreen from "@/screens/provider/InvoiceDetailScreen";
+import ManualPaymentsListScreen from "@/screens/provider/ManualPaymentsListScreen";
 import EstimatesListScreen from "@/screens/provider/EstimatesListScreen";
 import AddEstimateScreen from "@/screens/provider/AddEstimateScreen";
 import QuickQuoteScreen from "@/screens/provider/QuickQuoteScreen";
@@ -152,6 +153,7 @@ export type RootStackParamList = {
   AddJob: { clientId?: string } | undefined;
   AddInvoice: { clientId?: string } | undefined;
   InvoiceDetail: { invoiceId: string };
+  ManualPaymentsList: undefined;
   EstimatesList: undefined;
   AddEstimate:
     | {
@@ -519,6 +521,11 @@ export default function RootStackNavigator() {
         options={{
           headerTitle: "Invoice",
         }}
+      />
+      <Stack.Screen
+        name="ManualPaymentsList"
+        component={ManualPaymentsListScreen}
+        options={{ headerTitle: "Manual Payments" }}
       />
       <Stack.Screen
         name="EstimatesList"
