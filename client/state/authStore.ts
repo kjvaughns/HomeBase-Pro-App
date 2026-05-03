@@ -47,6 +47,12 @@ interface AuthState {
   /** Last explicit role chosen by the user — persisted through logout/login so
    *  dual-role users return to whichever view they were using last. */
   lastActiveRole: UserRole | null;
+  /** Task #291: Persisted preferred role. Set from signup intent (provider
+   *  signup → "provider", homeowner signup → "homeowner") and any explicit
+   *  role switch. When set, the launch flow bypasses any role-selection
+   *  gateway and routes directly into the matching tab navigator. Stays
+   *  null only for users who have never picked a side. */
+  preferredRole: UserRole | null;
   providerProfile: ProviderProfile | null;
   isHydrated: boolean;
   needsRoleSelection: boolean;
@@ -55,6 +61,7 @@ interface AuthState {
   logout: () => void;
   setActiveRole: (role: UserRole) => void;
   activateProviderMode: () => void;
+  setPreferredRole: (role: UserRole | null) => void;
   setNeedsRoleSelection: (needs: boolean) => void;
   updateUser: (updates: Partial<User>) => void;
   setSessionToken: (token: string | null) => void;
@@ -75,6 +82,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   sessionToken: null,
   activeRole: "guest",
   lastActiveRole: null,
+  preferredRole: null,
   providerProfile: null,
   isHydrated: false,
   needsRoleSelection: true,
@@ -82,26 +90,36 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   login: (user: User, providerProfile?: ProviderProfile | null, token?: string | null) => {
     const hasApprovedProvider = providerProfile?.status === "approved";
 
-    // Determine starting role. For dual-role users (or any user with a prior
-    // session), we honour lastActiveRole so they return to whichever view they
-    // used last. For brand-new logins with no prior preference, we default to
-    // "provider" when the user has an approved provider profile, "homeowner"
-    // otherwise.
-    const { lastActiveRole } = get();
+    // Determine starting role. Priority order:
+    //   1. Persisted preferredRole (Task #291) — the explicit choice from
+    //      signup intent or a prior switch. Always wins for dual-role users.
+    //   2. lastActiveRole — restores whichever view was used last.
+    //   3. Default to "provider" for users with an approved profile,
+    //      "homeowner" otherwise.
+    const { lastActiveRole, preferredRole } = get();
     let activeRole: UserRole = "homeowner";
     if (hasApprovedProvider) {
-      if (lastActiveRole === "homeowner" || lastActiveRole === "provider") {
-        activeRole = lastActiveRole; // restore last choice for dual-role users
+      if (preferredRole === "homeowner" || preferredRole === "provider") {
+        activeRole = preferredRole;
+      } else if (lastActiveRole === "homeowner" || lastActiveRole === "provider") {
+        activeRole = lastActiveRole;
       } else {
-        activeRole = "provider"; // no prior preference → land on provider dashboard
+        activeRole = "provider";
       }
+    } else if (preferredRole === "homeowner") {
+      activeRole = "homeowner";
     }
+
+    // Seed preferredRole on first login so dual-role gateways stay quiet on
+    // future launches, even if the user never explicitly switches.
+    const nextPreferred: UserRole | null = preferredRole ?? activeRole;
 
     const newState = {
       isAuthenticated: true,
       user,
       sessionToken: token || null,
       activeRole,
+      preferredRole: nextPreferred,
       providerProfile: providerProfile || null,
       needsRoleSelection: false,
     };
@@ -111,7 +129,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   logout: () => {
-    const { lastActiveRole, sessionToken } = get();
+    const { lastActiveRole, preferredRole, sessionToken } = get();
     // Deactivate ONLY this device's push token (not the user's other devices).
     // Capture the bearer token NOW (before clearing auth state) and send it
     // explicitly so the request is authenticated even though the store is
@@ -140,8 +158,10 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       sessionToken: null,
       activeRole: "guest" as UserRole,
       providerProfile: null,
-      // Keep lastActiveRole across logout so the next login restores the prior view.
+      // Keep lastActiveRole and preferredRole across logout so the next login
+      // restores the prior view without re-prompting (Task #291).
       lastActiveRole,
+      preferredRole,
     };
     set(newState);
     secureSetSessionToken(null);
@@ -154,14 +174,21 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     if (role === "provider" && !state.canAccessProviderMode()) {
       return;
     }
-    set({ activeRole: role, lastActiveRole: role });
+    // Task #291: any explicit role choice updates preferredRole so the launch
+    // flow remembers it across restarts.
+    set({ activeRole: role, lastActiveRole: role, preferredRole: role });
     saveToStorage(get());
   },
 
   activateProviderMode: () => {
     // Bypasses the canAccessProviderMode guard for use only after completing
     // ProviderSetupFlow — new providers don't have an approved backend profile yet.
-    set({ activeRole: "provider", lastActiveRole: "provider" });
+    set({ activeRole: "provider", lastActiveRole: "provider", preferredRole: "provider" });
+    saveToStorage(get());
+  },
+
+  setPreferredRole: (role: UserRole | null) => {
+    set({ preferredRole: role });
     saveToStorage(get());
   },
 
@@ -322,6 +349,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
           sessionToken: secureToken || null,
           activeRole,
           lastActiveRole: data.lastActiveRole || null,
+          preferredRole: data.preferredRole || null,
           providerProfile,
           needsRoleSelection,
           isHydrated: true,
@@ -344,6 +372,7 @@ async function saveToStorage(state: AuthState) {
       // sessionToken is intentionally omitted: it lives in SecureStore.
       activeRole: state.activeRole,
       lastActiveRole: state.lastActiveRole,
+      preferredRole: state.preferredRole,
       providerProfile: state.providerProfile,
       needsRoleSelection: state.needsRoleSelection,
     };

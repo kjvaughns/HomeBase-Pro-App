@@ -106,17 +106,6 @@ export default function ProviderMoreScreen() {
     }
   };
 
-  const { setActiveRole, setNeedsRoleSelection } = useAuthStore();
-
-  const handleSwitchToHomeowner = () => {
-    setActiveRole("homeowner");
-    setNeedsRoleSelection(false);
-    navigation.reset({
-      index: 0,
-      routes: [{ name: "Main" }],
-    });
-  };
-
   const handleLogout = () => {
     logout();
   };
@@ -265,12 +254,6 @@ export default function ProviderMoreScreen() {
               title="Notification Preferences"
               leftIcon="sliders"
               onPress={() => navigation.navigate("NotificationPreferences")}
-            />
-            <ListRow
-              title="Switch to Homeowner Mode"
-              subtitle="Browse and book services"
-              leftIcon="home"
-              onPress={handleSwitchToHomeowner}
               isLast
             />
           </View>

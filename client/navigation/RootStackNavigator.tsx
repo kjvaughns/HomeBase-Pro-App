@@ -6,7 +6,6 @@ import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 import HomeownerTabNavigator, { type HomeownerTabParamList } from "@/navigation/HomeownerTabNavigator";
 import ProviderTabNavigator, { type ProviderTabParamList } from "@/navigation/ProviderTabNavigator";
-import RoleSwitchConfirmationScreen from "@/screens/RoleSwitchConfirmationScreen";
 import BecomeProviderScreen from "@/screens/BecomeProviderScreen";
 import FirstLaunchScreen from "@/screens/onboarding/FirstLaunchScreen";
 import AccountTypeSelectionScreen from "@/screens/onboarding/AccountTypeSelectionScreen";
@@ -85,7 +84,6 @@ export type RootStackParamList = {
     | NavigatorScreenParams<HomeownerTabParamList>
     | NavigatorScreenParams<ProviderTabParamList>
     | undefined;
-  RoleSwitchConfirmation: { targetRole: UserRole };
   BecomeProvider: undefined;
   AIChat: undefined;
   SmartIntake: { 
@@ -179,7 +177,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export default function RootStackNavigator() {
   const screenOptions = useScreenOptions();
   const { theme } = useTheme();
-  const { isAuthenticated, isHydrated, activeRole, canAccessProviderMode, needsRoleSelection, setActiveRole, setNeedsRoleSelection, activateProviderMode, syncFromServer } = useAuthStore();
+  const { isAuthenticated, isHydrated, activeRole, preferredRole, canAccessProviderMode, needsRoleSelection, setActiveRole, setNeedsRoleSelection, activateProviderMode, syncFromServer } = useAuthStore();
   const { hasCompletedFirstLaunch, hasCompletedProviderSetup, isHydrated: onboardingHydrated } = useOnboardingStore();
 
   usePushNotifications();
@@ -196,9 +194,17 @@ export default function RootStackNavigator() {
 
   // Auto-resolve role selection edge cases (e.g., very old cached state).
   // login() now sets the correct role directly, so this is mostly a safety net.
+  // Task #291: when a preferredRole is persisted, honour it so providers who
+  // signed up as providers never see a role-selection interstitial on launch.
   useEffect(() => {
     if (isAuthenticated && needsRoleSelection) {
-      if (canAccessProviderMode()) {
+      if (preferredRole === "provider" && canAccessProviderMode()) {
+        setActiveRole("provider");
+      } else if (preferredRole === "provider" && hasCompletedProviderSetup) {
+        activateProviderMode();
+      } else if (preferredRole === "homeowner") {
+        setActiveRole("homeowner");
+      } else if (canAccessProviderMode()) {
         // Existing approved provider — setActiveRole is fine (guard will pass).
         setActiveRole("provider");
       } else if (hasCompletedProviderSetup) {
@@ -211,7 +217,7 @@ export default function RootStackNavigator() {
       }
       setNeedsRoleSelection(false);
     }
-  }, [isAuthenticated, needsRoleSelection]);
+  }, [isAuthenticated, needsRoleSelection, preferredRole]);
 
   // canAccessProviderMode checks for an approved provider profile (existing providers).
   // hasCompletedProviderSetup covers new providers who finished ProviderOnboarding
@@ -296,17 +302,6 @@ export default function RootStackNavigator() {
         name="Onboarding"
         component={OnboardingScreen}
         options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="RoleSwitchConfirmation"
-        component={RoleSwitchConfirmationScreen}
-        options={{
-          presentation: "formSheet",
-          headerTitle: "Switch Role",
-          sheetAllowedDetents: [0.45],
-          sheetCornerRadius: 20,
-          sheetExpandsWhenScrolledToEdge: false,
-        }}
       />
       <Stack.Screen
         name="BecomeProvider"

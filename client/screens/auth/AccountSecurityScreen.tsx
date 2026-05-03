@@ -11,6 +11,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { TextField } from "@/components/TextField";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { ListRow } from "@/components/ListRow";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Typography, BorderRadius, Colors } from "@/constants/theme";
@@ -46,10 +47,34 @@ export default function AccountSecurityScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { theme } = useTheme();
-  const { user, activeRole, updateUser, setSessionToken, logout } = useAuthStore();
+  const {
+    user,
+    activeRole,
+    updateUser,
+    setSessionToken,
+    logout,
+    setActiveRole,
+    setNeedsRoleSelection,
+    canAccessProviderMode,
+    hasProviderProfile,
+  } = useAuthStore();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const isProvider = activeRole === "provider";
+  // Task #291: providers reach the cross-role switch from More → Account
+  // (here), instead of as a top-level Settings row. Only show it when the
+  // user actually has both sides available.
+  const canCrossToHomeowner = isProvider;
+  const canCrossToProvider = !isProvider && hasProviderProfile() && canAccessProviderMode();
+
+  const handleSwitchRole = (target: "homeowner" | "provider") => {
+    setActiveRole(target);
+    setNeedsRoleSelection(false);
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "Main" }],
+    });
+  };
   const { isSubscribed, isInGrace, daysRemainingInGrace, status } = useSubscriptionStatus();
   const subscriptionSubtitle = isSubscribed
     ? "Active — manage your HomeBase Pro plan"
@@ -138,6 +163,40 @@ export default function AccountSecurityScreen() {
                 isLast
                 testID="row-subscription"
               />
+            </View>
+          </>
+        ) : null}
+
+        {canCrossToHomeowner || canCrossToProvider ? (
+          <>
+            <ThemedText
+              style={[styles.sectionTitle, { color: theme.textSecondary, marginTop: Spacing.xl }]}
+            >
+              Account Type
+            </ThemedText>
+            <View style={[styles.section, { backgroundColor: theme.cardBackground }]}>
+              {canCrossToHomeowner ? (
+                <ListRow
+                  title="Switch to Homeowner Mode"
+                  subtitle="Browse and book services"
+                  leftIcon="home"
+                  onPress={() => handleSwitchRole("homeowner")}
+                  isFirst
+                  isLast
+                  testID="row-switch-to-homeowner"
+                />
+              ) : null}
+              {canCrossToProvider ? (
+                <ListRow
+                  title="Switch to Provider Mode"
+                  subtitle="Access your provider dashboard"
+                  leftIcon="briefcase"
+                  onPress={() => handleSwitchRole("provider")}
+                  isFirst
+                  isLast
+                  testID="row-switch-to-provider"
+                />
+              ) : null}
             </View>
           </>
         ) : null}
