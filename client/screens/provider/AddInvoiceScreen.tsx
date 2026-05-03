@@ -13,6 +13,8 @@ import { useSafeAreaInsets, type EdgeInsets } from "react-native-safe-area-conte
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation, useRoute } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import { NativeDatePickerSheet } from "@/components/NativeDatePickerSheet";
@@ -106,7 +108,7 @@ function getServicePriceLabel(service: CustomService): string {
 export default function AddInvoiceScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute();
   const queryClient = useQueryClient();
   const { providerProfile } = useAuthStore();
@@ -213,7 +215,7 @@ export default function AddInvoiceScreen() {
 
   const buildEstimatePayload = () => ({
     providerId: providerId!,
-    clientId: selectedClientId!,
+    clientId: selectedClientId || null,
     notes: notes.trim() || undefined,
     expiresAt: dueDate ? dueDate.toISOString() : undefined,
     lineItems: lineItems.map((item) => ({
@@ -245,8 +247,7 @@ export default function AddInvoiceScreen() {
       if (result.kind === "estimate") {
         queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "estimates"] });
         if (result.id) {
-          (navigation as unknown as { replace: (name: string, params: object) => void })
-            .replace("EstimateDetail", { estimateId: result.id });
+          navigation.replace("EstimateDetail", { estimateId: result.id });
           return;
         }
       } else {
@@ -268,9 +269,9 @@ export default function AddInvoiceScreen() {
     },
   });
 
-  const validateForm = () => {
+  const validateForm = (requireClient: boolean) => {
     setFormError(null);
-    if (!selectedClientId) { setFormError("Please select a client."); return false; }
+    if (requireClient && !selectedClientId) { setFormError("Please select a client."); return false; }
     if (!providerId) { setFormError("Provider profile not found."); return false; }
     const hasValidItem = lineItems.some((item) => (parseFloat(item.unitPrice) || 0) > 0);
     if (!hasValidItem) { setFormError("Please add at least one line item with a price."); return false; }
@@ -278,16 +279,20 @@ export default function AddInvoiceScreen() {
   };
 
   const handleCreateAndSend = () => {
-    if (!validateForm()) return;
+    const hasClient = !!selectedClientId;
+    if (!validateForm(!sendAsEstimate || hasClient)) return;
     if (subscriptionGated) {
       setShowSubscriptionGate(true);
       return;
     }
-    createMutation.mutate({ asEstimate: sendAsEstimate, sendImmediately: true });
+    createMutation.mutate({
+      asEstimate: sendAsEstimate,
+      sendImmediately: sendAsEstimate ? hasClient : true,
+    });
   };
 
   const handleSaveDraft = () => {
-    if (!validateForm()) return;
+    if (!validateForm(!sendAsEstimate)) return;
     if (subscriptionGated) {
       setShowSubscriptionGate(true);
       return;
@@ -600,15 +605,17 @@ export default function AddInvoiceScreen() {
           <PrimaryButton
             onPress={handleCreateAndSend}
             loading={createMutation.isPending}
-            disabled={anyLoading || clients.length === 0}
+            disabled={anyLoading || (!sendAsEstimate && clients.length === 0)}
             testID="button-create-send"
           >
-            {sendAsEstimate ? "Send Estimate" : "Send Invoice"}
+            {sendAsEstimate
+              ? selectedClientId ? "Send Estimate" : "Save Estimate"
+              : "Send Invoice"}
           </PrimaryButton>
           <SecondaryButton
             onPress={handleSaveDraft}
             loading={createMutation.isPending}
-            disabled={anyLoading || clients.length === 0}
+            disabled={anyLoading || (!sendAsEstimate && clients.length === 0)}
             testID="button-save-draft"
           >
             Save as Draft

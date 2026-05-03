@@ -1424,9 +1424,6 @@ export default function FinancialsScreen() {
     { key: "payouts", label: "Payouts" },
   ];
 
-  // Task #336 — show only one row per converted estimate: prefer the invoice
-  // it converted into. Estimate rows in `converted` status are dropped from
-  // the unified feed so we don't double-list them next to their invoice.
   const unifiedRows: UnifiedTxRow[] = useMemo(() => {
     const inv: UnifiedTxRow[] = invoices.map((i) => ({
       kind: "invoice",
@@ -1456,8 +1453,6 @@ export default function FinancialsScreen() {
     );
   }, [invoices, estimates, transactionFilter]);
 
-  // Task #336 — month-scoped count + total for the Manual Payments tile so the
-  // headline number matches the dollar amount underneath it.
   const manualPaymentsThisMonth = useMemo(() => {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
@@ -1921,7 +1916,7 @@ export default function FinancialsScreen() {
         </Pressable>
       </Animated.View>
 
-      {/* Task #336 — Manual Payments summary tile (cash / check / etc.) */}
+      {/* Manual Payments summary tile (cash / check / etc.) */}
       <Animated.View entering={FadeInDown.delay(180).duration(400)}>
         <Pressable
           onPress={() => {
