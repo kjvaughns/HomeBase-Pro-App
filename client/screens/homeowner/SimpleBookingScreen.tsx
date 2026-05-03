@@ -147,7 +147,15 @@ export default function SimpleBookingScreen() {
   const route = useRoute<ScreenRouteProp>();
   const navigation = useNavigation<NavigationProp>();
   const { theme, isDark } = useTheme();
-  const params = route.params;
+  // Task #289: route.params is `undefined` when this screen is opened via a
+  // bare deep link (e.g. someone hits `/SimpleBooking` in a browser without
+  // any query params). Destructuring `providerId` directly threw and
+  // tripped the global ErrorBoundary on web, leaving the user staring at
+  // "Something went wrong". Default to an empty object and validate the
+  // required fields below so we render a friendly empty state instead.
+  const params = (route.params ?? {}) as Partial<RootStackParamList["SimpleBooking"]>;
+  const providerId = params.providerId;
+  const providerName = params.providerName;
   const { user } = useAuthStore();
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -165,19 +173,19 @@ export default function SimpleBookingScreen() {
   });
 
   const { services: publishedServices, isLoading: servicesLoading } =
-    useProviderPublishedServices(params.providerId);
+    useProviderPublishedServices(providerId);
 
   // Task #236: fetch provider's booking policies so we can show the
   // homeowner the policy summary + deposit estimate before they book.
   const { data: providerData } = useQuery<{
     provider?: { bookingPolicies?: unknown };
   }>({
-    queryKey: ["/api/providers", params.providerId],
+    queryKey: ["/api/providers", providerId],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/providers/${params.providerId}`);
+      const res = await apiRequest("GET", `/api/providers/${providerId}`);
       return res.json();
     },
-    enabled: !!params.providerId,
+    enabled: !!providerId,
   });
   const bookingPolicy = useMemo(
     () => normalizeBookingPolicy(providerData?.provider?.bookingPolicies),
@@ -192,15 +200,15 @@ export default function SimpleBookingScreen() {
     slots: { startTime: string; label: string }[];
     workingDays: number[];
   }>({
-    queryKey: ["/api/provider", params.providerId, "availability", selectedDate],
+    queryKey: ["/api/provider", providerId, "availability", selectedDate],
     queryFn: async () => {
       const path = selectedDate
-        ? `/api/provider/${params.providerId}/availability?date=${encodeURIComponent(selectedDate)}`
-        : `/api/provider/${params.providerId}/availability`;
+        ? `/api/provider/${providerId}/availability?date=${encodeURIComponent(selectedDate)}`
+        : `/api/provider/${providerId}/availability`;
       const res = await apiRequest("GET", path);
       return res.json();
     },
-    enabled: !!params.providerId && !!selectedDate,
+    enabled: !!providerId && !!selectedDate,
   });
 
   const timeSlots = availabilityData?.slots || TIME_SLOTS;
@@ -379,7 +387,7 @@ export default function SimpleBookingScreen() {
       const res = await apiRequest("POST", url.toString(), {
         userId: user.id,
         homeId: defaultHome.id,
-        providerId: params.providerId,
+        providerId: providerId,
         serviceName: serviceNameFull,
         addOns: structuredAddOns.length > 0 ? structuredAddOns : undefined,
         description: baseDescription,
@@ -529,6 +537,46 @@ export default function SimpleBookingScreen() {
     );
   };
 
+  // Task #289: when this screen is opened via a deep link without the
+  // required providerId — e.g. someone hits `/SimpleBooking` directly in a
+  // browser — render a friendly empty state instead of trying to fetch
+  // services for `undefined` and crashing into the global ErrorBoundary.
+  if (!providerId) {
+    return (
+      <ThemedView style={styles.container}>
+        <View
+          style={[
+            styles.content,
+            {
+              paddingTop: headerHeight + Spacing.xl,
+              alignItems: "center",
+              gap: Spacing.md,
+            },
+          ]}
+        >
+          <Feather name="link" size={32} color={theme.textSecondary} />
+          <ThemedText style={[styles.summaryTitle, { textAlign: "center" }]}>
+            Booking link incomplete
+          </ThemedText>
+          <ThemedText
+            style={[styles.summaryText, { color: theme.textSecondary, textAlign: "center" }]}
+          >
+            This booking page needs a provider to continue. Open the link your provider shared with you, or browse providers from the home screen.
+          </ThemedText>
+          <PrimaryButton
+            onPress={() => {
+              if (navigation.canGoBack()) navigation.goBack();
+              else navigation.navigate("Main" as never);
+            }}
+            testID="button-booking-missing-provider-back"
+          >
+            Go to Home
+          </PrimaryButton>
+        </View>
+      </ThemedView>
+    );
+  }
+
   return (
     <ThemedView style={styles.container}>
       <ScrollView
@@ -574,11 +622,11 @@ export default function SimpleBookingScreen() {
             <View style={styles.providerRow}>
               <View style={[styles.providerAvatar, { backgroundColor: Colors.accentLight }]}>
                 <ThemedText style={styles.providerInitial}>
-                  {params.providerName?.charAt(0) || "P"}
+                  {providerName?.charAt(0) || "P"}
                 </ThemedText>
               </View>
               <View style={styles.providerInfo}>
-                <ThemedText style={styles.providerName}>{params.providerName}</ThemedText>
+                <ThemedText style={styles.providerName}>{providerName}</ThemedText>
                 <ThemedText style={[styles.providerCategory, { color: theme.textSecondary }]}>
                   {params.intakeData?.category || "Service Provider"}
                 </ThemedText>

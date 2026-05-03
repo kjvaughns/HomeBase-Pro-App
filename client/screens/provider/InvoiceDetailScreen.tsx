@@ -118,7 +118,11 @@ export default function InvoiceDetailScreen() {
   const { providerProfile } = useAuthStore();
   const { theme } = useTheme();
 
-  const { invoiceId } = route.params;
+  // Task #289: deep-link safety — `route.params` is undefined when this
+  // screen is opened via a bare `/invoice/` URL without an id, which threw
+  // and tripped the global ErrorBoundary on web. Default to an empty
+  // object so the `enabled: !!invoiceId` query path below short-circuits.
+  const { invoiceId } = (route.params ?? {}) as { invoiceId?: string };
   const providerId = providerProfile?.id;
 
   const [bannerMessage, setBannerMessage] = useState<SuccessBannerMessage>(null);

@@ -35,7 +35,13 @@ export default function BookingSuccessScreen() {
   const route = useRoute<ScreenRouteProp>();
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
-  const { jobId, awaitingDeposit, depositCheckoutUrl } = route.params;
+  // Task #289: deep-link safety — `route.params` is undefined when this
+  // screen is opened via a bare URL with no query params, which threw and
+  // tripped the global ErrorBoundary on web. Default to an empty object
+  // so the `enabled: !!jobId` query path below short-circuits cleanly.
+  const { jobId, awaitingDeposit, depositCheckoutUrl } = (route.params ?? {}) as Partial<
+    RootStackParamList["BookingSuccess"]
+  >;
   const [resumingPayment, setResumingPayment] = React.useState(false);
 
   const { data: aptData, isLoading } = useQuery<{ appointment: AppointmentRecord }>({

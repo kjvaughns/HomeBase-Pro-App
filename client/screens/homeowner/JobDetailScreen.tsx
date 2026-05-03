@@ -113,7 +113,11 @@ export default function JobDetailScreen() {
   const route = useRoute<ScreenRouteProp>();
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
-  const { jobId } = route.params;
+  // Task #289: deep-link safety — `route.params` is undefined when this
+  // screen is opened via a bare `/job/` URL without an id, which threw
+  // and tripped the global ErrorBoundary on web. Default to an empty
+  // object so the `!jobId` paths below render their friendly empty state.
+  const { jobId } = (route.params ?? {}) as Partial<RootStackParamList["JobDetail"]>;
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
 

@@ -42,7 +42,15 @@ export default function PaymentScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
   const queryClient = useQueryClient();
-  const { jobId, invoiceId, status } = route.params;
+  // Task #289: deep-link safety — `route.params` is undefined when this
+  // screen is opened via a bare `/payment-result` URL with no query
+  // parameters. Destructuring directly threw and tripped the global
+  // ErrorBoundary on web. Default to an empty object so we degrade
+  // gracefully and the existing `!invoiceId` checks below show the
+  // correct empty state.
+  const { jobId, invoiceId, status } = (route.params ?? {}) as Partial<
+    RootStackParamList["Payment"]
+  >;
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
