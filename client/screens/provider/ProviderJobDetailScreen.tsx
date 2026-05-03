@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { StyleSheet, View, ScrollView, Pressable, Linking, Alert, ActivityIndicator, Image, Platform, TextInput } from "react-native";
+import { StyleSheet, View, ScrollView, Pressable, Linking, Alert, ActivityIndicator, Image, Platform, TextInput, Modal } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, RouteProp, useNavigation } from "@react-navigation/native";
@@ -148,6 +148,7 @@ interface ApiJob {
   appointmentId?: string | null;
   // Present when this job is part of a recurring series.
   seriesId?: string | null;
+  assignedCrewMemberId?: string | null;
 }
 
 interface ApiClient {
@@ -985,6 +986,15 @@ export default function ProviderJobDetailScreen() {
           </GlassCard>
         </Animated.View>
 
+        <CrewAssignmentCard
+          jobId={job.id}
+          providerId={job.providerId}
+          assignedCrewMemberId={job.assignedCrewMemberId ?? null}
+          onChanged={() =>
+            queryClient.invalidateQueries({ queryKey: ["/api/jobs", job.id] })
+          }
+        />
+
         <Animated.View entering={FadeInDown.delay(200).duration(400)}>
           <GlassCard style={styles.section}>
             <ThemedText type="label" style={{ color: theme.textSecondary, marginBottom: Spacing.sm }}>
@@ -1285,6 +1295,195 @@ export default function ProviderJobDetailScreen() {
         onCancel={() => setRescheduleStep("closed")}
       />
     </ThemedView>
+  );
+}
+
+interface CrewAssignmentCardProps {
+  jobId: string;
+  providerId: string;
+  assignedCrewMemberId: string | null;
+  onChanged: () => void;
+}
+
+function CrewAssignmentCard({
+  jobId,
+  providerId,
+  assignedCrewMemberId,
+  onChanged,
+}: CrewAssignmentCardProps) {
+  const { theme } = useTheme();
+  const queryClient = useQueryClient();
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const { data } = useQuery<{
+    crew: { id: string; name: string; color: string; isActive: boolean }[];
+  }>({
+    queryKey: ["/api/provider", providerId, "crew"],
+    enabled: !!providerId,
+  });
+  const crew = (data?.crew || []).filter((c) => c.isActive);
+
+  const assigned = crew.find((c) => c.id === assignedCrewMemberId) || null;
+
+  const updateMutation = useMutation({
+    mutationFn: (newId: string | null) =>
+      apiRequest("PUT", `/api/jobs/${jobId}`, {
+        assignedCrewMemberId: newId,
+      }).then((r) => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/provider", providerId, "jobs"],
+      });
+      onChanged();
+      setPickerOpen(false);
+    },
+  });
+
+  return (
+    <Animated.View entering={FadeInDown.delay(150).duration(400)}>
+      <GlassCard style={styles.section}>
+        <ThemedText
+          type="label"
+          style={{ color: theme.textSecondary, marginBottom: Spacing.sm }}
+        >
+          ASSIGNED TO
+        </ThemedText>
+        <Pressable
+          onPress={() => setPickerOpen(true)}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: Spacing.sm,
+          }}
+          testID="button-assign-crew"
+        >
+          {assigned ? (
+            <>
+              <View
+                style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: 6,
+                  backgroundColor: assigned.color,
+                }}
+              />
+              <ThemedText style={{ flex: 1 }} type="body">
+                {assigned.name}
+              </ThemedText>
+            </>
+          ) : (
+            <ThemedText
+              style={{ flex: 1, color: theme.textSecondary }}
+              type="body"
+            >
+              Unassigned — tap to assign a crew member
+            </ThemedText>
+          )}
+          <Feather name="chevron-right" size={16} color={theme.textTertiary} />
+        </Pressable>
+      </GlassCard>
+
+      <Modal
+        visible={pickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPickerOpen(false)}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.4)",
+            justifyContent: "center",
+            paddingHorizontal: Spacing.lg,
+          }}
+          onPress={() => setPickerOpen(false)}
+        >
+          <Pressable
+            style={{
+              backgroundColor: theme.backgroundRoot,
+              borderRadius: BorderRadius.lg,
+              padding: Spacing.lg,
+              maxHeight: "70%",
+            }}
+            onPress={() => {}}
+          >
+            <ThemedText
+              type="h3"
+              style={{ marginBottom: Spacing.md, fontWeight: "600" }}
+            >
+              Assign To
+            </ThemedText>
+            {crew.length === 0 ? (
+              <ThemedText style={{ color: theme.textSecondary }}>
+                You haven't added crew yet. Open Business Hub → Manage Crew to
+                add team members.
+              </ThemedText>
+            ) : (
+              <ScrollView style={{ maxHeight: 360 }}>
+                <Pressable
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: Spacing.sm,
+                    paddingVertical: 12,
+                  }}
+                  onPress={() => updateMutation.mutate(null)}
+                  testID="crew-pick-unassigned"
+                >
+                  <View
+                    style={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: 6,
+                      backgroundColor: theme.separator,
+                    }}
+                  />
+                  <ThemedText style={{ flex: 1 }}>Unassigned</ThemedText>
+                  {!assigned ? (
+                    <Feather
+                      name="check"
+                      size={16}
+                      color={Colors.accent}
+                    />
+                  ) : null}
+                </Pressable>
+                {crew.map((m) => (
+                  <Pressable
+                    key={m.id}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: Spacing.sm,
+                      paddingVertical: 12,
+                    }}
+                    onPress={() => updateMutation.mutate(m.id)}
+                    testID={`crew-pick-${m.id}`}
+                  >
+                    <View
+                      style={{
+                        width: 12,
+                        height: 12,
+                        borderRadius: 6,
+                        backgroundColor: m.color,
+                      }}
+                    />
+                    <ThemedText style={{ flex: 1 }}>{m.name}</ThemedText>
+                    {assigned?.id === m.id ? (
+                      <Feather
+                        name="check"
+                        size={16}
+                        color={Colors.accent}
+                      />
+                    ) : null}
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </Animated.View>
   );
 }
 

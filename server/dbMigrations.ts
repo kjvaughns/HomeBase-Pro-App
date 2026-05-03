@@ -932,12 +932,46 @@ export async function runBootMigrations(): Promise<void> {
       `ALTER TABLE jobs ADD COLUMN IF NOT EXISTS original_scheduled_at TIMESTAMP`,
     );
 
+    // ── Task #302: crew_members roster + jobs.assigned_crew_member_id ────
+    await runSql(
+      "table.crew_members",
+      `CREATE TABLE IF NOT EXISTS crew_members (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        provider_id VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        phone TEXT,
+        email TEXT,
+        color TEXT NOT NULL DEFAULT '#38AE5F',
+        invited_user_id VARCHAR REFERENCES users(id) ON DELETE SET NULL,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )`,
+    );
+    await runSql(
+      "crew_members.provider_idx",
+      `CREATE INDEX IF NOT EXISTS crew_members_provider_idx
+         ON crew_members (provider_id)`,
+    );
+    await runSql(
+      "jobs.assigned_crew_member_id",
+      `ALTER TABLE jobs
+         ADD COLUMN IF NOT EXISTS assigned_crew_member_id VARCHAR
+         REFERENCES crew_members(id) ON DELETE SET NULL`,
+    );
+    await runSql(
+      "jobs.assigned_crew_member_idx",
+      `CREATE INDEX IF NOT EXISTS jobs_assigned_crew_member_idx
+         ON jobs (assigned_crew_member_id)`,
+    );
+
     verifications.push(
       ["provider_route_orders", `SELECT provider_id FROM provider_route_orders LIMIT 0`],
       ["job_series table",      `SELECT id FROM job_series LIMIT 0`],
       ["jobs.series_id column", `SELECT series_id FROM jobs LIMIT 0`],
       ["jobs.weather_held_at column",       `SELECT weather_held_at FROM jobs LIMIT 0`],
       ["jobs.original_scheduled_at column", `SELECT original_scheduled_at FROM jobs LIMIT 0`],
+      ["crew_members table",                `SELECT id FROM crew_members LIMIT 0`],
+      ["jobs.assigned_crew_member_id",      `SELECT assigned_crew_member_id FROM jobs LIMIT 0`],
     );
 
     const verificationErrors: string[] = [];

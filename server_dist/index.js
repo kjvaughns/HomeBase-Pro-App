@@ -22,6 +22,8 @@ __export(schema_exports, {
   connectOnboardingStatusEnum: () => connectOnboardingStatusEnum,
   creditLedger: () => creditLedger,
   creditLedgerRelations: () => creditLedgerRelations,
+  crewMembers: () => crewMembers,
+  crewMembersRelations: () => crewMembersRelations,
   homeFieldChanges: () => homeFieldChanges,
   homeFieldChangesRelations: () => homeFieldChangesRelations,
   homeProfileUpdateSchema: () => homeProfileUpdateSchema,
@@ -33,6 +35,7 @@ __export(schema_exports, {
   insertBookingLinkSchema: () => insertBookingLinkSchema,
   insertClientSchema: () => insertClientSchema,
   insertCreditLedgerSchema: () => insertCreditLedgerSchema,
+  insertCrewMemberSchema: () => insertCrewMemberSchema,
   insertHomeSchema: () => insertHomeSchema,
   insertHousefaxEntrySchema: () => insertHousefaxEntrySchema,
   insertIntakeSubmissionSchema: () => insertIntakeSubmissionSchema,
@@ -143,7 +146,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-var propertyTypeEnum, appointmentStatusEnum, urgencyEnum, jobSizeEnum, jobStatusEnum, invoiceStatusEnum, paymentMethodEnum, paymentStatusEnum, payoutStatusEnum, connectOnboardingStatusEnum, providerPlanTierEnum, users, usersRelations, homes, homesRelations, serviceCategories, serviceCategoriesRelations, services, servicesRelations, providers, providersRelations, providerServices, providerServicesRelations, pricingTypeEnum, providerCustomServices, providerCustomServicesRelations, insertProviderCustomServiceSchema, appointments, appointmentsRelations, reviews, reviewsRelations, savedProviders, savedProvidersRelations, reviewReports, reviewReportsRelations, notifications, notificationsRelations, maintenanceReminderFrequencyEnum, maintenanceReminders, maintenanceRemindersRelations, providerPlans2, providerPlansRelations, stripeConnectAccounts, stripeConnectAccountsRelations, userCredits, userCreditsRelations, creditLedger, creditLedgerRelations, payouts, payoutsRelations, refundStatusEnum, refunds, refundsRelations, stripeWebhookEvents, invoiceLineItems, invoiceLineItemsRelations, clients, clientsRelations, jobs, jobsRelations, jobSeries, jobSeriesRelations, invoices, invoicesRelations, payments, paymentsRelations, bookingLinkStatusEnum, quoteModeEnum, intakeStatusEnum, bookingLinks, bookingLinksRelations, intakeSubmissions, intakeSubmissionsRelations, insertUserSchema, loginSchema, insertHomeSchema, homeProfileUpdateSchema, homeFieldChanges, homeFieldChangesRelations, insertAppointmentSchema, insertClientSchema, insertJobSchema, insertInvoiceSchema, insertPaymentSchema, insertProviderSchema, insertProviderPlanSchema, insertStripeConnectAccountSchema, insertInvoiceLineItemSchema, insertPayoutSchema, insertUserCreditsSchema, insertCreditLedgerSchema, insertBookingLinkSchema, insertIntakeSubmissionSchema, notificationChannelEnum, notificationDeliveryStatusEnum, pushTokens, notificationPreferences, notificationDeliveries, messageChannelEnum, messageStatusEnum, providerMessages, providerMessagesRelations, insertProviderMessageSchema, messageTemplates, messageTemplatesRelations, insertMessageTemplateSchema, leads, insertLeadSchema, insertNotificationPreferenceSchema, housefaxEntries, housefaxEntriesRelations, insertHousefaxEntrySchema, supportTickets, supportTicketsRelations, insertSupportTicketSchema;
+var propertyTypeEnum, appointmentStatusEnum, urgencyEnum, jobSizeEnum, jobStatusEnum, invoiceStatusEnum, paymentMethodEnum, paymentStatusEnum, payoutStatusEnum, connectOnboardingStatusEnum, providerPlanTierEnum, users, usersRelations, homes, homesRelations, serviceCategories, serviceCategoriesRelations, services, servicesRelations, providers, providersRelations, crewMembers, crewMembersRelations, providerServices, providerServicesRelations, pricingTypeEnum, providerCustomServices, providerCustomServicesRelations, insertProviderCustomServiceSchema, appointments, appointmentsRelations, reviews, reviewsRelations, savedProviders, savedProvidersRelations, reviewReports, reviewReportsRelations, notifications, notificationsRelations, maintenanceReminderFrequencyEnum, maintenanceReminders, maintenanceRemindersRelations, providerPlans2, providerPlansRelations, stripeConnectAccounts, stripeConnectAccountsRelations, userCredits, userCreditsRelations, creditLedger, creditLedgerRelations, payouts, payoutsRelations, refundStatusEnum, refunds, refundsRelations, stripeWebhookEvents, invoiceLineItems, invoiceLineItemsRelations, clients, clientsRelations, jobs, jobsRelations, jobSeries, jobSeriesRelations, invoices, invoicesRelations, payments, paymentsRelations, bookingLinkStatusEnum, quoteModeEnum, intakeStatusEnum, bookingLinks, bookingLinksRelations, intakeSubmissions, intakeSubmissionsRelations, insertUserSchema, loginSchema, insertHomeSchema, homeProfileUpdateSchema, homeFieldChanges, homeFieldChangesRelations, insertAppointmentSchema, insertClientSchema, insertJobSchema, insertInvoiceSchema, insertPaymentSchema, insertProviderSchema, insertProviderPlanSchema, insertStripeConnectAccountSchema, insertInvoiceLineItemSchema, insertPayoutSchema, insertUserCreditsSchema, insertCreditLedgerSchema, insertCrewMemberSchema, insertBookingLinkSchema, insertIntakeSubmissionSchema, notificationChannelEnum, notificationDeliveryStatusEnum, pushTokens, notificationPreferences, notificationDeliveries, messageChannelEnum, messageStatusEnum, providerMessages, providerMessagesRelations, insertProviderMessageSchema, messageTemplates, messageTemplatesRelations, insertMessageTemplateSchema, leads, insertLeadSchema, insertNotificationPreferenceSchema, housefaxEntries, housefaxEntriesRelations, insertHousefaxEntrySchema, supportTickets, supportTicketsRelations, insertSupportTicketSchema;
 var init_schema = __esm({
   "shared/schema.ts"() {
     "use strict";
@@ -385,7 +388,31 @@ var init_schema = __esm({
       clients: many(clients),
       jobs: many(jobs),
       invoices: many(invoices),
-      payments: many(payments)
+      payments: many(payments),
+      crewMembers: many(crewMembers)
+    }));
+    crewMembers = pgTable("crew_members", {
+      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+      providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+      name: text("name").notNull(),
+      phone: text("phone"),
+      email: text("email"),
+      color: text("color").notNull().default("#38AE5F"),
+      invitedUserId: varchar("invited_user_id").references(() => users.id, {
+        onDelete: "set null"
+      }),
+      isActive: boolean("is_active").notNull().default(true),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    crewMembersRelations = relations(crewMembers, ({ one }) => ({
+      provider: one(providers, {
+        fields: [crewMembers.providerId],
+        references: [providers.id]
+      }),
+      invitedUser: one(users, {
+        fields: [crewMembers.invitedUserId],
+        references: [users.id]
+      })
     }));
     providerServices = pgTable("provider_services", {
       id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -864,7 +891,13 @@ var init_schema = __esm({
       updatedAt: timestamp("updated_at").defaultNow().notNull(),
       completedAt: timestamp("completed_at"),
       weatherHeldAt: timestamp("weather_held_at"),
-      originalScheduledAt: timestamp("original_scheduled_at")
+      originalScheduledAt: timestamp("original_scheduled_at"),
+      // Task #302: optional crew member assigned to this job. Set null if the
+      // crew member is later deleted so jobs aren't orphaned.
+      assignedCrewMemberId: varchar("assigned_crew_member_id").references(
+        () => crewMembers.id,
+        { onDelete: "set null" }
+      )
     });
     jobsRelations = relations(jobs, ({ one, many }) => ({
       provider: one(providers, {
@@ -1317,6 +1350,10 @@ var init_schema = __esm({
       updatedAt: true
     });
     insertCreditLedgerSchema = createInsertSchema(creditLedger).omit({
+      id: true,
+      createdAt: true
+    });
+    insertCrewMemberSchema = createInsertSchema(crewMembers).omit({
       id: true,
       createdAt: true
     });
@@ -7612,6 +7649,30 @@ var DatabaseStorage = class {
   async deleteJob(id) {
     const result = await db.delete(jobs).where(eq5(jobs.id, id)).returning();
     return result.length > 0;
+  }
+  // Crew member methods (Task #302)
+  async getCrewMembers(providerId) {
+    return db.select().from(crewMembers).where(eq5(crewMembers.providerId, providerId)).orderBy(desc(crewMembers.createdAt));
+  }
+  async getCrewMember(id) {
+    const [member] = await db.select().from(crewMembers).where(eq5(crewMembers.id, id));
+    return member || void 0;
+  }
+  async createCrewMember(member) {
+    const [newMember] = await db.insert(crewMembers).values(member).returning();
+    return newMember;
+  }
+  async updateCrewMember(id, data) {
+    const [member] = await db.update(crewMembers).set(data).where(eq5(crewMembers.id, id)).returning();
+    return member || void 0;
+  }
+  async deleteCrewMember(id) {
+    const result = await db.delete(crewMembers).where(eq5(crewMembers.id, id)).returning();
+    return result.length > 0;
+  }
+  async countJobsAssignedToCrewMember(id) {
+    const rows = await db.select({ id: jobs.id }).from(jobs).where(eq5(jobs.assignedCrewMemberId, id));
+    return rows.length;
   }
   // Invoice methods
   async getInvoices(providerId) {
@@ -14628,6 +14689,108 @@ Respond with JSON only:
       }
     }
   );
+  async function loadCrewForProvider(crewMemberId, providerId) {
+    const [row] = await db.select({
+      id: crewMembers.id,
+      providerId: crewMembers.providerId
+    }).from(crewMembers).where(eq10(crewMembers.id, crewMemberId)).catch(() => [null]);
+    if (!row || row.providerId !== providerId) return null;
+    return row;
+  }
+  app2.get(
+    "/api/provider/:providerId/crew",
+    requireAuth,
+    async (req, res) => {
+      try {
+        if (!await assertProviderOwnership(req, req.params.providerId, res))
+          return;
+        const crew = await storage.getCrewMembers(req.params.providerId);
+        res.json({ crew });
+      } catch (error) {
+        console.error("Get crew error:", error);
+        res.status(500).json({ error: "Failed to get crew" });
+      }
+    }
+  );
+  app2.post(
+    "/api/provider/:providerId/crew",
+    requireAuth,
+    async (req, res) => {
+      try {
+        if (!await assertProviderOwnership(req, req.params.providerId, res))
+          return;
+        const parsed = insertCrewMemberSchema.safeParse({
+          ...req.body,
+          providerId: req.params.providerId
+        });
+        if (!parsed.success) {
+          return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
+        }
+        const created = await storage.createCrewMember(parsed.data);
+        res.status(201).json({ crewMember: created });
+      } catch (error) {
+        console.error("Create crew member error:", error);
+        res.status(500).json({ error: "Failed to create crew member" });
+      }
+    }
+  );
+  app2.put(
+    "/api/crew/:id",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const existing = await storage.getCrewMember(req.params.id);
+        if (!existing)
+          return res.status(404).json({ error: "Crew member not found" });
+        if (!await assertProviderOwnership(req, existing.providerId, res))
+          return;
+        const { name, phone, email, color, isActive } = req.body;
+        const update = {};
+        if (typeof name === "string" && name.trim().length > 0)
+          update.name = name.trim();
+        if (phone !== void 0)
+          update.phone = phone === null ? null : String(phone).trim();
+        if (email !== void 0)
+          update.email = email === null ? null : String(email).trim();
+        if (typeof color === "string" && /^#[0-9A-Fa-f]{6}$/.test(color))
+          update.color = color;
+        if (typeof isActive === "boolean") update.isActive = isActive;
+        const updated = await storage.updateCrewMember(req.params.id, update);
+        res.json({ crewMember: updated });
+      } catch (error) {
+        console.error("Update crew member error:", error);
+        res.status(500).json({ error: "Failed to update crew member" });
+      }
+    }
+  );
+  app2.delete(
+    "/api/crew/:id",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const existing = await storage.getCrewMember(req.params.id);
+        if (!existing)
+          return res.status(404).json({ error: "Crew member not found" });
+        if (!await assertProviderOwnership(req, existing.providerId, res))
+          return;
+        const assigned = await storage.countJobsAssignedToCrewMember(
+          req.params.id
+        );
+        if (assigned > 0) {
+          return res.status(409).json({
+            error: "Crew member still has assigned jobs",
+            assignedJobCount: assigned
+          });
+        }
+        const ok = await storage.deleteCrewMember(req.params.id);
+        if (!ok) return res.status(404).json({ error: "Crew member not found" });
+        res.json({ success: true });
+      } catch (error) {
+        console.error("Delete crew member error:", error);
+        res.status(500).json({ error: "Failed to delete crew member" });
+      }
+    }
+  );
   app2.get(
     "/api/provider/:providerId/clients",
     requireAuth,
@@ -15283,6 +15446,34 @@ Respond with JSON only:
       relatedRecordId: job.id,
       recipientUserId: client.homeownerUserId ?? void 0
     });
+    if (job.assignedCrewMemberId) {
+      try {
+        const [crew] = await db.select({
+          id: crewMembers.id,
+          name: crewMembers.name,
+          invitedUserId: crewMembers.invitedUserId
+        }).from(crewMembers).where(eq10(crewMembers.id, job.assignedCrewMemberId));
+        if (crew?.invitedUserId) {
+          const friendly = newStatus.replace(/_/g, " ");
+          await dispatchNotification(
+            crew.invitedUserId,
+            `Job update: ${job.title ?? "Assigned job"}`,
+            `Status changed to ${friendly}.`,
+            "job.crew_status_changed",
+            {
+              screen: "ProviderJobDetail",
+              params: { jobId: job.id },
+              jobId: job.id,
+              providerId: job.providerId,
+              newStatus
+            },
+            "bookings"
+          );
+        }
+      } catch (e) {
+        console.error("crew notification dispatch error:", e);
+      }
+    }
   }
   app2.post("/api/jobs", requireAuth, async (req, res) => {
     try {
@@ -15298,6 +15489,15 @@ Respond with JSON only:
       const [callerProvider] = await db.select({ id: providers.id, userId: providers.userId }).from(providers).where(eq10(providers.id, parsed.data.providerId)).catch(() => [null]);
       if (!callerProvider || callerProvider.userId !== authUserId) {
         return res.status(403).json({ error: "Forbidden: you do not own this provider account" });
+      }
+      if (parsed.data.assignedCrewMemberId) {
+        const ok = await loadCrewForProvider(
+          parsed.data.assignedCrewMemberId,
+          parsed.data.providerId
+        );
+        if (!ok) {
+          return res.status(400).json({ error: "Invalid crew member for this provider" });
+        }
       }
       if (!await checkSubscriptionGate(parsed.data.providerId, res)) return;
       let svcSnapshot = null;
@@ -15528,7 +15728,8 @@ Respond with JSON only:
           estimatedPrice,
           finalPrice,
           notes,
-          address
+          address,
+          assignedCrewMemberId
         } = req.body;
         if (status === "weather_held") {
           return res.status(400).json({
@@ -15575,6 +15776,20 @@ Respond with JSON only:
         if (finalPrice !== void 0) update.finalPrice = finalPrice;
         if (notes !== void 0) update.notes = notes;
         if (address !== void 0) update.address = address;
+        if (assignedCrewMemberId !== void 0) {
+          if (assignedCrewMemberId === null) {
+            update.assignedCrewMemberId = null;
+          } else if (typeof assignedCrewMemberId === "string") {
+            const ok = await loadCrewForProvider(
+              assignedCrewMemberId,
+              existing.providerId
+            );
+            if (!ok) {
+              return res.status(400).json({ error: "Invalid crew member for this provider" });
+            }
+            update.assignedCrewMemberId = assignedCrewMemberId;
+          }
+        }
         const job = await storage.updateJob(req.params.id, update);
         if (!job) {
           return res.status(404).json({ error: "Job not found" });
@@ -20651,12 +20866,44 @@ async function runBootMigrations() {
       "jobs.original_scheduled_at",
       `ALTER TABLE jobs ADD COLUMN IF NOT EXISTS original_scheduled_at TIMESTAMP`
     );
+    await runSql(
+      "table.crew_members",
+      `CREATE TABLE IF NOT EXISTS crew_members (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        provider_id VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        phone TEXT,
+        email TEXT,
+        color TEXT NOT NULL DEFAULT '#38AE5F',
+        invited_user_id VARCHAR REFERENCES users(id) ON DELETE SET NULL,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )`
+    );
+    await runSql(
+      "crew_members.provider_idx",
+      `CREATE INDEX IF NOT EXISTS crew_members_provider_idx
+         ON crew_members (provider_id)`
+    );
+    await runSql(
+      "jobs.assigned_crew_member_id",
+      `ALTER TABLE jobs
+         ADD COLUMN IF NOT EXISTS assigned_crew_member_id VARCHAR
+         REFERENCES crew_members(id) ON DELETE SET NULL`
+    );
+    await runSql(
+      "jobs.assigned_crew_member_idx",
+      `CREATE INDEX IF NOT EXISTS jobs_assigned_crew_member_idx
+         ON jobs (assigned_crew_member_id)`
+    );
     verifications.push(
       ["provider_route_orders", `SELECT provider_id FROM provider_route_orders LIMIT 0`],
       ["job_series table", `SELECT id FROM job_series LIMIT 0`],
       ["jobs.series_id column", `SELECT series_id FROM jobs LIMIT 0`],
       ["jobs.weather_held_at column", `SELECT weather_held_at FROM jobs LIMIT 0`],
-      ["jobs.original_scheduled_at column", `SELECT original_scheduled_at FROM jobs LIMIT 0`]
+      ["jobs.original_scheduled_at column", `SELECT original_scheduled_at FROM jobs LIMIT 0`],
+      ["crew_members table", `SELECT id FROM crew_members LIMIT 0`],
+      ["jobs.assigned_crew_member_id", `SELECT assigned_crew_member_id FROM jobs LIMIT 0`]
     );
     const verificationErrors = [];
     for (const [label, sql6] of verifications) {

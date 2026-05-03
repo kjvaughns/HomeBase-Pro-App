@@ -195,6 +195,14 @@ export default function AddJobScreen() {
     enabled: !!providerId,
   });
 
+  const { data: crewData } = useQuery<{
+    crew: { id: string; name: string; color: string; isActive: boolean }[];
+  }>({
+    queryKey: ["/api/provider", providerId, "crew"],
+    enabled: !!providerId,
+  });
+  const crew = (crewData?.crew || []).filter((c) => c.isActive);
+
   const {
     services: publishedServices,
     isLoading: servicesLoading,
@@ -211,6 +219,9 @@ export default function AddJobScreen() {
     preselectedClientId || null,
   );
   const [selectedService, setSelectedService] = useState<CustomService | null>(
+    null,
+  );
+  const [selectedCrewMemberId, setSelectedCrewMemberId] = useState<string | null>(
     null,
   );
   const [description, setDescription] = useState("");
@@ -436,6 +447,7 @@ export default function AddJobScreen() {
       selectedAddOns: selectedAddOns.length > 0 ? selectedAddOns : undefined,
       answersJson,
       intakeAnswers: answersJson ? trimmedAnswers : undefined,
+      assignedCrewMemberId: selectedCrewMemberId || undefined,
     });
   };
 
@@ -680,6 +692,82 @@ export default function AddJobScreen() {
             />
           )}
         </Section>
+
+        {/* ============ 2b. ASSIGN TO CREW (Task #302) ============ */}
+        {crew.length > 0 ? (
+          <Section title="Assign To" theme={theme}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{
+                paddingHorizontal: Spacing.md,
+                paddingVertical: Spacing.sm,
+                gap: Spacing.sm,
+              }}
+            >
+              <Pressable
+                onPress={() => setSelectedCrewMemberId(null)}
+                style={[
+                  styles.crewChip,
+                  {
+                    backgroundColor:
+                      selectedCrewMemberId === null
+                        ? Colors.accent
+                        : theme.backgroundSecondary,
+                  },
+                ]}
+                testID="crew-chip-unassigned"
+              >
+                <ThemedText
+                  style={{
+                    color:
+                      selectedCrewMemberId === null
+                        ? "#FFFFFF"
+                        : theme.textSecondary,
+                    ...Typography.caption1,
+                  }}
+                >
+                  Unassigned
+                </ThemedText>
+              </Pressable>
+              {crew.map((m) => {
+                const active = selectedCrewMemberId === m.id;
+                return (
+                  <Pressable
+                    key={m.id}
+                    onPress={() => setSelectedCrewMemberId(m.id)}
+                    style={[
+                      styles.crewChip,
+                      {
+                        backgroundColor: active
+                          ? m.color
+                          : theme.backgroundSecondary,
+                        borderColor: m.color,
+                        borderWidth: active ? 0 : 1,
+                      },
+                    ]}
+                    testID={`crew-chip-${m.id}`}
+                  >
+                    <View
+                      style={[
+                        styles.crewDot,
+                        { backgroundColor: active ? "#FFFFFF" : m.color },
+                      ]}
+                    />
+                    <ThemedText
+                      style={{
+                        color: active ? "#FFFFFF" : theme.text,
+                        ...Typography.caption1,
+                      }}
+                    >
+                      {m.name}
+                    </ThemedText>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </Section>
+        ) : null}
 
         {/* ============ 3. JOB DETAILS ============ */}
         <Section title="Job Details" theme={theme}>
@@ -1592,6 +1680,21 @@ function SummaryBlock({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+
+  // Crew chips (Task #302)
+  crewChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  crewDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
 
   // Section (iOS grouped-list style)
   sectionWrap: { marginBottom: Spacing.lg },

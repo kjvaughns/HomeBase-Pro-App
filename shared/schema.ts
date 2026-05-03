@@ -288,6 +288,36 @@ export const providersRelations = relations(providers, ({ one, many }) => ({
   jobs: many(jobs),
   invoices: many(invoices),
   payments: many(payments),
+  crewMembers: many(crewMembers),
+}));
+
+export const crewMembers = pgTable("crew_members", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  phone: text("phone"),
+  email: text("email"),
+  color: text("color").notNull().default("#38AE5F"),
+  invitedUserId: varchar("invited_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const crewMembersRelations = relations(crewMembers, ({ one }) => ({
+  provider: one(providers, {
+    fields: [crewMembers.providerId],
+    references: [providers.id],
+  }),
+  invitedUser: one(users, {
+    fields: [crewMembers.invitedUserId],
+    references: [users.id],
+  }),
 }));
 
 export const providerServices = pgTable("provider_services", {
@@ -900,6 +930,12 @@ export const jobs = pgTable("jobs", {
   completedAt: timestamp("completed_at"),
   weatherHeldAt: timestamp("weather_held_at"),
   originalScheduledAt: timestamp("original_scheduled_at"),
+  // Task #302: optional crew member assigned to this job. Set null if the
+  // crew member is later deleted so jobs aren't orphaned.
+  assignedCrewMemberId: varchar("assigned_crew_member_id").references(
+    () => crewMembers.id,
+    { onDelete: "set null" },
+  ),
 });
 
 export const jobsRelations = relations(jobs, ({ one, many }) => ({
@@ -1441,6 +1477,14 @@ export const insertCreditLedgerSchema = createInsertSchema(creditLedger).omit({
   id: true,
   createdAt: true,
 });
+
+export const insertCrewMemberSchema = createInsertSchema(crewMembers).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type CrewMember = typeof crewMembers.$inferSelect;
+export type InsertCrewMember = z.infer<typeof insertCrewMemberSchema>;
 
 export const insertBookingLinkSchema = createInsertSchema(bookingLinks).omit({
   id: true,

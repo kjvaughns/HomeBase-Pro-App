@@ -116,6 +116,7 @@ interface Job {
   notes?: string | null;
   // Present when this job is part of a recurring series.
   seriesId?: string | null;
+  assignedCrewMemberId?: string | null;
 }
 
 interface Client {
@@ -532,6 +533,7 @@ function TodayBanner({ jobs, getClientName }: TodayBannerProps) {
 interface EnhancedJobCardProps {
   job: Job;
   clientName: string;
+  crewColor?: string;
   onPress: () => void;
   onLongPress?: () => void;
   onQuickAction: (action: string) => void;
@@ -541,6 +543,7 @@ interface EnhancedJobCardProps {
 function EnhancedJobCard({
   job,
   clientName,
+  crewColor,
   onPress,
   onLongPress,
   onQuickAction,
@@ -548,6 +551,7 @@ function EnhancedJobCard({
 }: EnhancedJobCardProps) {
   const { theme } = useTheme();
   const statusColor = STATUS_COLOR[job.status];
+  const sideBarColor = crewColor || statusColor;
   const quickAction = getQuickAction(job.status);
 
   return (
@@ -559,7 +563,7 @@ function EnhancedJobCard({
       <GlassCard style={styles.jobCard} noPadding>
         <View style={styles.jobCardInner}>
           <View
-            style={[styles.jobStatusBar, { backgroundColor: statusColor }]}
+            style={[styles.jobStatusBar, { backgroundColor: sideBarColor }]}
           />
 
           <View style={styles.jobCardContent}>
@@ -1052,6 +1056,7 @@ export default function ScheduleScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedDate, setSelectedDate] = useState<Date>(today);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [crewFilter, setCrewFilter] = useState<string>("all");
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -1074,6 +1079,19 @@ export default function ScheduleScreen() {
     queryKey: ["/api/provider", providerId, "clients"],
     enabled: !!providerId,
   });
+
+  const { data: crewData } = useQuery<{
+    crew: { id: string; name: string; color: string; isActive: boolean }[];
+  }>({
+    queryKey: ["/api/provider", providerId, "crew"],
+    enabled: !!providerId,
+  });
+  const crew = (crewData?.crew || []).filter((c) => c.isActive);
+  const crewColorById = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const c of crew) m[c.id] = c.color;
+    return m;
+  }, [crew]);
 
   const jobs = jobsData?.jobs || [];
   const clients = clientsData?.clients || [];
@@ -1223,12 +1241,20 @@ export default function ScheduleScreen() {
       .filter((job) => {
         if (job.status === "cancelled") return false;
         if (!isSameDay(new Date(job.scheduledDate), selectedDate)) return false;
-        return matchesFilter(job.status, statusFilter);
+        if (!matchesFilter(job.status, statusFilter)) return false;
+        if (crewFilter !== "all") {
+          if (crewFilter === "unassigned") {
+            if (job.assignedCrewMemberId) return false;
+          } else if (job.assignedCrewMemberId !== crewFilter) {
+            return false;
+          }
+        }
+        return true;
       })
       .sort((a, b) =>
         (a.scheduledTime || "").localeCompare(b.scheduledTime || ""),
       );
-  }, [jobs, selectedDate, statusFilter]);
+  }, [jobs, selectedDate, statusFilter, crewFilter]);
 
   // Build FlatList rows with a single date header
   type BackfillCandidate = {
@@ -1415,6 +1441,61 @@ export default function ScheduleScreen() {
               );
             })}
           </View>
+        ) : null}
+
+        {/* Crew Filter Chips (Task #302) */}
+        {!isCalendarMode && !isRouteMode && crew.length > 0 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipsRow}
+          >
+            {[
+              { id: "all", label: "All Crew", color: undefined as string | undefined },
+              { id: "unassigned", label: "Unassigned", color: undefined as string | undefined },
+              ...crew.map((c) => ({ id: c.id, label: c.name, color: c.color })),
+            ].map((opt) => {
+              const isActive = crewFilter === opt.id;
+              const tint = opt.color || Colors.accent;
+              return (
+                <Pressable
+                  key={opt.id}
+                  style={[
+                    styles.chip,
+                    {
+                      backgroundColor: isActive
+                        ? tint
+                        : theme.backgroundSecondary,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                    },
+                  ]}
+                  onPress={() => setCrewFilter(opt.id)}
+                  testID={`chip-crew-${opt.id}`}
+                >
+                  {opt.color ? (
+                    <View
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 4,
+                        backgroundColor: isActive ? "#FFFFFF" : opt.color,
+                      }}
+                    />
+                  ) : null}
+                  <ThemedText
+                    style={[
+                      styles.chipText,
+                      { color: isActive ? "#FFFFFF" : theme.textSecondary },
+                    ]}
+                  >
+                    {opt.label}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
         ) : null}
       </View>
 
@@ -1633,6 +1714,11 @@ export default function ScheduleScreen() {
                     <EnhancedJobCard
                       job={item.job}
                       clientName={getClientName(item.job.clientId)}
+                      crewColor={
+                        item.job.assignedCrewMemberId
+                          ? crewColorById[item.job.assignedCrewMemberId]
+                          : undefined
+                      }
                       onPress={() => handleJobPress(item.job.id)}
                       onLongPress={() => handleJobLongPress(item.job.id)}
                       onQuickAction={(action) =>

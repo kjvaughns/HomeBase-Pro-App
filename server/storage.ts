@@ -16,6 +16,7 @@ import {
   bookingLinks,
   intakeSubmissions,
   notificationPreferences,
+  crewMembers,
   type User,
   type InsertUser,
   type Home,
@@ -40,6 +41,8 @@ import {
   type IntakeSubmission,
   type InsertIntakeSubmission,
   type NotificationPreference,
+  type CrewMember,
+  type InsertCrewMember,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, desc, sql, gte, lte } from "drizzle-orm";
@@ -443,6 +446,56 @@ export class DatabaseStorage implements IStorage {
   async deleteJob(id: string): Promise<boolean> {
     const result = await db.delete(jobs).where(eq(jobs.id, id)).returning();
     return result.length > 0;
+  }
+
+  // Crew member methods (Task #302)
+  async getCrewMembers(providerId: string): Promise<CrewMember[]> {
+    return db
+      .select()
+      .from(crewMembers)
+      .where(eq(crewMembers.providerId, providerId))
+      .orderBy(desc(crewMembers.createdAt));
+  }
+
+  async getCrewMember(id: string): Promise<CrewMember | undefined> {
+    const [member] = await db
+      .select()
+      .from(crewMembers)
+      .where(eq(crewMembers.id, id));
+    return member || undefined;
+  }
+
+  async createCrewMember(member: InsertCrewMember): Promise<CrewMember> {
+    const [newMember] = await db.insert(crewMembers).values(member).returning();
+    return newMember;
+  }
+
+  async updateCrewMember(
+    id: string,
+    data: Partial<CrewMember>,
+  ): Promise<CrewMember | undefined> {
+    const [member] = await db
+      .update(crewMembers)
+      .set(data)
+      .where(eq(crewMembers.id, id))
+      .returning();
+    return member || undefined;
+  }
+
+  async deleteCrewMember(id: string): Promise<boolean> {
+    const result = await db
+      .delete(crewMembers)
+      .where(eq(crewMembers.id, id))
+      .returning();
+    return result.length > 0;
+  }
+
+  async countJobsAssignedToCrewMember(id: string): Promise<number> {
+    const rows = await db
+      .select({ id: jobs.id })
+      .from(jobs)
+      .where(eq(jobs.assignedCrewMemberId, id));
+    return rows.length;
   }
 
   // Invoice methods

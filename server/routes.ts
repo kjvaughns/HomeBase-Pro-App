@@ -23,9 +23,11 @@ import {
   insertProviderSchema,
   insertClientSchema,
   insertJobSchema,
+  insertCrewMemberSchema,
   insertInvoiceSchema,
   insertPaymentSchema,
   appointments,
+  crewMembers,
   maintenanceReminders,
   homes,
   reviews,
@@ -8001,6 +8003,129 @@ Respond with JSON only:
     },
   );
 
+  // ============ CREW ROUTES (Task #302) ============
+
+  // Helper: validate that a crew member exists and belongs to the given
+  // provider. Returns the row or null.
+  async function loadCrewForProvider(
+    crewMemberId: string,
+    providerId: string,
+  ): Promise<{ id: string; providerId: string } | null> {
+    const [row] = await db
+      .select({
+        id: crewMembers.id,
+        providerId: crewMembers.providerId,
+      })
+      .from(crewMembers)
+      .where(eq(crewMembers.id, crewMemberId))
+      .catch(() => [null]);
+    if (!row || row.providerId !== providerId) return null;
+    return row;
+  }
+
+  app.get(
+    "/api/provider/:providerId/crew",
+    requireAuth,
+    async (req: Request<ProviderIdParams>, res: Response) => {
+      try {
+        if (!(await assertProviderOwnership(req, req.params.providerId, res)))
+          return;
+        const crew = await storage.getCrewMembers(req.params.providerId);
+        res.json({ crew });
+      } catch (error) {
+        console.error("Get crew error:", error);
+        res.status(500).json({ error: "Failed to get crew" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/provider/:providerId/crew",
+    requireAuth,
+    async (req: Request<ProviderIdParams>, res: Response) => {
+      try {
+        if (!(await assertProviderOwnership(req, req.params.providerId, res)))
+          return;
+        const parsed = insertCrewMemberSchema.safeParse({
+          ...req.body,
+          providerId: req.params.providerId,
+        });
+        if (!parsed.success) {
+          return res
+            .status(400)
+            .json({ error: "Invalid input", details: parsed.error.issues });
+        }
+        const created = await storage.createCrewMember(parsed.data);
+        res.status(201).json({ crewMember: created });
+      } catch (error) {
+        console.error("Create crew member error:", error);
+        res.status(500).json({ error: "Failed to create crew member" });
+      }
+    },
+  );
+
+  app.put(
+    "/api/crew/:id",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const existing = await storage.getCrewMember(req.params.id);
+        if (!existing)
+          return res.status(404).json({ error: "Crew member not found" });
+        if (!(await assertProviderOwnership(req, existing.providerId, res)))
+          return;
+        const { name, phone, email, color, isActive } = req.body;
+        const update: Record<string, unknown> = {};
+        if (typeof name === "string" && name.trim().length > 0)
+          update.name = name.trim();
+        if (phone !== undefined)
+          update.phone = phone === null ? null : String(phone).trim();
+        if (email !== undefined)
+          update.email = email === null ? null : String(email).trim();
+        if (typeof color === "string" && /^#[0-9A-Fa-f]{6}$/.test(color))
+          update.color = color;
+        if (typeof isActive === "boolean") update.isActive = isActive;
+        const updated = await storage.updateCrewMember(req.params.id, update);
+        res.json({ crewMember: updated });
+      } catch (error) {
+        console.error("Update crew member error:", error);
+        res.status(500).json({ error: "Failed to update crew member" });
+      }
+    },
+  );
+
+  app.delete(
+    "/api/crew/:id",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const existing = await storage.getCrewMember(req.params.id);
+        if (!existing)
+          return res.status(404).json({ error: "Crew member not found" });
+        if (!(await assertProviderOwnership(req, existing.providerId, res)))
+          return;
+        // Guardrail: refuse to delete while jobs are still assigned. The
+        // provider must reassign or unassign first so we never silently lose
+        // attribution on the schedule.
+        const assigned = await storage.countJobsAssignedToCrewMember(
+          req.params.id,
+        );
+        if (assigned > 0) {
+          return res.status(409).json({
+            error: "Crew member still has assigned jobs",
+            assignedJobCount: assigned,
+          });
+        }
+        const ok = await storage.deleteCrewMember(req.params.id);
+        if (!ok) return res.status(404).json({ error: "Crew member not found" });
+        res.json({ success: true });
+      } catch (error) {
+        console.error("Delete crew member error:", error);
+        res.status(500).json({ error: "Failed to delete crew member" });
+      }
+    },
+  );
+
   // ============ CLIENTS ROUTES ============
 
   app.get(
@@ -8939,6 +9064,41 @@ Respond with JSON only:
       relatedRecordId: job.id,
       recipientUserId: client.homeownerUserId ?? undefined,
     });
+
+    // Task #302: also notify the assigned crew member when their roster row
+    // is linked to a HomeBase user account. Best-effort; never blocks the
+    // homeowner-facing dispatch above.
+    if (job.assignedCrewMemberId) {
+      try {
+        const [crew] = await db
+          .select({
+            id: crewMembers.id,
+            name: crewMembers.name,
+            invitedUserId: crewMembers.invitedUserId,
+          })
+          .from(crewMembers)
+          .where(eq(crewMembers.id, job.assignedCrewMemberId));
+        if (crew?.invitedUserId) {
+          const friendly = newStatus.replace(/_/g, " ");
+          await dispatchNotification(
+            crew.invitedUserId,
+            `Job update: ${job.title ?? "Assigned job"}`,
+            `Status changed to ${friendly}.`,
+            "job.crew_status_changed",
+            {
+              screen: "ProviderJobDetail",
+              params: { jobId: job.id },
+              jobId: job.id,
+              providerId: job.providerId,
+              newStatus,
+            },
+            "bookings",
+          );
+        }
+      } catch (e) {
+        console.error("crew notification dispatch error:", e);
+      }
+    }
   }
 
   app.post("/api/jobs", requireAuth, async (req: Request, res: Response) => {
@@ -8968,6 +9128,20 @@ Respond with JSON only:
         return res
           .status(403)
           .json({ error: "Forbidden: you do not own this provider account" });
+      }
+
+      // Task #302: validate any assigned crew member belongs to this provider
+      // so a hostile client can't attach a job to another provider's roster.
+      if (parsed.data.assignedCrewMemberId) {
+        const ok = await loadCrewForProvider(
+          parsed.data.assignedCrewMemberId,
+          parsed.data.providerId,
+        );
+        if (!ok) {
+          return res
+            .status(400)
+            .json({ error: "Invalid crew member for this provider" });
+        }
       }
 
       // Subscription gate — block job creation if grace period has expired
@@ -9384,6 +9558,7 @@ Respond with JSON only:
           finalPrice,
           notes,
           address,
+          assignedCrewMemberId,
         } = req.body;
         // Transitions into/out of weather_held must go through the dedicated
         // /weather-hold and /restore endpoints so the hold metadata,
@@ -9453,6 +9628,24 @@ Respond with JSON only:
         if (finalPrice !== undefined) update.finalPrice = finalPrice;
         if (notes !== undefined) update.notes = notes;
         if (address !== undefined) update.address = address;
+        // Task #302: crew assignment. Accept null to clear, or validate the
+        // crew member belongs to this job's provider before persisting.
+        if (assignedCrewMemberId !== undefined) {
+          if (assignedCrewMemberId === null) {
+            update.assignedCrewMemberId = null;
+          } else if (typeof assignedCrewMemberId === "string") {
+            const ok = await loadCrewForProvider(
+              assignedCrewMemberId,
+              existing.providerId,
+            );
+            if (!ok) {
+              return res
+                .status(400)
+                .json({ error: "Invalid crew member for this provider" });
+            }
+            update.assignedCrewMemberId = assignedCrewMemberId;
+          }
+        }
 
         const job = await storage.updateJob(req.params.id, update);
         if (!job) {
