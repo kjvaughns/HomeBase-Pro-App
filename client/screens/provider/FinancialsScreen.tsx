@@ -1105,6 +1105,7 @@ export default function FinancialsScreen() {
   const providerId = providerProfile?.id ?? "";
   const [sectionTab, setSectionTab] = useState<SectionTab>("overview");
   const [transactionTab, setTransactionTab] = useState<TransactionTab>("invoices");
+  const [transactionFilter, setTransactionFilter] = useState<"all" | "invoices" | "estimates">("all");
   const [dateRange, setDateRange] = useState<DateRange>("month");
   const [refreshing, setRefreshing] = useState(false);
   const [showInlinePicker, setShowInlinePicker] = useState(false);
@@ -1423,32 +1424,50 @@ export default function FinancialsScreen() {
     { key: "payouts", label: "Payouts" },
   ];
 
+  // Task #336 — show only one row per converted estimate: prefer the invoice
+  // it converted into. Estimate rows in `converted` status are dropped from
+  // the unified feed so we don't double-list them next to their invoice.
   const unifiedRows: UnifiedTxRow[] = useMemo(() => {
     const inv: UnifiedTxRow[] = invoices.map((i) => ({
       kind: "invoice",
       date: i.sentAt || i.createdAt,
       data: i,
     }));
-    const est: UnifiedTxRow[] = estimates.map((e) => ({
-      kind: "estimate",
-      date: e.createdAt,
-      data: e,
-    }));
-    return [...inv, ...est].sort(
+    const est: UnifiedTxRow[] = estimates
+      .filter((e) => e.status !== "converted")
+      .map((e) => ({
+        kind: "estimate",
+        date: e.createdAt,
+        data: e,
+      }));
+    const merged = [...inv, ...est];
+    if (transactionFilter === "invoices") {
+      return merged.filter((r) => r.kind === "invoice").sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+      );
+    }
+    if (transactionFilter === "estimates") {
+      return merged.filter((r) => r.kind === "estimate").sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+      );
+    }
+    return merged.sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
     );
-  }, [invoices, estimates]);
+  }, [invoices, estimates, transactionFilter]);
 
+  // Task #336 — month-scoped count + total for the Manual Payments tile so the
+  // headline number matches the dollar amount underneath it.
   const manualPaymentsThisMonth = useMemo(() => {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-    const active = manualPayments.filter((p) => !p.voidedAt);
-    const monthly = active.filter((p) => {
+    const monthly = manualPayments.filter((p) => {
+      if (p.voidedAt) return false;
       const t = new Date(p.receivedAt || p.createdAt).getTime();
       return t >= startOfMonth;
     });
     const totalCents = monthly.reduce((s, p) => s + (p.amountCents ?? 0), 0);
-    return { count: active.length, totalCents };
+    return { count: monthly.length, totalCents };
   }, [manualPayments]);
 
   // ── Row renderers ──────────────────────────────────────────────────────────
@@ -1881,6 +1900,7 @@ export default function FinancialsScreen() {
             Haptics.selectionAsync();
             setSectionTab("transactions");
             setTransactionTab("invoices");
+            setTransactionFilter("estimates");
           }}
           testID="tile-estimates-summary"
         >
@@ -2026,6 +2046,39 @@ export default function FinancialsScreen() {
           ) : null}
         </View>
       </Animated.View>
+
+      {transactionTab === "invoices" ? (
+        <Animated.View entering={FadeInDown.delay(70).duration(400)}>
+          <View style={[styles.transTabBar, { borderColor: theme.separator, marginTop: Spacing.sm }]}>
+            {(["all", "invoices", "estimates"] as const).map((key) => {
+              const label = key === "all" ? "All" : key === "invoices" ? "Invoices" : "Estimates";
+              const isActive = transactionFilter === key;
+              return (
+                <Pressable
+                  key={key}
+                  style={[
+                    styles.transTabItem,
+                    isActive && { backgroundColor: theme.cardBackground },
+                  ]}
+                  onPress={() => { Haptics.selectionAsync(); setTransactionFilter(key); }}
+                  testID={`trans-filter-${key}`}
+                >
+                  <ThemedText
+                    style={[
+                      styles.transTabLabel,
+                      isActive
+                        ? { color: Colors.accent, fontWeight: "700" }
+                        : { color: theme.textSecondary },
+                    ]}
+                  >
+                    {label}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Animated.View>
+      ) : null}
 
       {transactionTab === "payouts" && !isConnected ? (
         <Animated.View entering={FadeInDown.delay(80).duration(400)}>
