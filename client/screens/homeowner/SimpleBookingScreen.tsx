@@ -18,6 +18,7 @@ const Haptics = Platform.OS === "web"
     }
   : HapticsRaw;
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { trackEvent, AnalyticsEvents } from "@/lib/analytics";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -409,6 +410,11 @@ export default function SimpleBookingScreen() {
       depositAmountCents?: number;
     }) => {
       const appointmentId = data?.appointment?.id || "booking";
+      trackEvent(AnalyticsEvents.BookingCreated, {
+        appointmentId,
+        requiresDeposit: !!data?.requiresDeposit,
+        depositAmountCents: data?.depositAmountCents ?? null,
+      });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       // Task #236: provider requires a deposit — open the Stripe Checkout
       // page externally so the homeowner can pay before the booking is

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useLayoutEffect } from "react";
-import { StyleSheet, View, ScrollView, Pressable, Linking, Alert, ActivityIndicator, Modal } from "react-native";
+import { StyleSheet, View, ScrollView, Pressable, Linking, Alert, Modal } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight, HeaderButton } from "@react-navigation/elements";
 import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";

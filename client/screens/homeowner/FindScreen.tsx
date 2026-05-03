@@ -2,7 +2,6 @@ import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
   StyleSheet,
   View,
-  FlatList,
   RefreshControl,
   Pressable,
   Modal,
@@ -10,6 +9,7 @@ import {
   TextInput,
   ActivityIndicator,
 } from "react-native";
+import { FlashList } from "@shopify/flash-list";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
@@ -31,6 +31,7 @@ import { SectionHeader } from "@/components/SectionHeader";
 import { AccountGateModal } from "@/components/AccountGateModal";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { SkeletonLoader } from "@/components/SkeletonLoader";
+import { EmptyState } from "@/components/EmptyState";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
@@ -592,29 +593,22 @@ export default function FindScreen() {
 
       {isSearching && featuredProviders.length === 0 ? (
         <View style={styles.emptyState}>
-          <Feather name="search" size={40} color={theme.textSecondary} />
-          <ThemedText style={[styles.emptyTitle, { color: theme.text }]}>
-            No results found
-          </ThemedText>
-          <ThemedText
-            style={[styles.emptySubtitle, { color: theme.textSecondary }]}
-          >
-            Try a different search term or browse by category
-          </ThemedText>
+          <EmptyState
+            icon="search"
+            title="No results found"
+            description="Try a different search term or browse by category"
+          />
         </View>
       ) : null}
 
       {!isSearching && !providersLoading && featuredProviders.length === 0 ? (
-        <View style={styles.emptyState} testID="empty-no-providers">
-          <Feather name="map-pin" size={40} color={theme.textSecondary} />
-          <ThemedText style={[styles.emptyTitle, { color: theme.text }]}>
-            No providers nearby yet
-          </ThemedText>
-          <ThemedText
-            style={[styles.emptySubtitle, { color: theme.textSecondary }]}
-          >
-            No providers found in your area yet. Check back soon!
-          </ThemedText>
+        <View style={styles.emptyState}>
+          <EmptyState
+            testID="empty-no-providers"
+            icon="map-pin"
+            title="No providers nearby yet"
+            description="No providers found in your area yet. Check back soon!"
+          />
         </View>
       ) : null}
     </View>
@@ -1036,7 +1030,7 @@ export default function FindScreen() {
           testID="search-input"
         />
       </View>
-      <FlatList
+      <FlashList
         keyboardShouldPersistTaps="handled"
         data={featuredProviders}
         renderItem={renderProvider}
@@ -1048,7 +1042,6 @@ export default function FindScreen() {
           paddingBottom: tabBarHeight + Spacing.xl,
           paddingHorizontal: horizontalPadding,
         }}
-        scrollIndicatorInsets={{ bottom: insets.bottom }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl

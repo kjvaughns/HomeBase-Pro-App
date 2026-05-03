@@ -20,6 +20,8 @@ import { useThemeStore } from "@/state/themeStore";
 import { useOnboardingStore } from "@/state/onboardingStore";
 import { initAppReviewTracker } from "@/state/appReviewStore";
 import { useAuthStore } from "@/state/authStore";
+import { initSentry, setSentryUser } from "@/lib/sentry";
+import { initAnalytics, identifyUser, resetAnalytics } from "@/lib/analytics";
 import { useTheme } from "@/hooks/useTheme";
 import {
   configurePurchases,
@@ -92,6 +94,23 @@ export default function App() {
   // account on this device. Re-runs whenever auth or provider identity changes.
   const providerId = useAuthStore((s) => s.providerProfile?.id ?? null);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const userId = useAuthStore((s) => s.user?.id ?? null);
+
+  useEffect(() => {
+    // Ensure SDKs are initialized before associating user identity. Both
+    // init helpers are idempotent + no-op when env keys are missing, so
+    // calling them here is safe even when also called in the boot effect.
+    initSentry();
+    void initAnalytics().then(() => {
+      if (isAuthenticated && userId) {
+        setSentryUser({ id: userId });
+        identifyUser(userId);
+      } else {
+        setSentryUser(null);
+        resetAnalytics();
+      }
+    });
+  }, [isAuthenticated, userId]);
 
   // Configure RevenueCat only once the provider identity is resolved so we
   // never create an anonymous appUserID on launch.
@@ -108,6 +127,8 @@ export default function App() {
   }, [isAuthenticated, providerId]);
 
   useEffect(() => {
+    initSentry();
+    void initAnalytics();
     hydrateTheme();
     hydrateOnboarding();
     void initAppReviewTracker();

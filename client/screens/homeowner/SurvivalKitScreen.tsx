@@ -460,7 +460,11 @@ export default function SurvivalKitScreen() {
     if (!h.roofInstalledYear) return "roof_age";
     if (!h.yardSizeSqft) return "yard_size";
     if (exterior.length === 0) return "exterior_features";
-    return "neighborhood";
+    // Home profile is fully sufficient — skip the wizard-only steps
+    // (neighborhood/climate/diy/service/budget) and jump straight to results
+    // so the same task list shows up across devices when the same home is
+    // selected. The wizard-only fields keep their sensible defaults.
+    return "results";
   };
 
   const prefillFromHome = useCallback((home: Home) => {

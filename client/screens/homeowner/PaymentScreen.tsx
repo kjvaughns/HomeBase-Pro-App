@@ -17,6 +17,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { getApiUrl, getAuthHeaders } from "@/lib/query-client";
+import { trackEvent, AnalyticsEvents } from "@/lib/analytics";
 
 type ScreenRouteProp = RouteProp<RootStackParamList, "Payment">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -108,6 +109,29 @@ export default function PaymentScreen() {
       setReturnNotice(null);
     }
   }, [data?.invoice?.status, returnNotice]);
+
+  // Track invoice-paid event only on an actual unpaid → paid transition
+  // observed during this mount. We snapshot the prior status and only fire
+  // when it transitions, so opening an already-paid invoice does NOT
+  // re-emit the analytics event.
+  const lastInvoiceStatusRef = React.useRef<string | null>(null);
+  useEffect(() => {
+    const inv = data?.invoice;
+    const status = inv?.status ?? null;
+    const prev = lastInvoiceStatusRef.current;
+    if (
+      inv?.id &&
+      status === "paid" &&
+      prev !== null &&
+      prev !== "paid"
+    ) {
+      trackEvent(AnalyticsEvents.InvoicePaid, {
+        invoiceId: inv.id,
+        amountCents: (inv as { totalCents?: number }).totalCents ?? null,
+      });
+    }
+    lastInvoiceStatusRef.current = status;
+  }, [data?.invoice?.status, data?.invoice?.id]);
 
   const handlePayInvoice = async () => {
     setIsProcessing(true);

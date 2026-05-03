@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from "react";
-import { StyleSheet, View, ScrollView, Pressable, ActivityIndicator, RefreshControl, Image, Modal } from "react-native";
+import { StyleSheet, View, ScrollView, Pressable, RefreshControl, Modal } from "react-native";
+import { Image } from "expo-image";
 import { SkeletonCard, SkeletonLoader } from "@/components/SkeletonLoader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -480,7 +481,7 @@ export default function HouseFaxScreen() {
                     <View style={styles.photosRow}>
                       {entry.photos.slice(0, 4).map((uri: string, idx: number) => (
                         <Pressable key={idx} onPress={() => setLightboxPhoto(uri)} testID={`photo-thumb-${entry.id}-${idx}`}>
-                          <Image source={{ uri }} style={styles.photoThumb} resizeMode="cover" />
+                          <Image source={{ uri }} style={styles.photoThumb} contentFit="cover" transition={150} />
                         </Pressable>
                       ))}
                       {entry.photos.length > 4 ? (
@@ -854,7 +855,7 @@ export default function HouseFaxScreen() {
             <Image
               source={{ uri: lightboxPhoto }}
               style={styles.lightboxImage}
-              resizeMode="contain"
+              contentFit="contain"
             />
           </Pressable>
         </Modal>

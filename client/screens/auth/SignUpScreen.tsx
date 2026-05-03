@@ -12,6 +12,7 @@ import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollV
 import { useTheme } from "@/hooks/useTheme";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest } from "@/lib/query-client";
+import { trackEvent, AnalyticsEvents } from "@/lib/analytics";
 import { Spacing, Colors, Typography } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -78,6 +79,10 @@ export default function SignUpScreen({ navigation }: Props) {
       const data = await response.json();
       
       if (data.user) {
+        trackEvent(AnalyticsEvents.SignupCompleted, {
+          role: "homeowner",
+          userId: data.user.id,
+        });
         login({
           id: data.user.id,
           name: data.user.name,

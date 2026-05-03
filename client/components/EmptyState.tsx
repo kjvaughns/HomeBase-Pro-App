@@ -1,17 +1,20 @@
 import React from "react";
 import { StyleSheet, View, ImageSourcePropType } from "react-native";
 import { Image } from "expo-image";
+import { Feather } from "@expo/vector-icons";
 
 import { ThemedText } from "@/components/ThemedText";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { SecondaryButton } from "@/components/SecondaryButton";
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing } from "@/constants/theme";
+import { Spacing, Colors } from "@/constants/theme";
 
 interface EmptyStateProps {
-  image: ImageSourcePropType;
+  image?: ImageSourcePropType;
+  icon?: keyof typeof Feather.glyphMap;
   title: string;
   description: string;
+  testID?: string;
   primaryAction?: {
     label: string;
     onPress: () => void;
@@ -24,16 +27,24 @@ interface EmptyStateProps {
 
 export function EmptyState({
   image,
+  icon,
   title,
   description,
+  testID,
   primaryAction,
   secondaryAction,
 }: EmptyStateProps) {
   const { theme } = useTheme();
 
   return (
-    <View style={styles.container}>
-      <Image source={image} style={styles.image} contentFit="contain" />
+    <View style={styles.container} testID={testID}>
+      {image ? (
+        <Image source={image} style={styles.image} contentFit="contain" />
+      ) : icon ? (
+        <View style={[styles.iconCircle, { backgroundColor: Colors.accentLight }]}>
+          <Feather name={icon} size={36} color={Colors.accent} />
+        </View>
+      ) : null}
 
       <ThemedText type="h2" style={styles.title}>
         {title}
@@ -82,6 +93,14 @@ const styles = StyleSheet.create({
     width: 200,
     height: 200,
     marginBottom: Spacing.xl,
+  },
+  iconCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.lg,
   },
   title: {
     textAlign: "center",
