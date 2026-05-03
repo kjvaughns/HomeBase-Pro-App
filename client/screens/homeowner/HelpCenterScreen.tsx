@@ -185,7 +185,7 @@ function FAQSectionComponent({ section }: { section: FAQSection }) {
           <BlurView
             intensity={60}
             tint={isDark ? "dark" : "light"}
-            style={StyleSheet.absoluteFill}
+            style={StyleSheet.absoluteFill} pointerEvents="none"
           />
         ) : (
           <View

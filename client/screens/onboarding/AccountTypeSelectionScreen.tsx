@@ -137,7 +137,7 @@ export default function AccountTypeSelectionScreen({ navigation }: Props) {
           <BlurView
             intensity={isDark ? 28 : 50}
             tint={isDark ? "dark" : "light"}
-            style={StyleSheet.absoluteFill}
+            style={StyleSheet.absoluteFill} pointerEvents="none"
           />
         ) : (
           <View

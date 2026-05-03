@@ -44,6 +44,8 @@ export function AccountGateModal({
       visible={visible}
       animationType="slide"
       transparent={true}
+      presentationStyle="overFullScreen"
+      statusBarTranslucent
       onRequestClose={onClose}
     >
       <View style={[styles.overlay, { backgroundColor: theme.overlay }]}>
@@ -61,7 +63,7 @@ export function AccountGateModal({
             <BlurView
               intensity={80}
               tint={isDark ? "dark" : "light"}
-              style={StyleSheet.absoluteFill}
+              style={StyleSheet.absoluteFill} pointerEvents="none"
             />
           ) : null}
 

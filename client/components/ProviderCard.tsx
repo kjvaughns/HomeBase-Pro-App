@@ -87,7 +87,7 @@ export function ProviderCard({
         <BlurView
           intensity={GlassEffect.intensity.light}
           tint={isDark ? "dark" : "light"}
-          style={StyleSheet.absoluteFill}
+          style={StyleSheet.absoluteFill} pointerEvents="none"
         />
       ) : null}
 

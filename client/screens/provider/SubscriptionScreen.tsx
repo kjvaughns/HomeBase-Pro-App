@@ -442,6 +442,48 @@ export default function SubscriptionScreen() {
               {copy.body}
             </ThemedText>
 
+            {/* Apple 3.1.2(c): EULA + Privacy must be visible BEFORE the
+                purchase confirmation, not just in a footer. We render the
+                same legal row above the Subscribe/Manage button on every
+                state (free / grace / expired / subscribed). */}
+            {isPartner ? null : (
+              <View style={styles.legalRowAbove}>
+                <Pressable
+                  onPress={() => Linking.openURL(TERMS_URL).catch(() => {})}
+                  hitSlop={8}
+                  testID="link-terms-above"
+                >
+                  <ThemedText style={[styles.legalLink, { color: Colors.accent }]}>
+                    Terms of Use (EULA)
+                  </ThemedText>
+                </Pressable>
+                <ThemedText style={[styles.legalSep, { color: theme.textTertiary }]}>
+                  ·
+                </ThemedText>
+                <Pressable
+                  onPress={() => Linking.openURL(PRIVACY_URL).catch(() => {})}
+                  hitSlop={8}
+                  testID="link-privacy-above"
+                >
+                  <ThemedText style={[styles.legalLink, { color: Colors.accent }]}>
+                    Privacy Policy
+                  </ThemedText>
+                </Pressable>
+                <ThemedText style={[styles.legalSep, { color: theme.textTertiary }]}>
+                  ·
+                </ThemedText>
+                <Pressable
+                  onPress={handleContactSupport}
+                  hitSlop={8}
+                  testID="link-contact-support-above"
+                >
+                  <ThemedText style={[styles.legalLink, { color: Colors.accent }]}>
+                    Contact support
+                  </ThemedText>
+                </Pressable>
+              </View>
+            )}
+
             {/* Primary action — partners get no billing controls at all
                 (their access is admin-granted, not billed). */}
             {isPartner ? null : showSubscribeButton ? (
@@ -1009,6 +1051,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: Spacing.xs,
     marginTop: Spacing.md,
+  },
+  legalRowAbove: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: Spacing.xs,
+    marginBottom: Spacing.md,
+    alignSelf: "stretch",
   },
   legalLink: {
     ...Typography.caption1,

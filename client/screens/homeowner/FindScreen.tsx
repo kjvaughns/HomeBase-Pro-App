@@ -625,7 +625,7 @@ export default function FindScreen() {
         <BlurView
           intensity={isDark ? 40 : 60}
           tint={isDark ? "dark" : "light"}
-          style={StyleSheet.absoluteFill}
+          style={StyleSheet.absoluteFill} pointerEvents="none"
         />
         <Pressable
           style={StyleSheet.absoluteFill}
@@ -754,7 +754,7 @@ export default function FindScreen() {
         <BlurView
           intensity={isDark ? 40 : 60}
           tint={isDark ? "dark" : "light"}
-          style={StyleSheet.absoluteFill}
+          style={StyleSheet.absoluteFill} pointerEvents="none"
         />
         <Pressable
           style={StyleSheet.absoluteFill}

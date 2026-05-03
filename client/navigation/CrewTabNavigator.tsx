@@ -70,9 +70,10 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
           <BlurView
             intensity={isDark ? 80 : 60}
             tint={isDark ? "systemMaterialDark" : "systemUltraThinMaterialLight"}
-            style={[StyleSheet.absoluteFill, styles.blurView]}
+            style={[StyleSheet.absoluteFill, styles.blurView]} pointerEvents="none"
           />
           <View
+            pointerEvents="none"
             style={[
               StyleSheet.absoluteFill,
               {
@@ -84,6 +85,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
         </>
       ) : (
         <View
+          pointerEvents="none"
           style={[
             StyleSheet.absoluteFill,
             styles.androidBackground,

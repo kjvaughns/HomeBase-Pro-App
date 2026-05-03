@@ -131,7 +131,14 @@ export default function ProviderFAB() {
   return (
     <>
       {isOpen && (
-        <Modal transparent visible={isOpen} animationType="none">
+        <Modal
+          transparent
+          visible={isOpen}
+          animationType="none"
+          presentationStyle="overFullScreen"
+          statusBarTranslucent
+          onRequestClose={handleClose}
+        >
           <AnimatedPressable
             style={[styles.overlay, overlayStyle]}
             onPress={handleClose}

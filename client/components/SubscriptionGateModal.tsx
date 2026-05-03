@@ -52,6 +52,8 @@ export function SubscriptionGateModal({
       visible={visible}
       animationType="slide"
       transparent={true}
+      presentationStyle="overFullScreen"
+      statusBarTranslucent
       onRequestClose={onClose}
     >
       <View style={[styles.overlay, { backgroundColor: theme.overlay }]}>
@@ -69,7 +71,7 @@ export function SubscriptionGateModal({
             <BlurView
               intensity={80}
               tint={isDark ? "dark" : "light"}
-              style={StyleSheet.absoluteFill}
+              style={StyleSheet.absoluteFill} pointerEvents="none"
             />
           ) : null}
 
