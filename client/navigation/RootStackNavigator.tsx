@@ -48,6 +48,7 @@ import ServiceBlueprintWizardScreen from "@/screens/provider/ServiceBlueprintWiz
 import ServiceSummaryScreen from "@/screens/provider/ServiceSummaryScreen";
 import PublicProfileScreen from "@/screens/provider/PublicProfileScreen";
 import ProviderJobDetailScreen from "@/screens/provider/ProviderJobDetailScreen";
+import SeriesDetailScreen from "@/screens/provider/SeriesDetailScreen";
 import LeadsScreen from "@/screens/provider/LeadsScreen";
 import ReviewsScreen from "@/screens/provider/ReviewsScreen";
 import ProviderResourcesScreen from "@/screens/provider/ProviderResourcesScreen";
@@ -151,6 +152,7 @@ export type RootStackParamList = {
   HelpCenter: undefined;
   ContactUs: undefined;
   ProviderJobDetail: { jobId: string };
+  SeriesDetail: { seriesId: string };
   Leads: undefined;
   Reviews: undefined;
   ProviderResources: undefined;
@@ -548,6 +550,13 @@ export default function RootStackNavigator() {
         component={ProviderJobDetailScreen}
         options={{
           headerTitle: "Job Details",
+        }}
+      />
+      <Stack.Screen
+        name="SeriesDetail"
+        component={SeriesDetailScreen}
+        options={{
+          headerTitle: "Recurring Series",
         }}
       />
       <Stack.Screen

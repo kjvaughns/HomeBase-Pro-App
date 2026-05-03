@@ -32,7 +32,7 @@ import {
 } from "@shared/schema";
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
-import { db } from "./db";
+import { db, pool } from "./db";
 import { sql, eq, and, or, desc, inArray, gte, ilike, isNull } from "drizzle-orm";
 import {
   sendInvoiceEmail,
@@ -129,7 +129,14 @@ import {
   savedProviders,
   reviewReports,
   homeProfileUpdateSchema,
+  jobSeries,
 } from "@shared/schema";
+import {
+  createSeriesForJob,
+  cancelSeries as cancelSeriesService,
+  applyToFollowing as applyToFollowingService,
+  isSupportedFrequency,
+} from "./recurringJobsService";
 
 import { generateToken, authenticateJWT } from "./auth";
 const BCRYPT_SALT_ROUNDS = 10;
@@ -8716,6 +8723,9 @@ Respond with JSON only:
         basePrice: string | null;
         priceFrom: string | null;
         intakeQuestionsJson: string | null;
+        isRecurring: boolean | null;
+        recurringFrequency: string | null;
+        recurringPrice: string | null;
       } | null = null;
       let verifiedCustomServiceId: string | null = null;
       if (parsed.data.customServiceId) {
@@ -8726,6 +8736,9 @@ Respond with JSON only:
             basePrice: providerCustomServices.basePrice,
             priceFrom: providerCustomServices.priceFrom,
             intakeQuestionsJson: providerCustomServices.intakeQuestionsJson,
+            isRecurring: providerCustomServices.isRecurring,
+            recurringFrequency: providerCustomServices.recurringFrequency,
+            recurringPrice: providerCustomServices.recurringPrice,
           })
           .from(providerCustomServices)
           .where(
@@ -8851,6 +8864,10 @@ Respond with JSON only:
           customServiceId: verifiedCustomServiceId,
           estimatedPrice: effectivePrice ?? parsed.data.estimatedPrice,
           description: finalJobDescription,
+          // Belt-and-suspenders: insertJobSchema already strips seriesId,
+          // but null it out here too so any future schema regression can't
+          // let a client attach the new job to another provider's series.
+          seriesId: null,
         };
         const [job] = await tx.insert(jobs).values(jobValues).returning();
 
@@ -8887,6 +8904,38 @@ Respond with JSON only:
 
         return { job: linkedJob, appointment: apptRow };
       });
+
+      // If the job came from a recurring custom service, anchor a job_series
+      // and materialize the next ~90 days of occurrences. Awaited (not
+      // fire-and-forget) so the create-job response only succeeds once the
+      // series row exists — the recurring badge / series detail screen are
+      // immediately consistent with the response. Materialization itself is
+      // bounded (≤90 inserts) so this stays well under request budgets.
+      let responseJob = newJob;
+      if (
+        svcSnapshot?.isRecurring &&
+        svcSnapshot.recurringFrequency &&
+        isSupportedFrequency(svcSnapshot.recurringFrequency) &&
+        !newJob.seriesId
+      ) {
+        // Series creation is part of the create-job contract for recurring
+        // services. We do NOT swallow failures: if anchoring/materialization
+        // fails the request returns 500 so the client can retry, rather than
+        // silently producing a one-off job and orphaned promise of a series.
+        await createSeriesForJob({
+          job: newJob,
+          frequency: svcSnapshot.recurringFrequency,
+          recurringPrice: svcSnapshot.recurringPrice,
+        });
+        // Refetch so the response carries the newly-assigned series_id —
+        // the schedule UI uses it to deep-link to the Series detail screen
+        // immediately after creation.
+        const [refreshed] = await db
+          .select()
+          .from(jobs)
+          .where(eq(jobs.id, newJob.id));
+        if (refreshed) responseJob = refreshed;
+      }
 
       // Fire client confirmation email (fire-and-forget) if client has an email on record
       if (newJob.clientId) {
@@ -9014,7 +9063,7 @@ Respond with JSON only:
         })();
       }
 
-      return res.status(201).json({ job: newJob, appointment });
+      return res.status(201).json({ job: responseJob, appointment });
     } catch (error) {
       console.error("Create job error:", error);
       res.status(500).json({ error: "Failed to create job" });
@@ -9045,11 +9094,55 @@ Respond with JSON only:
           address,
         } = req.body;
         const update: Record<string, unknown> = {};
+        const isFollowing =
+          req.query.scope === "following" && !!existing.seriesId;
+
+        // Compute the cadence shift (if any) BEFORE mutating the pivot row
+        // so applyToFollowing can compare against the OLD scheduled_date.
+        // Use calendar-date arithmetic (Y/M/D-only) rather than millisecond
+        // deltas so DST transitions and time-of-day differences between the
+        // two timestamps don't sneak an extra ±1 day into the shift.
+        let shiftDays = 0;
+        if (
+          isFollowing &&
+          scheduledDate !== undefined &&
+          existing.scheduledDate
+        ) {
+          const oldD = new Date(existing.scheduledDate);
+          const newD = new Date(scheduledDate);
+          if (
+            !Number.isNaN(oldD.getTime()) &&
+            !Number.isNaN(newD.getTime())
+          ) {
+            const oldUtc = Date.UTC(
+              oldD.getFullYear(),
+              oldD.getMonth(),
+              oldD.getDate(),
+            );
+            const newUtc = Date.UTC(
+              newD.getFullYear(),
+              newD.getMonth(),
+              newD.getDate(),
+            );
+            shiftDays = Math.round(
+              (newUtc - oldUtc) / (24 * 60 * 60 * 1000),
+            );
+          }
+        }
+        const oldPivotDate = existing.scheduledDate
+          ? new Date(existing.scheduledDate)
+          : undefined;
+
         if (title !== undefined) update.title = title;
         if (description !== undefined) update.description = description;
         if (status !== undefined) update.status = status;
-        if (scheduledDate !== undefined) update.scheduledDate = scheduledDate;
-        if (scheduledTime !== undefined) update.scheduledTime = scheduledTime;
+        // For scope=following, applyToFollowing handles the date+time shift
+        // across the pivot AND every later occurrence. Skip the per-pivot
+        // mutation here so the row isn't moved twice (route + SQL interval).
+        if (scheduledDate !== undefined && !isFollowing)
+          update.scheduledDate = scheduledDate;
+        if (scheduledTime !== undefined && !isFollowing)
+          update.scheduledTime = scheduledTime;
         if (estimatedPrice !== undefined)
           update.estimatedPrice = estimatedPrice;
         if (finalPrice !== undefined) update.finalPrice = finalPrice;
@@ -9060,6 +9153,69 @@ Respond with JSON only:
         if (!job) {
           return res.status(404).json({ error: "Job not found" });
         }
+
+        // scope=following propagates safe field edits (and an optional date
+        // shift) to the pivot + every future occurrence in the same series
+        // and to the series template, so newly-generated occurrences inherit
+        // them too.
+        if (isFollowing) {
+          const hasFieldEdit =
+            title !== undefined ||
+            description !== undefined ||
+            notes !== undefined ||
+            scheduledTime !== undefined ||
+            estimatedPrice !== undefined ||
+            address !== undefined;
+          if (hasFieldEdit || shiftDays !== 0) {
+            try {
+              await applyToFollowingService(req.params.id, {
+                title,
+                description,
+                notes,
+                scheduledTime,
+                estimatedPrice,
+                address,
+                shiftDays,
+                pivotDateOverride: oldPivotDate,
+              });
+            } catch (err) {
+              // Surface conflict / constraint failures to the client instead
+              // of silently succeeding — otherwise the UI thinks the spread
+              // worked when later occurrences are still on the old schedule.
+              console.error("[recurring] applyToFollowing failed:", err);
+              return res.status(409).json({
+                error: "Failed to update following occurrences",
+              });
+            }
+          }
+        } else if (
+          job.appointmentId &&
+          (scheduledDate !== undefined ||
+            scheduledTime !== undefined ||
+            (status !== undefined && status === "cancelled"))
+        ) {
+          // Single-occurrence edit: mirror date/time/cancellation to the
+          // homeowner-facing appointment so it doesn't drift out of sync.
+          // Other "this+following" cases are handled by applyToFollowing,
+          // and series-cancel mirrors via cancelSeries.
+          const apptUpdate: Record<string, unknown> = {};
+          if (scheduledDate !== undefined)
+            apptUpdate.scheduledDate = scheduledDate;
+          if (scheduledTime !== undefined)
+            apptUpdate.scheduledTime = scheduledTime;
+          if (status === "cancelled") apptUpdate.status = "cancelled";
+          if (Object.keys(apptUpdate).length > 0) {
+            try {
+              await storage.updateAppointment(job.appointmentId, apptUpdate);
+            } catch (err) {
+              console.error(
+                "[recurring] mirror appointment update failed:",
+                err,
+              );
+            }
+          }
+        }
+
         // Dispatch job.status_changed when status field changes
         if (status && existing.status !== status) {
           dispatchJobStatusEmail(job, status).catch((e: unknown) =>
@@ -9274,6 +9430,28 @@ Respond with JSON only:
         }
         if (!(await assertProviderOwnership(req, existing.providerId, res)))
           return;
+
+        // scope=series cancels every future occurrence + the series itself,
+        // leaving the current job + completed history alone. The recurring
+        // service marks future scheduled/confirmed jobs as cancelled.
+        if (req.query.scope === "series" && existing.seriesId) {
+          let cancelled = 0;
+          try {
+            cancelled = await cancelSeriesService(existing.seriesId);
+          } catch (err) {
+            console.error("[recurring] cancelSeries failed:", err);
+            return res
+              .status(500)
+              .json({ error: "Failed to cancel series" });
+          }
+          return res.json({
+            success: true,
+            scope: "series",
+            seriesId: existing.seriesId,
+            cancelledOccurrences: cancelled,
+          });
+        }
+
         const deleted = await storage.deleteJob(req.params.id);
         if (!deleted) {
           return res.status(404).json({ error: "Job not found" });
@@ -9282,6 +9460,192 @@ Respond with JSON only:
       } catch (error) {
         console.error("Delete job error:", error);
         res.status(500).json({ error: "Failed to delete job" });
+      }
+    },
+  );
+
+  // ============ JOB SERIES ROUTES ============
+
+  // Fetch a series + its materialized occurrences. Provider-scoped.
+  app.get(
+    "/api/series/:id",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const [series] = await db
+          .select()
+          .from(jobSeries)
+          .where(eq(jobSeries.id, req.params.id));
+        if (!series) {
+          return res.status(404).json({ error: "Series not found" });
+        }
+        if (!(await assertProviderOwnership(req, series.providerId, res)))
+          return;
+
+        const occurrences = await db
+          .select()
+          .from(jobs)
+          .where(eq(jobs.seriesId, series.id))
+          .orderBy(jobs.scheduledDate);
+
+        res.json({ series, occurrences });
+      } catch (error) {
+        console.error("Get series error:", error);
+        res.status(500).json({ error: "Failed to get series" });
+      }
+    },
+  );
+
+  // Cancel a series (and all future not-yet-touched occurrences).
+  app.post(
+    "/api/series/:id/cancel",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const [series] = await db
+          .select({ id: jobSeries.id, providerId: jobSeries.providerId })
+          .from(jobSeries)
+          .where(eq(jobSeries.id, req.params.id));
+        if (!series) {
+          return res.status(404).json({ error: "Series not found" });
+        }
+        if (!(await assertProviderOwnership(req, series.providerId, res)))
+          return;
+        const cancelledOccurrences = await cancelSeriesService(series.id);
+        res.json({ success: true, cancelledOccurrences });
+      } catch (error) {
+        console.error("Cancel series error:", error);
+        res.status(500).json({ error: "Failed to cancel series" });
+      }
+    },
+  );
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Recurring-series backfill (provider-confirmed).
+  //
+  // Existing recurring jobs (created before this feature shipped, or by the
+  // generic POST /api/jobs path with a non-recurring custom service) aren't
+  // auto-stitched into series at boot — that would silently fabricate
+  // dozens of phantom future occurrences. Instead we expose a preview /
+  // confirm pair the provider opts into from the schedule screen.
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // Returns groups of jobs that look like an unstitched recurring series for
+  // the calling provider: same custom_service_id + client_id, ≥1 historical
+  // occurrence, custom service is flagged is_recurring with a known cadence.
+  app.get(
+    "/api/recurring/backfill-candidates",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const userId = req.user?.userId;
+        if (!userId) return res.status(401).json({ error: "Unauthorized" });
+        const provider = await storage.getProviderByUserId(userId);
+        if (!provider) return res.json({ candidates: [] });
+        const result = await pool.query(
+          `SELECT j.custom_service_id,
+                  j.client_id,
+                  COUNT(*)::int      AS occurrences,
+                  MIN(j.scheduled_date) AS anchor_date,
+                  MIN(j.title)       AS title,
+                  MIN(pcs.recurring_frequency) AS frequency,
+                  MIN(c.first_name || ' ' || c.last_name) AS client_name
+             FROM jobs j
+             JOIN provider_custom_services pcs
+               ON pcs.id = j.custom_service_id
+             LEFT JOIN clients c ON c.id = j.client_id
+            WHERE j.provider_id = $1
+              AND j.series_id IS NULL
+              AND pcs.is_recurring = true
+              AND pcs.recurring_frequency IN
+                  ('daily','weekly','biweekly','monthly','quarterly')
+            GROUP BY j.custom_service_id, j.client_id
+            HAVING COUNT(*) >= 1`,
+          [provider.id],
+        );
+        res.json({ candidates: result.rows });
+      } catch (error) {
+        console.error("Backfill candidates error:", error);
+        res.status(500).json({ error: "Failed to load candidates" });
+      }
+    },
+  );
+
+  // Stitches a single confirmed group into a job_series and links existing
+  // jobs to it. The most recent occurrence becomes the series anchor and
+  // future occurrences are then materialized through the standard generator.
+  app.post(
+    "/api/recurring/backfill-confirm",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const userId = req.user?.userId;
+        if (!userId) return res.status(401).json({ error: "Unauthorized" });
+        const provider = await storage.getProviderByUserId(userId);
+        if (!provider) return res.status(403).json({ error: "Forbidden" });
+        const { customServiceId, clientId } = req.body as {
+          customServiceId?: string;
+          clientId?: string | null;
+        };
+        if (!customServiceId) {
+          return res.status(400).json({ error: "customServiceId required" });
+        }
+        // Most recent unstitched job becomes the series anchor. We query
+        // through Drizzle (not raw SQL) so the resulting Job row keeps its
+        // camelCase shape — createSeriesForJob reads providerId /
+        // scheduledDate / customServiceId, not snake_case columns.
+        const [anchor] = await db
+          .select()
+          .from(jobs)
+          .where(
+            and(
+              eq(jobs.providerId, provider.id),
+              eq(jobs.customServiceId, customServiceId),
+              clientId
+                ? eq(jobs.clientId, clientId)
+                : isNull(jobs.clientId),
+              isNull(jobs.seriesId),
+            ),
+          )
+          .orderBy(desc(jobs.scheduledDate))
+          .limit(1);
+        if (!anchor) {
+          return res.status(404).json({ error: "No candidate jobs" });
+        }
+        const [svc] = await db
+          .select()
+          .from(providerCustomServices)
+          .where(eq(providerCustomServices.id, customServiceId));
+        if (!svc?.isRecurring || !svc.recurringFrequency) {
+          return res.status(400).json({ error: "Service not recurring" });
+        }
+        const result = await createSeriesForJob({
+          job: anchor,
+          frequency: svc.recurringFrequency,
+          recurringPrice: svc.recurringPrice,
+        });
+        if (!result) {
+          return res.status(400).json({ error: "Unsupported frequency" });
+        }
+        // Link any other historical unstitched jobs in the same group to the
+        // freshly-created series so they show the recurring badge too.
+        await pool.query(
+          `UPDATE jobs
+              SET series_id = $1, updated_at = NOW()
+            WHERE provider_id = $2
+              AND custom_service_id = $3
+              AND client_id IS NOT DISTINCT FROM $4
+              AND series_id IS NULL`,
+          [result.seriesId, provider.id, customServiceId, clientId ?? null],
+        );
+        res.json({
+          success: true,
+          seriesId: result.seriesId,
+          materialized: result.materialized,
+        });
+      } catch (error) {
+        console.error("Backfill confirm error:", error);
+        res.status(500).json({ error: "Failed to backfill" });
       }
     },
   );

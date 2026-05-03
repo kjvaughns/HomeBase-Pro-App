@@ -820,6 +820,81 @@ export async function runBootMigrations(): Promise<void> {
       )`,
     );
 
+    // ── job_series + jobs.series_id (auto-generated recurring jobs) ──
+    // Schema migration only. Existing recurring jobs created before this
+    // feature shipped are NOT auto-stitched into series at boot — that
+    // requires provider confirmation on the dashboard so a misclassified
+    // grouping doesn't silently create dozens of phantom future jobs. The
+    // first new booking of a recurring custom service anchors a series via
+    // POST /api/jobs.
+    await runSql(
+      "job_series.create",
+      `CREATE TABLE IF NOT EXISTS job_series (
+        id                 VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        provider_id        VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+        client_id          VARCHAR REFERENCES clients(id) ON DELETE SET NULL,
+        custom_service_id  VARCHAR REFERENCES provider_custom_services(id) ON DELETE SET NULL,
+        title              TEXT NOT NULL,
+        description        TEXT,
+        notes              TEXT,
+        estimated_duration INTEGER,
+        frequency          TEXT NOT NULL,
+        scheduled_time     TEXT,
+        estimated_price    NUMERIC(10, 2),
+        address            TEXT,
+        anchor_date        TIMESTAMP NOT NULL,
+        generated_through  TIMESTAMP,
+        status             TEXT NOT NULL DEFAULT 'active',
+        created_at         TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at         TIMESTAMP NOT NULL DEFAULT NOW(),
+        cancelled_at       TIMESTAMP
+      )`,
+    );
+    // Add the snapshotted-context columns separately so installs that
+    // already have an older job_series table get them too.
+    await runSql(
+      "job_series.description",
+      `ALTER TABLE job_series ADD COLUMN IF NOT EXISTS description TEXT`,
+    );
+    await runSql(
+      "job_series.notes",
+      `ALTER TABLE job_series ADD COLUMN IF NOT EXISTS notes TEXT`,
+    );
+    await runSql(
+      "job_series.estimated_duration",
+      `ALTER TABLE job_series ADD COLUMN IF NOT EXISTS estimated_duration INTEGER`,
+    );
+    await runSql(
+      "jobs.series_id",
+      `ALTER TABLE jobs
+         ADD COLUMN IF NOT EXISTS series_id VARCHAR
+         REFERENCES job_series(id) ON DELETE SET NULL`,
+    );
+    await runSql(
+      "jobs.series_id.index",
+      `CREATE INDEX IF NOT EXISTS jobs_series_id_idx ON jobs (series_id)`,
+    );
+    await runSql(
+      "job_series.provider_status.index",
+      `CREATE INDEX IF NOT EXISTS job_series_provider_status_idx
+         ON job_series (provider_id, status)`,
+    );
+    // Idempotency guard: a series cannot have two occurrences on the same
+    // calendar day. Casts to date so timezone-shifted timestamps still
+    // collide. Application code already de-dups in-process, but a
+    // concurrent cron + manual trigger could otherwise race-insert dupes.
+    await runSql(
+      "jobs.series_date.unique",
+      `CREATE UNIQUE INDEX IF NOT EXISTS jobs_series_id_date_unique
+         ON jobs (series_id, (scheduled_date::date))
+         WHERE series_id IS NOT NULL`,
+    );
+
+    verifications.push(
+      ["job_series table",      `SELECT id FROM job_series LIMIT 0`],
+      ["jobs.series_id column", `SELECT series_id FROM jobs LIMIT 0`],
+    );
+
     const verificationErrors: string[] = [];
     for (const [label, sql] of verifications) {
       try {

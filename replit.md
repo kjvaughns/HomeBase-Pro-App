@@ -28,6 +28,7 @@ The application consists of a client-side React Native Expo app and an Express.j
 - **Stripe Webhook Architecture**: Features two webhook endpoints (`/api/stripe/webhook/platform` and `/api/stripe/webhook/connect`) for platform and Connect events, with a unified dispatcher for signature verification, idempotency, and connected-account resolution.
 
 ## Recent Changes
+- 2026-05-03: Task #292 — Auto-generate recurring jobs on the calendar. New `job_series` table + `jobs.series_id` FK; `server/recurringJobsService.ts` materializes occurrences over a 90-day horizon (weekly/biweekly/monthly/quarterly), respects business-hours closed days, and is idempotent on (series, date). Daily 04:00 cron in `server/index.ts` extends horizons. `POST /api/jobs` auto-creates a series when the linked custom service is recurring. `PUT /api/jobs/:id?scope=following` edits this+future occurrences; `DELETE /api/jobs/:id?scope=series` cancels a whole series. New `GET /api/series/:id` and `POST /api/series/:id/cancel`. UI: schedule cards show a recurring icon, job detail offers "This Occurrence / Entire Series" cancel and a tappable badge linking to the new `SeriesDetailScreen` (lists upcoming + history of occurrences with cancel-series action). Idempotent backfill in `server/dbMigrations.ts` groups existing recurring jobs into series.
 - 2026-05-02: New canonical design audit at `docs/homebase-design-audit-2026-05.md` supersedes the April 14 design audits; feeds the queued "HomeBase design fixes pass (P0 / P1 / P2)" task.
 
 ## External Dependencies

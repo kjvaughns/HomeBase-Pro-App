@@ -1069,7 +1069,20 @@ function setupReminderJobs(): void {
   cron.schedule('0 9 * * *', runSubscriptionGraceReminder);
   // Subscription expired notice — 10:00 daily (expired within last 24h)
   cron.schedule('0 10 * * *', runSubscriptionExpiredNotice);
-  console.log('[cron] reminder jobs scheduled: 24h/2h booking reminders, 3d/1d invoice reminders, daily orphan-provider cleanup, subscription grace/expired notices');
+  // Extend the recurring-job series horizon every day at 04:00 so every
+  // active series always has ~90 days of materialized occurrences ahead.
+  cron.schedule('0 4 * * *', async () => {
+    try {
+      const { extendAllSeriesHorizons } = await import('./recurringJobsService');
+      const { scanned, inserted } = await extendAllSeriesHorizons();
+      if (scanned > 0) {
+        console.log(`[cron:recurring-horizon] scanned=${scanned} inserted=${inserted}`);
+      }
+    } catch (err: unknown) {
+      console.error('[cron:recurring-horizon] error:', err);
+    }
+  });
+  console.log('[cron] reminder jobs scheduled: 24h/2h booking reminders, 3d/1d invoice reminders, daily orphan-provider cleanup, subscription grace/expired notices, recurring-series horizon');
 }
 
 async function runSubscriptionGraceReminder(): Promise<void> {

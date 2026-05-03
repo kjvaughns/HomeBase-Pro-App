@@ -27,6 +27,7 @@ type DBJobStatus = JobStatus;
 type DisplayStatus = JobStatus;
 
 import { HomeProfileSection, type HomeProfile } from "@/components/HomeProfileSection";
+import { NativeDatePickerSheet } from "@/components/NativeDatePickerSheet";
 
 export function HomeownerNotesBanner({ homeId }: { homeId: string }) {
   const [notes, setNotes] = useState<string | null>(null);
@@ -144,6 +145,8 @@ interface ApiJob {
   checklist?: JobChecklistItem[] | null;
   homeId?: string | null;
   appointmentId?: string | null;
+  // Present when this job is part of a recurring series.
+  seriesId?: string | null;
 }
 
 interface ApiClient {
@@ -473,7 +476,120 @@ export default function ProviderJobDetailScreen() {
     }
   }, [job, updateJobMutation, completeJobMutation]);
 
+  const [rescheduleStep, setRescheduleStep] = useState<"closed" | "date" | "time">(
+    "closed",
+  );
+  const [rescheduleDraft, setRescheduleDraft] = useState<Date>(new Date());
+
+  const rescheduleMutation = useMutation({
+    mutationFn: async (params: { newDate: Date; scope: "single" | "following" }) => {
+      const path =
+        params.scope === "following"
+          ? `/api/jobs/${jobId}?scope=following`
+          : `/api/jobs/${jobId}`;
+      const url = new URL(path, getApiUrl());
+      const hh = String(params.newDate.getHours()).padStart(2, "0");
+      const mm = String(params.newDate.getMinutes()).padStart(2, "0");
+      const res = await apiRequest("PUT", url.toString(), {
+        scheduledDate: params.newDate.toISOString(),
+        scheduledTime: `${hh}:${mm}`,
+      });
+      return (await res.json()) as { job: ApiJob };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/provider", providerId, "jobs"],
+      });
+      if (job?.seriesId) {
+        queryClient.invalidateQueries({
+          queryKey: ["/api/series", job.seriesId],
+        });
+      }
+    },
+    onError: () => {
+      Alert.alert("Couldn't reschedule", "Please try again.");
+    },
+  });
+
+  const handleReschedulePress = useCallback(() => {
+    if (!job?.scheduledDate) return;
+    setRescheduleDraft(new Date(job.scheduledDate));
+    setRescheduleStep("date");
+  }, [job?.scheduledDate]);
+
+  const finalizeReschedule = useCallback(
+    (newDate: Date) => {
+      setRescheduleStep("closed");
+      if (!job) return;
+      // For series jobs, ask the provider whether the change should apply to
+      // just this occurrence or to this and every following occurrence.
+      if (job.seriesId) {
+        Alert.alert(
+          "Apply to which occurrences?",
+          "Update only this date, or shift this and all following occurrences by the same amount?",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "This Occurrence",
+              onPress: () =>
+                rescheduleMutation.mutate({ newDate, scope: "single" }),
+            },
+            {
+              text: "This + Following",
+              onPress: () =>
+                rescheduleMutation.mutate({ newDate, scope: "following" }),
+            },
+          ],
+        );
+      } else {
+        rescheduleMutation.mutate({ newDate, scope: "single" });
+      }
+    },
+    [job, rescheduleMutation],
+  );
+
+  const cancelSeriesMutation = useMutation({
+    mutationFn: async () => {
+      const url = new URL(`/api/jobs/${jobId}?scope=series`, getApiUrl());
+      return apiRequest("DELETE", url.toString());
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "jobs"] });
+      if (job?.seriesId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/series", job.seriesId] });
+      }
+      setDisplayStatus("cancelled");
+    },
+    onError: () => {
+      Alert.alert("Couldn't cancel series", "Please try again.");
+    },
+  });
+
   const handleCancel = useCallback(() => {
+    // When this job belongs to a recurring series, ask the provider whether
+    // they're cancelling just this occurrence or the whole series. For
+    // one-offs, keep the original two-button confirm.
+    if (job?.seriesId) {
+      Alert.alert(
+        "Cancel Recurring Job",
+        "Cancel just this occurrence, or the entire recurring series?",
+        [
+          { text: "Nevermind", style: "cancel" },
+          {
+            text: "This Occurrence",
+            onPress: () => updateJobMutation.mutate("cancelled"),
+          },
+          {
+            text: "Entire Series",
+            style: "destructive",
+            onPress: () => cancelSeriesMutation.mutate(),
+          },
+        ],
+      );
+      return;
+    }
     Alert.alert(
       "Cancel Job",
       "Are you sure you want to cancel this job?",
@@ -488,7 +604,7 @@ export default function ProviderJobDetailScreen() {
         },
       ]
     );
-  }, [updateJobMutation]);
+  }, [updateJobMutation, cancelSeriesMutation, job?.seriesId]);
 
   const handleCall = useCallback(() => {
     if (client?.phone) {
@@ -680,15 +796,30 @@ export default function ProviderJobDetailScreen() {
             </ThemedText>
             <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.xs, flexWrap: "wrap" }}>
               <ThemedText type="h3">{job.title}</ThemedText>
-              {job.isRecurring ? (
-                <View style={[styles.recurringBadge, { backgroundColor: Colors.accent + "22" }]}>
-                  <Feather name="repeat" size={11} color={Colors.accent} />
-                  <ThemedText style={[styles.recurringBadgeText, { color: Colors.accent }]}>
-                    {job.recurringFrequency
-                      ? job.recurringFrequency.charAt(0).toUpperCase() + job.recurringFrequency.slice(1)
-                      : "Recurring"}
-                  </ThemedText>
-                </View>
+              {job.isRecurring || job.seriesId ? (
+                <Pressable
+                  onPress={
+                    job.seriesId
+                      ? () =>
+                          navigation.navigate("SeriesDetail", {
+                            seriesId: job.seriesId!,
+                          })
+                      : undefined
+                  }
+                  testID="link-view-series"
+                >
+                  <View style={[styles.recurringBadge, { backgroundColor: Colors.accent + "22" }]}>
+                    <Feather name="repeat" size={11} color={Colors.accent} />
+                    <ThemedText style={[styles.recurringBadgeText, { color: Colors.accent }]}>
+                      {job.recurringFrequency
+                        ? job.recurringFrequency.charAt(0).toUpperCase() + job.recurringFrequency.slice(1)
+                        : "Recurring"}
+                    </ThemedText>
+                    {job.seriesId ? (
+                      <Feather name="chevron-right" size={11} color={Colors.accent} />
+                    ) : null}
+                  </View>
+                </Pressable>
               ) : null}
             </View>
             <View style={styles.detailRow}>
@@ -852,14 +983,59 @@ export default function ProviderJobDetailScreen() {
         ) : null}
 
         {resolvedDisplayStatus !== "cancelled" && resolvedDisplayStatus !== "completed" ? (
-          <Pressable
-            style={[styles.cancelButton, { borderColor: "#EF4444" }]}
-            onPress={handleCancel}
-          >
-            <ThemedText type="body" style={{ color: "#EF4444" }}>Cancel Job</ThemedText>
-          </Pressable>
+          <>
+            <Pressable
+              style={[styles.cancelButton, { borderColor: theme.border }]}
+              onPress={handleReschedulePress}
+              disabled={rescheduleMutation.isPending}
+              testID="button-reschedule-job"
+            >
+              <ThemedText type="body">
+                {rescheduleMutation.isPending ? "Rescheduling..." : "Reschedule"}
+              </ThemedText>
+            </Pressable>
+            <Pressable
+              style={[styles.cancelButton, { borderColor: "#EF4444" }]}
+              onPress={handleCancel}
+            >
+              <ThemedText type="body" style={{ color: "#EF4444" }}>Cancel Job</ThemedText>
+            </Pressable>
+          </>
         ) : null}
       </View>
+      <NativeDatePickerSheet
+        visible={rescheduleStep === "date"}
+        value={rescheduleDraft}
+        mode="date"
+        title="New date"
+        minimumDate={new Date()}
+        onConfirm={(d) => {
+          // Preserve the existing time-of-day from the previous draft.
+          const merged = new Date(d);
+          merged.setHours(
+            rescheduleDraft.getHours(),
+            rescheduleDraft.getMinutes(),
+            0,
+            0,
+          );
+          setRescheduleDraft(merged);
+          setRescheduleStep("time");
+        }}
+        onCancel={() => setRescheduleStep("closed")}
+      />
+      <NativeDatePickerSheet
+        visible={rescheduleStep === "time"}
+        value={rescheduleDraft}
+        mode="time"
+        title="New time"
+        minuteInterval={15}
+        onConfirm={(t) => {
+          const merged = new Date(rescheduleDraft);
+          merged.setHours(t.getHours(), t.getMinutes(), 0, 0);
+          finalizeReschedule(merged);
+        }}
+        onCancel={() => setRescheduleStep("closed")}
+      />
     </ThemedView>
   );
 }

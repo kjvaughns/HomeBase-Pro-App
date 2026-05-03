@@ -60,6 +60,8 @@ __export(schema_exports, {
   invoiceStatusEnum: () => invoiceStatusEnum,
   invoices: () => invoices,
   invoicesRelations: () => invoicesRelations,
+  jobSeries: () => jobSeries,
+  jobSeriesRelations: () => jobSeriesRelations,
   jobSizeEnum: () => jobSizeEnum,
   jobStatusEnum: () => jobStatusEnum,
   jobs: () => jobs,
@@ -141,7 +143,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-var propertyTypeEnum, appointmentStatusEnum, urgencyEnum, jobSizeEnum, jobStatusEnum, invoiceStatusEnum, paymentMethodEnum, paymentStatusEnum, payoutStatusEnum, connectOnboardingStatusEnum, providerPlanTierEnum, users, usersRelations, homes, homesRelations, serviceCategories, serviceCategoriesRelations, services, servicesRelations, providers, providersRelations, providerServices, providerServicesRelations, pricingTypeEnum, providerCustomServices, providerCustomServicesRelations, insertProviderCustomServiceSchema, appointments, appointmentsRelations, reviews, reviewsRelations, savedProviders, savedProvidersRelations, reviewReports, reviewReportsRelations, notifications, notificationsRelations, maintenanceReminderFrequencyEnum, maintenanceReminders, maintenanceRemindersRelations, providerPlans2, providerPlansRelations, stripeConnectAccounts, stripeConnectAccountsRelations, userCredits, userCreditsRelations, creditLedger, creditLedgerRelations, payouts, payoutsRelations, refundStatusEnum, refunds, refundsRelations, stripeWebhookEvents, invoiceLineItems, invoiceLineItemsRelations, clients, clientsRelations, jobs, jobsRelations, invoices, invoicesRelations, payments, paymentsRelations, bookingLinkStatusEnum, quoteModeEnum, intakeStatusEnum, bookingLinks, bookingLinksRelations, intakeSubmissions, intakeSubmissionsRelations, insertUserSchema, loginSchema, insertHomeSchema, homeProfileUpdateSchema, homeFieldChanges, homeFieldChangesRelations, insertAppointmentSchema, insertClientSchema, insertJobSchema, insertInvoiceSchema, insertPaymentSchema, insertProviderSchema, insertProviderPlanSchema, insertStripeConnectAccountSchema, insertInvoiceLineItemSchema, insertPayoutSchema, insertUserCreditsSchema, insertCreditLedgerSchema, insertBookingLinkSchema, insertIntakeSubmissionSchema, notificationChannelEnum, notificationDeliveryStatusEnum, pushTokens, notificationPreferences, notificationDeliveries, messageChannelEnum, messageStatusEnum, providerMessages, providerMessagesRelations, insertProviderMessageSchema, messageTemplates, messageTemplatesRelations, insertMessageTemplateSchema, leads, insertLeadSchema, insertNotificationPreferenceSchema, housefaxEntries, housefaxEntriesRelations, insertHousefaxEntrySchema, supportTickets, supportTicketsRelations, insertSupportTicketSchema;
+var propertyTypeEnum, appointmentStatusEnum, urgencyEnum, jobSizeEnum, jobStatusEnum, invoiceStatusEnum, paymentMethodEnum, paymentStatusEnum, payoutStatusEnum, connectOnboardingStatusEnum, providerPlanTierEnum, users, usersRelations, homes, homesRelations, serviceCategories, serviceCategoriesRelations, services, servicesRelations, providers, providersRelations, providerServices, providerServicesRelations, pricingTypeEnum, providerCustomServices, providerCustomServicesRelations, insertProviderCustomServiceSchema, appointments, appointmentsRelations, reviews, reviewsRelations, savedProviders, savedProvidersRelations, reviewReports, reviewReportsRelations, notifications, notificationsRelations, maintenanceReminderFrequencyEnum, maintenanceReminders, maintenanceRemindersRelations, providerPlans2, providerPlansRelations, stripeConnectAccounts, stripeConnectAccountsRelations, userCredits, userCreditsRelations, creditLedger, creditLedgerRelations, payouts, payoutsRelations, refundStatusEnum, refunds, refundsRelations, stripeWebhookEvents, invoiceLineItems, invoiceLineItemsRelations, clients, clientsRelations, jobs, jobsRelations, jobSeries, jobSeriesRelations, invoices, invoicesRelations, payments, paymentsRelations, bookingLinkStatusEnum, quoteModeEnum, intakeStatusEnum, bookingLinks, bookingLinksRelations, intakeSubmissions, intakeSubmissionsRelations, insertUserSchema, loginSchema, insertHomeSchema, homeProfileUpdateSchema, homeFieldChanges, homeFieldChangesRelations, insertAppointmentSchema, insertClientSchema, insertJobSchema, insertInvoiceSchema, insertPaymentSchema, insertProviderSchema, insertProviderPlanSchema, insertStripeConnectAccountSchema, insertInvoiceLineItemSchema, insertPayoutSchema, insertUserCreditsSchema, insertCreditLedgerSchema, insertBookingLinkSchema, insertIntakeSubmissionSchema, notificationChannelEnum, notificationDeliveryStatusEnum, pushTokens, notificationPreferences, notificationDeliveries, messageChannelEnum, messageStatusEnum, providerMessages, providerMessagesRelations, insertProviderMessageSchema, messageTemplates, messageTemplatesRelations, insertMessageTemplateSchema, leads, insertLeadSchema, insertNotificationPreferenceSchema, housefaxEntries, housefaxEntriesRelations, insertHousefaxEntrySchema, supportTickets, supportTicketsRelations, insertSupportTicketSchema;
 var init_schema = __esm({
   "shared/schema.ts"() {
     "use strict";
@@ -837,6 +839,12 @@ var init_schema = __esm({
         () => providerCustomServices.id,
         { onDelete: "set null" }
       ),
+      // Link to job_series for auto-generated recurring occurrences (nullable
+      // for one-off jobs). Declared as a bare varchar so we don't create a
+      // circular type reference with the jobSeries table (which is defined
+      // below jobs but logically points back at the same provider scope). The
+      // physical FK constraint is added by the boot migration.
+      seriesId: varchar("series_id"),
       title: text("title").notNull(),
       description: text("description"),
       scheduledDate: timestamp("scheduled_date").notNull(),
@@ -872,7 +880,60 @@ var init_schema = __esm({
         fields: [jobs.customServiceId],
         references: [providerCustomServices.id]
       }),
-      invoices: many(invoices)
+      invoices: many(invoices),
+      series: one(jobSeries, {
+        fields: [jobs.seriesId],
+        references: [jobSeries.id]
+      })
+    }));
+    jobSeries = pgTable("job_series", {
+      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+      providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+      clientId: varchar("client_id").references(() => clients.id, {
+        onDelete: "set null"
+      }),
+      customServiceId: varchar("custom_service_id").references(
+        () => providerCustomServices.id,
+        { onDelete: "set null" }
+      ),
+      title: text("title").notNull(),
+      // Snapshotted from the anchor job so each materialized occurrence inherits
+      // the same description (intake summary), provider notes, and duration.
+      description: text("description"),
+      notes: text("notes"),
+      estimatedDuration: integer("estimated_duration"),
+      // minutes
+      // weekly | biweekly | monthly | quarterly
+      frequency: text("frequency").notNull(),
+      // HH:MM (24h) — preferred time-of-day for each occurrence
+      scheduledTime: text("scheduled_time"),
+      estimatedPrice: decimal("estimated_price", { precision: 10, scale: 2 }),
+      address: text("address"),
+      // Anchor date — first occurrence's scheduled_date. All subsequent
+      // occurrences are computed from this anchor by frequency offset.
+      anchorDate: timestamp("anchor_date").notNull(),
+      // Furthest scheduled_date materialized so far (rolling horizon).
+      generatedThrough: timestamp("generated_through"),
+      // active | cancelled
+      status: text("status").notNull().default("active"),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      updatedAt: timestamp("updated_at").defaultNow().notNull(),
+      cancelledAt: timestamp("cancelled_at")
+    });
+    jobSeriesRelations = relations(jobSeries, ({ one, many }) => ({
+      provider: one(providers, {
+        fields: [jobSeries.providerId],
+        references: [providers.id]
+      }),
+      client: one(clients, {
+        fields: [jobSeries.clientId],
+        references: [clients.id]
+      }),
+      customService: one(providerCustomServices, {
+        fields: [jobSeries.customServiceId],
+        references: [providerCustomServices.id]
+      }),
+      jobs: many(jobs)
     }));
     invoices = pgTable("invoices", {
       id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1194,7 +1255,11 @@ var init_schema = __esm({
       id: true,
       createdAt: true,
       updatedAt: true,
-      completedAt: true
+      completedAt: true,
+      // Server-owned: only recurring service code / backfill may set series_id.
+      // Allowing clients to submit it would let them attach jobs to another
+      // provider's series.
+      seriesId: true
     });
     insertInvoiceSchema = createInsertSchema(invoices).omit({
       id: true,
@@ -5179,6 +5244,489 @@ var init_stripeConnectService = __esm({
   }
 });
 
+// server/recurringJobsService.ts
+var recurringJobsService_exports = {};
+__export(recurringJobsService_exports, {
+  HORIZON_DAYS: () => HORIZON_DAYS,
+  applyToFollowing: () => applyToFollowing,
+  cancelSeries: () => cancelSeries,
+  computeOccurrence: () => computeOccurrence,
+  createSeriesForJob: () => createSeriesForJob,
+  extendAllSeriesHorizons: () => extendAllSeriesHorizons,
+  isSupportedFrequency: () => isSupportedFrequency,
+  jobSeriesTable: () => jobSeries,
+  materializeOccurrences: () => materializeOccurrences
+});
+import { and as and4, eq as eq7, gte as gte2, inArray as inArray2, ne, sql as sql4 } from "drizzle-orm";
+function isSupportedFrequency(value) {
+  return typeof value === "string" && SUPPORTED_FREQUENCIES.includes(value);
+}
+function parseBusinessHours(raw) {
+  if (!raw) return null;
+  let value = raw;
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+  if (!value || typeof value !== "object") return null;
+  return value;
+}
+function isClosedDay(hours, date) {
+  if (!hours) return false;
+  const day = hours[DAY_KEYS[date.getDay()]];
+  if (!day) return false;
+  return day.enabled === false;
+}
+function isOutsideBusinessHours(hours, date, scheduledTime, durationMin) {
+  if (!hours || !scheduledTime) return false;
+  const day = hours[DAY_KEYS[date.getDay()]];
+  if (!day || day.enabled === false) return false;
+  const open = parseHHMM(day.open ?? null);
+  const close = parseHHMM(day.close ?? null);
+  const start = parseHHMM(scheduledTime);
+  if (open == null || close == null || start == null) return false;
+  const end = start + durationMin;
+  return start < open || end > close;
+}
+function parseHHMM(time) {
+  if (!time) return null;
+  const trimmed = time.trim();
+  if (!trimmed || /^closed$/i.test(trimmed)) return null;
+  const m = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (!m) return null;
+  let h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  if (Number.isNaN(h) || Number.isNaN(min)) return null;
+  const ampm = m[3]?.toUpperCase();
+  if (ampm === "AM") {
+    if (h === 12) h = 0;
+  } else if (ampm === "PM") {
+    if (h !== 12) h += 12;
+  }
+  if (h < 0 || h > 23 || min < 0 || min > 59) return null;
+  return h * 60 + min;
+}
+function computeStartN(anchor, frequency, minDate) {
+  if (minDate <= anchor) return 1;
+  switch (frequency) {
+    case "daily": {
+      const diffDays = Math.floor(
+        (minDate.getTime() - anchor.getTime()) / (24 * 60 * 60 * 1e3)
+      );
+      return Math.max(1, diffDays);
+    }
+    case "weekly": {
+      const diffDays = Math.floor(
+        (minDate.getTime() - anchor.getTime()) / (24 * 60 * 60 * 1e3)
+      );
+      return Math.max(1, Math.floor(diffDays / 7));
+    }
+    case "biweekly": {
+      const diffDays = Math.floor(
+        (minDate.getTime() - anchor.getTime()) / (24 * 60 * 60 * 1e3)
+      );
+      return Math.max(1, Math.floor(diffDays / 14));
+    }
+    case "monthly": {
+      const months = (minDate.getFullYear() - anchor.getFullYear()) * 12 + (minDate.getMonth() - anchor.getMonth());
+      return Math.max(1, months);
+    }
+    case "quarterly": {
+      const months = (minDate.getFullYear() - anchor.getFullYear()) * 12 + (minDate.getMonth() - anchor.getMonth());
+      return Math.max(1, Math.floor(months / 3));
+    }
+  }
+}
+function computeOccurrence(anchor, frequency, n) {
+  const d = new Date(anchor);
+  switch (frequency) {
+    case "daily":
+      d.setDate(d.getDate() + n);
+      return d;
+    case "weekly":
+      d.setDate(d.getDate() + 7 * n);
+      return d;
+    case "biweekly":
+      d.setDate(d.getDate() + 14 * n);
+      return d;
+    case "monthly":
+      return shiftMonths(d, n);
+    case "quarterly":
+      return shiftMonths(d, 3 * n);
+  }
+}
+function shiftMonths(d, months) {
+  const day = d.getDate();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + months);
+  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(day, lastDay));
+  return d;
+}
+async function adjustToAvailableDay(date, hours, ctx) {
+  const candidate = new Date(date);
+  for (let i = 0; i < 7; i++) {
+    if (!isClosedDay(hours, candidate) && !isOutsideBusinessHours(
+      hours,
+      candidate,
+      ctx.scheduledTime,
+      ctx.durationMin
+    ) && !await hasConflictingJob(candidate, ctx)) {
+      return new Date(candidate);
+    }
+    candidate.setDate(candidate.getDate() + 1);
+  }
+  return null;
+}
+async function hasConflictingJob(date, ctx) {
+  const dayStart = new Date(date);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart);
+  dayEnd.setDate(dayEnd.getDate() + 1);
+  const sameDay = await db.select({
+    id: jobs.id,
+    scheduledTime: jobs.scheduledTime,
+    estimatedDuration: jobs.estimatedDuration,
+    seriesId: jobs.seriesId,
+    status: jobs.status
+  }).from(jobs).where(
+    and4(
+      eq7(jobs.providerId, ctx.providerId),
+      gte2(jobs.scheduledDate, dayStart),
+      sql4`${jobs.scheduledDate} < ${dayEnd}`
+    )
+  );
+  const newStart = parseHHMM(ctx.scheduledTime);
+  const newEnd = newStart != null ? newStart + ctx.durationMin : null;
+  for (const j of sameDay) {
+    if (j.seriesId === ctx.seriesId) continue;
+    if (j.status === "cancelled") continue;
+    if (newStart == null || !j.scheduledTime) return true;
+    const otherStart = parseHHMM(j.scheduledTime);
+    if (otherStart == null) return true;
+    const otherEnd = otherStart + (j.estimatedDuration ?? DEFAULT_DURATION_MIN);
+    if (newStart < otherEnd && otherStart < newEnd) return true;
+  }
+  return false;
+}
+async function resolveHomeowner(clientId) {
+  if (!clientId) return { userId: null, homeId: null };
+  const [row] = await db.select({
+    homeId: clients.homeId,
+    homeownerUserId: clients.homeownerUserId
+  }).from(clients).where(eq7(clients.id, clientId));
+  if (!row) return { userId: null, homeId: null };
+  if (row.homeownerUserId) {
+    return { userId: row.homeownerUserId, homeId: row.homeId ?? null };
+  }
+  if (row.homeId) {
+    const [home] = await db.select({ userId: homes.userId }).from(homes).where(eq7(homes.id, row.homeId));
+    if (home?.userId) {
+      return { userId: home.userId, homeId: row.homeId };
+    }
+    return { userId: null, homeId: row.homeId };
+  }
+  return { userId: null, homeId: null };
+}
+async function materializeOccurrences(series, opts = {}) {
+  if (series.status !== "active") return 0;
+  if (!isSupportedFrequency(series.frequency)) return 0;
+  const horizonDays = opts.horizonDays ?? HORIZON_DAYS;
+  const horizonEnd = /* @__PURE__ */ new Date();
+  horizonEnd.setDate(horizonEnd.getDate() + horizonDays);
+  const [provider] = await db.select({ businessHours: providers.businessHours }).from(providers).where(eq7(providers.id, series.providerId));
+  const hours = parseBusinessHours(provider?.businessHours);
+  const homeowner = await resolveHomeowner(series.clientId);
+  const existingJobs = await db.select({ id: jobs.id, scheduledDate: jobs.scheduledDate }).from(jobs).where(eq7(jobs.seriesId, series.id));
+  const occupiedDates = new Set(
+    existingJobs.map(
+      (j) => new Date(j.scheduledDate).toISOString().slice(0, 10)
+    )
+  );
+  const durationMin = series.estimatedDuration ?? DEFAULT_DURATION_MIN;
+  let inserted = 0;
+  let lastGenerated = null;
+  const minDate = new Date(
+    Math.max(
+      (series.generatedThrough ?? /* @__PURE__ */ new Date(0)).getTime(),
+      Date.now() - 24 * 60 * 60 * 1e3
+    )
+  );
+  const startN = computeStartN(
+    series.anchorDate,
+    series.frequency,
+    minDate
+  );
+  const MAX_ITERATIONS = startN + 400;
+  for (let n = startN; n < MAX_ITERATIONS; n++) {
+    const raw = computeOccurrence(series.anchorDate, series.frequency, n);
+    if (raw > horizonEnd) break;
+    const adjusted = await adjustToAvailableDay(raw, hours, {
+      providerId: series.providerId,
+      seriesId: series.id,
+      scheduledTime: series.scheduledTime,
+      durationMin
+    });
+    if (!adjusted) continue;
+    const key = adjusted.toISOString().slice(0, 10);
+    if (occupiedDates.has(key)) {
+      lastGenerated = adjusted;
+      continue;
+    }
+    if (adjusted.getTime() < Date.now() - 24 * 60 * 60 * 1e3) continue;
+    try {
+      await db.transaction(async (tx) => {
+        const [job] = await tx.insert(jobs).values({
+          providerId: series.providerId,
+          clientId: series.clientId ?? void 0,
+          customServiceId: series.customServiceId ?? void 0,
+          seriesId: series.id,
+          title: series.title,
+          description: series.description ?? void 0,
+          notes: series.notes ?? void 0,
+          estimatedDuration: series.estimatedDuration ?? void 0,
+          scheduledDate: adjusted,
+          scheduledTime: series.scheduledTime ?? void 0,
+          address: series.address ?? void 0,
+          estimatedPrice: series.estimatedPrice ?? void 0,
+          status: "scheduled"
+        }).returning();
+        const [appt] = await tx.insert(appointments).values({
+          userId: homeowner.userId ?? void 0,
+          homeId: homeowner.homeId ?? void 0,
+          providerId: series.providerId,
+          serviceName: series.title,
+          description: series.description ?? void 0,
+          scheduledDate: adjusted,
+          scheduledTime: series.scheduledTime ?? void 0,
+          estimatedPrice: series.estimatedPrice ?? void 0,
+          status: "confirmed",
+          notes: series.notes ?? void 0,
+          isRecurring: true,
+          recurringFrequency: series.frequency
+        }).returning();
+        await tx.update(jobs).set({ appointmentId: appt.id }).where(eq7(jobs.id, job.id));
+      });
+      inserted++;
+      occupiedDates.add(key);
+      lastGenerated = adjusted;
+    } catch (err) {
+      console.error(
+        `[recurring] materialize failed for series ${series.id} @ ${key}:`,
+        err
+      );
+    }
+  }
+  if (lastGenerated || series.generatedThrough == null) {
+    await db.update(jobSeries).set({
+      generatedThrough: lastGenerated ?? horizonEnd,
+      updatedAt: /* @__PURE__ */ new Date()
+    }).where(eq7(jobSeries.id, series.id));
+  }
+  return inserted;
+}
+async function createSeriesForJob(params) {
+  if (!isSupportedFrequency(params.frequency)) return null;
+  const job = params.job;
+  if (!job.scheduledDate) return null;
+  if (job.seriesId) {
+    return { seriesId: job.seriesId, materialized: 0 };
+  }
+  const [series] = await db.insert(jobSeries).values({
+    providerId: job.providerId,
+    clientId: job.clientId ?? void 0,
+    customServiceId: job.customServiceId ?? void 0,
+    title: job.title,
+    description: job.description ?? void 0,
+    notes: job.notes ?? void 0,
+    estimatedDuration: job.estimatedDuration ?? void 0,
+    frequency: params.frequency,
+    scheduledTime: job.scheduledTime ?? void 0,
+    estimatedPrice: params.recurringPrice ?? job.estimatedPrice ?? void 0,
+    address: job.address ?? void 0,
+    anchorDate: job.scheduledDate,
+    status: "active"
+  }).returning();
+  await db.update(jobs).set({ seriesId: series.id, updatedAt: /* @__PURE__ */ new Date() }).where(eq7(jobs.id, job.id));
+  if (job.appointmentId) {
+    await db.update(appointments).set({
+      isRecurring: true,
+      recurringFrequency: params.frequency,
+      updatedAt: /* @__PURE__ */ new Date()
+    }).where(eq7(appointments.id, job.appointmentId));
+  }
+  const materialized = await materializeOccurrences({
+    id: series.id,
+    providerId: series.providerId,
+    clientId: series.clientId,
+    customServiceId: series.customServiceId,
+    title: series.title,
+    description: series.description,
+    notes: series.notes,
+    estimatedDuration: series.estimatedDuration,
+    frequency: series.frequency,
+    scheduledTime: series.scheduledTime,
+    estimatedPrice: series.estimatedPrice,
+    address: series.address,
+    anchorDate: series.anchorDate,
+    generatedThrough: series.generatedThrough,
+    status: series.status
+  });
+  return { seriesId: series.id, materialized };
+}
+async function cancelSeries(seriesId) {
+  const now = /* @__PURE__ */ new Date();
+  await db.update(jobSeries).set({ status: "cancelled", cancelledAt: now, updatedAt: now }).where(eq7(jobSeries.id, seriesId));
+  const futureJobs = await db.select({ id: jobs.id, appointmentId: jobs.appointmentId, status: jobs.status }).from(jobs).where(and4(eq7(jobs.seriesId, seriesId), gte2(jobs.scheduledDate, now)));
+  let cancelled = 0;
+  for (const j of futureJobs) {
+    if (j.status !== "scheduled" && j.status !== "confirmed") continue;
+    await db.update(jobs).set({ status: "cancelled", updatedAt: now }).where(eq7(jobs.id, j.id));
+    if (j.appointmentId) {
+      await db.update(appointments).set({ status: "cancelled", updatedAt: now }).where(eq7(appointments.id, j.appointmentId)).catch(() => {
+      });
+    }
+    cancelled++;
+  }
+  return cancelled;
+}
+async function applyToFollowing(fromJobId, patch) {
+  const [pivotRow] = await db.select({
+    seriesId: jobs.seriesId,
+    scheduledDate: jobs.scheduledDate
+  }).from(jobs).where(eq7(jobs.id, fromJobId));
+  if (!pivotRow?.seriesId) return 0;
+  const pivotDate = patch.pivotDateOverride ?? pivotRow.scheduledDate;
+  const now = /* @__PURE__ */ new Date();
+  const setData = { updatedAt: now };
+  if (patch.title !== void 0) setData.title = patch.title;
+  if (patch.description !== void 0) setData.description = patch.description;
+  if (patch.notes !== void 0) setData.notes = patch.notes;
+  if (patch.estimatedDuration !== void 0)
+    setData.estimatedDuration = patch.estimatedDuration;
+  if (patch.scheduledTime !== void 0)
+    setData.scheduledTime = patch.scheduledTime;
+  if (patch.estimatedPrice !== void 0)
+    setData.estimatedPrice = patch.estimatedPrice;
+  if (patch.address !== void 0) setData.address = patch.address;
+  let changed = 0;
+  if (Object.keys(setData).length > 1) {
+    const result = await db.update(jobs).set(setData).where(
+      and4(
+        eq7(jobs.seriesId, pivotRow.seriesId),
+        gte2(jobs.scheduledDate, pivotDate),
+        ne(jobs.status, "cancelled"),
+        ne(jobs.status, "completed")
+      )
+    ).returning({
+      id: jobs.id,
+      appointmentId: jobs.appointmentId,
+      scheduledTime: jobs.scheduledTime
+    });
+    changed = result.length;
+    if (patch.scheduledTime !== void 0 || patch.notes !== void 0) {
+      const apptPatch = { updatedAt: now };
+      if (patch.scheduledTime !== void 0)
+        apptPatch.scheduledTime = patch.scheduledTime;
+      if (patch.notes !== void 0) apptPatch.notes = patch.notes;
+      for (const r of result) {
+        if (!r.appointmentId) continue;
+        await db.update(appointments).set(apptPatch).where(eq7(appointments.id, r.appointmentId)).catch(() => {
+        });
+      }
+    }
+  }
+  if (patch.shiftDays && patch.shiftDays !== 0) {
+    const days = Math.trunc(patch.shiftDays);
+    const PARK_DAYS = 1e5;
+    const phase1 = await db.update(jobs).set({
+      scheduledDate: sql4`${jobs.scheduledDate} + (${days + PARK_DAYS} || ' days')::interval`,
+      updatedAt: now
+    }).where(
+      and4(
+        eq7(jobs.seriesId, pivotRow.seriesId),
+        gte2(jobs.scheduledDate, pivotDate),
+        ne(jobs.status, "cancelled"),
+        ne(jobs.status, "completed")
+      )
+    ).returning({ id: jobs.id, appointmentId: jobs.appointmentId });
+    let result = phase1;
+    if (phase1.length > 0) {
+      result = await db.update(jobs).set({
+        scheduledDate: sql4`${jobs.scheduledDate} - (${PARK_DAYS} || ' days')::interval`,
+        updatedAt: now
+      }).where(
+        inArray2(
+          jobs.id,
+          phase1.map((r) => r.id)
+        )
+      ).returning({ id: jobs.id, appointmentId: jobs.appointmentId });
+    }
+    changed = Math.max(changed, result.length);
+    for (const r of result) {
+      if (!r.appointmentId) continue;
+      await db.update(appointments).set({
+        scheduledDate: sql4`${appointments.scheduledDate} + (${days} || ' days')::interval`,
+        updatedAt: now
+      }).where(eq7(appointments.id, r.appointmentId)).catch(() => {
+      });
+    }
+    await db.update(jobSeries).set({
+      anchorDate: sql4`${jobSeries.anchorDate} + (${days} || ' days')::interval`,
+      updatedAt: now
+    }).where(eq7(jobSeries.id, pivotRow.seriesId));
+  }
+  const seriesPatch = { updatedAt: now };
+  if (patch.title !== void 0) seriesPatch.title = patch.title;
+  if (patch.description !== void 0)
+    seriesPatch.description = patch.description;
+  if (patch.notes !== void 0) seriesPatch.notes = patch.notes;
+  if (patch.estimatedDuration !== void 0)
+    seriesPatch.estimatedDuration = patch.estimatedDuration;
+  if (patch.scheduledTime !== void 0)
+    seriesPatch.scheduledTime = patch.scheduledTime;
+  if (patch.estimatedPrice !== void 0)
+    seriesPatch.estimatedPrice = patch.estimatedPrice;
+  if (patch.address !== void 0) seriesPatch.address = patch.address;
+  if (Object.keys(seriesPatch).length > 1) {
+    await db.update(jobSeries).set(seriesPatch).where(eq7(jobSeries.id, pivotRow.seriesId));
+  }
+  return changed;
+}
+async function extendAllSeriesHorizons() {
+  const active = await db.select().from(jobSeries).where(eq7(jobSeries.status, "active"));
+  let inserted = 0;
+  for (const s of active) {
+    try {
+      inserted += await materializeOccurrences(s);
+    } catch (err) {
+      console.error(`[recurring] horizon extend failed for ${s.id}:`, err);
+    }
+  }
+  return { scanned: active.length, inserted };
+}
+var HORIZON_DAYS, DEFAULT_DURATION_MIN, SUPPORTED_FREQUENCIES, DAY_KEYS;
+var init_recurringJobsService = __esm({
+  "server/recurringJobsService.ts"() {
+    "use strict";
+    init_db();
+    init_schema();
+    HORIZON_DAYS = 90;
+    DEFAULT_DURATION_MIN = 60;
+    SUPPORTED_FREQUENCIES = [
+      "daily",
+      "weekly",
+      "biweekly",
+      "monthly",
+      "quarterly"
+    ];
+    DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  }
+});
+
 // server/auth.ts
 var auth_exports = {};
 __export(auth_exports, {
@@ -5188,7 +5736,7 @@ __export(auth_exports, {
   verifyToken: () => verifyToken
 });
 import jwt from "jsonwebtoken";
-import { eq as eq7 } from "drizzle-orm";
+import { eq as eq8 } from "drizzle-orm";
 function generateToken(userId, role, tokenVersion) {
   return jwt.sign({ userId, role, tv: tokenVersion }, JWT_SECRET, { expiresIn: "7d" });
 }
@@ -5234,7 +5782,7 @@ var init_auth = __esm({
         return;
       }
       try {
-        const [user] = await db.select({ tokenVersion: users.tokenVersion }).from(users).where(eq7(users.id, payload.userId));
+        const [user] = await db.select({ tokenVersion: users.tokenVersion }).from(users).where(eq8(users.id, payload.userId));
         if (!user) {
           res.status(401).json({ error: "Unauthorized" });
           return;
@@ -5464,7 +6012,7 @@ var revenuecatService_exports = {};
 __export(revenuecatService_exports, {
   handleRevenueCatWebhook: () => handleRevenueCatWebhook
 });
-import { eq as eq8 } from "drizzle-orm";
+import { eq as eq9 } from "drizzle-orm";
 function sourceForStore(store) {
   switch ((store || "").toUpperCase()) {
     case "APP_STORE":
@@ -5485,16 +6033,16 @@ function eventEntitlements(event) {
 async function resolveProviderId(event) {
   const candidate = event.app_user_id || event.original_app_user_id;
   if (!candidate) return null;
-  const [match] = await db.select({ id: providers.id }).from(providers).where(eq8(providers.id, candidate)).limit(1);
+  const [match] = await db.select({ id: providers.id }).from(providers).where(eq9(providers.id, candidate)).limit(1);
   return match?.id ?? null;
 }
 async function upsertPlan(providerId, patch) {
-  const [existing] = await db.select().from(providerPlans2).where(eq8(providerPlans2.providerId, providerId));
+  const [existing] = await db.select().from(providerPlans2).where(eq9(providerPlans2.providerId, providerId));
   const now = /* @__PURE__ */ new Date();
   const wasSubscribed = !!existing?.isSubscribed;
   const isSubscribed = patch.isSubscribed ?? wasSubscribed;
   if (existing) {
-    await db.update(providerPlans2).set({ ...patch, updatedAt: now }).where(eq8(providerPlans2.id, existing.id));
+    await db.update(providerPlans2).set({ ...patch, updatedAt: now }).where(eq9(providerPlans2.id, existing.id));
   } else {
     await db.insert(providerPlans2).values({
       providerId,
@@ -5506,7 +6054,7 @@ async function upsertPlan(providerId, patch) {
 }
 async function notifyDeactivated(providerId) {
   try {
-    const [provider] = await db.select().from(providers).where(eq8(providers.id, providerId));
+    const [provider] = await db.select().from(providers).where(eq9(providers.id, providerId));
     if (!provider?.userId) return;
     await dispatchNotification(
       provider.userId,
@@ -5522,7 +6070,7 @@ async function notifyDeactivated(providerId) {
 }
 async function notifyActivated(providerId) {
   try {
-    const [provider] = await db.select().from(providers).where(eq8(providers.id, providerId));
+    const [provider] = await db.select().from(providers).where(eq9(providers.id, providerId));
     if (!provider?.userId) return;
     await dispatchNotification(
       provider.userId,
@@ -5639,7 +6187,7 @@ var bookingPage_exports = {};
 __export(bookingPage_exports, {
   renderBookingPage: () => renderBookingPage
 });
-import { eq as eq11, and as and5, desc as desc4 } from "drizzle-orm";
+import { eq as eq12, and as and6, desc as desc4 } from "drizzle-orm";
 function escapeHtml3(str) {
   if (!str) return "";
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -5712,14 +6260,14 @@ function errorPage(status, title, message) {
   return { html, status };
 }
 async function renderBookingPage(slug, db2) {
-  const [link] = await db2.select().from(bookingLinks).where(eq11(bookingLinks.slug, slug)).limit(1);
+  const [link] = await db2.select().from(bookingLinks).where(eq12(bookingLinks.slug, slug)).limit(1);
   if (!link) {
     return errorPage(404, "Provider not found", "This booking page does not exist. Please check the link and try again.");
   }
   if (link.isActive === false || link.status !== "active") {
     return errorPage(404, "Booking page unavailable", "This booking page is currently unavailable. Please contact the provider directly.");
   }
-  const [provider] = await db2.select().from(providers).where(eq11(providers.id, link.providerId)).limit(1);
+  const [provider] = await db2.select().from(providers).where(eq12(providers.id, link.providerId)).limit(1);
   if (!provider) {
     return errorPage(404, "Provider not found", "The provider associated with this booking page could not be found.");
   }
@@ -5733,15 +6281,15 @@ async function renderBookingPage(slug, db2) {
   }
   let isPartner = false;
   try {
-    const [planRow] = await db2.select({ isPartner: providerPlans2.isPartner }).from(providerPlans2).where(eq11(providerPlans2.providerId, provider.id)).limit(1);
+    const [planRow] = await db2.select({ isPartner: providerPlans2.isPartner }).from(providerPlans2).where(eq12(providerPlans2.providerId, provider.id)).limit(1);
     isPartner = planRow?.isPartner === true;
   } catch (err) {
     console.error("[bookingPage] partner lookup failed:", err);
   }
   const customServices = await db2.select().from(providerCustomServices).where(
-    and5(
-      eq11(providerCustomServices.providerId, provider.id),
-      eq11(providerCustomServices.isPublished, true)
+    and6(
+      eq12(providerCustomServices.providerId, provider.id),
+      eq12(providerCustomServices.isPublished, true)
     )
   );
   const catalogServices = await db2.select({
@@ -5751,10 +6299,10 @@ async function renderBookingPage(slug, db2) {
     basePrice: services.basePrice,
     price: providerServices.price,
     providerServiceId: providerServices.id
-  }).from(providerServices).innerJoin(services, eq11(providerServices.serviceId, services.id)).where(
-    and5(
-      eq11(providerServices.providerId, provider.id),
-      eq11(services.isPublic, true)
+  }).from(providerServices).innerJoin(services, eq12(providerServices.serviceId, services.id)).where(
+    and6(
+      eq12(providerServices.providerId, provider.id),
+      eq12(services.isPublic, true)
     )
   );
   const recentReviews = await db2.select({
@@ -5765,7 +6313,7 @@ async function renderBookingPage(slug, db2) {
     providerReply: reviews.providerReply,
     providerReplyAt: reviews.providerReplyAt,
     reviewerFirstName: users.firstName
-  }).from(reviews).leftJoin(users, eq11(reviews.userId, users.id)).where(eq11(reviews.providerId, provider.id)).orderBy(desc4(reviews.createdAt)).limit(5);
+  }).from(reviews).leftJoin(users, eq12(reviews.userId, users.id)).where(eq12(reviews.providerId, provider.id)).orderBy(desc4(reviews.createdAt)).limit(5);
   const showPricing = link.showPricing !== false;
   const businessName = escapeHtml3(provider.businessName ?? "Your Provider");
   const pageTitle = link.customTitle ? escapeHtml3(link.customTitle) : `Book with ${businessName}`;
@@ -7572,7 +8120,7 @@ var stripeService = new StripeService();
 init_db();
 init_emailService();
 init_notificationService();
-import { sql as sql4, eq as eq9, and as and4, or as or2, desc as desc3, inArray as inArray2, gte as gte2, ilike, isNull } from "drizzle-orm";
+import { sql as sql5, eq as eq10, and as and5, or as or3, desc as desc3, inArray as inArray3, gte as gte3, ilike, isNull } from "drizzle-orm";
 
 // server/lib/distance.ts
 function haversineMiles(aLat, aLng, bLat, bLng) {
@@ -8081,6 +8629,7 @@ function checkRescheduleAllowed(policy, scheduledAt, currentRescheduleCount, now
 // server/routes.ts
 init_subscriptionService();
 init_schema();
+init_recurringJobsService();
 init_auth();
 var BCRYPT_SALT_ROUNDS = 10;
 var requireAuth = authenticateJWT;
@@ -8122,10 +8671,10 @@ async function fireInsightNotifications(userId, insights) {
   if (topMilestone) {
     const milestoneType = `revenue_milestone_${topMilestone}`;
     const [existing] = await db.select({ id: notifications.id }).from(notifications).where(
-      and4(
-        eq9(notifications.userId, userId),
-        eq9(notifications.type, milestoneType),
-        gte2(notifications.createdAt, thirtyDaysAgo)
+      and5(
+        eq10(notifications.userId, userId),
+        eq10(notifications.type, milestoneType),
+        gte3(notifications.createdAt, thirtyDaysAgo)
       )
     ).limit(1);
     if (!existing) {
@@ -8141,10 +8690,10 @@ async function fireInsightNotifications(userId, insights) {
   }
   if (insights.clientGrowthPct >= 10) {
     const [existing] = await db.select({ id: notifications.id }).from(notifications).where(
-      and4(
-        eq9(notifications.userId, userId),
-        eq9(notifications.type, "quarterly_client_growth"),
-        gte2(notifications.createdAt, thirtyDaysAgo)
+      and5(
+        eq10(notifications.userId, userId),
+        eq10(notifications.type, "quarterly_client_growth"),
+        gte3(notifications.createdAt, thirtyDaysAgo)
       )
     ).limit(1);
     if (!existing) {
@@ -8160,10 +8709,10 @@ async function fireInsightNotifications(userId, insights) {
   }
   if (parseFloat(insights.rating) >= 4.8 && insights.reviewCount >= 10) {
     const [existing] = await db.select({ id: notifications.id }).from(notifications).where(
-      and4(
-        eq9(notifications.userId, userId),
-        eq9(notifications.type, "top_rated_achievement"),
-        gte2(notifications.createdAt, thirtyDaysAgo)
+      and5(
+        eq10(notifications.userId, userId),
+        eq10(notifications.type, "top_rated_achievement"),
+        gte3(notifications.createdAt, thirtyDaysAgo)
       )
     ).limit(1);
     if (!existing) {
@@ -8313,7 +8862,7 @@ async function convertIntakeToClientJob(tx, params) {
   const lastName = nameParts.slice(1).join(" ") || "";
   let clientId;
   if (clientEmail) {
-    const result = await tx.execute(sql4`
+    const result = await tx.execute(sql5`
       INSERT INTO clients (id, provider_id, first_name, last_name, email, phone, address, created_at, updated_at)
       VALUES (gen_random_uuid(), ${providerId}, ${firstName}, ${lastName || null}, ${clientEmail}, ${clientPhone || null}, ${address || null}, NOW(), NOW())
       ON CONFLICT (provider_id, email) WHERE email IS NOT NULL
@@ -8326,11 +8875,11 @@ async function convertIntakeToClientJob(tx, params) {
     clientId = result.rows[0].id;
   } else if (clientPhone) {
     const existing = await tx.select({ id: clients.id }).from(clients).where(
-      and4(eq9(clients.providerId, providerId), eq9(clients.phone, clientPhone))
+      and5(eq10(clients.providerId, providerId), eq10(clients.phone, clientPhone))
     ).limit(1);
     if (existing.length > 0) {
       clientId = existing[0].id;
-      await tx.update(clients).set({ address: address || void 0, updatedAt: /* @__PURE__ */ new Date() }).where(eq9(clients.id, clientId));
+      await tx.update(clients).set({ address: address || void 0, updatedAt: /* @__PURE__ */ new Date() }).where(eq10(clients.id, clientId));
     } else {
       const [newC] = await tx.insert(clients).values({
         providerId,
@@ -8380,7 +8929,7 @@ async function convertIntakeToClientJob(tx, params) {
     convertedJobId: newJob.id,
     convertedAt: now,
     updatedAt: now
-  }).where(eq9(intakeSubmissions.id, submissionId));
+  }).where(eq10(intakeSubmissions.id, submissionId));
   return { clientId, job: newJob };
 }
 async function handleMarketplaceBooking(params) {
@@ -8404,11 +8953,11 @@ async function handleMarketplaceBooking(params) {
       error: "Name and problem description are required"
     };
   }
-  const [link] = await db.select().from(bookingLinks).where(eq9(bookingLinks.slug, slug)).limit(1);
+  const [link] = await db.select().from(bookingLinks).where(eq10(bookingLinks.slug, slug)).limit(1);
   if (!link || link.isActive === false || link.status !== "active") {
     return { ok: false, status: 404, error: "Booking page not found" };
   }
-  const [bookingProvider] = await db.select().from(providers).where(eq9(providers.id, link.providerId)).limit(1);
+  const [bookingProvider] = await db.select().from(providers).where(eq10(providers.id, link.providerId)).limit(1);
   if (!bookingProvider || bookingProvider.isPublic !== true) {
     return { ok: false, status: 404, error: "Booking page not found" };
   }
@@ -8455,9 +9004,9 @@ async function handleMarketplaceBooking(params) {
     submission = sub;
     if (clientEmail) {
       const existing = await tx.select({ id: leads.id }).from(leads).where(
-        and4(
-          eq9(leads.providerId, link.providerId),
-          eq9(leads.email, clientEmail)
+        and5(
+          eq10(leads.providerId, link.providerId),
+          eq10(leads.email, clientEmail)
         )
       ).limit(1);
       if (existing.length === 0) {
@@ -8472,7 +9021,7 @@ async function handleMarketplaceBooking(params) {
           source: "booking_page"
         });
       } else if (isInstant) {
-        await tx.update(leads).set({ status: "won", updatedAt: /* @__PURE__ */ new Date() }).where(eq9(leads.id, existing[0].id));
+        await tx.update(leads).set({ status: "won", updatedAt: /* @__PURE__ */ new Date() }).where(eq10(leads.id, existing[0].id));
       }
     } else {
       await tx.insert(leads).values({
@@ -8491,10 +9040,10 @@ async function handleMarketplaceBooking(params) {
       let appt;
       if (homeownerUserId) {
         const [pre] = await tx.select({ id: appointments.id }).from(appointments).where(
-          and4(
-            eq9(appointments.userId, homeownerUserId),
-            eq9(appointments.providerId, link.providerId),
-            eq9(appointments.scheduledDate, apptDate)
+          and5(
+            eq10(appointments.userId, homeownerUserId),
+            eq10(appointments.providerId, link.providerId),
+            eq10(appointments.scheduledDate, apptDate)
           )
         ).limit(1);
         if (pre) appt = pre;
@@ -8512,10 +9061,10 @@ async function handleMarketplaceBooking(params) {
           appt = inserted[0];
         } else if (homeownerUserId) {
           const [winner] = await tx.select({ id: appointments.id }).from(appointments).where(
-            and4(
-              eq9(appointments.userId, homeownerUserId),
-              eq9(appointments.providerId, link.providerId),
-              eq9(appointments.scheduledDate, apptDate)
+            and5(
+              eq10(appointments.userId, homeownerUserId),
+              eq10(appointments.providerId, link.providerId),
+              eq10(appointments.scheduledDate, apptDate)
             )
           ).limit(1);
           appt = winner;
@@ -8548,7 +9097,7 @@ async function handleMarketplaceBooking(params) {
     userId: providers.userId,
     businessName: providers.businessName,
     email: providers.email
-  }).from(providers).where(eq9(providers.id, link.providerId)).limit(1);
+  }).from(providers).where(eq10(providers.id, link.providerId)).limit(1);
   const providerName = providerRow?.businessName ?? link.customTitle ?? "Your Provider";
   const bookingLinkName = link.customTitle ?? providerName;
   const preferredDateStr = validPreferredDate ? validPreferredDate.toLocaleDateString() : void 0;
@@ -8665,21 +9214,21 @@ async function autoLogHouseFaxEntry(job) {
   try {
     let homeId = null;
     if (job.appointmentId) {
-      const [appt] = await db.select({ homeId: appointments.homeId }).from(appointments).where(eq9(appointments.id, job.appointmentId));
+      const [appt] = await db.select({ homeId: appointments.homeId }).from(appointments).where(eq10(appointments.id, job.appointmentId));
       if (appt) homeId = appt.homeId;
     }
     if (!homeId && job.id) {
-      const [inv] = await db.select({ homeownerUserId: invoices.homeownerUserId }).from(invoices).where(eq9(invoices.jobId, job.id));
+      const [inv] = await db.select({ homeownerUserId: invoices.homeownerUserId }).from(invoices).where(eq10(invoices.jobId, job.id));
       if (inv?.homeownerUserId) {
         const [defaultHome] = await db.select({ id: homes.id }).from(homes).where(
-          and4(
-            eq9(homes.userId, inv.homeownerUserId),
-            eq9(homes.isDefault, true)
+          and5(
+            eq10(homes.userId, inv.homeownerUserId),
+            eq10(homes.isDefault, true)
           )
         );
         if (defaultHome) homeId = defaultHome.id;
         else {
-          const [anyHome] = await db.select({ id: homes.id }).from(homes).where(eq9(homes.userId, inv.homeownerUserId));
+          const [anyHome] = await db.select({ id: homes.id }).from(homes).where(eq10(homes.userId, inv.homeownerUserId));
           if (anyHome) homeId = anyHome.id;
         }
       }
@@ -8690,12 +9239,12 @@ async function autoLogHouseFaxEntry(job) {
       );
       return;
     }
-    const [existing] = await db.select({ id: housefaxEntries.id }).from(housefaxEntries).where(eq9(housefaxEntries.jobId, job.id));
+    const [existing] = await db.select({ id: housefaxEntries.id }).from(housefaxEntries).where(eq10(housefaxEntries.jobId, job.id));
     if (existing) {
       console.log(`[HouseFax] Entry already exists for job ${job.id}`);
       return;
     }
-    const [provider] = job.providerId ? await db.select({ businessName: providers.businessName }).from(providers).where(eq9(providers.id, job.providerId)) : [null];
+    const [provider] = job.providerId ? await db.select({ businessName: providers.businessName }).from(providers).where(eq10(providers.id, job.providerId)) : [null];
     const serviceCategory = detectServiceCategory(job.title);
     const costCents = job.finalPrice ? Math.round(parseFloat(job.finalPrice) * 100) : 0;
     let aiSummary = null;
@@ -8754,7 +9303,7 @@ async function calculateAndPersistHouseFaxScore(homeId) {
     "Pest Control",
     "Lawn"
   ];
-  const allEntries = await db.select().from(housefaxEntries).where(eq9(housefaxEntries.homeId, homeId));
+  const allEntries = await db.select().from(housefaxEntries).where(eq10(housefaxEntries.homeId, homeId));
   const now = /* @__PURE__ */ new Date();
   const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1e3);
   const twoYearsAgo = new Date(now.getTime() - 2 * 365 * 24 * 60 * 60 * 1e3);
@@ -8909,6 +9458,16 @@ async function registerRoutes(app2) {
             }).returning();
             newService = svc;
           }
+          const slugBase = (businessName || "pro").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "pro";
+          const slugSuffix = Math.random().toString(36).slice(2, 8);
+          await tx.insert(bookingLinks).values({
+            providerId: newProvider.id,
+            slug: `${slugBase}-${slugSuffix}`,
+            status: "active",
+            isActive: true,
+            instantBooking: false,
+            showPricing: true
+          });
           await tx.insert(messageTemplates).values([
             {
               providerId: newProvider.id,
@@ -9059,7 +9618,7 @@ async function registerRoutes(app2) {
       let enrichedProfile = providerProfile;
       if (providerProfile) {
         try {
-          const [planRow] = await db.select({ isPartner: providerPlans2.isPartner }).from(providerPlans2).where(eq9(providerPlans2.providerId, providerProfile.id));
+          const [planRow] = await db.select({ isPartner: providerPlans2.isPartner }).from(providerPlans2).where(eq10(providerPlans2.providerId, providerProfile.id));
           enrichedProfile = {
             ...providerProfile,
             isPartner: planRow?.isPartner ?? false
@@ -9084,7 +9643,7 @@ async function registerRoutes(app2) {
       const providerProfile = await storage.getProviderByUserId(userId);
       let enrichedProfile = null;
       if (providerProfile) {
-        const [planRow] = await db.select({ isPartner: providerPlans2.isPartner }).from(providerPlans2).where(eq9(providerPlans2.providerId, providerProfile.id));
+        const [planRow] = await db.select({ isPartner: providerPlans2.isPartner }).from(providerPlans2).where(eq10(providerPlans2.providerId, providerProfile.id));
         enrichedProfile = {
           ...providerProfile,
           isPartner: planRow?.isPartner ?? false
@@ -9106,7 +9665,7 @@ async function registerRoutes(app2) {
     async (req, res) => {
       try {
         const userId = req.authenticatedUserId;
-        await db.update(users).set({ tokenVersion: sql4`token_version + 1` }).where(eq9(users.id, userId));
+        await db.update(users).set({ tokenVersion: sql5`token_version + 1` }).where(eq10(users.id, userId));
         res.clearCookie("token");
         res.json({ success: true });
       } catch (error) {
@@ -9125,7 +9684,7 @@ async function registerRoutes(app2) {
         if (!user) {
           return res.status(401).json({ error: "User not found" });
         }
-        const providerRecord = await db.select({ id: providers.id }).from(providers).where(eq9(providers.userId, userId)).limit(1);
+        const providerRecord = await db.select({ id: providers.id }).from(providers).where(eq10(providers.userId, userId)).limit(1);
         const hasProviderRecord = providerRecord.length > 0;
         if (hasProviderRecord && !user.isProvider) {
           await storage.updateUser(userId, { isProvider: true });
@@ -9215,12 +9774,12 @@ async function registerRoutes(app2) {
         // Bump tokenVersion to:
         //  (a) invalidate all outstanding session JWTs (revoke existing logins)
         //  (b) make every other copy of this reset link unusable immediately
-        tokenVersion: sql4`token_version + 1`,
+        tokenVersion: sql5`token_version + 1`,
         updatedAt: /* @__PURE__ */ new Date()
       }).where(
-        and4(
-          eq9(users.id, decoded.userId),
-          eq9(users.tokenVersion, claimedTv)
+        and5(
+          eq10(users.id, decoded.userId),
+          eq10(users.tokenVersion, claimedTv)
         )
       ).returning({ id: users.id });
       if (updated.length === 0) {
@@ -9266,9 +9825,9 @@ async function registerRoutes(app2) {
         const hashed = await bcryptHash(newPassword, BCRYPT_SALT_ROUNDS);
         await db.update(users).set({
           password: hashed,
-          tokenVersion: sql4`token_version + 1`,
+          tokenVersion: sql5`token_version + 1`,
           updatedAt: /* @__PURE__ */ new Date()
-        }).where(eq9(users.id, userId));
+        }).where(eq10(users.id, userId));
         const refreshed = await storage.getUser(userId);
         const role = await storage.getProviderByUserId(userId) ? "provider" : "homeowner";
         const newToken = generateToken(
@@ -9321,7 +9880,7 @@ async function registerRoutes(app2) {
         if (existing && existing.id !== userId) {
           return res.status(409).json({ error: "That email is already in use" });
         }
-        const [updated] = await db.update(users).set({ email: cleaned, updatedAt: /* @__PURE__ */ new Date() }).where(eq9(users.id, userId)).returning();
+        const [updated] = await db.update(users).set({ email: cleaned, updatedAt: /* @__PURE__ */ new Date() }).where(eq10(users.id, userId)).returning();
         res.json({ success: true, email: updated.email });
       } catch (error) {
         console.error("Change email error:", error);
@@ -9345,46 +9904,46 @@ async function registerRoutes(app2) {
             stripeAccountId: stripeConnectAccounts.stripeAccountId
           }).from(providers).leftJoin(
             stripeConnectAccounts,
-            eq9(stripeConnectAccounts.providerId, providers.id)
-          ).where(eq9(providers.userId, userId)).limit(1);
+            eq10(stripeConnectAccounts.providerId, providers.id)
+          ).where(eq10(providers.userId, userId)).limit(1);
           if (providerRow.length > 0) {
             const provId = providerRow[0].id;
             await tx.delete(invoiceLineItems).where(
-              sql4`invoice_id IN (SELECT id FROM invoices WHERE provider_id = ${provId})`
+              sql5`invoice_id IN (SELECT id FROM invoices WHERE provider_id = ${provId})`
             );
             await tx.delete(payments).where(
-              sql4`invoice_id IN (SELECT id FROM invoices WHERE provider_id = ${provId})`
+              sql5`invoice_id IN (SELECT id FROM invoices WHERE provider_id = ${provId})`
             );
-            await tx.delete(invoices).where(eq9(invoices.providerId, provId));
-            await tx.delete(jobs).where(eq9(jobs.providerId, provId));
-            await tx.delete(clients).where(eq9(clients.providerId, provId));
-            await tx.delete(bookingLinks).where(eq9(bookingLinks.providerId, provId));
-            await tx.delete(intakeSubmissions).where(eq9(intakeSubmissions.providerId, provId));
-            await tx.delete(leads).where(eq9(leads.providerId, provId));
-            await tx.delete(providerMessages).where(eq9(providerMessages.providerId, provId));
-            await tx.delete(messageTemplates).where(eq9(messageTemplates.providerId, provId));
-            await tx.delete(providerCustomServices).where(eq9(providerCustomServices.providerId, provId));
-            await tx.delete(providerServices).where(eq9(providerServices.providerId, provId));
-            await tx.delete(providerPlans2).where(eq9(providerPlans2.providerId, provId));
-            await tx.delete(stripeConnectAccounts).where(eq9(stripeConnectAccounts.providerId, provId));
-            await tx.delete(payouts).where(eq9(payouts.providerId, provId));
-            await tx.delete(reviews).where(eq9(reviews.providerId, provId));
-            await tx.delete(providers).where(eq9(providers.id, provId));
+            await tx.delete(invoices).where(eq10(invoices.providerId, provId));
+            await tx.delete(jobs).where(eq10(jobs.providerId, provId));
+            await tx.delete(clients).where(eq10(clients.providerId, provId));
+            await tx.delete(bookingLinks).where(eq10(bookingLinks.providerId, provId));
+            await tx.delete(intakeSubmissions).where(eq10(intakeSubmissions.providerId, provId));
+            await tx.delete(leads).where(eq10(leads.providerId, provId));
+            await tx.delete(providerMessages).where(eq10(providerMessages.providerId, provId));
+            await tx.delete(messageTemplates).where(eq10(messageTemplates.providerId, provId));
+            await tx.delete(providerCustomServices).where(eq10(providerCustomServices.providerId, provId));
+            await tx.delete(providerServices).where(eq10(providerServices.providerId, provId));
+            await tx.delete(providerPlans2).where(eq10(providerPlans2.providerId, provId));
+            await tx.delete(stripeConnectAccounts).where(eq10(stripeConnectAccounts.providerId, provId));
+            await tx.delete(payouts).where(eq10(payouts.providerId, provId));
+            await tx.delete(reviews).where(eq10(reviews.providerId, provId));
+            await tx.delete(providers).where(eq10(providers.id, provId));
           }
-          await tx.delete(notifications).where(eq9(notifications.userId, userId));
-          await tx.delete(pushTokens).where(eq9(pushTokens.userId, userId));
-          await tx.delete(notificationPreferences).where(eq9(notificationPreferences.userId, userId));
-          await tx.delete(userCredits).where(eq9(userCredits.userId, userId));
-          await tx.delete(creditLedger).where(eq9(creditLedger.userId, userId));
-          await tx.delete(supportTickets).where(eq9(supportTickets.userId, userId));
-          const userHomes = await tx.select({ id: homes.id }).from(homes).where(eq9(homes.userId, userId));
+          await tx.delete(notifications).where(eq10(notifications.userId, userId));
+          await tx.delete(pushTokens).where(eq10(pushTokens.userId, userId));
+          await tx.delete(notificationPreferences).where(eq10(notificationPreferences.userId, userId));
+          await tx.delete(userCredits).where(eq10(userCredits.userId, userId));
+          await tx.delete(creditLedger).where(eq10(creditLedger.userId, userId));
+          await tx.delete(supportTickets).where(eq10(supportTickets.userId, userId));
+          const userHomes = await tx.select({ id: homes.id }).from(homes).where(eq10(homes.userId, userId));
           if (userHomes.length > 0) {
             const homeIds = userHomes.map((h) => h.id);
-            await tx.delete(housefaxEntries).where(sql4`home_id = ANY(${homeIds})`);
-            await tx.delete(maintenanceReminders).where(sql4`home_id = ANY(${homeIds})`);
-            await tx.delete(appointments).where(sql4`home_id = ANY(${homeIds})`);
+            await tx.delete(housefaxEntries).where(sql5`home_id = ANY(${homeIds})`);
+            await tx.delete(maintenanceReminders).where(sql5`home_id = ANY(${homeIds})`);
+            await tx.delete(appointments).where(sql5`home_id = ANY(${homeIds})`);
           }
-          await tx.delete(homes).where(eq9(homes.userId, userId));
+          await tx.delete(homes).where(eq10(homes.userId, userId));
           if (user.stripeCustomerId) {
             try {
               const stripe2 = getStripe();
@@ -9396,7 +9955,7 @@ async function registerRoutes(app2) {
               );
             }
           }
-          await tx.delete(users).where(eq9(users.id, userId));
+          await tx.delete(users).where(eq10(users.id, userId));
         });
         res.clearCookie("token");
         res.json({ success: true });
@@ -9908,15 +10467,15 @@ async function registerRoutes(app2) {
           return res.status(403).json({ error: "Access denied" });
         }
         const [linkedJob] = await db.select({ id: jobs.id }).from(jobs).where(
-          and4(
-            eq9(jobs.homeId, home.id),
-            eq9(jobs.providerId, providerRecord.id)
+          and5(
+            eq10(jobs.homeId, home.id),
+            eq10(jobs.providerId, providerRecord.id)
           )
         ).limit(1);
         const [linkedAppt] = linkedJob ? [null] : await db.select({ id: appointments.id }).from(appointments).where(
-          and4(
-            eq9(appointments.homeId, home.id),
-            eq9(appointments.providerId, providerRecord.id)
+          and5(
+            eq10(appointments.homeId, home.id),
+            eq10(appointments.providerId, providerRecord.id)
           )
         ).limit(1);
         if (!linkedJob && !linkedAppt) {
@@ -9979,7 +10538,7 @@ async function registerRoutes(app2) {
         if (!home) return res.status(404).json({ error: "Home not found" });
         if (home.userId !== authUserId)
           return res.status(403).json({ error: "Access denied" });
-        const entries = await db.select().from(housefaxEntries).where(eq9(housefaxEntries.homeId, homeId)).orderBy(desc3(housefaxEntries.completedAt));
+        const entries = await db.select().from(housefaxEntries).where(eq10(housefaxEntries.homeId, homeId)).orderBy(desc3(housefaxEntries.completedAt));
         const systemMap = /* @__PURE__ */ new Map();
         for (const entry of entries) {
           const sys = entry.systemAffected || entry.serviceCategory || "General";
@@ -10037,9 +10596,9 @@ async function registerRoutes(app2) {
         const score = await calculateAndPersistHouseFaxScore(homeId);
         const jobIds = entries.map((e) => e.jobId).filter(Boolean);
         const allInvoices = jobIds.length > 0 ? await db.select().from(invoices).where(
-          and4(
-            inArray2(invoices.jobId, jobIds),
-            inArray2(invoices.status, ["paid", "partially_paid"])
+          and5(
+            inArray3(invoices.jobId, jobIds),
+            inArray3(invoices.status, ["paid", "partially_paid"])
           )
         ) : [];
         const invoiceJobIds = new Set(
@@ -10193,10 +10752,10 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
             return res.status(400).json({ error: "Each photo must be smaller than 5 MB" });
           }
         }
-        let [entry] = await db.select().from(housefaxEntries).where(eq9(housefaxEntries.jobId, job.id));
+        let [entry] = await db.select().from(housefaxEntries).where(eq10(housefaxEntries.jobId, job.id));
         if (!entry) {
           await autoLogHouseFaxEntry(job);
-          const [newEntry] = await db.select().from(housefaxEntries).where(eq9(housefaxEntries.jobId, job.id));
+          const [newEntry] = await db.select().from(housefaxEntries).where(eq10(housefaxEntries.jobId, job.id));
           if (!newEntry) {
             return res.status(404).json({
               error: "Could not create HouseFax entry for this job. No home found for client."
@@ -10258,7 +10817,7 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
           }
         }
         const updatedPhotos = [...existingPhotos, ...savedUrls];
-        await db.update(housefaxEntries).set({ photos: updatedPhotos }).where(eq9(housefaxEntries.id, entry.id));
+        await db.update(housefaxEntries).set({ photos: updatedPhotos }).where(eq10(housefaxEntries.id, entry.id));
         res.json({
           success: true,
           photosCount: updatedPhotos.length,
@@ -10292,7 +10851,7 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
         );
         if (!updatedAppointment)
           return res.status(500).json({ error: "Failed to update appointment" });
-        const [linkedJob] = await db.select().from(jobs).where(eq9(jobs.appointmentId, req.params.id));
+        const [linkedJob] = await db.select().from(jobs).where(eq10(jobs.appointmentId, req.params.id));
         if (linkedJob && linkedJob.status !== "completed") {
           const { finalPrice } = req.body;
           const completedJob = await storage.updateJob(linkedJob.id, {
@@ -10307,12 +10866,12 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
           }
         } else {
           const { finalPrice } = req.body;
-          const [provider] = appointment.providerId ? await db.select({ businessName: providers.businessName }).from(providers).where(eq9(providers.id, appointment.providerId)) : [null];
+          const [provider] = appointment.providerId ? await db.select({ businessName: providers.businessName }).from(providers).where(eq10(providers.id, appointment.providerId)) : [null];
           const serviceCategory = detectServiceCategory(
             appointment.serviceName || "General Service"
           );
           const costCents = finalPrice ? Math.round(parseFloat(finalPrice) * 100) : 0;
-          const [existingByAppt] = await db.select({ id: housefaxEntries.id }).from(housefaxEntries).where(eq9(housefaxEntries.appointmentId, req.params.id));
+          const [existingByAppt] = await db.select({ id: housefaxEntries.id }).from(housefaxEntries).where(eq10(housefaxEntries.appointmentId, req.params.id));
           if (!existingByAppt) {
             let aiSummary = null;
             try {
@@ -10402,7 +10961,7 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
       const userLng = lngRaw !== void 0 ? parseFloat(lngRaw) : NaN;
       const hasUserCoords = Number.isFinite(userLat) && Number.isFinite(userLng);
       const providersList = await storage.getProviders(categoryId);
-      const planRows = providersList.length ? await db.select({ providerId: providerPlans2.providerId, isPartner: providerPlans2.isPartner }).from(providerPlans2).where(inArray2(providerPlans2.providerId, providersList.map((p) => p.id))) : [];
+      const planRows = providersList.length ? await db.select({ providerId: providerPlans2.providerId, isPartner: providerPlans2.isPartner }).from(providerPlans2).where(inArray3(providerPlans2.providerId, providersList.map((p) => p.id))) : [];
       const partnerSet = new Set(
         planRows.filter((r) => r.isPartner).map((r) => r.providerId)
       );
@@ -10453,7 +11012,7 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
             return provider.businessHours;
           }
         })() : provider.businessHours;
-        const [planRow] = await db.select({ isPartner: providerPlans2.isPartner }).from(providerPlans2).where(eq9(providerPlans2.providerId, req.params.id));
+        const [planRow] = await db.select({ isPartner: providerPlans2.isPartner }).from(providerPlans2).where(eq10(providerPlans2.providerId, req.params.id));
         const latRaw = req.query.lat;
         const lngRaw = req.query.lng;
         const userLat = latRaw !== void 0 ? parseFloat(latRaw) : NaN;
@@ -10493,7 +11052,7 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
           hourlyRate: providers.hourlyRate,
           capabilityTags: providers.capabilityTags,
           savedAt: savedProviders.createdAt
-        }).from(savedProviders).innerJoin(providers, eq9(savedProviders.providerId, providers.id)).where(eq9(savedProviders.userId, authUserId)).orderBy(desc3(savedProviders.createdAt));
+        }).from(savedProviders).innerJoin(providers, eq10(savedProviders.providerId, providers.id)).where(eq10(savedProviders.userId, authUserId)).orderBy(desc3(savedProviders.createdAt));
         const items = rows.map((r) => ({
           id: r.id,
           name: r.name,
@@ -10535,7 +11094,7 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
     async (req, res) => {
       try {
         const authUserId = req.authenticatedUserId;
-        await db.delete(savedProviders).where(and4(eq9(savedProviders.userId, authUserId), eq9(savedProviders.providerId, req.params.providerId)));
+        await db.delete(savedProviders).where(and5(eq10(savedProviders.userId, authUserId), eq10(savedProviders.providerId, req.params.providerId)));
         res.json({ ok: true });
       } catch (error) {
         console.error("Unsave provider error:", error);
@@ -10554,7 +11113,7 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
         if (!reason) {
           return res.status(400).json({ error: "Reason is required" });
         }
-        const [review] = await db.select().from(reviews).where(eq9(reviews.id, req.params.id)).limit(1);
+        const [review] = await db.select().from(reviews).where(eq10(reviews.id, req.params.id)).limit(1);
         if (!review) return res.status(404).json({ error: "Review not found" });
         const [report] = await db.insert(reviewReports).values({
           reviewId: req.params.id,
@@ -10564,7 +11123,7 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
         }).returning();
         (async () => {
           try {
-            const [reporter] = await db.select().from(users).where(eq9(users.id, authUserId)).limit(1);
+            const [reporter] = await db.select().from(users).where(eq10(users.id, authUserId)).limit(1);
             const reporterName = reporter ? `${reporter.firstName || ""} ${reporter.lastName || ""}`.trim() || reporter.email : authUserId;
             await sendSupportTicketEmail({
               ticketId: report.id,
@@ -10631,21 +11190,21 @@ Reason: ${reason}
             statusHistory = [];
           }
         }
-        let [linkedJob] = await db.select().from(jobs).where(eq9(jobs.appointmentId, appointment.id)).orderBy(desc3(jobs.createdAt)).limit(1);
+        let [linkedJob] = await db.select().from(jobs).where(eq10(jobs.appointmentId, appointment.id)).orderBy(desc3(jobs.createdAt)).limit(1);
         if (!linkedJob && appointment.userId && appointment.scheduledDate) {
           const candidateClients = await db.select({ id: clients.id }).from(clients).where(
-            and4(
-              eq9(clients.providerId, appointment.providerId),
-              eq9(clients.homeownerUserId, appointment.userId)
+            and5(
+              eq10(clients.providerId, appointment.providerId),
+              eq10(clients.homeownerUserId, appointment.userId)
             )
           );
           if (candidateClients.length > 0) {
             const clientIds = candidateClients.map((c) => c.id);
             const [fallbackJob] = await db.select().from(jobs).where(
-              and4(
-                eq9(jobs.providerId, appointment.providerId),
-                eq9(jobs.scheduledDate, appointment.scheduledDate),
-                inArray2(jobs.clientId, clientIds)
+              and5(
+                eq10(jobs.providerId, appointment.providerId),
+                eq10(jobs.scheduledDate, appointment.scheduledDate),
+                inArray3(jobs.clientId, clientIds)
               )
             ).orderBy(desc3(jobs.createdAt)).limit(1);
             if (fallbackJob) linkedJob = fallbackJob;
@@ -10653,14 +11212,14 @@ Reason: ${reason}
         }
         let linkedInvoice = null;
         if (linkedJob) {
-          const [inv] = await db.select().from(invoices).where(eq9(invoices.jobId, linkedJob.id)).orderBy(desc3(invoices.createdAt)).limit(1);
+          const [inv] = await db.select().from(invoices).where(eq10(invoices.jobId, linkedJob.id)).orderBy(desc3(invoices.createdAt)).limit(1);
           if (inv) linkedInvoice = inv;
         }
         if (!linkedInvoice && appointment.userId) {
           const candidateInvoices = await db.select().from(invoices).where(
-            and4(
-              eq9(invoices.providerId, appointment.providerId),
-              eq9(invoices.homeownerUserId, appointment.userId)
+            and5(
+              eq10(invoices.providerId, appointment.providerId),
+              eq10(invoices.homeownerUserId, appointment.userId)
             )
           ).orderBy(desc3(invoices.createdAt)).limit(10);
           const VISIBLE_STATUSES = /* @__PURE__ */ new Set([
@@ -10685,17 +11244,17 @@ Reason: ${reason}
         }
         if (!linkedInvoice && appointment.userId) {
           const matchingClients = await db.select({ id: clients.id }).from(clients).where(
-            and4(
-              eq9(clients.providerId, appointment.providerId),
-              eq9(clients.homeownerUserId, appointment.userId)
+            and5(
+              eq10(clients.providerId, appointment.providerId),
+              eq10(clients.homeownerUserId, appointment.userId)
             )
           );
           const clientIds = matchingClients.map((c) => c.id);
           if (clientIds.length > 0) {
             const legacyCandidates = await db.select().from(invoices).where(
-              and4(
-                eq9(invoices.providerId, appointment.providerId),
-                inArray2(invoices.clientId, clientIds),
+              and5(
+                eq10(invoices.providerId, appointment.providerId),
+                inArray3(invoices.clientId, clientIds),
                 isNull(invoices.homeownerUserId)
               )
             ).orderBy(desc3(invoices.createdAt)).limit(10);
@@ -10736,7 +11295,7 @@ Reason: ${reason}
             );
           }
         }
-        const [reviewRow] = await db.select().from(reviews).where(eq9(reviews.appointmentId, appointment.id)).limit(1);
+        const [reviewRow] = await db.select().from(reviews).where(eq10(reviews.appointmentId, appointment.id)).limit(1);
         res.json({
           appointment: {
             ...appointment,
@@ -10801,10 +11360,10 @@ Reason: ${reason}
         }
         if (parsed.data.userId && parsed.data.scheduledDate) {
           const [preExisting] = await db.select().from(appointments).where(
-            and4(
-              eq9(appointments.userId, parsed.data.userId),
-              eq9(appointments.providerId, parsed.data.providerId),
-              eq9(
+            and5(
+              eq10(appointments.userId, parsed.data.userId),
+              eq10(appointments.providerId, parsed.data.providerId),
+              eq10(
                 appointments.scheduledDate,
                 parsed.data.scheduledDate
               )
@@ -10820,7 +11379,7 @@ Reason: ${reason}
         }
         let depositCheckoutUrl = null;
         let depositAmountCents = 0;
-        const [policyProvider] = await db.select({ bookingPolicies: providers.bookingPolicies }).from(providers).where(eq9(providers.id, parsed.data.providerId));
+        const [policyProvider] = await db.select({ bookingPolicies: providers.bookingPolicies }).from(providers).where(eq10(providers.id, parsed.data.providerId));
         const policy = normalizeBookingPolicy(
           policyProvider?.bookingPolicies
         );
@@ -10832,7 +11391,7 @@ Reason: ${reason}
             depositAmountCents,
             status: "pending",
             updatedAt: /* @__PURE__ */ new Date()
-          }).where(eq9(appointments.id, appointment.id));
+          }).where(eq10(appointments.id, appointment.id));
           try {
             const session = await createDepositCheckoutSession({
               appointmentId: appointment.id,
@@ -10853,7 +11412,7 @@ Reason: ${reason}
                 depositAmountCents: 0,
                 status: "confirmed",
                 updatedAt: /* @__PURE__ */ new Date()
-              }).where(eq9(appointments.id, appointment.id));
+              }).where(eq10(appointments.id, appointment.id));
               depositAmountCents = 0;
               depositCheckoutUrl = null;
             } else {
@@ -10861,7 +11420,7 @@ Reason: ${reason}
                 "[booking-deposit] Stripe Checkout session creation failed",
                 depositErr
               );
-              await db.delete(appointments).where(eq9(appointments.id, appointment.id));
+              await db.delete(appointments).where(eq10(appointments.id, appointment.id));
               return res.status(502).json({
                 error: "deposit_charge_failed",
                 message: "We couldn't set up the deposit payment for this booking. Please try again in a moment."
@@ -10871,9 +11430,9 @@ Reason: ${reason}
         }
         let clientId = null;
         try {
-          const [user] = await db.select().from(users).where(eq9(users.id, parsed.data.userId));
+          const [user] = await db.select().from(users).where(eq10(users.id, parsed.data.userId));
           if (user) {
-            const existingClients = await db.select().from(clients).where(eq9(clients.providerId, parsed.data.providerId));
+            const existingClients = await db.select().from(clients).where(eq10(clients.providerId, parsed.data.providerId));
             const matchingClient = existingClients.find(
               (c) => c.email === user.email || c.firstName === (user.firstName || "") && c.phone === user.phone
             );
@@ -10903,9 +11462,9 @@ Reason: ${reason}
                 id: providerCustomServices.id,
                 intakeQuestionsJson: providerCustomServices.intakeQuestionsJson
               }).from(providerCustomServices).where(
-                and4(
-                  eq9(providerCustomServices.id, rawCustomSvcId),
-                  eq9(
+                and5(
+                  eq10(providerCustomServices.id, rawCustomSvcId),
+                  eq10(
                     providerCustomServices.providerId,
                     parsed.data.providerId
                   )
@@ -10970,8 +11529,8 @@ Reason: ${reason}
             JSON.stringify({ appointmentId: appointment.id })
           );
         }
-        const [bookedUser] = await db.select().from(users).where(eq9(users.id, parsed.data.userId)).catch(() => [null]);
-        const [bookedProvider] = await db.select().from(providers).where(eq9(providers.id, parsed.data.providerId)).catch(() => [null]);
+        const [bookedUser] = await db.select().from(users).where(eq10(users.id, parsed.data.userId)).catch(() => [null]);
+        const [bookedProvider] = await db.select().from(providers).where(eq10(providers.id, parsed.data.providerId)).catch(() => [null]);
         if (bookedUser && bookedProvider && !depositPending) {
           const baseServiceName = parsed.data.serviceName.split(" + ")[0].trim();
           const explicitAddOns = req.body.addOns;
@@ -11006,11 +11565,11 @@ Reason: ${reason}
           const [matchedSvc] = await db.select({
             description: providerCustomServices.description
           }).from(providerCustomServices).where(
-            and4(
-              eq9(providerCustomServices.providerId, bookedProvider.id),
-              bodyServiceId ? eq9(providerCustomServices.id, bodyServiceId) : and4(
-                eq9(providerCustomServices.name, baseServiceName),
-                eq9(providerCustomServices.isPublished, true)
+            and5(
+              eq10(providerCustomServices.providerId, bookedProvider.id),
+              bodyServiceId ? eq10(providerCustomServices.id, bodyServiceId) : and5(
+                eq10(providerCustomServices.name, baseServiceName),
+                eq10(providerCustomServices.isPublished, true)
               )
             )
           ).catch(() => [null]);
@@ -11064,7 +11623,7 @@ Reason: ${reason}
             (e) => console.error("booking.created dispatch error:", e)
           );
         }
-        const [finalAppt] = await db.select().from(appointments).where(eq9(appointments.id, appointment.id));
+        const [finalAppt] = await db.select().from(appointments).where(eq10(appointments.id, appointment.id));
         res.status(201).json({
           appointment: finalAppt ?? appointment,
           requiresDeposit: depositAmountCents > 0 && !!depositCheckoutUrl,
@@ -11098,8 +11657,8 @@ Reason: ${reason}
         if (!appointment) {
           return res.status(404).json({ error: "Appointment not found" });
         }
-        const [updatedApptUser] = await db.select().from(users).where(eq9(users.id, appointment.userId)).catch(() => [null]);
-        const [updatedApptProvider] = await db.select().from(providers).where(eq9(providers.id, appointment.providerId)).catch(() => [null]);
+        const [updatedApptUser] = await db.select().from(users).where(eq10(users.id, appointment.userId)).catch(() => [null]);
+        const [updatedApptProvider] = await db.select().from(providers).where(eq10(providers.id, appointment.providerId)).catch(() => [null]);
         if (updatedApptUser && updatedApptProvider) {
           dispatch("booking.updated", {
             clientEmail: updatedApptUser.email,
@@ -11136,7 +11695,7 @@ Reason: ${reason}
         const isProvider = providerRecord && existing.providerId === providerRecord.id;
         if (!isOwner && !isProvider)
           return res.status(403).json({ error: "Access denied" });
-        const [policyProvider] = await db.select({ bookingPolicies: providers.bookingPolicies }).from(providers).where(eq9(providers.id, existing.providerId));
+        const [policyProvider] = await db.select({ bookingPolicies: providers.bookingPolicies }).from(providers).where(eq10(providers.id, existing.providerId));
         const policy = normalizeBookingPolicy(policyProvider?.bookingPolicies);
         const totalCents = dollarsToCents(existing.estimatedPrice ?? null);
         const quote = computeCancellationFee(
@@ -11174,7 +11733,7 @@ Reason: ${reason}
         let cancellationFeeCheckoutUrl = null;
         let cancellationFeeCents = 0;
         if (isOwner && !isProvider) {
-          const [policyProvider] = await db.select({ bookingPolicies: providers.bookingPolicies }).from(providers).where(eq9(providers.id, existing.providerId));
+          const [policyProvider] = await db.select({ bookingPolicies: providers.bookingPolicies }).from(providers).where(eq10(providers.id, existing.providerId));
           const policy = normalizeBookingPolicy(
             policyProvider?.bookingPolicies
           );
@@ -11206,7 +11765,7 @@ Reason: ${reason}
               await db.update(appointments).set({
                 cancellationFeeCents: quote.feeCents,
                 updatedAt: /* @__PURE__ */ new Date()
-              }).where(eq9(appointments.id, existing.id));
+              }).where(eq10(appointments.id, existing.id));
             } catch (feeErr) {
               const code = typeof feeErr === "object" && feeErr !== null && "code" in feeErr ? feeErr.code : void 0;
               if (code !== "stripe_not_ready") {
@@ -11227,8 +11786,8 @@ Reason: ${reason}
           "booking_cancelled",
           JSON.stringify({ appointmentId: appointment.id })
         );
-        const [cancelledUser] = await db.select().from(users).where(eq9(users.id, appointment.userId)).catch(() => [null]);
-        const [cancelledProvider] = await db.select().from(providers).where(eq9(providers.id, appointment.providerId)).catch(() => [null]);
+        const [cancelledUser] = await db.select().from(users).where(eq10(users.id, appointment.userId)).catch(() => [null]);
+        const [cancelledProvider] = await db.select().from(providers).where(eq10(providers.id, appointment.providerId)).catch(() => [null]);
         if (cancelledUser && cancelledProvider) {
           dispatch("booking.cancelled", {
             clientEmail: cancelledUser.email,
@@ -11274,7 +11833,7 @@ Reason: ${reason}
           return res.status(400).json({ error: "New date and time are required" });
         }
         if (isOwner && !isProvider) {
-          const [policyProvider] = await db.select({ bookingPolicies: providers.bookingPolicies }).from(providers).where(eq9(providers.id, existing.providerId));
+          const [policyProvider] = await db.select({ bookingPolicies: providers.bookingPolicies }).from(providers).where(eq10(providers.id, existing.providerId));
           const policy = normalizeBookingPolicy(
             policyProvider?.bookingPolicies
           );
@@ -11309,8 +11868,8 @@ Reason: ${reason}
           "booking_update",
           JSON.stringify({ appointmentId: appointment.id })
         );
-        const [rescheduledUser] = await db.select().from(users).where(eq9(users.id, appointment.userId)).catch(() => [null]);
-        const [rescheduledProvider] = await db.select().from(providers).where(eq9(providers.id, appointment.providerId)).catch(() => [null]);
+        const [rescheduledUser] = await db.select().from(users).where(eq10(users.id, appointment.userId)).catch(() => [null]);
+        const [rescheduledProvider] = await db.select().from(providers).where(eq10(providers.id, appointment.providerId)).catch(() => [null]);
         if (rescheduledUser && rescheduledProvider) {
           dispatch("booking.rescheduled", {
             clientEmail: rescheduledUser.email,
@@ -11382,7 +11941,7 @@ Reason: ${reason}
           phone: provider.phone,
           email: provider.email
         } : null;
-        const [reviewRow] = await db.select().from(reviews).where(eq9(reviews.appointmentId, appointment.id)).limit(1);
+        const [reviewRow] = await db.select().from(reviews).where(eq10(reviews.appointmentId, appointment.id)).limit(1);
         res.json({ appointment, provider: providerInfo, review: reviewRow ?? null });
       } catch (error) {
         console.error("Get appointment error:", error);
@@ -11435,9 +11994,9 @@ Reason: ${reason}
           return res.status(403).json({ error: "Access denied" });
         }
         await db.update(notifications).set({ isRead: true }).where(
-          and4(
-            eq9(notifications.userId, authUserId),
-            eq9(notifications.isRead, false)
+          and5(
+            eq10(notifications.userId, authUserId),
+            eq10(notifications.isRead, false)
           )
         );
         res.json({ success: true });
@@ -11456,10 +12015,10 @@ Reason: ${reason}
         if (req.params.userId !== authUserId) {
           return res.status(403).json({ error: "Access denied" });
         }
-        const result = await db.select({ count: sql4`count(*)::int` }).from(notifications).where(
-          and4(
-            eq9(notifications.userId, authUserId),
-            eq9(notifications.isRead, false)
+        const result = await db.select({ count: sql5`count(*)::int` }).from(notifications).where(
+          and5(
+            eq10(notifications.userId, authUserId),
+            eq10(notifications.isRead, false)
           )
         );
         const count = result[0]?.count || 0;
@@ -11509,10 +12068,10 @@ Reason: ${reason}
         const { token } = req.body;
         if (token) {
           await db.update(pushTokens).set({ isActive: false, updatedAt: /* @__PURE__ */ new Date() }).where(
-            and4(eq9(pushTokens.userId, userId), eq9(pushTokens.token, token))
+            and5(eq10(pushTokens.userId, userId), eq10(pushTokens.token, token))
           );
         } else {
-          await db.update(pushTokens).set({ isActive: false, updatedAt: /* @__PURE__ */ new Date() }).where(eq9(pushTokens.userId, userId));
+          await db.update(pushTokens).set({ isActive: false, updatedAt: /* @__PURE__ */ new Date() }).where(eq10(pushTokens.userId, userId));
         }
         res.json({ success: true });
       } catch (error) {
@@ -11530,7 +12089,7 @@ Reason: ${reason}
         if (req.params.userId !== authUserId) {
           return res.status(403).json({ error: "Access denied" });
         }
-        const [prefs] = await db.select().from(notificationPreferences).where(eq9(notificationPreferences.userId, authUserId));
+        const [prefs] = await db.select().from(notificationPreferences).where(eq10(notificationPreferences.userId, authUserId));
         if (!prefs) {
           const defaults = {
             emailBookingConfirmation: true,
@@ -11580,9 +12139,9 @@ Reason: ${reason}
         for (const key of allowed) {
           if (updates[key] !== void 0) safeUpdates[key] = updates[key];
         }
-        const [existing] = await db.select().from(notificationPreferences).where(eq9(notificationPreferences.userId, userId));
+        const [existing] = await db.select().from(notificationPreferences).where(eq10(notificationPreferences.userId, userId));
         if (existing) {
-          const [updated] = await db.update(notificationPreferences).set(safeUpdates).where(eq9(notificationPreferences.userId, userId)).returning();
+          const [updated] = await db.update(notificationPreferences).set(safeUpdates).where(eq10(notificationPreferences.userId, userId)).returning();
           res.json({ preferences: updated });
         } else {
           const [created] = await db.insert(notificationPreferences).values(safeUpdates).returning();
@@ -12781,8 +13340,8 @@ Respond with JSON only:
           isRecurring: appointments.isRecurring,
           createdAt: appointments.createdAt,
           providerName: providers.businessName
-        }).from(appointments).leftJoin(providers, eq9(appointments.providerId, providers.id)).where(eq9(appointments.homeId, homeId)).orderBy(
-          sql4`${appointments.completedAt} DESC NULLS LAST, ${appointments.scheduledDate} DESC`
+        }).from(appointments).leftJoin(providers, eq10(appointments.providerId, providers.id)).where(eq10(appointments.homeId, homeId)).orderBy(
+          sql5`${appointments.completedAt} DESC NULLS LAST, ${appointments.scheduledDate} DESC`
         );
         res.json({ serviceHistory });
       } catch (error) {
@@ -12801,7 +13360,7 @@ Respond with JSON only:
         if (!home || home.userId !== req.authenticatedUserId) {
           return res.status(404).json({ error: "Home not found" });
         }
-        const reminders = await db.select().from(maintenanceReminders).where(eq9(maintenanceReminders.homeId, homeId)).orderBy(maintenanceReminders.nextDueAt);
+        const reminders = await db.select().from(maintenanceReminders).where(eq10(maintenanceReminders.homeId, homeId)).orderBy(maintenanceReminders.nextDueAt);
         res.json({ reminders });
       } catch (error) {
         console.error("Error fetching reminders:", error);
@@ -12843,7 +13402,7 @@ Respond with JSON only:
     async (req, res) => {
       try {
         const { id } = req.params;
-        const [existing] = await db.select().from(maintenanceReminders).where(eq9(maintenanceReminders.id, id));
+        const [existing] = await db.select().from(maintenanceReminders).where(eq10(maintenanceReminders.id, id));
         if (!existing) {
           return res.status(404).json({ error: "Reminder not found" });
         }
@@ -12864,7 +13423,7 @@ Respond with JSON only:
         const [updated] = await db.update(maintenanceReminders).set({
           lastCompletedAt: /* @__PURE__ */ new Date(),
           nextDueAt: nextDue
-        }).where(eq9(maintenanceReminders.id, id)).returning();
+        }).where(eq10(maintenanceReminders.id, id)).returning();
         res.json({ reminder: updated });
       } catch (error) {
         console.error("Error completing reminder:", error);
@@ -12878,7 +13437,7 @@ Respond with JSON only:
     async (req, res) => {
       try {
         const { date } = req.query;
-        const [link] = await db.select().from(bookingLinks).where(eq9(bookingLinks.providerId, req.params.providerId)).limit(1);
+        const [link] = await db.select().from(bookingLinks).where(eq10(bookingLinks.providerId, req.params.providerId)).limit(1);
         let rules = {};
         if (link?.availabilityRules) {
           try {
@@ -12931,10 +13490,10 @@ Respond with JSON only:
           if (!await assertProviderOwnership(req, req.params.providerId, res))
             return;
         }
-        const conditions = publishedOnly ? and4(
-          eq9(providerCustomServices.providerId, req.params.providerId),
-          eq9(providerCustomServices.isPublished, true)
-        ) : eq9(providerCustomServices.providerId, req.params.providerId);
+        const conditions = publishedOnly ? and5(
+          eq10(providerCustomServices.providerId, req.params.providerId),
+          eq10(providerCustomServices.isPublished, true)
+        ) : eq10(providerCustomServices.providerId, req.params.providerId);
         const svcList = await db.select().from(providerCustomServices).where(conditions).orderBy(providerCustomServices.createdAt);
         res.json({ services: svcList });
       } catch (error) {
@@ -12977,7 +13536,7 @@ Respond with JSON only:
     async (req, res) => {
       try {
         const authUserId = req.authenticatedUserId;
-        const [existing] = await db.select().from(providerCustomServices).where(eq9(providerCustomServices.id, req.params.id));
+        const [existing] = await db.select().from(providerCustomServices).where(eq10(providerCustomServices.id, req.params.id));
         if (!existing)
           return res.status(404).json({ error: "Service not found" });
         if (existing.providerId !== req.params.providerId) {
@@ -13039,7 +13598,7 @@ Respond with JSON only:
         }
         if (aiPricingInsight !== void 0)
           allowedUpdate.aiPricingInsight = aiPricingInsight;
-        const [svc] = await db.update(providerCustomServices).set({ ...allowedUpdate, updatedAt: /* @__PURE__ */ new Date() }).where(eq9(providerCustomServices.id, req.params.id)).returning();
+        const [svc] = await db.update(providerCustomServices).set({ ...allowedUpdate, updatedAt: /* @__PURE__ */ new Date() }).where(eq10(providerCustomServices.id, req.params.id)).returning();
         res.json({ service: svc });
       } catch (error) {
         console.error("Update custom service error:", error);
@@ -13053,7 +13612,7 @@ Respond with JSON only:
     async (req, res) => {
       try {
         const authUserId = req.authenticatedUserId;
-        const [existing] = await db.select().from(providerCustomServices).where(eq9(providerCustomServices.id, req.params.id));
+        const [existing] = await db.select().from(providerCustomServices).where(eq10(providerCustomServices.id, req.params.id));
         if (!existing)
           return res.status(404).json({ error: "Service not found" });
         if (existing.providerId !== req.params.providerId) {
@@ -13063,7 +13622,7 @@ Respond with JSON only:
         if (!provider || provider.userId !== authUserId) {
           return res.status(403).json({ error: "Access denied: provider does not belong to you" });
         }
-        await db.delete(providerCustomServices).where(eq9(providerCustomServices.id, req.params.id));
+        await db.delete(providerCustomServices).where(eq10(providerCustomServices.id, req.params.id));
         res.json({ success: true });
       } catch (error) {
         console.error("Delete custom service error:", error);
@@ -13491,8 +14050,8 @@ Line 3: rating caption for ${insights.rating} stars`
           providerReply: reviews.providerReply,
           providerReplyAt: reviews.providerReplyAt,
           providerReplyUpdatedAt: reviews.providerReplyUpdatedAt,
-          reviewerName: sql4`TRIM(CONCAT(COALESCE(${users.firstName}, ''), ' ', COALESCE(${users.lastName}, '')))`
-        }).from(reviews).innerJoin(users, eq9(reviews.userId, users.id)).where(eq9(reviews.providerId, req.params.id)).orderBy(desc3(reviews.createdAt));
+          reviewerName: sql5`TRIM(CONCAT(COALESCE(${users.firstName}, ''), ' ', COALESCE(${users.lastName}, '')))`
+        }).from(reviews).innerJoin(users, eq10(reviews.userId, users.id)).where(eq10(reviews.providerId, req.params.id)).orderBy(desc3(reviews.createdAt));
         res.json({ reviews: reviewRows });
       } catch (error) {
         console.error("Get provider reviews error:", error);
@@ -13505,7 +14064,7 @@ Line 3: rating caption for ${insights.rating} stars`
     const [row] = await db.select({
       review: reviews,
       provider: providers
-    }).from(reviews).innerJoin(providers, eq9(reviews.providerId, providers.id)).where(eq9(reviews.id, reviewId)).limit(1);
+    }).from(reviews).innerJoin(providers, eq10(reviews.providerId, providers.id)).where(eq10(reviews.id, reviewId)).limit(1);
     if (!row) return { error: "not_found" };
     if (row.provider.userId !== authUserId) return { error: "forbidden" };
     return { review: row.review, provider: row.provider };
@@ -13533,11 +14092,11 @@ Line 3: rating caption for ${insights.rating} stars`
           return res.status(409).json({ error: "Reply already exists. Use PATCH to edit." });
         }
         const now = /* @__PURE__ */ new Date();
-        const [updated] = await db.update(reviews).set({ providerReply: reply, providerReplyAt: now, providerReplyUpdatedAt: now }).where(eq9(reviews.id, req.params.id)).returning();
+        const [updated] = await db.update(reviews).set({ providerReply: reply, providerReplyAt: now, providerReplyUpdatedAt: now }).where(eq10(reviews.id, req.params.id)).returning();
         (async () => {
           try {
-            const [homeowner] = await db.select().from(users).where(eq9(users.id, loaded.review.userId)).limit(1);
-            const [appt] = await db.select().from(appointments).where(eq9(appointments.id, loaded.review.appointmentId)).limit(1);
+            const [homeowner] = await db.select().from(users).where(eq10(users.id, loaded.review.userId)).limit(1);
+            const [appt] = await db.select().from(appointments).where(eq10(appointments.id, loaded.review.appointmentId)).limit(1);
             const providerName = loaded.provider.businessName || "Your provider";
             const serviceName = appt?.serviceName || void 0;
             const baseUrl = process.env.PUBLIC_BASE_URL || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "https://homebaseproapp.com");
@@ -13597,7 +14156,7 @@ Line 3: rating caption for ${insights.rating} stars`
         if (!loaded.review.providerReply) {
           return res.status(404).json({ error: "No existing reply to edit" });
         }
-        const [updated] = await db.update(reviews).set({ providerReply: reply, providerReplyUpdatedAt: /* @__PURE__ */ new Date() }).where(eq9(reviews.id, req.params.id)).returning();
+        const [updated] = await db.update(reviews).set({ providerReply: reply, providerReplyUpdatedAt: /* @__PURE__ */ new Date() }).where(eq10(reviews.id, req.params.id)).returning();
         res.json({ review: updated });
       } catch (error) {
         console.error("Edit review reply error:", error);
@@ -13617,7 +14176,7 @@ Line 3: rating caption for ${insights.rating} stars`
             error: loaded.error === "not_found" ? "Review not found" : "Access denied"
           });
         }
-        await db.update(reviews).set({ providerReply: null, providerReplyAt: null, providerReplyUpdatedAt: null }).where(eq9(reviews.id, req.params.id));
+        await db.update(reviews).set({ providerReply: null, providerReplyAt: null, providerReplyUpdatedAt: null }).where(eq10(reviews.id, req.params.id));
         res.json({ success: true });
       } catch (error) {
         console.error("Delete review reply error:", error);
@@ -13634,7 +14193,7 @@ Line 3: rating caption for ${insights.rating} stars`
         const { appointmentId, clientId } = req.body ?? {};
         let appointment;
         if (appointmentId && typeof appointmentId === "string") {
-          const [row] = await db.select().from(appointments).where(eq9(appointments.id, appointmentId)).limit(1);
+          const [row] = await db.select().from(appointments).where(eq10(appointments.id, appointmentId)).limit(1);
           appointment = row;
         }
         if (!appointment && clientId && typeof clientId === "string") {
@@ -13649,10 +14208,10 @@ Line 3: rating caption for ${insights.rating} stars`
             });
           }
           const [row] = await db.select().from(appointments).where(
-            and4(
-              eq9(appointments.providerId, client.providerId),
-              eq9(appointments.userId, client.homeownerUserId),
-              eq9(appointments.status, "completed")
+            and5(
+              eq10(appointments.providerId, client.providerId),
+              eq10(appointments.userId, client.homeownerUserId),
+              eq10(appointments.status, "completed")
             )
           ).orderBy(desc3(appointments.scheduledDate)).limit(1);
           appointment = row;
@@ -13663,12 +14222,12 @@ Line 3: rating caption for ${insights.rating} stars`
           });
         }
         if (!await assertProviderOwnership(req, appointment.providerId, res)) return;
-        const [existingReview] = await db.select({ id: reviews.id }).from(reviews).where(eq9(reviews.appointmentId, appointment.id)).limit(1);
+        const [existingReview] = await db.select({ id: reviews.id }).from(reviews).where(eq10(reviews.appointmentId, appointment.id)).limit(1);
         if (existingReview) {
           return res.status(409).json({ error: "This client already submitted a review." });
         }
-        const [homeowner] = appointment.userId ? await db.select().from(users).where(eq9(users.id, appointment.userId)).limit(1) : [];
-        const [provider] = await db.select().from(providers).where(eq9(providers.id, appointment.providerId)).limit(1);
+        const [homeowner] = appointment.userId ? await db.select().from(users).where(eq10(users.id, appointment.userId)).limit(1) : [];
+        const [provider] = await db.select().from(providers).where(eq10(providers.id, appointment.providerId)).limit(1);
         if (!homeowner?.email) {
           return res.status(400).json({
             error: "This client doesn't have an email on file, so we can't send a review request."
@@ -13707,7 +14266,7 @@ Line 3: rating caption for ${insights.rating} stars`
         if (!rating || typeof rating !== "number" || rating < 1 || rating > 5) {
           return res.status(400).json({ error: "Rating must be a number between 1 and 5" });
         }
-        const [appointment] = await db.select().from(appointments).where(eq9(appointments.id, appointmentId)).limit(1);
+        const [appointment] = await db.select().from(appointments).where(eq10(appointments.id, appointmentId)).limit(1);
         if (!appointment) {
           return res.status(404).json({ error: "Appointment not found" });
         }
@@ -13725,7 +14284,7 @@ Line 3: rating caption for ${insights.rating} stars`
             error: "Reviews can only be submitted for completed appointments"
           });
         }
-        const [existingReview] = await db.select({ id: reviews.id }).from(reviews).where(eq9(reviews.appointmentId, appointmentId)).limit(1);
+        const [existingReview] = await db.select({ id: reviews.id }).from(reviews).where(eq10(reviews.appointmentId, appointmentId)).limit(1);
         if (existingReview) {
           return res.status(409).json({ error: "Review already submitted for this appointment" });
         }
@@ -13736,14 +14295,14 @@ Line 3: rating caption for ${insights.rating} stars`
           rating,
           comment: comment?.trim() || null
         }).returning();
-        const providerReviews = await db.select({ rating: reviews.rating }).from(reviews).where(eq9(reviews.providerId, appointment.providerId));
+        const providerReviews = await db.select({ rating: reviews.rating }).from(reviews).where(eq10(reviews.providerId, appointment.providerId));
         const totalReviews = providerReviews.length;
         const avgRating = totalReviews > 0 ? providerReviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews : 0;
         await db.update(providers).set({
           reviewCount: totalReviews,
           rating: avgRating.toFixed(1),
           averageRating: avgRating.toFixed(2)
-        }).where(eq9(providers.id, appointment.providerId));
+        }).where(eq10(providers.id, appointment.providerId));
         res.status(201).json({ review });
       } catch (error) {
         console.error("Submit review error:", error);
@@ -13780,7 +14339,7 @@ Line 3: rating caption for ${insights.rating} stars`
         const invoices2 = await storage.getInvoicesByClient(req.params.id);
         let home = null;
         if (client.homeId) {
-          const [homeRow] = await db.select().from(homes).where(eq9(homes.id, client.homeId)).limit(1);
+          const [homeRow] = await db.select().from(homes).where(eq10(homes.id, client.homeId)).limit(1);
           if (homeRow) {
             home = {
               beds: homeRow.bedrooms ?? null,
@@ -13949,7 +14508,7 @@ Line 3: rating caption for ${insights.rating} stars`
             const [appt] = await db.select({
               isRecurring: appointments.isRecurring,
               recurringFrequency: appointments.recurringFrequency
-            }).from(appointments).where(eq9(appointments.id, job.appointmentId)).limit(1).catch(() => [null]);
+            }).from(appointments).where(eq10(appointments.id, job.appointmentId)).limit(1).catch(() => [null]);
             return {
               ...job,
               isRecurring: appt?.isRecurring ?? false,
@@ -13989,7 +14548,7 @@ Line 3: rating caption for ${insights.rating} stars`
           const [appt] = await db.select({
             isRecurring: appointments.isRecurring,
             recurringFrequency: appointments.recurringFrequency
-          }).from(appointments).where(eq9(appointments.id, job.appointmentId)).limit(1).catch(() => [null]);
+          }).from(appointments).where(eq10(appointments.id, job.appointmentId)).limit(1).catch(() => [null]);
           if (appt) {
             isRecurring = appt.isRecurring ?? false;
             recurringFrequency = appt.recurringFrequency ?? null;
@@ -14015,7 +14574,7 @@ Line 3: rating caption for ${insights.rating} stars`
         const isProvider = providerRecord && appointment.providerId === providerRecord.id;
         if (!isOwner && !isProvider)
           return res.status(403).json({ error: "Access denied" });
-        const [job] = await db.select().from(jobs).where(eq9(jobs.appointmentId, req.params.id)).limit(1);
+        const [job] = await db.select().from(jobs).where(eq10(jobs.appointmentId, req.params.id)).limit(1);
         if (!job) return res.json({ job: null });
         res.json({ job });
       } catch (error) {
@@ -14077,7 +14636,7 @@ Line 3: rating caption for ${insights.rating} stars`
           label,
           completed: false
         }));
-        await db.update(jobs).set({ checklist }).where(eq9(jobs.id, req.params.id));
+        await db.update(jobs).set({ checklist }).where(eq10(jobs.id, req.params.id));
         res.json({ checklist });
       } catch (error) {
         console.error("Generate checklist error:", error);
@@ -14100,7 +14659,7 @@ Line 3: rating caption for ${insights.rating} stars`
         const { checklist } = req.body;
         if (!Array.isArray(checklist))
           return res.status(400).json({ error: "checklist must be an array" });
-        await db.update(jobs).set({ checklist }).where(eq9(jobs.id, req.params.id));
+        await db.update(jobs).set({ checklist }).where(eq10(jobs.id, req.params.id));
         res.json({ ok: true });
       } catch (error) {
         console.error("Checklist state error:", error);
@@ -14115,23 +14674,23 @@ Line 3: rating caption for ${insights.rating} stars`
       try {
         const authUserId = req.authenticatedUserId;
         const providerRecord = await storage.getProviderByUserId(authUserId);
-        let [invoice] = await db.select().from(invoices).where(eq9(invoices.jobId, req.params.id)).orderBy(desc3(invoices.createdAt)).limit(1);
+        let [invoice] = await db.select().from(invoices).where(eq10(invoices.jobId, req.params.id)).orderBy(desc3(invoices.createdAt)).limit(1);
         if (!invoice) {
           const [linkedJob] = await db.select({
             appointmentId: jobs.appointmentId,
             providerId: jobs.providerId
-          }).from(jobs).where(eq9(jobs.id, req.params.id)).limit(1);
+          }).from(jobs).where(eq10(jobs.id, req.params.id)).limit(1);
           if (linkedJob?.appointmentId) {
             const [appt] = await db.select({
               userId: appointments.userId,
               providerId: appointments.providerId,
               scheduledDate: appointments.scheduledDate
-            }).from(appointments).where(eq9(appointments.id, linkedJob.appointmentId)).limit(1);
+            }).from(appointments).where(eq10(appointments.id, linkedJob.appointmentId)).limit(1);
             if (appt?.userId) {
               const candidates = await db.select().from(invoices).where(
-                and4(
-                  eq9(invoices.providerId, appt.providerId),
-                  eq9(invoices.homeownerUserId, appt.userId)
+                and5(
+                  eq10(invoices.providerId, appt.providerId),
+                  eq10(invoices.homeownerUserId, appt.userId)
                 )
               ).orderBy(desc3(invoices.createdAt)).limit(10);
               const VISIBLE_STATUSES = /* @__PURE__ */ new Set([
@@ -14156,17 +14715,17 @@ Line 3: rating caption for ${insights.rating} stars`
             }
             if (!invoice && appt?.userId) {
               const matchingClients = await db.select({ id: clients.id }).from(clients).where(
-                and4(
-                  eq9(clients.providerId, appt.providerId),
-                  eq9(clients.homeownerUserId, appt.userId)
+                and5(
+                  eq10(clients.providerId, appt.providerId),
+                  eq10(clients.homeownerUserId, appt.userId)
                 )
               );
               const clientIds = matchingClients.map((c) => c.id);
               if (clientIds.length > 0) {
                 const legacyCandidates = await db.select().from(invoices).where(
-                  and4(
-                    eq9(invoices.providerId, appt.providerId),
-                    inArray2(invoices.clientId, clientIds),
+                  and5(
+                    eq10(invoices.providerId, appt.providerId),
+                    inArray3(invoices.clientId, clientIds),
                     isNull(invoices.homeownerUserId)
                   )
                 ).orderBy(desc3(invoices.createdAt)).limit(10);
@@ -14190,12 +14749,12 @@ Line 3: rating caption for ${insights.rating} stars`
         if (!invoice) return res.json({ invoice: null });
         let isHomeowner = invoice.homeownerUserId === authUserId;
         if (!isHomeowner && !invoice.homeownerUserId) {
-          const [linkedJob] = await db.select({ appointmentId: jobs.appointmentId }).from(jobs).where(eq9(jobs.id, req.params.id)).limit(1);
+          const [linkedJob] = await db.select({ appointmentId: jobs.appointmentId }).from(jobs).where(eq10(jobs.id, req.params.id)).limit(1);
           if (linkedJob?.appointmentId) {
-            const [appt] = await db.select({ userId: appointments.userId }).from(appointments).where(eq9(appointments.id, linkedJob.appointmentId)).limit(1);
+            const [appt] = await db.select({ userId: appointments.userId }).from(appointments).where(eq10(appointments.id, linkedJob.appointmentId)).limit(1);
             if (appt?.userId && appt.userId === authUserId) {
               isHomeowner = true;
-              await db.update(invoices).set({ homeownerUserId: appt.userId, updatedAt: /* @__PURE__ */ new Date() }).where(eq9(invoices.id, invoice.id)).catch(
+              await db.update(invoices).set({ homeownerUserId: appt.userId, updatedAt: /* @__PURE__ */ new Date() }).where(eq10(invoices.id, invoice.id)).catch(
                 (e) => console.error("invoice.homeowner_user_id backfill skipped:", e)
               );
             }
@@ -14229,8 +14788,8 @@ Line 3: rating caption for ${insights.rating} stars`
   );
   async function dispatchJobStatusEmail(job, newStatus) {
     if (!job.clientId || !job.providerId) return;
-    const [client] = await db.select().from(clients).where(eq9(clients.id, job.clientId)).catch(() => [null]);
-    const [provider] = await db.select().from(providers).where(eq9(providers.id, job.providerId)).catch(() => [null]);
+    const [client] = await db.select().from(clients).where(eq10(clients.id, job.clientId)).catch(() => [null]);
+    const [provider] = await db.select().from(providers).where(eq10(providers.id, job.providerId)).catch(() => [null]);
     if (!client || !provider) return;
     const clientEmail = client.email ?? void 0;
     const clientName = `${client.firstName || ""} ${client.lastName || ""}`.trim() || clientEmail;
@@ -14259,7 +14818,7 @@ Line 3: rating caption for ${insights.rating} stars`
         return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
       }
       const authUserId = req.authenticatedUserId;
-      const [callerProvider] = await db.select({ id: providers.id, userId: providers.userId }).from(providers).where(eq9(providers.id, parsed.data.providerId)).catch(() => [null]);
+      const [callerProvider] = await db.select({ id: providers.id, userId: providers.userId }).from(providers).where(eq10(providers.id, parsed.data.providerId)).catch(() => [null]);
       if (!callerProvider || callerProvider.userId !== authUserId) {
         return res.status(403).json({ error: "Forbidden: you do not own this provider account" });
       }
@@ -14272,11 +14831,14 @@ Line 3: rating caption for ${insights.rating} stars`
           pricingType: providerCustomServices.pricingType,
           basePrice: providerCustomServices.basePrice,
           priceFrom: providerCustomServices.priceFrom,
-          intakeQuestionsJson: providerCustomServices.intakeQuestionsJson
+          intakeQuestionsJson: providerCustomServices.intakeQuestionsJson,
+          isRecurring: providerCustomServices.isRecurring,
+          recurringFrequency: providerCustomServices.recurringFrequency,
+          recurringPrice: providerCustomServices.recurringPrice
         }).from(providerCustomServices).where(
-          and4(
-            eq9(providerCustomServices.id, parsed.data.customServiceId),
-            eq9(providerCustomServices.providerId, parsed.data.providerId)
+          and5(
+            eq10(providerCustomServices.id, parsed.data.customServiceId),
+            eq10(providerCustomServices.providerId, parsed.data.providerId)
           )
         ).catch(() => [null]);
         if (svcRow) {
@@ -14309,9 +14871,9 @@ Line 3: rating caption for ${insights.rating} stars`
           homeId: clients.homeId,
           homeownerUserId: clients.homeownerUserId
         }).from(clients).where(
-          and4(
-            eq9(clients.id, parsed.data.clientId),
-            eq9(clients.providerId, callerProvider.id)
+          and5(
+            eq10(clients.id, parsed.data.clientId),
+            eq10(clients.providerId, callerProvider.id)
           )
         );
         if (!jobClientRow) {
@@ -14322,10 +14884,10 @@ Line 3: rating caption for ${insights.rating} stars`
           if (jobClientRow.homeownerUserId) {
             resolvedHomeownerUserId = jobClientRow.homeownerUserId;
           } else {
-            const [homeRow] = await db.select({ userId: homes.userId }).from(homes).where(eq9(homes.id, jobClientRow.homeId));
+            const [homeRow] = await db.select({ userId: homes.userId }).from(homes).where(eq10(homes.id, jobClientRow.homeId));
             if (homeRow?.userId) {
               resolvedHomeownerUserId = homeRow.userId;
-              await db.update(clients).set({ homeownerUserId: homeRow.userId, updatedAt: /* @__PURE__ */ new Date() }).where(eq9(clients.id, jobClientRow.id)).catch(
+              await db.update(clients).set({ homeownerUserId: homeRow.userId, updatedAt: /* @__PURE__ */ new Date() }).where(eq10(clients.id, jobClientRow.id)).catch(
                 (e) => console.error("client.homeowner_user_id cache write skipped:", e)
               );
             }
@@ -14337,7 +14899,11 @@ Line 3: rating caption for ${insights.rating} stars`
           ...parsed.data,
           customServiceId: verifiedCustomServiceId,
           estimatedPrice: effectivePrice ?? parsed.data.estimatedPrice,
-          description: finalJobDescription
+          description: finalJobDescription,
+          // Belt-and-suspenders: insertJobSchema already strips seriesId,
+          // but null it out here too so any future schema regression can't
+          // let a client attach the new job to another provider's series.
+          seriesId: null
         };
         const [job] = await tx.insert(jobs).values(jobValues).returning();
         const apptDescription = job.description || svcSnapshot?.description || void 0;
@@ -14353,14 +14919,24 @@ Line 3: rating caption for ${insights.rating} stars`
           status: "confirmed",
           notes: job.notes || void 0
         }).returning();
-        const [linkedJob] = await tx.update(jobs).set({ appointmentId: apptRow.id }).where(eq9(jobs.id, job.id)).returning();
+        const [linkedJob] = await tx.update(jobs).set({ appointmentId: apptRow.id }).where(eq10(jobs.id, job.id)).returning();
         return { job: linkedJob, appointment: apptRow };
       });
+      let responseJob = newJob;
+      if (svcSnapshot?.isRecurring && svcSnapshot.recurringFrequency && isSupportedFrequency(svcSnapshot.recurringFrequency) && !newJob.seriesId) {
+        await createSeriesForJob({
+          job: newJob,
+          frequency: svcSnapshot.recurringFrequency,
+          recurringPrice: svcSnapshot.recurringPrice
+        });
+        const [refreshed] = await db.select().from(jobs).where(eq10(jobs.id, newJob.id));
+        if (refreshed) responseJob = refreshed;
+      }
       if (newJob.clientId) {
         (async () => {
           try {
-            const [jobClient] = await db.select().from(clients).where(eq9(clients.id, newJob.clientId)).catch(() => [null]);
-            const [jobProvider] = await db.select().from(providers).where(eq9(providers.id, newJob.providerId)).catch(() => [null]);
+            const [jobClient] = await db.select().from(clients).where(eq10(clients.id, newJob.clientId)).catch(() => [null]);
+            const [jobProvider] = await db.select().from(providers).where(eq10(providers.id, newJob.providerId)).catch(() => [null]);
             if (jobClient?.email && jobProvider) {
               const clientName = `${jobClient.firstName || ""} ${jobClient.lastName || ""}`.trim() || jobClient.email;
               const scheduledDateStr = newJob.scheduledDate ? new Date(newJob.scheduledDate).toLocaleDateString("en-US", {
@@ -14432,7 +15008,7 @@ Line 3: rating caption for ${insights.rating} stars`
           }
         })();
       }
-      return res.status(201).json({ job: newJob, appointment });
+      return res.status(201).json({ job: responseJob, appointment });
     } catch (error) {
       console.error("Create job error:", error);
       res.status(500).json({ error: "Failed to create job" });
@@ -14459,11 +15035,35 @@ Line 3: rating caption for ${insights.rating} stars`
           address
         } = req.body;
         const update = {};
+        const isFollowing = req.query.scope === "following" && !!existing.seriesId;
+        let shiftDays = 0;
+        if (isFollowing && scheduledDate !== void 0 && existing.scheduledDate) {
+          const oldD = new Date(existing.scheduledDate);
+          const newD = new Date(scheduledDate);
+          if (!Number.isNaN(oldD.getTime()) && !Number.isNaN(newD.getTime())) {
+            const oldUtc = Date.UTC(
+              oldD.getFullYear(),
+              oldD.getMonth(),
+              oldD.getDate()
+            );
+            const newUtc = Date.UTC(
+              newD.getFullYear(),
+              newD.getMonth(),
+              newD.getDate()
+            );
+            shiftDays = Math.round(
+              (newUtc - oldUtc) / (24 * 60 * 60 * 1e3)
+            );
+          }
+        }
+        const oldPivotDate = existing.scheduledDate ? new Date(existing.scheduledDate) : void 0;
         if (title !== void 0) update.title = title;
         if (description !== void 0) update.description = description;
         if (status !== void 0) update.status = status;
-        if (scheduledDate !== void 0) update.scheduledDate = scheduledDate;
-        if (scheduledTime !== void 0) update.scheduledTime = scheduledTime;
+        if (scheduledDate !== void 0 && !isFollowing)
+          update.scheduledDate = scheduledDate;
+        if (scheduledTime !== void 0 && !isFollowing)
+          update.scheduledTime = scheduledTime;
         if (estimatedPrice !== void 0)
           update.estimatedPrice = estimatedPrice;
         if (finalPrice !== void 0) update.finalPrice = finalPrice;
@@ -14472,6 +15072,45 @@ Line 3: rating caption for ${insights.rating} stars`
         const job = await storage.updateJob(req.params.id, update);
         if (!job) {
           return res.status(404).json({ error: "Job not found" });
+        }
+        if (isFollowing) {
+          const hasFieldEdit = title !== void 0 || description !== void 0 || notes !== void 0 || scheduledTime !== void 0 || estimatedPrice !== void 0 || address !== void 0;
+          if (hasFieldEdit || shiftDays !== 0) {
+            try {
+              await applyToFollowing(req.params.id, {
+                title,
+                description,
+                notes,
+                scheduledTime,
+                estimatedPrice,
+                address,
+                shiftDays,
+                pivotDateOverride: oldPivotDate
+              });
+            } catch (err) {
+              console.error("[recurring] applyToFollowing failed:", err);
+              return res.status(409).json({
+                error: "Failed to update following occurrences"
+              });
+            }
+          }
+        } else if (job.appointmentId && (scheduledDate !== void 0 || scheduledTime !== void 0 || status !== void 0 && status === "cancelled")) {
+          const apptUpdate = {};
+          if (scheduledDate !== void 0)
+            apptUpdate.scheduledDate = scheduledDate;
+          if (scheduledTime !== void 0)
+            apptUpdate.scheduledTime = scheduledTime;
+          if (status === "cancelled") apptUpdate.status = "cancelled";
+          if (Object.keys(apptUpdate).length > 0) {
+            try {
+              await storage.updateAppointment(job.appointmentId, apptUpdate);
+            } catch (err) {
+              console.error(
+                "[recurring] mirror appointment update failed:",
+                err
+              );
+            }
+          }
         }
         if (status && existing.status !== status) {
           dispatchJobStatusEmail(job, status).catch(
@@ -14482,7 +15121,7 @@ Line 3: rating caption for ${insights.rating} stars`
           const apptId = job.appointmentId;
           (async () => {
             try {
-              const [appt] = await db.select({ id: appointments.id, status: appointments.status }).from(appointments).where(eq9(appointments.id, apptId)).limit(1);
+              const [appt] = await db.select({ id: appointments.id, status: appointments.status }).from(appointments).where(eq10(appointments.id, apptId)).limit(1);
               if (appt) {
                 const REVIEWABLE = /* @__PURE__ */ new Set([
                   "completed",
@@ -14531,8 +15170,8 @@ Line 3: rating caption for ${insights.rating} stars`
         (async () => {
           try {
             if (!job.clientId || !job.providerId) return;
-            const [client] = await db.select().from(clients).where(eq9(clients.id, job.clientId)).catch(() => [null]);
-            const [provider] = await db.select().from(providers).where(eq9(providers.id, job.providerId)).catch(() => [null]);
+            const [client] = await db.select().from(clients).where(eq10(clients.id, job.clientId)).catch(() => [null]);
+            const [provider] = await db.select().from(providers).where(eq10(providers.id, job.providerId)).catch(() => [null]);
             if (!client?.email || !provider) return;
             const homeownerUserId = client.homeownerUserId ?? void 0;
             const encodedName = encodeURIComponent(provider.businessName);
@@ -14572,7 +15211,7 @@ Line 3: rating caption for ${insights.rating} stars`
           const apptId = job.appointmentId;
           (async () => {
             try {
-              const [appt] = await db.select({ id: appointments.id, status: appointments.status }).from(appointments).where(eq9(appointments.id, apptId)).limit(1);
+              const [appt] = await db.select({ id: appointments.id, status: appointments.status }).from(appointments).where(eq10(appointments.id, apptId)).limit(1);
               if (appt) {
                 const REVIEWABLE = /* @__PURE__ */ new Set([
                   "completed",
@@ -14637,6 +15276,21 @@ Line 3: rating caption for ${insights.rating} stars`
         }
         if (!await assertProviderOwnership(req, existing.providerId, res))
           return;
+        if (req.query.scope === "series" && existing.seriesId) {
+          let cancelled = 0;
+          try {
+            cancelled = await cancelSeries(existing.seriesId);
+          } catch (err) {
+            console.error("[recurring] cancelSeries failed:", err);
+            return res.status(500).json({ error: "Failed to cancel series" });
+          }
+          return res.json({
+            success: true,
+            scope: "series",
+            seriesId: existing.seriesId,
+            cancelledOccurrences: cancelled
+          });
+        }
         const deleted = await storage.deleteJob(req.params.id);
         if (!deleted) {
           return res.status(404).json({ error: "Job not found" });
@@ -14645,6 +15299,137 @@ Line 3: rating caption for ${insights.rating} stars`
       } catch (error) {
         console.error("Delete job error:", error);
         res.status(500).json({ error: "Failed to delete job" });
+      }
+    }
+  );
+  app2.get(
+    "/api/series/:id",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const [series] = await db.select().from(jobSeries).where(eq10(jobSeries.id, req.params.id));
+        if (!series) {
+          return res.status(404).json({ error: "Series not found" });
+        }
+        if (!await assertProviderOwnership(req, series.providerId, res))
+          return;
+        const occurrences = await db.select().from(jobs).where(eq10(jobs.seriesId, series.id)).orderBy(jobs.scheduledDate);
+        res.json({ series, occurrences });
+      } catch (error) {
+        console.error("Get series error:", error);
+        res.status(500).json({ error: "Failed to get series" });
+      }
+    }
+  );
+  app2.post(
+    "/api/series/:id/cancel",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const [series] = await db.select({ id: jobSeries.id, providerId: jobSeries.providerId }).from(jobSeries).where(eq10(jobSeries.id, req.params.id));
+        if (!series) {
+          return res.status(404).json({ error: "Series not found" });
+        }
+        if (!await assertProviderOwnership(req, series.providerId, res))
+          return;
+        const cancelledOccurrences = await cancelSeries(series.id);
+        res.json({ success: true, cancelledOccurrences });
+      } catch (error) {
+        console.error("Cancel series error:", error);
+        res.status(500).json({ error: "Failed to cancel series" });
+      }
+    }
+  );
+  app2.get(
+    "/api/recurring/backfill-candidates",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const userId = req.user?.userId;
+        if (!userId) return res.status(401).json({ error: "Unauthorized" });
+        const provider = await storage.getProviderByUserId(userId);
+        if (!provider) return res.json({ candidates: [] });
+        const result = await pool.query(
+          `SELECT j.custom_service_id,
+                  j.client_id,
+                  COUNT(*)::int      AS occurrences,
+                  MIN(j.scheduled_date) AS anchor_date,
+                  MIN(j.title)       AS title,
+                  MIN(pcs.recurring_frequency) AS frequency,
+                  MIN(c.first_name || ' ' || c.last_name) AS client_name
+             FROM jobs j
+             JOIN provider_custom_services pcs
+               ON pcs.id = j.custom_service_id
+             LEFT JOIN clients c ON c.id = j.client_id
+            WHERE j.provider_id = $1
+              AND j.series_id IS NULL
+              AND pcs.is_recurring = true
+              AND pcs.recurring_frequency IN
+                  ('daily','weekly','biweekly','monthly','quarterly')
+            GROUP BY j.custom_service_id, j.client_id
+            HAVING COUNT(*) >= 1`,
+          [provider.id]
+        );
+        res.json({ candidates: result.rows });
+      } catch (error) {
+        console.error("Backfill candidates error:", error);
+        res.status(500).json({ error: "Failed to load candidates" });
+      }
+    }
+  );
+  app2.post(
+    "/api/recurring/backfill-confirm",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const userId = req.user?.userId;
+        if (!userId) return res.status(401).json({ error: "Unauthorized" });
+        const provider = await storage.getProviderByUserId(userId);
+        if (!provider) return res.status(403).json({ error: "Forbidden" });
+        const { customServiceId, clientId } = req.body;
+        if (!customServiceId) {
+          return res.status(400).json({ error: "customServiceId required" });
+        }
+        const [anchor] = await db.select().from(jobs).where(
+          and5(
+            eq10(jobs.providerId, provider.id),
+            eq10(jobs.customServiceId, customServiceId),
+            clientId ? eq10(jobs.clientId, clientId) : isNull(jobs.clientId),
+            isNull(jobs.seriesId)
+          )
+        ).orderBy(desc3(jobs.scheduledDate)).limit(1);
+        if (!anchor) {
+          return res.status(404).json({ error: "No candidate jobs" });
+        }
+        const [svc] = await db.select().from(providerCustomServices).where(eq10(providerCustomServices.id, customServiceId));
+        if (!svc?.isRecurring || !svc.recurringFrequency) {
+          return res.status(400).json({ error: "Service not recurring" });
+        }
+        const result = await createSeriesForJob({
+          job: anchor,
+          frequency: svc.recurringFrequency,
+          recurringPrice: svc.recurringPrice
+        });
+        if (!result) {
+          return res.status(400).json({ error: "Unsupported frequency" });
+        }
+        await pool.query(
+          `UPDATE jobs
+              SET series_id = $1, updated_at = NOW()
+            WHERE provider_id = $2
+              AND custom_service_id = $3
+              AND client_id IS NOT DISTINCT FROM $4
+              AND series_id IS NULL`,
+          [result.seriesId, provider.id, customServiceId, clientId ?? null]
+        );
+        res.json({
+          success: true,
+          seriesId: result.seriesId,
+          materialized: result.materialized
+        });
+      } catch (error) {
+        console.error("Backfill confirm error:", error);
+        res.status(500).json({ error: "Failed to backfill" });
       }
     }
   );
@@ -14759,8 +15544,8 @@ Line 3: rating caption for ${insights.rating} stars`
         }
         const invoice = await storage.createInvoice(parsed.data);
         if (invoice.clientId) {
-          const [draftClient] = await db.select().from(clients).where(eq9(clients.id, invoice.clientId)).catch(() => [null]);
-          const [draftProvider] = await db.select().from(providers).where(eq9(providers.id, invoice.providerId)).catch(() => [null]);
+          const [draftClient] = await db.select().from(clients).where(eq10(clients.id, invoice.clientId)).catch(() => [null]);
+          const [draftProvider] = await db.select().from(providers).where(eq10(providers.id, invoice.providerId)).catch(() => [null]);
           if (draftClient?.email && draftProvider) {
             dispatch("invoice.created", {
               clientEmail: draftClient.email,
@@ -14787,14 +15572,14 @@ Line 3: rating caption for ${insights.rating} stars`
   async function notifyHomeownerInvoiceSent(args) {
     let homeownerUserId = args.invoice.homeownerUserId ?? null;
     if (!homeownerUserId && args.clientEmail) {
-      const rows = await db.select({ id: users.id }).from(users).where(eq9(users.email, args.clientEmail)).limit(1).catch(() => []);
+      const rows = await db.select({ id: users.id }).from(users).where(eq10(users.email, args.clientEmail)).limit(1).catch(() => []);
       const u = rows[0];
       if (u?.id) homeownerUserId = u.id;
     }
     if (!homeownerUserId) return;
     let appointmentId = null;
     if (args.invoice.jobId) {
-      const rows = await db.select({ appointmentId: jobs.appointmentId }).from(jobs).where(eq9(jobs.id, args.invoice.jobId)).limit(1).catch(() => []);
+      const rows = await db.select({ appointmentId: jobs.appointmentId }).from(jobs).where(eq10(jobs.id, args.invoice.jobId)).limit(1).catch(() => []);
       const j = rows[0];
       if (j?.appointmentId) appointmentId = j.appointmentId;
     }
@@ -14821,14 +15606,14 @@ Line 3: rating caption for ${insights.rating} stars`
   async function notifyHomeownerInvoiceReminder(args) {
     let homeownerUserId = args.invoice.homeownerUserId ?? null;
     if (!homeownerUserId && args.clientEmail) {
-      const rows = await db.select({ id: users.id }).from(users).where(eq9(users.email, args.clientEmail)).limit(1).catch(() => []);
+      const rows = await db.select({ id: users.id }).from(users).where(eq10(users.email, args.clientEmail)).limit(1).catch(() => []);
       const u = rows[0];
       if (u?.id) homeownerUserId = u.id;
     }
     if (!homeownerUserId) return;
     let appointmentId = null;
     if (args.invoice.jobId) {
-      const rows = await db.select({ appointmentId: jobs.appointmentId }).from(jobs).where(eq9(jobs.id, args.invoice.jobId)).limit(1).catch(() => []);
+      const rows = await db.select({ appointmentId: jobs.appointmentId }).from(jobs).where(eq10(jobs.id, args.invoice.jobId)).limit(1).catch(() => []);
       const j = rows[0];
       if (j?.appointmentId) appointmentId = j.appointmentId;
     }
@@ -14990,7 +15775,7 @@ Line 3: rating caption for ${insights.rating} stars`
             sentAt: /* @__PURE__ */ new Date(),
             hostedInvoiceUrl: hostedUrl,
             updatedAt: /* @__PURE__ */ new Date()
-          }).where(eq9(invoices.id, invoice.id)).returning();
+          }).where(eq10(invoices.id, invoice.id)).returning();
           if (updated) promoted = updated;
         }
         res.status(201).json({
@@ -15139,7 +15924,7 @@ Line 3: rating caption for ${insights.rating} stars`
           sentAt: /* @__PURE__ */ new Date(),
           ...hostedUrl ? { hostedInvoiceUrl: hostedUrl } : {},
           updatedAt: /* @__PURE__ */ new Date()
-        }).where(eq9(invoices.id, invoiceId)).returning();
+        }).where(eq10(invoices.id, invoiceId)).returning();
         res.json({
           invoice: updatedInvoice,
           paymentUrl: hostedUrl,
@@ -15317,20 +16102,20 @@ Line 3: rating caption for ${insights.rating} stars`
         if (!isProvider && !isHomeowner && !invoice.homeownerUserId) {
           let resolvedHomeownerId = null;
           if (invoice.clientId) {
-            const [c] = await db.select({ homeownerUserId: clients.homeownerUserId }).from(clients).where(eq9(clients.id, invoice.clientId)).limit(1);
+            const [c] = await db.select({ homeownerUserId: clients.homeownerUserId }).from(clients).where(eq10(clients.id, invoice.clientId)).limit(1);
             if (c?.homeownerUserId) resolvedHomeownerId = c.homeownerUserId;
           }
           if (!resolvedHomeownerId && invoice.jobId) {
-            const [j] = await db.select({ appointmentId: jobs.appointmentId }).from(jobs).where(eq9(jobs.id, invoice.jobId)).limit(1);
+            const [j] = await db.select({ appointmentId: jobs.appointmentId }).from(jobs).where(eq10(jobs.id, invoice.jobId)).limit(1);
             if (j?.appointmentId) {
-              const [a] = await db.select({ userId: appointments.userId }).from(appointments).where(eq9(appointments.id, j.appointmentId)).limit(1);
+              const [a] = await db.select({ userId: appointments.userId }).from(appointments).where(eq10(appointments.id, j.appointmentId)).limit(1);
               if (a?.userId) resolvedHomeownerId = a.userId;
             }
           }
           if (resolvedHomeownerId === authUserId) {
             isHomeowner = true;
             try {
-              await db.update(invoices).set({ homeownerUserId: authUserId }).where(eq9(invoices.id, invoiceId));
+              await db.update(invoices).set({ homeownerUserId: authUserId }).where(eq10(invoices.id, invoiceId));
             } catch (err) {
               console.warn(
                 "[payment-link] homeowner backfill failed:",
@@ -15404,7 +16189,7 @@ Line 3: rating caption for ${insights.rating} stars`
   app2.get("/api/stripe/products", async (req, res) => {
     try {
       const result = await db.execute(
-        sql4`SELECT * FROM stripe.products WHERE active = true`
+        sql5`SELECT * FROM stripe.products WHERE active = true`
       );
       res.json({ products: result.rows });
     } catch (error) {
@@ -15417,7 +16202,7 @@ Line 3: rating caption for ${insights.rating} stars`
     async (req, res) => {
       try {
         const result = await db.execute(
-          sql4`
+          sql5`
           SELECT 
             p.id as product_id,
             p.name as product_name,
@@ -15556,7 +16341,7 @@ Line 3: rating caption for ${insights.rating} stars`
       try {
         const userId = req.authenticatedUserId ?? req.user?.id;
         if (!userId) return res.status(401).json({ error: "unauthorized" });
-        const [provider] = await db.select({ id: providers.id }).from(providers).where(eq9(providers.userId, userId)).limit(1);
+        const [provider] = await db.select({ id: providers.id }).from(providers).where(eq10(providers.userId, userId)).limit(1);
         if (!provider) {
           return res.status(403).json({ error: "Only providers can subscribe to HomeBase Pro" });
         }
@@ -15672,7 +16457,7 @@ Line 3: rating caption for ${insights.rating} stars`
   };
   async function lookupInvoiceJobId2(invoiceId) {
     try {
-      const [inv] = await db.select({ jobId: invoices.jobId }).from(invoices).where(eq9(invoices.id, invoiceId));
+      const [inv] = await db.select({ jobId: invoices.jobId }).from(invoices).where(eq10(invoices.id, invoiceId));
       return inv?.jobId ?? null;
     } catch {
       return null;
@@ -15887,7 +16672,7 @@ Line 3: rating caption for ${insights.rating} stars`
         }
         if (!await assertProviderOwnership(req, providerId, res))
           return;
-        const providerInvoices = await db.select().from(invoices).where(eq9(invoices.providerId, providerId)).orderBy(desc3(invoices.createdAt));
+        const providerInvoices = await db.select().from(invoices).where(eq10(invoices.providerId, providerId)).orderBy(desc3(invoices.createdAt));
         res.json({ invoices: providerInvoices });
       } catch (error) {
         console.error("Get invoices error:", error);
@@ -15972,7 +16757,7 @@ Line 3: rating caption for ${insights.rating} stars`
             });
             emailSent = sendResult.emailSent;
             emailError = sendResult.emailError;
-            const [clientUser] = await db.select({ id: users.id }).from(users).where(eq9(users.email, client.email)).limit(1).catch(() => [null]);
+            const [clientUser] = await db.select({ id: users.id }).from(users).where(eq10(users.email, client.email)).limit(1).catch(() => [null]);
             if (clientUser) {
               const invoiceTotal = parseFloat(invoice.total?.toString() || "0");
               sendPush(
@@ -15991,7 +16776,7 @@ Line 3: rating caption for ${insights.rating} stars`
           sentAt: /* @__PURE__ */ new Date(),
           ...hostedUrl ? { hostedInvoiceUrl: hostedUrl } : {},
           updatedAt: /* @__PURE__ */ new Date()
-        }).where(eq9(invoices.id, invoiceId)).returning();
+        }).where(eq10(invoices.id, invoiceId)).returning();
         res.json({
           invoice: updated,
           paymentUrl: hostedUrl,
@@ -16015,7 +16800,7 @@ Line 3: rating caption for ${insights.rating} stars`
         const [inv] = await db.select({
           stripeInvoiceId: invoices.stripeInvoiceId,
           hostedInvoiceUrl: invoices.hostedInvoiceUrl
-        }).from(invoices).where(eq9(invoices.id, invoiceId));
+        }).from(invoices).where(eq10(invoices.id, invoiceId));
         if (!inv) return res.status(404).json({ error: "Invoice not found" });
         let url = inv.hostedInvoiceUrl;
         if (!url) {
@@ -16132,12 +16917,12 @@ Line 3: rating caption for ${insights.rating} stars`
             error: "Platform fee rates are not provider-configurable"
           });
         }
-        const [existing] = await db.select().from(providerPlans2).where(eq9(providerPlans2.providerId, providerId));
+        const [existing] = await db.select().from(providerPlans2).where(eq10(providerPlans2.providerId, providerId));
         if (existing) {
           const [updated] = await db.update(providerPlans2).set({
             planTier: planTier || existing.planTier,
             updatedAt: /* @__PURE__ */ new Date()
-          }).where(eq9(providerPlans2.id, existing.id)).returning();
+          }).where(eq10(providerPlans2.id, existing.id)).returning();
           res.json({ plan: updated });
         } else {
           const [created] = await db.insert(providerPlans2).values({
@@ -16160,13 +16945,13 @@ Line 3: rating caption for ${insights.rating} stars`
       try {
         const { providerId } = req.params;
         const { platformFeePercent, platformFeeFixedCents } = req.body;
-        const [existing] = await db.select().from(providerPlans2).where(eq9(providerPlans2.providerId, providerId));
+        const [existing] = await db.select().from(providerPlans2).where(eq10(providerPlans2.providerId, providerId));
         if (existing) {
           const [updated] = await db.update(providerPlans2).set({
             platformFeePercent: platformFeePercent ?? existing.platformFeePercent,
             platformFeeFixedCents: platformFeeFixedCents ?? existing.platformFeeFixedCents,
             updatedAt: /* @__PURE__ */ new Date()
-          }).where(eq9(providerPlans2.id, existing.id)).returning();
+          }).where(eq10(providerPlans2.id, existing.id)).returning();
           res.json({ plan: updated });
         } else {
           const [created] = await db.insert(providerPlans2).values({
@@ -16221,13 +17006,13 @@ Line 3: rating caption for ${insights.rating} stars`
     async (req, res) => {
       try {
         const { providerId } = req.params;
-        const [existing] = await db.select().from(providerPlans2).where(eq9(providerPlans2.providerId, providerId));
+        const [existing] = await db.select().from(providerPlans2).where(eq10(providerPlans2.providerId, providerId));
         if (existing) {
           await db.update(providerPlans2).set({
             isSubscribed: true,
             planTier: "professional",
             updatedAt: /* @__PURE__ */ new Date()
-          }).where(eq9(providerPlans2.id, existing.id));
+          }).where(eq10(providerPlans2.id, existing.id));
         } else {
           await db.insert(providerPlans2).values({
             providerId,
@@ -16261,9 +17046,9 @@ Line 3: rating caption for ${insights.rating} stars`
           email: providers.email,
           isPartner: providerPlans2.isPartner,
           partnerSince: providerPlans2.partnerSince
-        }).from(providers).leftJoin(providerPlans2, eq9(providerPlans2.providerId, providers.id));
+        }).from(providers).leftJoin(providerPlans2, eq10(providerPlans2.providerId, providers.id));
         const rows = await (search ? baseQuery.where(
-          or2(
+          or3(
             ilike(providers.businessName, `%${search}%`),
             ilike(providers.email, `%${search}%`)
           )
@@ -16282,12 +17067,12 @@ Line 3: rating caption for ${insights.rating} stars`
     async (req, res) => {
       try {
         const { providerId } = req.params;
-        const [provider] = await db.select({ id: providers.id }).from(providers).where(eq9(providers.id, providerId));
+        const [provider] = await db.select({ id: providers.id }).from(providers).where(eq10(providers.id, providerId));
         if (!provider) return res.status(404).json({ error: "Provider not found" });
         const now = /* @__PURE__ */ new Date();
-        const [existing] = await db.select().from(providerPlans2).where(eq9(providerPlans2.providerId, providerId));
+        const [existing] = await db.select().from(providerPlans2).where(eq10(providerPlans2.providerId, providerId));
         if (existing) {
-          await db.update(providerPlans2).set({ isPartner: true, partnerSince: now, updatedAt: now }).where(eq9(providerPlans2.id, existing.id));
+          await db.update(providerPlans2).set({ isPartner: true, partnerSince: now, updatedAt: now }).where(eq10(providerPlans2.id, existing.id));
         } else {
           await db.insert(providerPlans2).values({
             providerId,
@@ -16310,9 +17095,9 @@ Line 3: rating caption for ${insights.rating} stars`
     async (req, res) => {
       try {
         const { providerId } = req.params;
-        const [existing] = await db.select().from(providerPlans2).where(eq9(providerPlans2.providerId, providerId));
+        const [existing] = await db.select().from(providerPlans2).where(eq10(providerPlans2.providerId, providerId));
         if (existing) {
-          await db.update(providerPlans2).set({ isPartner: false, partnerSince: null, updatedAt: /* @__PURE__ */ new Date() }).where(eq9(providerPlans2.id, existing.id));
+          await db.update(providerPlans2).set({ isPartner: false, partnerSince: null, updatedAt: /* @__PURE__ */ new Date() }).where(eq10(providerPlans2.id, existing.id));
         }
         const status = await getProviderSubscriptionStatus(providerId);
         res.json({ success: true, providerId, isPartner: false, subscriptionStatus: status });
@@ -16412,7 +17197,7 @@ Line 3: rating caption for ${insights.rating} stars`
             }))
           );
         }
-        const createdLineItems = await db.select().from(invoiceLineItems).where(eq9(invoiceLineItems.invoiceId, invoice.id));
+        const createdLineItems = await db.select().from(invoiceLineItems).where(eq10(invoiceLineItems.invoiceId, invoice.id));
         res.status(201).json({
           invoice,
           lineItems: createdLineItems,
@@ -16452,7 +17237,7 @@ Line 3: rating caption for ${insights.rating} stars`
     async (req, res) => {
       try {
         const authUserId = req.authenticatedUserId;
-        const [user] = await db.select().from(users).where(eq9(users.id, authUserId));
+        const [user] = await db.select().from(users).where(eq10(users.id, authUserId));
         if (!user) return res.status(404).json({ error: "User not found" });
         const stripe2 = getStripe();
         let customerId = user.stripeCustomerId;
@@ -16463,7 +17248,7 @@ Line 3: rating caption for ${insights.rating} stars`
             metadata: { userId: user.id }
           });
           customerId = customer.id;
-          await db.update(users).set({ stripeCustomerId: customerId, updatedAt: /* @__PURE__ */ new Date() }).where(eq9(users.id, authUserId));
+          await db.update(users).set({ stripeCustomerId: customerId, updatedAt: /* @__PURE__ */ new Date() }).where(eq10(users.id, authUserId));
         }
         const ephemeralKey = await stripe2.ephemeralKeys.create(
           { customer: customerId },
@@ -16490,7 +17275,7 @@ Line 3: rating caption for ${insights.rating} stars`
     async (req, res) => {
       try {
         const authUserId = req.authenticatedUserId;
-        const [user] = await db.select().from(users).where(eq9(users.id, authUserId));
+        const [user] = await db.select().from(users).where(eq10(users.id, authUserId));
         if (!user?.stripeCustomerId)
           return res.json({ paymentMethods: [], defaultPaymentMethodId: null });
         const stripe2 = getStripe();
@@ -16525,7 +17310,7 @@ Line 3: rating caption for ${insights.rating} stars`
     async (req, res) => {
       try {
         const authUserId = req.authenticatedUserId;
-        const [user] = await db.select().from(users).where(eq9(users.id, authUserId));
+        const [user] = await db.select().from(users).where(eq10(users.id, authUserId));
         if (!user?.stripeCustomerId) {
           return res.status(400).json({ error: "No Stripe customer found" });
         }
@@ -16537,7 +17322,7 @@ Line 3: rating caption for ${insights.rating} stars`
         }
         await stripe2.paymentMethods.detach(pmId);
         if (user.defaultPaymentMethodId === pmId) {
-          await db.update(users).set({ defaultPaymentMethodId: null, updatedAt: /* @__PURE__ */ new Date() }).where(eq9(users.id, authUserId));
+          await db.update(users).set({ defaultPaymentMethodId: null, updatedAt: /* @__PURE__ */ new Date() }).where(eq10(users.id, authUserId));
         }
         res.json({ success: true });
       } catch (error) {
@@ -16555,7 +17340,7 @@ Line 3: rating caption for ${insights.rating} stars`
         const { paymentMethodId } = req.body;
         if (!paymentMethodId)
           return res.status(400).json({ error: "paymentMethodId required" });
-        const [user] = await db.select().from(users).where(eq9(users.id, authUserId));
+        const [user] = await db.select().from(users).where(eq10(users.id, authUserId));
         if (!user?.stripeCustomerId)
           return res.status(400).json({ error: "No Stripe customer found" });
         const stripe2 = getStripe();
@@ -16565,7 +17350,7 @@ Line 3: rating caption for ${insights.rating} stars`
         await db.update(users).set({
           defaultPaymentMethodId: paymentMethodId,
           updatedAt: /* @__PURE__ */ new Date()
-        }).where(eq9(users.id, authUserId));
+        }).where(eq10(users.id, authUserId));
         res.json({ success: true });
       } catch (error) {
         console.error("Set default PM error:", error);
@@ -16585,7 +17370,7 @@ Line 3: rating caption for ${insights.rating} stars`
         if (!invoiceId)
           return res.status(400).json({ error: "invoiceId required" });
         if (!await assertInvoiceAccess(req, invoiceId, res)) return;
-        const [invoice] = await db.select().from(invoices).where(eq9(invoices.id, invoiceId));
+        const [invoice] = await db.select().from(invoices).where(eq10(invoices.id, invoiceId));
         if (!invoice)
           return res.status(404).json({ error: "Invoice not found" });
         if (invoice.status === "paid")
@@ -16597,7 +17382,7 @@ Line 3: rating caption for ${insights.rating} stars`
             message: "Provider payment processing is not yet enabled"
           });
         }
-        const [user] = await db.select().from(users).where(eq9(users.id, authUserId));
+        const [user] = await db.select().from(users).where(eq10(users.id, authUserId));
         if (!user) return res.status(404).json({ error: "User not found" });
         const stripe2 = getStripe();
         let customerId = user.stripeCustomerId;
@@ -16608,7 +17393,7 @@ Line 3: rating caption for ${insights.rating} stars`
             metadata: { userId: user.id }
           });
           customerId = customer.id;
-          await db.update(users).set({ stripeCustomerId: customerId, updatedAt: /* @__PURE__ */ new Date() }).where(eq9(users.id, authUserId));
+          await db.update(users).set({ stripeCustomerId: customerId, updatedAt: /* @__PURE__ */ new Date() }).where(eq10(users.id, authUserId));
         }
         const paymentIntent = await stripe2.paymentIntents.create({
           amount: invoice.totalCents,
@@ -16630,7 +17415,7 @@ Line 3: rating caption for ${insights.rating} stars`
         await db.update(invoices).set({
           stripePaymentIntentId: paymentIntent.id,
           updatedAt: /* @__PURE__ */ new Date()
-        }).where(eq9(invoices.id, invoiceId));
+        }).where(eq10(invoices.id, invoiceId));
         res.json({
           paymentIntentClientSecret: paymentIntent.client_secret,
           ephemeralKeySecret: ephemeralKey.secret,
@@ -16713,7 +17498,7 @@ Line 3: rating caption for ${insights.rating} stars`
         if (userId !== req.authenticatedUserId) {
           return res.status(403).json({ error: "Access denied" });
         }
-        const [credits] = await db.select().from(userCredits).where(eq9(userCredits.userId, userId));
+        const [credits] = await db.select().from(userCredits).where(eq10(userCredits.userId, userId));
         res.json({
           balanceCents: credits?.balanceCents || 0,
           balance: ((credits?.balanceCents || 0) / 100).toFixed(2)
@@ -16735,11 +17520,11 @@ Line 3: rating caption for ${insights.rating} stars`
         if (!amountCents || amountCents <= 0) {
           return res.status(400).json({ error: "amountCents must be a positive number" });
         }
-        const [existing] = await db.select().from(userCredits).where(eq9(userCredits.userId, userId));
+        const [existing] = await db.select().from(userCredits).where(eq10(userCredits.userId, userId));
         let newBalance;
         if (existing) {
           newBalance = (existing.balanceCents || 0) + amountCents;
-          await db.update(userCredits).set({ balanceCents: newBalance, updatedAt: /* @__PURE__ */ new Date() }).where(eq9(userCredits.userId, userId));
+          await db.update(userCredits).set({ balanceCents: newBalance, updatedAt: /* @__PURE__ */ new Date() }).where(eq10(userCredits.userId, userId));
         } else {
           newBalance = amountCents;
           await db.insert(userCredits).values({
@@ -16769,7 +17554,7 @@ Line 3: rating caption for ${insights.rating} stars`
       try {
         const { providerId } = req.params;
         if (!await assertProviderOwnership(req, providerId, res)) return;
-        const providerPayouts = await db.select().from(payouts).where(eq9(payouts.providerId, providerId));
+        const providerPayouts = await db.select().from(payouts).where(eq10(payouts.providerId, providerId));
         res.json({ payouts: providerPayouts });
       } catch (error) {
         console.error("Get payouts error:", error);
@@ -16779,7 +17564,7 @@ Line 3: rating caption for ${insights.rating} stars`
   );
   async function assertProviderOwnership(req, providerId, res) {
     const authUserId = req.authenticatedUserId;
-    const [provider] = await db.select({ userId: providers.userId }).from(providers).where(eq9(providers.id, providerId));
+    const [provider] = await db.select({ userId: providers.userId }).from(providers).where(eq10(providers.id, providerId));
     if (!provider || provider.userId !== authUserId) {
       res.status(403).json({ error: "Forbidden" });
       return false;
@@ -16792,13 +17577,13 @@ Line 3: rating caption for ${insights.rating} stars`
       id: invoices.id,
       providerId: invoices.providerId,
       homeownerUserId: invoices.homeownerUserId
-    }).from(invoices).where(eq9(invoices.id, invoiceId)).limit(1);
+    }).from(invoices).where(eq10(invoices.id, invoiceId)).limit(1);
     if (!inv) {
       res.status(404).json({ error: "Invoice not found" });
       return null;
     }
     if (inv.homeownerUserId && inv.homeownerUserId === authUserId) return inv;
-    const [provider] = await db.select({ userId: providers.userId }).from(providers).where(eq9(providers.id, inv.providerId)).limit(1);
+    const [provider] = await db.select({ userId: providers.userId }).from(providers).where(eq10(providers.id, inv.providerId)).limit(1);
     if (provider && provider.userId === authUserId) return inv;
     res.status(403).json({ error: "Forbidden" });
     return null;
@@ -16863,17 +17648,17 @@ Line 3: rating caption for ${insights.rating} stars`
           stripeChargeId: payments.stripeChargeId,
           stripePaymentIntentId: payments.stripePaymentIntentId,
           invoiceId: payments.invoiceId
-        }).from(payments).where(eq9(payments.providerId, providerId));
+        }).from(payments).where(eq10(payments.providerId, providerId));
         const localInvoices = await db.select({
           id: invoices.id,
           invoiceNumber: invoices.invoiceNumber,
           clientId: invoices.clientId
-        }).from(invoices).where(eq9(invoices.providerId, providerId));
+        }).from(invoices).where(eq10(invoices.providerId, providerId));
         const localClients = await db.select({
           id: clients.id,
           firstName: clients.firstName,
           lastName: clients.lastName
-        }).from(clients).where(eq9(clients.providerId, providerId));
+        }).from(clients).where(eq10(clients.providerId, providerId));
         const result = charges.data.filter(
           (charge) => localPayments.some(
             (p) => p.stripeChargeId === charge.id || p.stripePaymentIntentId === charge.payment_intent?.toString()
@@ -17167,11 +17952,11 @@ Line 3: rating caption for ${insights.rating} stars`
     async (req, res) => {
       try {
         const { slug } = req.params;
-        const [link] = await db.select().from(bookingLinks).where(eq9(bookingLinks.slug, slug)).limit(1);
+        const [link] = await db.select().from(bookingLinks).where(eq10(bookingLinks.slug, slug)).limit(1);
         if (!link || link.isActive === false || link.status !== "active") {
           return res.status(404).json({ error: "Booking page not found" });
         }
-        const [provider] = await db.select().from(providers).where(eq9(providers.id, link.providerId)).limit(1);
+        const [provider] = await db.select().from(providers).where(eq10(providers.id, link.providerId)).limit(1);
         if (!provider) {
           return res.status(404).json({ error: "Provider not found" });
         }
@@ -17182,9 +17967,9 @@ Line 3: rating caption for ${insights.rating} stars`
           return res.status(404).json({ error: "Booking page not found" });
         }
         const customServices = await db.select().from(providerCustomServices).where(
-          and4(
-            eq9(providerCustomServices.providerId, provider.id),
-            eq9(providerCustomServices.isPublished, true)
+          and5(
+            eq10(providerCustomServices.providerId, provider.id),
+            eq10(providerCustomServices.isPublished, true)
           )
         );
         const catalogServices = await db.select({
@@ -17195,10 +17980,10 @@ Line 3: rating caption for ${insights.rating} stars`
           categoryId: services.categoryId,
           price: providerServices.price,
           providerServiceId: providerServices.id
-        }).from(providerServices).innerJoin(services, eq9(providerServices.serviceId, services.id)).where(
-          and4(
-            eq9(providerServices.providerId, provider.id),
-            eq9(services.isPublic, true)
+        }).from(providerServices).innerJoin(services, eq10(providerServices.serviceId, services.id)).where(
+          and5(
+            eq10(providerServices.providerId, provider.id),
+            eq10(services.isPublic, true)
           )
         );
         const recentReviews = await db.select({
@@ -17206,7 +17991,7 @@ Line 3: rating caption for ${insights.rating} stars`
           rating: reviews.rating,
           comment: reviews.comment,
           createdAt: reviews.createdAt
-        }).from(reviews).where(eq9(reviews.providerId, provider.id)).orderBy(desc3(reviews.createdAt)).limit(5);
+        }).from(reviews).where(eq10(reviews.providerId, provider.id)).orderBy(desc3(reviews.createdAt)).limit(5);
         res.json({
           provider: {
             id: provider.id,
@@ -17314,7 +18099,7 @@ Line 3: rating caption for ${insights.rating} stars`
       try {
         const { providerId } = req.params;
         const authUserId = req.authenticatedUserId;
-        const [providerRow] = await db.select({ userId: providers.userId }).from(providers).where(eq9(providers.id, providerId)).limit(1);
+        const [providerRow] = await db.select({ userId: providers.userId }).from(providers).where(eq10(providers.id, providerId)).limit(1);
         if (!providerRow || providerRow.userId !== authUserId) {
           return res.status(403).json({ error: "Forbidden" });
         }
@@ -17338,7 +18123,7 @@ Line 3: rating caption for ${insights.rating} stars`
         if (!existing) {
           return res.status(404).json({ error: "Submission not found" });
         }
-        const [providerRow] = await db.select({ userId: providers.userId }).from(providers).where(eq9(providers.id, existing.providerId)).limit(1);
+        const [providerRow] = await db.select({ userId: providers.userId }).from(providers).where(eq10(providers.id, existing.providerId)).limit(1);
         if (!providerRow || providerRow.userId !== authUserId) {
           return res.status(403).json({ error: "Forbidden" });
         }
@@ -17365,7 +18150,7 @@ Line 3: rating caption for ${insights.rating} stars`
         if (!submission) {
           return res.status(404).json({ error: "Submission not found" });
         }
-        const [providerOwner] = await db.select({ userId: providers.userId }).from(providers).where(eq9(providers.id, submission.providerId));
+        const [providerOwner] = await db.select({ userId: providers.userId }).from(providers).where(eq10(providers.id, submission.providerId));
         if (!providerOwner || providerOwner.userId !== authUserId) {
           return res.status(403).json({ error: "Forbidden" });
         }
@@ -17391,12 +18176,12 @@ Line 3: rating caption for ${insights.rating} stars`
         }
         let acceptLinkIntakeQuestions = null;
         if (submission.bookingLinkId) {
-          const [linkRow] = await db.select({ intakeQuestions: bookingLinks.intakeQuestions }).from(bookingLinks).where(eq9(bookingLinks.id, submission.bookingLinkId)).catch(() => [null]);
+          const [linkRow] = await db.select({ intakeQuestions: bookingLinks.intakeQuestions }).from(bookingLinks).where(eq10(bookingLinks.id, submission.bookingLinkId)).catch(() => [null]);
           acceptLinkIntakeQuestions = linkRow?.intakeQuestions ?? null;
         }
         let alreadyAccepted = false;
         const result = await db.transaction(async (tx) => {
-          const locked = await tx.execute(sql4`
+          const locked = await tx.execute(sql5`
           SELECT status FROM intake_submissions WHERE id = ${id} FOR UPDATE
         `);
           const lockedStatus = locked.rows[0]?.status;
@@ -17423,9 +18208,9 @@ Line 3: rating caption for ${insights.rating} stars`
           if (submission.clientEmail) {
             const now = /* @__PURE__ */ new Date();
             await tx.update(leads).set({ status: "won", updatedAt: now }).where(
-              and4(
-                eq9(leads.providerId, submission.providerId),
-                eq9(leads.email, submission.clientEmail)
+              and5(
+                eq10(leads.providerId, submission.providerId),
+                eq10(leads.email, submission.clientEmail)
               )
             );
           }
@@ -17439,7 +18224,7 @@ Line 3: rating caption for ${insights.rating} stars`
             userId: providers.userId,
             businessName: providers.businessName,
             email: providers.email
-          }).from(providers).where(eq9(providers.id, submission.providerId)).limit(1);
+          }).from(providers).where(eq10(providers.id, submission.providerId)).limit(1);
           const providerName = providerRow?.businessName ?? "Your Provider";
           const job = result.job;
           const apptDate = job.scheduledDate ? new Date(job.scheduledDate) : /* @__PURE__ */ new Date();
@@ -17507,7 +18292,7 @@ Line 3: rating caption for ${insights.rating} stars`
       try {
         const { providerId } = req.params;
         if (!await assertProviderOwnership(req, providerId, res)) return;
-        const rows = await db.select().from(leads).where(eq9(leads.providerId, providerId)).orderBy(desc3(leads.createdAt));
+        const rows = await db.select().from(leads).where(eq10(leads.providerId, providerId)).orderBy(desc3(leads.createdAt));
         res.json({ leads: rows });
       } catch (error) {
         console.error("Get leads error:", error);
@@ -17549,7 +18334,7 @@ Line 3: rating caption for ${insights.rating} stars`
     async (req, res) => {
       try {
         const { id } = req.params;
-        const [existing] = await db.select({ providerId: leads.providerId }).from(leads).where(eq9(leads.id, id)).limit(1);
+        const [existing] = await db.select({ providerId: leads.providerId }).from(leads).where(eq10(leads.id, id)).limit(1);
         if (!existing) return res.status(404).json({ error: "Lead not found" });
         if (!await assertProviderOwnership(req, existing.providerId, res))
           return;
@@ -17563,7 +18348,7 @@ Line 3: rating caption for ${insights.rating} stars`
         if (status !== void 0) updates.status = status;
         if (source !== void 0) updates.source = source;
         updates.updatedAt = /* @__PURE__ */ new Date();
-        const [lead] = await db.update(leads).set(updates).where(eq9(leads.id, id)).returning();
+        const [lead] = await db.update(leads).set(updates).where(eq10(leads.id, id)).returning();
         if (!lead) return res.status(404).json({ error: "Lead not found" });
         res.json({ lead });
       } catch (error) {
@@ -17580,9 +18365,9 @@ Line 3: rating caption for ${insights.rating} stars`
         const { id } = req.params;
         const { scheduledDate, scheduledTime, estimatedPrice, notes } = req.body;
         const authUserId = req.authenticatedUserId;
-        const [lead] = await db.select().from(leads).where(eq9(leads.id, id)).limit(1);
+        const [lead] = await db.select().from(leads).where(eq10(leads.id, id)).limit(1);
         if (!lead) return res.status(404).json({ error: "Lead not found" });
-        const [providerRow] = await db.select({ userId: providers.userId }).from(providers).where(eq9(providers.id, lead.providerId)).limit(1);
+        const [providerRow] = await db.select({ userId: providers.userId }).from(providers).where(eq10(providers.id, lead.providerId)).limit(1);
         if (!providerRow || providerRow.userId !== authUserId) {
           return res.status(403).json({ error: "Forbidden" });
         }
@@ -17597,9 +18382,9 @@ Line 3: rating caption for ${insights.rating} stars`
           let clientId;
           if (lead.email) {
             const [found] = await tx.select({ id: clients.id }).from(clients).where(
-              and4(
-                eq9(clients.providerId, lead.providerId),
-                eq9(clients.email, lead.email)
+              and5(
+                eq10(clients.providerId, lead.providerId),
+                eq10(clients.email, lead.email)
               )
             );
             if (found) {
@@ -17636,7 +18421,7 @@ Line 3: rating caption for ${insights.rating} stars`
             notes: notes || null
           }).returning();
           const now = /* @__PURE__ */ new Date();
-          await tx.update(leads).set({ status: "won", updatedAt: now }).where(eq9(leads.id, id));
+          await tx.update(leads).set({ status: "won", updatedAt: now }).where(eq10(leads.id, id));
           return { clientId, job: newJob };
         });
         res.status(201).json({
@@ -17656,13 +18441,13 @@ Line 3: rating caption for ${insights.rating} stars`
     async (req, res) => {
       try {
         const { id } = req.params;
-        const [existingLead] = await db.select({ providerId: leads.providerId }).from(leads).where(eq9(leads.id, id)).limit(1);
+        const [existingLead] = await db.select({ providerId: leads.providerId }).from(leads).where(eq10(leads.id, id)).limit(1);
         if (!existingLead) {
           return res.status(404).json({ error: "Lead not found" });
         }
         if (!await assertProviderOwnership(req, existingLead.providerId, res))
           return;
-        const [deleted] = await db.delete(leads).where(eq9(leads.id, id)).returning();
+        const [deleted] = await db.delete(leads).where(eq10(leads.id, id)).returning();
         if (!deleted) return res.status(404).json({ error: "Lead not found" });
         res.json({ success: true });
       } catch (error) {
@@ -17699,7 +18484,7 @@ Line 3: rating caption for ${insights.rating} stars`
           return res.status(400).json({ error: "clientId and body are required" });
         }
         const [client] = await db.select().from(clients).where(
-          and4(eq9(clients.id, clientId), eq9(clients.providerId, providerId))
+          and5(eq10(clients.id, clientId), eq10(clients.providerId, providerId))
         );
         if (!client) {
           return res.status(403).json({ error: "Client does not belong to this provider" });
@@ -17713,7 +18498,7 @@ Line 3: rating caption for ${insights.rating} stars`
         let processedBody = body.replace(/\{\{client_name\}\}/g, clientName).replace(/\{\{provider_name\}\}/g, providerRecord.businessName);
         let processedSubject = (subject || `Message from ${providerRecord.businessName}`).replace(/\{\{client_name\}\}/g, clientName).replace(/\{\{provider_name\}\}/g, providerRecord.businessName);
         if (jobId) {
-          const [jobRecord] = await db.select().from(jobs).where(eq9(jobs.id, jobId));
+          const [jobRecord] = await db.select().from(jobs).where(eq10(jobs.id, jobId));
           if (jobRecord) {
             processedBody = processedBody.replace(/\{\{service\}\}/g, jobRecord.title || "").replace(
               /\{\{booking_date\}\}/g,
@@ -17729,7 +18514,7 @@ Line 3: rating caption for ${insights.rating} stars`
           }
         }
         if (invoiceId) {
-          const [invoiceRecord] = await db.select().from(invoices).where(eq9(invoices.id, invoiceId));
+          const [invoiceRecord] = await db.select().from(invoices).where(eq10(invoices.id, invoiceId));
           if (invoiceRecord) {
             const amount = invoiceRecord.total || invoiceRecord.amount || "0";
             processedBody = processedBody.replace(
@@ -17800,9 +18585,9 @@ Line 3: rating caption for ${insights.rating} stars`
         for (const clientId of clientIds) {
           try {
             const [client] = await db.select().from(clients).where(
-              and4(
-                eq9(clients.id, clientId),
-                eq9(clients.providerId, providerId)
+              and5(
+                eq10(clients.id, clientId),
+                eq10(clients.providerId, providerId)
               )
             );
             if (!client) {
@@ -17888,9 +18673,9 @@ Line 3: rating caption for ${insights.rating} stars`
         const { providerId, clientId } = req.params;
         if (!await assertProviderOwnership(req, providerId, res)) return;
         const messages = await db.select().from(providerMessages).where(
-          and4(
-            eq9(providerMessages.providerId, providerId),
-            eq9(providerMessages.clientId, clientId)
+          and5(
+            eq10(providerMessages.providerId, providerId),
+            eq10(providerMessages.clientId, clientId)
           )
         ).orderBy(desc3(providerMessages.createdAt));
         res.json({ messages });
@@ -17907,7 +18692,7 @@ Line 3: rating caption for ${insights.rating} stars`
       try {
         const { providerId } = req.params;
         if (!await assertProviderOwnership(req, providerId, res)) return;
-        const templates = await db.select().from(messageTemplates).where(eq9(messageTemplates.providerId, providerId)).orderBy(desc3(messageTemplates.createdAt));
+        const templates = await db.select().from(messageTemplates).where(eq10(messageTemplates.providerId, providerId)).orderBy(desc3(messageTemplates.createdAt));
         res.json({ templates });
       } catch (error) {
         console.error("Get message templates error:", error);
@@ -17954,9 +18739,9 @@ Line 3: rating caption for ${insights.rating} stars`
         if (subject !== void 0) updates.subject = subject;
         if (body !== void 0) updates.body = body;
         const [template] = await db.update(messageTemplates).set(updates).where(
-          and4(
-            eq9(messageTemplates.id, templateId),
-            eq9(messageTemplates.providerId, providerId)
+          and5(
+            eq10(messageTemplates.id, templateId),
+            eq10(messageTemplates.providerId, providerId)
           )
         ).returning();
         if (!template)
@@ -17976,9 +18761,9 @@ Line 3: rating caption for ${insights.rating} stars`
         const { providerId, templateId } = req.params;
         if (!await assertProviderOwnership(req, providerId, res)) return;
         const [deleted] = await db.delete(messageTemplates).where(
-          and4(
-            eq9(messageTemplates.id, templateId),
-            eq9(messageTemplates.providerId, providerId)
+          and5(
+            eq10(messageTemplates.id, templateId),
+            eq10(messageTemplates.providerId, providerId)
           )
         ).returning();
         if (!deleted)
@@ -17997,7 +18782,7 @@ Line 3: rating caption for ${insights.rating} stars`
       try {
         const { providerId } = req.params;
         if (!await assertProviderOwnership(req, providerId, res)) return;
-        const lastMessages = await db.execute(sql4`
+        const lastMessages = await db.execute(sql5`
         SELECT DISTINCT ON (client_id) 
           client_id as "clientId",
           body,
@@ -18037,7 +18822,7 @@ Line 3: rating caption for ${insights.rating} stars`
           });
         }
         const [client] = await db.select().from(clients).where(
-          and4(eq9(clients.id, clientId), eq9(clients.providerId, providerId))
+          and5(eq10(clients.id, clientId), eq10(clients.providerId, providerId))
         );
         if (!client) {
           return res.status(404).json({ error: "Client not found" });
@@ -18063,11 +18848,11 @@ Line 3: rating caption for ${insights.rating} stars`
           if (client.email) {
             const [verifiedUser] = await db.select({ id: users.id }).from(users).innerJoin(
               appointments,
-              and4(
-                eq9(appointments.userId, users.id),
-                eq9(appointments.providerId, providerId)
+              and5(
+                eq10(appointments.userId, users.id),
+                eq10(appointments.providerId, providerId)
               )
-            ).where(eq9(users.email, client.email)).limit(1);
+            ).where(eq10(users.email, client.email)).limit(1);
             if (verifiedUser) {
               await sendPush(
                 verifiedUser.id,
@@ -18120,7 +18905,7 @@ Line 3: rating caption for ${insights.rating} stars`
             error: "channels must include at least one of: push, email"
           });
         }
-        const allClients = await db.select().from(clients).where(eq9(clients.providerId, providerId));
+        const allClients = await db.select().from(clients).where(eq10(clients.providerId, providerId));
         const providerName = providerRecord.businessName;
         let emailSent = 0;
         let pushSent = 0;
@@ -18142,11 +18927,11 @@ Line 3: rating caption for ${insights.rating} stars`
           if (validatedChannels.includes("push") && client.email) {
             const [verifiedUser] = await db.select({ id: users.id }).from(users).innerJoin(
               appointments,
-              and4(
-                eq9(appointments.userId, users.id),
-                eq9(appointments.providerId, providerId)
+              and5(
+                eq10(appointments.userId, users.id),
+                eq10(appointments.providerId, providerId)
               )
-            ).where(eq9(users.email, client.email)).limit(1);
+            ).where(eq10(users.email, client.email)).limit(1);
             if (verifiedUser) {
               await sendPush(
                 verifiedUser.id,
@@ -18238,9 +19023,9 @@ var IS_DEV = process.env.NODE_ENV !== "production";
 async function runBootMigrations() {
   const client = await pool.connect();
   const errors = [];
-  async function runSql(label, sql5) {
+  async function runSql(label, sql6) {
     try {
-      await client.query(sql5);
+      await client.query(sql6);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       errors.push(`[${label}] ${msg}`);
@@ -18268,8 +19053,8 @@ async function runBootMigrations() {
       ["invoices.paid_at", `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP`],
       ["invoices.updated_at", `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW() NOT NULL`]
     ];
-    for (const [label, sql5] of invoiceAlters) {
-      await runSql(label, sql5);
+    for (const [label, sql6] of invoiceAlters) {
+      await runSql(label, sql6);
     }
     await runSql("clients.stripe_connect_customer_id", `ALTER TABLE clients ADD COLUMN IF NOT EXISTS stripe_connect_customer_id TEXT`);
     await runSql("payments.stripe_charge_id", `ALTER TABLE payments ADD COLUMN IF NOT EXISTS stripe_charge_id TEXT`);
@@ -18315,8 +19100,8 @@ async function runBootMigrations() {
       ["provider_plans.is_partner", `ALTER TABLE provider_plans ADD COLUMN IF NOT EXISTS is_partner BOOLEAN NOT NULL DEFAULT FALSE`],
       ["provider_plans.partner_since", `ALTER TABLE provider_plans ADD COLUMN IF NOT EXISTS partner_since TIMESTAMP`]
     ];
-    for (const [label, sql5] of providerPlanAlters) {
-      await runSql(label, sql5);
+    for (const [label, sql6] of providerPlanAlters) {
+      await runSql(label, sql6);
     }
     await runSql("services.is_public", `ALTER TABLE services ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT TRUE`);
     const enumDefs = [
@@ -18326,8 +19111,8 @@ async function runBootMigrations() {
       ["enum.message_channel", `DO $$ BEGIN CREATE TYPE message_channel AS ENUM ('email','sms'); EXCEPTION WHEN duplicate_object THEN null; END $$`],
       ["enum.message_status", `DO $$ BEGIN CREATE TYPE message_status AS ENUM ('sent','failed','pending_sms'); EXCEPTION WHEN duplicate_object THEN null; END $$`]
     ];
-    for (const [label, sql5] of enumDefs) {
-      await runSql(label, sql5);
+    for (const [label, sql6] of enumDefs) {
+      await runSql(label, sql6);
     }
     await runSql("table.push_tokens", `
       CREATE TABLE IF NOT EXISTS push_tokens (
@@ -18450,8 +19235,8 @@ async function runBootMigrations() {
       ["users.default_payment_method_id", `ALTER TABLE users ADD COLUMN IF NOT EXISTS default_payment_method_id TEXT`],
       ["users.token_version", `ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0`]
     ];
-    for (const [label, sql5] of userAlters) {
-      await runSql(label, sql5);
+    for (const [label, sql6] of userAlters) {
+      await runSql(label, sql6);
     }
     await runSql("clients.unique_provider_email", `
       DO $$ BEGIN
@@ -18499,16 +19284,16 @@ async function runBootMigrations() {
       ["provider_custom_services.booking_mode", `ALTER TABLE provider_custom_services ADD COLUMN IF NOT EXISTS booking_mode TEXT DEFAULT 'instant'`],
       ["provider_custom_services.ai_pricing_insight", `ALTER TABLE provider_custom_services ADD COLUMN IF NOT EXISTS ai_pricing_insight TEXT`]
     ];
-    for (const [label, sql5] of customServiceAlters) {
-      await runSql(label, sql5);
+    for (const [label, sql6] of customServiceAlters) {
+      await runSql(label, sql6);
     }
     const reviewAlters = [
       ["reviews.provider_reply", `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS provider_reply TEXT`],
       ["reviews.provider_reply_at", `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS provider_reply_at TIMESTAMP`],
       ["reviews.provider_reply_updated_at", `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS provider_reply_updated_at TIMESTAMP`]
     ];
-    for (const [label, sql5] of reviewAlters) {
-      await runSql(label, sql5);
+    for (const [label, sql6] of reviewAlters) {
+      await runSql(label, sql6);
     }
     await runSql("table.housefax_entries", `
       CREATE TABLE IF NOT EXISTS housefax_entries (
@@ -18547,8 +19332,8 @@ async function runBootMigrations() {
       ["homes.housefax_score", `ALTER TABLE homes ADD COLUMN IF NOT EXISTS housefax_score INTEGER`],
       ["homes.housefax_enriched_at", `ALTER TABLE homes ADD COLUMN IF NOT EXISTS housefax_enriched_at TIMESTAMP`]
     ];
-    for (const [label, sql5] of homeAlters) {
-      await runSql(label, sql5);
+    for (const [label, sql6] of homeAlters) {
+      await runSql(label, sql6);
     }
     try {
       const backfill = await client.query(`
@@ -18768,8 +19553,8 @@ async function runBootMigrations() {
       ["appointments.cancellation_fee_checkout_session_id", `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS cancellation_fee_checkout_session_id TEXT`],
       ["appointments.reschedule_count", `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS reschedule_count INTEGER NOT NULL DEFAULT 0`]
     ];
-    for (const [label, sql5] of apptPolicyAlters) {
-      await runSql(label, sql5);
+    for (const [label, sql6] of apptPolicyAlters) {
+      await runSql(label, sql6);
     }
     await runSql("appointments.user_provider_slot_unique", `
       CREATE UNIQUE INDEX IF NOT EXISTS appointments_user_provider_slot_unique
@@ -18851,10 +19636,70 @@ async function runBootMigrations() {
         PRIMARY KEY (event_type, dedup_key, channel)
       )`
     );
+    await runSql(
+      "job_series.create",
+      `CREATE TABLE IF NOT EXISTS job_series (
+        id                 VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        provider_id        VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+        client_id          VARCHAR REFERENCES clients(id) ON DELETE SET NULL,
+        custom_service_id  VARCHAR REFERENCES provider_custom_services(id) ON DELETE SET NULL,
+        title              TEXT NOT NULL,
+        description        TEXT,
+        notes              TEXT,
+        estimated_duration INTEGER,
+        frequency          TEXT NOT NULL,
+        scheduled_time     TEXT,
+        estimated_price    NUMERIC(10, 2),
+        address            TEXT,
+        anchor_date        TIMESTAMP NOT NULL,
+        generated_through  TIMESTAMP,
+        status             TEXT NOT NULL DEFAULT 'active',
+        created_at         TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at         TIMESTAMP NOT NULL DEFAULT NOW(),
+        cancelled_at       TIMESTAMP
+      )`
+    );
+    await runSql(
+      "job_series.description",
+      `ALTER TABLE job_series ADD COLUMN IF NOT EXISTS description TEXT`
+    );
+    await runSql(
+      "job_series.notes",
+      `ALTER TABLE job_series ADD COLUMN IF NOT EXISTS notes TEXT`
+    );
+    await runSql(
+      "job_series.estimated_duration",
+      `ALTER TABLE job_series ADD COLUMN IF NOT EXISTS estimated_duration INTEGER`
+    );
+    await runSql(
+      "jobs.series_id",
+      `ALTER TABLE jobs
+         ADD COLUMN IF NOT EXISTS series_id VARCHAR
+         REFERENCES job_series(id) ON DELETE SET NULL`
+    );
+    await runSql(
+      "jobs.series_id.index",
+      `CREATE INDEX IF NOT EXISTS jobs_series_id_idx ON jobs (series_id)`
+    );
+    await runSql(
+      "job_series.provider_status.index",
+      `CREATE INDEX IF NOT EXISTS job_series_provider_status_idx
+         ON job_series (provider_id, status)`
+    );
+    await runSql(
+      "jobs.series_date.unique",
+      `CREATE UNIQUE INDEX IF NOT EXISTS jobs_series_id_date_unique
+         ON jobs (series_id, (scheduled_date::date))
+         WHERE series_id IS NOT NULL`
+    );
+    verifications.push(
+      ["job_series table", `SELECT id FROM job_series LIMIT 0`],
+      ["jobs.series_id column", `SELECT series_id FROM jobs LIMIT 0`]
+    );
     const verificationErrors = [];
-    for (const [label, sql5] of verifications) {
+    for (const [label, sql6] of verifications) {
       try {
-        await client.query(sql5);
+        await client.query(sql6);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         verificationErrors.push(`MISSING ${label}: ${msg}`);
@@ -18894,12 +19739,12 @@ init_db();
 init_schema();
 init_notificationService();
 import cron from "node-cron";
-import { eq as eq12, and as and6, gte as gte3, lte as lte2, lt } from "drizzle-orm";
+import { eq as eq13, and as and7, gte as gte4, lte as lte2, lt } from "drizzle-orm";
 
 // server/redirectPages.ts
 init_db();
 init_schema();
-import { eq as eq10 } from "drizzle-orm";
+import { eq as eq11 } from "drizzle-orm";
 var APP_STORE_URL = "https://apps.apple.com/app/homebase-pro/id6739456140";
 var PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.homebase.app";
 var HOMEPAGE_URL = "https://homebaseproapp.com";
@@ -19023,11 +19868,11 @@ ${extraScript}
 }
 async function lookupJobSummary(jobId) {
   try {
-    const [job] = await db.select().from(jobs).where(eq10(jobs.id, jobId)).limit(1);
+    const [job] = await db.select().from(jobs).where(eq11(jobs.id, jobId)).limit(1);
     if (!job) return null;
     let providerName = null;
     if (job.providerId) {
-      const [p] = await db.select({ name: providers.businessName }).from(providers).where(eq10(providers.id, job.providerId)).limit(1);
+      const [p] = await db.select({ name: providers.businessName }).from(providers).where(eq11(providers.id, job.providerId)).limit(1);
       providerName = p?.name ?? null;
     }
     return {
@@ -19042,7 +19887,7 @@ async function lookupJobSummary(jobId) {
 }
 async function lookupInvoiceJobId(invoiceId) {
   try {
-    const [inv] = await db.select({ jobId: invoices.jobId }).from(invoices).where(eq10(invoices.id, invoiceId)).limit(1);
+    const [inv] = await db.select({ jobId: invoices.jobId }).from(invoices).where(eq11(invoices.id, invoiceId)).limit(1);
     return inv?.jobId ?? null;
   } catch {
     return null;
@@ -19050,11 +19895,11 @@ async function lookupInvoiceJobId(invoiceId) {
 }
 async function lookupAppointmentSummary(appointmentId) {
   try {
-    const [appt] = await db.select().from(appointments).where(eq10(appointments.id, appointmentId)).limit(1);
+    const [appt] = await db.select().from(appointments).where(eq11(appointments.id, appointmentId)).limit(1);
     if (!appt) return null;
     let providerName = null;
     if (appt.providerId) {
-      const [p] = await db.select({ name: providers.businessName }).from(providers).where(eq10(providers.id, appt.providerId)).limit(1);
+      const [p] = await db.select({ name: providers.businessName }).from(providers).where(eq11(providers.id, appt.providerId)).limit(1);
       providerName = p?.name ?? null;
     }
     return {
@@ -19933,7 +20778,7 @@ async function runBookingReminder24h() {
     const broadFrom = new Date(now.getTime() + 22 * 60 * 60 * 1e3);
     const broadTo = new Date(now.getTime() + 26 * 60 * 60 * 1e3);
     const upcoming = await db.select().from(appointments).where(
-      and6(gte3(appointments.scheduledDate, broadFrom), lte2(appointments.scheduledDate, broadTo), eq12(appointments.status, "confirmed"))
+      and7(gte4(appointments.scheduledDate, broadFrom), lte2(appointments.scheduledDate, broadTo), eq13(appointments.status, "confirmed"))
     );
     const windowFrom = new Date(now.getTime() + 23 * 60 * 60 * 1e3);
     const windowTo = new Date(now.getTime() + 25 * 60 * 60 * 1e3);
@@ -19943,8 +20788,8 @@ async function runBookingReminder24h() {
       const alreadySent = await hasDeliveryForRecord("booking.reminder_24h", appt.id);
       if (alreadySent) continue;
       const [user, provider] = await Promise.all([
-        db.select().from(users).where(eq12(users.id, appt.userId)).then((r) => r[0]),
-        db.select().from(providers).where(eq12(providers.id, appt.providerId)).then((r) => r[0])
+        db.select().from(users).where(eq13(users.id, appt.userId)).then((r) => r[0]),
+        db.select().from(providers).where(eq13(providers.id, appt.providerId)).then((r) => r[0])
       ]);
       if (!user?.email) continue;
       const name = [user.firstName, user.lastName].filter(Boolean).join(" ") || "there";
@@ -19971,7 +20816,7 @@ async function runBookingReminder2h() {
     const broadFrom = new Date(now.getTime() + 60 * 60 * 1e3);
     const broadTo = new Date(now.getTime() + 3 * 60 * 60 * 1e3);
     const upcoming = await db.select().from(appointments).where(
-      and6(gte3(appointments.scheduledDate, broadFrom), lte2(appointments.scheduledDate, broadTo), eq12(appointments.status, "confirmed"))
+      and7(gte4(appointments.scheduledDate, broadFrom), lte2(appointments.scheduledDate, broadTo), eq13(appointments.status, "confirmed"))
     );
     const windowFrom = new Date(now.getTime() + 90 * 60 * 1e3);
     const windowTo = new Date(now.getTime() + 150 * 60 * 1e3);
@@ -19981,8 +20826,8 @@ async function runBookingReminder2h() {
       const alreadySent = await hasDeliveryForRecord("booking.reminder_2h", appt.id);
       if (alreadySent) continue;
       const [user, provider] = await Promise.all([
-        db.select().from(users).where(eq12(users.id, appt.userId)).then((r) => r[0]),
-        db.select().from(providers).where(eq12(providers.id, appt.providerId)).then((r) => r[0])
+        db.select().from(users).where(eq13(users.id, appt.userId)).then((r) => r[0]),
+        db.select().from(providers).where(eq13(providers.id, appt.providerId)).then((r) => r[0])
       ]);
       if (!user?.email) continue;
       const name = [user.firstName, user.lastName].filter(Boolean).join(" ") || "there";
@@ -20009,10 +20854,10 @@ async function runInvoiceDueReminder() {
     const from = new Date(now.getTime() + 2.5 * 24 * 60 * 60 * 1e3);
     const to = new Date(now.getTime() + 3.5 * 24 * 60 * 60 * 1e3);
     const dueInvoices = await db.select().from(invoices).where(
-      and6(
-        gte3(invoices.dueDate, from),
+      and7(
+        gte4(invoices.dueDate, from),
         lte2(invoices.dueDate, to),
-        eq12(invoices.status, "sent")
+        eq13(invoices.status, "sent")
       )
     );
     for (const invoice of dueInvoices) {
@@ -20020,14 +20865,14 @@ async function runInvoiceDueReminder() {
       const alreadySent = await hasDeliveryForRecord("invoice.reminder_3d", invoice.id);
       if (alreadySent) continue;
       const [client, provider] = await Promise.all([
-        invoice.clientId ? db.select().from(clients).where(eq12(clients.id, invoice.clientId)).then((r) => r[0]) : Promise.resolve(void 0),
-        db.select().from(providers).where(eq12(providers.id, invoice.providerId)).then((r) => r[0])
+        invoice.clientId ? db.select().from(clients).where(eq13(clients.id, invoice.clientId)).then((r) => r[0]) : Promise.resolve(void 0),
+        db.select().from(providers).where(eq13(providers.id, invoice.providerId)).then((r) => r[0])
       ]);
       let recipientEmail = client?.email;
       let recipientName = [client?.firstName, client?.lastName].filter(Boolean).join(" ") || "Client";
       let recipientUserId;
       if (invoice.homeownerUserId) {
-        const homeowner = await db.select().from(users).where(eq12(users.id, invoice.homeownerUserId)).then((r) => r[0]);
+        const homeowner = await db.select().from(users).where(eq13(users.id, invoice.homeownerUserId)).then((r) => r[0]);
         if (homeowner?.email) {
           recipientEmail = homeowner.email;
           recipientName = [homeowner.firstName, homeowner.lastName].filter(Boolean).join(" ") || "Client";
@@ -20062,10 +20907,10 @@ async function runInvoiceOverdueReminder() {
     const from = new Date(now.getTime() - 1.5 * 24 * 60 * 60 * 1e3);
     const to = new Date(now.getTime() - 0.5 * 24 * 60 * 60 * 1e3);
     const overdueInvoices = await db.select().from(invoices).where(
-      and6(
-        gte3(invoices.dueDate, from),
+      and7(
+        gte4(invoices.dueDate, from),
         lt(invoices.dueDate, to),
-        eq12(invoices.status, "sent")
+        eq13(invoices.status, "sent")
       )
     );
     for (const invoice of overdueInvoices) {
@@ -20073,14 +20918,14 @@ async function runInvoiceOverdueReminder() {
       const alreadySent = await hasDeliveryForRecord("invoice.overdue_1d", invoice.id);
       if (alreadySent) continue;
       const [client, provider] = await Promise.all([
-        invoice.clientId ? db.select().from(clients).where(eq12(clients.id, invoice.clientId)).then((r) => r[0]) : Promise.resolve(void 0),
-        db.select().from(providers).where(eq12(providers.id, invoice.providerId)).then((r) => r[0])
+        invoice.clientId ? db.select().from(clients).where(eq13(clients.id, invoice.clientId)).then((r) => r[0]) : Promise.resolve(void 0),
+        db.select().from(providers).where(eq13(providers.id, invoice.providerId)).then((r) => r[0])
       ]);
       let recipientEmail = client?.email;
       let recipientName = [client?.firstName, client?.lastName].filter(Boolean).join(" ") || "Client";
       let recipientUserId;
       if (invoice.homeownerUserId) {
-        const homeowner = await db.select().from(users).where(eq12(users.id, invoice.homeownerUserId)).then((r) => r[0]);
+        const homeowner = await db.select().from(users).where(eq13(users.id, invoice.homeownerUserId)).then((r) => r[0]);
         if (homeowner?.email) {
           recipientEmail = homeowner.email;
           recipientName = [homeowner.firstName, homeowner.lastName].filter(Boolean).join(" ") || "Client";
@@ -20131,7 +20976,18 @@ function setupReminderJobs() {
   });
   cron.schedule("0 9 * * *", runSubscriptionGraceReminder);
   cron.schedule("0 10 * * *", runSubscriptionExpiredNotice);
-  console.log("[cron] reminder jobs scheduled: 24h/2h booking reminders, 3d/1d invoice reminders, daily orphan-provider cleanup, subscription grace/expired notices");
+  cron.schedule("0 4 * * *", async () => {
+    try {
+      const { extendAllSeriesHorizons: extendAllSeriesHorizons2 } = await Promise.resolve().then(() => (init_recurringJobsService(), recurringJobsService_exports));
+      const { scanned, inserted } = await extendAllSeriesHorizons2();
+      if (scanned > 0) {
+        console.log(`[cron:recurring-horizon] scanned=${scanned} inserted=${inserted}`);
+      }
+    } catch (err) {
+      console.error("[cron:recurring-horizon] error:", err);
+    }
+  });
+  console.log("[cron] reminder jobs scheduled: 24h/2h booking reminders, 3d/1d invoice reminders, daily orphan-provider cleanup, subscription grace/expired notices, recurring-series horizon");
 }
 async function runSubscriptionGraceReminder() {
   try {

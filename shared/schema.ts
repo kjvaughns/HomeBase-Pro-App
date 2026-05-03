@@ -876,6 +876,12 @@ export const jobs = pgTable("jobs", {
     () => providerCustomServices.id,
     { onDelete: "set null" },
   ),
+  // Link to job_series for auto-generated recurring occurrences (nullable
+  // for one-off jobs). Declared as a bare varchar so we don't create a
+  // circular type reference with the jobSeries table (which is defined
+  // below jobs but logically points back at the same provider scope). The
+  // physical FK constraint is added by the boot migration.
+  seriesId: varchar("series_id"),
   title: text("title").notNull(),
   description: text("description"),
   scheduledDate: timestamp("scheduled_date").notNull(),
@@ -911,6 +917,68 @@ export const jobsRelations = relations(jobs, ({ one, many }) => ({
     references: [providerCustomServices.id],
   }),
   invoices: many(invoices),
+  series: one(jobSeries, {
+    fields: [jobs.seriesId],
+    references: [jobSeries.id],
+  }),
+}));
+
+// ─── Recurring Job Series ────────────────────────────────────────────────────
+// Materializes recurring service bookings onto the calendar. The originating
+// job becomes occurrence #1 and the generator inserts subsequent occurrences
+// (jobs + paired appointments) up to a rolling horizon. Cancelling the series
+// cancels future occurrences but leaves completed history intact via
+// ON DELETE SET NULL on jobs.series_id.
+export const jobSeries = pgTable("job_series", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  clientId: varchar("client_id").references(() => clients.id, {
+    onDelete: "set null",
+  }),
+  customServiceId: varchar("custom_service_id").references(
+    () => providerCustomServices.id,
+    { onDelete: "set null" },
+  ),
+  title: text("title").notNull(),
+  // Snapshotted from the anchor job so each materialized occurrence inherits
+  // the same description (intake summary), provider notes, and duration.
+  description: text("description"),
+  notes: text("notes"),
+  estimatedDuration: integer("estimated_duration"), // minutes
+  // weekly | biweekly | monthly | quarterly
+  frequency: text("frequency").notNull(),
+  // HH:MM (24h) — preferred time-of-day for each occurrence
+  scheduledTime: text("scheduled_time"),
+  estimatedPrice: decimal("estimated_price", { precision: 10, scale: 2 }),
+  address: text("address"),
+  // Anchor date — first occurrence's scheduled_date. All subsequent
+  // occurrences are computed from this anchor by frequency offset.
+  anchorDate: timestamp("anchor_date").notNull(),
+  // Furthest scheduled_date materialized so far (rolling horizon).
+  generatedThrough: timestamp("generated_through"),
+  // active | cancelled
+  status: text("status").notNull().default("active"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  cancelledAt: timestamp("cancelled_at"),
+});
+
+export const jobSeriesRelations = relations(jobSeries, ({ one, many }) => ({
+  provider: one(providers, {
+    fields: [jobSeries.providerId],
+    references: [providers.id],
+  }),
+  client: one(clients, {
+    fields: [jobSeries.clientId],
+    references: [clients.id],
+  }),
+  customService: one(providerCustomServices, {
+    fields: [jobSeries.customServiceId],
+    references: [providerCustomServices.id],
+  }),
+  jobs: many(jobs),
 }));
 
 // Invoices for jobs (enhanced for Stripe Connect)
@@ -1300,6 +1368,10 @@ export const insertJobSchema = createInsertSchema(jobs, {
   createdAt: true,
   updatedAt: true,
   completedAt: true,
+  // Server-owned: only recurring service code / backfill may set series_id.
+  // Allowing clients to submit it would let them attach jobs to another
+  // provider's series.
+  seriesId: true,
 });
 
 export const insertInvoiceSchema = createInsertSchema(invoices).omit({

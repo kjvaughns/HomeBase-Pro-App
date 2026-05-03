@@ -112,6 +112,8 @@ interface Job {
   estimatedPrice?: string | null;
   address?: string | null;
   notes?: string | null;
+  // Present when this job is part of a recurring series.
+  seriesId?: string | null;
 }
 
 interface Client {
@@ -593,9 +595,19 @@ function EnhancedJobCard({
                     </ThemedText>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <ThemedText style={styles.jobClientName} numberOfLines={1}>
-                      {clientName}
-                    </ThemedText>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <ThemedText style={styles.jobClientName} numberOfLines={1}>
+                        {clientName}
+                      </ThemedText>
+                      {job.seriesId ? (
+                        <Feather
+                          name="repeat"
+                          size={11}
+                          color={Colors.accent}
+                          testID={`job-recurring-${job.id}`}
+                        />
+                      ) : null}
+                    </View>
                     <ThemedText
                       style={[styles.jobService, { color: Colors.accent }]}
                       numberOfLines={1}
@@ -1191,8 +1203,40 @@ export default function ScheduleScreen() {
   }, [jobs, selectedDate, statusFilter]);
 
   // Build FlatList rows with a single date header
+  type BackfillCandidate = {
+    custom_service_id: string;
+    client_id: string | null;
+    occurrences: number;
+    title: string | null;
+    frequency: string | null;
+    client_name: string | null;
+  };
+  const { data: backfillData } = useQuery<{ candidates: BackfillCandidate[] }>({
+    queryKey: ["/api/recurring/backfill-candidates"],
+    enabled: !!providerId,
+  });
+  const [dismissedBackfill, setDismissedBackfill] = useState(false);
+  const backfillCandidates = backfillData?.candidates ?? [];
+  const backfillMutation = useMutation({
+    mutationFn: (c: BackfillCandidate) =>
+      apiRequest("POST", "/api/recurring/backfill-confirm", {
+        customServiceId: c.custom_service_id,
+        clientId: c.client_id,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/recurring/backfill-candidates"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/provider", providerId, "jobs"],
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+  });
+
   type ListRow =
     | { type: "banner"; key: string }
+    | { type: "backfill"; key: string }
     | { type: "dateHeader"; key: string; label: string }
     | { type: "job"; key: string; job: Job }
     | { type: "empty"; key: string }
@@ -1200,6 +1244,13 @@ export default function ScheduleScreen() {
 
   const listData = useMemo((): ListRow[] => {
     const rows: ListRow[] = [];
+    if (
+      !dismissedBackfill &&
+      backfillCandidates.length > 0 &&
+      !backfillMutation.isPending
+    ) {
+      rows.push({ type: "backfill", key: "backfill" });
+    }
     if (isToday) {
       rows.push({ type: "banner", key: "banner" });
     }
@@ -1219,7 +1270,14 @@ export default function ScheduleScreen() {
     // long-press a specific empty slot to Quick Add at that exact time.
     rows.push({ type: "slots", key: "slots" });
     return rows;
-  }, [filteredJobs, isToday, selectedDate]);
+  }, [
+    filteredJobs,
+    isToday,
+    selectedDate,
+    backfillCandidates.length,
+    dismissedBackfill,
+    backfillMutation.isPending,
+  ]);
 
   const isCalendarMode = viewMode === "month";
 
@@ -1368,6 +1426,54 @@ export default function ScheduleScreen() {
               />
             }
             renderItem={({ item, index }) => {
+              if (item.type === "backfill") {
+                const c = backfillCandidates[0];
+                return (
+                  <Animated.View entering={FadeInDown.duration(300)}>
+                    <GlassCard style={styles.backfillCard}>
+                      <ThemedText style={styles.backfillTitle}>
+                        Recurring jobs detected
+                      </ThemedText>
+                      <ThemedText
+                        style={[
+                          styles.backfillBody,
+                          { color: theme.textSecondary },
+                        ]}
+                      >
+                        {`We found ${backfillCandidates.length} recurring job ${backfillCandidates.length === 1 ? "pattern" : "patterns"} not yet on a schedule. Add the next "${c.title ?? "service"}"${c.client_name ? ` for ${c.client_name}` : ""} (${c.frequency}) to your calendar?`}
+                      </ThemedText>
+                      <View style={styles.backfillActions}>
+                        <Pressable
+                          testID="button-backfill-dismiss"
+                          onPress={() => setDismissedBackfill(true)}
+                          style={[
+                            styles.backfillBtn,
+                            { backgroundColor: theme.backgroundSecondary },
+                          ]}
+                        >
+                          <ThemedText style={styles.backfillBtnText}>
+                            Not now
+                          </ThemedText>
+                        </Pressable>
+                        <Pressable
+                          testID="button-backfill-confirm"
+                          onPress={() => backfillMutation.mutate(c)}
+                          style={[
+                            styles.backfillBtn,
+                            { backgroundColor: Colors.accent },
+                          ]}
+                        >
+                          <ThemedText
+                            style={[styles.backfillBtnText, { color: "#fff" }]}
+                          >
+                            Add to schedule
+                          </ThemedText>
+                        </Pressable>
+                      </View>
+                    </GlassCard>
+                  </Animated.View>
+                );
+              }
               if (item.type === "banner") {
                 return (
                   <Animated.View entering={FadeInDown.delay(0).duration(350)}>
@@ -1632,6 +1738,36 @@ const styles = StyleSheet.create({
   },
   listEmpty: {
     flexGrow: 1,
+  },
+
+  // Backfill prompt
+  backfillCard: {
+    marginBottom: Spacing.md,
+    padding: Spacing.md,
+    gap: Spacing.sm,
+  },
+  backfillTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  backfillBody: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  backfillActions: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginTop: Spacing.xs,
+  },
+  backfillBtn: {
+    flex: 1,
+    paddingVertical: Spacing.sm,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  backfillBtnText: {
+    fontSize: 14,
+    fontWeight: "600",
   },
 
   // Today Banner
