@@ -33,6 +33,7 @@ const CATEGORIES = [
 
 function SuccessState({ ticketId, onDone }: { ticketId: string; onDone: () => void }) {
   const { theme } = useTheme();
+  const { horizontalPadding } = useLayout();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
 
@@ -41,7 +42,7 @@ function SuccessState({ ticketId, onDone }: { ticketId: string; onDone: () => vo
       <View
         style={[
           styles.successContent,
-          { paddingTop: headerHeight + Spacing.xl, paddingBottom: insets.bottom + Spacing.xl },
+          { paddingTop: headerHeight + Spacing.xl, paddingBottom: insets.bottom + Spacing.xl, paddingHorizontal: horizontalPadding },
         ]}
       >
         <View style={[styles.successIcon, { backgroundColor: Colors.accent + "15" }]}>
@@ -283,9 +284,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
-    paddingHorizontal: Spacing.screenPadding,
-  },
+  content: {},
   header: {
     alignItems: "center",
     marginBottom: Spacing.xl,
@@ -386,7 +385,6 @@ const styles = StyleSheet.create({
   },
   successContent: {
     flex: 1,
-    paddingHorizontal: Spacing.screenPadding,
     alignItems: "center",
     justifyContent: "center",
   },

@@ -734,7 +734,6 @@ export default function ServicesScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   headerContainer: {
-    paddingHorizontal: Spacing.screenPadding,
     marginBottom: Spacing.md,
   },
   titleRow: {
@@ -781,7 +780,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   serviceCard: {
-    marginHorizontal: Spacing.screenPadding,
     marginBottom: Spacing.sm,
     padding: Spacing.md,
   },
@@ -914,14 +912,12 @@ const styles = StyleSheet.create({
   emptyContainer: {
     flexGrow: 1,
     justifyContent: "center",
-    paddingHorizontal: Spacing.screenPadding,
   },
   loadingContainer: {
     padding: Spacing["2xl"],
     alignItems: "center",
   },
   emptyCard: {
-    marginHorizontal: Spacing.screenPadding,
     padding: Spacing.xl,
     alignItems: "center",
     gap: Spacing.md,

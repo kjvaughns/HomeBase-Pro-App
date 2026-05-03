@@ -612,7 +612,7 @@ export default function PublicProfileScreen() {
       <View
         style={[
           styles.pinnedBannerWrapper,
-          { paddingTop: headerHeight + Spacing.sm, backgroundColor: theme.backgroundRoot },
+          { paddingTop: headerHeight + Spacing.sm, backgroundColor: theme.backgroundRoot, paddingHorizontal: horizontalPadding },
         ]}
       >
         <View style={[styles.previewBanner, { backgroundColor: Colors.accentLight }]}>
@@ -716,6 +716,7 @@ export default function PublicProfileScreen() {
           {
             backgroundColor: theme.backgroundRoot,
             paddingBottom: insets.bottom + Spacing.md,
+            paddingHorizontal: horizontalPadding,
           },
         ]}
       >
@@ -769,7 +770,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   pinnedBannerWrapper: {
-    paddingHorizontal: Spacing.screenPadding,
     paddingBottom: Spacing.sm,
   },
   previewBanner: {
@@ -1071,7 +1071,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: Spacing.screenPadding,
     paddingTop: Spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "rgba(0,0,0,0.1)",

@@ -733,7 +733,7 @@ export default function HouseFaxScreen() {
     return (
       <ThemedView style={styles.container}>
         <ScrollView
-          contentContainerStyle={[styles.skeletonContainer, { paddingTop: headerHeight + Spacing.xl }]}
+          contentContainerStyle={[styles.skeletonContainer, { paddingTop: headerHeight + Spacing.xl, paddingHorizontal: horizontalPadding }]}
           showsVerticalScrollIndicator={false}
         >
           <SkeletonLoader width="60%" height={28} style={{ marginBottom: Spacing.lg }} />
@@ -866,17 +866,13 @@ export default function HouseFaxScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: {
-    paddingHorizontal: Spacing.screenPadding,
-  },
+  content: {},
   loadingContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: Spacing.screenPadding,
   },
   skeletonContainer: {
-    paddingHorizontal: Spacing.screenPadding,
     paddingBottom: Spacing.xl,
   },
   loadingText: {

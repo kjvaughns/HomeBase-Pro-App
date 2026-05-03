@@ -380,7 +380,7 @@ export default function CrewScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { paddingHorizontal: Spacing.screenPadding },
+  scroll: {},
   center: { paddingTop: Spacing["3xl"], alignItems: "center" },
   headerBtn: { paddingHorizontal: Spacing.sm },
 

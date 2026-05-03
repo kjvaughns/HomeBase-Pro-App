@@ -920,7 +920,7 @@ export default function HealthScoreScreen() {
           </ScrollView>
 
           {activeTab === "risks" && currentResult.topRisks.length > 0 ? (
-            <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + Spacing.lg }]}>
+            <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + Spacing.lg, paddingHorizontal: horizontalPadding }]}>
               <PrimaryButton onPress={() => navigation.navigate("SmartIntake")}>
                 Fix Top Issue Now
               </PrimaryButton>
@@ -974,7 +974,7 @@ export default function HealthScoreScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { paddingHorizontal: Spacing.screenPadding },
+  content: {},
   homeSelector: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full, marginBottom: Spacing.lg, gap: Spacing.sm },
   homeSelectorText: { ...Typography.subhead, fontWeight: "500" },
   heroCard: { marginBottom: Spacing.sectionGap },
@@ -1041,7 +1041,7 @@ const styles = StyleSheet.create({
   resultsHeader: { flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.md, paddingBottom: Spacing.md },
   resultsBackButton: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   resultsTitle: { ...Typography.headline, flex: 1, textAlign: "center" },
-  resultsContent: { paddingHorizontal: Spacing.screenPadding, paddingBottom: 120 },
+  resultsContent: { paddingBottom: 120 },
   scoreSection: { alignItems: "center", paddingVertical: Spacing.xl },
   scoreSummary: { ...Typography.title2, marginTop: Spacing.md, marginBottom: Spacing.xs },
   tabBar: { flexDirection: "row", marginBottom: Spacing.lg },
@@ -1083,7 +1083,7 @@ const styles = StyleSheet.create({
   historyImprovement: { ...Typography.caption1 },
   compareButton: { alignItems: "center", paddingVertical: Spacing.md },
   compareButtonText: { ...Typography.subhead, fontWeight: "500" },
-  stickyFooter: { position: "absolute", bottom: 0, left: 0, right: 0, paddingHorizontal: Spacing.screenPadding, paddingTop: Spacing.lg, backgroundColor: "rgba(255,255,255,0.95)" },
+  stickyFooter: { position: "absolute", bottom: 0, left: 0, right: 0, paddingTop: Spacing.lg, backgroundColor: "rgba(255,255,255,0.95)" },
 
   drawerOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.4)" },
   drawerContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: Spacing.xl, paddingTop: Spacing.sm },

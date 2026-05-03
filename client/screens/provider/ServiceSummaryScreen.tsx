@@ -358,7 +358,7 @@ export default function ServiceSummaryScreen() {
       </ScrollView>
 
       {/* Fixed bottom bar */}
-      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing.md, borderTopColor: theme.borderLight, backgroundColor: theme.backgroundDefault }]}>
+      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing.md, borderTopColor: theme.borderLight, backgroundColor: theme.backgroundDefault, paddingHorizontal: horizontalPadding }]}>
         <Pressable
           onPress={handleSave}
           disabled={saving}
@@ -394,7 +394,6 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   flex: { flex: 1 },
   content: {
-    paddingHorizontal: Spacing.screenPadding,
     gap: Spacing.lg,
   },
 
@@ -503,7 +502,6 @@ const styles = StyleSheet.create({
 
   // Bottom bar
   bottomBar: {
-    paddingHorizontal: Spacing.screenPadding,
     paddingTop: Spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
     gap: Spacing.sm,

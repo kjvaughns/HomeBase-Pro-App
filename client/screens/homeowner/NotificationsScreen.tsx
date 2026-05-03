@@ -297,6 +297,7 @@ export default function NotificationsScreen() {
             styles.markAllBar,
             {
               paddingTop: headerHeight + Spacing.sm,
+              paddingHorizontal: horizontalPadding,
               backgroundColor: theme.backgroundRoot,
               borderBottomColor: theme.borderLight,
             },
@@ -348,7 +349,6 @@ const styles = StyleSheet.create({
   },
   markAllBar: {
     paddingBottom: Spacing.sm,
-    paddingHorizontal: Spacing.screenPadding,
     borderBottomWidth: StyleSheet.hairlineWidth,
     zIndex: 1,
   },
@@ -363,7 +363,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   sectionHeader: {
-    paddingHorizontal: Spacing.screenPadding,
     paddingTop: Spacing.md,
     paddingBottom: Spacing.xs,
   },
@@ -376,7 +375,6 @@ const styles = StyleSheet.create({
   notificationCard: {
     flexDirection: "row",
     paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.screenPadding,
     gap: Spacing.md,
     borderLeftWidth: 3,
     alignItems: "flex-start",
@@ -424,7 +422,7 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: StyleSheet.hairlineWidth,
-    marginLeft: Spacing.screenPadding + 40 + Spacing.md,
+    marginLeft: 40 + Spacing.md,
   },
   skeletonCard: {
     flexDirection: "row",

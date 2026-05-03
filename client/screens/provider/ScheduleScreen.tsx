@@ -1493,7 +1493,7 @@ export default function ScheduleScreen() {
 
         {/* Week Strip (list mode only) */}
         {!isCalendarMode && !isRouteMode ? (
-          <View style={styles.weekStripWrapper}>
+          <View style={[styles.weekStripWrapper, { marginHorizontal: -horizontalPadding }]}>
             <WeekStrip
               selectedDate={selectedDate}
               jobs={jobs}
@@ -1962,7 +1962,6 @@ const styles = StyleSheet.create({
 
   // Header
   header: {
-    paddingHorizontal: Spacing.screenPadding,
     paddingBottom: Spacing.sm,
   },
   headerRow: {
@@ -1997,14 +1996,12 @@ const styles = StyleSheet.create({
 
   // Week Strip
   weekStripWrapper: {
-    marginHorizontal: -Spacing.screenPadding,
     marginBottom: Spacing.md,
   },
   weekStrip: {
     flexGrow: 0,
   },
   weekStripContent: {
-    paddingHorizontal: Spacing.screenPadding,
     gap: Spacing.xs,
   },
   weekDay: {
@@ -2059,7 +2056,6 @@ const styles = StyleSheet.create({
   content: { flex: 1 },
   loadingBox: { flex: 1, alignItems: "center", justifyContent: "center" },
   listContent: {
-    paddingHorizontal: Spacing.screenPadding,
     paddingTop: Spacing.md,
     paddingBottom: Spacing.xl,
     gap: Spacing.sm,
@@ -2395,7 +2391,6 @@ const styles = StyleSheet.create({
   // Month View
   monthScroll: {
     flex: 1,
-    paddingHorizontal: Spacing.screenPadding,
   },
   monthNavRow: {
     flexDirection: "row",

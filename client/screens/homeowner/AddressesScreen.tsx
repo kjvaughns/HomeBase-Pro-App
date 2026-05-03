@@ -419,7 +419,7 @@ export default function AddressesScreen() {
   const renderAddModal = () => (
     <Modal visible={showAddModal} animationType="slide" presentationStyle="pageSheet">
       <ThemedView style={styles.modalContainer}>
-        <View style={[styles.modalHeader, { paddingTop: insets.top + Spacing.md }]}>
+        <View style={[styles.modalHeader, { paddingTop: insets.top + Spacing.md, paddingHorizontal: horizontalPadding }]}>
           <Pressable onPress={() => { setShowAddModal(false); setEnrichmentData(null); setNickname(""); setSaveError(null); }}>
             <ThemedText style={[styles.modalCancel, { color: Colors.accent }]}>Cancel</ThemedText>
           </Pressable>
@@ -528,7 +528,7 @@ export default function AddressesScreen() {
   const renderEditModal = () => (
     <Modal visible={!!editingHome} animationType="slide" presentationStyle="pageSheet">
       <ThemedView style={styles.modalContainer}>
-        <View style={[styles.modalHeader, { paddingTop: insets.top + Spacing.md }]}>
+        <View style={[styles.modalHeader, { paddingTop: insets.top + Spacing.md, paddingHorizontal: horizontalPadding }]}>
           <Pressable onPress={closeEditModal}>
             <ThemedText style={[styles.modalCancel, { color: Colors.accent }]}>Cancel</ThemedText>
           </Pressable>
@@ -839,7 +839,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: Spacing.screenPadding,
     paddingBottom: Spacing.md,
   },
   modalCancel: {
@@ -849,7 +848,6 @@ const styles = StyleSheet.create({
     ...Typography.headline,
   },
   modalContent: {
-    paddingHorizontal: Spacing.screenPadding,
     paddingTop: Spacing.lg,
   },
   modalIcon: {

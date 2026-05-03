@@ -1481,7 +1481,7 @@ export default function BusinessHubScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabBarContent}
+          contentContainerStyle={[styles.tabBarContent, { paddingHorizontal: horizontalPadding }]}
         >
           {TABS.map((tab) => {
             const isActive = activeTab === tab.key;
@@ -1603,7 +1603,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   tabBarContent: {
-    paddingHorizontal: Spacing.screenPadding,
     gap: Spacing.sm,
   },
   tab: {
@@ -1621,7 +1620,7 @@ const styles = StyleSheet.create({
   },
   content: { flex: 1 },
   tabContent: {
-    padding: Spacing.screenPadding,
+    padding: Spacing.md,
     gap: Spacing.md,
   },
   emptyContainer: {
@@ -1978,7 +1977,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: Spacing.screenPadding,
+    padding: Spacing.md,
     gap: Spacing.md,
   },
   errorTitle: {

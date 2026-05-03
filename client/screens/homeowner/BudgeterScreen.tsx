@@ -100,7 +100,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingHorizontal: Spacing.screenPadding,
     gap: Spacing.xl,
   },
   heroSection: {

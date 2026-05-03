@@ -268,6 +268,7 @@ export default function AIChatScreen() {
               backgroundColor: isDark ? theme.backgroundSecondary : theme.backgroundRoot,
               borderTopColor: theme.borderLight,
               paddingBottom: Math.max(insets.bottom, Spacing.md),
+              paddingHorizontal: horizontalPadding,
             },
           ]}
         >
@@ -332,7 +333,6 @@ const styles = StyleSheet.create({
   },
   messagesContent: {
     flexGrow: 1,
-    paddingHorizontal: Spacing.screenPadding,
   },
   messageContainer: {
     flexDirection: "row",
@@ -426,7 +426,6 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     paddingTop: Spacing.sm,
-    paddingHorizontal: Spacing.screenPadding,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   inputWrapper: {

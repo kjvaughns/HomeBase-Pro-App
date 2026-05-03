@@ -380,6 +380,7 @@ export default function ReviewScreen() {
         style={[
           styles.bottomBar,
           {
+            paddingHorizontal: horizontalPadding,
             backgroundColor: theme.backgroundDefault,
             borderTopColor: theme.borderLight,
             paddingBottom: insets.bottom + Spacing.md,
@@ -493,7 +494,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: Spacing.screenPadding,
     paddingTop: Spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "rgba(0,0,0,0.1)",

@@ -389,7 +389,7 @@ export default function LeadsScreen() {
   );
 
   const renderHeader = () => (
-    <View style={styles.filterWrapper}>
+    <View style={[styles.filterWrapper, { paddingHorizontal: horizontalPadding }]}>
       {submissions.length > 0 ? (
         <View style={[styles.sectionLabel, { borderBottomColor: theme.separator }]}>
           <Feather name="bell" size={14} color={Colors.accent} />
@@ -672,7 +672,6 @@ const styles = StyleSheet.create({
   },
   filterWrapper: {
     marginBottom: Spacing.md,
-    paddingHorizontal: Spacing.screenPadding,
   },
   filterChips: {
     paddingVertical: Spacing.sm,

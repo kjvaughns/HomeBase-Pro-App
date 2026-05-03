@@ -1638,7 +1638,7 @@ export default function ServiceBlueprintWizardScreen() {
     return (
       <Modal visible={previewVisible} animationType="slide" presentationStyle="pageSheet">
         <ThemedView style={styles.flex}>
-          <View style={[styles.previewHeader, { paddingTop: insets.top + Spacing.md, borderBottomColor: theme.borderLight }]}>
+          <View style={[styles.previewHeader, { paddingTop: insets.top + Spacing.md, borderBottomColor: theme.borderLight, paddingHorizontal: horizontalPadding }]}>
             <View style={[styles.previewBanner, { backgroundColor: Colors.accent + "15" }]}>
               <Feather name="eye" size={14} color={Colors.accent} />
               <ThemedText style={[styles.previewBannerText, { color: Colors.accent }]}>Customer View</ThemedText>
@@ -1649,7 +1649,7 @@ export default function ServiceBlueprintWizardScreen() {
           </View>
           <ScrollView
             style={styles.flex}
-            contentContainerStyle={[styles.previewContent, { paddingBottom: insets.bottom + 40 }]}
+            contentContainerStyle={[styles.previewContent, { paddingBottom: insets.bottom + 40, paddingHorizontal: horizontalPadding }]}
             showsVerticalScrollIndicator={false}
           >
             <GlassCard style={styles.previewServiceCard}>
@@ -1772,7 +1772,7 @@ export default function ServiceBlueprintWizardScreen() {
   return (
     <ThemedView style={styles.container}>
       {isQuickEdit ? null : (
-        <View style={[styles.progressRow, { paddingTop: headerHeight + Spacing.xs }]}>
+        <View style={[styles.progressRow, { paddingTop: headerHeight + Spacing.xs, paddingHorizontal: horizontalPadding }]}>
           <View style={styles.progressLabelRow}>
             <ThemedText style={[styles.stepLabel, { color: theme.textTertiary }]}>
               {WIZARD_STEPS[step]}
@@ -1793,7 +1793,7 @@ export default function ServiceBlueprintWizardScreen() {
       {step === 5 ? renderStep4() : null}
       {step === 6 ? renderStep5() : null}
 
-      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing.sm, borderTopColor: theme.borderLight, backgroundColor: theme.backgroundDefault }]}>
+      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing.sm, borderTopColor: theme.borderLight, backgroundColor: theme.backgroundDefault, paddingHorizontal: horizontalPadding }]}>
         <PrimaryButton
           onPress={handleCTA}
           disabled={!canProceed[step] || saving}
@@ -1813,7 +1813,6 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   flex: { flex: 1 },
   progressRow: {
-    paddingHorizontal: Spacing.screenPadding,
     paddingBottom: Spacing.xs,
     gap: Spacing.xs,
   },
@@ -1831,7 +1830,7 @@ const styles = StyleSheet.create({
   },
   progressSegment: { height: 4, borderRadius: BorderRadius.full },
   stepLabel: { ...Typography.caption, textTransform: "uppercase", letterSpacing: 0.5 },
-  stepContent: { paddingHorizontal: Spacing.screenPadding, gap: Spacing.md },
+  stepContent: { gap: Spacing.md },
   stepInner: { gap: Spacing.md },
   stepHeading: { fontWeight: "700", marginBottom: 2 },
   stepSubheading: { ...Typography.body, lineHeight: 22, marginBottom: Spacing.xs },
@@ -2116,7 +2115,6 @@ const styles = StyleSheet.create({
   },
   deleteConfirmDeleteText: { ...Typography.body, fontWeight: "700", color: "#fff" },
   bottomBar: {
-    paddingHorizontal: Spacing.screenPadding,
     paddingTop: Spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
@@ -2124,7 +2122,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: Spacing.screenPadding,
     paddingBottom: Spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
@@ -2139,7 +2136,6 @@ const styles = StyleSheet.create({
   previewBannerText: { ...Typography.caption, fontWeight: "600" },
   previewClose: { padding: Spacing.xs },
   previewContent: {
-    paddingHorizontal: Spacing.screenPadding,
     paddingTop: Spacing.lg,
     gap: Spacing.md,
   },

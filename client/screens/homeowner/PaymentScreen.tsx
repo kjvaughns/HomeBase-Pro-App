@@ -366,7 +366,7 @@ export default function PaymentScreen() {
 
       </ScrollView>
 
-      <View style={[styles.bottomBar, { backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.md }]}>
+      <View style={[styles.bottomBar, { backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.md, paddingHorizontal: horizontalPadding }]}>
         <PrimaryButton
           onPress={handlePayInvoice}
           disabled={isProcessing}
@@ -447,7 +447,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: Spacing.screenPadding,
     paddingTop: Spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "rgba(0,0,0,0.1)",
@@ -456,7 +455,7 @@ const styles = StyleSheet.create({
   altPayText: { ...Typography.subhead },
   successIconCircle: { width: 100, height: 100, borderRadius: 50, alignItems: "center", justifyContent: "center", marginBottom: Spacing.xl },
   successTitle: { ...Typography.title1, fontWeight: "700", marginBottom: Spacing.sm, textAlign: "center" },
-  successSubtitle: { ...Typography.body, textAlign: "center", marginBottom: Spacing.xl, paddingHorizontal: Spacing.screenPadding },
+  successSubtitle: { ...Typography.body, textAlign: "center", marginBottom: Spacing.xl },
   successBtn: { width: "80%" },
   returnNotice: {
     flexDirection: "row",

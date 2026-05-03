@@ -1291,7 +1291,7 @@ export default function ProviderJobDetailScreen() {
         ) : null}
       </ScrollView>
 
-      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing.md, backgroundColor: theme.backgroundRoot }]}>
+      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing.md, backgroundColor: theme.backgroundRoot, paddingHorizontal: horizontalPadding }]}>
         {!isOnline ? (
           <ThemedText
             style={[styles.offlineBottomCaption, { color: theme.textSecondary }]}
@@ -1793,7 +1793,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: Spacing.screenPadding,
     paddingTop: Spacing.md,
     borderTopWidth: 1,
     borderTopColor: "rgba(0,0,0,0.1)",

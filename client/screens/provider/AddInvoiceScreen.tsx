@@ -710,6 +710,7 @@ function ClientPickerModal({
   theme,
   insets,
 }: ClientPickerModalProps) {
+  const { horizontalPadding } = useLayout();
   return (
     <KeyboardAvoidingView
       style={modalStyles.overlay}
@@ -720,7 +721,7 @@ function ClientPickerModal({
         {/* Handle */}
         <View style={[modalStyles.handle, { backgroundColor: theme.separator }]} />
 
-        <View style={modalStyles.sheetHeader}>
+        <View style={[modalStyles.sheetHeader, { paddingHorizontal: horizontalPadding }]}>
           <ThemedText style={modalStyles.sheetTitle}>Select Client</ThemedText>
           <Pressable onPress={onClose} hitSlop={12} testID="button-close-client-picker">
             <Feather name="x" size={22} color={theme.textSecondary} />
@@ -728,7 +729,7 @@ function ClientPickerModal({
         </View>
 
         {/* Search */}
-        <View style={[modalStyles.searchRow, { backgroundColor: theme.backgroundSecondary, borderColor: theme.separator }]}>
+        <View style={[modalStyles.searchRow, { backgroundColor: theme.backgroundSecondary, borderColor: theme.separator, marginHorizontal: horizontalPadding }]}>
           <Feather name="search" size={16} color={theme.textTertiary} />
           <RNTextInput
             style={[modalStyles.searchInput, { color: theme.text }]}
@@ -746,7 +747,7 @@ function ClientPickerModal({
           ) : null}
         </View>
 
-        <ScrollView style={modalStyles.list} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <ScrollView style={modalStyles.list} contentContainerStyle={{ paddingHorizontal: horizontalPadding }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {filteredClients.length === 0 ? (
             <View style={modalStyles.emptyState}>
               <Feather name="users" size={24} color={theme.textTertiary} />
@@ -824,6 +825,7 @@ function ServicePickerModal({
   theme,
   insets,
 }: ServicePickerModalProps) {
+  const { horizontalPadding } = useLayout();
   return (
     <KeyboardAvoidingView
       style={modalStyles.overlay}
@@ -834,14 +836,14 @@ function ServicePickerModal({
         {/* Handle */}
         <View style={[modalStyles.handle, { backgroundColor: theme.separator }]} />
 
-        <View style={modalStyles.sheetHeader}>
+        <View style={[modalStyles.sheetHeader, { paddingHorizontal: horizontalPadding }]}>
           <ThemedText style={modalStyles.sheetTitle}>Add Service</ThemedText>
           <Pressable onPress={onClose} hitSlop={12} testID="button-close-service-picker">
             <Feather name="x" size={22} color={theme.textSecondary} />
           </Pressable>
         </View>
 
-        <ScrollView style={modalStyles.list} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <ScrollView style={modalStyles.list} contentContainerStyle={{ paddingHorizontal: horizontalPadding }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {/* Custom Job — always first */}
           <Pressable
             style={[modalStyles.serviceRow, { borderColor: theme.separator }]}
@@ -1131,7 +1133,6 @@ const modalStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: Spacing.screenPadding,
     marginBottom: Spacing.md,
   },
   sheetTitle: {
@@ -1142,7 +1143,6 @@ const modalStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.sm,
-    marginHorizontal: Spacing.screenPadding,
     marginBottom: Spacing.sm,
     borderRadius: BorderRadius.md,
     borderWidth: StyleSheet.hairlineWidth,
@@ -1154,9 +1154,7 @@ const modalStyles = StyleSheet.create({
     ...Typography.body,
     flex: 1,
   },
-  list: {
-    paddingHorizontal: Spacing.screenPadding,
-  },
+  list: {},
   clientRow: {
     flexDirection: "row",
     alignItems: "center",

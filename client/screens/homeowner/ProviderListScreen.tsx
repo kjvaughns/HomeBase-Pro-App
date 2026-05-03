@@ -293,14 +293,14 @@ export default function ProviderListScreen() {
             { backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.md },
           ]}
         >
-          <View style={styles.modalHeader}>
+          <View style={[styles.modalHeader, { paddingHorizontal: horizontalPadding }]}>
             <ThemedText style={styles.modalTitle}>Filters</ThemedText>
             <Pressable onPress={() => setShowFilterModal(false)}>
               <Feather name="x" size={24} color={theme.text} />
             </Pressable>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+          <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll} contentContainerStyle={{ paddingHorizontal: horizontalPadding }}>
             <View style={styles.filterSection}>
               <ThemedText style={styles.filterLabel}>Minimum Rating</ThemedText>
               <View style={styles.optionsRow}>
@@ -429,7 +429,7 @@ export default function ProviderListScreen() {
             </View>
           </ScrollView>
 
-          <View style={styles.modalActions}>
+          <View style={[styles.modalActions, { paddingHorizontal: horizontalPadding }]}>
             <Pressable
               onPress={resetFilters}
               style={[styles.resetButton, { borderColor: theme.borderLight }]}
@@ -469,7 +469,7 @@ export default function ProviderListScreen() {
   const renderEmpty = () => {
     if (providersLoading) {
       return (
-        <View style={styles.skeletonContainer}>
+        <View style={[styles.skeletonContainer, { paddingHorizontal: horizontalPadding }]}>
           <SkeletonCard />
           <SkeletonCard />
           <SkeletonCard />
@@ -643,7 +643,6 @@ const styles = StyleSheet.create({
   },
   skeletonContainer: {
     paddingTop: Spacing.lg,
-    paddingHorizontal: Spacing.screenPadding,
   },
   emptyTitle: {
     ...Typography.headline,
@@ -667,16 +666,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: Spacing.screenPadding,
     paddingBottom: Spacing.md,
   },
   modalTitle: {
     ...Typography.title2,
     fontWeight: "700",
   },
-  modalScroll: {
-    paddingHorizontal: Spacing.screenPadding,
-  },
+  modalScroll: {},
   filterSection: {
     marginBottom: Spacing.lg,
   },
@@ -717,7 +713,6 @@ const styles = StyleSheet.create({
   modalActions: {
     flexDirection: "row",
     gap: Spacing.sm,
-    paddingHorizontal: Spacing.screenPadding,
     paddingTop: Spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "rgba(0,0,0,0.1)",

@@ -106,6 +106,7 @@ interface ClientCardProps {
 
 function ClientCard({ client, onPress, onCall, onMessage, lastMessage }: ClientCardProps) {
   const { theme } = useTheme();
+  const { horizontalPadding } = useLayout();
 
   const statusColor = useMemo(() => {
     switch (client.status) {
@@ -128,7 +129,7 @@ function ClientCard({ client, onPress, onCall, onMessage, lastMessage }: ClientC
 
   return (
     <Pressable onPress={onPress} testID={`client-card-${client.id}`}>
-      <GlassCard style={styles.clientCard}>
+      <GlassCard style={[styles.clientCard, { marginHorizontal: horizontalPadding }]}>
         <View style={styles.clientHeader}>
           <View style={styles.clientHeaderLeft}>
             <View style={[styles.avatar, { backgroundColor: Colors.accent + "20" }]}>
@@ -414,7 +415,7 @@ export default function ClientsScreen() {
   };
 
   const renderHeader = () => (
-    <View style={styles.headerContainer}>
+    <View style={[styles.headerContainer, { paddingHorizontal: horizontalPadding }]}>
       <FilterChips
         options={STATUS_FILTERS.map((f) => ({
           ...f,
@@ -495,7 +496,7 @@ export default function ClientsScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <View style={[styles.titleSection, { paddingTop: insets.top + Spacing.md, paddingHorizontal: Spacing.screenPadding }]}>
+      <View style={[styles.titleSection, { paddingTop: insets.top + Spacing.md, paddingHorizontal: horizontalPadding }]}>
         <View style={styles.titleRow}>
           <View>
             <ThemedText type="h1">Clients</ThemedText>
@@ -548,7 +549,7 @@ export default function ClientsScreen() {
           {
             paddingTop: Spacing.lg,
             paddingBottom: insets.bottom + 100,
-            paddingHorizontal: Math.max(0, horizontalPadding - Spacing.screenPadding),
+            paddingHorizontal: 0,
           },
           filteredClients.length === 0 && styles.emptyContainer,
         ]}
@@ -574,7 +575,6 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   headerContainer: {
-    paddingHorizontal: Spacing.screenPadding,
     marginBottom: Spacing.md,
   },
   titleRow: {
@@ -628,7 +628,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
   },
   clientCard: {
-    marginHorizontal: Spacing.screenPadding,
     marginBottom: Spacing.sm,
   },
   clientHeader: {
@@ -707,6 +706,5 @@ const styles = StyleSheet.create({
   emptyContainer: {
     flexGrow: 1,
     justifyContent: "center",
-    paddingHorizontal: Spacing.screenPadding,
   },
 });

@@ -1231,6 +1231,7 @@ export default function AddJobScreen() {
               {
                 backgroundColor: theme.backgroundRoot,
                 paddingBottom: Math.max(insets.bottom, Spacing.lg),
+                paddingHorizontal: horizontalPadding,
               },
             ]}
           >
@@ -1459,6 +1460,7 @@ export default function AddJobScreen() {
               {
                 backgroundColor: theme.backgroundRoot,
                 paddingBottom: Math.max(insets.bottom, Spacing.lg),
+                paddingHorizontal: horizontalPadding,
               },
             ]}
           >
@@ -2033,7 +2035,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingTop: Spacing.sm,
-    paddingHorizontal: Spacing.screenPadding,
     maxHeight: "85%",
   },
   sheetHandle: {

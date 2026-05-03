@@ -264,7 +264,7 @@ export default function SavedProvidersScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  list: { paddingHorizontal: Spacing.screenPadding, flexGrow: 1 },
+  list: { flexGrow: 1 },
   listHeader: { marginBottom: Spacing.lg },
   searchContainer: { flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.md, gap: Spacing.sm, marginBottom: Spacing.md },
   searchInput: { flex: 1, ...Typography.body, paddingVertical: Spacing.xs },

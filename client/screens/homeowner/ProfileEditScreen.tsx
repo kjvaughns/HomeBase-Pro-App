@@ -194,7 +194,7 @@ export default function ProfileEditScreen() {
       <View
         style={[
           styles.bottomBar,
-          { backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.md },
+          { paddingHorizontal: horizontalPadding, backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.md },
         ]}
       >
         <PrimaryButton
@@ -256,7 +256,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: Spacing.screenPadding,
     paddingTop: Spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "rgba(0,0,0,0.1)",

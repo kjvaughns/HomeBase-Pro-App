@@ -715,7 +715,7 @@ export default function ProviderProfileScreen() {
       </ScrollView>
 
       <View
-        style={[styles.bottomBar, { backgroundColor: theme.backgroundRoot, paddingBottom: insets.bottom + Spacing.md }]}
+        style={[styles.bottomBar, { backgroundColor: theme.backgroundRoot, paddingBottom: insets.bottom + Spacing.md, paddingHorizontal: horizontalPadding }]}
         onLayout={(e) => {
           const h = e.nativeEvent.layout.height;
           if (h > 0 && Math.abs(h - bottomBarHeight) > 1) setBottomBarHeight(h);
@@ -800,7 +800,6 @@ const styles = StyleSheet.create({
   },
   skeletonContainer: {
     paddingTop: Spacing["2xl"],
-    paddingHorizontal: Spacing.screenPadding,
     paddingBottom: Spacing.xl,
   },
   loadingText: {
@@ -1051,7 +1050,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: Spacing.screenPadding,
     paddingTop: Spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "rgba(0,0,0,0.1)",

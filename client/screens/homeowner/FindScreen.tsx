@@ -418,7 +418,7 @@ export default function FindScreen() {
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.savedProvidersRow}
+                contentContainerStyle={[styles.savedProvidersRow, { paddingRight: horizontalPadding }]}
               >
                 {savedProviders.slice(0, 5).map((provider) => (
                   <Pressable
@@ -1221,16 +1221,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: Spacing.screenPadding,
     paddingBottom: Spacing.md,
   },
   modalTitle: {
     ...Typography.title2,
     fontWeight: "700",
   },
-  modalScroll: {
-    paddingHorizontal: Spacing.screenPadding,
-  },
+  modalScroll: {},
   filterSection: {
     marginBottom: Spacing.lg,
   },
@@ -1259,7 +1256,6 @@ const styles = StyleSheet.create({
   modalActions: {
     flexDirection: "row",
     gap: Spacing.sm,
-    paddingHorizontal: Spacing.screenPadding,
     paddingTop: Spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "rgba(0,0,0,0.1)",
@@ -1282,7 +1278,6 @@ const styles = StyleSheet.create({
   savedProvidersRow: {
     paddingVertical: Spacing.sm,
     gap: Spacing.sm,
-    paddingRight: Spacing.screenPadding,
   },
   savedProviderCard: {
     width: 100,

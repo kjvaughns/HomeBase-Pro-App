@@ -572,7 +572,7 @@ export default function ProviderHomeScreen() {
           />
         }
       >
-        <View style={{ marginHorizontal: -Spacing.screenPadding }}>
+        <View style={{ marginHorizontal: -horizontalPadding }}>
           <GracePeriodBanner />
         </View>
 
@@ -1086,7 +1086,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: Spacing.screenPadding,
+    paddingHorizontal: Spacing.xl,
   },
   loadingText: {
     ...Typography.body,

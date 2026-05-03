@@ -376,14 +376,14 @@ export default function CommunicationsScreen() {
         onRequestClose={() => setShowClientPicker(false)}
       >
         <ThemedView style={styles.pickerModal}>
-          <View style={styles.pickerHeader}>
+          <View style={[styles.pickerHeader, { paddingHorizontal: horizontalPadding }]}>
             <ThemedText type="h2">Select Client</ThemedText>
             <Pressable onPress={() => setShowClientPicker(false)} style={styles.closeButton}>
               <Feather name="x" size={22} color={theme.text} />
             </Pressable>
           </View>
 
-          <View style={[styles.searchBar, { backgroundColor: theme.cardBackground }]}>
+          <View style={[styles.searchBar, { backgroundColor: theme.cardBackground, marginHorizontal: horizontalPadding }]}>
             <Feather name="search" size={16} color={theme.textSecondary} />
             <TextInput
               style={[styles.searchInput, { color: theme.text }]}
@@ -451,7 +451,7 @@ export default function CommunicationsScreen() {
         transparent
         onRequestClose={() => setShowBroadcastConfirm(false)}
       >
-        <View style={styles.confirmOverlay}>
+        <View style={[styles.confirmOverlay, { paddingHorizontal: horizontalPadding }]}>
           <View style={[styles.confirmDialog, { backgroundColor: theme.background }]}>
             <View style={[styles.confirmIconWrap, { backgroundColor: Colors.accent + "20" }]}>
               <Feather name="send" size={24} color={Colors.accent} />
@@ -583,7 +583,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: Spacing.screenPadding,
     marginBottom: Spacing.lg,
   },
   closeButton: {
@@ -595,7 +594,6 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.card,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
-    marginHorizontal: Spacing.screenPadding,
     marginBottom: Spacing.lg,
     gap: Spacing.sm,
   },
@@ -621,7 +619,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.5)",
     alignItems: "center",
     justifyContent: "center",
-    padding: Spacing.screenPadding,
   },
   confirmDialog: {
     width: "100%",
