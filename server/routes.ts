@@ -137,6 +137,12 @@ import {
   applyToFollowing as applyToFollowingService,
   isSupportedFrequency,
 } from "./recurringJobsService";
+import {
+  buildRoute,
+  geocodeJobs,
+  type JobInput,
+  type RoutePoint,
+} from "./routeOptimizationService";
 
 import { generateToken, authenticateJWT } from "./auth";
 const BCRYPT_SALT_ROUNDS = 10;
@@ -8255,6 +8261,174 @@ Respond with JSON only:
       } catch (error) {
         console.error("Get jobs error:", error);
         res.status(500).json({ error: "Failed to get jobs" });
+      }
+    },
+  );
+
+  // POST /api/provider/:providerId/route/optimize  (Task #301)
+  // Computes a one-day field-service route. The body specifies which day to
+  // route, optionally an origin (provider's current GPS or a manually-entered
+  // starting address), and optionally a manual `order` (jobIds) so the
+  // provider's drag-reorder result can be re-priced without re-optimizing.
+  // Returns: { origin, stops[], totalMinutes, totalMiles, driveTimeSource,
+  //           missing[] (jobs whose address could not be geocoded) }.
+  app.post(
+    "/api/provider/:providerId/route/optimize",
+    requireAuth,
+    async (
+      req: Request<
+        ProviderIdParams,
+        unknown,
+        {
+          date?: string;
+          originLat?: number;
+          originLng?: number;
+          originAddress?: string;
+          order?: string[];
+        }
+      >,
+      res: Response,
+    ) => {
+      try {
+        if (!(await assertProviderOwnership(req, req.params.providerId, res)))
+          return;
+        const { date, originLat, originLng, originAddress, order } = req.body;
+        if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+          return res
+            .status(400)
+            .json({ error: "date (YYYY-MM-DD) is required" });
+        }
+        // Resolve the day window in the server's local time (matches how
+        // jobs.scheduledDate is stored — date-only).
+        const dayStart = new Date(`${date}T00:00:00`);
+        const dayEnd = new Date(`${date}T23:59:59`);
+
+        const allJobs = await storage.getJobs(req.params.providerId);
+        const dayJobs = allJobs.filter((j) => {
+          const d = new Date(j.scheduledDate);
+          return d >= dayStart && d <= dayEnd && j.status !== "cancelled";
+        });
+
+        if (dayJobs.length === 0) {
+          return res.json({
+            origin: null,
+            stops: [],
+            totalMinutes: 0,
+            totalMiles: 0,
+            driveTimeSource: "haversine",
+            missing: [],
+          });
+        }
+
+        // Pre-load client names so we can return them with each stop.
+        const clientIds = Array.from(
+          new Set(dayJobs.map((j) => j.clientId).filter(Boolean) as string[]),
+        );
+        const clientMap = new Map<
+          string,
+          { firstName: string | null; lastName: string | null }
+        >();
+        for (const cid of clientIds) {
+          const c = await storage.getClient(cid);
+          if (c) {
+            clientMap.set(cid, {
+              firstName: c.firstName ?? null,
+              lastName: c.lastName ?? null,
+            });
+          }
+        }
+
+        const inputs: JobInput[] = dayJobs.map((j) => {
+          const c = j.clientId ? clientMap.get(j.clientId) : null;
+          const clientName = c
+            ? [c.firstName, c.lastName].filter(Boolean).join(" ") || null
+            : null;
+          return {
+            jobId: j.id,
+            title: j.title || "Job",
+            scheduledTime: j.scheduledTime ?? null,
+            clientName,
+            address: j.address ?? "",
+          };
+        });
+
+        const { resolved, missing } = await geocodeJobs(inputs);
+        if (resolved.length === 0) {
+          return res.json({
+            origin: null,
+            stops: [],
+            totalMinutes: 0,
+            totalMiles: 0,
+            driveTimeSource: "haversine",
+            missing: missing.map((m) => ({
+              jobId: m.jobId,
+              title: m.title,
+              address: m.address,
+            })),
+          });
+        }
+
+        // Determine origin: explicit lat/lng > geocoded originAddress > the
+        // first resolved stop (so the route still has a valid starting point
+        // even when the provider hasn't shared location).
+        let origin: RoutePoint | null = null;
+        // Validate coords: finite, in WGS-84 range, and not the (0,0) null
+        // island sentinel that would otherwise produce nonsense routes.
+        const validCoords =
+          typeof originLat === "number" &&
+          typeof originLng === "number" &&
+          Number.isFinite(originLat) &&
+          Number.isFinite(originLng) &&
+          originLat >= -90 &&
+          originLat <= 90 &&
+          originLng >= -180 &&
+          originLng <= 180 &&
+          !(originLat === 0 && originLng === 0);
+        if (validCoords) {
+          origin = {
+            lat: originLat,
+            lng: originLng,
+            address: originAddress?.trim() || "Current location",
+          };
+        } else if (originAddress && originAddress.trim().length >= 3) {
+          const g = await geocodeAddress(originAddress.trim());
+          if (g) {
+            origin = {
+              lat: g.latitude,
+              lng: g.longitude,
+              address: g.formattedAddress,
+            };
+          }
+        }
+        if (!origin) {
+          origin = {
+            lat: resolved[0].lat,
+            lng: resolved[0].lng,
+            address: resolved[0].address,
+          };
+        }
+
+        const route = await buildRoute({
+          origin,
+          jobs: resolved,
+          manualOrder: Array.isArray(order) ? order : undefined,
+        });
+
+        return res.json({
+          origin: route.origin,
+          stops: route.stops,
+          totalMinutes: route.totalMinutes,
+          totalMiles: route.totalMiles,
+          driveTimeSource: route.driveTimeSource,
+          missing: missing.map((m) => ({
+            jobId: m.jobId,
+            title: m.title,
+            address: m.address,
+          })),
+        });
+      } catch (err) {
+        console.error("[route/optimize] error:", err);
+        res.status(500).json({ error: "Failed to optimize route" });
       }
     },
   );

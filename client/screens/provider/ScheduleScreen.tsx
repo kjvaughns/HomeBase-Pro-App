@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useCallback } from "react";
+import React, { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -35,6 +35,7 @@ import { useAuthStore } from "@/state/authStore";
 import { apiRequest } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { QuickAddJobSheet } from "@/components/QuickAddJobSheet";
+import { RouteView } from "@/components/RouteView";
 
 // ─── Long-press wrapper using react-native-gesture-handler ───────────────────
 
@@ -97,7 +98,7 @@ type JobStatus =
   | "cancelled";
 
 type StatusFilter = "all" | "scheduled" | "active" | "done";
-type ViewMode = "list" | "month";
+type ViewMode = "list" | "month" | "route";
 
 interface Job {
   id: string;
@@ -1019,7 +1020,16 @@ export default function ScheduleScreen() {
   const queryClient = useQueryClient();
 
   const providerId = providerProfile?.id;
-  const today = useMemo(() => startOfDay(new Date()), []);
+  const [today, setToday] = useState<Date>(() => startOfDay(new Date()));
+  // Re-anchor `today` if the calendar day rolls over while the screen is
+  // mounted (so Route view stays current overnight).
+  useEffect(() => {
+    const id = setInterval(() => {
+      const t = startOfDay(new Date());
+      setToday((prev) => (isSameDay(prev, t) ? prev : t));
+    }, 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedDate, setSelectedDate] = useState<Date>(today);
@@ -1280,6 +1290,7 @@ export default function ScheduleScreen() {
   ]);
 
   const isCalendarMode = viewMode === "month";
+  const isRouteMode = viewMode === "route";
 
   return (
     <ThemedView style={styles.container}>
@@ -1293,30 +1304,46 @@ export default function ScheduleScreen() {
               : "Schedule"}
           </ThemedText>
           <View style={styles.headerActions}>
-            <Pressable
-              style={[
-                styles.iconBtn,
-                {
-                  backgroundColor: isCalendarMode
-                    ? Colors.accent
-                    : theme.backgroundSecondary,
-                },
-              ]}
-              onPress={() => {
-                setViewMode(isCalendarMode ? "list" : "month");
-                setSelectedDate(today);
-                setCalendarMonth(
-                  new Date(today.getFullYear(), today.getMonth(), 1),
-                );
-              }}
-              testID="button-calendar-toggle"
-            >
-              <Feather
-                name="calendar"
-                size={16}
-                color={isCalendarMode ? "#FFFFFF" : theme.textSecondary}
-              />
-            </Pressable>
+            {(["list", "month", "route"] as const).map((mode) => {
+              const active = viewMode === mode;
+              const icon =
+                mode === "list"
+                  ? "list"
+                  : mode === "month"
+                    ? "calendar"
+                    : "map";
+              return (
+                <Pressable
+                  key={mode}
+                  style={[
+                    styles.iconBtn,
+                    {
+                      backgroundColor: active
+                        ? Colors.accent
+                        : theme.backgroundSecondary,
+                    },
+                  ]}
+                  onPress={() => {
+                    setViewMode(mode);
+                    if (mode !== "list") {
+                      setSelectedDate(today);
+                    }
+                    if (mode === "month") {
+                      setCalendarMonth(
+                        new Date(today.getFullYear(), today.getMonth(), 1),
+                      );
+                    }
+                  }}
+                  testID={`button-view-${mode}`}
+                >
+                  <Feather
+                    name={icon}
+                    size={16}
+                    color={active ? "#FFFFFF" : theme.textSecondary}
+                  />
+                </Pressable>
+              );
+            })}
             <Pressable
               style={[styles.addBtn, { backgroundColor: Colors.accent }]}
               onPress={handleAddJob}
@@ -1328,7 +1355,7 @@ export default function ScheduleScreen() {
         </View>
 
         {/* Week Strip (list mode only) */}
-        {!isCalendarMode ? (
+        {!isCalendarMode && !isRouteMode ? (
           <View style={styles.weekStripWrapper}>
             <WeekStrip
               selectedDate={selectedDate}
@@ -1340,7 +1367,7 @@ export default function ScheduleScreen() {
         ) : null}
 
         {/* Status Filter Chips */}
-        {!isCalendarMode ? (
+        {!isCalendarMode && !isRouteMode ? (
           <View style={styles.chipsRow}>
             {STATUS_CHIPS.map((chip) => {
               const isActive = statusFilter === chip.key;
@@ -1374,8 +1401,20 @@ export default function ScheduleScreen() {
       </View>
 
       {/* ── Content ── */}
-      <View style={[styles.content, { paddingBottom: tabBarHeight }]}>
-        {isCalendarMode ? (
+      <View style={[styles.content, { paddingBottom: tabBarHeight, paddingHorizontal: isRouteMode ? horizontalPadding : 0 }]}>
+        {isRouteMode ? (
+          providerId ? (
+            <RouteView
+              providerId={providerId}
+              date={today}
+              onJobPress={handleJobPress}
+            />
+          ) : (
+            <View style={styles.loadingBox}>
+              <ActivityIndicator size="large" color={Colors.accent} />
+            </View>
+          )
+        ) : isCalendarMode ? (
           <MonthView
             selectedDate={selectedDate}
             calendarMonth={calendarMonth}
