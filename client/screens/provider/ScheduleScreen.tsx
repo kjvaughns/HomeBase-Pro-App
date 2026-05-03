@@ -1073,25 +1073,27 @@ export default function ScheduleScreen() {
     time: string;
   }>({ visible: false, date: today, time: "09:00" });
 
+  const isOnline = useNetworkStore((s) => s.isOnline);
+
   const {
     data: jobsData,
     isLoading,
     refetch,
   } = useQuery<{ jobs: Job[] }>({
     queryKey: ["/api/provider", providerId, "jobs"],
-    enabled: !!providerId,
+    enabled: !!providerId && isOnline,
   });
 
   const { data: clientsData } = useQuery<{ clients: Client[] }>({
     queryKey: ["/api/provider", providerId, "clients"],
-    enabled: !!providerId,
+    enabled: !!providerId && isOnline,
   });
 
   const { data: crewData } = useQuery<{
     crew: { id: string; name: string; color: string; isActive: boolean }[];
   }>({
     queryKey: ["/api/provider", providerId, "crew"],
-    enabled: !!providerId,
+    enabled: !!providerId && isOnline,
   });
   const crew = (crewData?.crew || []).filter((c) => c.isActive);
   const crewColorById = useMemo(() => {
@@ -1100,7 +1102,6 @@ export default function ScheduleScreen() {
     return m;
   }, [crew]);
 
-  const isOnline = useNetworkStore((s) => s.isOnline);
   const [offlineSnapshot, setOfflineSnapshot] = useState<{
     jobs: Job[];
     clients: Client[];

@@ -1235,7 +1235,7 @@ export default function ProviderJobDetailScreen() {
                   { borderColor: Colors.accent, opacity: isOnline ? 1 : 0.5 },
                 ]}
                 onPress={handleUploadPhotos}
-                disabled={isUploadingPhotos || !isOnline}
+                disabled={isUploadingPhotos}
               >
                 {isUploadingPhotos ? (
                   <ActivityIndicator size="small" color={Colors.accent} />
@@ -1264,9 +1264,11 @@ export default function ProviderJobDetailScreen() {
           <>
             {canRecordPayment ? (
               <PrimaryButton
-                onPress={() => setPaymentSheetOpen(true)}
-                style={styles.actionButton}
-                disabled={!isOnline}
+                onPress={() => {
+                  if (!isOnline) { blockOffline(); return; }
+                  setPaymentSheetOpen(true);
+                }}
+                style={[styles.actionButton, !isOnline && { opacity: 0.5 }]}
                 testID="button-record-payment-job"
               >
                 Record Payment
@@ -1274,17 +1276,16 @@ export default function ProviderJobDetailScreen() {
             ) : (
               <PrimaryButton
                 onPress={handleCreateInvoice}
-                style={styles.actionButton}
-                disabled={!isOnline}
+                style={[styles.actionButton, !isOnline && { opacity: 0.5 }]}
               >
                 Create Invoice
               </PrimaryButton>
             )}
             <PrimaryButton
               onPress={handleRequestReview}
-              style={styles.actionButton}
+              style={[styles.actionButton, !isOnline && { opacity: 0.5 }]}
               loading={requestReviewMutation.isPending}
-              disabled={requestReviewMutation.isPending || !isOnline}
+              disabled={requestReviewMutation.isPending}
               testID="button-request-review-job"
             >
               Request a Review
@@ -1293,8 +1294,8 @@ export default function ProviderJobDetailScreen() {
         ) : nextAction ? (
           <PrimaryButton
             onPress={() => handleUpdateStatus(nextAction.status)}
-            style={styles.actionButton}
-            disabled={updateJobMutation.isPending || completeJobMutation.isPending || !isOnline}
+            style={[styles.actionButton, !isOnline && { opacity: 0.5 }]}
+            disabled={updateJobMutation.isPending || completeJobMutation.isPending}
           >
             {(updateJobMutation.isPending || completeJobMutation.isPending) ? "Updating..." : nextAction.label}
           </PrimaryButton>
@@ -1307,7 +1308,7 @@ export default function ProviderJobDetailScreen() {
               { borderColor: Colors.accent, opacity: isOnline ? 1 : 0.5 },
             ]}
             onPress={handleRestore}
-            disabled={restoreJobMutation.isPending || !isOnline}
+            disabled={restoreJobMutation.isPending}
             testID="button-restore-job"
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -1327,7 +1328,7 @@ export default function ProviderJobDetailScreen() {
                 { borderColor: theme.border, opacity: isOnline ? 1 : 0.5 },
               ]}
               onPress={handleReschedulePress}
-              disabled={rescheduleMutation.isPending || !isOnline}
+              disabled={rescheduleMutation.isPending}
               testID="button-reschedule-job"
             >
               <ThemedText type="body">
@@ -1340,7 +1341,7 @@ export default function ProviderJobDetailScreen() {
                 { borderColor: theme.border, opacity: isOnline ? 1 : 0.5 },
               ]}
               onPress={handleWeatherHold}
-              disabled={weatherHoldMutation.isPending || !isOnline}
+              disabled={weatherHoldMutation.isPending}
               testID="button-weather-hold-job"
             >
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -1356,7 +1357,6 @@ export default function ProviderJobDetailScreen() {
                 { borderColor: "#EF4444", opacity: isOnline ? 1 : 0.5 },
               ]}
               onPress={handleCancel}
-              disabled={!isOnline}
             >
               <ThemedText type="body" style={{ color: "#EF4444" }}>Cancel Job</ThemedText>
             </Pressable>

@@ -16,6 +16,7 @@ import { HeaderTitle } from "@/components/HeaderTitle";
 import { ThemedText } from "@/components/ThemedText";
 import ProviderFAB from "@/components/ProviderFAB";
 import { useLeadsBadgeCount } from "@/hooks/useLeadsBadgeCount";
+import { useNetworkStore } from "@/state/networkStore";
 import { Colors, Spacing, Typography, BorderRadius } from "@/constants/theme";
 
 export type ProviderTabParamList = {
@@ -172,6 +173,46 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   );
 }
 
+function OfflinePill() {
+  const { theme, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
+  const isOnline = useNetworkStore((s) => s.isOnline);
+  if (isOnline) return null;
+  return (
+    <View
+      pointerEvents="none"
+      style={[
+        styles.offlinePillWrap,
+        { top: insets.top + Spacing.sm },
+      ]}
+      testID="pill-offline-provider"
+    >
+      <View
+        style={[
+          styles.offlinePill,
+          {
+            backgroundColor: isDark
+              ? "rgba(28,28,30,0.92)"
+              : "rgba(60,60,67,0.92)",
+            borderColor: isDark
+              ? "rgba(255,255,255,0.12)"
+              : "rgba(0,0,0,0.08)",
+          },
+        ]}
+      >
+        <Feather name="wifi-off" size={12} color="#FFFFFF" />
+        <ThemedText
+          style={styles.offlinePillText}
+          lightColor="#FFFFFF"
+          darkColor="#FFFFFF"
+        >
+          Offline — read-only
+        </ThemedText>
+      </View>
+    </View>
+  );
+}
+
 export default function ProviderTabNavigator() {
   const { theme, isDark } = useTheme();
   const leadsBadge = useLeadsBadgeCount();
@@ -250,6 +291,7 @@ export default function ProviderTabNavigator() {
         />
       </Tab.Navigator>
       <ProviderFAB />
+      <OfflinePill />
     </View>
   );
 }
@@ -313,5 +355,26 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontWeight: "500",
+  },
+  offlinePillWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    zIndex: 9999,
+  },
+  offlinePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  offlinePillText: {
+    ...Typography.footnote,
+    fontWeight: "600",
+    fontSize: 11,
   },
 });
