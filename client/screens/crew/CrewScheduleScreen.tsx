@@ -16,6 +16,7 @@ import { Feather } from "@expo/vector-icons";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import { Colors, Spacing, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
@@ -55,6 +56,7 @@ export default function CrewScheduleScreen() {
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useFloatingTabBarHeight();
   const { theme } = useTheme();
+  const { horizontalPadding } = useLayout();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { activeCrewProviderId } = useAuthStore();
@@ -111,7 +113,12 @@ export default function CrewScheduleScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <View style={{ paddingTop: headerHeight + Spacing.sm }}>
+      <View
+        style={{
+          paddingTop: headerHeight + Spacing.sm,
+          paddingHorizontal: horizontalPadding,
+        }}
+      >
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -210,7 +217,7 @@ export default function CrewScheduleScreen() {
         contentContainerStyle={{
           paddingTop: Spacing.lg,
           paddingBottom: tabBarHeight + Spacing.xl,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
         scrollIndicatorInsets={{ bottom: insets.bottom }}
         showsVerticalScrollIndicator={false}

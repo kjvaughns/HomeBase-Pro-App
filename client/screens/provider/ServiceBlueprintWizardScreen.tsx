@@ -25,6 +25,7 @@ import { GlassCard } from "@/components/GlassCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useAuthStore } from "@/state/authStore";
@@ -146,6 +147,7 @@ function SectionLabel({ text }: { text: string }) {
 export default function ServiceBlueprintWizardScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const { theme } = useTheme();
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute();
@@ -598,7 +600,7 @@ export default function ServiceBlueprintWizardScreen() {
   const renderStep0 = () => (
     <KeyboardAwareScrollViewCompat
       style={styles.flex}
-      contentContainerStyle={[styles.stepContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 120 }]}
+      contentContainerStyle={[styles.stepContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 120, paddingHorizontal: horizontalPadding }]}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="always"
     >
@@ -709,7 +711,7 @@ export default function ServiceBlueprintWizardScreen() {
   const renderStep1 = () => (
     <KeyboardAwareScrollViewCompat
       style={styles.flex}
-      contentContainerStyle={[styles.stepContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 120 }]}
+      contentContainerStyle={[styles.stepContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 120, paddingHorizontal: horizontalPadding }]}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="always"
     >
@@ -842,7 +844,7 @@ export default function ServiceBlueprintWizardScreen() {
   const renderStep2 = () => (
     <KeyboardAwareScrollViewCompat
       style={styles.flex}
-      contentContainerStyle={[styles.stepContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 120 }]}
+      contentContainerStyle={[styles.stepContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 120, paddingHorizontal: horizontalPadding }]}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="always"
     >
@@ -1012,7 +1014,7 @@ export default function ServiceBlueprintWizardScreen() {
   const renderStep3 = () => (
     <KeyboardAwareScrollViewCompat
       style={styles.flex}
-      contentContainerStyle={[styles.stepContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 120 }]}
+      contentContainerStyle={[styles.stepContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 120, paddingHorizontal: horizontalPadding }]}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="always"
     >
@@ -1184,7 +1186,7 @@ export default function ServiceBlueprintWizardScreen() {
   const renderChecklistStep = () => (
     <KeyboardAwareScrollViewCompat
       style={styles.flex}
-      contentContainerStyle={[styles.stepContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 120 }]}
+      contentContainerStyle={[styles.stepContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 120, paddingHorizontal: horizontalPadding }]}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="always"
     >
@@ -1380,7 +1382,7 @@ export default function ServiceBlueprintWizardScreen() {
   const renderStep4 = () => (
     <KeyboardAwareScrollViewCompat
       style={styles.flex}
-      contentContainerStyle={[styles.stepContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 120 }]}
+      contentContainerStyle={[styles.stepContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 120, paddingHorizontal: horizontalPadding }]}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="always"
     >
@@ -1449,7 +1451,7 @@ export default function ServiceBlueprintWizardScreen() {
     return (
       <ScrollView
         style={styles.flex}
-        contentContainerStyle={[styles.stepContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 140 }]}
+        contentContainerStyle={[styles.stepContent, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + 140, paddingHorizontal: horizontalPadding }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.stepInner}>

@@ -22,6 +22,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import {
   useSubscriptionStatus,
   type SubscriptionStatusInfo,
@@ -64,6 +65,7 @@ type OfferingState =
 
 export default function SubscriptionScreen() {
   const { theme, isDark } = useTheme();
+  const { horizontalPadding } = useLayout();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
   const navigation =
@@ -399,7 +401,7 @@ export default function SubscriptionScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.xl,
           paddingBottom: insets.bottom + Spacing.xl * 2,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
         showsVerticalScrollIndicator={false}
         refreshControl={

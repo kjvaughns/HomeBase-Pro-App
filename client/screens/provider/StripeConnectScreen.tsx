@@ -16,6 +16,7 @@ import { StatusPill } from "@/components/StatusPill";
 import { TextField } from "@/components/TextField";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
 
@@ -47,6 +48,7 @@ interface Client {
 export default function StripeConnectScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const { theme } = useTheme();
   const { providerProfile } = useAuthStore();
   const queryClient = useQueryClient();
@@ -240,7 +242,7 @@ export default function StripeConnectScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,
           paddingBottom: insets.bottom + Spacing.xl,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
         showsVerticalScrollIndicator={false}
       >

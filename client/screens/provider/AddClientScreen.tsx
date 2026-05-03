@@ -17,6 +17,7 @@ import { FormSectionHeader } from "@/components/FormSectionHeader";
 import { AddressAutocomplete, EnrichmentData } from "@/components/AddressAutocomplete";
 import { Spacing, Typography, Colors, BorderRadius } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest } from "@/lib/query-client";
 import * as Haptics from "expo-haptics";
@@ -24,6 +25,7 @@ import * as Haptics from "expo-haptics";
 export default function AddClientScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const navigation = useNavigation();
   const queryClient = useQueryClient();
   const { theme } = useTheme();
@@ -115,7 +117,7 @@ export default function AddClientScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,
           paddingBottom: insets.bottom + Spacing.xl,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
         showsVerticalScrollIndicator={false}
       >

@@ -22,6 +22,7 @@ import { SecondaryButton } from "@/components/SecondaryButton";
 import { Spacing, Typography, Colors, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { apiRequest } from "@/lib/query-client";
 
 interface CrewMember {
@@ -56,6 +57,7 @@ function getInitials(name: string): string {
 export default function CrewScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const navigation = useNavigation();
   const queryClient = useQueryClient();
   const { theme } = useTheme();
@@ -192,7 +194,7 @@ export default function CrewScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.scroll,
-          { paddingTop: headerHeight + Spacing.xl, paddingBottom: insets.bottom + Spacing["3xl"] },
+          { paddingTop: headerHeight + Spacing.xl, paddingBottom: insets.bottom + Spacing["3xl"], paddingHorizontal: horizontalPadding },
         ]}
         showsVerticalScrollIndicator={false}
       >

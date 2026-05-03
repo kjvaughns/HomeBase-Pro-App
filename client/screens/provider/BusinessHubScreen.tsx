@@ -33,6 +33,7 @@ import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollV
 import { NativeDatePickerSheet } from "@/components/NativeDatePickerSheet";
 import { ZipCodeAreaInput } from "@/components/ZipCodeAreaInput";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useProviderStore, StripeNotReadyError } from "@/state/providerStore";
@@ -155,6 +156,7 @@ function getPricingLabel(type: string): string {
 export default function BusinessHubScreen() {
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useFloatingTabBarHeight();
+  const { horizontalPadding } = useLayout();
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
   const { user, providerProfile, createProviderProfile, clearProviderProfile } = useAuthStore();
@@ -635,7 +637,7 @@ export default function BusinessHubScreen() {
 
   const renderProfileTab = () => (
     <KeyboardAwareScrollViewCompat
-      contentContainerStyle={styles.tabContent}
+      contentContainerStyle={[styles.tabContent, { paddingHorizontal: horizontalPadding }]}
       showsVerticalScrollIndicator={false}
     >
       <Animated.View entering={FadeInDown.duration(300)}>
@@ -1133,6 +1135,7 @@ export default function BusinessHubScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={[
           styles.tabContent,
+          { paddingHorizontal: horizontalPadding },
           services.length === 0 && styles.emptyContainer,
         ]}
         ListHeaderComponent={
@@ -1199,6 +1202,7 @@ export default function BusinessHubScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.tabContent,
+          { paddingHorizontal: horizontalPadding },
           bookingLinks.length === 0 && styles.emptyContainer,
         ]}
         showsVerticalScrollIndicator={false}
@@ -1257,7 +1261,7 @@ export default function BusinessHubScreen() {
       </View>
     ) : (
       <KeyboardAwareScrollViewCompat
-        contentContainerStyle={styles.tabContent}
+        contentContainerStyle={[styles.tabContent, { paddingHorizontal: horizontalPadding }]}
         showsVerticalScrollIndicator={false}
       >
         <Animated.View entering={FadeInDown.duration(300)}>

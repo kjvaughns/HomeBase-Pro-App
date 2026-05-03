@@ -24,6 +24,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -482,6 +483,7 @@ function ServiceCard({ service, onPress, onTogglePublish, onPreview, onDelete, i
 
 export default function ServicesScreen() {
   const insets = useSafeAreaInsets();
+  const { horizontalPadding } = useLayout();
   const { theme } = useTheme();
   const navigation = useNavigation<NavigationProp>();
   const { providerProfile } = useAuthStore();
@@ -705,6 +707,7 @@ export default function ServicesScreen() {
           {
             paddingTop: insets.top + Spacing.lg,
             paddingBottom: insets.bottom + 100,
+            paddingHorizontal: horizontalPadding,
           },
           filteredServices.length === 0 && styles.emptyContainer,
         ]}

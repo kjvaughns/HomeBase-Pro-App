@@ -17,6 +17,7 @@ import { ProviderCard } from "@/components/ProviderCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { SkeletonCard } from "@/components/SkeletonLoader";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { Provider } from "@/state/types";
@@ -59,6 +60,7 @@ export default function ProviderListScreen() {
   const route = useRoute<ScreenRouteProp>();
   const navigation = useNavigation<NavigationProp>();
   const { theme, isDark } = useTheme();
+  const { horizontalPadding } = useLayout();
   const { categoryId } = route.params;
 
   const userCoords = useLocationStore((s) => s.coords);
@@ -492,7 +494,7 @@ export default function ProviderListScreen() {
       <View
         style={[
           styles.searchBarWrapper,
-          { paddingTop: headerHeight + Spacing.md, paddingHorizontal: Spacing.screenPadding },
+          { paddingTop: headerHeight + Spacing.md, paddingHorizontal: horizontalPadding },
         ]}
       >
         <View style={styles.searchRow}>
@@ -540,7 +542,7 @@ export default function ProviderListScreen() {
         contentContainerStyle={{
           paddingTop: Spacing.xs,
           paddingBottom: insets.bottom + Spacing.xl,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
           flexGrow: 1,
         }}
         showsVerticalScrollIndicator={false}

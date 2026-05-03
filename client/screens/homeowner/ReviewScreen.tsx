@@ -18,6 +18,7 @@ import { TextField } from "@/components/TextField";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, Typography } from "@/constants/theme";
 import { apiRequest, getApiUrl, getAuthHeaders } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -50,6 +51,7 @@ interface AppointmentData {
 export default function ReviewScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const route = useRoute<ScreenRouteProp>();
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
@@ -198,7 +200,7 @@ export default function ReviewScreen() {
           contentContainerStyle={{
             paddingTop: headerHeight + Spacing.lg,
             paddingBottom: insets.bottom + Spacing.xl,
-            paddingHorizontal: Spacing.screenPadding,
+            paddingHorizontal: horizontalPadding,
           }}
         >
           <GlassCard style={styles.providerCard}>
@@ -283,7 +285,7 @@ export default function ReviewScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,
           paddingBottom: (bottomBarHeight || 96) + Spacing.lg,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
       >
         <GlassCard style={styles.providerCard}>

@@ -17,6 +17,7 @@ import { Feather } from "@expo/vector-icons";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import { Colors, Spacing, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
@@ -98,6 +99,7 @@ export default function MyJobsScreen() {
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useFloatingTabBarHeight();
   const { theme } = useTheme();
+  const { horizontalPadding } = useLayout();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { activeCrewProviderId, crewMemberships } = useAuthStore();
@@ -143,7 +145,7 @@ export default function MyJobsScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,
           paddingBottom: tabBarHeight + Spacing.xl,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
         scrollIndicatorInsets={{ bottom: insets.bottom }}
         showsVerticalScrollIndicator={false}

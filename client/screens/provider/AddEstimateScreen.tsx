@@ -27,6 +27,7 @@ import { NativeDatePickerSheet } from "@/components/NativeDatePickerSheet";
 import { Spacing, Colors, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { apiRequest } from "@/lib/query-client";
 
 interface Client {
@@ -59,6 +60,7 @@ function calcTotal(items: LineItem[]): number {
 export default function AddEstimateScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const navigation = useNavigation<any>();
   const route = useRoute();
   const queryClient = useQueryClient();
@@ -176,7 +178,7 @@ export default function AddEstimateScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,
           paddingBottom: insets.bottom + Spacing.xl,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
         showsVerticalScrollIndicator={false}
       >

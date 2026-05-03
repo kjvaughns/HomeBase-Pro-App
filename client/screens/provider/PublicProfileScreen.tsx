@@ -24,6 +24,7 @@ import { GlassCard } from "@/components/GlassCard";
 import { Avatar } from "@/components/Avatar";
 import { StatusPill } from "@/components/StatusPill";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { getApiUrl, getAuthHeaders } from "@/lib/query-client";
@@ -119,6 +120,7 @@ function formatServicePrice(svc: CustomService): string | null {
 export default function PublicProfileScreen() {
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
+  const { horizontalPadding } = useLayout();
   const navigation = useNavigation<any>();
   const { theme } = useTheme();
   const { providerProfile } = useAuthStore();
@@ -630,7 +632,7 @@ export default function PublicProfileScreen() {
         contentContainerStyle={{
           paddingTop: Spacing.md,
           paddingBottom: insets.bottom + 120,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
         showsVerticalScrollIndicator={false}
       >

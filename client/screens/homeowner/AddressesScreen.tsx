@@ -13,6 +13,7 @@ import { TextField } from "@/components/TextField";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { AddressAutocomplete, EnrichmentData } from "@/components/AddressAutocomplete";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest } from "@/lib/query-client";
@@ -45,6 +46,7 @@ interface Home {
 export default function AddressesScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const { theme } = useTheme();
   const { user } = useAuthStore();
 
@@ -426,7 +428,7 @@ export default function AddressesScreen() {
         </View>
 
         <ScrollView
-          contentContainerStyle={styles.modalContent}
+          contentContainerStyle={[styles.modalContent, { paddingHorizontal: horizontalPadding }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -535,7 +537,7 @@ export default function AddressesScreen() {
         </View>
 
         <ScrollView
-          contentContainerStyle={styles.modalContent}
+          contentContainerStyle={[styles.modalContent, { paddingHorizontal: horizontalPadding }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -652,7 +654,7 @@ export default function AddressesScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,
           paddingBottom: insets.bottom + Spacing.xl,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />}

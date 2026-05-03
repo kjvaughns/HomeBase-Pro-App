@@ -250,7 +250,7 @@ export default function ProviderProfileScreen() {
   if (isApiLoading && !passedProvider && !apiData) {
     return (
       <ThemedView style={styles.container}>
-        <ScrollView contentContainerStyle={styles.skeletonContainer} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[styles.skeletonContainer, { paddingHorizontal: horizontalPadding }]} showsVerticalScrollIndicator={false}>
           <SkeletonLoader width="100%" height={180} borderRadius={20} />
           <View style={{ marginTop: Spacing.lg }}>
             <SkeletonLoader width="60%" height={24} />

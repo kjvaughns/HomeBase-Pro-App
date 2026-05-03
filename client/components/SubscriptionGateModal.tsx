@@ -12,6 +12,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { SecondaryButton } from "@/components/SecondaryButton";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { BorderRadius, Spacing, Colors } from "@/constants/theme";
 
 interface SubscriptionGateModalProps {
@@ -28,6 +29,7 @@ export function SubscriptionGateModal({
   description = "Your 7-day trial has ended. Subscribe to keep creating jobs and sending invoices. Your existing data is safe.",
 }: SubscriptionGateModalProps) {
   const { theme, isDark } = useTheme();
+  const { isTablet } = useLayout();
   const insets = useSafeAreaInsets();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -56,7 +58,7 @@ export function SubscriptionGateModal({
       statusBarTranslucent
       onRequestClose={onClose}
     >
-      <View style={[styles.overlay, { backgroundColor: theme.overlay }]}>
+      <View style={[styles.overlay, { backgroundColor: theme.overlay, alignItems: isTablet ? "center" : undefined }]}>
         <View
           style={[
             styles.container,
@@ -64,6 +66,8 @@ export function SubscriptionGateModal({
               backgroundColor:
                 Platform.OS === "ios" ? "transparent" : theme.backgroundRoot,
               paddingBottom: insets.bottom + Spacing.xl,
+              maxWidth: isTablet ? 600 : undefined,
+              width: isTablet ? "100%" : undefined,
             },
           ]}
         >

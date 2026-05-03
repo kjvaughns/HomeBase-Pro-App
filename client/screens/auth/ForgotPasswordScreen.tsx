@@ -11,6 +11,7 @@ import { TextField } from "@/components/TextField";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { apiRequest } from "@/lib/query-client";
 import { Spacing, Colors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -19,6 +20,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "ForgotPassword">;
 
 export default function ForgotPasswordScreen({ navigation }: Props) {
   const { theme } = useTheme();
+  const { horizontalPadding } = useLayout();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
 
@@ -61,7 +63,7 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
         <View
           style={[
             styles.successContent,
-            { paddingTop: headerHeight + Spacing["3xl"], paddingBottom: insets.bottom + Spacing.xl },
+            { paddingTop: headerHeight + Spacing["3xl"], paddingBottom: insets.bottom + Spacing.xl, paddingHorizontal: horizontalPadding },
           ]}
         >
           <View style={[styles.successIcon, { backgroundColor: Colors.accent + "20" }]}>
@@ -90,7 +92,7 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
       <KeyboardAwareScrollViewCompat
         contentContainerStyle={[
           styles.content,
-          { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + Spacing.xl },
+          { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + Spacing.xl, paddingHorizontal: horizontalPadding },
         ]}
       >
         <View style={styles.header}>

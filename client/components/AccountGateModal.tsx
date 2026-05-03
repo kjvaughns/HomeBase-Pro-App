@@ -16,6 +16,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { SecondaryButton } from "@/components/SecondaryButton";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { BorderRadius, Spacing, Colors } from "@/constants/theme";
 
 interface AccountGateModalProps {
@@ -32,6 +33,7 @@ export function AccountGateModal({
   onSignUp,
 }: AccountGateModalProps) {
   const { theme, isDark } = useTheme();
+  const { isTablet } = useLayout();
   const insets = useSafeAreaInsets();
 
   const handleClose = () => {
@@ -48,7 +50,7 @@ export function AccountGateModal({
       statusBarTranslucent
       onRequestClose={onClose}
     >
-      <View style={[styles.overlay, { backgroundColor: theme.overlay }]}>
+      <View style={[styles.overlay, { backgroundColor: theme.overlay, alignItems: isTablet ? "center" : undefined }]}>
         <View
           style={[
             styles.container,
@@ -56,6 +58,8 @@ export function AccountGateModal({
               backgroundColor:
                 Platform.OS === "ios" ? "transparent" : theme.backgroundRoot,
               paddingBottom: insets.bottom + Spacing.xl,
+              maxWidth: isTablet ? 600 : undefined,
+              width: isTablet ? "100%" : undefined,
             },
           ]}
         >

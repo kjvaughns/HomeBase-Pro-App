@@ -15,6 +15,7 @@ import { useNavigation } from "@react-navigation/native";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Colors, Spacing, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest } from "@/lib/query-client";
@@ -74,6 +75,7 @@ function SuccessState({ ticketId, onDone }: { ticketId: string; onDone: () => vo
 
 export default function ContactUsScreen() {
   const { theme, isDark } = useTheme();
+  const { horizontalPadding } = useLayout();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
@@ -134,6 +136,7 @@ export default function ContactUsScreen() {
           {
             paddingTop: headerHeight + Spacing.md,
             paddingBottom: insets.bottom + Spacing.xl,
+            paddingHorizontal: horizontalPadding,
           },
         ]}
         showsVerticalScrollIndicator={false}

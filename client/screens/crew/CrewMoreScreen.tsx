@@ -13,6 +13,7 @@ import { Avatar } from "@/components/Avatar";
 import { ListRow } from "@/components/ListRow";
 import { GlassCard } from "@/components/GlassCard";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
@@ -26,6 +27,7 @@ export default function CrewMoreScreen() {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { theme, isDark } = useTheme();
+  const { horizontalPadding } = useLayout();
   const toggleDarkMode = useThemeStore((s) => s.toggleDarkMode);
 
   const {
@@ -68,7 +70,7 @@ export default function CrewMoreScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,
           paddingBottom: tabBarHeight + Spacing.xl,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
         scrollIndicatorInsets={{ bottom: insets.bottom }}
         showsVerticalScrollIndicator={false}

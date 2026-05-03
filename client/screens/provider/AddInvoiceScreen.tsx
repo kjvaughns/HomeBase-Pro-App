@@ -32,6 +32,7 @@ import { FormSectionHeader } from "@/components/FormSectionHeader";
 import { Spacing, Typography, Colors, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { apiRequest } from "@/lib/query-client";
 import * as Haptics from "expo-haptics";
 
@@ -108,6 +109,7 @@ function getServicePriceLabel(service: CustomService): string {
 export default function AddInvoiceScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute();
   const queryClient = useQueryClient();
@@ -331,7 +333,7 @@ export default function AddInvoiceScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,
           paddingBottom: insets.bottom + Spacing.xl,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
         showsVerticalScrollIndicator={false}
       >

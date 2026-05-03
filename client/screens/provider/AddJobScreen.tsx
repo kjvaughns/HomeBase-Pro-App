@@ -21,6 +21,7 @@ import { Feather } from "@expo/vector-icons";
 import { NativeDatePickerSheet } from "@/components/NativeDatePickerSheet";
 import { SubscriptionGateModal } from "@/components/SubscriptionGateModal";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
+import { useLayout } from "@/hooks/useLayout";
 
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
@@ -180,6 +181,7 @@ function getPricingTypeLabel(t: string): string {
 export default function AddJobScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute();
@@ -522,7 +524,7 @@ export default function AddJobScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,
           paddingBottom: insets.bottom + Spacing["3xl"],
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
         showsVerticalScrollIndicator={false}
       >

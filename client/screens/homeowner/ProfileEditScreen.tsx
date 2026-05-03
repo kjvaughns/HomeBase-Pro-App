@@ -14,6 +14,7 @@ import { Avatar } from "@/components/Avatar";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, Typography } from "@/constants/theme";
 import { useHomeownerStore } from "@/state/homeownerStore";
 import { useAuthStore } from "@/state/authStore";
@@ -22,6 +23,7 @@ import { apiRequest } from "@/lib/query-client";
 export default function ProfileEditScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const navigation = useNavigation();
   const { theme } = useTheme();
 
@@ -125,7 +127,7 @@ export default function ProfileEditScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,
           paddingBottom: insets.bottom + 100,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
       >
         <View style={styles.avatarSection}>

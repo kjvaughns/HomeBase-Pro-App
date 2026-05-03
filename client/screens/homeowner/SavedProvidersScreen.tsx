@@ -22,6 +22,7 @@ import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { Avatar } from "@/components/Avatar";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Colors, Spacing, Typography, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { apiRequest, queryClient } from "@/lib/query-client";
@@ -52,6 +53,7 @@ const SORT_OPTIONS: { id: SortOption; label: string }[] = [
 
 export default function SavedProvidersScreen() {
   const { theme } = useTheme();
+  const { horizontalPadding } = useLayout();
   const navigation = useNavigation<NavigationProp>();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
@@ -251,7 +253,7 @@ export default function SavedProvidersScreen() {
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={[
           styles.list,
-          { paddingTop: headerHeight + Spacing.md, paddingBottom: insets.bottom + Spacing.xl },
+          { paddingTop: headerHeight + Spacing.md, paddingBottom: insets.bottom + Spacing.xl, paddingHorizontal: horizontalPadding },
         ]}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={onRefresh} tintColor={Colors.accent} />}
         showsVerticalScrollIndicator={false}

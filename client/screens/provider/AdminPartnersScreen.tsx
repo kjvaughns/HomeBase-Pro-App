@@ -18,6 +18,7 @@ import { GlassCard } from "@/components/GlassCard";
 import { PartnerBadge } from "@/components/PartnerBadge";
 import { apiRequest } from "@/lib/query-client";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { useAuthStore } from "@/state/authStore";
 import { BorderRadius, Colors, Spacing } from "@/constants/theme";
 
@@ -35,6 +36,7 @@ interface AdminProvidersResponse {
 
 export default function AdminPartnersScreen() {
   const { theme } = useTheme();
+  const { horizontalPadding } = useLayout();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
@@ -216,7 +218,7 @@ export default function AdminPartnersScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.xl,
           paddingBottom: insets.bottom + Spacing.xl * 2,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
         ListHeaderComponent={
           <View style={styles.headerBlock}>

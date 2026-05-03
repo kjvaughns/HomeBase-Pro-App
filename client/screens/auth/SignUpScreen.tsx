@@ -10,6 +10,7 @@ import { TextField } from "@/components/TextField";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest } from "@/lib/query-client";
 import { trackEvent, AnalyticsEvents } from "@/lib/analytics";
@@ -20,6 +21,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "SignUp">;
 
 export default function SignUpScreen({ navigation }: Props) {
   const { theme } = useTheme();
+  const { horizontalPadding } = useLayout();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { login, setNeedsRoleSelection, setActiveRole } = useAuthStore();
@@ -127,7 +129,7 @@ export default function SignUpScreen({ navigation }: Props) {
       <KeyboardAwareScrollViewCompat
         contentContainerStyle={[
           styles.content,
-          { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + Spacing.xl },
+          { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + Spacing.xl, paddingHorizontal: horizontalPadding },
         ]}
       >
         <View style={styles.header}>

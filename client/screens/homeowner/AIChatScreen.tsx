@@ -21,6 +21,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { AccountGateModal } from "@/components/AccountGateModal";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { getApiUrl, apiRequest } from "@/lib/query-client";
@@ -47,6 +48,7 @@ const SUGGESTED_QUESTIONS = [
 export default function AIChatScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const navigation = useNavigation<NavigationProp>();
   const { theme, isDark } = useTheme();
   const { isAuthenticated } = useAuthStore();
@@ -240,6 +242,7 @@ export default function AIChatScreen() {
           style={{ backgroundColor: theme.backgroundRoot }}
           contentContainerStyle={[
             styles.messagesContent,
+            { paddingHorizontal: horizontalPadding },
             messages.length > 0
               ? {
                   // Inverted list: visual top = list bottom; clear header there

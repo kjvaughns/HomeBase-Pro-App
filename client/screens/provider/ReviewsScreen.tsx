@@ -17,6 +17,7 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLayout } from "@/hooks/useLayout";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -55,6 +56,7 @@ const REPLY_MAX_LENGTH = 1000;
 export default function ReviewsScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const { theme } = useTheme();
   const { providerProfile } = useAuthStore();
   const queryClient = useQueryClient();
@@ -464,7 +466,7 @@ export default function ReviewsScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,
           paddingBottom: insets.bottom + Spacing.xl,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={renderEmptyState}

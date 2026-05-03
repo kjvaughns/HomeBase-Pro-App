@@ -21,6 +21,7 @@ import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, BorderRadius } from "@/constants/theme";
 import { getApiUrl, apiRequest } from "@/lib/query-client";
 import { useAuthStore } from "@/state/authStore";
@@ -47,6 +48,7 @@ interface Template {
 export default function SendMessageScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const { theme } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, "SendMessage">>();
@@ -150,7 +152,7 @@ export default function SendMessageScreen() {
           contentContainerStyle={{
             paddingTop: headerHeight + Spacing.md,
             paddingBottom: insets.bottom + Spacing.xl,
-            paddingHorizontal: Spacing.screenPadding,
+            paddingHorizontal: horizontalPadding,
           }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"

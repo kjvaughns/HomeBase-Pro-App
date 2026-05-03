@@ -15,6 +15,7 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { markLeadsBadgeViewed } from "@/hooks/useLeadsBadgeCount";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
+import { useLayout } from "@/hooks/useLayout";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -77,6 +78,7 @@ export default function LeadsScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useFloatingTabBarHeight();
+  const { horizontalPadding } = useLayout();
   const queryClient = useQueryClient();
   const { theme } = useTheme();
   const navigation = useNavigation();
@@ -444,6 +446,7 @@ export default function LeadsScreen() {
           {
             paddingTop: headerHeight + Spacing.md,
             paddingBottom: tabBarHeight + Spacing.xl,
+            paddingHorizontal: horizontalPadding,
           },
           filteredLeads.length === 0 && submissions.length === 0 && styles.emptyContainer,
         ]}

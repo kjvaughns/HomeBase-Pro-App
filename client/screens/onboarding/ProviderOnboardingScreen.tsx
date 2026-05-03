@@ -1180,9 +1180,10 @@ function CreateAccountStep({
   setShowPassword: (v: boolean) => void;
   errors: Record<string, string>;
 }) {
+  const { horizontalPadding } = useLayout();
   return (
     <KeyboardAwareScrollViewCompat
-      contentContainerStyle={styles.stepScrollContent}
+      contentContainerStyle={[styles.stepScrollContent, { paddingHorizontal: horizontalPadding }]}
     >
       <View style={styles.stepHeader}>
         <ThemedText style={styles.stepTitle}>Create your account</ThemedText>

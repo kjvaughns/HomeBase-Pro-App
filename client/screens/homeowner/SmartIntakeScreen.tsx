@@ -24,6 +24,7 @@ import { Avatar } from "@/components/Avatar";
 import { StatusPill } from "@/components/StatusPill";
 import { AccountGateModal } from "@/components/AccountGateModal";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { useAuthStore } from "@/state/authStore";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { getApiUrl, apiRequest } from "@/lib/query-client";
@@ -108,6 +109,7 @@ const CATEGORY_NAMES: Record<string, string> = {
 export default function SmartIntakeScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<ScreenRouteProp>();
   const { theme } = useTheme();
@@ -751,7 +753,7 @@ export default function SmartIntakeScreen() {
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingTop: headerHeight + Spacing.md, paddingBottom: insets.bottom + Spacing.xl },
+            { paddingTop: headerHeight + Spacing.md, paddingBottom: insets.bottom + Spacing.xl, paddingHorizontal: horizontalPadding },
           ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"

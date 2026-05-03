@@ -14,6 +14,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { ListRow } from "@/components/ListRow";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Typography, BorderRadius, Colors } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
@@ -46,6 +47,7 @@ function parseApiError(err: unknown, fallback: string): { status: number | null;
 export default function AccountSecurityScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const { theme } = useTheme();
   const {
     user,
@@ -114,7 +116,7 @@ export default function AccountSecurityScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,
           paddingBottom: insets.bottom + Spacing.xl,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
       >
         <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
@@ -413,6 +415,7 @@ function ChangeEmailSheet({
   onSuccess: (newEmail: string) => void;
 }) {
   const insets = useSafeAreaInsets();
+  const { horizontalPadding } = useLayout();
   const { theme } = useTheme();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newEmail, setNewEmail] = useState("");
@@ -470,7 +473,8 @@ function ChangeEmailSheet({
       <SheetHeader title="Change Email" onClose={onClose} theme={theme} />
       <KeyboardAwareScrollViewCompat
         contentContainerStyle={{
-          padding: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
+          paddingTop: Spacing.screenPadding,
           paddingBottom: insets.bottom + 120,
           gap: Spacing.lg,
         }}
@@ -559,6 +563,7 @@ function ChangePasswordSheet({
   onSuccess: (newToken: string | null) => void;
 }) {
   const insets = useSafeAreaInsets();
+  const { horizontalPadding } = useLayout();
   const { theme } = useTheme();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -629,7 +634,8 @@ function ChangePasswordSheet({
       <SheetHeader title="Change Password" onClose={onClose} theme={theme} />
       <KeyboardAwareScrollViewCompat
         contentContainerStyle={{
-          padding: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
+          paddingTop: Spacing.screenPadding,
           paddingBottom: insets.bottom + 120,
           gap: Spacing.lg,
         }}

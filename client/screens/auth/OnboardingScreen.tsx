@@ -171,7 +171,7 @@ export default function OnboardingScreen() {
       <KeyboardAwareScrollViewCompat
         contentContainerStyle={[
           styles.formContent,
-          { paddingTop: insets.top + Spacing.xl, paddingBottom: insets.bottom + Spacing.xl },
+          { paddingTop: insets.top + Spacing.xl, paddingBottom: insets.bottom + Spacing.xl, paddingHorizontal: horizontalPadding },
         ]}
       >
         <View style={styles.formHeader}>

@@ -22,6 +22,7 @@ import { GlassCard } from "@/components/GlassCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { Avatar } from "@/components/Avatar";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, BorderRadius } from "@/constants/theme";
 import { getApiUrl, apiRequest } from "@/lib/query-client";
 import { useAuthStore } from "@/state/authStore";
@@ -68,6 +69,7 @@ function SuccessBanner({ message, onDismiss }: { message: string; onDismiss: () 
 export default function CommunicationsScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const { theme } = useTheme();
   const { providerProfile } = useAuthStore();
   const providerId = providerProfile?.id;
@@ -189,7 +191,7 @@ export default function CommunicationsScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.md,
           paddingBottom: insets.bottom + Spacing.xl,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -405,7 +407,7 @@ export default function CommunicationsScreen() {
             <FlatList
               data={filteredClients}
               keyExtractor={(item) => item.id}
-              contentContainerStyle={{ paddingHorizontal: Spacing.screenPadding, paddingBottom: insets.bottom + Spacing.xl }}
+              contentContainerStyle={{ paddingHorizontal: horizontalPadding, paddingBottom: insets.bottom + Spacing.xl }}
               renderItem={({ item }) => {
                 const name = [item.firstName, item.lastName].filter(Boolean).join(" ");
                 const isSelected = selectedClient?.id === item.id;

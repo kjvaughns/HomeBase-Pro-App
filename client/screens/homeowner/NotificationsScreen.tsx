@@ -21,6 +21,7 @@ import { ThemedView } from "@/components/ThemedView";
 import { EmptyState } from "@/components/EmptyState";
 import { SkeletonLoader } from "@/components/SkeletonLoader";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { useAuthStore } from "@/state/authStore";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { apiRequest } from "@/lib/query-client";
@@ -108,6 +109,7 @@ function getTimeAgo(dateString: string): string {
 export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { theme, isDark } = useTheme();
   const { user } = useAuthStore();
@@ -254,7 +256,7 @@ export default function NotificationsScreen() {
         <View
           style={{
             paddingTop: headerHeight + Spacing.md,
-            paddingHorizontal: Spacing.screenPadding,
+            paddingHorizontal: horizontalPadding,
             gap: Spacing.sm,
           }}
         >
@@ -274,7 +276,7 @@ export default function NotificationsScreen() {
             flex: 1,
             paddingTop: headerHeight + Spacing.lg,
             paddingBottom: insets.bottom + Spacing.xl,
-            paddingHorizontal: Spacing.screenPadding,
+            paddingHorizontal: horizontalPadding,
           }}
         >
           <EmptyState
@@ -320,6 +322,7 @@ export default function NotificationsScreen() {
         contentContainerStyle={{
           paddingTop: unreadCount > 0 ? Spacing.sm : headerHeight + Spacing.md,
           paddingBottom: insets.bottom + Spacing.xl,
+          paddingHorizontal: horizontalPadding,
         }}
         refreshControl={
           <RefreshControl

@@ -331,7 +331,7 @@ export default function ServiceHistoryScreen() {
             <View style={{ width: 40 }} />
           </View>
 
-          <ScrollView contentContainerStyle={styles.detailContent} showsVerticalScrollIndicator={false}>
+          <ScrollView contentContainerStyle={[styles.detailContent, { paddingHorizontal: horizontalPadding }]} showsVerticalScrollIndicator={false}>
             <GlassCard style={styles.detailSummary}>
               <View style={styles.detailSummaryHeader}>
                 <View style={[styles.detailIcon, { backgroundColor: Colors.accentLight }]}>

@@ -30,6 +30,7 @@ import { AddressAutocomplete, type EnrichmentData } from "@/components/AddressAu
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { apiRequest } from "@/lib/query-client";
 
 interface CustomService {
@@ -72,6 +73,7 @@ function formatPrice(n: number): string {
 export default function QuickQuoteScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const navigation = useNavigation<any>();
   const queryClient = useQueryClient();
   const { providerProfile } = useAuthStore();
@@ -258,7 +260,7 @@ export default function QuickQuoteScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,
           paddingBottom: insets.bottom + Spacing.xl,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
         showsVerticalScrollIndicator={false}
       >

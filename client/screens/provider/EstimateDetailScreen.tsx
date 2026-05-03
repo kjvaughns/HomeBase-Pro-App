@@ -19,6 +19,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { SecondaryButton } from "@/components/SecondaryButton";
 import { Spacing, Colors, BorderRadius } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { estimateStatusLabel, estimateStatusTone } from "@/constants/estimateStatuses";
@@ -78,6 +79,7 @@ function formatDateTime(d: string | null | undefined): string {
 export default function EstimateDetailScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
   const navigation = useNavigation<any>();
   const route = useRoute<RouteProp<RouteParams, "EstimateDetail">>();
   const queryClient = useQueryClient();
@@ -203,7 +205,7 @@ export default function EstimateDetailScreen() {
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.md,
           paddingBottom: insets.bottom + Spacing.xl,
-          paddingHorizontal: Spacing.screenPadding,
+          paddingHorizontal: horizontalPadding,
         }}
         refreshControl={undefined}
       >

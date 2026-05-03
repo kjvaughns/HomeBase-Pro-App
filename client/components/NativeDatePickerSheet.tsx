@@ -10,6 +10,7 @@ import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/dat
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Colors, Spacing, BorderRadius } from "@/constants/theme";
 
 interface NativeDatePickerSheetProps {
@@ -36,6 +37,7 @@ export function NativeDatePickerSheet({
   onCancel,
 }: NativeDatePickerSheetProps) {
   const { theme } = useTheme();
+  const { isTablet } = useLayout();
   const insets = useSafeAreaInsets();
   const [draft, setDraft] = useState<Date>(value);
 
@@ -75,7 +77,7 @@ export function NativeDatePickerSheet({
       animationType="slide"
       onRequestClose={onCancel}
     >
-      <View style={sheet.overlay}>
+      <View style={[sheet.overlay, isTablet && sheet.overlayTablet]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} />
         <View
           style={[
@@ -83,6 +85,8 @@ export function NativeDatePickerSheet({
             {
               backgroundColor: theme.cardBackground,
               paddingBottom: Math.max(insets.bottom, Spacing.lg),
+              maxWidth: isTablet ? 600 : undefined,
+              width: isTablet ? "100%" : undefined,
             },
           ]}
         >
@@ -130,6 +134,9 @@ const sheet = StyleSheet.create({
     flex: 1,
     justifyContent: "flex-end",
     backgroundColor: "rgba(0,0,0,0.35)",
+  },
+  overlayTablet: {
+    alignItems: "center",
   },
   container: {
     borderTopLeftRadius: 24,

@@ -15,6 +15,7 @@ import { useNavigation } from "@react-navigation/native";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Colors, Spacing, Typography, BorderRadius } from "@/constants/theme";
 
 interface FAQItem {
@@ -210,6 +211,7 @@ function FAQSectionComponent({ section }: { section: FAQSection }) {
 
 export default function HelpCenterScreen() {
   const { theme, isDark } = useTheme();
+  const { horizontalPadding } = useLayout();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
@@ -226,6 +228,7 @@ export default function HelpCenterScreen() {
           {
             paddingTop: headerHeight + Spacing.md,
             paddingBottom: insets.bottom + Spacing.xl,
+            paddingHorizontal: horizontalPadding,
           },
         ]}
         showsVerticalScrollIndicator={false}
