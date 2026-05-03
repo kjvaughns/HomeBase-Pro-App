@@ -171,8 +171,6 @@ var init_schema = __esm({
       "in_progress",
       "completed",
       "cancelled",
-      // Distinct from "cancelled" — the job is paused for weather, not bailed on.
-      // Excluded from cancellation/completion stats.
       "weather_held"
     ]);
     invoiceStatusEnum = pgEnum("invoice_status", [
@@ -865,9 +863,6 @@ var init_schema = __esm({
       createdAt: timestamp("created_at").defaultNow().notNull(),
       updatedAt: timestamp("updated_at").defaultNow().notNull(),
       completedAt: timestamp("completed_at"),
-      // `originalScheduledAt` is a combined date+time snapshot taken when the job
-      // is first put on weather hold, so "Restore" can put it back on the exact
-      // slot (both date and time) it was pulled from.
       weatherHeldAt: timestamp("weather_held_at"),
       originalScheduledAt: timestamp("original_scheduled_at")
     });
@@ -5674,8 +5669,6 @@ async function applyToFollowing(fromJobId, patch) {
         gte2(jobs.scheduledDate, pivotDate),
         ne(jobs.status, "cancelled"),
         ne(jobs.status, "completed"),
-        // Weather-held jobs sit on a custom date set by the provider;
-        // don't trample it with a series-wide field/time edit.
         ne(jobs.status, "weather_held")
       )
     ).returning({
@@ -5708,8 +5701,6 @@ async function applyToFollowing(fromJobId, patch) {
         gte2(jobs.scheduledDate, pivotDate),
         ne(jobs.status, "cancelled"),
         ne(jobs.status, "completed"),
-        // Weather-held jobs hold their custom date; skip the bulk shift
-        // so "Restore" still puts them back in their original slot.
         ne(jobs.status, "weather_held")
       )
     ).returning({ id: jobs.id, appointmentId: jobs.appointmentId });
@@ -14767,7 +14758,7 @@ Line 3: rating caption for ${insights.rating} stars`
         const allJobs = await storage.getJobs(req.params.providerId);
         const dayJobs = allJobs.filter((j) => {
           const d = new Date(j.scheduledDate);
-          return d >= dayStart && d <= dayEnd && j.status !== "cancelled";
+          return d >= dayStart && d <= dayEnd && j.status !== "cancelled" && j.status !== "weather_held";
         });
         if (dayJobs.length === 0) {
           return res.json({
@@ -15434,6 +15425,16 @@ Line 3: rating caption for ${insights.rating} stars`
           notes,
           address
         } = req.body;
+        if (status === "weather_held") {
+          return res.status(400).json({
+            error: "Use POST /api/jobs/:id/weather-hold to place a job on weather hold"
+          });
+        }
+        if (existing.status === "weather_held" && status && status !== "weather_held") {
+          return res.status(400).json({
+            error: "Use POST /api/jobs/:id/restore to take a job off weather hold"
+          });
+        }
         const update = {};
         const isFollowing = req.query.scope === "following" && !!existing.seriesId;
         let shiftDays = 0;
@@ -15642,24 +15643,12 @@ Line 3: rating caption for ${insights.rating} stars`
         }
         const update = {
           status: "scheduled",
-          weatherHeldAt: null
+          weatherHeldAt: null,
+          originalScheduledAt: null
         };
-        let restoredDate = null;
-        if (existing.originalScheduledAt) {
-          restoredDate = new Date(existing.originalScheduledAt);
-          update.scheduledDate = restoredDate;
-          update.scheduledTime = formatTimeFromDate(restoredDate);
-          update.originalScheduledAt = null;
-        }
         const job = await db.transaction(async (tx) => {
           const [updated] = await tx.update(jobs).set(update).where(eq10(jobs.id, req.params.id)).returning();
           if (!updated) throw new Error("Job update returned no row");
-          if (updated.appointmentId && restoredDate) {
-            await tx.update(appointments).set({
-              scheduledDate: restoredDate,
-              scheduledTime: formatTimeFromDate(restoredDate)
-            }).where(eq10(appointments.id, updated.appointmentId));
-          }
           return updated;
         });
         dispatchJobStatusEmail(job, "scheduled").catch(

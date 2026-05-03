@@ -171,7 +171,6 @@ const STATUS_CONFIG: Record<DisplayStatus, { label: string; color: string; icon:
   in_progress: { label: "In Progress", color: Colors.warning, icon: "tool" },
   completed: { label: "Completed", color: Colors.accent, icon: "check" },
   cancelled: { label: "Cancelled", color: "#EF4444", icon: "x-circle" },
-  // Neutral grey + rain glyph (not red) so the state reads as "paused, not failed".
   weather_held: { label: "Weather Hold", color: "#6B7280", icon: "cloud-rain" },
 };
 
@@ -683,9 +682,6 @@ export default function ProviderJobDetailScreen() {
 
   const handleWeatherHold = useCallback(() => {
     if (!job) return;
-    // Build the +7d suggestion at the *same time of day* the job was
-    // booked for. scheduledDate alone is unreliable here — it's often
-    // stored at midnight — so apply scheduledTime ("HH:MM") on top.
     const base = job.scheduledDate ? new Date(job.scheduledDate) : new Date();
     const nextWeek = new Date(base);
     nextWeek.setDate(nextWeek.getDate() + 7);

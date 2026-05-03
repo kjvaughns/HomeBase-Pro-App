@@ -8386,7 +8386,12 @@ Respond with JSON only:
         const allJobs = await storage.getJobs(req.params.providerId);
         const dayJobs = allJobs.filter((j) => {
           const d = new Date(j.scheduledDate);
-          return d >= dayStart && d <= dayEnd && j.status !== "cancelled";
+          return (
+            d >= dayStart &&
+            d <= dayEnd &&
+            j.status !== "cancelled" &&
+            j.status !== "weather_held"
+          );
         });
 
         if (dayJobs.length === 0) {
@@ -9432,6 +9437,19 @@ Respond with JSON only:
           notes,
           address,
         } = req.body;
+        // Transitions into/out of weather_held must go through the dedicated
+        // /weather-hold and /restore endpoints so the hold metadata,
+        // appointment mirroring, and customer notification stay in sync.
+        if (status === "weather_held") {
+          return res.status(400).json({
+            error: "Use POST /api/jobs/:id/weather-hold to place a job on weather hold",
+          });
+        }
+        if (existing.status === "weather_held" && status && status !== "weather_held") {
+          return res.status(400).json({
+            error: "Use POST /api/jobs/:id/restore to take a job off weather hold",
+          });
+        }
         const update: Record<string, unknown> = {};
         const isFollowing =
           req.query.scope === "following" && !!existing.seriesId;
@@ -9616,10 +9634,9 @@ Respond with JSON only:
     return `${hh}:${mm}`;
   };
 
-  // The app stores scheduledDate (timestamp) and scheduledTime (text "HH:MM")
-  // independently and the date column is sometimes truncated to midnight.
-  // Combine them into a single Date so the snapshot and any restore reflect
-  // the actual slot the customer was booked for.
+  // scheduledDate (timestamp) and scheduledTime ("HH:MM") are stored
+  // independently; combine them so the snapshot reflects the booked slot
+  // even when scheduledDate is stored at midnight.
   const combineDateAndTime = (
     date: Date | string | null | undefined,
     time: string | null | undefined,
@@ -9694,9 +9711,6 @@ Respond with JSON only:
         if (parsedNewDate) update.scheduledDate = parsedNewDate;
         if (body.newTime !== undefined) update.scheduledTime = body.newTime;
 
-        // Wrap job + appointment writes in one transaction so a partial
-        // failure can't leave them inconsistent. Status doesn't mirror —
-        // appointments have no weather_held value yet — but date/time do.
         const job = await db.transaction(async (tx) => {
           const [updated] = await tx
             .update(jobs)
@@ -9752,17 +9766,16 @@ Respond with JSON only:
           return res.json({ job: existing, idempotent: true });
         }
 
+        // Restore = unpause at the job's *current* scheduled slot. If the
+        // provider held & moved the job to a tentative new date, "Restore"
+        // confirms that new slot rather than rolling back to the rainy
+        // original. The originalScheduledAt snapshot is cleared and kept
+        // only on the held record for any future undo-move flow.
         const update: Record<string, unknown> = {
           status: "scheduled",
           weatherHeldAt: null,
+          originalScheduledAt: null,
         };
-        let restoredDate: Date | null = null;
-        if (existing.originalScheduledAt) {
-          restoredDate = new Date(existing.originalScheduledAt);
-          update.scheduledDate = restoredDate;
-          update.scheduledTime = formatTimeFromDate(restoredDate);
-          update.originalScheduledAt = null;
-        }
 
         const job = await db.transaction(async (tx) => {
           const [updated] = await tx
@@ -9771,16 +9784,6 @@ Respond with JSON only:
             .where(eq(jobs.id, req.params.id))
             .returning();
           if (!updated) throw new Error("Job update returned no row");
-
-          if (updated.appointmentId && restoredDate) {
-            await tx
-              .update(appointments)
-              .set({
-                scheduledDate: restoredDate,
-                scheduledTime: formatTimeFromDate(restoredDate),
-              })
-              .where(eq(appointments.id, updated.appointmentId));
-          }
           return updated;
         });
 
