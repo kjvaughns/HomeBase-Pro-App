@@ -427,18 +427,22 @@ export default function ProviderJobDetailScreen() {
   // gated behind the connectivity check below.
   const [offlineJob, setOfflineJob] = useState<ApiJob | null>(null);
   const [offlineClient, setOfflineClient] = useState<ApiClient | null>(null);
+  const [offlineHydrated, setOfflineHydrated] = useState(false);
   useEffect(() => {
     if (!providerId || !jobId) return;
     let cancelled = false;
     loadScheduleSnapshot<ApiJob, ApiClient>(providerId).then((snap) => {
-      if (cancelled || !snap) return;
-      const matchedJob = snap.jobs.find((j) => j.id === jobId) ?? null;
-      setOfflineJob(matchedJob);
-      if (matchedJob) {
-        setOfflineClient(
-          snap.clients.find((c) => c.id === matchedJob.clientId) ?? null,
-        );
+      if (cancelled) return;
+      if (snap) {
+        const matchedJob = snap.jobs.find((j) => j.id === jobId) ?? null;
+        setOfflineJob(matchedJob);
+        if (matchedJob) {
+          setOfflineClient(
+            snap.clients.find((c) => c.id === matchedJob.clientId) ?? null,
+          );
+        }
       }
+      setOfflineHydrated(true);
     });
     return () => {
       cancelled = true;
@@ -958,7 +962,7 @@ export default function ProviderJobDetailScreen() {
     }
   }, [jobId, blockOffline]);
 
-  if (isLoading && !job) {
+  if ((isLoading || (!isOnline && !offlineHydrated)) && !job) {
     return (
       <ThemedView style={styles.container}>
         <View style={[styles.notFound, { paddingTop: headerHeight + Spacing.xl }]}>
@@ -972,7 +976,17 @@ export default function ProviderJobDetailScreen() {
     return (
       <ThemedView style={styles.container}>
         <View style={[styles.notFound, { paddingTop: headerHeight }]}>
-          <ThemedText type="h2">Job not found</ThemedText>
+          <ThemedText type="h2">
+            {isOnline ? "Job not found" : "Not available offline"}
+          </ThemedText>
+          {!isOnline ? (
+            <ThemedText
+              type="caption"
+              style={{ color: theme.textSecondary, marginTop: Spacing.sm }}
+            >
+              Reconnect to load this job.
+            </ThemedText>
+          ) : null}
         </View>
       </ThemedView>
     );
@@ -1072,6 +1086,8 @@ export default function ProviderJobDetailScreen() {
           jobId={job.id}
           providerId={job.providerId}
           assignedCrewMemberId={job.assignedCrewMemberId ?? null}
+          isOnline={isOnline}
+          onOfflineAttempt={blockOffline}
           onChanged={() =>
             queryClient.invalidateQueries({ queryKey: ["/api/jobs", job.id] })
           }
@@ -1413,6 +1429,8 @@ interface CrewAssignmentCardProps {
   jobId: string;
   providerId: string;
   assignedCrewMemberId: string | null;
+  isOnline: boolean;
+  onOfflineAttempt: () => void;
   onChanged: () => void;
 }
 
@@ -1420,6 +1438,8 @@ function CrewAssignmentCard({
   jobId,
   providerId,
   assignedCrewMemberId,
+  isOnline,
+  onOfflineAttempt,
   onChanged,
 }: CrewAssignmentCardProps) {
   const { theme } = useTheme();
@@ -1430,17 +1450,22 @@ function CrewAssignmentCard({
     crew: { id: string; name: string; color: string; isActive: boolean }[];
   }>({
     queryKey: ["/api/provider", providerId, "crew"],
-    enabled: !!providerId,
+    enabled: !!providerId && isOnline,
   });
   const crew = (data?.crew || []).filter((c) => c.isActive);
 
   const assigned = crew.find((c) => c.id === assignedCrewMemberId) || null;
 
   const updateMutation = useMutation({
-    mutationFn: (newId: string | null) =>
-      apiRequest("PUT", `/api/jobs/${jobId}`, {
+    mutationFn: (newId: string | null) => {
+      if (!isOnline) {
+        onOfflineAttempt();
+        return Promise.reject(new Error("offline"));
+      }
+      return apiRequest("PUT", `/api/jobs/${jobId}`, {
         assignedCrewMemberId: newId,
-      }).then((r) => r.json()),
+      }).then((r) => r.json());
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
       queryClient.invalidateQueries({
@@ -1453,7 +1478,7 @@ function CrewAssignmentCard({
 
   return (
     <Animated.View entering={FadeInDown.delay(150).duration(400)}>
-      <GlassCard style={styles.section}>
+      <GlassCard style={[styles.section, !isOnline && { opacity: 0.6 }]}>
         <ThemedText
           type="label"
           style={{ color: theme.textSecondary, marginBottom: Spacing.sm }}
@@ -1461,7 +1486,13 @@ function CrewAssignmentCard({
           ASSIGNED TO
         </ThemedText>
         <Pressable
-          onPress={() => setPickerOpen(true)}
+          onPress={() => {
+            if (!isOnline) {
+              onOfflineAttempt();
+              return;
+            }
+            setPickerOpen(true);
+          }}
           style={{
             flexDirection: "row",
             alignItems: "center",
