@@ -1841,9 +1841,11 @@ export default function ScheduleScreen() {
                           { color: theme.textSecondary },
                         ]}
                       >
-                        {statusFilter === "all"
-                          ? "Nothing scheduled"
-                          : `No ${statusFilter} jobs`}
+                        {!isOnline && !offlineSnapshot
+                          ? "No cached schedule"
+                          : statusFilter === "all"
+                            ? "Nothing scheduled"
+                            : `No ${statusFilter} jobs`}
                       </ThemedText>
                       <ThemedText
                         style={[
@@ -1851,20 +1853,24 @@ export default function ScheduleScreen() {
                           { color: theme.textTertiary },
                         ]}
                       >
-                        {formatDateLabel(selectedDate)}
+                        {!isOnline && !offlineSnapshot
+                          ? "You're offline. Reconnect to load your schedule."
+                          : formatDateLabel(selectedDate)}
                       </ThemedText>
-                      <Pressable
-                        style={[
-                          styles.emptyAddBtn,
-                          { backgroundColor: Colors.accent },
-                        ]}
-                        onPress={handleAddJob}
-                      >
-                        <Feather name="plus" size={16} color="#FFFFFF" />
-                        <ThemedText style={styles.emptyAddText}>
-                          Add Job
-                        </ThemedText>
-                      </Pressable>
+                      {isOnline ? (
+                        <Pressable
+                          style={[
+                            styles.emptyAddBtn,
+                            { backgroundColor: Colors.accent },
+                          ]}
+                          onPress={handleAddJob}
+                        >
+                          <Feather name="plus" size={16} color="#FFFFFF" />
+                          <ThemedText style={styles.emptyAddText}>
+                            Add Job
+                          </ThemedText>
+                        </Pressable>
+                      ) : null}
                     </View>
                   </Animated.View>
                 );
