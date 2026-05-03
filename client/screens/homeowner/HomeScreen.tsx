@@ -88,6 +88,7 @@ export default function HomeScreen() {
   );
 
   const onRefresh = async () => {
+    if (!user?.id) return;
     setRefreshing(true);
     await refetch();
     setRefreshing(false);
@@ -239,7 +240,12 @@ export default function HomeScreen() {
               </View>
             </GlassCard>
           ) : appointmentsError ? (
-            <Pressable onPress={() => refetch()} testID="card-home-appointments-retry">
+            <Pressable
+              onPress={() => {
+                if (user?.id) refetch();
+              }}
+              testID="card-home-appointments-retry"
+            >
               <GlassCard style={styles.firstBookingCard}>
                 <View style={styles.firstBookingCardContent}>
                   <View style={[styles.firstBookingIconRing, { backgroundColor: Colors.accentLight }]}>
