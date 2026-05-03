@@ -602,8 +602,8 @@ export class DatabaseStorage implements IStorage {
     // the upcoming list, and downstream consumers (Money/Financials/AI) agree.
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
-    // Task #303: weather_held jobs are paused (not upcoming, not cancelled).
-    // They reappear under "upcoming" only after a provider restores them.
+    // weather_held jobs are paused (not upcoming, not cancelled). They
+    // reappear under "upcoming" only after a provider restores them.
     const upcomingJobsList = await db
       .select({ id: jobs.id })
       .from(jobs)

@@ -170,7 +170,11 @@ var init_schema = __esm({
       "arrived",
       "in_progress",
       "completed",
-      "cancelled"
+      "cancelled",
+      // Task #303: weather hold — distinct from cancellation. The job is paused
+      // because of weather, not because the customer or provider bailed. Excluded
+      // from cancellation/completion stats.
+      "weather_held"
     ]);
     invoiceStatusEnum = pgEnum("invoice_status", [
       "draft",
@@ -435,6 +439,7 @@ var init_schema = __esm({
       recurringPrice: decimal("recurring_price", { precision: 10, scale: 2 }),
       intakeQuestionsJson: text("intake_questions_json"),
       addOnsJson: text("add_ons_json"),
+      checklistTemplateJson: jsonb("checklist_template_json").$type(),
       bookingMode: text("booking_mode").default("instant"),
       aiPricingInsight: text("ai_pricing_insight"),
       createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -860,7 +865,13 @@ var init_schema = __esm({
       // [{ id, label, completed }] — AI-generated, persisted
       createdAt: timestamp("created_at").defaultNow().notNull(),
       updatedAt: timestamp("updated_at").defaultNow().notNull(),
-      completedAt: timestamp("completed_at")
+      completedAt: timestamp("completed_at"),
+      // Task #303: weather-hold tracking. `weatherHeldAt` records when the job
+      // was put on weather hold; `originalScheduledAt` snapshots the original
+      // scheduled timestamp so a one-tap "Restore" can put the job back on the
+      // exact slot it was pulled from.
+      weatherHeldAt: timestamp("weather_held_at"),
+      originalScheduledAt: timestamp("original_scheduled_at")
     });
     jobsRelations = relations(jobs, ({ one, many }) => ({
       provider: one(providers, {
@@ -2203,7 +2214,8 @@ async function sendJobStatusChangedEmail(data) {
     in_progress: "In Progress",
     completed: "Completed",
     cancelled: "Cancelled",
-    on_hold: "On Hold"
+    on_hold: "On Hold",
+    weather_held: "Weather Hold"
   };
   const sProv = escapeHtml(data.providerName);
   const sSvc = escapeHtml(data.serviceName);
@@ -2243,6 +2255,12 @@ async function sendJobStatusChangedEmail(data) {
       headline: "Appointment Cancelled",
       lead: `Your ${sSvc} appointment with ${sProv} has been cancelled.`,
       closing: `If this wasn't expected, please reach out to ${sProv} through the HomeBase app.`
+    },
+    weather_held: {
+      subject: `Weather hold \u2014 your ${data.serviceName} appointment is being moved`,
+      headline: "Weather Hold",
+      lead: `Heads up \u2014 weather is moving us. ${sProv} has placed your ${sSvc} appointment on a weather hold and will reschedule shortly.`,
+      closing: `No action needed on your end \u2014 ${sProv} will follow up with the new time. You can review the details any time in the HomeBase app.`
     }
   };
   const copy = stepCopy[data.newStatus];
@@ -2758,7 +2776,8 @@ async function _dispatch(event, payload) {
         arrived: { title: `${providerName} has arrived`, body: `Your provider just arrived for your ${serviceName} appointment.` },
         in_progress: { title: "Work has started", body: `${providerName} has started your ${serviceName}.` },
         completed: { title: "Service complete", body: `${providerName} finished your ${serviceName}. Thank you!` },
-        cancelled: { title: "Appointment cancelled", body: `Your ${serviceName} with ${providerName} was cancelled.` }
+        cancelled: { title: "Appointment cancelled", body: `Your ${serviceName} with ${providerName} was cancelled.` },
+        weather_held: { title: "Weather hold", body: `Weather is moving us \u2014 ${providerName} placed your ${serviceName} on hold and will reschedule shortly.` }
       };
       const push = pushCopy[newStatus] ?? { title: "Job update", body: `Your ${serviceName} status changed.` };
       if (clientEmail && clientName) {
@@ -5439,6 +5458,21 @@ async function materializeOccurrences(series, opts = {}) {
   horizonEnd.setDate(horizonEnd.getDate() + horizonDays);
   const [provider] = await db.select({ businessHours: providers.businessHours }).from(providers).where(eq7(providers.id, series.providerId));
   const hours = parseBusinessHours(provider?.businessHours);
+  let seriesInitialChecklist = [];
+  if (series.customServiceId) {
+    const [svcRow] = await db.select({
+      checklistTemplateJson: providerCustomServices.checklistTemplateJson
+    }).from(providerCustomServices).where(eq7(providerCustomServices.id, series.customServiceId));
+    if (Array.isArray(svcRow?.checklistTemplateJson)) {
+      seriesInitialChecklist = svcRow.checklistTemplateJson.filter(
+        (it) => it && typeof it.label === "string" && it.label.trim().length > 0
+      ).map((it, i) => ({
+        id: String(it.id ?? `c_${Date.now()}_${i}`),
+        label: String(it.label).slice(0, 200),
+        completed: false
+      }));
+    }
+  }
   const homeowner = await resolveHomeowner(series.clientId);
   const existingJobs = await db.select({ id: jobs.id, scheduledDate: jobs.scheduledDate }).from(jobs).where(eq7(jobs.seriesId, series.id));
   const occupiedDates = new Set(
@@ -5492,7 +5526,8 @@ async function materializeOccurrences(series, opts = {}) {
           scheduledTime: series.scheduledTime ?? void 0,
           address: series.address ?? void 0,
           estimatedPrice: series.estimatedPrice ?? void 0,
-          status: "scheduled"
+          status: "scheduled",
+          checklist: seriesInitialChecklist
         }).returning();
         const [appt] = await tx.insert(appointments).values({
           userId: homeowner.userId ?? void 0,
@@ -5619,7 +5654,10 @@ async function applyToFollowing(fromJobId, patch) {
         eq7(jobs.seriesId, pivotRow.seriesId),
         gte2(jobs.scheduledDate, pivotDate),
         ne(jobs.status, "cancelled"),
-        ne(jobs.status, "completed")
+        ne(jobs.status, "completed"),
+        // Task #303: weather-held jobs sit on a custom date set by the
+        // provider; don't trample that with a series-wide field/time edit.
+        ne(jobs.status, "weather_held")
       )
     ).returning({
       id: jobs.id,
@@ -5650,7 +5688,10 @@ async function applyToFollowing(fromJobId, patch) {
         eq7(jobs.seriesId, pivotRow.seriesId),
         gte2(jobs.scheduledDate, pivotDate),
         ne(jobs.status, "cancelled"),
-        ne(jobs.status, "completed")
+        ne(jobs.status, "completed"),
+        // Task #303: weather-held jobs hold their custom date; skip the
+        // bulk shift so a "Restore" still puts them back in their slot.
+        ne(jobs.status, "weather_held")
       )
     ).returning({ id: jobs.id, appointmentId: jobs.appointmentId });
     let result = phase1;
@@ -8120,7 +8161,7 @@ var stripeService = new StripeService();
 init_db();
 init_emailService();
 init_notificationService();
-import { sql as sql5, eq as eq10, and as and5, or as or3, desc as desc3, inArray as inArray3, gte as gte3, ilike, isNull } from "drizzle-orm";
+import { sql as sql5, eq as eq10, and as and5, or as or3, desc as desc3, inArray as inArray3, notInArray, gte as gte3, ilike, isNull } from "drizzle-orm";
 
 // server/lib/distance.ts
 function haversineMiles(aLat, aLng, bLat, bLng) {
@@ -9056,7 +9097,8 @@ async function convertIntakeToClientJob(tx, params) {
     status: "scheduled",
     address: address || null,
     estimatedPrice: estimatedPrice || null,
-    notes: notes || null
+    notes: notes || null,
+    checklist: []
   }).returning();
   const now = /* @__PURE__ */ new Date();
   await tx.update(intakeSubmissions).set({
@@ -11593,10 +11635,12 @@ Reason: ${reason}
             const rawCustomSvcId = typeof req.body.customServiceId === "string" ? req.body.customServiceId : null;
             let apptCustomServiceId = null;
             let apptSvcIntakeQuestionsJson = null;
+            let apptSvcChecklistTemplate = null;
             if (rawCustomSvcId) {
               const [ownedSvc] = await db.select({
                 id: providerCustomServices.id,
-                intakeQuestionsJson: providerCustomServices.intakeQuestionsJson
+                intakeQuestionsJson: providerCustomServices.intakeQuestionsJson,
+                checklistTemplateJson: providerCustomServices.checklistTemplateJson
               }).from(providerCustomServices).where(
                 and5(
                   eq10(providerCustomServices.id, rawCustomSvcId),
@@ -11609,6 +11653,9 @@ Reason: ${reason}
               if (ownedSvc) {
                 apptCustomServiceId = rawCustomSvcId;
                 apptSvcIntakeQuestionsJson = ownedSvc.intakeQuestionsJson;
+                apptSvcChecklistTemplate = Array.isArray(
+                  ownedSvc.checklistTemplateJson
+                ) ? ownedSvc.checklistTemplateJson : null;
               }
             }
             const apptAddOns = Array.isArray(req.body.addOns) ? req.body.addOns.filter(
@@ -11625,6 +11672,13 @@ Reason: ${reason}
               intakeQuestions: parseIntakeQuestions(apptSvcIntakeQuestionsJson),
               addOns: apptAddOns
             });
+            const apptInitialChecklist = Array.isArray(apptSvcChecklistTemplate) ? apptSvcChecklistTemplate.filter(
+              (it) => it && typeof it.label === "string" && it.label.trim().length > 0
+            ).map((it, i) => ({
+              id: String(it.id ?? `c_${Date.now()}_${i}`),
+              label: String(it.label).slice(0, 200),
+              completed: false
+            })) : [];
             await db.insert(jobs).values({
               providerId: parsed.data.providerId,
               clientId,
@@ -11637,7 +11691,8 @@ Reason: ${reason}
               estimatedDuration: 60,
               status: "scheduled",
               estimatedPrice: parsed.data.estimatedPrice ?? null,
-              notes: `Booked via homeowner portal.`
+              notes: `Booked via homeowner portal.`,
+              checklist: apptInitialChecklist
             });
           } catch (jobErr) {
             console.error("Job creation error (non-fatal):", jobErr);
@@ -12869,6 +12924,7 @@ Return a JSON object with exactly these fields:
   "addOns": [
     {"id": string, "name": string, "description": string, "price": number}
   ],
+  "checklistTemplate": [string],
   "bookingMode": "instant" | "starts_at" | "quote_only",
   "aiPricingInsight": "one sentence identifying a specific profit leak or pricing opportunity for this service type"
 }
@@ -12876,6 +12932,7 @@ Return a JSON object with exactly these fields:
 Rules:
 - intakeQuestions: 3-5 questions specific to this exact service. Include property size where relevant.
 - addOns: 2-4 high-value add-ons with realistic prices for ${providerLocation || "US"} market
+- checklistTemplate: 5-8 short, ordered, on-site steps a tech would actually do for this service (e.g., "Lay drop cloths", "Mask trim", "Cut in edges"). Plain strings, no numbering.
 - bookingMode: use "instant" for straightforward flat-rate services, "starts_at" for variable pricing, "quote_only" for complex/large jobs
 - priceTiers: only include if type is "variable"
 - All prices in USD, no $ sign, just numbers
@@ -13036,6 +13093,7 @@ Return a JSON object with exactly these fields:
   "addOns": [
     {"id": string, "name": string, "description": string, "price": number}
   ],
+  "checklistTemplate": [string],
   "bookingMode": "instant" | "starts_at" | "quote_only",
   "aiPricingInsight": "one sentence identifying a pricing opportunity for this service type"
 }
@@ -13043,6 +13101,7 @@ Return a JSON object with exactly these fields:
 Rules:
 - intakeQuestions: 3-5 questions specific to this exact service
 - addOns: 2-4 high-value add-ons with realistic prices
+- checklistTemplate: 5-8 short, ordered, on-site steps a tech would actually do for this service. Plain strings, no numbering.
 - bookingMode: use "instant" for flat-rate, "starts_at" for variable, "quote_only" for complex jobs
 - priceTiers: only include if type is "variable"
 - All prices in USD as numbers only`;
@@ -13699,8 +13758,10 @@ Respond with JSON only:
           recurringPrice,
           intakeQuestionsJson,
           addOnsJson,
+          checklistTemplateJson,
           bookingMode,
-          aiPricingInsight
+          aiPricingInsight,
+          applyChecklistToFutureJobs
         } = req.body;
         const allowedUpdate = {};
         if (name !== void 0) allowedUpdate.name = name;
@@ -13723,6 +13784,8 @@ Respond with JSON only:
         if (intakeQuestionsJson !== void 0)
           allowedUpdate.intakeQuestionsJson = intakeQuestionsJson;
         if (addOnsJson !== void 0) allowedUpdate.addOnsJson = addOnsJson;
+        if (checklistTemplateJson !== void 0)
+          allowedUpdate.checklistTemplateJson = checklistTemplateJson;
         const VALID_BOOKING_MODES = ["instant", "starts_at", "quote_only"];
         if (bookingMode !== void 0) {
           if (!VALID_BOOKING_MODES.includes(bookingMode)) {
@@ -13735,7 +13798,28 @@ Respond with JSON only:
         if (aiPricingInsight !== void 0)
           allowedUpdate.aiPricingInsight = aiPricingInsight;
         const [svc] = await db.update(providerCustomServices).set({ ...allowedUpdate, updatedAt: /* @__PURE__ */ new Date() }).where(eq10(providerCustomServices.id, req.params.id)).returning();
-        res.json({ service: svc });
+        let appliedToJobs = 0;
+        if (applyChecklistToFutureJobs === true && Array.isArray(checklistTemplateJson)) {
+          const templateItems = checklistTemplateJson.filter(
+            (it) => typeof it === "object" && it !== null
+          ).map((it, i) => ({
+            id: String(it.id ?? `c_${Date.now()}_${i}`),
+            label: String(it.label ?? "").slice(0, 200),
+            completed: false
+          })).filter((it) => it.label.length > 0);
+          const todayStart = /* @__PURE__ */ new Date();
+          todayStart.setHours(0, 0, 0, 0);
+          const updated = await db.update(jobs).set({ checklist: templateItems }).where(
+            and5(
+              eq10(jobs.customServiceId, req.params.id),
+              eq10(jobs.providerId, req.params.providerId),
+              notInArray(jobs.status, ["completed", "cancelled", "weather_held"]),
+              gte3(jobs.scheduledDate, todayStart)
+            )
+          ).returning({ id: jobs.id });
+          appliedToJobs = updated.length;
+        }
+        res.json({ service: svc, appliedToJobs });
       } catch (error) {
         console.error("Update custom service error:", error);
         res.status(500).json({ error: "Failed to update service" });
@@ -14905,46 +14989,24 @@ Line 3: rating caption for ${insights.rating} stars`
           return res.status(403).json({ error: "Access denied" });
         }
         const existingChecklist = job.checklist;
-        if (existingChecklist && Array.isArray(existingChecklist) && existingChecklist.length > 0) {
+        if (Array.isArray(existingChecklist)) {
           return res.json({ checklist: existingChecklist });
         }
-        const prompt = [
-          `You are a home services task manager. Generate a practical 6-8 step checklist for a service provider performing this job.`,
-          `Job type: ${job.title}`,
-          job.description ? `Client's issue: ${job.description}` : "",
-          `Return ONLY a valid JSON array of strings with no markdown, no extra keys, and no explanation. Each string is a clear, actionable step.`,
-          `Example: ["Arrive and introduce yourself", "Assess the issue", "Complete the repair", ...]`
-        ].filter(Boolean).join("\n");
-        const aiResponse = await openai.chat.completions.create({
-          model: "gpt-4o-mini",
-          messages: [{ role: "user", content: prompt }],
-          temperature: 0.4,
-          max_tokens: 400
-        });
-        const raw = aiResponse.choices[0]?.message?.content?.trim() || "[]";
-        let labels = [];
-        try {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed))
-            labels = parsed.filter((s) => typeof s === "string");
-        } catch {
-          labels = raw.split("\n").map((l) => l.replace(/^[-\d.]+\s*/, "").trim()).filter(Boolean).slice(0, 8);
+        let checklist = [];
+        if (job.customServiceId) {
+          const [svcRow] = await db.select({
+            checklistTemplateJson: providerCustomServices.checklistTemplateJson
+          }).from(providerCustomServices).where(eq10(providerCustomServices.id, job.customServiceId));
+          if (Array.isArray(svcRow?.checklistTemplateJson)) {
+            checklist = svcRow.checklistTemplateJson.filter(
+              (it) => it && typeof it.label === "string" && it.label.trim().length > 0
+            ).map((it, i) => ({
+              id: String(it.id ?? `c_${Date.now()}_${i}`),
+              label: String(it.label).slice(0, 200),
+              completed: false
+            }));
+          }
         }
-        if (labels.length === 0) {
-          labels = [
-            "Arrive at location",
-            "Assess the issue",
-            "Discuss scope with client",
-            "Complete main work",
-            "Clean up area",
-            "Walkthrough with client"
-          ];
-        }
-        const checklist = labels.map((label, i) => ({
-          id: String(i + 1),
-          label,
-          completed: false
-        }));
         await db.update(jobs).set({ checklist }).where(eq10(jobs.id, req.params.id));
         res.json({ checklist });
       } catch (error) {
@@ -15141,6 +15203,7 @@ Line 3: rating caption for ${insights.rating} stars`
           basePrice: providerCustomServices.basePrice,
           priceFrom: providerCustomServices.priceFrom,
           intakeQuestionsJson: providerCustomServices.intakeQuestionsJson,
+          checklistTemplateJson: providerCustomServices.checklistTemplateJson,
           isRecurring: providerCustomServices.isRecurring,
           recurringFrequency: providerCustomServices.recurringFrequency,
           recurringPrice: providerCustomServices.recurringPrice
@@ -15203,12 +15266,30 @@ Line 3: rating caption for ${insights.rating} stars`
           }
         }
       }
+      let initialChecklist = [];
+      const incomingChecklist = parsed.data.checklist;
+      if (Array.isArray(incomingChecklist)) {
+        initialChecklist = incomingChecklist.filter(
+          (it) => typeof it === "object" && it !== null
+        ).map((it, i) => ({
+          id: String(it.id ?? `c_${Date.now()}_${i}`),
+          label: String(it.label ?? "").slice(0, 200),
+          completed: Boolean(it.completed)
+        })).filter((it) => it.label.length > 0);
+      } else if (Array.isArray(svcSnapshot?.checklistTemplateJson)) {
+        initialChecklist = svcSnapshot.checklistTemplateJson.filter((it) => it && typeof it.label === "string" && it.label.trim().length > 0).map((it, i) => ({
+          id: String(it.id ?? `c_${Date.now()}_${i}`),
+          label: String(it.label).slice(0, 200),
+          completed: false
+        }));
+      }
       const { job: newJob, appointment } = await db.transaction(async (tx) => {
         const jobValues = {
           ...parsed.data,
           customServiceId: verifiedCustomServiceId,
           estimatedPrice: effectivePrice ?? parsed.data.estimatedPrice,
           description: finalJobDescription,
+          checklist: initialChecklist,
           // Belt-and-suspenders: insertJobSchema already strips seriesId,
           // but null it out here too so any future schema regression can't
           // let a client attach the new job to another provider's series.
@@ -15454,6 +15535,113 @@ Line 3: rating caption for ${insights.rating} stars`
       } catch (error) {
         console.error("Update job error:", error);
         res.status(500).json({ error: "Failed to update job" });
+      }
+    }
+  );
+  const formatTimeFromDate = (d) => {
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    return `${hh}:${mm}`;
+  };
+  app2.post(
+    "/api/jobs/:id/weather-hold",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const existing = await storage.getJob(req.params.id);
+        if (!existing) return res.status(404).json({ error: "Job not found" });
+        if (!await assertProviderOwnership(req, existing.providerId, res))
+          return;
+        if (existing.status === "completed" || existing.status === "cancelled") {
+          return res.status(400).json({ error: "Cannot weather-hold a completed or cancelled job" });
+        }
+        const body = req.body;
+        let parsedNewDate;
+        if (body.newDate) {
+          parsedNewDate = new Date(body.newDate);
+          if (Number.isNaN(parsedNewDate.getTime())) {
+            return res.status(400).json({ error: "Invalid newDate" });
+          }
+        }
+        if (existing.status === "weather_held" && !parsedNewDate && body.newTime === void 0) {
+          return res.json({ job: existing, idempotent: true });
+        }
+        const wasAlreadyHeld = existing.status === "weather_held";
+        const update = {
+          status: "weather_held"
+        };
+        if (!wasAlreadyHeld) {
+          update.weatherHeldAt = /* @__PURE__ */ new Date();
+        }
+        if (!existing.originalScheduledAt && existing.scheduledDate) {
+          update.originalScheduledAt = new Date(existing.scheduledDate);
+        }
+        if (parsedNewDate) update.scheduledDate = parsedNewDate;
+        if (body.newTime !== void 0) update.scheduledTime = body.newTime;
+        const job = await db.transaction(async (tx) => {
+          const [updated] = await tx.update(jobs).set(update).where(eq10(jobs.id, req.params.id)).returning();
+          if (!updated) throw new Error("Job update returned no row");
+          if (updated.appointmentId && (parsedNewDate || body.newTime !== void 0)) {
+            const apptUpdate = {};
+            if (parsedNewDate) apptUpdate.scheduledDate = parsedNewDate;
+            if (body.newTime !== void 0) apptUpdate.scheduledTime = body.newTime;
+            await tx.update(appointments).set(apptUpdate).where(eq10(appointments.id, updated.appointmentId));
+          }
+          return updated;
+        });
+        if (!wasAlreadyHeld) {
+          dispatchJobStatusEmail(job, "weather_held").catch(
+            (e) => console.error("weather-hold dispatch error:", e)
+          );
+        }
+        res.json({ job });
+      } catch (error) {
+        console.error("Weather-hold job error:", error);
+        res.status(500).json({ error: "Failed to place job on weather hold" });
+      }
+    }
+  );
+  app2.post(
+    "/api/jobs/:id/restore",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const existing = await storage.getJob(req.params.id);
+        if (!existing) return res.status(404).json({ error: "Job not found" });
+        if (!await assertProviderOwnership(req, existing.providerId, res))
+          return;
+        if (existing.status !== "weather_held") {
+          return res.json({ job: existing, idempotent: true });
+        }
+        const update = {
+          status: "scheduled",
+          weatherHeldAt: null
+        };
+        let restoredDate = null;
+        if (existing.originalScheduledAt) {
+          restoredDate = new Date(existing.originalScheduledAt);
+          update.scheduledDate = restoredDate;
+          update.scheduledTime = formatTimeFromDate(restoredDate);
+          update.originalScheduledAt = null;
+        }
+        const job = await db.transaction(async (tx) => {
+          const [updated] = await tx.update(jobs).set(update).where(eq10(jobs.id, req.params.id)).returning();
+          if (!updated) throw new Error("Job update returned no row");
+          if (updated.appointmentId && restoredDate) {
+            await tx.update(appointments).set({
+              scheduledDate: restoredDate,
+              scheduledTime: formatTimeFromDate(restoredDate)
+            }).where(eq10(appointments.id, updated.appointmentId));
+          }
+          return updated;
+        });
+        dispatchJobStatusEmail(job, "scheduled").catch(
+          (e) => console.error("restore dispatch error:", e)
+        );
+        res.json({ job });
+      } catch (error) {
+        console.error("Restore job error:", error);
+        res.status(500).json({ error: "Failed to restore job" });
       }
     }
   );
@@ -17898,6 +18086,98 @@ Line 3: rating caption for ${insights.rating} stars`
     return null;
   }
   app2.get(
+    "/api/providers/:providerId/next-payout",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const { providerId } = req.params;
+        if (!await assertProviderOwnership(req, providerId, res)) return;
+        const connectAccount = await getConnectAccount(providerId);
+        if (!connectAccount?.stripeAccountId) {
+          return res.json({ status: "not_onboarded" });
+        }
+        if (!connectAccount.payoutsEnabled) {
+          return res.json({ status: "onboarding_incomplete" });
+        }
+        const stripe2 = getStripe();
+        const acctId = connectAccount.stripeAccountId;
+        let bankName = null;
+        let last4 = null;
+        try {
+          const banks = await stripe2.accounts.listExternalAccounts(acctId, {
+            object: "bank_account",
+            limit: 10
+          });
+          const list = banks.data;
+          const defaultBank = list.find((b) => b.default_for_currency === true) ?? list[0];
+          if (defaultBank) {
+            bankName = defaultBank.bank_name ?? null;
+            last4 = defaultBank.last4 ?? null;
+          }
+        } catch (err) {
+          console.warn(
+            "[next-payout] listExternalAccounts failed:",
+            err instanceof Error ? err.message : err
+          );
+        }
+        const [pending, inTransit] = await Promise.all([
+          stripe2.payouts.list(
+            { status: "pending", limit: 5 },
+            { stripeAccount: acctId }
+          ),
+          stripe2.payouts.list(
+            { status: "in_transit", limit: 5 },
+            { stripeAccount: acctId }
+          )
+        ]);
+        const next = [...pending.data, ...inTransit.data].sort(
+          (a, b) => (a.arrival_date ?? 0) - (b.arrival_date ?? 0)
+        )[0];
+        if (next) {
+          return res.json({
+            status: "ready",
+            nextPayout: {
+              id: next.id,
+              amountCents: next.amount,
+              currency: next.currency,
+              arrivalDate: next.arrival_date ? new Date(next.arrival_date * 1e3).toISOString() : null,
+              bankName,
+              last4,
+              payoutStatus: next.status
+            },
+            pendingBalanceCents: 0
+          });
+        }
+        let pendingBalanceCents = 0;
+        try {
+          const balance = await stripe2.balance.retrieve(void 0, {
+            stripeAccount: acctId
+          });
+          pendingBalanceCents = (balance.pending ?? []).reduce(
+            (sum, b) => sum + (b.amount ?? 0),
+            0
+          );
+        } catch (err) {
+          console.warn(
+            "[next-payout] balance.retrieve failed:",
+            err instanceof Error ? err.message : err
+          );
+        }
+        return res.json({
+          status: "ready",
+          nextPayout: null,
+          pendingBalanceCents,
+          bankName,
+          last4
+        });
+      } catch (error) {
+        console.error("[next-payout] error:", error);
+        const message = error instanceof Error ? error.message : "Failed to load next payout";
+        res.status(500).json({ error: message });
+      }
+    }
+  );
+  app2.get(
     "/api/providers/:providerId/stripe-payouts",
     requireAuth,
     async (req, res) => {
@@ -18727,7 +19007,8 @@ Line 3: rating caption for ${insights.rating} stars`
             scheduledTime: scheduledTime || null,
             status: "scheduled",
             estimatedPrice: estimatedPrice ? String(estimatedPrice) : null,
-            notes: notes || null
+            notes: notes || null,
+            checklist: []
           }).returning();
           const now = /* @__PURE__ */ new Date();
           await tx.update(leads).set({ status: "won", updatedAt: now }).where(eq10(leads.id, id));
@@ -19591,7 +19872,8 @@ async function runBootMigrations() {
       ["provider_custom_services.intake_questions_json", `ALTER TABLE provider_custom_services ADD COLUMN IF NOT EXISTS intake_questions_json TEXT`],
       ["provider_custom_services.add_ons_json", `ALTER TABLE provider_custom_services ADD COLUMN IF NOT EXISTS add_ons_json TEXT`],
       ["provider_custom_services.booking_mode", `ALTER TABLE provider_custom_services ADD COLUMN IF NOT EXISTS booking_mode TEXT DEFAULT 'instant'`],
-      ["provider_custom_services.ai_pricing_insight", `ALTER TABLE provider_custom_services ADD COLUMN IF NOT EXISTS ai_pricing_insight TEXT`]
+      ["provider_custom_services.ai_pricing_insight", `ALTER TABLE provider_custom_services ADD COLUMN IF NOT EXISTS ai_pricing_insight TEXT`],
+      ["provider_custom_services.checklist_template_json", `ALTER TABLE provider_custom_services ADD COLUMN IF NOT EXISTS checklist_template_json JSONB`]
     ];
     for (const [label, sql6] of customServiceAlters) {
       await runSql(label, sql6);
@@ -20011,10 +20293,24 @@ async function runBootMigrations() {
         PRIMARY KEY (provider_id, route_date)
       )`
     );
+    await runSql(
+      "job_status.weather_held",
+      `ALTER TYPE job_status ADD VALUE IF NOT EXISTS 'weather_held'`
+    );
+    await runSql(
+      "jobs.weather_held_at",
+      `ALTER TABLE jobs ADD COLUMN IF NOT EXISTS weather_held_at TIMESTAMP`
+    );
+    await runSql(
+      "jobs.original_scheduled_at",
+      `ALTER TABLE jobs ADD COLUMN IF NOT EXISTS original_scheduled_at TIMESTAMP`
+    );
     verifications.push(
       ["provider_route_orders", `SELECT provider_id FROM provider_route_orders LIMIT 0`],
       ["job_series table", `SELECT id FROM job_series LIMIT 0`],
-      ["jobs.series_id column", `SELECT series_id FROM jobs LIMIT 0`]
+      ["jobs.series_id column", `SELECT series_id FROM jobs LIMIT 0`],
+      ["jobs.weather_held_at column", `SELECT weather_held_at FROM jobs LIMIT 0`],
+      ["jobs.original_scheduled_at column", `SELECT original_scheduled_at FROM jobs LIMIT 0`]
     );
     const verificationErrors = [];
     for (const [label, sql6] of verifications) {

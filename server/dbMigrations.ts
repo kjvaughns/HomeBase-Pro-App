@@ -906,10 +906,9 @@ export async function runBootMigrations(): Promise<void> {
       )`,
     );
 
-    // ── Task #303: weather-hold job state ────────────────────────────────
-    // ALTER TYPE ... ADD VALUE must run in its own transaction (each runSql
-    // call is autocommitted) before the new value can be referenced by
-    // subsequent queries. The two ALTER TABLEs are simple additive columns.
+    // ALTER TYPE ... ADD VALUE must commit before subsequent queries can
+    // reference the new value. Each runSql call autocommits, so doing the
+    // enum-add before the column-adds keeps it safe.
     await runSql(
       "job_status.weather_held",
       `ALTER TYPE job_status ADD VALUE IF NOT EXISTS 'weather_held'`,

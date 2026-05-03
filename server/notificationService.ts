@@ -78,6 +78,8 @@ export interface DispatchPayload {
   intakeAnswers?: string;
   oldDate?: string;
   oldTime?: string;
+  scheduledTime?: string;
+  wasRescheduled?: boolean;
   reason?: string;
   preferredDate?: string;
   preferredTime?: string;
@@ -501,7 +503,7 @@ async function _dispatch(event: NotificationEvent, payload: DispatchPayload): Pr
     }
 
     case 'job.status_changed': {
-      const { clientEmail, clientName, providerName, serviceName, newStatus, scheduledDate, notes } = payload;
+      const { clientEmail, clientName, providerName, serviceName, newStatus, scheduledDate, scheduledTime, wasRescheduled, notes } = payload;
       if (!providerName || !serviceName || !newStatus) {
         console.log('[notification] job.status_changed skipped — missing provider/service/status');
         break;
@@ -539,7 +541,7 @@ async function _dispatch(event: NotificationEvent, payload: DispatchPayload): Pr
             relatedRecordId: payload.relatedRecordId,
           });
           try {
-            const result = await sendJobStatusChangedEmail({ clientEmail, clientName, providerName, serviceName, newStatus, scheduledDate, notes });
+            const result = await sendJobStatusChangedEmail({ clientEmail, clientName, providerName, serviceName, newStatus, scheduledDate, scheduledTime, wasRescheduled, notes });
             await updateDelivery(deliveryId, result.success ? 'sent' : 'failed', result.messageId, result.error);
             console.log(`[notification] job.status_changed(${newStatus}) email ${result.success ? 'sent' : 'failed'} to ${clientEmail}`);
           } catch (err: any) {

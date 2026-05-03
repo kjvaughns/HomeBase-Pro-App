@@ -8953,6 +8953,7 @@ Respond with JSON only:
   async function dispatchJobStatusEmail(
     job: Job,
     newStatus: string,
+    extra?: { wasRescheduled?: boolean },
   ): Promise<void> {
     if (!job.clientId || !job.providerId) return;
     const [client] = await db
@@ -8978,7 +8979,9 @@ Respond with JSON only:
       serviceName: job.title ?? "your job",
       newStatus,
       scheduledDate: job.scheduledDate ? String(job.scheduledDate) : undefined,
+      scheduledTime: job.scheduledTime ?? undefined,
       notes: job.notes ?? undefined,
+      wasRescheduled: extra?.wasRescheduled,
       relatedRecordType: "job",
       relatedRecordId: job.id,
       recipientUserId: client.homeownerUserId ?? undefined,
@@ -9607,18 +9610,30 @@ Respond with JSON only:
     },
   );
 
-  // ── Task #303: weather hold ────────────────────────────────────────────
-  // Distinct from cancellation: marks a job as paused-for-weather, snapshots
-  // the original slot, optionally moves the job to a new slot, and notifies
-  // the customer through the existing communications dispatcher. Excluded
-  // from cancellation/completion stats.
-  // Pull "HH:MM" out of a Date without locale/timezone surprises. Used so
-  // restore can put `scheduledTime` (text) back in lockstep with the
-  // snapshot we hold in `originalScheduledAt` (timestamp).
   const formatTimeFromDate = (d: Date): string => {
     const hh = String(d.getHours()).padStart(2, "0");
     const mm = String(d.getMinutes()).padStart(2, "0");
     return `${hh}:${mm}`;
+  };
+
+  // The app stores scheduledDate (timestamp) and scheduledTime (text "HH:MM")
+  // independently and the date column is sometimes truncated to midnight.
+  // Combine them into a single Date so the snapshot and any restore reflect
+  // the actual slot the customer was booked for.
+  const combineDateAndTime = (
+    date: Date | string | null | undefined,
+    time: string | null | undefined,
+  ): Date | null => {
+    if (!date) return null;
+    const base = new Date(date);
+    if (Number.isNaN(base.getTime())) return null;
+    if (time) {
+      const m = /^(\d{1,2}):(\d{2})/.exec(time);
+      if (m) {
+        base.setHours(Number(m[1]), Number(m[2]), 0, 0);
+      }
+    }
+    return base;
   };
 
   app.post(
@@ -9649,9 +9664,8 @@ Respond with JSON only:
           }
         }
 
-        // Idempotency: if the job is already weather-held AND the caller
-        // didn't ask to move it, return the existing record without
-        // re-notifying the customer (avoid duplicate push/email).
+        // No-op when the job is already held and the caller isn't asking to
+        // move it — return the existing record without re-notifying.
         if (
           existing.status === "weather_held" &&
           !parsedNewDate &&
@@ -9668,18 +9682,21 @@ Respond with JSON only:
         if (!wasAlreadyHeld) {
           update.weatherHeldAt = new Date();
         }
-        // Snapshot the original slot only the first time so repeated holds
-        // (e.g., extended rainy stretch) don't overwrite the true original.
-        if (!existing.originalScheduledAt && existing.scheduledDate) {
-          update.originalScheduledAt = new Date(existing.scheduledDate);
+        // Snapshot only the first hold so repeated holds during an extended
+        // rainy stretch don't overwrite the true original slot.
+        if (!existing.originalScheduledAt) {
+          const snapshot = combineDateAndTime(
+            existing.scheduledDate,
+            existing.scheduledTime,
+          );
+          if (snapshot) update.originalScheduledAt = snapshot;
         }
         if (parsedNewDate) update.scheduledDate = parsedNewDate;
         if (body.newTime !== undefined) update.scheduledTime = body.newTime;
 
-        // Wrap the job + appointment writes in a single DB transaction so a
-        // partial failure can't leave them inconsistent. Mirror date/time
-        // (not status — appointments have no weather_held value) onto the
-        // paired homeowner appointment.
+        // Wrap job + appointment writes in one transaction so a partial
+        // failure can't leave them inconsistent. Status doesn't mirror —
+        // appointments have no weather_held value yet — but date/time do.
         const job = await db.transaction(async (tx) => {
           const [updated] = await tx
             .update(jobs)
@@ -9703,11 +9720,11 @@ Respond with JSON only:
           return updated;
         });
 
-        // Suppress duplicate notifications when the call was a pure
-        // metadata change to an already-held job.
         if (!wasAlreadyHeld) {
-          dispatchJobStatusEmail(job, "weather_held").catch((e: unknown) =>
-            console.error("weather-hold dispatch error:", e),
+          const wasRescheduled = Boolean(parsedNewDate || body.newTime !== undefined);
+          dispatchJobStatusEmail(job, "weather_held", { wasRescheduled }).catch(
+            (e: unknown) =>
+              console.error("weather-hold dispatch error:", e),
           );
         }
 
@@ -9729,9 +9746,8 @@ Respond with JSON only:
         if (!(await assertProviderOwnership(req, existing.providerId, res)))
           return;
 
-        // Idempotent restore: if the job is already off weather hold,
-        // return success rather than 400. The provider's UI can call this
-        // safely (e.g., double-tap, retry) without surfacing an error.
+        // Idempotent restore — succeed quietly if the job is already off
+        // weather hold so retries/double-taps don't raise errors.
         if (existing.status !== "weather_held") {
           return res.json({ job: existing, idempotent: true });
         }
@@ -9740,14 +9756,10 @@ Respond with JSON only:
           status: "scheduled",
           weatherHeldAt: null,
         };
-        // One-tap restore: put the job back on its original slot if we have
-        // one snapshotted. Otherwise leave the current scheduledDate alone.
         let restoredDate: Date | null = null;
         if (existing.originalScheduledAt) {
           restoredDate = new Date(existing.originalScheduledAt);
           update.scheduledDate = restoredDate;
-          // Keep the text scheduledTime in lockstep with the timestamp so
-          // they don't drift after a reschedule-during-hold.
           update.scheduledTime = formatTimeFromDate(restoredDate);
           update.originalScheduledAt = null;
         }

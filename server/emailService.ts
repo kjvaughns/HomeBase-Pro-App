@@ -1104,8 +1104,31 @@ export async function sendJobStatusChangedEmail(data: {
   serviceName: string;
   newStatus: string;
   scheduledDate?: string;
+  scheduledTime?: string;
+  wasRescheduled?: boolean;
   notes?: string;
 }): Promise<SendResult> {
+  const formattedSlot = (() => {
+    if (!data.scheduledDate) return undefined;
+    const d = new Date(data.scheduledDate);
+    if (Number.isNaN(d.getTime())) return data.scheduledDate;
+    const datePart = d.toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "short",
+      day: "numeric",
+    });
+    if (data.scheduledTime) {
+      const m = /^(\d{1,2}):(\d{2})/.exec(data.scheduledTime);
+      if (m) {
+        let hh = Number(m[1]);
+        const mm = m[2];
+        const ampm = hh >= 12 ? "PM" : "AM";
+        hh = hh % 12 || 12;
+        return `${datePart} at ${hh}:${mm} ${ampm}`;
+      }
+    }
+    return datePart;
+  })();
   const statusLabel: Record<string, string> = {
     scheduled: "Scheduled",
     confirmed: "Confirmed",
@@ -1166,8 +1189,11 @@ export async function sendJobStatusChangedEmail(data: {
     weather_held: {
       subject: `Weather hold — your ${data.serviceName} appointment is being moved`,
       headline: "Weather Hold",
-      lead: `Heads up — weather is moving us. ${sProv} has placed your ${sSvc} appointment on a weather hold and will reschedule shortly.`,
-      closing: `No action needed on your end — ${sProv} will follow up with the new time. You can review the details any time in the HomeBase app.`,
+      lead:
+        data.wasRescheduled && formattedSlot
+          ? `Heads up — weather is moving us. ${sProv} has placed your ${sSvc} appointment on a weather hold and tentatively moved it to ${escapeHtml(formattedSlot)}.`
+          : `Heads up — weather is moving us. ${sProv} has placed your ${sSvc} appointment on a weather hold and will reschedule shortly.`,
+      closing: `No action needed on your end — ${sProv} will follow up to confirm the new time. You can review the details any time in the HomeBase app.`,
     },
   };
 
@@ -1187,9 +1213,9 @@ export async function sendJobStatusChangedEmail(data: {
   const body =
     greeting(data.clientName) +
     paragraph(lead) +
-    (data.scheduledDate || data.notes
+    (formattedSlot || data.notes
       ? infoBox(
-          (data.scheduledDate ? infoRow("Scheduled", data.scheduledDate) : "") +
+          (formattedSlot ? infoRow("Scheduled", formattedSlot) : "") +
             (data.notes ? infoRow("Notes", data.notes) : ""),
         )
       : "") +

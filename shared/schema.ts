@@ -39,9 +39,8 @@ export const jobStatusEnum = pgEnum("job_status", [
   "in_progress",
   "completed",
   "cancelled",
-  // Task #303: weather hold — distinct from cancellation. The job is paused
-  // because of weather, not because the customer or provider bailed. Excluded
-  // from cancellation/completion stats.
+  // Distinct from "cancelled" — the job is paused for weather, not bailed on.
+  // Excluded from cancellation/completion stats.
   "weather_held",
 ]);
 export const invoiceStatusEnum = pgEnum("invoice_status", [
@@ -901,10 +900,9 @@ export const jobs = pgTable("jobs", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   completedAt: timestamp("completed_at"),
-  // Task #303: weather-hold tracking. `weatherHeldAt` records when the job
-  // was put on weather hold; `originalScheduledAt` snapshots the original
-  // scheduled timestamp so a one-tap "Restore" can put the job back on the
-  // exact slot it was pulled from.
+  // `originalScheduledAt` is a combined date+time snapshot taken when the job
+  // is first put on weather hold, so "Restore" can put it back on the exact
+  // slot (both date and time) it was pulled from.
   weatherHeldAt: timestamp("weather_held_at"),
   originalScheduledAt: timestamp("original_scheduled_at"),
 });

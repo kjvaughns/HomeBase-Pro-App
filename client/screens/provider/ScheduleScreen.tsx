@@ -96,8 +96,8 @@ type JobStatus =
   | "in_progress"
   | "completed"
   | "cancelled"
-  // Task #303: weather hold — distinct from cancellation. Excluded from
-  // cancellation/completion stats; surfaced with a rain glyph on the card.
+  // Distinct from cancellation: paused for weather, surfaced with a rain
+  // glyph and excluded from cancellation/completion stats.
   | "weather_held";
 
 type StatusFilter = "all" | "scheduled" | "active" | "done";
@@ -182,8 +182,8 @@ const STATUS_LABEL: Record<JobStatus, string> = {
   weather_held: "Weather Hold",
 };
 
-// Task #303: rain glyph rendered on schedule cards / month dots / row icon
-// so a held job is visually distinct without color noise.
+// Rain glyph for weather-held jobs so they read as distinct without
+// adding color noise to the calendar.
 const STATUS_ICON: Partial<Record<JobStatus, keyof typeof Feather.glyphMap>> = {
   weather_held: "cloud-rain",
 };
