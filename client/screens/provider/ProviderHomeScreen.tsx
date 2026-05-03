@@ -219,7 +219,12 @@ export default function ProviderHomeScreen() {
     retry: false,
   });
 
-  const { data: bookingLinksData } = useQuery<{ bookingLinks: { id: string }[] }>({
+  const { data: bookingLinksData } = useQuery<{
+    bookingLinks: {
+      id: string;
+      intakeQuestions?: unknown[] | string | null;
+    }[];
+  }>({
     queryKey: ["/api/providers", providerId, "booking-links"],
     enabled: !!providerId,
     retry: false,
