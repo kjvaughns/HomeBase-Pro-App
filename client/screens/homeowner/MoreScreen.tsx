@@ -40,6 +40,8 @@ export default function MoreScreen() {
     logout,
     setActiveRole,
     setNeedsRoleSelection,
+    crewMemberships,
+    setActiveCrewProvider,
   } = useAuthStore();
   const { count: unreadCount } = useNotificationCount();
 
@@ -63,6 +65,18 @@ export default function MoreScreen() {
 
   const handleBecomeProvider = () => {
     navigation.navigate("BecomeProvider");
+  };
+
+  const [showCrewPicker, setShowCrewPicker] = useState(false);
+
+  const handleSwitchToCrew = () => {
+    if (crewMemberships.length === 0) return;
+    if (crewMemberships.length === 1) {
+      setActiveCrewProvider(crewMemberships[0].providerId);
+      navigation.reset({ index: 0, routes: [{ name: "Main" }] });
+      return;
+    }
+    setShowCrewPicker(true);
   };
 
   const handleSwitchToProvider = () => {
@@ -290,7 +304,7 @@ export default function MoreScreen() {
                     leftIcon="briefcase"
                     onPress={handleSwitchToProvider}
                     isFirst
-                    isLast
+                    isLast={crewMemberships.length === 0}
                   />
                 ) : (
                   <ListRow
@@ -299,9 +313,23 @@ export default function MoreScreen() {
                     leftIcon="briefcase"
                     onPress={handleBecomeProvider}
                     isFirst
-                    isLast
+                    isLast={crewMemberships.length === 0}
                   />
                 )}
+                {crewMemberships.length > 0 ? (
+                  <ListRow
+                    title="Switch to Crew Mode"
+                    subtitle={
+                      crewMemberships.length === 1
+                        ? `Run jobs for ${crewMemberships[0].providerName}`
+                        : `Run jobs for ${crewMemberships.length} businesses`
+                    }
+                    leftIcon="users"
+                    onPress={handleSwitchToCrew}
+                    isLast
+                    testID="row-switch-to-crew"
+                  />
+                ) : null}
               </View>
             </Animated.View>
           </>
@@ -438,6 +466,51 @@ export default function MoreScreen() {
       />
 
       <Modal
+        visible={showCrewPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCrewPicker(false)}
+      >
+        <Pressable
+          style={crewPickerStyles.overlay}
+          onPress={() => setShowCrewPicker(false)}
+        >
+          <View
+            style={[
+              crewPickerStyles.sheet,
+              { backgroundColor: theme.cardBackground },
+            ]}
+          >
+            <ThemedText style={crewPickerStyles.title}>
+              Switch to Crew
+            </ThemedText>
+            {crewMemberships.map((m) => (
+              <Pressable
+                key={m.providerId}
+                style={[
+                  crewPickerStyles.row,
+                  { borderTopColor: theme.separator },
+                ]}
+                onPress={() => {
+                  setShowCrewPicker(false);
+                  setActiveCrewProvider(m.providerId);
+                  navigation.reset({
+                    index: 0,
+                    routes: [{ name: "Main" }],
+                  });
+                }}
+                testID={`crew-picker-${m.providerId}`}
+              >
+                <ThemedText style={crewPickerStyles.rowText}>
+                  {m.providerName}
+                </ThemedText>
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
+
+      <Modal
         visible={showDeleteModal}
         transparent
         animationType="fade"
@@ -489,6 +562,31 @@ export default function MoreScreen() {
     </ThemedView>
   );
 }
+
+const crewPickerStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    paddingHorizontal: Spacing.xl,
+  },
+  sheet: {
+    borderRadius: BorderRadius.card,
+    padding: Spacing.lg,
+  },
+  title: {
+    ...Typography.headline,
+    fontWeight: "700",
+    marginBottom: Spacing.md,
+  },
+  row: {
+    paddingVertical: Spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  rowText: {
+    ...Typography.body,
+  },
+});
 
 const styles = StyleSheet.create({
   container: {

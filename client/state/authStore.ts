@@ -3,8 +3,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApiUrl, queryClient } from "@/lib/query-client";
 import { setSessionToken as secureSetSessionToken, getSessionToken as secureGetSessionToken } from "@/lib/secureSession";
 
-export type UserRole = "guest" | "homeowner" | "provider";
+export type UserRole = "guest" | "homeowner" | "provider" | "crew";
 export type ProviderStatus = "draft" | "pending" | "approved" | "rejected" | "paused";
+
+export interface CrewMembership {
+  providerId: string;
+  providerName: string;
+  crewMemberId: string;
+}
 
 export interface User {
   id: string;
@@ -54,10 +60,18 @@ interface AuthState {
    *  null only for users who have never picked a side. */
   preferredRole: UserRole | null;
   providerProfile: ProviderProfile | null;
+  /** Task #328: every provider for whom this user is a linked, active crew
+   *  member. Populated by /login + /api/auth/me. Crew is a capability flag,
+   *  not a role; a user may simultaneously be homeowner, provider, and crew
+   *  of N providers. */
+  crewMemberships: CrewMembership[];
+  /** Task #328: when set, the app renders the minimized 3-tab Crew portal
+   *  scoped to that provider. Cleared when the user switches back. */
+  activeCrewProviderId: string | null;
   isHydrated: boolean;
   needsRoleSelection: boolean;
-  
-  login: (user: User, providerProfile?: ProviderProfile | null, token?: string | null) => void;
+
+  login: (user: User, providerProfile?: ProviderProfile | null, token?: string | null, crewMemberships?: CrewMembership[]) => void;
   logout: () => void;
   setActiveRole: (role: UserRole) => void;
   activateProviderMode: () => void;
@@ -68,6 +82,8 @@ interface AuthState {
   createProviderProfile: (profile: ProviderProfile) => void;
   updateProviderStatus: (status: ProviderStatus) => void;
   updateProviderProfile: (updates: Partial<ProviderProfile>) => void;
+  setCrewMemberships: (memberships: CrewMembership[]) => void;
+  setActiveCrewProvider: (providerId: string | null) => void;
   hasProviderProfile: () => boolean;
   canAccessProviderMode: () => boolean;
   hydrate: () => Promise<void>;
@@ -84,10 +100,12 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   lastActiveRole: null,
   preferredRole: null,
   providerProfile: null,
+  crewMemberships: [],
+  activeCrewProviderId: null,
   isHydrated: false,
   needsRoleSelection: true,
 
-  login: (user: User, providerProfile?: ProviderProfile | null, token?: string | null) => {
+  login: (user: User, providerProfile?: ProviderProfile | null, token?: string | null, crewMemberships?: CrewMembership[]) => {
     const hasApprovedProvider = providerProfile?.status === "approved";
 
     // Determine starting role. Priority order:
@@ -121,6 +139,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       activeRole,
       preferredRole: nextPreferred,
       providerProfile: providerProfile || null,
+      crewMemberships: crewMemberships || [],
+      activeCrewProviderId: null,
       needsRoleSelection: false,
     };
     set(newState);
@@ -158,6 +178,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       sessionToken: null,
       activeRole: "guest" as UserRole,
       providerProfile: null,
+      crewMemberships: [],
+      activeCrewProviderId: null,
       // Keep lastActiveRole and preferredRole across logout so the next login
       // restores the prior view without re-prompting (Task #291).
       lastActiveRole,
@@ -237,6 +259,25 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     }
   },
 
+  setCrewMemberships: (memberships: CrewMembership[]) => {
+    const { activeCrewProviderId } = get();
+    // If the active provider is no longer in the list (revoked / removed),
+    // drop the active selection so the portal switcher reverts gracefully.
+    const stillValid =
+      activeCrewProviderId &&
+      memberships.some((m) => m.providerId === activeCrewProviderId);
+    set({
+      crewMemberships: memberships,
+      activeCrewProviderId: stillValid ? activeCrewProviderId : null,
+    });
+    saveToStorage(get());
+  },
+
+  setActiveCrewProvider: (providerId: string | null) => {
+    set({ activeCrewProviderId: providerId });
+    saveToStorage(get());
+  },
+
   // Task #220: rehydrate user.isAdmin and providerProfile.isPartner from
   // server truth on app start. Admin can be granted via SQL (or by another
   // admin in the app) without invalidating the persisted auth blob, so we
@@ -282,7 +323,22 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
           }
         : providerProfile;
 
-      set({ user: nextUser, providerProfile: nextProfile });
+      const nextMemberships: CrewMembership[] = Array.isArray(
+        data.crewMemberships,
+      )
+        ? data.crewMemberships
+        : get().crewMemberships;
+      const { activeCrewProviderId } = get();
+      const stillValid =
+        activeCrewProviderId &&
+        nextMemberships.some((m) => m.providerId === activeCrewProviderId);
+
+      set({
+        user: nextUser,
+        providerProfile: nextProfile,
+        crewMemberships: nextMemberships,
+        activeCrewProviderId: stillValid ? activeCrewProviderId : null,
+      });
       saveToStorage(get());
     } catch {
       // Network / auth error — keep persisted values, surface elsewhere.
@@ -351,6 +407,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
           lastActiveRole: data.lastActiveRole || null,
           preferredRole: data.preferredRole || null,
           providerProfile,
+          crewMemberships: Array.isArray(data.crewMemberships) ? data.crewMemberships : [],
+          activeCrewProviderId: typeof data.activeCrewProviderId === "string" ? data.activeCrewProviderId : null,
           needsRoleSelection,
           isHydrated: true,
         });
@@ -374,6 +432,8 @@ async function saveToStorage(state: AuthState) {
       lastActiveRole: state.lastActiveRole,
       preferredRole: state.preferredRole,
       providerProfile: state.providerProfile,
+      crewMemberships: state.crewMemberships,
+      activeCrewProviderId: state.activeCrewProviderId,
       needsRoleSelection: state.needsRoleSelection,
     };
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));

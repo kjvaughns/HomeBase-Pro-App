@@ -1,5 +1,11 @@
 var __defProp = Object.defineProperty;
 var __getOwnPropNames = Object.getOwnPropertyNames;
+var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
+  get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
+}) : x)(function(x) {
+  if (typeof require !== "undefined") return require.apply(this, arguments);
+  throw Error('Dynamic require of "' + x + '" is not supported');
+});
 var __esm = (fn, res) => function __init() {
   return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
 };
@@ -24,6 +30,11 @@ __export(schema_exports, {
   creditLedgerRelations: () => creditLedgerRelations,
   crewMembers: () => crewMembers,
   crewMembersRelations: () => crewMembersRelations,
+  estimateLineItems: () => estimateLineItems,
+  estimateLineItemsRelations: () => estimateLineItemsRelations,
+  estimateStatusEnum: () => estimateStatusEnum,
+  estimates: () => estimates,
+  estimatesRelations: () => estimatesRelations,
   homeFieldChanges: () => homeFieldChanges,
   homeFieldChangesRelations: () => homeFieldChangesRelations,
   homeProfileUpdateSchema: () => homeProfileUpdateSchema,
@@ -36,6 +47,8 @@ __export(schema_exports, {
   insertClientSchema: () => insertClientSchema,
   insertCreditLedgerSchema: () => insertCreditLedgerSchema,
   insertCrewMemberSchema: () => insertCrewMemberSchema,
+  insertEstimateLineItemSchema: () => insertEstimateLineItemSchema,
+  insertEstimateSchema: () => insertEstimateSchema,
   insertHomeSchema: () => insertHomeSchema,
   insertHousefaxEntrySchema: () => insertHousefaxEntrySchema,
   insertIntakeSubmissionSchema: () => insertIntakeSubmissionSchema,
@@ -146,7 +159,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-var propertyTypeEnum, appointmentStatusEnum, urgencyEnum, jobSizeEnum, jobStatusEnum, invoiceStatusEnum, paymentMethodEnum, paymentStatusEnum, payoutStatusEnum, connectOnboardingStatusEnum, providerPlanTierEnum, users, usersRelations, homes, homesRelations, serviceCategories, serviceCategoriesRelations, services, servicesRelations, providers, providersRelations, crewMembers, crewMembersRelations, providerServices, providerServicesRelations, pricingTypeEnum, providerCustomServices, providerCustomServicesRelations, insertProviderCustomServiceSchema, appointments, appointmentsRelations, reviews, reviewsRelations, savedProviders, savedProvidersRelations, reviewReports, reviewReportsRelations, notifications, notificationsRelations, maintenanceReminderFrequencyEnum, maintenanceReminders, maintenanceRemindersRelations, providerPlans2, providerPlansRelations, stripeConnectAccounts, stripeConnectAccountsRelations, userCredits, userCreditsRelations, creditLedger, creditLedgerRelations, payouts, payoutsRelations, refundStatusEnum, refunds, refundsRelations, stripeWebhookEvents, invoiceLineItems, invoiceLineItemsRelations, clients, clientsRelations, jobs, jobsRelations, jobSeries, jobSeriesRelations, invoices, invoicesRelations, payments, paymentsRelations, bookingLinkStatusEnum, quoteModeEnum, intakeStatusEnum, bookingLinks, bookingLinksRelations, intakeSubmissions, intakeSubmissionsRelations, insertUserSchema, loginSchema, insertHomeSchema, homeProfileUpdateSchema, homeFieldChanges, homeFieldChangesRelations, insertAppointmentSchema, insertClientSchema, insertJobSchema, insertInvoiceSchema, insertPaymentSchema, insertProviderSchema, insertProviderPlanSchema, insertStripeConnectAccountSchema, insertInvoiceLineItemSchema, insertPayoutSchema, insertUserCreditsSchema, insertCreditLedgerSchema, insertCrewMemberSchema, insertBookingLinkSchema, insertIntakeSubmissionSchema, notificationChannelEnum, notificationDeliveryStatusEnum, pushTokens, notificationPreferences, notificationDeliveries, messageChannelEnum, messageStatusEnum, providerMessages, providerMessagesRelations, insertProviderMessageSchema, messageTemplates, messageTemplatesRelations, insertMessageTemplateSchema, leads, insertLeadSchema, insertNotificationPreferenceSchema, housefaxEntries, housefaxEntriesRelations, insertHousefaxEntrySchema, supportTickets, supportTicketsRelations, insertSupportTicketSchema;
+var propertyTypeEnum, appointmentStatusEnum, urgencyEnum, jobSizeEnum, jobStatusEnum, invoiceStatusEnum, estimateStatusEnum, paymentMethodEnum, paymentStatusEnum, payoutStatusEnum, connectOnboardingStatusEnum, providerPlanTierEnum, users, usersRelations, homes, homesRelations, serviceCategories, serviceCategoriesRelations, services, servicesRelations, providers, providersRelations, crewMembers, crewMembersRelations, providerServices, providerServicesRelations, pricingTypeEnum, providerCustomServices, providerCustomServicesRelations, insertProviderCustomServiceSchema, appointments, appointmentsRelations, reviews, reviewsRelations, savedProviders, savedProvidersRelations, reviewReports, reviewReportsRelations, notifications, notificationsRelations, maintenanceReminderFrequencyEnum, maintenanceReminders, maintenanceRemindersRelations, providerPlans2, providerPlansRelations, stripeConnectAccounts, stripeConnectAccountsRelations, userCredits, userCreditsRelations, creditLedger, creditLedgerRelations, payouts, payoutsRelations, refundStatusEnum, refunds, refundsRelations, stripeWebhookEvents, invoiceLineItems, estimateLineItems, invoiceLineItemsRelations, clients, clientsRelations, jobs, jobsRelations, jobSeries, jobSeriesRelations, invoices, invoicesRelations, estimates, estimatesRelations, estimateLineItemsRelations, payments, paymentsRelations, bookingLinkStatusEnum, quoteModeEnum, intakeStatusEnum, bookingLinks, bookingLinksRelations, intakeSubmissions, intakeSubmissionsRelations, insertUserSchema, loginSchema, insertHomeSchema, homeProfileUpdateSchema, homeFieldChanges, homeFieldChangesRelations, insertAppointmentSchema, insertClientSchema, insertJobSchema, insertInvoiceSchema, insertPaymentSchema, insertProviderSchema, insertProviderPlanSchema, insertStripeConnectAccountSchema, insertInvoiceLineItemSchema, insertEstimateSchema, insertEstimateLineItemSchema, insertPayoutSchema, insertUserCreditsSchema, insertCreditLedgerSchema, insertCrewMemberSchema, insertBookingLinkSchema, insertIntakeSubmissionSchema, notificationChannelEnum, notificationDeliveryStatusEnum, pushTokens, notificationPreferences, notificationDeliveries, messageChannelEnum, messageStatusEnum, providerMessages, providerMessagesRelations, insertProviderMessageSchema, messageTemplates, messageTemplatesRelations, insertMessageTemplateSchema, leads, insertLeadSchema, insertNotificationPreferenceSchema, housefaxEntries, housefaxEntriesRelations, insertHousefaxEntrySchema, supportTickets, supportTicketsRelations, insertSupportTicketSchema;
 var init_schema = __esm({
   "shared/schema.ts"() {
     "use strict";
@@ -186,6 +199,15 @@ var init_schema = __esm({
       "void",
       "refunded",
       "cancelled"
+    ]);
+    estimateStatusEnum = pgEnum("estimate_status", [
+      "draft",
+      "sent",
+      "viewed",
+      "accepted",
+      "declined",
+      "expired",
+      "converted"
     ]);
     paymentMethodEnum = pgEnum("payment_method", [
       "cash",
@@ -807,6 +829,17 @@ var init_schema = __esm({
       // JSON for additional data
       createdAt: timestamp("created_at").defaultNow().notNull()
     });
+    estimateLineItems = pgTable("estimate_line_items", {
+      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+      estimateId: varchar("estimate_id").notNull(),
+      name: text("name").notNull(),
+      description: text("description"),
+      quantity: decimal("quantity", { precision: 10, scale: 2 }).default("1"),
+      unitPriceCents: integer("unit_price_cents").notNull(),
+      amountCents: integer("amount_cents").notNull(),
+      metadata: text("metadata"),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
     invoiceLineItemsRelations = relations(
       invoiceLineItems,
       ({ one }) => ({
@@ -1032,6 +1065,67 @@ var init_schema = __esm({
       payments: many(payments),
       lineItemsNormalized: many(invoiceLineItems)
     }));
+    estimates = pgTable("estimates", {
+      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+      providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+      clientId: varchar("client_id").references(() => clients.id, {
+        onDelete: "set null"
+      }),
+      homeownerUserId: varchar("homeowner_user_id").references(() => users.id, {
+        onDelete: "set null"
+      }),
+      jobId: varchar("job_id").references(() => jobs.id, { onDelete: "set null" }),
+      estimateNumber: text("estimate_number").notNull(),
+      currency: text("currency").default("usd"),
+      subtotalCents: integer("subtotal_cents").notNull().default(0),
+      taxCents: integer("tax_cents").default(0),
+      discountCents: integer("discount_cents").default(0),
+      totalCents: integer("total_cents").notNull().default(0),
+      status: estimateStatusEnum("status").default("draft"),
+      expiresAt: timestamp("expires_at"),
+      notes: text("notes"),
+      // Snapshot of line items at the moment of acceptance/decline so the
+      // client-facing record stays stable even if the provider edits later.
+      acceptedSnapshot: text("accepted_snapshot"),
+      // Public viewer token (random, unguessable) used by the homeowner to
+      // open the estimate without authenticating.
+      publicToken: text("public_token").notNull().unique(),
+      // Convert link: when an accepted estimate is promoted into an invoice
+      // we record the invoice id here. The reverse pointer (invoices.estimateId)
+      // is added in the migration so the FK isn't a circular Drizzle reference.
+      convertedInvoiceId: varchar("converted_invoice_id"),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      updatedAt: timestamp("updated_at").defaultNow().notNull(),
+      sentAt: timestamp("sent_at"),
+      viewedAt: timestamp("viewed_at"),
+      decidedAt: timestamp("decided_at"),
+      convertedAt: timestamp("converted_at")
+    });
+    estimatesRelations = relations(estimates, ({ one, many }) => ({
+      provider: one(providers, {
+        fields: [estimates.providerId],
+        references: [providers.id]
+      }),
+      client: one(clients, {
+        fields: [estimates.clientId],
+        references: [clients.id]
+      }),
+      homeownerUser: one(users, {
+        fields: [estimates.homeownerUserId],
+        references: [users.id]
+      }),
+      job: one(jobs, { fields: [estimates.jobId], references: [jobs.id] }),
+      lineItems: many(estimateLineItems)
+    }));
+    estimateLineItemsRelations = relations(
+      estimateLineItems,
+      ({ one }) => ({
+        estimate: one(estimates, {
+          fields: [estimateLineItems.estimateId],
+          references: [estimates.id]
+        })
+      })
+    );
     payments = pgTable("payments", {
       id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
       invoiceId: varchar("invoice_id").notNull().references(() => invoices.id, { onDelete: "cascade" }),
@@ -1341,6 +1435,22 @@ var init_schema = __esm({
       id: true,
       createdAt: true
     });
+    insertEstimateSchema = createInsertSchema(estimates).omit({
+      id: true,
+      createdAt: true,
+      updatedAt: true,
+      sentAt: true,
+      viewedAt: true,
+      decidedAt: true,
+      convertedAt: true,
+      publicToken: true
+    });
+    insertEstimateLineItemSchema = createInsertSchema(
+      estimateLineItems
+    ).omit({
+      id: true,
+      createdAt: true
+    });
     insertPayoutSchema = createInsertSchema(payouts).omit({
       id: true,
       createdAt: true
@@ -1631,7 +1741,10 @@ __export(emailService_exports, {
   sendBookingReminderEmail: () => sendBookingReminderEmail,
   sendBookingRequestReceivedEmail: () => sendBookingRequestReceivedEmail,
   sendBookingRescheduledEmail: () => sendBookingRescheduledEmail,
+  sendCrewInviteEmail: () => sendCrewInviteEmail,
   sendEmailVerificationEmail: () => sendEmailVerificationEmail,
+  sendEstimateDecisionEmail: () => sendEstimateDecisionEmail,
+  sendEstimateEmail: () => sendEstimateEmail,
   sendIntakeSubmissionNotification: () => sendIntakeSubmissionNotification,
   sendInvoiceCreatedEmail: () => sendInvoiceCreatedEmail,
   sendInvoiceEmail: () => sendInvoiceEmail,
@@ -1989,6 +2102,56 @@ async function sendInvoiceEmail(data) {
 }
 async function sendInvoiceCreatedEmail(data) {
   return sendInvoiceEmail(data);
+}
+async function sendEstimateEmail(data) {
+  const lineItemsHtml = data.lineItems.map(
+    (item) => `
+    <tr>
+      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;color:#374151;font-size:13px;">${escapeHtml(item.description)}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:center;color:#374151;font-size:13px;">${item.quantity}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;color:#374151;font-size:13px;">$${item.unitPrice.toFixed(2)}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;color:#374151;font-size:13px;">$${item.total.toFixed(2)}</td>
+    </tr>`
+  ).join("");
+  const body = greeting(data.clientName) + paragraph(
+    `<strong>${escapeHtml(data.providerName)}</strong> has prepared an estimate for you. Review the details and let them know if you'd like to accept.`
+  ) + infoBox(
+    infoRow("Estimate #", data.estimateNumber) + (data.expiresAt ? infoRow("Valid Until", data.expiresAt) : "") + `<div style="display:flex;justify-content:space-between;padding-top:12px;border-top:1px solid #e5e7eb;">
+        <span style="color:#6b7280;font-size:14px;">Estimated Total</span>
+        <span style="color:#38AE5F;font-weight:700;font-size:20px;">${fmtUsd(data.amount)}</span>
+      </div>`
+  ) + `<table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+      <thead>
+        <tr style="background:#f3f4f6;">
+          <th style="padding:10px 12px;text-align:left;color:#374151;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Description</th>
+          <th style="padding:10px 12px;text-align:center;color:#374151;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Qty</th>
+          <th style="padding:10px 12px;text-align:right;color:#374151;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Price</th>
+          <th style="padding:10px 12px;text-align:right;color:#374151;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Total</th>
+        </tr>
+      </thead>
+      <tbody>${lineItemsHtml}</tbody>
+    </table>` + (data.viewerUrl ? `<a href="${data.viewerUrl}" style="display:block;background:#38AE5F;color:#fff;text-align:center;padding:16px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;margin-bottom:24px;">Review &amp; Respond</a>` : "") + appDownloadSection();
+  return sendEmail(
+    data.clientEmail,
+    `Estimate ${data.estimateNumber} from ${data.providerName} &ndash; ${fmtUsd(data.amount)}`,
+    buildEmailBase(`Estimate from ${escapeHtml(data.providerName)}`, body)
+  );
+}
+async function sendEstimateDecisionEmail(data) {
+  const verb = data.decision === "accepted" ? "accepted" : data.decision === "declined" ? "declined" : "expired without a response";
+  const subjectVerb = data.decision === "accepted" ? "Accepted" : data.decision === "declined" ? "Declined" : "Expired";
+  const body = greeting(data.recipientName) + paragraph(
+    `<strong>${escapeHtml(data.clientName)}</strong> has ${verb} your estimate <strong>${escapeHtml(data.estimateNumber)}</strong>.`
+  ) + infoBox(
+    infoRow("Estimate #", data.estimateNumber) + infoRow("Total", fmtUsd(data.amount)) + infoRow("Status", subjectVerb)
+  ) + paragraph(
+    data.decision === "accepted" ? `You can now convert this estimate into an invoice from the HomeBase app to collect payment.` : data.decision === "declined" ? `No further action is required. You can follow up with the client if you'd like to revise the estimate.` : `The estimate is no longer valid. You can resend or duplicate it if needed.`
+  ) + appDownloadSection();
+  return sendEmail(
+    data.recipientEmail,
+    `Estimate ${data.estimateNumber} ${subjectVerb}`,
+    buildEmailBase(`Estimate ${subjectVerb}`, body)
+  );
 }
 async function sendInvoiceReminderEmail(data) {
   const isOverdue = (data.daysOverdue ?? 0) > 0;
@@ -2456,6 +2619,20 @@ async function sendProviderClientMessage(data) {
     return { success: false, error: error.message || "Failed to send message" };
   }
 }
+async function sendCrewInviteEmail(to, crewName, providerName, acceptUrl) {
+  const body = greeting(crewName) + paragraph(
+    `${escapeHtml(providerName)} has invited you to join their crew on HomeBase. As a crew member you can view your assigned jobs, update job status, and add photos and notes from the field.`
+  ) + paragraph(
+    "Tap the button below to accept the invite. You'll need to sign in with this email address. If you don't have a HomeBase account yet, create one with this email and the invite will activate automatically."
+  ) + paragraph(
+    "This invite link expires in 14 days."
+  );
+  return sendEmail(
+    to,
+    `${providerName} invited you to their crew on HomeBase`,
+    buildEmailBase("Crew Invite", body, "Accept Invite", acceptUrl)
+  );
+}
 var connectionSettings, SUBSCRIBE_DEEP_LINK;
 var init_emailService = __esm({
   "server/emailService.ts"() {
@@ -2747,6 +2924,59 @@ async function _dispatch(event, payload) {
         relatedRecordId: payload.relatedRecordId
       });
       const result = await sendInvoicePaidEmail({ clientEmail, clientName, providerName, invoiceNumber, amount, paymentDate, paymentMethod });
+      await updateDelivery(deliveryId, result.success ? "sent" : "failed", result.messageId, result.error);
+      break;
+    }
+    // ── Task #296: Estimate events ────────────────────────────────────
+    case "estimate.sent": {
+      const { clientEmail, clientName, providerName, invoiceNumber, amount, dueDate, lineItems, paymentLink } = payload;
+      if (!clientEmail || !clientName) {
+        return { emailSent: false, emailError: "Missing client email or name" };
+      }
+      const deliveryId = await logDelivery({
+        channel: "email",
+        status: "queued",
+        eventType: event,
+        recipientEmail: clientEmail,
+        relatedRecordType: "estimate",
+        relatedRecordId: payload.relatedRecordId
+      });
+      const result = await sendEstimateEmail({
+        clientEmail,
+        clientName,
+        providerName,
+        estimateNumber: invoiceNumber || "",
+        amount: amount || 0,
+        expiresAt: dueDate,
+        lineItems: lineItems || [],
+        viewerUrl: paymentLink || ""
+      });
+      await updateDelivery(deliveryId, result.success ? "sent" : "failed", result.messageId, result.error);
+      return { emailSent: result.success, emailError: result.error };
+    }
+    case "estimate.accepted":
+    case "estimate.declined":
+    case "estimate.expired": {
+      const { clientEmail, clientName, providerEmail, providerName, invoiceNumber, amount } = payload;
+      const recipient = providerEmail;
+      if (!recipient) break;
+      const deliveryId = await logDelivery({
+        channel: "email",
+        status: "queued",
+        eventType: event,
+        recipientEmail: recipient,
+        relatedRecordType: "estimate",
+        relatedRecordId: payload.relatedRecordId
+      });
+      const decision = event === "estimate.accepted" ? "accepted" : event === "estimate.declined" ? "declined" : "expired";
+      const result = await sendEstimateDecisionEmail({
+        recipientEmail: recipient,
+        recipientName: providerName || "there",
+        clientName: clientName || "Your client",
+        estimateNumber: invoiceNumber || "",
+        amount: amount || 0,
+        decision
+      });
       await updateDelivery(deliveryId, result.success ? "sent" : "failed", result.messageId, result.error);
       break;
     }
@@ -5323,6 +5553,666 @@ var init_stripeConnectService = __esm({
   }
 });
 
+// server/storage.ts
+import { eq as eq5, and as and3, or, desc, sql as sql3, gte, lte } from "drizzle-orm";
+import { hash, compare } from "bcryptjs";
+var SALT_ROUNDS, DatabaseStorage, storage;
+var init_storage = __esm({
+  "server/storage.ts"() {
+    "use strict";
+    init_schema();
+    init_db();
+    init_stripeConnectService();
+    SALT_ROUNDS = 10;
+    DatabaseStorage = class {
+      async getUser(id) {
+        const [user] = await db.select().from(users).where(eq5(users.id, id));
+        return user || void 0;
+      }
+      async getUserByEmail(email) {
+        const [user] = await db.select().from(users).where(
+          sql3`LOWER(${users.email}) = LOWER(${email})`
+        );
+        return user || void 0;
+      }
+      async createUser(insertUser) {
+        const hashedPassword = await hash(insertUser.password, SALT_ROUNDS);
+        const [user] = await db.insert(users).values({ ...insertUser, password: hashedPassword }).returning();
+        return user;
+      }
+      async updateUser(id, data) {
+        const updateData = { ...data, updatedAt: /* @__PURE__ */ new Date() };
+        if (data.password) {
+          updateData.password = await hash(data.password, SALT_ROUNDS);
+        }
+        const [user] = await db.update(users).set(updateData).where(eq5(users.id, id)).returning();
+        return user || void 0;
+      }
+      async verifyPassword(email, password) {
+        const user = await this.getUserByEmail(email);
+        if (!user) return null;
+        const valid = await compare(password, user.password);
+        return valid ? user : null;
+      }
+      async getHomes(userId) {
+        return db.select().from(homes).where(eq5(homes.userId, userId)).orderBy(desc(homes.isDefault));
+      }
+      async getHome(id) {
+        const [home] = await db.select().from(homes).where(eq5(homes.id, id));
+        return home || void 0;
+      }
+      async createHome(home) {
+        if (home.isDefault) {
+          await db.update(homes).set({ isDefault: false }).where(eq5(homes.userId, home.userId));
+        }
+        const [newHome] = await db.insert(homes).values(home).returning();
+        return newHome;
+      }
+      async updateHome(id, data) {
+        const updateData = { ...data, updatedAt: /* @__PURE__ */ new Date() };
+        const [home] = await db.update(homes).set(updateData).where(eq5(homes.id, id)).returning();
+        return home || void 0;
+      }
+      async deleteHome(id) {
+        const result = await db.delete(homes).where(eq5(homes.id, id)).returning();
+        return result.length > 0;
+      }
+      async getCategories() {
+        return db.select().from(serviceCategories).orderBy(serviceCategories.sortOrder);
+      }
+      async getServices(categoryId) {
+        if (categoryId) {
+          return db.select().from(services).where(eq5(services.categoryId, categoryId));
+        }
+        return db.select().from(services);
+      }
+      async getProviders(categoryId) {
+        if (categoryId) {
+          const catalogIds = await db.select({ providerId: providerServices.providerId }).from(providerServices).where(eq5(providerServices.categoryId, categoryId));
+          const [catRow] = await db.select({ name: serviceCategories.name }).from(serviceCategories).where(eq5(serviceCategories.id, categoryId));
+          const customIds = catRow ? await db.select({ providerId: providerCustomServices.providerId }).from(providerCustomServices).where(sql3`lower(${providerCustomServices.category}) = lower(${catRow.name})`) : [];
+          const nameIds = catRow ? await db.select({ providerId: providers.id }).from(providers).where(
+            and3(
+              sql3`lower(${providers.businessName}) like ${"%" + catRow.name.toLowerCase() + "%"}`,
+              eq5(providers.isActive, true)
+            )
+          ) : [];
+          const allProviderIds = [
+            ...catalogIds.map((r) => r.providerId),
+            ...customIds.map((r) => r.providerId),
+            ...nameIds.map((r) => r.providerId)
+          ];
+          if (allProviderIds.length === 0) return [];
+          const uniqueIds = [...new Set(allProviderIds)];
+          const expiredRows = await db.select({ providerId: providerPlans.providerId }).from(providerPlans).where(
+            and3(
+              eq5(providerPlans.isSubscribed, false),
+              sql3`${providerPlans.gracePeriodEndsAt} IS NOT NULL`,
+              sql3`${providerPlans.gracePeriodEndsAt} < NOW()`
+            )
+          );
+          const expiredSet = new Set(expiredRows.map((r) => r.providerId));
+          const results = [];
+          for (const id of uniqueIds) {
+            if (expiredSet.has(id)) continue;
+            const [provider] = await db.select().from(providers).where(eq5(providers.id, id));
+            if (provider && provider.isActive && provider.isPublic && provider.userId) {
+              results.push(provider);
+            }
+          }
+          const readySet2 = await getProviderReadinessSet(results.map((p) => p.id));
+          return results.filter((p) => readySet2.has(p.id));
+        }
+        const baseList = await db.select().from(providers).where(
+          and3(
+            eq5(providers.isActive, true),
+            eq5(providers.isPublic, true),
+            sql3`${providers.userId} IS NOT NULL`,
+            sql3`NOT EXISTS (SELECT 1 FROM provider_plans pp WHERE pp.provider_id = ${providers.id} AND COALESCE(pp.is_subscribed, false) = false AND pp.grace_period_ends_at IS NOT NULL AND pp.grace_period_ends_at < NOW())`
+          )
+        );
+        const readySet = await getProviderReadinessSet(baseList.map((p) => p.id));
+        return baseList.filter((p) => readySet.has(p.id));
+      }
+      async getProvider(id) {
+        const [provider] = await db.select().from(providers).where(eq5(providers.id, id));
+        return provider || void 0;
+      }
+      async getProviderServices(providerId) {
+        const ps = await db.select({ serviceId: providerServices.serviceId }).from(providerServices).where(eq5(providerServices.providerId, providerId));
+        const results = [];
+        for (const { serviceId } of ps) {
+          const [service] = await db.select().from(services).where(eq5(services.id, serviceId));
+          if (service) results.push(service);
+        }
+        return results;
+      }
+      async getAppointments(userId) {
+        return db.select().from(appointments).where(eq5(appointments.userId, userId)).orderBy(desc(appointments.scheduledDate));
+      }
+      async getAppointment(id) {
+        const [appointment] = await db.select().from(appointments).where(eq5(appointments.id, id));
+        return appointment || void 0;
+      }
+      async createAppointment(appointment) {
+        if (appointment.userId && appointment.providerId && appointment.scheduledDate) {
+          const slotFilter = and3(
+            eq5(appointments.userId, appointment.userId),
+            eq5(appointments.providerId, appointment.providerId),
+            eq5(appointments.scheduledDate, appointment.scheduledDate)
+          );
+          const [existing] = await db.select().from(appointments).where(slotFilter).limit(1);
+          if (existing) return { appointment: existing, created: false };
+          const inserted = await db.insert(appointments).values(appointment).onConflictDoNothing().returning();
+          if (inserted[0]) return { appointment: inserted[0], created: true };
+          const [winner] = await db.select().from(appointments).where(slotFilter).limit(1);
+          if (winner) return { appointment: winner, created: false };
+          throw new Error(
+            "createAppointment: insert skipped on conflict but no existing row found"
+          );
+        }
+        const [newAppointment] = await db.insert(appointments).values(appointment).returning();
+        return { appointment: newAppointment, created: true };
+      }
+      async updateAppointment(id, data) {
+        const updateData = { ...data, updatedAt: /* @__PURE__ */ new Date() };
+        const [appointment] = await db.update(appointments).set(updateData).where(eq5(appointments.id, id)).returning();
+        return appointment || void 0;
+      }
+      async cancelAppointment(id) {
+        const [appointment] = await db.update(appointments).set({ status: "cancelled", cancelledAt: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date() }).where(eq5(appointments.id, id)).returning();
+        return appointment || void 0;
+      }
+      async getNotifications(userId) {
+        return db.select().from(notifications).where(eq5(notifications.userId, userId)).orderBy(desc(notifications.createdAt));
+      }
+      async getNotification(id) {
+        const [notification] = await db.select().from(notifications).where(eq5(notifications.id, id));
+        return notification;
+      }
+      async markNotificationRead(id) {
+        await db.update(notifications).set({ isRead: true }).where(eq5(notifications.id, id));
+      }
+      async createNotification(userId, title, message, type, data) {
+        const [notification] = await db.insert(notifications).values({ userId, title, message, type, data }).returning();
+        return notification;
+      }
+      // Provider methods
+      async createProvider(provider) {
+        const [newProvider] = await db.insert(providers).values(provider).returning();
+        return newProvider;
+      }
+      async getProviderByUserId(userId) {
+        const [provider] = await db.select().from(providers).where(eq5(providers.userId, userId));
+        return provider || void 0;
+      }
+      async updateProvider(id, data) {
+        const [provider] = await db.update(providers).set(data).where(eq5(providers.id, id)).returning();
+        return provider || void 0;
+      }
+      // Client methods
+      async getClients(providerId) {
+        return db.select().from(clients).where(eq5(clients.providerId, providerId)).orderBy(desc(clients.createdAt));
+      }
+      async getClient(id) {
+        const [client] = await db.select().from(clients).where(eq5(clients.id, id));
+        return client || void 0;
+      }
+      async createClient(client) {
+        const [newClient] = await db.insert(clients).values(client).returning();
+        return newClient;
+      }
+      async updateClient(id, data) {
+        const updateData = { ...data, updatedAt: /* @__PURE__ */ new Date() };
+        const [client] = await db.update(clients).set(updateData).where(eq5(clients.id, id)).returning();
+        return client || void 0;
+      }
+      async deleteClient(id) {
+        const result = await db.delete(clients).where(eq5(clients.id, id)).returning();
+        return result.length > 0;
+      }
+      // Job methods
+      async getJobs(providerId) {
+        return db.select().from(jobs).where(eq5(jobs.providerId, providerId)).orderBy(desc(jobs.scheduledDate));
+      }
+      async getJobsByClient(clientId) {
+        return db.select().from(jobs).where(eq5(jobs.clientId, clientId)).orderBy(desc(jobs.scheduledDate));
+      }
+      async getJob(id) {
+        const [job] = await db.select().from(jobs).where(eq5(jobs.id, id));
+        return job || void 0;
+      }
+      async createJob(job) {
+        const [newJob] = await db.insert(jobs).values(job).returning();
+        return newJob;
+      }
+      async updateJob(id, data) {
+        const updateData = { ...data, updatedAt: /* @__PURE__ */ new Date() };
+        const [job] = await db.update(jobs).set(updateData).where(eq5(jobs.id, id)).returning();
+        return job || void 0;
+      }
+      async completeJob(id, finalPrice) {
+        const updateData = {
+          status: "completed",
+          completedAt: /* @__PURE__ */ new Date(),
+          updatedAt: /* @__PURE__ */ new Date()
+        };
+        if (finalPrice) updateData.finalPrice = finalPrice;
+        const [job] = await db.update(jobs).set(updateData).where(eq5(jobs.id, id)).returning();
+        return job || void 0;
+      }
+      async deleteJob(id) {
+        const result = await db.delete(jobs).where(eq5(jobs.id, id)).returning();
+        return result.length > 0;
+      }
+      // Crew member methods (Task #302)
+      async getCrewMembers(providerId) {
+        return db.select().from(crewMembers).where(eq5(crewMembers.providerId, providerId)).orderBy(desc(crewMembers.createdAt));
+      }
+      async getCrewMember(id) {
+        const [member] = await db.select().from(crewMembers).where(eq5(crewMembers.id, id));
+        return member || void 0;
+      }
+      async createCrewMember(member) {
+        const [newMember] = await db.insert(crewMembers).values(member).returning();
+        return newMember;
+      }
+      async updateCrewMember(id, data) {
+        const [member] = await db.update(crewMembers).set(data).where(eq5(crewMembers.id, id)).returning();
+        return member || void 0;
+      }
+      async deleteCrewMember(id) {
+        const result = await db.delete(crewMembers).where(eq5(crewMembers.id, id)).returning();
+        return result.length > 0;
+      }
+      async countJobsAssignedToCrewMember(id) {
+        const rows = await db.select({ id: jobs.id }).from(jobs).where(eq5(jobs.assignedCrewMemberId, id));
+        return rows.length;
+      }
+      // Invoice methods
+      async getInvoices(providerId) {
+        return db.select().from(invoices).where(eq5(invoices.providerId, providerId)).orderBy(desc(invoices.createdAt));
+      }
+      async getInvoicesByClient(clientId) {
+        return db.select().from(invoices).where(eq5(invoices.clientId, clientId)).orderBy(desc(invoices.createdAt));
+      }
+      async getInvoice(id) {
+        const [invoice] = await db.select().from(invoices).where(eq5(invoices.id, id));
+        return invoice || void 0;
+      }
+      async createInvoice(invoice) {
+        const [newInvoice] = await db.insert(invoices).values(invoice).returning();
+        return newInvoice;
+      }
+      async updateInvoice(id, data) {
+        const [invoice] = await db.update(invoices).set(data).where(eq5(invoices.id, id)).returning();
+        return invoice || void 0;
+      }
+      async sendInvoice(id) {
+        const [invoice] = await db.update(invoices).set({ status: "sent", sentAt: /* @__PURE__ */ new Date() }).where(eq5(invoices.id, id)).returning();
+        return invoice || void 0;
+      }
+      async markInvoicePaid(id) {
+        const [invoice] = await db.update(invoices).set({ status: "paid", paidAt: /* @__PURE__ */ new Date() }).where(eq5(invoices.id, id)).returning();
+        return invoice || void 0;
+      }
+      async cancelInvoice(id) {
+        const [invoice] = await db.update(invoices).set({ status: "cancelled" }).where(eq5(invoices.id, id)).returning();
+        return invoice || void 0;
+      }
+      // Payment methods
+      async getPayments(providerId) {
+        return db.select().from(payments).where(eq5(payments.providerId, providerId)).orderBy(desc(payments.createdAt));
+      }
+      async getPaymentsByInvoice(invoiceId) {
+        return db.select().from(payments).where(eq5(payments.invoiceId, invoiceId)).orderBy(desc(payments.receivedAt));
+      }
+      async createPayment(payment) {
+        const [newPayment] = await db.insert(payments).values(payment).returning();
+        await this.markInvoicePaid(payment.invoiceId);
+        return newPayment;
+      }
+      // ── Task #295: manual (cash/check/other) payment helpers ──────────────
+      // The plain `createPayment` above auto-marks the invoice as fully paid,
+      // which is correct for Stripe webhook upserts (one payment == full
+      // settlement). Manual payments support partial collection, so we
+      // recompute status from the sum of non-voided rows instead.
+      async recomputeInvoiceStatusFromPayments(invoiceId) {
+        const [invoice] = await db.select().from(invoices).where(eq5(invoices.id, invoiceId));
+        if (!invoice) return void 0;
+        if (invoice.status === "void" || invoice.status === "cancelled" || invoice.status === "refunded") {
+          return invoice;
+        }
+        const rows = await db.select({ amountCents: payments.amountCents }).from(payments).where(and3(eq5(payments.invoiceId, invoiceId), sql3`${payments.voidedAt} IS NULL`));
+        const collectedCents = rows.reduce((sum, r) => sum + (r.amountCents ?? 0), 0);
+        const totalCents = invoice.totalCents ?? 0;
+        let nextStatus = invoice.status;
+        let nextPaidAt = invoice.paidAt ?? null;
+        if (totalCents > 0 && collectedCents >= totalCents) {
+          nextStatus = "paid";
+          nextPaidAt = invoice.paidAt ?? /* @__PURE__ */ new Date();
+        } else if (collectedCents > 0) {
+          nextStatus = "partially_paid";
+          nextPaidAt = null;
+        } else {
+          nextStatus = invoice.sentAt ? "sent" : "draft";
+          nextPaidAt = null;
+        }
+        if (nextStatus === invoice.status && nextPaidAt === invoice.paidAt) {
+          return invoice;
+        }
+        const [updated] = await db.update(invoices).set({ status: nextStatus, paidAt: nextPaidAt }).where(eq5(invoices.id, invoiceId)).returning();
+        return updated;
+      }
+      async createManualPayment(payment) {
+        const [row] = await db.insert(payments).values(payment).returning();
+        await this.recomputeInvoiceStatusFromPayments(payment.invoiceId);
+        return row;
+      }
+      async updateManualPayment(id, patch) {
+        const [row] = await db.update(payments).set(patch).where(eq5(payments.id, id)).returning();
+        if (row) await this.recomputeInvoiceStatusFromPayments(row.invoiceId);
+        return row || void 0;
+      }
+      async voidPayment(id, voidedBy) {
+        const [row] = await db.update(payments).set({ voidedAt: /* @__PURE__ */ new Date(), voidedBy, status: "refunded" }).where(eq5(payments.id, id)).returning();
+        if (row) await this.recomputeInvoiceStatusFromPayments(row.invoiceId);
+        return row || void 0;
+      }
+      async getPayment(id) {
+        const [row] = await db.select().from(payments).where(eq5(payments.id, id));
+        return row || void 0;
+      }
+      async getManualPayments(providerId) {
+        return db.select().from(payments).where(and3(eq5(payments.providerId, providerId), sql3`${payments.method} <> 'stripe'`)).orderBy(desc(payments.receivedAt));
+      }
+      // Provider dashboard stats
+      async getProviderStats(providerId, startDate, endDate) {
+        const start = startDate ?? (() => {
+          const d = /* @__PURE__ */ new Date();
+          d.setDate(1);
+          d.setHours(0, 0, 0, 0);
+          return d;
+        })();
+        const end = endDate ?? /* @__PURE__ */ new Date();
+        const paidInvoices = await db.select({ total: invoices.total, paidAt: invoices.paidAt }).from(invoices).where(
+          and3(
+            eq5(invoices.providerId, providerId),
+            eq5(invoices.status, "paid"),
+            gte(invoices.paidAt, start),
+            lte(invoices.paidAt, end)
+          )
+        );
+        const revenueMTD = paidInvoices.reduce((sum, inv) => sum + parseFloat(inv.total || "0"), 0);
+        const averageJobValue = paidInvoices.length > 0 ? revenueMTD / paidInvoices.length : 0;
+        const diffMs = end.getTime() - start.getTime();
+        const diffDays = diffMs / (1e3 * 60 * 60 * 24);
+        const bucketCount = diffDays <= 7 ? 7 : diffDays <= 31 ? Math.ceil(diffDays / 7) : diffDays <= 92 ? 13 : 12;
+        const bucketSizeMs = diffMs / bucketCount;
+        const revenueByPeriod = [];
+        for (let i = 0; i < bucketCount; i++) {
+          const bucketStart = new Date(start.getTime() + i * bucketSizeMs);
+          const bucketEnd = new Date(start.getTime() + (i + 1) * bucketSizeMs);
+          const bucketRevenue = paidInvoices.filter((inv) => {
+            if (!inv.paidAt) return false;
+            const t = new Date(inv.paidAt).getTime();
+            return t >= bucketStart.getTime() && t < bucketEnd.getTime();
+          }).reduce((sum, inv) => sum + parseFloat(inv.total || "0"), 0);
+          let label;
+          if (diffDays <= 7) {
+            label = bucketStart.toLocaleDateString("en-US", { weekday: "short" });
+          } else if (diffDays <= 31) {
+            label = bucketStart.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+          } else if (diffDays <= 92) {
+            label = `W${i + 1}`;
+          } else {
+            label = bucketStart.toLocaleDateString("en-US", { month: "short" });
+          }
+          revenueByPeriod.push({ label, value: bucketRevenue });
+        }
+        const completedJobs = await db.select({ id: jobs.id }).from(jobs).where(
+          and3(
+            eq5(jobs.providerId, providerId),
+            eq5(jobs.status, "completed"),
+            gte(jobs.completedAt, start),
+            lte(jobs.completedAt, end)
+          )
+        );
+        const jobsCompleted = completedJobs.length;
+        const clientList = await this.getClients(providerId);
+        const activeClients = clientList.length;
+        const startOfToday = /* @__PURE__ */ new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        const upcomingJobsList = await db.select({ id: jobs.id }).from(jobs).where(
+          and3(
+            eq5(jobs.providerId, providerId),
+            or(
+              eq5(jobs.status, "in_progress"),
+              and3(eq5(jobs.status, "scheduled"), gte(jobs.scheduledDate, startOfToday))
+            )
+          )
+        );
+        const upcomingJobs = upcomingJobsList.length;
+        return { revenueMTD, jobsCompleted, activeClients, upcomingJobs, averageJobValue, revenueByPeriod };
+      }
+      // Provider business insights — real numbers for the dashboard metric grid
+      // and an 8-week revenue trend. Also returns internal fields used by the
+      // milestone-notification pipeline (allTimeRevenue, clientGrowthPct, rating,
+      // reviewCount) so the route handler can fire those without a second query.
+      async getProviderInsights(providerId) {
+        const now = /* @__PURE__ */ new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+        const prevMonthCutoff = new Date(
+          now.getFullYear(),
+          now.getMonth() - 1,
+          now.getDate(),
+          23,
+          59,
+          59,
+          999
+        );
+        const completedJobRows = await db.select({
+          finalPrice: jobs.finalPrice,
+          completedAt: jobs.completedAt,
+          clientId: jobs.clientId
+        }).from(jobs).where(and3(eq5(jobs.providerId, providerId), eq5(jobs.status, "completed")));
+        const allTimeRevenue = completedJobRows.reduce(
+          (sum, j) => sum + parseFloat(j.finalPrice || "0"),
+          0
+        );
+        const inWindow = (d, start, end) => !!d && d >= start && d <= end;
+        const currentJobs = completedJobRows.filter(
+          (j) => inWindow(j.completedAt, startOfMonth, now)
+        );
+        const priorJobs = completedJobRows.filter(
+          (j) => inWindow(j.completedAt, startOfPrevMonth, prevMonthCutoff)
+        );
+        const sumPrices = (rows) => rows.reduce((s, j) => s + parseFloat(j.finalPrice || "0"), 0);
+        const revenueMtd = sumPrices(currentJobs);
+        const revenuePrev = sumPrices(priorJobs);
+        const jobsCompleted = currentJobs.length;
+        const jobsCompletedPrev = priorJobs.length;
+        const avgJobValue = jobsCompleted > 0 ? revenueMtd / jobsCompleted : 0;
+        const avgJobValuePrev = jobsCompletedPrev > 0 ? revenuePrev / jobsCompletedPrev : 0;
+        const activeClientsThis = new Set(
+          currentJobs.map((j) => j.clientId).filter(Boolean)
+        ).size;
+        const activeClientsPrev = new Set(
+          priorJobs.map((j) => j.clientId).filter(Boolean)
+        ).size;
+        const pctDelta = (current, prior) => {
+          if (prior <= 0) {
+            if (current <= 0) return null;
+            return 100;
+          }
+          return Math.round((current - prior) / prior * 100);
+        };
+        const startOfThisWeek = (() => {
+          const d = new Date(now);
+          d.setHours(0, 0, 0, 0);
+          const day = d.getDay();
+          const diffToMonday = (day + 6) % 7;
+          d.setDate(d.getDate() - diffToMonday);
+          return d;
+        })();
+        const weeklyRevenueSeries = [];
+        for (let i = 7; i >= 0; i--) {
+          const weekStart = new Date(startOfThisWeek);
+          weekStart.setDate(weekStart.getDate() - i * 7);
+          const weekEnd = new Date(weekStart);
+          weekEnd.setDate(weekEnd.getDate() + 6);
+          weekEnd.setHours(23, 59, 59, 999);
+          const value = completedJobRows.filter((j) => inWindow(j.completedAt, weekStart, weekEnd)).reduce((s, j) => s + parseFloat(j.finalPrice || "0"), 0);
+          const label = weekStart.toLocaleDateString("en-US", {
+            month: "numeric",
+            day: "numeric"
+          });
+          weeklyRevenueSeries.push({ label, value });
+        }
+        const quarterMonth = Math.floor(now.getMonth() / 3) * 3;
+        const startOfThisQuarter = new Date(now.getFullYear(), quarterMonth, 1, 0, 0, 0, 0);
+        const startOfLastQuarter = new Date(now.getFullYear(), quarterMonth - 3, 1, 0, 0, 0, 0);
+        const endOfLastQuarter = new Date(startOfThisQuarter.getTime() - 1);
+        const clientsThisQuarter = await db.select({ id: clients.id }).from(clients).where(and3(eq5(clients.providerId, providerId), gte(clients.createdAt, startOfThisQuarter)));
+        const clientsLastQuarter = await db.select({ id: clients.id }).from(clients).where(
+          and3(
+            eq5(clients.providerId, providerId),
+            gte(clients.createdAt, startOfLastQuarter),
+            lte(clients.createdAt, endOfLastQuarter)
+          )
+        );
+        const clientGrowthPct = clientsLastQuarter.length > 0 ? Math.round(
+          (clientsThisQuarter.length - clientsLastQuarter.length) / clientsLastQuarter.length * 100
+        ) : clientsThisQuarter.length > 0 ? 100 : 0;
+        const [providerRow] = await db.select({ rating: providers.rating, reviewCount: providers.reviewCount }).from(providers).where(eq5(providers.id, providerId));
+        const totalClientsRow = await db.select({ id: clients.id }).from(clients).where(eq5(clients.providerId, providerId));
+        const hasAnyData = completedJobRows.length > 0 || totalClientsRow.length > 0;
+        return {
+          revenueMtd,
+          revenueMtdDelta: pctDelta(revenueMtd, revenuePrev),
+          jobsCompleted,
+          jobsCompletedDelta: pctDelta(jobsCompleted, jobsCompletedPrev),
+          activeClients: activeClientsThis,
+          activeClientsDelta: pctDelta(activeClientsThis, activeClientsPrev),
+          avgJobValue,
+          avgJobValueDelta: pctDelta(avgJobValue, avgJobValuePrev),
+          weeklyRevenueSeries,
+          hasAnyData,
+          allTimeRevenue,
+          clientGrowthPct,
+          rating: providerRow?.rating ?? "0",
+          reviewCount: providerRow?.reviewCount ?? 0
+        };
+      }
+      // Get next invoice number
+      async getNextInvoiceNumber(providerId) {
+        const existingInvoices = await db.select({ invoiceNumber: invoices.invoiceNumber }).from(invoices).where(eq5(invoices.providerId, providerId));
+        const nextNum = existingInvoices.length + 1;
+        return `INV-${String(nextNum).padStart(4, "0")}`;
+      }
+      // ── Task #296: Estimate methods ───────────────────────────────────────
+      async getNextEstimateNumber(providerId) {
+        const rows = await db.select({ estimateNumber: estimates.estimateNumber }).from(estimates).where(eq5(estimates.providerId, providerId));
+        const nextNum = rows.length + 1;
+        return `EST-${String(nextNum).padStart(4, "0")}`;
+      }
+      async getEstimates(providerId) {
+        return db.select().from(estimates).where(eq5(estimates.providerId, providerId)).orderBy(desc(estimates.createdAt));
+      }
+      async getEstimatesByClient(clientId) {
+        return db.select().from(estimates).where(eq5(estimates.clientId, clientId)).orderBy(desc(estimates.createdAt));
+      }
+      async getEstimate(id) {
+        const [row] = await db.select().from(estimates).where(eq5(estimates.id, id));
+        return row || void 0;
+      }
+      async getEstimateByPublicToken(token) {
+        const [row] = await db.select().from(estimates).where(eq5(estimates.publicToken, token));
+        return row || void 0;
+      }
+      async createEstimate(data) {
+        const [row] = await db.insert(estimates).values(data).returning();
+        return row;
+      }
+      async updateEstimate(id, data) {
+        const [row] = await db.update(estimates).set({ ...data, updatedAt: /* @__PURE__ */ new Date() }).where(eq5(estimates.id, id)).returning();
+        return row || void 0;
+      }
+      async deleteEstimate(id) {
+        const result = await db.delete(estimates).where(eq5(estimates.id, id)).returning();
+        return result.length > 0;
+      }
+      async getEstimateLineItems(estimateId) {
+        return db.select().from(estimateLineItems).where(eq5(estimateLineItems.estimateId, estimateId)).orderBy(estimateLineItems.createdAt);
+      }
+      async replaceEstimateLineItems(estimateId, items) {
+        await db.delete(estimateLineItems).where(eq5(estimateLineItems.estimateId, estimateId));
+        if (items.length === 0) return [];
+        const inserted = await db.insert(estimateLineItems).values(items.map((it) => ({ ...it, estimateId }))).returning();
+        return inserted;
+      }
+      // Booking Links
+      async getBookingLink(id) {
+        const [link] = await db.select().from(bookingLinks).where(eq5(bookingLinks.id, id));
+        return link || void 0;
+      }
+      async getBookingLinkBySlug(slug) {
+        const [link] = await db.select().from(bookingLinks).where(eq5(bookingLinks.slug, slug));
+        return link || void 0;
+      }
+      async getBookingLinksByProvider(providerId) {
+        return await db.select().from(bookingLinks).where(eq5(bookingLinks.providerId, providerId));
+      }
+      async createBookingLink(data) {
+        const [link] = await db.insert(bookingLinks).values(data).returning();
+        return link;
+      }
+      async updateBookingLink(id, data) {
+        const [link] = await db.update(bookingLinks).set({ ...data, updatedAt: /* @__PURE__ */ new Date() }).where(eq5(bookingLinks.id, id)).returning();
+        return link || void 0;
+      }
+      async deleteBookingLink(id) {
+        const result = await db.delete(bookingLinks).where(eq5(bookingLinks.id, id));
+        return true;
+      }
+      // Intake Submissions
+      async getIntakeSubmission(id) {
+        const [submission] = await db.select().from(intakeSubmissions).where(eq5(intakeSubmissions.id, id));
+        return submission || void 0;
+      }
+      async getIntakeSubmissionsByProvider(providerId) {
+        return await db.select().from(intakeSubmissions).where(eq5(intakeSubmissions.providerId, providerId)).orderBy(desc(intakeSubmissions.createdAt));
+      }
+      async getIntakeSubmissionsByBookingLink(bookingLinkId) {
+        return await db.select().from(intakeSubmissions).where(eq5(intakeSubmissions.bookingLinkId, bookingLinkId)).orderBy(desc(intakeSubmissions.createdAt));
+      }
+      async createIntakeSubmission(data) {
+        const [submission] = await db.insert(intakeSubmissions).values(data).returning();
+        return submission;
+      }
+      async updateIntakeSubmission(id, data) {
+        const [submission] = await db.update(intakeSubmissions).set({ ...data, updatedAt: /* @__PURE__ */ new Date() }).where(eq5(intakeSubmissions.id, id)).returning();
+        return submission || void 0;
+      }
+      async getNotificationPreferences(userId) {
+        const [prefs] = await db.select().from(notificationPreferences).where(eq5(notificationPreferences.userId, userId));
+        return prefs || void 0;
+      }
+      async upsertNotificationPreferences(userId, data) {
+        const existing = await this.getNotificationPreferences(userId);
+        if (existing) {
+          const [updated] = await db.update(notificationPreferences).set({ ...data, updatedAt: /* @__PURE__ */ new Date() }).where(eq5(notificationPreferences.userId, userId)).returning();
+          return updated;
+        }
+        const [created] = await db.insert(notificationPreferences).values({ userId, ...data }).returning();
+        return created;
+      }
+    };
+    storage = new DatabaseStorage();
+  }
+});
+
 // server/recurringJobsService.ts
 var recurringJobsService_exports = {};
 __export(recurringJobsService_exports, {
@@ -6279,13 +7169,167 @@ var init_revenuecatService = __esm({
   }
 });
 
+// server/estimateViewer.ts
+var estimateViewer_exports = {};
+__export(estimateViewer_exports, {
+  renderEstimateViewer: () => renderEstimateViewer
+});
+function escapeHtml3(str) {
+  if (!str) return "";
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function formatMoney2(cents) {
+  const n = (cents ?? 0) / 100;
+  return n.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD"
+  });
+}
+function statusBadge(status) {
+  const tone = status === "accepted" || status === "converted" ? "#10b981" : status === "declined" || status === "expired" ? "#ef4444" : status === "viewed" || status === "sent" ? "#3b82f6" : "#9ca3af";
+  return `<span class="badge" style="background:${tone}1a;color:${tone};border:1px solid ${tone}33">${escapeHtml3(status.toUpperCase())}</span>`;
+}
+function page(body, title = "Estimate") {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${escapeHtml3(title)}</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0a0f1e;color:#fff;min-height:100vh;padding:24px}
+    .wrap{max-width:640px;margin:0 auto}
+    .card{background:rgba(255,255,255,0.06);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:24px;margin-bottom:16px}
+    h1{font-size:22px;margin-bottom:4px}
+    .muted{color:rgba(255,255,255,0.6);font-size:14px}
+    .row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.08)}
+    .row:last-child{border-bottom:0}
+    .total{font-size:20px;font-weight:600;color:#fff}
+    .badge{display:inline-block;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600;letter-spacing:0.5px}
+    .actions{display:flex;gap:12px;margin-top:8px}
+    button{flex:1;padding:14px;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;border:0}
+    .accept{background:#10b981;color:#fff}
+    .decline{background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3)}
+    .info{background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);color:#93c5fd;padding:12px 16px;border-radius:12px;margin-top:12px;font-size:14px}
+    .err{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:#fca5a5;padding:12px 16px;border-radius:12px;margin-top:12px;font-size:14px}
+  </style>
+</head>
+<body>
+  <div class="wrap">${body}</div>
+</body>
+</html>`;
+}
+function errorPage(status, title, message) {
+  return {
+    status,
+    html: page(
+      `<div class="card"><h1>${escapeHtml3(title)}</h1><p class="muted" style="margin-top:8px">${escapeHtml3(message)}</p></div>`,
+      title
+    )
+  };
+}
+async function renderEstimateViewer(token) {
+  const estimate = await storage.getEstimateByPublicToken(token);
+  if (!estimate) return errorPage(404, "Estimate not found", "This link is invalid or has been removed.");
+  if (estimate.status === "sent") {
+    await storage.updateEstimate(estimate.id, {
+      status: "viewed",
+      viewedAt: /* @__PURE__ */ new Date()
+    });
+    estimate.status = "viewed";
+  }
+  const now = /* @__PURE__ */ new Date();
+  if (estimate.expiresAt && new Date(estimate.expiresAt) < now && (estimate.status === "sent" || estimate.status === "viewed")) {
+    await storage.updateEstimate(estimate.id, {
+      status: "expired",
+      decidedAt: now
+    });
+    estimate.status = "expired";
+  }
+  const lineItems = await storage.getEstimateLineItems(estimate.id);
+  const provider = await storage.getProvider(estimate.providerId);
+  const providerName = provider?.businessName || "Service Provider";
+  const decided = estimate.status === "accepted" || estimate.status === "declined" || estimate.status === "expired" || estimate.status === "converted";
+  const itemsHtml = lineItems.map(
+    (li) => `
+      <div class="row">
+        <div>
+          <div>${escapeHtml3(li.name)}</div>
+          <div class="muted">${Number(li.quantity ?? 1)} \xD7 ${formatMoney2(li.unitPriceCents)}</div>
+        </div>
+        <div>${formatMoney2(li.amountCents)}</div>
+      </div>`
+  ).join("");
+  const expiresLine = estimate.expiresAt ? `<p class="muted" style="margin-top:8px">Expires ${escapeHtml3(new Date(estimate.expiresAt).toLocaleDateString())}</p>` : "";
+  const decisionForm = decided ? `<div class="info">This estimate is ${escapeHtml3(estimate.status)}. ${estimate.status === "accepted" ? "Your provider will be in touch shortly." : estimate.status === "declined" ? "Thanks for letting us know." : ""}</div>` : `
+    <div class="actions">
+      <button class="decline" onclick="decide('declined')">Decline</button>
+      <button class="accept" onclick="decide('accepted')">Accept</button>
+    </div>
+    <div id="msg"></div>
+    <script>
+      async function decide(decision){
+        document.querySelectorAll('button').forEach(b=>b.disabled=true);
+        const msg=document.getElementById('msg');
+        msg.innerHTML='<div class="info">Submitting...</div>';
+        try{
+          const r=await fetch('/api/estimates/public/${escapeHtml3(token)}/decision',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({decision})
+          });
+          const data=await r.json().catch(()=>({}));
+          if(!r.ok){ msg.innerHTML='<div class="err">'+(data.error||'Could not submit')+'</div>'; document.querySelectorAll('button').forEach(b=>b.disabled=false); return; }
+          location.reload();
+        }catch(e){ msg.innerHTML='<div class="err">Network error</div>'; document.querySelectorAll('button').forEach(b=>b.disabled=false); }
+      }
+    </script>
+    `;
+  const html = page(
+    `
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <h1>Estimate ${escapeHtml3(estimate.estimateNumber)}</h1>
+          <p class="muted">From ${escapeHtml3(providerName)}</p>
+          ${expiresLine}
+        </div>
+        ${statusBadge(estimate.status)}
+      </div>
+    </div>
+
+    <div class="card">
+      ${itemsHtml || '<p class="muted">No line items</p>'}
+      <div class="row" style="border-top:1px solid rgba(255,255,255,0.15);margin-top:8px">
+        <div class="total">Total</div>
+        <div class="total">${formatMoney2(estimate.totalCents)}</div>
+      </div>
+      ${estimate.notes ? `<p class="muted" style="margin-top:12px;white-space:pre-wrap">${escapeHtml3(estimate.notes)}</p>` : ""}
+    </div>
+
+    <div class="card">
+      ${decisionForm}
+    </div>
+    `,
+    `Estimate ${estimate.estimateNumber}`
+  );
+  return { html, status: 200 };
+}
+var init_estimateViewer = __esm({
+  "server/estimateViewer.ts"() {
+    "use strict";
+    init_storage();
+  }
+});
+
 // server/bookingPage.ts
 var bookingPage_exports = {};
 __export(bookingPage_exports, {
   renderBookingPage: () => renderBookingPage
 });
 import { eq as eq12, and as and6, desc as desc4 } from "drizzle-orm";
-function escapeHtml3(str) {
+function escapeHtml4(str) {
   if (!str) return "";
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
@@ -6309,13 +7353,13 @@ function renderStars(rating) {
   }
   return stars;
 }
-function errorPage(status, title, message) {
+function errorPage2(status, title, message) {
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${escapeHtml3(title)}</title>
+  <title>${escapeHtml4(title)}</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -6347,8 +7391,8 @@ function errorPage(status, title, message) {
 <body>
   <div>
     <div class="card">
-      <h1>${escapeHtml3(title)}</h1>
-      <p>${escapeHtml3(message)}</p>
+      <h1>${escapeHtml4(title)}</h1>
+      <p>${escapeHtml4(message)}</p>
     </div>
     <div class="footer">Powered by <a href="https://homebaseproapp.com" target="_blank" rel="noopener">HomeBase Pro</a></div>
   </div>
@@ -6359,22 +7403,22 @@ function errorPage(status, title, message) {
 async function renderBookingPage(slug, db2) {
   const [link] = await db2.select().from(bookingLinks).where(eq12(bookingLinks.slug, slug)).limit(1);
   if (!link) {
-    return errorPage(404, "Provider not found", "This booking page does not exist. Please check the link and try again.");
+    return errorPage2(404, "Provider not found", "This booking page does not exist. Please check the link and try again.");
   }
   if (link.isActive === false || link.status !== "active") {
-    return errorPage(404, "Booking page unavailable", "This booking page is currently unavailable. Please contact the provider directly.");
+    return errorPage2(404, "Booking page unavailable", "This booking page is currently unavailable. Please contact the provider directly.");
   }
   const [provider] = await db2.select().from(providers).where(eq12(providers.id, link.providerId)).limit(1);
   if (!provider) {
-    return errorPage(404, "Provider not found", "The provider associated with this booking page could not be found.");
+    return errorPage2(404, "Provider not found", "The provider associated with this booking page could not be found.");
   }
   if (provider.isPublic !== true) {
-    return errorPage(404, "Booking page unavailable", "This booking page is currently unavailable. Please contact the provider directly.");
+    return errorPage2(404, "Booking page unavailable", "This booking page is currently unavailable. Please contact the provider directly.");
   }
   const { isProviderReadyForCharges: isProviderReadyForCharges2 } = await Promise.resolve().then(() => (init_stripeConnectService(), stripeConnectService_exports));
   const stripeReady = await isProviderReadyForCharges2(provider.id);
   if (!stripeReady) {
-    return errorPage(404, "Booking page unavailable", "This provider is finishing payment setup and isn't accepting bookings yet. Please check back soon.");
+    return errorPage2(404, "Booking page unavailable", "This provider is finishing payment setup and isn't accepting bookings yet. Please check back soon.");
   }
   let isPartner = false;
   try {
@@ -6412,13 +7456,13 @@ async function renderBookingPage(slug, db2) {
     reviewerFirstName: users.firstName
   }).from(reviews).leftJoin(users, eq12(reviews.userId, users.id)).where(eq12(reviews.providerId, provider.id)).orderBy(desc4(reviews.createdAt)).limit(5);
   const showPricing = link.showPricing !== false;
-  const businessName = escapeHtml3(provider.businessName ?? "Your Provider");
-  const pageTitle = link.customTitle ? escapeHtml3(link.customTitle) : `Book with ${businessName}`;
-  const description = link.customDescription ? escapeHtml3(link.customDescription) : escapeHtml3(provider.description ?? `Book a service with ${businessName}.`);
-  const avatarUrl = escapeHtml3(provider.avatarUrl ?? "");
+  const businessName = escapeHtml4(provider.businessName ?? "Your Provider");
+  const pageTitle = link.customTitle ? escapeHtml4(link.customTitle) : `Book with ${businessName}`;
+  const description = link.customDescription ? escapeHtml4(link.customDescription) : escapeHtml4(provider.description ?? `Book a service with ${businessName}.`);
+  const avatarUrl = escapeHtml4(provider.avatarUrl ?? "");
   const rating = provider.averageRating ?? provider.rating ?? 0;
   const reviewCount = provider.reviewCount ?? 0;
-  const serviceAreaText = provider.serviceArea ? escapeHtml3(stripEmoji(provider.serviceArea)) : "";
+  const serviceAreaText = provider.serviceArea ? escapeHtml4(stripEmoji(provider.serviceArea)) : "";
   const serviceOptions = [
     ...customServices.map((s) => ({
       id: `custom_${s.id}`,
@@ -6450,13 +7494,13 @@ async function renderBookingPage(slug, db2) {
   const servicesHtml = allServices.length > 0 ? allServices.map((s) => `
       <div class="service-card">
         <div class="service-info">
-          <div class="service-name">${escapeHtml3(s.name)}</div>
-          ${s.description ? `<div class="service-desc">${escapeHtml3(s.description)}</div>` : ""}
+          <div class="service-name">${escapeHtml4(s.name)}</div>
+          ${s.description ? `<div class="service-desc">${escapeHtml4(s.description)}</div>` : ""}
         </div>
-        ${showPricing && s.price ? `<div class="service-price">$${escapeHtml3(s.price)}</div>` : ""}
+        ${showPricing && s.price ? `<div class="service-price">$${escapeHtml4(s.price)}</div>` : ""}
       </div>`).join("") : `<p class="no-services">Contact us to learn about our available services.</p>`;
   const reviewsHtml = recentReviews.length > 0 ? recentReviews.map((r) => {
-    const firstName = r.reviewerFirstName ? escapeHtml3(r.reviewerFirstName) : "Anonymous";
+    const firstName = r.reviewerFirstName ? escapeHtml4(r.reviewerFirstName) : "Anonymous";
     return `
         <div class="review-card">
           <div class="review-header">
@@ -6466,11 +7510,11 @@ async function renderBookingPage(slug, db2) {
               <span class="review-date">${formatDate(r.createdAt)}</span>
             </div>
           </div>
-          ${r.comment ? `<p class="review-comment">${escapeHtml3(r.comment)}</p>` : ""}
+          ${r.comment ? `<p class="review-comment">${escapeHtml4(r.comment)}</p>` : ""}
           ${r.providerReply ? `
           <div class="review-reply">
             <div class="review-reply-label">Response from ${businessName}${r.providerReplyAt ? ` &middot; ${formatDate(r.providerReplyAt)}` : ""}</div>
-            <p class="review-reply-text">${escapeHtml3(r.providerReply)}</p>
+            <p class="review-reply-text">${escapeHtml4(r.providerReply)}</p>
           </div>` : ""}
         </div>`;
   }).join("") : "";
@@ -6995,7 +8039,7 @@ async function renderBookingPage(slug, db2) {
     <!-- Provider Header -->
     <div class="glass provider-header">
       <div class="avatar-wrap">
-        ${avatarUrl ? `<img src="${avatarUrl}" alt="${businessName}" loading="lazy" />` : `<span class="avatar-initials">${escapeHtml3((provider.businessName ?? "P")[0].toUpperCase())}</span>`}
+        ${avatarUrl ? `<img src="${avatarUrl}" alt="${businessName}" loading="lazy" />` : `<span class="avatar-initials">${escapeHtml4((provider.businessName ?? "P")[0].toUpperCase())}</span>`}
       </div>
       <div class="business-name">${businessName}</div>
       ${isPartner ? `<div class="partner-badge" aria-label="HomeBase Partner"><svg class="partner-mark" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 10.5L12 3.5L21 10.5V20.5H14.5V14.5H9.5V20.5H3V10.5Z" fill="currentColor"/></svg><span>HomeBase Partner</span></div>` : ""}
@@ -7402,618 +8446,8 @@ If asked to perform an action (like creating an invoice or scheduling a job), ac
 
 Be professional yet friendly - running a service business is challenging, and you're here to help them succeed.`;
 
-// server/storage.ts
-init_schema();
-init_db();
-init_stripeConnectService();
-import { eq as eq5, and as and3, or, desc, sql as sql3, gte, lte } from "drizzle-orm";
-import { hash, compare } from "bcryptjs";
-var SALT_ROUNDS = 10;
-var DatabaseStorage = class {
-  async getUser(id) {
-    const [user] = await db.select().from(users).where(eq5(users.id, id));
-    return user || void 0;
-  }
-  async getUserByEmail(email) {
-    const [user] = await db.select().from(users).where(
-      sql3`LOWER(${users.email}) = LOWER(${email})`
-    );
-    return user || void 0;
-  }
-  async createUser(insertUser) {
-    const hashedPassword = await hash(insertUser.password, SALT_ROUNDS);
-    const [user] = await db.insert(users).values({ ...insertUser, password: hashedPassword }).returning();
-    return user;
-  }
-  async updateUser(id, data) {
-    const updateData = { ...data, updatedAt: /* @__PURE__ */ new Date() };
-    if (data.password) {
-      updateData.password = await hash(data.password, SALT_ROUNDS);
-    }
-    const [user] = await db.update(users).set(updateData).where(eq5(users.id, id)).returning();
-    return user || void 0;
-  }
-  async verifyPassword(email, password) {
-    const user = await this.getUserByEmail(email);
-    if (!user) return null;
-    const valid = await compare(password, user.password);
-    return valid ? user : null;
-  }
-  async getHomes(userId) {
-    return db.select().from(homes).where(eq5(homes.userId, userId)).orderBy(desc(homes.isDefault));
-  }
-  async getHome(id) {
-    const [home] = await db.select().from(homes).where(eq5(homes.id, id));
-    return home || void 0;
-  }
-  async createHome(home) {
-    if (home.isDefault) {
-      await db.update(homes).set({ isDefault: false }).where(eq5(homes.userId, home.userId));
-    }
-    const [newHome] = await db.insert(homes).values(home).returning();
-    return newHome;
-  }
-  async updateHome(id, data) {
-    const updateData = { ...data, updatedAt: /* @__PURE__ */ new Date() };
-    const [home] = await db.update(homes).set(updateData).where(eq5(homes.id, id)).returning();
-    return home || void 0;
-  }
-  async deleteHome(id) {
-    const result = await db.delete(homes).where(eq5(homes.id, id)).returning();
-    return result.length > 0;
-  }
-  async getCategories() {
-    return db.select().from(serviceCategories).orderBy(serviceCategories.sortOrder);
-  }
-  async getServices(categoryId) {
-    if (categoryId) {
-      return db.select().from(services).where(eq5(services.categoryId, categoryId));
-    }
-    return db.select().from(services);
-  }
-  async getProviders(categoryId) {
-    if (categoryId) {
-      const catalogIds = await db.select({ providerId: providerServices.providerId }).from(providerServices).where(eq5(providerServices.categoryId, categoryId));
-      const [catRow] = await db.select({ name: serviceCategories.name }).from(serviceCategories).where(eq5(serviceCategories.id, categoryId));
-      const customIds = catRow ? await db.select({ providerId: providerCustomServices.providerId }).from(providerCustomServices).where(sql3`lower(${providerCustomServices.category}) = lower(${catRow.name})`) : [];
-      const nameIds = catRow ? await db.select({ providerId: providers.id }).from(providers).where(
-        and3(
-          sql3`lower(${providers.businessName}) like ${"%" + catRow.name.toLowerCase() + "%"}`,
-          eq5(providers.isActive, true)
-        )
-      ) : [];
-      const allProviderIds = [
-        ...catalogIds.map((r) => r.providerId),
-        ...customIds.map((r) => r.providerId),
-        ...nameIds.map((r) => r.providerId)
-      ];
-      if (allProviderIds.length === 0) return [];
-      const uniqueIds = [...new Set(allProviderIds)];
-      const expiredRows = await db.select({ providerId: providerPlans.providerId }).from(providerPlans).where(
-        and3(
-          eq5(providerPlans.isSubscribed, false),
-          sql3`${providerPlans.gracePeriodEndsAt} IS NOT NULL`,
-          sql3`${providerPlans.gracePeriodEndsAt} < NOW()`
-        )
-      );
-      const expiredSet = new Set(expiredRows.map((r) => r.providerId));
-      const results = [];
-      for (const id of uniqueIds) {
-        if (expiredSet.has(id)) continue;
-        const [provider] = await db.select().from(providers).where(eq5(providers.id, id));
-        if (provider && provider.isActive && provider.isPublic && provider.userId) {
-          results.push(provider);
-        }
-      }
-      const readySet2 = await getProviderReadinessSet(results.map((p) => p.id));
-      return results.filter((p) => readySet2.has(p.id));
-    }
-    const baseList = await db.select().from(providers).where(
-      and3(
-        eq5(providers.isActive, true),
-        eq5(providers.isPublic, true),
-        sql3`${providers.userId} IS NOT NULL`,
-        sql3`NOT EXISTS (SELECT 1 FROM provider_plans pp WHERE pp.provider_id = ${providers.id} AND COALESCE(pp.is_subscribed, false) = false AND pp.grace_period_ends_at IS NOT NULL AND pp.grace_period_ends_at < NOW())`
-      )
-    );
-    const readySet = await getProviderReadinessSet(baseList.map((p) => p.id));
-    return baseList.filter((p) => readySet.has(p.id));
-  }
-  async getProvider(id) {
-    const [provider] = await db.select().from(providers).where(eq5(providers.id, id));
-    return provider || void 0;
-  }
-  async getProviderServices(providerId) {
-    const ps = await db.select({ serviceId: providerServices.serviceId }).from(providerServices).where(eq5(providerServices.providerId, providerId));
-    const results = [];
-    for (const { serviceId } of ps) {
-      const [service] = await db.select().from(services).where(eq5(services.id, serviceId));
-      if (service) results.push(service);
-    }
-    return results;
-  }
-  async getAppointments(userId) {
-    return db.select().from(appointments).where(eq5(appointments.userId, userId)).orderBy(desc(appointments.scheduledDate));
-  }
-  async getAppointment(id) {
-    const [appointment] = await db.select().from(appointments).where(eq5(appointments.id, id));
-    return appointment || void 0;
-  }
-  async createAppointment(appointment) {
-    if (appointment.userId && appointment.providerId && appointment.scheduledDate) {
-      const slotFilter = and3(
-        eq5(appointments.userId, appointment.userId),
-        eq5(appointments.providerId, appointment.providerId),
-        eq5(appointments.scheduledDate, appointment.scheduledDate)
-      );
-      const [existing] = await db.select().from(appointments).where(slotFilter).limit(1);
-      if (existing) return { appointment: existing, created: false };
-      const inserted = await db.insert(appointments).values(appointment).onConflictDoNothing().returning();
-      if (inserted[0]) return { appointment: inserted[0], created: true };
-      const [winner] = await db.select().from(appointments).where(slotFilter).limit(1);
-      if (winner) return { appointment: winner, created: false };
-      throw new Error(
-        "createAppointment: insert skipped on conflict but no existing row found"
-      );
-    }
-    const [newAppointment] = await db.insert(appointments).values(appointment).returning();
-    return { appointment: newAppointment, created: true };
-  }
-  async updateAppointment(id, data) {
-    const updateData = { ...data, updatedAt: /* @__PURE__ */ new Date() };
-    const [appointment] = await db.update(appointments).set(updateData).where(eq5(appointments.id, id)).returning();
-    return appointment || void 0;
-  }
-  async cancelAppointment(id) {
-    const [appointment] = await db.update(appointments).set({ status: "cancelled", cancelledAt: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date() }).where(eq5(appointments.id, id)).returning();
-    return appointment || void 0;
-  }
-  async getNotifications(userId) {
-    return db.select().from(notifications).where(eq5(notifications.userId, userId)).orderBy(desc(notifications.createdAt));
-  }
-  async getNotification(id) {
-    const [notification] = await db.select().from(notifications).where(eq5(notifications.id, id));
-    return notification;
-  }
-  async markNotificationRead(id) {
-    await db.update(notifications).set({ isRead: true }).where(eq5(notifications.id, id));
-  }
-  async createNotification(userId, title, message, type, data) {
-    const [notification] = await db.insert(notifications).values({ userId, title, message, type, data }).returning();
-    return notification;
-  }
-  // Provider methods
-  async createProvider(provider) {
-    const [newProvider] = await db.insert(providers).values(provider).returning();
-    return newProvider;
-  }
-  async getProviderByUserId(userId) {
-    const [provider] = await db.select().from(providers).where(eq5(providers.userId, userId));
-    return provider || void 0;
-  }
-  async updateProvider(id, data) {
-    const [provider] = await db.update(providers).set(data).where(eq5(providers.id, id)).returning();
-    return provider || void 0;
-  }
-  // Client methods
-  async getClients(providerId) {
-    return db.select().from(clients).where(eq5(clients.providerId, providerId)).orderBy(desc(clients.createdAt));
-  }
-  async getClient(id) {
-    const [client] = await db.select().from(clients).where(eq5(clients.id, id));
-    return client || void 0;
-  }
-  async createClient(client) {
-    const [newClient] = await db.insert(clients).values(client).returning();
-    return newClient;
-  }
-  async updateClient(id, data) {
-    const updateData = { ...data, updatedAt: /* @__PURE__ */ new Date() };
-    const [client] = await db.update(clients).set(updateData).where(eq5(clients.id, id)).returning();
-    return client || void 0;
-  }
-  async deleteClient(id) {
-    const result = await db.delete(clients).where(eq5(clients.id, id)).returning();
-    return result.length > 0;
-  }
-  // Job methods
-  async getJobs(providerId) {
-    return db.select().from(jobs).where(eq5(jobs.providerId, providerId)).orderBy(desc(jobs.scheduledDate));
-  }
-  async getJobsByClient(clientId) {
-    return db.select().from(jobs).where(eq5(jobs.clientId, clientId)).orderBy(desc(jobs.scheduledDate));
-  }
-  async getJob(id) {
-    const [job] = await db.select().from(jobs).where(eq5(jobs.id, id));
-    return job || void 0;
-  }
-  async createJob(job) {
-    const [newJob] = await db.insert(jobs).values(job).returning();
-    return newJob;
-  }
-  async updateJob(id, data) {
-    const updateData = { ...data, updatedAt: /* @__PURE__ */ new Date() };
-    const [job] = await db.update(jobs).set(updateData).where(eq5(jobs.id, id)).returning();
-    return job || void 0;
-  }
-  async completeJob(id, finalPrice) {
-    const updateData = {
-      status: "completed",
-      completedAt: /* @__PURE__ */ new Date(),
-      updatedAt: /* @__PURE__ */ new Date()
-    };
-    if (finalPrice) updateData.finalPrice = finalPrice;
-    const [job] = await db.update(jobs).set(updateData).where(eq5(jobs.id, id)).returning();
-    return job || void 0;
-  }
-  async deleteJob(id) {
-    const result = await db.delete(jobs).where(eq5(jobs.id, id)).returning();
-    return result.length > 0;
-  }
-  // Crew member methods (Task #302)
-  async getCrewMembers(providerId) {
-    return db.select().from(crewMembers).where(eq5(crewMembers.providerId, providerId)).orderBy(desc(crewMembers.createdAt));
-  }
-  async getCrewMember(id) {
-    const [member] = await db.select().from(crewMembers).where(eq5(crewMembers.id, id));
-    return member || void 0;
-  }
-  async createCrewMember(member) {
-    const [newMember] = await db.insert(crewMembers).values(member).returning();
-    return newMember;
-  }
-  async updateCrewMember(id, data) {
-    const [member] = await db.update(crewMembers).set(data).where(eq5(crewMembers.id, id)).returning();
-    return member || void 0;
-  }
-  async deleteCrewMember(id) {
-    const result = await db.delete(crewMembers).where(eq5(crewMembers.id, id)).returning();
-    return result.length > 0;
-  }
-  async countJobsAssignedToCrewMember(id) {
-    const rows = await db.select({ id: jobs.id }).from(jobs).where(eq5(jobs.assignedCrewMemberId, id));
-    return rows.length;
-  }
-  // Invoice methods
-  async getInvoices(providerId) {
-    return db.select().from(invoices).where(eq5(invoices.providerId, providerId)).orderBy(desc(invoices.createdAt));
-  }
-  async getInvoicesByClient(clientId) {
-    return db.select().from(invoices).where(eq5(invoices.clientId, clientId)).orderBy(desc(invoices.createdAt));
-  }
-  async getInvoice(id) {
-    const [invoice] = await db.select().from(invoices).where(eq5(invoices.id, id));
-    return invoice || void 0;
-  }
-  async createInvoice(invoice) {
-    const [newInvoice] = await db.insert(invoices).values(invoice).returning();
-    return newInvoice;
-  }
-  async updateInvoice(id, data) {
-    const [invoice] = await db.update(invoices).set(data).where(eq5(invoices.id, id)).returning();
-    return invoice || void 0;
-  }
-  async sendInvoice(id) {
-    const [invoice] = await db.update(invoices).set({ status: "sent", sentAt: /* @__PURE__ */ new Date() }).where(eq5(invoices.id, id)).returning();
-    return invoice || void 0;
-  }
-  async markInvoicePaid(id) {
-    const [invoice] = await db.update(invoices).set({ status: "paid", paidAt: /* @__PURE__ */ new Date() }).where(eq5(invoices.id, id)).returning();
-    return invoice || void 0;
-  }
-  async cancelInvoice(id) {
-    const [invoice] = await db.update(invoices).set({ status: "cancelled" }).where(eq5(invoices.id, id)).returning();
-    return invoice || void 0;
-  }
-  // Payment methods
-  async getPayments(providerId) {
-    return db.select().from(payments).where(eq5(payments.providerId, providerId)).orderBy(desc(payments.createdAt));
-  }
-  async getPaymentsByInvoice(invoiceId) {
-    return db.select().from(payments).where(eq5(payments.invoiceId, invoiceId)).orderBy(desc(payments.receivedAt));
-  }
-  async createPayment(payment) {
-    const [newPayment] = await db.insert(payments).values(payment).returning();
-    await this.markInvoicePaid(payment.invoiceId);
-    return newPayment;
-  }
-  // ── Task #295: manual (cash/check/other) payment helpers ──────────────
-  // The plain `createPayment` above auto-marks the invoice as fully paid,
-  // which is correct for Stripe webhook upserts (one payment == full
-  // settlement). Manual payments support partial collection, so we
-  // recompute status from the sum of non-voided rows instead.
-  async recomputeInvoiceStatusFromPayments(invoiceId) {
-    const [invoice] = await db.select().from(invoices).where(eq5(invoices.id, invoiceId));
-    if (!invoice) return void 0;
-    if (invoice.status === "void" || invoice.status === "cancelled" || invoice.status === "refunded") {
-      return invoice;
-    }
-    const rows = await db.select({ amountCents: payments.amountCents }).from(payments).where(and3(eq5(payments.invoiceId, invoiceId), sql3`${payments.voidedAt} IS NULL`));
-    const collectedCents = rows.reduce((sum, r) => sum + (r.amountCents ?? 0), 0);
-    const totalCents = invoice.totalCents ?? 0;
-    let nextStatus = invoice.status;
-    let nextPaidAt = invoice.paidAt ?? null;
-    if (totalCents > 0 && collectedCents >= totalCents) {
-      nextStatus = "paid";
-      nextPaidAt = invoice.paidAt ?? /* @__PURE__ */ new Date();
-    } else if (collectedCents > 0) {
-      nextStatus = "partially_paid";
-      nextPaidAt = null;
-    } else {
-      nextStatus = invoice.sentAt ? "sent" : "draft";
-      nextPaidAt = null;
-    }
-    if (nextStatus === invoice.status && nextPaidAt === invoice.paidAt) {
-      return invoice;
-    }
-    const [updated] = await db.update(invoices).set({ status: nextStatus, paidAt: nextPaidAt }).where(eq5(invoices.id, invoiceId)).returning();
-    return updated;
-  }
-  async createManualPayment(payment) {
-    const [row] = await db.insert(payments).values(payment).returning();
-    await this.recomputeInvoiceStatusFromPayments(payment.invoiceId);
-    return row;
-  }
-  async updateManualPayment(id, patch) {
-    const [row] = await db.update(payments).set(patch).where(eq5(payments.id, id)).returning();
-    if (row) await this.recomputeInvoiceStatusFromPayments(row.invoiceId);
-    return row || void 0;
-  }
-  async voidPayment(id, voidedBy) {
-    const [row] = await db.update(payments).set({ voidedAt: /* @__PURE__ */ new Date(), voidedBy, status: "refunded" }).where(eq5(payments.id, id)).returning();
-    if (row) await this.recomputeInvoiceStatusFromPayments(row.invoiceId);
-    return row || void 0;
-  }
-  async getPayment(id) {
-    const [row] = await db.select().from(payments).where(eq5(payments.id, id));
-    return row || void 0;
-  }
-  async getManualPayments(providerId) {
-    return db.select().from(payments).where(and3(eq5(payments.providerId, providerId), sql3`${payments.method} <> 'stripe'`)).orderBy(desc(payments.receivedAt));
-  }
-  // Provider dashboard stats
-  async getProviderStats(providerId, startDate, endDate) {
-    const start = startDate ?? (() => {
-      const d = /* @__PURE__ */ new Date();
-      d.setDate(1);
-      d.setHours(0, 0, 0, 0);
-      return d;
-    })();
-    const end = endDate ?? /* @__PURE__ */ new Date();
-    const paidInvoices = await db.select({ total: invoices.total, paidAt: invoices.paidAt }).from(invoices).where(
-      and3(
-        eq5(invoices.providerId, providerId),
-        eq5(invoices.status, "paid"),
-        gte(invoices.paidAt, start),
-        lte(invoices.paidAt, end)
-      )
-    );
-    const revenueMTD = paidInvoices.reduce((sum, inv) => sum + parseFloat(inv.total || "0"), 0);
-    const averageJobValue = paidInvoices.length > 0 ? revenueMTD / paidInvoices.length : 0;
-    const diffMs = end.getTime() - start.getTime();
-    const diffDays = diffMs / (1e3 * 60 * 60 * 24);
-    const bucketCount = diffDays <= 7 ? 7 : diffDays <= 31 ? Math.ceil(diffDays / 7) : diffDays <= 92 ? 13 : 12;
-    const bucketSizeMs = diffMs / bucketCount;
-    const revenueByPeriod = [];
-    for (let i = 0; i < bucketCount; i++) {
-      const bucketStart = new Date(start.getTime() + i * bucketSizeMs);
-      const bucketEnd = new Date(start.getTime() + (i + 1) * bucketSizeMs);
-      const bucketRevenue = paidInvoices.filter((inv) => {
-        if (!inv.paidAt) return false;
-        const t = new Date(inv.paidAt).getTime();
-        return t >= bucketStart.getTime() && t < bucketEnd.getTime();
-      }).reduce((sum, inv) => sum + parseFloat(inv.total || "0"), 0);
-      let label;
-      if (diffDays <= 7) {
-        label = bucketStart.toLocaleDateString("en-US", { weekday: "short" });
-      } else if (diffDays <= 31) {
-        label = bucketStart.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      } else if (diffDays <= 92) {
-        label = `W${i + 1}`;
-      } else {
-        label = bucketStart.toLocaleDateString("en-US", { month: "short" });
-      }
-      revenueByPeriod.push({ label, value: bucketRevenue });
-    }
-    const completedJobs = await db.select({ id: jobs.id }).from(jobs).where(
-      and3(
-        eq5(jobs.providerId, providerId),
-        eq5(jobs.status, "completed"),
-        gte(jobs.completedAt, start),
-        lte(jobs.completedAt, end)
-      )
-    );
-    const jobsCompleted = completedJobs.length;
-    const clientList = await this.getClients(providerId);
-    const activeClients = clientList.length;
-    const startOfToday = /* @__PURE__ */ new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-    const upcomingJobsList = await db.select({ id: jobs.id }).from(jobs).where(
-      and3(
-        eq5(jobs.providerId, providerId),
-        or(
-          eq5(jobs.status, "in_progress"),
-          and3(eq5(jobs.status, "scheduled"), gte(jobs.scheduledDate, startOfToday))
-        )
-      )
-    );
-    const upcomingJobs = upcomingJobsList.length;
-    return { revenueMTD, jobsCompleted, activeClients, upcomingJobs, averageJobValue, revenueByPeriod };
-  }
-  // Provider business insights — real numbers for the dashboard metric grid
-  // and an 8-week revenue trend. Also returns internal fields used by the
-  // milestone-notification pipeline (allTimeRevenue, clientGrowthPct, rating,
-  // reviewCount) so the route handler can fire those without a second query.
-  async getProviderInsights(providerId) {
-    const now = /* @__PURE__ */ new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-    const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
-    const prevMonthCutoff = new Date(
-      now.getFullYear(),
-      now.getMonth() - 1,
-      now.getDate(),
-      23,
-      59,
-      59,
-      999
-    );
-    const completedJobRows = await db.select({
-      finalPrice: jobs.finalPrice,
-      completedAt: jobs.completedAt,
-      clientId: jobs.clientId
-    }).from(jobs).where(and3(eq5(jobs.providerId, providerId), eq5(jobs.status, "completed")));
-    const allTimeRevenue = completedJobRows.reduce(
-      (sum, j) => sum + parseFloat(j.finalPrice || "0"),
-      0
-    );
-    const inWindow = (d, start, end) => !!d && d >= start && d <= end;
-    const currentJobs = completedJobRows.filter(
-      (j) => inWindow(j.completedAt, startOfMonth, now)
-    );
-    const priorJobs = completedJobRows.filter(
-      (j) => inWindow(j.completedAt, startOfPrevMonth, prevMonthCutoff)
-    );
-    const sumPrices = (rows) => rows.reduce((s, j) => s + parseFloat(j.finalPrice || "0"), 0);
-    const revenueMtd = sumPrices(currentJobs);
-    const revenuePrev = sumPrices(priorJobs);
-    const jobsCompleted = currentJobs.length;
-    const jobsCompletedPrev = priorJobs.length;
-    const avgJobValue = jobsCompleted > 0 ? revenueMtd / jobsCompleted : 0;
-    const avgJobValuePrev = jobsCompletedPrev > 0 ? revenuePrev / jobsCompletedPrev : 0;
-    const activeClientsThis = new Set(
-      currentJobs.map((j) => j.clientId).filter(Boolean)
-    ).size;
-    const activeClientsPrev = new Set(
-      priorJobs.map((j) => j.clientId).filter(Boolean)
-    ).size;
-    const pctDelta = (current, prior) => {
-      if (prior <= 0) {
-        if (current <= 0) return null;
-        return 100;
-      }
-      return Math.round((current - prior) / prior * 100);
-    };
-    const startOfThisWeek = (() => {
-      const d = new Date(now);
-      d.setHours(0, 0, 0, 0);
-      const day = d.getDay();
-      const diffToMonday = (day + 6) % 7;
-      d.setDate(d.getDate() - diffToMonday);
-      return d;
-    })();
-    const weeklyRevenueSeries = [];
-    for (let i = 7; i >= 0; i--) {
-      const weekStart = new Date(startOfThisWeek);
-      weekStart.setDate(weekStart.getDate() - i * 7);
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekEnd.getDate() + 6);
-      weekEnd.setHours(23, 59, 59, 999);
-      const value = completedJobRows.filter((j) => inWindow(j.completedAt, weekStart, weekEnd)).reduce((s, j) => s + parseFloat(j.finalPrice || "0"), 0);
-      const label = weekStart.toLocaleDateString("en-US", {
-        month: "numeric",
-        day: "numeric"
-      });
-      weeklyRevenueSeries.push({ label, value });
-    }
-    const quarterMonth = Math.floor(now.getMonth() / 3) * 3;
-    const startOfThisQuarter = new Date(now.getFullYear(), quarterMonth, 1, 0, 0, 0, 0);
-    const startOfLastQuarter = new Date(now.getFullYear(), quarterMonth - 3, 1, 0, 0, 0, 0);
-    const endOfLastQuarter = new Date(startOfThisQuarter.getTime() - 1);
-    const clientsThisQuarter = await db.select({ id: clients.id }).from(clients).where(and3(eq5(clients.providerId, providerId), gte(clients.createdAt, startOfThisQuarter)));
-    const clientsLastQuarter = await db.select({ id: clients.id }).from(clients).where(
-      and3(
-        eq5(clients.providerId, providerId),
-        gte(clients.createdAt, startOfLastQuarter),
-        lte(clients.createdAt, endOfLastQuarter)
-      )
-    );
-    const clientGrowthPct = clientsLastQuarter.length > 0 ? Math.round(
-      (clientsThisQuarter.length - clientsLastQuarter.length) / clientsLastQuarter.length * 100
-    ) : clientsThisQuarter.length > 0 ? 100 : 0;
-    const [providerRow] = await db.select({ rating: providers.rating, reviewCount: providers.reviewCount }).from(providers).where(eq5(providers.id, providerId));
-    const totalClientsRow = await db.select({ id: clients.id }).from(clients).where(eq5(clients.providerId, providerId));
-    const hasAnyData = completedJobRows.length > 0 || totalClientsRow.length > 0;
-    return {
-      revenueMtd,
-      revenueMtdDelta: pctDelta(revenueMtd, revenuePrev),
-      jobsCompleted,
-      jobsCompletedDelta: pctDelta(jobsCompleted, jobsCompletedPrev),
-      activeClients: activeClientsThis,
-      activeClientsDelta: pctDelta(activeClientsThis, activeClientsPrev),
-      avgJobValue,
-      avgJobValueDelta: pctDelta(avgJobValue, avgJobValuePrev),
-      weeklyRevenueSeries,
-      hasAnyData,
-      allTimeRevenue,
-      clientGrowthPct,
-      rating: providerRow?.rating ?? "0",
-      reviewCount: providerRow?.reviewCount ?? 0
-    };
-  }
-  // Get next invoice number
-  async getNextInvoiceNumber(providerId) {
-    const existingInvoices = await db.select({ invoiceNumber: invoices.invoiceNumber }).from(invoices).where(eq5(invoices.providerId, providerId));
-    const nextNum = existingInvoices.length + 1;
-    return `INV-${String(nextNum).padStart(4, "0")}`;
-  }
-  // Booking Links
-  async getBookingLink(id) {
-    const [link] = await db.select().from(bookingLinks).where(eq5(bookingLinks.id, id));
-    return link || void 0;
-  }
-  async getBookingLinkBySlug(slug) {
-    const [link] = await db.select().from(bookingLinks).where(eq5(bookingLinks.slug, slug));
-    return link || void 0;
-  }
-  async getBookingLinksByProvider(providerId) {
-    return await db.select().from(bookingLinks).where(eq5(bookingLinks.providerId, providerId));
-  }
-  async createBookingLink(data) {
-    const [link] = await db.insert(bookingLinks).values(data).returning();
-    return link;
-  }
-  async updateBookingLink(id, data) {
-    const [link] = await db.update(bookingLinks).set({ ...data, updatedAt: /* @__PURE__ */ new Date() }).where(eq5(bookingLinks.id, id)).returning();
-    return link || void 0;
-  }
-  async deleteBookingLink(id) {
-    const result = await db.delete(bookingLinks).where(eq5(bookingLinks.id, id));
-    return true;
-  }
-  // Intake Submissions
-  async getIntakeSubmission(id) {
-    const [submission] = await db.select().from(intakeSubmissions).where(eq5(intakeSubmissions.id, id));
-    return submission || void 0;
-  }
-  async getIntakeSubmissionsByProvider(providerId) {
-    return await db.select().from(intakeSubmissions).where(eq5(intakeSubmissions.providerId, providerId)).orderBy(desc(intakeSubmissions.createdAt));
-  }
-  async getIntakeSubmissionsByBookingLink(bookingLinkId) {
-    return await db.select().from(intakeSubmissions).where(eq5(intakeSubmissions.bookingLinkId, bookingLinkId)).orderBy(desc(intakeSubmissions.createdAt));
-  }
-  async createIntakeSubmission(data) {
-    const [submission] = await db.insert(intakeSubmissions).values(data).returning();
-    return submission;
-  }
-  async updateIntakeSubmission(id, data) {
-    const [submission] = await db.update(intakeSubmissions).set({ ...data, updatedAt: /* @__PURE__ */ new Date() }).where(eq5(intakeSubmissions.id, id)).returning();
-    return submission || void 0;
-  }
-  async getNotificationPreferences(userId) {
-    const [prefs] = await db.select().from(notificationPreferences).where(eq5(notificationPreferences.userId, userId));
-    return prefs || void 0;
-  }
-  async upsertNotificationPreferences(userId, data) {
-    const existing = await this.getNotificationPreferences(userId);
-    if (existing) {
-      const [updated] = await db.update(notificationPreferences).set({ ...data, updatedAt: /* @__PURE__ */ new Date() }).where(eq5(notificationPreferences.userId, userId)).returning();
-      return updated;
-    }
-    const [created] = await db.insert(notificationPreferences).values({ userId, ...data }).returning();
-    return created;
-  }
-};
-var storage = new DatabaseStorage();
+// server/routes.ts
+init_storage();
 
 // server/seed.ts
 init_db();
@@ -9709,6 +10143,41 @@ async function calculateAndPersistHouseFaxScore(homeId) {
   await storage.updateHome(homeId, { housefaxScore: score });
   return score;
 }
+async function getCrewMembershipsForUser(userId) {
+  try {
+    const rows = await db.select({
+      crewMemberId: crewMembers.id,
+      providerId: crewMembers.providerId,
+      providerName: providers.businessName
+    }).from(crewMembers).innerJoin(providers, eq10(providers.id, crewMembers.providerId)).where(
+      and5(
+        eq10(crewMembers.invitedUserId, userId),
+        eq10(crewMembers.isActive, true)
+      )
+    );
+    return rows.map((r) => ({
+      crewMemberId: r.crewMemberId,
+      providerId: r.providerId,
+      providerName: r.providerName ?? "Provider"
+    }));
+  } catch (e) {
+    console.error("getCrewMembershipsForUser error:", e);
+    return [];
+  }
+}
+async function autoLinkCrewByEmail(userId, email) {
+  if (!email) return;
+  try {
+    await db.update(crewMembers).set({ invitedUserId: userId }).where(
+      and5(
+        isNull(crewMembers.invitedUserId),
+        sql5`lower(${crewMembers.email}) = lower(${email})`
+      )
+    );
+  } catch (e) {
+    console.error("autoLinkCrewByEmail error:", e);
+  }
+}
 async function registerRoutes(app2) {
   if (process.env.NODE_ENV !== "production") {
     await seedDatabase();
@@ -10007,7 +10476,14 @@ async function registerRoutes(app2) {
           console.error("[auth/login] partner lookup failed:", err);
         }
       }
-      res.json({ user: formatUserResponse(user), providerProfile: enrichedProfile, token });
+      await autoLinkCrewByEmail(user.id, user.email);
+      const crewMemberships = await getCrewMembershipsForUser(user.id);
+      res.json({
+        user: formatUserResponse(user),
+        providerProfile: enrichedProfile,
+        crewMemberships,
+        token
+      });
     } catch (error) {
       console.error("Login error:", error);
       res.status(500).json({ error: "Failed to login" });
@@ -10029,7 +10505,13 @@ async function registerRoutes(app2) {
           isPartner: planRow?.isPartner ?? false
         };
       }
-      res.json({ user: formatUserResponse(user), providerProfile: enrichedProfile });
+      await autoLinkCrewByEmail(user.id, user.email);
+      const crewMemberships = await getCrewMembershipsForUser(user.id);
+      res.json({
+        user: formatUserResponse(user),
+        providerProfile: enrichedProfile,
+        crewMemberships
+      });
     } catch (error) {
       console.error("Auth me error:", error);
       res.status(500).json({ error: "Failed to get user" });
@@ -11091,6 +11573,22 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
       }
     }
   );
+  app2.get(
+    "/api/jobs/:id/photos",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const gate = await requireCrewOrProviderForJob(req, req.params.id, res);
+        if (!gate) return;
+        const [entry] = await db.select({ photos: housefaxEntries.photos }).from(housefaxEntries).where(eq10(housefaxEntries.jobId, gate.job.id));
+        const photos = Array.isArray(entry?.photos) ? entry.photos : [];
+        res.json({ photos });
+      } catch (error) {
+        console.error("Get job photos error:", error);
+        res.status(500).json({ error: "Failed to load photos" });
+      }
+    }
+  );
   app2.post(
     "/api/jobs/:id/photos",
     requireAuth,
@@ -11103,15 +11601,9 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
         "data:image/webp;base64,"
       ];
       try {
-        const authUserId = req.authenticatedUserId;
-        const job = await storage.getJob(req.params.id);
-        if (!job) return res.status(404).json({ error: "Job not found" });
-        const providerProfile = await storage.getProviderByUserId(authUserId);
-        if (!providerProfile || job.providerId !== providerProfile.id) {
-          return res.status(403).json({
-            error: "Only the assigned provider can upload photos for this job"
-          });
-        }
+        const gate = await requireCrewOrProviderForJob(req, req.params.id, res);
+        if (!gate) return;
+        const job = gate.job;
         const { photos } = req.body;
         if (!Array.isArray(photos) || photos.length === 0) {
           return res.status(400).json({ error: "photos array is required" });
@@ -14689,6 +15181,31 @@ Respond with JSON only:
       }
     }
   );
+  async function requireCrewOrProviderForJob(req, jobId, res) {
+    const authUserId = req.authenticatedUserId;
+    const job = await storage.getJob(jobId);
+    if (!job) {
+      res.status(404).json({ error: "Job not found" });
+      return null;
+    }
+    const providerProfile = await storage.getProviderByUserId(authUserId);
+    if (providerProfile && providerProfile.id === job.providerId) {
+      return { job, role: "provider" };
+    }
+    if (job.assignedCrewMemberId) {
+      const [crew] = await db.select({
+        id: crewMembers.id,
+        providerId: crewMembers.providerId,
+        invitedUserId: crewMembers.invitedUserId,
+        isActive: crewMembers.isActive
+      }).from(crewMembers).where(eq10(crewMembers.id, job.assignedCrewMemberId)).catch(() => [null]);
+      if (crew && crew.isActive && crew.invitedUserId === authUserId && crew.providerId === job.providerId) {
+        return { job, role: "crew", crewMemberId: crew.id };
+      }
+    }
+    res.status(403).json({ error: "Forbidden" });
+    return null;
+  }
   async function loadCrewForProvider(crewMemberId, providerId) {
     const [row] = await db.select({
       id: crewMembers.id,
@@ -14788,6 +15305,155 @@ Respond with JSON only:
       } catch (error) {
         console.error("Delete crew member error:", error);
         res.status(500).json({ error: "Failed to delete crew member" });
+      }
+    }
+  );
+  app2.post(
+    "/api/crew/:id/invite",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const crew = await storage.getCrewMember(req.params.id);
+        if (!crew)
+          return res.status(404).json({ error: "Crew member not found" });
+        if (!await assertProviderOwnership(req, crew.providerId, res))
+          return;
+        if (!crew.email) {
+          return res.status(400).json({ error: "Crew member has no email on file" });
+        }
+        const [provider] = await db.select({
+          id: providers.id,
+          businessName: providers.businessName
+        }).from(providers).where(eq10(providers.id, crew.providerId));
+        if (!provider) {
+          return res.status(404).json({ error: "Provider not found" });
+        }
+        const { JWT_SECRET: JWT_SECRET2 } = await Promise.resolve().then(() => (init_auth(), auth_exports));
+        const jwt2 = await import("jsonwebtoken");
+        const INVITE_SECRET = `${JWT_SECRET2}:crew-invite`;
+        const inviteToken = jwt2.default.sign(
+          {
+            purpose: "crew_invite",
+            crewMemberId: crew.id,
+            providerId: crew.providerId,
+            email: crew.email
+          },
+          INVITE_SECRET,
+          { expiresIn: "14d" }
+        );
+        const appOrigin = process.env.APP_ORIGIN || (process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : "https://home-base-pro-app.replit.app");
+        const acceptUrl = `${appOrigin}/crew-invite?token=${inviteToken}`;
+        const { sendCrewInviteEmail: sendCrewInviteEmail2 } = await Promise.resolve().then(() => (init_emailService(), emailService_exports));
+        const result = await sendCrewInviteEmail2(
+          crew.email,
+          crew.name,
+          provider.businessName,
+          acceptUrl
+        );
+        if (!result.success) {
+          return res.status(502).json({ error: result.error || "Failed to send invite email" });
+        }
+        res.json({ success: true });
+      } catch (error) {
+        console.error("Send crew invite error:", error);
+        res.status(500).json({ error: "Failed to send invite" });
+      }
+    }
+  );
+  app2.post(
+    "/api/crew/invites/accept",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const { token } = req.body;
+        if (!token || typeof token !== "string") {
+          return res.status(400).json({ error: "Invite token is required" });
+        }
+        const { JWT_SECRET: JWT_SECRET2 } = await Promise.resolve().then(() => (init_auth(), auth_exports));
+        const jwt2 = await import("jsonwebtoken");
+        const INVITE_SECRET = `${JWT_SECRET2}:crew-invite`;
+        let decoded;
+        try {
+          decoded = jwt2.default.verify(token, INVITE_SECRET);
+        } catch {
+          return res.status(400).json({ error: "Invalid or expired invite link." });
+        }
+        if (decoded.purpose !== "crew_invite" || !decoded.crewMemberId || !decoded.email) {
+          return res.status(400).json({ error: "Invalid invite token" });
+        }
+        const authUserId = req.authenticatedUserId;
+        const user = await storage.getUser(authUserId);
+        if (!user) return res.status(401).json({ error: "Not signed in" });
+        if (user.email.toLowerCase() !== String(decoded.email).toLowerCase()) {
+          return res.status(403).json({
+            error: "This invite is for a different email address. Sign in with the invited email and try again."
+          });
+        }
+        const crew = await storage.getCrewMember(decoded.crewMemberId);
+        if (!crew)
+          return res.status(404).json({ error: "Crew row no longer exists" });
+        if (crew.invitedUserId && crew.invitedUserId !== authUserId) {
+          return res.status(409).json({ error: "This invite is already linked to another account" });
+        }
+        if (!crew.invitedUserId) {
+          await storage.updateCrewMember(crew.id, {
+            invitedUserId: authUserId
+          });
+        }
+        const memberships = await getCrewMembershipsForUser(authUserId);
+        res.json({ success: true, crewMemberships: memberships });
+      } catch (error) {
+        console.error("Accept crew invite error:", error);
+        res.status(500).json({ error: "Failed to accept invite" });
+      }
+    }
+  );
+  app2.get(
+    "/api/crew/me/memberships",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const userId = req.authenticatedUserId;
+        const user = await storage.getUser(userId);
+        if (user) await autoLinkCrewByEmail(userId, user.email);
+        const memberships = await getCrewMembershipsForUser(userId);
+        res.json({ crewMemberships: memberships });
+      } catch (error) {
+        console.error("Get crew memberships error:", error);
+        res.status(500).json({ error: "Failed to load crew memberships" });
+      }
+    }
+  );
+  app2.get(
+    "/api/crew/me/jobs",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const userId = req.authenticatedUserId;
+        const providerId = typeof req.query.providerId === "string" ? req.query.providerId : void 0;
+        if (!providerId) {
+          return res.status(400).json({ error: "providerId is required" });
+        }
+        const [crew] = await db.select({ id: crewMembers.id }).from(crewMembers).where(
+          and5(
+            eq10(crewMembers.providerId, providerId),
+            eq10(crewMembers.invitedUserId, userId),
+            eq10(crewMembers.isActive, true)
+          )
+        );
+        if (!crew) {
+          return res.status(403).json({ error: "You are not on this provider's crew" });
+        }
+        const rows = await db.select().from(jobs).where(
+          and5(
+            eq10(jobs.providerId, providerId),
+            eq10(jobs.assignedCrewMemberId, crew.id)
+          )
+        ).orderBy(desc3(jobs.scheduledDate));
+        res.json({ jobs: rows });
+      } catch (error) {
+        console.error("Get crew jobs error:", error);
+        res.status(500).json({ error: "Failed to load crew jobs" });
       }
     }
   );
@@ -15199,7 +15865,16 @@ Respond with JSON only:
           const linkedAppointment = await storage.getAppointment(job.appointmentId);
           isHomeowner = linkedAppointment?.userId === req.authenticatedUserId;
         }
-        if (!isProvider && !isHomeowner) {
+        let isCrew = false;
+        if (!isProvider && !isHomeowner && job.assignedCrewMemberId) {
+          const [crew] = await db.select({
+            invitedUserId: crewMembers.invitedUserId,
+            isActive: crewMembers.isActive,
+            providerId: crewMembers.providerId
+          }).from(crewMembers).where(eq10(crewMembers.id, job.assignedCrewMemberId)).catch(() => [null]);
+          isCrew = !!(crew && crew.isActive && crew.invitedUserId === req.authenticatedUserId && crew.providerId === job.providerId);
+        }
+        if (!isProvider && !isHomeowner && !isCrew) {
           return res.status(403).json({ error: "Access denied" });
         }
         let isRecurring = false;
@@ -15715,11 +16390,11 @@ Respond with JSON only:
     requireAuth,
     async (req, res) => {
       try {
-        const existing = await storage.getJob(req.params.id);
-        if (!existing) return res.status(404).json({ error: "Job not found" });
-        if (!await assertProviderOwnership(req, existing.providerId, res))
-          return;
-        const {
+        const gate = await requireCrewOrProviderForJob(req, req.params.id, res);
+        if (!gate) return;
+        const existing = gate.job;
+        const isCrewCaller = gate.role === "crew";
+        let {
           title,
           description,
           status,
@@ -15731,6 +16406,25 @@ Respond with JSON only:
           address,
           assignedCrewMemberId
         } = req.body;
+        if (isCrewCaller) {
+          title = void 0;
+          description = void 0;
+          scheduledDate = void 0;
+          scheduledTime = void 0;
+          estimatedPrice = void 0;
+          finalPrice = void 0;
+          address = void 0;
+          assignedCrewMemberId = void 0;
+          const ALLOWED_CREW_STATUSES = /* @__PURE__ */ new Set([
+            "in_progress",
+            "completed"
+          ]);
+          if (status !== void 0 && !ALLOWED_CREW_STATUSES.has(status)) {
+            return res.status(403).json({
+              error: "Crew members may only mark jobs in_progress or completed"
+            });
+          }
+        }
         if (status === "weather_held") {
           return res.status(400).json({
             error: "Use POST /api/jobs/:id/weather-hold to place a job on weather hold"
@@ -15986,11 +16680,10 @@ Respond with JSON only:
     requireAuth,
     async (req, res) => {
       try {
-        const { finalPrice } = req.body;
-        const prior = await storage.getJob(req.params.id);
-        if (!prior) return res.status(404).json({ error: "Job not found" });
-        if (!await assertProviderOwnership(req, prior.providerId, res))
-          return;
+        const gate = await requireCrewOrProviderForJob(req, req.params.id, res);
+        if (!gate) return;
+        const prior = gate.job;
+        const finalPrice = gate.role === "crew" ? void 0 : req.body.finalPrice;
         const job = await storage.completeJob(req.params.id, finalPrice);
         if (!job) {
           return res.status(404).json({ error: "Job not found" });
@@ -16076,17 +16769,22 @@ Respond with JSON only:
     requireAuth,
     async (req, res) => {
       try {
-        const prior = await storage.getJob(req.params.id);
-        if (!prior) return res.status(404).json({ error: "Job not found" });
-        if (!await assertProviderOwnership(req, prior.providerId, res))
-          return;
+        const gate = await requireCrewOrProviderForJob(req, req.params.id, res);
+        if (!gate) return;
+        const prior = gate.job;
+        if (gate.role === "crew") {
+          const allowed = /* @__PURE__ */ new Set(["scheduled", "confirmed", "in_progress"]);
+          if (!allowed.has(prior.status)) {
+            return res.status(409).json({ error: `Cannot start a ${prior.status} job` });
+          }
+        }
         const job = await storage.updateJob(req.params.id, {
           status: "in_progress"
         });
         if (!job) {
           return res.status(404).json({ error: "Job not found" });
         }
-        if (prior?.status !== "in_progress") {
+        if (prior.status !== "in_progress") {
           dispatchJobStatusEmail(job, "in_progress").catch(
             (e) => console.error("job.status_changed dispatch error:", e)
           );
@@ -17190,6 +17888,404 @@ Respond with JSON only:
       } catch (error) {
         console.error("Generate payment link error:", error);
         res.status(500).json({ error: error.message || "Failed to generate payment link" });
+      }
+    }
+  );
+  function normalizeEstimateLineItems(input) {
+    const items = (Array.isArray(input) ? input : []).map((raw) => {
+      const name = String(raw.name || raw.description || "Service").slice(0, 200);
+      const description = raw.description ? String(raw.description) : null;
+      const qty = Number(raw.quantity) || 1;
+      const unitPrice = Number(raw.unitPrice) || 0;
+      const unitPriceCents = Math.round(unitPrice * 100);
+      const amountCents = Math.round(qty * unitPriceCents);
+      return { name, description, quantity: qty, unitPriceCents, amountCents };
+    });
+    const subtotalCents = items.reduce((s, it) => s + it.amountCents, 0);
+    return { items, subtotalCents };
+  }
+  function generateEstimateToken() {
+    const { randomBytes } = __require("crypto");
+    return randomBytes(32).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+  function publicEstimateUrl(req, token) {
+    const proto = req.headers["x-forwarded-proto"] || req.protocol || "https";
+    const host = req.headers.host;
+    return `${proto}://${host}/estimates/${token}`;
+  }
+  app2.get(
+    "/api/provider/:providerId/estimates",
+    requireAuth,
+    async (req, res) => {
+      try {
+        if (!await assertProviderOwnership(req, req.params.providerId, res)) return;
+        const rows = await storage.getEstimates(req.params.providerId);
+        res.json({ estimates: rows });
+      } catch (error) {
+        console.error("Get estimates error:", error);
+        res.status(500).json({ error: "Failed to get estimates" });
+      }
+    }
+  );
+  app2.get(
+    "/api/clients/:clientId/estimates",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const client = await storage.getClient(req.params.clientId);
+        if (!client) return res.status(404).json({ error: "Client not found" });
+        if (!await assertProviderOwnership(req, client.providerId, res)) return;
+        const rows = await storage.getEstimatesByClient(req.params.clientId);
+        res.json({ estimates: rows });
+      } catch (error) {
+        console.error("Get client estimates error:", error);
+        res.status(500).json({ error: "Failed to get estimates" });
+      }
+    }
+  );
+  app2.get(
+    "/api/provider/:providerId/next-estimate-number",
+    requireAuth,
+    async (req, res) => {
+      try {
+        if (!await assertProviderOwnership(req, req.params.providerId, res)) return;
+        const estimateNumber = await storage.getNextEstimateNumber(req.params.providerId);
+        res.json({ estimateNumber });
+      } catch (error) {
+        console.error("Get next estimate number error:", error);
+        res.status(500).json({ error: "Failed to get estimate number" });
+      }
+    }
+  );
+  app2.get(
+    "/api/estimates/:id",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const authUserId = req.authenticatedUserId;
+        const estimate = await storage.getEstimate(req.params.id);
+        if (!estimate) return res.status(404).json({ error: "Estimate not found" });
+        const providerRecord = await storage.getProviderByUserId(authUserId);
+        const isProvider = providerRecord && estimate.providerId === providerRecord.id;
+        const isHomeowner = estimate.homeownerUserId === authUserId;
+        if (!isProvider && !isHomeowner) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+        const lineItems = await storage.getEstimateLineItems(estimate.id);
+        res.json({ estimate, lineItems });
+      } catch (error) {
+        console.error("Get estimate error:", error);
+        res.status(500).json({ error: "Failed to get estimate" });
+      }
+    }
+  );
+  app2.post(
+    "/api/estimates",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const providerId = req.body.providerId;
+        if (!providerId) return res.status(400).json({ error: "providerId is required" });
+        if (!await assertProviderOwnership(req, providerId, res)) return;
+        if (!await checkSubscriptionGate(providerId, res)) return;
+        const estimateNumber = req.body.estimateNumber || await storage.getNextEstimateNumber(providerId);
+        const { items, subtotalCents } = normalizeEstimateLineItems(req.body.lineItems);
+        const data = {
+          providerId,
+          clientId: req.body.clientId || null,
+          homeownerUserId: req.body.homeownerUserId || null,
+          jobId: req.body.jobId || null,
+          estimateNumber,
+          currency: "usd",
+          subtotalCents,
+          taxCents: 0,
+          discountCents: 0,
+          totalCents: subtotalCents,
+          status: "draft",
+          notes: req.body.notes || null,
+          expiresAt: req.body.expiresAt ? new Date(req.body.expiresAt) : null
+        };
+        const parsed = insertEstimateSchema.safeParse(data);
+        if (!parsed.success) {
+          return res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
+        }
+        const created = await storage.createEstimate({
+          ...parsed.data,
+          publicToken: generateEstimateToken()
+        });
+        await storage.replaceEstimateLineItems(created.id, items);
+        res.status(201).json({ estimate: created });
+      } catch (error) {
+        console.error("Create estimate error:", error);
+        res.status(500).json({ error: "Failed to create estimate" });
+      }
+    }
+  );
+  app2.put(
+    "/api/estimates/:id",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const existing = await storage.getEstimate(req.params.id);
+        if (!existing) return res.status(404).json({ error: "Estimate not found" });
+        if (!await assertProviderOwnership(req, existing.providerId, res)) return;
+        const TERMINAL = /* @__PURE__ */ new Set(["accepted", "declined", "expired", "converted"]);
+        if (TERMINAL.has(existing.status)) {
+          return res.status(409).json({
+            error: `Estimate is ${existing.status} and can no longer be edited`
+          });
+        }
+        const update = {};
+        if (req.body.notes !== void 0) update.notes = req.body.notes;
+        if (req.body.expiresAt !== void 0) {
+          update.expiresAt = req.body.expiresAt ? new Date(req.body.expiresAt) : null;
+        }
+        if (Array.isArray(req.body.lineItems)) {
+          const { items, subtotalCents } = normalizeEstimateLineItems(req.body.lineItems);
+          update.subtotalCents = subtotalCents;
+          update.totalCents = subtotalCents;
+          await storage.replaceEstimateLineItems(existing.id, items);
+        }
+        const updated = await storage.updateEstimate(existing.id, update);
+        res.json({ estimate: updated });
+      } catch (error) {
+        console.error("Update estimate error:", error);
+        res.status(500).json({ error: "Failed to update estimate" });
+      }
+    }
+  );
+  app2.delete(
+    "/api/estimates/:id",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const existing = await storage.getEstimate(req.params.id);
+        if (!existing) return res.status(404).json({ error: "Estimate not found" });
+        if (!await assertProviderOwnership(req, existing.providerId, res)) return;
+        if (existing.status !== "draft") {
+          return res.status(409).json({ error: "Only draft estimates can be deleted" });
+        }
+        await storage.deleteEstimate(existing.id);
+        res.status(204).end();
+      } catch (error) {
+        console.error("Delete estimate error:", error);
+        res.status(500).json({ error: "Failed to delete estimate" });
+      }
+    }
+  );
+  app2.post(
+    "/api/estimates/:id/send",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const existing = await storage.getEstimate(req.params.id);
+        if (!existing) return res.status(404).json({ error: "Estimate not found" });
+        if (!await assertProviderOwnership(req, existing.providerId, res)) return;
+        if (existing.status !== "draft" && existing.status !== "sent" && existing.status !== "viewed") {
+          return res.status(409).json({
+            error: `Cannot send estimate in status ${existing.status}`
+          });
+        }
+        const updated = await storage.updateEstimate(existing.id, {
+          status: "sent",
+          sentAt: existing.sentAt ?? /* @__PURE__ */ new Date()
+        });
+        let emailSent = false;
+        let emailError;
+        try {
+          if (existing.clientId) {
+            const client = await storage.getClient(existing.clientId);
+            const provider = await storage.getProvider(existing.providerId);
+            if (client?.email && provider) {
+              const lineItems = await storage.getEstimateLineItems(existing.id);
+              const result = await dispatchWithResult("estimate.sent", {
+                clientEmail: client.email,
+                clientName: [client.firstName, client.lastName].filter(Boolean).join(" ") || "Client",
+                providerName: provider.businessName || "Service Provider",
+                invoiceNumber: existing.estimateNumber,
+                // reused field
+                amount: (existing.totalCents ?? 0) / 100,
+                dueDate: existing.expiresAt ? new Date(existing.expiresAt).toLocaleDateString() : void 0,
+                lineItems: lineItems.map((li) => ({
+                  description: li.name,
+                  quantity: Number(li.quantity ?? 1),
+                  unitPrice: (li.unitPriceCents ?? 0) / 100,
+                  total: (li.amountCents ?? 0) / 100
+                })),
+                paymentLink: publicEstimateUrl(req, existing.publicToken),
+                relatedRecordType: "estimate",
+                relatedRecordId: existing.id
+              });
+              emailSent = result.emailSent;
+              emailError = result.emailError;
+            }
+          }
+        } catch (e) {
+          emailError = e?.message || "Failed to send estimate email";
+        }
+        res.json({
+          estimate: updated,
+          viewerUrl: publicEstimateUrl(req, existing.publicToken),
+          emailSent,
+          emailError
+        });
+      } catch (error) {
+        console.error("Send estimate error:", error);
+        res.status(500).json({ error: "Failed to send estimate" });
+      }
+    }
+  );
+  app2.get(
+    "/api/estimates/public/:token",
+    async (req, res) => {
+      try {
+        const estimate = await storage.getEstimateByPublicToken(req.params.token);
+        if (!estimate) return res.status(404).json({ error: "Estimate not found" });
+        if (estimate.status === "sent") {
+          await storage.updateEstimate(estimate.id, {
+            status: "viewed",
+            viewedAt: /* @__PURE__ */ new Date()
+          });
+        }
+        const lineItems = await storage.getEstimateLineItems(estimate.id);
+        const provider = await storage.getProvider(estimate.providerId);
+        res.json({
+          estimate,
+          lineItems,
+          providerName: provider?.businessName || "Service Provider"
+        });
+      } catch (error) {
+        console.error("Public estimate fetch error:", error);
+        res.status(500).json({ error: "Failed to load estimate" });
+      }
+    }
+  );
+  app2.post(
+    "/api/estimates/public/:token/decision",
+    async (req, res) => {
+      try {
+        const decision = String(req.body.decision || "");
+        if (decision !== "accepted" && decision !== "declined") {
+          return res.status(400).json({ error: "decision must be 'accepted' or 'declined'" });
+        }
+        const estimate = await storage.getEstimateByPublicToken(req.params.token);
+        if (!estimate) return res.status(404).json({ error: "Estimate not found" });
+        if (estimate.status === "accepted" || estimate.status === "declined" || estimate.status === "converted") {
+          return res.status(409).json({ error: `Estimate already ${estimate.status}` });
+        }
+        if (estimate.expiresAt && new Date(estimate.expiresAt) < /* @__PURE__ */ new Date()) {
+          await storage.updateEstimate(estimate.id, {
+            status: "expired",
+            decidedAt: /* @__PURE__ */ new Date()
+          });
+          return res.status(410).json({ error: "Estimate has expired" });
+        }
+        const lineItems = await storage.getEstimateLineItems(estimate.id);
+        const updated = await storage.updateEstimate(estimate.id, {
+          status: decision,
+          decidedAt: /* @__PURE__ */ new Date(),
+          acceptedSnapshot: JSON.stringify({
+            lineItems,
+            totalCents: estimate.totalCents
+          })
+        });
+        try {
+          const provider = await storage.getProvider(estimate.providerId);
+          const providerUser = provider ? await storage.getUser(provider.userId) : null;
+          const client = estimate.clientId ? await storage.getClient(estimate.clientId) : null;
+          if (providerUser?.email) {
+            dispatch(decision === "accepted" ? "estimate.accepted" : "estimate.declined", {
+              providerEmail: providerUser.email,
+              providerName: provider?.businessName || "there",
+              clientName: client ? [client.firstName, client.lastName].filter(Boolean).join(" ") || "Your client" : "Your client",
+              invoiceNumber: estimate.estimateNumber,
+              amount: (estimate.totalCents ?? 0) / 100,
+              relatedRecordType: "estimate",
+              relatedRecordId: estimate.id
+            }).catch((e) => console.error("estimate decision dispatch:", e));
+            if (provider) {
+              dispatchNotification(
+                provider.userId,
+                decision === "accepted" ? "Estimate accepted" : "Estimate declined",
+                `${client ? [client.firstName, client.lastName].filter(Boolean).join(" ") || "A client" : "A client"} ${decision} estimate ${estimate.estimateNumber}.`,
+                decision === "accepted" ? "estimate_accepted" : "estimate_declined",
+                { type: decision === "accepted" ? "estimate_accepted" : "estimate_declined", estimateId: estimate.id, screen: "EstimateDetail", params: { estimateId: estimate.id } },
+                "invoices"
+              ).catch((e) => console.error("estimate notification:", e));
+            }
+          }
+        } catch (e) {
+          console.error("Estimate decision side-effects failed:", e);
+        }
+        res.json({ estimate: updated });
+      } catch (error) {
+        console.error("Estimate decision error:", error);
+        res.status(500).json({ error: "Failed to record decision" });
+      }
+    }
+  );
+  app2.post(
+    "/api/estimates/:id/convert",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const existing = await storage.getEstimate(req.params.id);
+        if (!existing) return res.status(404).json({ error: "Estimate not found" });
+        if (!await assertProviderOwnership(req, existing.providerId, res)) return;
+        if (existing.status !== "accepted") {
+          return res.status(409).json({
+            error: "Only accepted estimates can be converted to an invoice"
+          });
+        }
+        if (existing.convertedInvoiceId) {
+          const invoice2 = await storage.getInvoice(existing.convertedInvoiceId);
+          return res.json({ invoice: invoice2, estimate: existing });
+        }
+        const lineItems = await storage.getEstimateLineItems(existing.id);
+        const lineItemsJson = JSON.stringify(
+          lineItems.map((li) => ({
+            description: li.name,
+            quantity: Number(li.quantity ?? 1),
+            unitPrice: (li.unitPriceCents ?? 0) / 100,
+            total: (li.amountCents ?? 0) / 100
+          }))
+        );
+        const subtotalCents = existing.totalCents ?? 0;
+        const plan = await getProviderPlan(existing.providerId);
+        const fee = calculatePlatformFee(
+          subtotalCents,
+          plan.platformFeePercent || "3.00",
+          plan.platformFeeFixedCents || 0
+        );
+        const invoiceNumber = await storage.getNextInvoiceNumber(existing.providerId);
+        const invoice = await storage.createInvoice({
+          providerId: existing.providerId,
+          clientId: existing.clientId,
+          homeownerUserId: existing.homeownerUserId,
+          jobId: existing.jobId,
+          invoiceNumber,
+          currency: "usd",
+          subtotalCents,
+          taxCents: 0,
+          discountCents: 0,
+          platformFeeCents: fee.totalCents,
+          totalCents: subtotalCents,
+          amount: (subtotalCents / 100).toFixed(2),
+          total: (subtotalCents / 100).toFixed(2),
+          status: "draft",
+          notes: existing.notes,
+          lineItems: lineItemsJson
+        });
+        await db.update(invoices).set({ estimateId: existing.id }).where(eq10(invoices.id, invoice.id));
+        const updated = await storage.updateEstimate(existing.id, {
+          status: "converted",
+          convertedAt: /* @__PURE__ */ new Date(),
+          convertedInvoiceId: invoice.id
+        });
+        res.status(201).json({ invoice, estimate: updated });
+      } catch (error) {
+        console.error("Convert estimate error:", error);
+        res.status(500).json({ error: "Failed to convert estimate" });
       }
     }
   );
@@ -21642,6 +22738,19 @@ function configureExpoAndLanding(app2) {
   registerRedirectPages(app2);
   app2.get("/book/:slug", (req, res) => {
     res.redirect(301, `/providers/${req.params.slug}`);
+  });
+  app2.get("/estimates/:token", async (req, res) => {
+    try {
+      const { renderEstimateViewer: renderEstimateViewer2 } = await Promise.resolve().then(() => (init_estimateViewer(), estimateViewer_exports));
+      const { html, status } = await renderEstimateViewer2(req.params.token);
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.status(status).send(html);
+    } catch (err) {
+      console.error("Estimate viewer render error:", err);
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.status(500).send("<!DOCTYPE html><html><body><h1>Internal Server Error</h1></body></html>");
+    }
   });
   app2.get("/providers/:slug", async (req, res) => {
     try {

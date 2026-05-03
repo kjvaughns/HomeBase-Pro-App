@@ -1243,6 +1243,65 @@ async function calculateAndPersistHouseFaxScore(
   return score;
 }
 
+// ─── Crew portal helpers (Task #328) ───────────────────────────────────────
+// Module-scoped because both /login and /me need them, and they predate the
+// registerRoutes closure. They use the singleton db import at the top of file.
+
+type CrewMembership = {
+  providerId: string;
+  providerName: string;
+  crewMemberId: string;
+};
+
+async function getCrewMembershipsForUser(
+  userId: string,
+): Promise<CrewMembership[]> {
+  try {
+    const rows = await db
+      .select({
+        crewMemberId: crewMembers.id,
+        providerId: crewMembers.providerId,
+        providerName: providers.businessName,
+      })
+      .from(crewMembers)
+      .innerJoin(providers, eq(providers.id, crewMembers.providerId))
+      .where(
+        and(
+          eq(crewMembers.invitedUserId, userId),
+          eq(crewMembers.isActive, true),
+        ),
+      );
+    return rows.map((r) => ({
+      crewMemberId: r.crewMemberId,
+      providerId: r.providerId,
+      providerName: r.providerName ?? "Provider",
+    }));
+  } catch (e) {
+    console.error("getCrewMembershipsForUser error:", e);
+    return [];
+  }
+}
+
+async function autoLinkCrewByEmail(
+  userId: string,
+  email: string,
+): Promise<void> {
+  if (!email) return;
+  try {
+    await db
+      .update(crewMembers)
+      .set({ invitedUserId: userId })
+      .where(
+        and(
+          isNull(crewMembers.invitedUserId),
+          sql`lower(${crewMembers.email}) = lower(${email})`,
+        ),
+      );
+  } catch (e) {
+    console.error("autoLinkCrewByEmail error:", e);
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Only seed in development — never in production to prevent demo data leakage
   if (process.env.NODE_ENV !== "production") {
@@ -1657,7 +1716,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      res.json({ user: formatUserResponse(user), providerProfile: enrichedProfile, token });
+      // Task #328: link any pending crew_members rows whose email matches
+      // this account, then load all crew memberships so the client can offer
+      // "Switch to Crew" without a separate round trip.
+      await autoLinkCrewByEmail(user.id, user.email);
+      const crewMemberships = await getCrewMembershipsForUser(user.id);
+
+      res.json({
+        user: formatUserResponse(user),
+        providerProfile: enrichedProfile,
+        crewMemberships,
+        token,
+      });
     } catch (error) {
       console.error("Login error:", error);
       res.status(500).json({ error: "Failed to login" });
@@ -1689,7 +1759,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isPartner: planRow?.isPartner ?? false,
         };
       }
-      res.json({ user: formatUserResponse(user), providerProfile: enrichedProfile });
+      // Task #328: include crew memberships so a refresh / cold launch
+      // restores the "Switch to Crew" UX and re-validates the active scope.
+      await autoLinkCrewByEmail(user.id, user.email);
+      const crewMemberships = await getCrewMembershipsForUser(user.id);
+
+      res.json({
+        user: formatUserResponse(user),
+        providerProfile: enrichedProfile,
+        crewMemberships,
+      });
     } catch (error) {
       console.error("Auth me error:", error);
       res.status(500).json({ error: "Failed to get user" });
@@ -3062,6 +3141,29 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
     },
   );
 
+  // GET /api/jobs/:id/photos - list job photos (provider OR assigned crew).
+  app.get(
+    "/api/jobs/:id/photos",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const gate = await requireCrewOrProviderForJob(req, req.params.id, res);
+        if (!gate) return;
+        const [entry] = await db
+          .select({ photos: housefaxEntries.photos })
+          .from(housefaxEntries)
+          .where(eq(housefaxEntries.jobId, gate.job.id));
+        const photos = Array.isArray(entry?.photos)
+          ? (entry!.photos as string[])
+          : [];
+        res.json({ photos });
+      } catch (error) {
+        console.error("Get job photos error:", error);
+        res.status(500).json({ error: "Failed to load photos" });
+      }
+    },
+  );
+
   // POST /api/jobs/:id/photos - add photos to a job's housefax entry (provider only)
   // Accepts base64-encoded images, saves to /uploads/photos/, stores HTTPS URLs in DB
   app.post(
@@ -3077,17 +3179,10 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
       ];
 
       try {
-        const authUserId = req.authenticatedUserId!;
-        const job = await storage.getJob(req.params.id);
-        if (!job) return res.status(404).json({ error: "Job not found" });
-
-        // Only allow the assigned provider to upload photos
-        const providerProfile = await storage.getProviderByUserId(authUserId);
-        if (!providerProfile || job.providerId !== providerProfile.id) {
-          return res.status(403).json({
-            error: "Only the assigned provider can upload photos for this job",
-          });
-        }
+        // Task #328: provider OR assigned crew member may upload field photos.
+        const gate = await requireCrewOrProviderForJob(req, req.params.id, res);
+        if (!gate) return;
+        const job = gate.job;
 
         const { photos } = req.body as { photos: string[] };
         if (!Array.isArray(photos) || photos.length === 0) {
@@ -8008,6 +8103,51 @@ Respond with JSON only:
 
   // ============ CREW ROUTES (Task #302) ============
 
+  // Task #328: gate handler for endpoints that may be called by EITHER the
+  // provider owner OR the assigned crew member. Returns the job + the caller
+  // role; null means access denied (response already written).
+  async function requireCrewOrProviderForJob(
+    req: Request,
+    jobId: string,
+    res: Response,
+  ): Promise<
+    | { job: Job; role: "provider" | "crew"; crewMemberId?: string }
+    | null
+  > {
+    const authUserId = req.authenticatedUserId!;
+    const job = await storage.getJob(jobId);
+    if (!job) {
+      res.status(404).json({ error: "Job not found" });
+      return null;
+    }
+    const providerProfile = await storage.getProviderByUserId(authUserId);
+    if (providerProfile && providerProfile.id === job.providerId) {
+      return { job, role: "provider" };
+    }
+    if (job.assignedCrewMemberId) {
+      const [crew] = await db
+        .select({
+          id: crewMembers.id,
+          providerId: crewMembers.providerId,
+          invitedUserId: crewMembers.invitedUserId,
+          isActive: crewMembers.isActive,
+        })
+        .from(crewMembers)
+        .where(eq(crewMembers.id, job.assignedCrewMemberId))
+        .catch(() => [null]);
+      if (
+        crew &&
+        crew.isActive &&
+        crew.invitedUserId === authUserId &&
+        crew.providerId === job.providerId
+      ) {
+        return { job, role: "crew", crewMemberId: crew.id };
+      }
+    }
+    res.status(403).json({ error: "Forbidden" });
+    return null;
+  }
+
   // Helper: validate that a crew member exists and belongs to the given
   // provider. Returns the row or null.
   async function loadCrewForProvider(
@@ -8125,6 +8265,205 @@ Respond with JSON only:
       } catch (error) {
         console.error("Delete crew member error:", error);
         res.status(500).json({ error: "Failed to delete crew member" });
+      }
+    },
+  );
+
+  // ============ CREW PORTAL (Task #328) ============
+  // Email-invite + per-crew-member job views so a crew member can sign in
+  // with their own HomeBase account and work the schedule from a minimized
+  // 3-tab portal. "Crew" is a capability flag (crewMembers.invitedUserId),
+  // not a user role; one user may simultaneously be homeowner, provider,
+  // and crew of N providers.
+
+  app.post(
+    "/api/crew/:id/invite",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const crew = await storage.getCrewMember(req.params.id);
+        if (!crew)
+          return res.status(404).json({ error: "Crew member not found" });
+        if (!(await assertProviderOwnership(req, crew.providerId, res)))
+          return;
+        if (!crew.email) {
+          return res
+            .status(400)
+            .json({ error: "Crew member has no email on file" });
+        }
+        const [provider] = await db
+          .select({
+            id: providers.id,
+            businessName: providers.businessName,
+          })
+          .from(providers)
+          .where(eq(providers.id, crew.providerId));
+        if (!provider) {
+          return res.status(404).json({ error: "Provider not found" });
+        }
+
+        const { JWT_SECRET } = await import("./auth");
+        const jwt = await import("jsonwebtoken");
+        const INVITE_SECRET = `${JWT_SECRET}:crew-invite`;
+        const inviteToken = jwt.default.sign(
+          {
+            purpose: "crew_invite",
+            crewMemberId: crew.id,
+            providerId: crew.providerId,
+            email: crew.email,
+          },
+          INVITE_SECRET,
+          { expiresIn: "14d" },
+        );
+
+        const appOrigin =
+          process.env.APP_ORIGIN ||
+          (process.env.EXPO_PUBLIC_DOMAIN
+            ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
+            : "https://home-base-pro-app.replit.app");
+        const acceptUrl = `${appOrigin}/crew-invite?token=${inviteToken}`;
+
+        const { sendCrewInviteEmail } = await import("./emailService");
+        const result = await sendCrewInviteEmail(
+          crew.email,
+          crew.name,
+          provider.businessName,
+          acceptUrl,
+        );
+        if (!result.success) {
+          return res
+            .status(502)
+            .json({ error: result.error || "Failed to send invite email" });
+        }
+        res.json({ success: true });
+      } catch (error) {
+        console.error("Send crew invite error:", error);
+        res.status(500).json({ error: "Failed to send invite" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/crew/invites/accept",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const { token } = req.body;
+        if (!token || typeof token !== "string") {
+          return res.status(400).json({ error: "Invite token is required" });
+        }
+        const { JWT_SECRET } = await import("./auth");
+        const jwt = await import("jsonwebtoken");
+        const INVITE_SECRET = `${JWT_SECRET}:crew-invite`;
+        let decoded: any;
+        try {
+          decoded = jwt.default.verify(token, INVITE_SECRET);
+        } catch {
+          return res
+            .status(400)
+            .json({ error: "Invalid or expired invite link." });
+        }
+        if (
+          decoded.purpose !== "crew_invite" ||
+          !decoded.crewMemberId ||
+          !decoded.email
+        ) {
+          return res.status(400).json({ error: "Invalid invite token" });
+        }
+        const authUserId = req.authenticatedUserId!;
+        const user = await storage.getUser(authUserId);
+        if (!user) return res.status(401).json({ error: "Not signed in" });
+        // Email match is required: the invite is bound to the email the
+        // provider added to the roster row.
+        if (user.email.toLowerCase() !== String(decoded.email).toLowerCase()) {
+          return res.status(403).json({
+            error:
+              "This invite is for a different email address. Sign in with the invited email and try again.",
+          });
+        }
+        const crew = await storage.getCrewMember(decoded.crewMemberId);
+        if (!crew)
+          return res.status(404).json({ error: "Crew row no longer exists" });
+        if (crew.invitedUserId && crew.invitedUserId !== authUserId) {
+          return res
+            .status(409)
+            .json({ error: "This invite is already linked to another account" });
+        }
+        if (!crew.invitedUserId) {
+          await storage.updateCrewMember(crew.id, {
+            invitedUserId: authUserId,
+          });
+        }
+        const memberships = await getCrewMembershipsForUser(authUserId);
+        res.json({ success: true, crewMemberships: memberships });
+      } catch (error) {
+        console.error("Accept crew invite error:", error);
+        res.status(500).json({ error: "Failed to accept invite" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/crew/me/memberships",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const userId = req.authenticatedUserId!;
+        const user = await storage.getUser(userId);
+        if (user) await autoLinkCrewByEmail(userId, user.email);
+        const memberships = await getCrewMembershipsForUser(userId);
+        res.json({ crewMemberships: memberships });
+      } catch (error) {
+        console.error("Get crew memberships error:", error);
+        res.status(500).json({ error: "Failed to load crew memberships" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/crew/me/jobs",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const userId = req.authenticatedUserId!;
+        const providerId =
+          typeof req.query.providerId === "string"
+            ? req.query.providerId
+            : undefined;
+        if (!providerId) {
+          return res.status(400).json({ error: "providerId is required" });
+        }
+        // Confirm the caller is the linked + active crew member of this
+        // provider before exposing any job rows.
+        const [crew] = await db
+          .select({ id: crewMembers.id })
+          .from(crewMembers)
+          .where(
+            and(
+              eq(crewMembers.providerId, providerId),
+              eq(crewMembers.invitedUserId, userId),
+              eq(crewMembers.isActive, true),
+            ),
+          );
+        if (!crew) {
+          return res
+            .status(403)
+            .json({ error: "You are not on this provider's crew" });
+        }
+        const rows = await db
+          .select()
+          .from(jobs)
+          .where(
+            and(
+              eq(jobs.providerId, providerId),
+              eq(jobs.assignedCrewMemberId, crew.id),
+            ),
+          )
+          .orderBy(desc(jobs.scheduledDate));
+        res.json({ jobs: rows });
+      } catch (error) {
+        console.error("Get crew jobs error:", error);
+        res.status(500).json({ error: "Failed to load crew jobs" });
       }
     },
   );
@@ -8680,7 +9019,8 @@ Respond with JSON only:
         if (!job) {
           return res.status(404).json({ error: "Job not found" });
         }
-        // Allow access only to the provider who owns the job or the homeowner linked via appointment
+        // Allow access to the provider who owns the job, the homeowner linked
+        // via appointment, or an assigned active crew member (Task #328).
         const providerRecord = await storage.getProviderByUserId(req.authenticatedUserId!);
         const isProvider = providerRecord != null && job.providerId === providerRecord.id;
         let isHomeowner = false;
@@ -8688,7 +9028,25 @@ Respond with JSON only:
           const linkedAppointment = await storage.getAppointment(job.appointmentId);
           isHomeowner = linkedAppointment?.userId === req.authenticatedUserId;
         }
-        if (!isProvider && !isHomeowner) {
+        let isCrew = false;
+        if (!isProvider && !isHomeowner && job.assignedCrewMemberId) {
+          const [crew] = await db
+            .select({
+              invitedUserId: crewMembers.invitedUserId,
+              isActive: crewMembers.isActive,
+              providerId: crewMembers.providerId,
+            })
+            .from(crewMembers)
+            .where(eq(crewMembers.id, job.assignedCrewMemberId))
+            .catch(() => [null]);
+          isCrew = !!(
+            crew &&
+            crew.isActive &&
+            crew.invitedUserId === req.authenticatedUserId &&
+            crew.providerId === job.providerId
+          );
+        }
+        if (!isProvider && !isHomeowner && !isCrew) {
           return res.status(403).json({ error: "Access denied" });
         }
         let isRecurring = false;
@@ -9544,14 +9902,16 @@ Respond with JSON only:
     requireAuth,
     async (req: Request<IdParams>, res: Response) => {
       try {
-        const existing = await storage.getJob(req.params.id);
-        if (!existing) return res.status(404).json({ error: "Job not found" });
-        // Ownership: verify the requesting user owns the provider that issued this job
-        if (!(await assertProviderOwnership(req, existing.providerId, res)))
-          return;
+        // Task #328: provider owner OR assigned crew member may PUT this row.
+        // Crew callers are restricted below to {status, notes} so they cannot
+        // reschedule, reprice, or reassign jobs from the field.
+        const gate = await requireCrewOrProviderForJob(req, req.params.id, res);
+        if (!gate) return;
+        const existing = gate.job;
+        const isCrewCaller = gate.role === "crew";
 
         // Allowlist mutable fields to prevent mass-assignment
-        const {
+        let {
           title,
           description,
           status,
@@ -9563,6 +9923,29 @@ Respond with JSON only:
           address,
           assignedCrewMemberId,
         } = req.body;
+        if (isCrewCaller) {
+          // Strip every field crew may not change. Only status + notes survive.
+          title = undefined;
+          description = undefined;
+          scheduledDate = undefined;
+          scheduledTime = undefined;
+          estimatedPrice = undefined;
+          finalPrice = undefined;
+          address = undefined;
+          assignedCrewMemberId = undefined;
+          // Crew may only push the job between in-flight states they actually
+          // perform. Anything else (cancellation, weather hold, scheduling
+          // changes) requires the provider.
+          const ALLOWED_CREW_STATUSES = new Set([
+            "in_progress",
+            "completed",
+          ]);
+          if (status !== undefined && !ALLOWED_CREW_STATUSES.has(status)) {
+            return res.status(403).json({
+              error: "Crew members may only mark jobs in_progress or completed",
+            });
+          }
+        }
         // Transitions into/out of weather_held must go through the dedicated
         // /weather-hold and /restore endpoints so the hold metadata,
         // appointment mirroring, and customer notification stay in sync.
@@ -9948,11 +10331,13 @@ Respond with JSON only:
     requireAuth,
     async (req: Request<IdParams>, res: Response) => {
       try {
-        const { finalPrice } = req.body;
-        const prior = await storage.getJob(req.params.id);
-        if (!prior) return res.status(404).json({ error: "Job not found" });
-        if (!(await assertProviderOwnership(req, prior.providerId, res)))
-          return;
+        // Task #328: provider owner OR assigned crew member.
+        const gate = await requireCrewOrProviderForJob(req, req.params.id, res);
+        if (!gate) return;
+        const prior = gate.job;
+        // Crew callers can mark complete but cannot set/override pricing.
+        const finalPrice =
+          gate.role === "crew" ? undefined : req.body.finalPrice;
         const job = await storage.completeJob(req.params.id, finalPrice);
         if (!job) {
           return res.status(404).json({ error: "Job not found" });
@@ -10067,10 +10452,20 @@ Respond with JSON only:
     requireAuth,
     async (req: Request<IdParams>, res: Response) => {
       try {
-        const prior = await storage.getJob(req.params.id);
-        if (!prior) return res.status(404).json({ error: "Job not found" });
-        if (!(await assertProviderOwnership(req, prior.providerId, res)))
-          return;
+        // Task #328: provider OR assigned crew member may start a job.
+        const gate = await requireCrewOrProviderForJob(req, req.params.id, res);
+        if (!gate) return;
+        const prior = gate.job;
+        // Crew may only start jobs that are in a pre-start state. Providers
+        // retain full latitude (e.g. restarting a completed job).
+        if (gate.role === "crew") {
+          const allowed = new Set(["scheduled", "confirmed", "in_progress"]);
+          if (!allowed.has(prior.status)) {
+            return res
+              .status(409)
+              .json({ error: `Cannot start a ${prior.status} job` });
+          }
+        }
         const job = await storage.updateJob(req.params.id, {
           status: "in_progress",
         });
@@ -10078,7 +10473,7 @@ Respond with JSON only:
           return res.status(404).json({ error: "Job not found" });
         }
         // Fire job status change email only if status actually transitioned (prevents duplicates)
-        if (prior?.status !== "in_progress") {
+        if (prior.status !== "in_progress") {
           dispatchJobStatusEmail(job, "in_progress").catch((e: unknown) =>
             console.error("job.status_changed dispatch error:", e),
           );

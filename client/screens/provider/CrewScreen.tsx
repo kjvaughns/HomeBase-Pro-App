@@ -113,6 +113,17 @@ export default function CrewScreen() {
     onError: (e: Error) => setError(e.message),
   });
 
+  const inviteMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest("POST", `/api/crew/${id}/invite`).then((r) => r.json()),
+    onSuccess: () => {
+      invalidate();
+      Alert.alert("Invite sent", "We've emailed your crew member an invite link.");
+    },
+    onError: (e: Error) =>
+      Alert.alert("Couldn't send invite", e.message || "Please try again."),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) =>
       apiRequest("DELETE", `/api/crew/${id}`).then((r) => r.json()),
@@ -235,7 +246,24 @@ export default function CrewScreen() {
             <GlassCard key={m.id} style={styles.row}>
               <View style={[styles.colorDot, { backgroundColor: m.color }]} />
               <View style={{ flex: 1 }}>
-                <ThemedText style={styles.rowName}>{m.name}</ThemedText>
+                <View style={styles.rowNameRow}>
+                  <ThemedText style={styles.rowName}>{m.name}</ThemedText>
+                  {m.invitedUserId ? (
+                    <View
+                      style={[
+                        styles.linkedBadge,
+                        { backgroundColor: Colors.accentLight },
+                      ]}
+                    >
+                      <Feather name="check" size={11} color={Colors.accent} />
+                      <ThemedText
+                        style={[styles.linkedText, { color: Colors.accent }]}
+                      >
+                        Linked
+                      </ThemedText>
+                    </View>
+                  ) : null}
+                </View>
                 {m.phone || m.email ? (
                   <ThemedText
                     style={[styles.rowSub, { color: theme.textSecondary }]}
@@ -245,6 +273,17 @@ export default function CrewScreen() {
                   </ThemedText>
                 ) : null}
               </View>
+              {m.email && !m.invitedUserId ? (
+                <Pressable
+                  onPress={() => inviteMutation.mutate(m.id)}
+                  hitSlop={10}
+                  style={styles.iconBtn}
+                  disabled={inviteMutation.isPending}
+                  testID={`crew-invite-${m.id}`}
+                >
+                  <Feather name="send" size={16} color={Colors.accent} />
+                </Pressable>
+              ) : null}
               <Pressable
                 onPress={() => openEdit(m)}
                 hitSlop={10}
@@ -413,8 +452,26 @@ const styles = StyleSheet.create({
     height: 14,
     borderRadius: 7,
   },
+  rowNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   rowName: {
     ...Typography.body,
+    fontWeight: "600",
+  },
+  linkedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.sm,
+  },
+  linkedText: {
+    ...Typography.caption,
+    fontSize: 11,
     fontWeight: "600",
   },
   rowSub: {

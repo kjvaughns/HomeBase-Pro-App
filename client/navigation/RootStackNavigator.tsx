@@ -6,6 +6,8 @@ import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 import HomeownerTabNavigator, { type HomeownerTabParamList } from "@/navigation/HomeownerTabNavigator";
 import ProviderTabNavigator, { type ProviderTabParamList } from "@/navigation/ProviderTabNavigator";
+import CrewTabNavigator, { type CrewTabParamList } from "@/navigation/CrewTabNavigator";
+import CrewJobDetailScreen from "@/screens/crew/CrewJobDetailScreen";
 import BecomeProviderScreen from "@/screens/BecomeProviderScreen";
 import FirstLaunchScreen from "@/screens/onboarding/FirstLaunchScreen";
 import AccountTypeSelectionScreen from "@/screens/onboarding/AccountTypeSelectionScreen";
@@ -88,6 +90,7 @@ export type RootStackParamList = {
   Main:
     | NavigatorScreenParams<HomeownerTabParamList>
     | NavigatorScreenParams<ProviderTabParamList>
+    | NavigatorScreenParams<CrewTabParamList>
     | undefined;
   BecomeProvider: undefined;
   AIChat: undefined;
@@ -180,6 +183,7 @@ export type RootStackParamList = {
   Subscription: undefined;
   AdminPartners: undefined;
   Crew: undefined;
+  CrewJobDetail: { jobId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -187,7 +191,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export default function RootStackNavigator() {
   const screenOptions = useScreenOptions();
   const { theme } = useTheme();
-  const { isAuthenticated, isHydrated, activeRole, preferredRole, canAccessProviderMode, needsRoleSelection, setActiveRole, setNeedsRoleSelection, activateProviderMode, syncFromServer } = useAuthStore();
+  const { isAuthenticated, isHydrated, activeRole, preferredRole, canAccessProviderMode, needsRoleSelection, setActiveRole, setNeedsRoleSelection, activateProviderMode, syncFromServer, activeCrewProviderId } = useAuthStore();
   const { hasCompletedFirstLaunch, hasCompletedProviderSetup, isHydrated: onboardingHydrated } = useOnboardingStore();
 
   usePushNotifications();
@@ -236,6 +240,11 @@ export default function RootStackNavigator() {
     (canAccessProviderMode() || hasCompletedProviderSetup);
 
   const getMainComponent = () => {
+    // Task #328: an active crew session takes precedence over the user's
+    // homeowner/provider role. Switching back is handled by setActiveCrewProvider(null).
+    if (isAuthenticated && activeCrewProviderId) {
+      return CrewTabNavigator;
+    }
     if (isProviderMode) {
       return ProviderTabNavigator;
     }
@@ -664,6 +673,13 @@ export default function RootStackNavigator() {
         component={CrewScreen}
         options={{
           headerTitle: "Crew",
+        }}
+      />
+      <Stack.Screen
+        name="CrewJobDetail"
+        component={CrewJobDetailScreen}
+        options={{
+          headerTitle: "Job",
         }}
       />
     </Stack.Navigator>

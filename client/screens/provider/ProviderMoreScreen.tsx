@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { StyleSheet, View, ScrollView, Switch, Alert } from "react-native";
+import { StyleSheet, View, ScrollView, Switch, Alert, Modal, Pressable } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import Constants from "expo-constants";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -36,7 +36,24 @@ export default function ProviderMoreScreen() {
   const tabBarHeight = useFloatingTabBarHeight();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { theme, isDark } = useTheme();
-  const { user, providerProfile, logout } = useAuthStore();
+  const {
+    user,
+    providerProfile,
+    logout,
+    crewMemberships,
+    setActiveCrewProvider,
+  } = useAuthStore();
+  const [showCrewPicker, setShowCrewPicker] = useState(false);
+
+  const handleSwitchToCrew = () => {
+    if (crewMemberships.length === 0) return;
+    if (crewMemberships.length === 1) {
+      setActiveCrewProvider(crewMemberships[0].providerId);
+      navigation.reset({ index: 0, routes: [{ name: "Main" }] });
+      return;
+    }
+    setShowCrewPicker(true);
+  };
   const toggleDarkMode = useThemeStore((s) => s.toggleDarkMode);
 
   // Client-side visibility gate for the admin link (Task #220).
@@ -198,8 +215,22 @@ export default function ProviderMoreScreen() {
               subtitle="Send messages and push notifications to clients"
               leftIcon="send"
               onPress={() => navigation.navigate("Communications")}
-              isLast
+              isLast={crewMemberships.length === 0}
             />
+            {crewMemberships.length > 0 ? (
+              <ListRow
+                title="Switch to Crew Mode"
+                subtitle={
+                  crewMemberships.length === 1
+                    ? `Run jobs for ${crewMemberships[0].providerName}`
+                    : `Run jobs for ${crewMemberships.length} businesses`
+                }
+                leftIcon="users"
+                onPress={handleSwitchToCrew}
+                isLast
+                testID="row-switch-to-crew"
+              />
+            ) : null}
           </View>
         </Animated.View>
 
@@ -351,9 +382,74 @@ export default function ProviderMoreScreen() {
           </ThemedText>
         </Animated.View>
       </ScrollView>
+
+      <Modal
+        visible={showCrewPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCrewPicker(false)}
+      >
+        <Pressable
+          style={crewPickerStyles.overlay}
+          onPress={() => setShowCrewPicker(false)}
+        >
+          <View
+            style={[
+              crewPickerStyles.sheet,
+              { backgroundColor: theme.cardBackground },
+            ]}
+          >
+            <ThemedText style={crewPickerStyles.title}>Switch to Crew</ThemedText>
+            {crewMemberships.map((m) => (
+              <Pressable
+                key={m.providerId}
+                style={[
+                  crewPickerStyles.row,
+                  { borderTopColor: theme.separator },
+                ]}
+                onPress={() => {
+                  setShowCrewPicker(false);
+                  setActiveCrewProvider(m.providerId);
+                  navigation.reset({ index: 0, routes: [{ name: "Main" }] });
+                }}
+                testID={`crew-picker-${m.providerId}`}
+              >
+                <ThemedText style={crewPickerStyles.rowText}>
+                  {m.providerName}
+                </ThemedText>
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
     </ThemedView>
   );
 }
+
+const crewPickerStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    paddingHorizontal: Spacing.xl,
+  },
+  sheet: {
+    borderRadius: BorderRadius.card,
+    padding: Spacing.lg,
+  },
+  title: {
+    ...Typography.headline,
+    fontWeight: "700",
+    marginBottom: Spacing.md,
+  },
+  row: {
+    paddingVertical: Spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  rowText: {
+    ...Typography.body,
+  },
+});
 
 const styles = StyleSheet.create({
   container: {

@@ -1502,3 +1502,27 @@ export async function sendProviderClientMessage(
     return { success: false, error: error.message || "Failed to send message" };
   }
 }
+
+export async function sendCrewInviteEmail(
+  to: string,
+  crewName: string,
+  providerName: string,
+  acceptUrl: string,
+): Promise<SendResult> {
+  const body =
+    greeting(crewName) +
+    paragraph(
+      `${escapeHtml(providerName)} has invited you to join their crew on HomeBase. As a crew member you can view your assigned jobs, update job status, and add photos and notes from the field.`,
+    ) +
+    paragraph(
+      "Tap the button below to accept the invite. You'll need to sign in with this email address. If you don't have a HomeBase account yet, create one with this email and the invite will activate automatically.",
+    ) +
+    paragraph(
+      "This invite link expires in 14 days.",
+    );
+  return sendEmail(
+    to,
+    `${providerName} invited you to their crew on HomeBase`,
+    buildEmailBase("Crew Invite", body, "Accept Invite", acceptUrl),
+  );
+}

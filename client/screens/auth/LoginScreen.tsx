@@ -85,7 +85,7 @@ export default function LoginScreen({ navigation }: Props) {
           // Task #220: DB-backed admin flag drives the More-tab visibility
           // of the HomeBase Partners admin row.
           isAdmin: data.user.isAdmin === true,
-        }, providerProfile, data.token ?? null);
+        }, providerProfile, data.token ?? null, Array.isArray(data.crewMemberships) ? data.crewMemberships : []);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
