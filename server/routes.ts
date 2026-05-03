@@ -8433,6 +8433,83 @@ Respond with JSON only:
     },
   );
 
+  // GET /api/provider/:providerId/route/order/:date — read persisted
+  // manual stop order (returns { order: string[] | null }). 404 == no order.
+  app.get(
+    "/api/provider/:providerId/route/order/:date",
+    requireAuth,
+    async (
+      req: Request<{ providerId: string; date: string }>,
+      res: Response,
+    ) => {
+      try {
+        if (!(await assertProviderOwnership(req, req.params.providerId, res)))
+          return;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.date)) {
+          return res.status(400).json({ error: "date must be YYYY-MM-DD" });
+        }
+        const r = await pool.query<{ order_json: string[] }>(
+          `SELECT order_json FROM provider_route_orders
+            WHERE provider_id = $1 AND route_date = $2`,
+          [req.params.providerId, req.params.date],
+        );
+        return res.json({ order: r.rows[0]?.order_json ?? null });
+      } catch (err) {
+        console.error("[route/order GET] error:", err);
+        res.status(500).json({ error: "Failed to load route order" });
+      }
+    },
+  );
+
+  // PUT /api/provider/:providerId/route/order/:date — upsert order, or
+  // pass an empty array / { clear: true } to delete (re-optimize next time).
+  app.put(
+    "/api/provider/:providerId/route/order/:date",
+    requireAuth,
+    async (
+      req: Request<
+        { providerId: string; date: string },
+        unknown,
+        { order?: string[]; clear?: boolean }
+      >,
+      res: Response,
+    ) => {
+      try {
+        if (!(await assertProviderOwnership(req, req.params.providerId, res)))
+          return;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.date)) {
+          return res.status(400).json({ error: "date must be YYYY-MM-DD" });
+        }
+        const { order, clear } = req.body;
+        if (clear || !order || order.length === 0) {
+          await pool.query(
+            `DELETE FROM provider_route_orders
+              WHERE provider_id = $1 AND route_date = $2`,
+            [req.params.providerId, req.params.date],
+          );
+          return res.json({ ok: true, cleared: true });
+        }
+        if (
+          !Array.isArray(order) ||
+          order.some((s) => typeof s !== "string" || s.length === 0)
+        ) {
+          return res.status(400).json({ error: "order must be string[]" });
+        }
+        await pool.query(
+          `INSERT INTO provider_route_orders (provider_id, route_date, order_json, updated_at)
+           VALUES ($1, $2, $3::jsonb, NOW())
+           ON CONFLICT (provider_id, route_date)
+           DO UPDATE SET order_json = EXCLUDED.order_json, updated_at = NOW()`,
+          [req.params.providerId, req.params.date, JSON.stringify(order)],
+        );
+        return res.json({ ok: true });
+      } catch (err) {
+        console.error("[route/order PUT] error:", err);
+        res.status(500).json({ error: "Failed to save route order" });
+      }
+    },
+  );
+
   app.get(
     "/api/jobs/:id",
     requireAuth,

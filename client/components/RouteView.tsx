@@ -161,28 +161,49 @@ export function RouteView({ providerId, date, onJobPress }: Props) {
     },
   });
 
-  // Load any persisted manual order for this day.
+  // Load any persisted manual order for this day. Server is source of truth
+  // (survives reinstall / device changes); AsyncStorage is an offline cache
+  // that we fall back to when the API is unreachable.
   useEffect(() => {
     let cancelled = false;
-    AsyncStorage.getItem(STORAGE_KEY_PREFIX + dateKey)
-      .then((raw) => {
+    (async () => {
+      try {
+        const r = await apiRequest(
+          "GET",
+          `/api/provider/${providerId}/route/order/${dateKey}`,
+        );
+        const data = (await r.json()) as { order: string[] | null };
         if (cancelled) return;
-        if (raw) {
-          try {
-            const parsed = JSON.parse(raw) as string[];
-            if (Array.isArray(parsed)) setManualOrder(parsed);
-          } catch {
-            /* ignore */
-          }
+        if (data.order && Array.isArray(data.order)) {
+          setManualOrder(data.order);
+          AsyncStorage.setItem(
+            STORAGE_KEY_PREFIX + dateKey,
+            JSON.stringify(data.order),
+          ).catch(() => {});
         } else {
           setManualOrder(undefined);
         }
-      })
-      .catch(() => {});
+        return;
+      } catch {
+        // Server unavailable — fall through to AsyncStorage cache.
+      }
+      try {
+        const raw = await AsyncStorage.getItem(STORAGE_KEY_PREFIX + dateKey);
+        if (cancelled) return;
+        if (raw) {
+          const parsed = JSON.parse(raw) as string[];
+          if (Array.isArray(parsed)) setManualOrder(parsed);
+        } else {
+          setManualOrder(undefined);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
     return () => {
       cancelled = true;
     };
-  }, [dateKey]);
+  }, [dateKey, providerId]);
 
   // Try foreground location once on mount.
   useEffect(() => {
@@ -263,9 +284,16 @@ export function RouteView({ providerId, date, onJobPress }: Props) {
         STORAGE_KEY_PREFIX + dateKey,
         JSON.stringify(order),
       ).catch(() => {});
+      apiRequest(
+        "PUT",
+        `/api/provider/${providerId}/route/order/${dateKey}`,
+        { order },
+      ).catch(() => {
+        // Queued in AsyncStorage; server will catch up on next reorder.
+      });
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     },
-    [dateKey],
+    [dateKey, providerId],
   );
 
   const moveStop = useCallback(
@@ -286,8 +314,13 @@ export function RouteView({ providerId, date, onJobPress }: Props) {
   const resetOrder = useCallback(() => {
     setManualOrder(undefined);
     AsyncStorage.removeItem(STORAGE_KEY_PREFIX + dateKey).catch(() => {});
+    apiRequest(
+      "PUT",
+      `/api/provider/${providerId}/route/order/${dateKey}`,
+      { clear: true },
+    ).catch(() => {});
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [dateKey]);
+  }, [dateKey, providerId]);
 
   const handleStartRoute = useCallback(async () => {
     if (!route || !route.origin || route.stops.length === 0) return;
@@ -371,8 +404,12 @@ export function RouteView({ providerId, date, onJobPress }: Props) {
       )}
 
       {/* Map */}
-      {Platform.OS !== "web" && route && route.origin && stops.length > 0 ? (
-        <NativeRouteMap origin={route.origin} stops={stops} />
+      {route && route.origin && stops.length > 0 ? (
+        Platform.OS === "web" ? (
+          <WebRouteMap origin={route.origin} stops={stops} />
+        ) : (
+          <NativeRouteMap origin={route.origin} stops={stops} />
+        )
       ) : null}
 
       {/* Summary */}
@@ -587,6 +624,28 @@ interface MapProps {
   stops: { jobId: string; title: string; lat: number; lng: number }[];
 }
 
+// Web fallback: embedded Google Maps Directions iframe (no API key required
+// for the public /maps/embed/v1/dir endpoint via the basic /maps/dir/ form
+// in an iframe). Uses the same multi-waypoint URL shape as Start Route.
+function WebRouteMap({ origin, stops }: MapProps) {
+  const points = [
+    `${origin.lat},${origin.lng}`,
+    ...stops.map((s) => `${s.lat},${s.lng}`),
+  ].join("/");
+  const src = `https://www.google.com/maps/dir/${points}`;
+  return (
+    <View style={styles.mapWrap}>
+      {React.createElement("iframe", {
+        src,
+        style: { border: 0, width: "100%", height: "100%" },
+        loading: "lazy",
+        referrerPolicy: "no-referrer-when-downgrade",
+        title: "Today's route",
+      })}
+    </View>
+  );
+}
+
 function NativeRouteMap({ origin, stops }: MapProps) {
   if (!MapViewModule) return null;
   const MapView = MapViewModule.default;
@@ -615,15 +674,23 @@ function NativeRouteMap({ origin, stops }: MapProps) {
         <Marker
           coordinate={{ latitude: origin.lat, longitude: origin.lng }}
           title="Start"
-          pinColor={Colors.accent}
-        />
+          anchor={{ x: 0.5, y: 0.5 }}
+        >
+          <View style={[styles.numMarker, styles.startMarker]}>
+            <Feather name="navigation" size={12} color="#FFFFFF" />
+          </View>
+        </Marker>
         {stops.map((s, i) => (
           <Marker
             key={s.jobId}
             coordinate={{ latitude: s.lat, longitude: s.lng }}
             title={`${i + 1}. ${s.title}`}
-            pinColor={Colors.accent}
-          />
+            anchor={{ x: 0.5, y: 0.5 }}
+          >
+            <View style={styles.numMarker}>
+              <ThemedText style={styles.numMarkerText}>{i + 1}</ThemedText>
+            </View>
+          </Marker>
         ))}
         <Polyline
           coordinates={[
@@ -688,6 +755,26 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   map: { flex: 1 },
+  numMarker: {
+    minWidth: 26,
+    height: 26,
+    paddingHorizontal: 6,
+    borderRadius: 13,
+    backgroundColor: Colors.accent,
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  startMarker: {
+    backgroundColor: "#1F1F1F",
+  },
+  numMarkerText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 16,
+  },
   summaryCard: {
     padding: Spacing.md,
     gap: Spacing.md,

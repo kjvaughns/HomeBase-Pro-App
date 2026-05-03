@@ -890,7 +890,23 @@ export async function runBootMigrations(): Promise<void> {
          WHERE series_id IS NOT NULL`,
     );
 
+    // ── provider_route_orders (Task #301: persisted per-day route order)
+    // Stores the provider's manual stop ordering for a given calendar day so
+    // it survives reinstall / device changes. AsyncStorage on the client
+    // remains as an offline cache.
+    await runSql(
+      "provider_route_orders.create",
+      `CREATE TABLE IF NOT EXISTS provider_route_orders (
+        provider_id  VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+        route_date   DATE    NOT NULL,
+        order_json   JSONB   NOT NULL,
+        updated_at   TIMESTAMP NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (provider_id, route_date)
+      )`,
+    );
+
     verifications.push(
+      ["provider_route_orders", `SELECT provider_id FROM provider_route_orders LIMIT 0`],
       ["job_series table",      `SELECT id FROM job_series LIMIT 0`],
       ["jobs.series_id column", `SELECT series_id FROM jobs LIMIT 0`],
     );
