@@ -995,6 +995,87 @@ export async function runBootMigrations(): Promise<void> {
          ON jobs (assigned_crew_member_id)`,
     );
 
+    // ── Task #296: estimates + estimate_line_items ────────────────────────
+    await runSql(
+      "enum.estimate_status",
+      `DO $$ BEGIN
+         CREATE TYPE estimate_status AS ENUM (
+           'draft','sent','viewed','accepted','declined','expired','converted'
+         );
+       EXCEPTION WHEN duplicate_object THEN null;
+       END $$`,
+    );
+    await runSql(
+      "table.estimates",
+      `CREATE TABLE IF NOT EXISTS estimates (
+        id                  VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        provider_id         VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+        client_id           VARCHAR REFERENCES clients(id) ON DELETE SET NULL,
+        homeowner_user_id   VARCHAR REFERENCES users(id) ON DELETE SET NULL,
+        job_id              VARCHAR REFERENCES jobs(id) ON DELETE SET NULL,
+        estimate_number     TEXT NOT NULL,
+        currency            TEXT DEFAULT 'usd',
+        subtotal_cents      INTEGER NOT NULL DEFAULT 0,
+        tax_cents           INTEGER DEFAULT 0,
+        discount_cents      INTEGER DEFAULT 0,
+        total_cents         INTEGER NOT NULL DEFAULT 0,
+        status              estimate_status DEFAULT 'draft',
+        expires_at          TIMESTAMP,
+        notes               TEXT,
+        accepted_snapshot   TEXT,
+        public_token        TEXT NOT NULL UNIQUE,
+        converted_invoice_id VARCHAR,
+        created_at          TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at          TIMESTAMP NOT NULL DEFAULT NOW(),
+        sent_at             TIMESTAMP,
+        viewed_at           TIMESTAMP,
+        decided_at          TIMESTAMP,
+        converted_at        TIMESTAMP
+      )`,
+    );
+    await runSql(
+      "estimates.provider_id_idx",
+      `CREATE INDEX IF NOT EXISTS estimates_provider_id_idx ON estimates (provider_id)`,
+    );
+    await runSql(
+      "estimates.client_id_idx",
+      `CREATE INDEX IF NOT EXISTS estimates_client_id_idx ON estimates (client_id)`,
+    );
+    await runSql(
+      "estimates.status_idx",
+      `CREATE INDEX IF NOT EXISTS estimates_status_idx ON estimates (status)`,
+    );
+    await runSql(
+      "table.estimate_line_items",
+      `CREATE TABLE IF NOT EXISTS estimate_line_items (
+        id           VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        estimate_id  VARCHAR NOT NULL REFERENCES estimates(id) ON DELETE CASCADE,
+        name         TEXT NOT NULL,
+        description  TEXT,
+        quantity     DECIMAL(10,2) DEFAULT '1',
+        unit_price_cents INTEGER NOT NULL,
+        amount_cents     INTEGER NOT NULL,
+        metadata     TEXT,
+        created_at   TIMESTAMP NOT NULL DEFAULT NOW()
+      )`,
+    );
+    await runSql(
+      "estimate_line_items.estimate_id_idx",
+      `CREATE INDEX IF NOT EXISTS estimate_line_items_estimate_id_idx ON estimate_line_items (estimate_id)`,
+    );
+    await runSql(
+      "invoices.estimate_id",
+      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS estimate_id VARCHAR REFERENCES estimates(id) ON DELETE SET NULL`,
+    );
+    await runSql(
+      "estimates.converted_invoice_id_fk",
+      `DO $$ BEGIN
+         ALTER TABLE estimates ADD CONSTRAINT estimates_converted_invoice_id_fkey
+           FOREIGN KEY (converted_invoice_id) REFERENCES invoices(id) ON DELETE SET NULL;
+       EXCEPTION WHEN duplicate_object THEN null;
+       END $$`,
+    );
+
     verifications.push(
       ["provider_route_orders", `SELECT provider_id FROM provider_route_orders LIMIT 0`],
       ["job_series table",      `SELECT id FROM job_series LIMIT 0`],
@@ -1003,6 +1084,8 @@ export async function runBootMigrations(): Promise<void> {
       ["jobs.original_scheduled_at column", `SELECT original_scheduled_at FROM jobs LIMIT 0`],
       ["crew_members table",                `SELECT id FROM crew_members LIMIT 0`],
       ["jobs.assigned_crew_member_id",      `SELECT assigned_crew_member_id FROM jobs LIMIT 0`],
+      ["estimates table",                   `SELECT id FROM estimates LIMIT 0`],
+      ["estimate_line_items table",         `SELECT id FROM estimate_line_items LIMIT 0`],
     );
 
     const verificationErrors: string[] = [];
