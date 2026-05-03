@@ -88,7 +88,7 @@ export function QuickAddJobSheet({
 }: QuickAddJobSheetProps) {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
-  const { isTablet, horizontalPadding } = useLayout();
+  const { isTablet } = useLayout();
   const queryClient = useQueryClient();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -231,7 +231,6 @@ export function QuickAddJobSheet({
             {
               backgroundColor: theme.backgroundElevated,
               paddingBottom: insets.bottom + Spacing.lg,
-              paddingHorizontal: horizontalPadding,
               ...(isTablet && { maxWidth: 600, width: "100%", borderRadius: BorderRadius.xl }),
             },
           ]}
@@ -527,6 +526,7 @@ const styles = StyleSheet.create({
   sheet: {
     borderTopLeftRadius: BorderRadius.xl,
     borderTopRightRadius: BorderRadius.xl,
+    paddingHorizontal: Spacing.screenPadding,
     paddingTop: Spacing.sm,
     maxHeight: "88%",
   },

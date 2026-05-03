@@ -31,7 +31,7 @@ export function FilterChips<T extends string>({
   style,
 }: FilterChipsProps<T>) {
   const { theme } = useTheme();
-  const { horizontalPadding } = useLayout();
+  const { isTablet } = useLayout();
 
   const handleSelect = (key: T) => {
     if (key !== selected) {
@@ -75,7 +75,7 @@ export function FilterChips<T extends string>({
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContainer, { paddingHorizontal: horizontalPadding }, style]}
+        contentContainerStyle={[styles.scrollContainer, { paddingHorizontal: isTablet ? 0 : Spacing.screenPadding }, style]}
       >
         {options.map(renderChip)}
       </ScrollView>
