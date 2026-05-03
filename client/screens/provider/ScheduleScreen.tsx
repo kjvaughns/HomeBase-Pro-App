@@ -1345,16 +1345,21 @@ export default function ScheduleScreen() {
   };
   const { data: backfillData } = useQuery<{ candidates: BackfillCandidate[] }>({
     queryKey: ["/api/recurring/backfill-candidates"],
-    enabled: !!providerId,
+    enabled: !!providerId && isOnline,
   });
   const [dismissedBackfill, setDismissedBackfill] = useState(false);
   const backfillCandidates = backfillData?.candidates ?? [];
   const backfillMutation = useMutation({
-    mutationFn: (c: BackfillCandidate) =>
-      apiRequest("POST", "/api/recurring/backfill-confirm", {
+    mutationFn: (c: BackfillCandidate) => {
+      if (!isOnline) {
+        Alert.alert("You're offline", "Reconnect to update.");
+        return Promise.reject(new Error("offline"));
+      }
+      return apiRequest("POST", "/api/recurring/backfill-confirm", {
         customServiceId: c.custom_service_id,
         clientId: c.client_id,
-      }),
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ["/api/recurring/backfill-candidates"],

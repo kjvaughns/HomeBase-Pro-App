@@ -1062,6 +1062,19 @@ export default function ProviderJobDetailScreen() {
                   </ThemedText>
                   {job.address ? <Feather name="external-link" size={14} color={Colors.accent} /> : null}
                 </Pressable>
+                {client?.phone ? (
+                  <View style={styles.addressRow}>
+                    <Feather name="phone" size={14} color={theme.textSecondary} />
+                    <ThemedText
+                      type="caption"
+                      style={{ color: theme.textSecondary, marginLeft: 4, flex: 1 }}
+                      numberOfLines={1}
+                      testID="text-client-phone"
+                    >
+                      {client.phone}
+                    </ThemedText>
+                  </View>
+                ) : null}
               </View>
             </View>
 
