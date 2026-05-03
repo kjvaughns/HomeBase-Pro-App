@@ -1214,6 +1214,10 @@ export default function ScheduleScreen() {
   };
 
   const handleAddJob = () => {
+    if (!isOnline) {
+      Alert.alert("You're offline", "Reconnect to update.");
+      return;
+    }
     navigation.navigate("AddJob");
   };
 
@@ -1250,14 +1254,21 @@ export default function ScheduleScreen() {
     [jobs],
   );
 
-  const openQuickAddForSlot = useCallback((date: Date, time: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setQuickAdd({
-      visible: true,
-      date: startOfDay(date),
-      time,
-    });
-  }, []);
+  const openQuickAddForSlot = useCallback(
+    (date: Date, time: string) => {
+      if (!isOnline) {
+        Alert.alert("You're offline", "Reconnect to update.");
+        return;
+      }
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      setQuickAdd({
+        visible: true,
+        date: startOfDay(date),
+        time,
+      });
+    },
+    [isOnline],
+  );
 
   const handleJobLongPress = useCallback(
     (jobId: string) => {
@@ -1613,7 +1624,7 @@ export default function ScheduleScreen() {
             onQuickAction={handleQuickAction}
             actionLoadingId={actionLoadingId}
           />
-        ) : isLoading ? (
+        ) : isLoading && !useOfflineData ? (
           <View style={styles.loadingBox}>
             <ActivityIndicator size="large" color={Colors.accent} />
           </View>

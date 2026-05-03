@@ -488,6 +488,7 @@ export default function ProviderJobDetailScreen() {
       checklistFetched.current = true;
       return;
     }
+    if (!isOnline) return;
     checklistFetched.current = true;
     const url = new URL(`/api/jobs/${jobId}/generate-checklist`, getApiUrl());
     apiRequest("POST", url.toString(), {})
@@ -496,7 +497,7 @@ export default function ProviderJobDetailScreen() {
         if (Array.isArray(data?.checklist)) setLocalChecklist(data.checklist);
       })
       .catch(() => setLocalChecklist([]));
-  }, [job, jobId]);
+  }, [job, jobId, isOnline]);
 
   const persistChecklist = useCallback(
     (next: JobChecklistItem[]) => {
@@ -508,6 +509,10 @@ export default function ProviderJobDetailScreen() {
 
   const handleToggleChecklist = useCallback(
     (id: string) => {
+      if (!isOnline) {
+        blockOffline();
+        return;
+      }
       setLocalChecklist((prev) => {
         const updated = prev.map((item) =>
           item.id === id ? { ...item, completed: !item.completed } : item,
@@ -516,11 +521,15 @@ export default function ProviderJobDetailScreen() {
         return updated;
       });
     },
-    [persistChecklist],
+    [persistChecklist, isOnline],
   );
 
   const handleAddChecklistStep = useCallback(
     (label: string) => {
+      if (!isOnline) {
+        blockOffline();
+        return;
+      }
       setLocalChecklist((prev) => {
         const next: JobChecklistItem[] = [
           ...prev,
@@ -530,7 +539,7 @@ export default function ProviderJobDetailScreen() {
         return next;
       });
     },
-    [persistChecklist],
+    [persistChecklist, isOnline],
   );
 
   const updateJobMutation = useMutation({
