@@ -1153,7 +1153,7 @@ export default function ScheduleScreen() {
 
   const liveJobs = jobsData?.jobs;
   const liveClients = clientsData?.clients;
-  const useOfflineData = !isOnline && !liveJobs && !!offlineSnapshot;
+  const useOfflineData = !isOnline && !!offlineSnapshot;
   const jobs = useOfflineData ? offlineSnapshot!.jobs : liveJobs || [];
   const clients = useOfflineData
     ? offlineSnapshot!.clients
@@ -1205,6 +1205,10 @@ export default function ScheduleScreen() {
   );
 
   const onRefresh = async () => {
+    if (!isOnline) {
+      Alert.alert("You're offline", "Reconnect to update.");
+      return;
+    }
     setRefreshing(true);
     await refetch();
     setRefreshing(false);

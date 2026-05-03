@@ -280,9 +280,11 @@ interface ChecklistSectionProps {
   onToggle: (id: string) => void;
   onAddStep: (label: string) => void;
   loading?: boolean;
+  isOnline?: boolean;
+  onOfflineAttempt?: () => void;
 }
 
-function ChecklistSection({ checklist, onToggle, onAddStep, loading }: ChecklistSectionProps) {
+function ChecklistSection({ checklist, onToggle, onAddStep, loading, isOnline = true, onOfflineAttempt }: ChecklistSectionProps) {
   const { theme } = useTheme();
   const completedCount = checklist.filter((item) => item.completed).length;
   const [adding, setAdding] = useState(false);
@@ -384,8 +386,15 @@ function ChecklistSection({ checklist, onToggle, onAddStep, loading }: Checklist
         </View>
       ) : (
         <Pressable
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setAdding(true); }}
-          style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: Spacing.sm, alignSelf: "flex-start" }}
+          onPress={() => {
+            if (!isOnline) {
+              onOfflineAttempt?.();
+              return;
+            }
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setAdding(true);
+          }}
+          style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: Spacing.sm, alignSelf: "flex-start", opacity: isOnline ? 1 : 0.5 }}
           testID="button-add-checklist-step-job"
         >
           <Feather name="plus" size={16} color={Colors.accent} />
@@ -1186,6 +1195,8 @@ export default function ProviderJobDetailScreen() {
               checklist={localChecklist}
               onToggle={handleToggleChecklist}
               onAddStep={handleAddChecklistStep}
+              isOnline={isOnline}
+              onOfflineAttempt={blockOffline}
             />
           </Animated.View>
         ) : null}
