@@ -244,10 +244,14 @@ export function handleNotificationNavigation(
       screen === "Leads" ||
       screen === "LeadsTab" ||
       // Server currently sends `screen: "ProviderIntakeSubmissions"` for
-      // new-booking-request pushes; route those into the Leads tab too.
+      // new-booking-request pushes; route those into the Clients tab's
+      // Leads filter (Task #330 folded the standalone Leads tab into Clients).
       screen === "ProviderIntakeSubmissions"
     ) {
-      navigation.navigate("Main", { screen: "LeadsTab" });
+      navigation.navigate("Main", {
+        screen: "ClientsTab",
+        params: { initialFilter: "lead" },
+      });
     } else if (screen === "Review") {
       const appointmentId = (params?.appointmentId as string | undefined)
         ?? (data.appointmentId as string | undefined);

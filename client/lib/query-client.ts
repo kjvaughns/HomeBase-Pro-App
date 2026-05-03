@@ -1,34 +1,6 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { Platform } from "react-native";
-import { useAuthStore } from "@/state/authStore";
-
-// Tracks whether we have already kicked off a global session-expiry logout.
-// Without this latch, parallel queries failing 401 in the same render cycle
-// would each call `logout()` and clobber the post-logout navigation state.
-let sessionExpiryHandled = false;
-let lastSessionTokenSeen: string | null = null;
-
-function handleSessionExpiry() {
-  // Only react when the user actually has a session — we don't want a 401
-  // from /api/auth/login (wrong password) to log out a logged-out user.
-  const { sessionToken } = useAuthStore.getState();
-  if (!sessionToken) return;
-  if (sessionExpiryHandled && lastSessionTokenSeen === sessionToken) return;
-  sessionExpiryHandled = true;
-  lastSessionTokenSeen = sessionToken;
-  // Defer to a microtask so React Query can settle the failing query first.
-  setTimeout(() => {
-    try {
-      useAuthStore.getState().logout();
-    } catch (err) {
-      console.error("[query-client] session expiry logout failed:", err);
-    }
-    // Re-arm so a future session can also expire cleanly.
-    setTimeout(() => {
-      sessionExpiryHandled = false;
-    }, 1000);
-  }, 0);
-}
+import { getSessionToken, handleSessionExpiry } from "@/lib/sessionExpiry";
 
 /**
  * Gets the base URL for the Express API server.
@@ -62,7 +34,7 @@ export function getApiUrl(): string {
 }
 
 export function getAuthHeaders(): Record<string, string> {
-  const { sessionToken } = useAuthStore.getState();
+  const sessionToken = getSessionToken();
   if (sessionToken) {
     return { Authorization: `Bearer ${sessionToken}` };
   }

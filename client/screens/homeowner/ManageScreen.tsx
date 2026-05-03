@@ -9,6 +9,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { useQuery } from "@tanstack/react-query";
 
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
@@ -21,7 +22,6 @@ import { SkeletonCard } from "@/components/SkeletonLoader";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuthStore } from "@/state/authStore";
-import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type AppointmentStatus = "pending" | "confirmed" | "in_progress" | "completed" | "cancelled";
@@ -79,35 +79,27 @@ export default function ManageScreen() {
   const { theme } = useTheme();
   const { isAuthenticated, user } = useAuthStore();
 
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showAccountGate, setShowAccountGate] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
-  const [loadError, setLoadError] = useState(false);
 
-  const fetchAppointments = useCallback(async () => {
-    if (!user?.id) {
-      setIsLoading(false);
-      return;
-    }
-    try {
-      setLoadError(false);
-      const response = await apiRequest("GET", `/api/users/${user.id}/appointments`);
-      const data = await response.json();
-      setAppointments(data.appointments || []);
-    } catch (error) {
-      console.error("Failed to fetch appointments:", error);
-      setLoadError(true);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user?.id]);
+  const {
+    data,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<{ appointments: Appointment[] }>({
+    queryKey: ["/api/users", user?.id, "appointments"],
+    enabled: !!user?.id,
+  });
+
+  const appointments = data?.appointments ?? [];
+  const loadError = isError;
 
   useFocusEffect(
     useCallback(() => {
-      fetchAppointments();
-    }, [fetchAppointments])
+      if (user?.id) refetch();
+    }, [user?.id, refetch])
   );
 
   const sections: Section[] = React.useMemo(() => {
@@ -127,7 +119,7 @@ export default function ManageScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchAppointments();
+    await refetch();
     setRefreshing(false);
   };
 
@@ -284,8 +276,7 @@ export default function ManageScreen() {
           primaryAction={{
             label: "Try again",
             onPress: () => {
-              setIsLoading(true);
-              fetchAppointments();
+              refetch();
             },
           }}
         />
@@ -305,7 +296,7 @@ export default function ManageScreen() {
     );
   };
 
-  if (isLoading) {
+  if (isLoading && !!user?.id) {
     return (
       <ThemedView style={styles.container}>
         <ScrollView

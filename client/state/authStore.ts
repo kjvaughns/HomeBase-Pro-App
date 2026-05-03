@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApiUrl, queryClient } from "@/lib/query-client";
+import { registerSessionHandlers } from "@/lib/sessionExpiry";
 import { setSessionToken as secureSetSessionToken, getSessionToken as secureGetSessionToken } from "@/lib/secureSession";
 
 export type UserRole = "guest" | "homeowner" | "provider" | "crew";
@@ -441,5 +442,10 @@ async function saveToStorage(state: AuthState) {
     console.error("Failed to save auth state:", error);
   }
 }
+
+registerSessionHandlers({
+  getSessionToken: () => useAuthStore.getState().sessionToken,
+  onExpiry: () => useAuthStore.getState().logout(),
+});
 
 useAuthStore.getState().hydrate();

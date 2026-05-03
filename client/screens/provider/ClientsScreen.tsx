@@ -1,8 +1,9 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { StyleSheet, FlatList, RefreshControl, View, TextInput, Pressable, Linking } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { ProviderTabParamList } from "@/navigation/ProviderTabNavigator";
 import Animated from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -254,6 +255,7 @@ export default function ClientsScreen() {
   const { theme } = useTheme();
   const { horizontalPadding } = useLayout();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<ProviderTabParamList, "ClientsTab">>();
   const { providerProfile } = useAuthStore();
   const providerId = providerProfile?.id;
 
@@ -295,9 +297,16 @@ export default function ClientsScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(
+    (route.params?.initialFilter as StatusFilter | undefined) ?? "all",
+  );
   const [sortBy, setSortBy] = useState<SortOption>("recent");
   const [showSortMenu, setShowSortMenu] = useState(false);
+
+  useEffect(() => {
+    const next = route.params?.initialFilter as StatusFilter | undefined;
+    if (next) setStatusFilter(next);
+  }, [route.params?.initialFilter]);
 
   const filteredClients = useMemo(() => {
     let result = [...clients];

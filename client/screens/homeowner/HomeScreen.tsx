@@ -25,7 +25,7 @@ import { useAuthStore } from "@/state/authStore";
 import { useHomeownerStore } from "@/state/homeownerStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { Job, JobStatus, ServiceCategory } from "@/state/types";
-import { apiRequest, getApiUrl } from "@/lib/query-client";
+import { useQuery } from "@tanstack/react-query";
 import { recordHappyMoment } from "@/state/appReviewStore";
 
 interface Appointment {
@@ -65,33 +65,25 @@ export default function HomeScreen() {
   const { user } = useAuthStore();
   
   const categories = useHomeownerStore((s) => s.categories);
-  
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchAppointments = useCallback(async () => {
-    if (!user?.id) return;
-    try {
-      const response = await apiRequest("GET", `/api/users/${user.id}/appointments`);
-      if (response.ok) {
-        const data = await response.json();
-        setAppointments(data.appointments || []);
-      }
-    } catch (error) {
-      console.error("Failed to fetch appointments:", error);
-    }
-  }, [user?.id]);
+  const { data: appointmentsData, refetch } = useQuery<{ appointments: Appointment[] }>({
+    queryKey: ["/api/users", user?.id, "appointments"],
+    enabled: !!user?.id,
+  });
+  const appointments: Appointment[] = appointmentsData?.appointments ?? [];
 
   useFocusEffect(
     useCallback(() => {
-      fetchAppointments();
+      if (user?.id) refetch();
       recordHappyMoment("homeowner_feature_used").catch(() => {});
-    }, [fetchAppointments])
+    }, [user?.id, refetch])
   );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchAppointments();
+    await refetch();
     setRefreshing(false);
   };
 

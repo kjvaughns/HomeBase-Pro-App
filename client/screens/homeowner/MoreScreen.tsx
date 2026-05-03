@@ -235,24 +235,6 @@ export default function MoreScreen() {
                   </ThemedText>
                 </Pressable>
 
-                <Pressable
-                  style={[styles.toolTile, isTablet && styles.toolTileTablet, { backgroundColor: theme.cardBackground }]}
-                  onPress={() => navigation.navigate("Budgeter")}
-                  testID="tile-budgeter"
-                >
-                  <View style={[styles.toolIcon, { backgroundColor: Colors.accentLight }]}>
-                    <Feather name="dollar-sign" size={20} color={Colors.accent} />
-                  </View>
-                  <View style={styles.toolTitleRow}>
-                    <ThemedText style={styles.toolTitle}>Budgeter</ThemedText>
-                    <View style={[styles.comingSoonBadge, { backgroundColor: theme.backgroundSecondary }]}>
-                      <ThemedText style={[styles.comingSoonText, { color: theme.textSecondary }]}>Soon</ThemedText>
-                    </View>
-                  </View>
-                  <ThemedText style={[styles.toolSubtitle, { color: theme.textSecondary }]}>
-                    Home spending
-                  </ThemedText>
-                </Pressable>
               </View>
             </Animated.View>
 

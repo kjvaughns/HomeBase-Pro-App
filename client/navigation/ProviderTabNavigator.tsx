@@ -8,7 +8,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ProviderHomeScreen from "@/screens/provider/ProviderHomeScreen";
 import ClientsScreen from "@/screens/provider/ClientsScreen";
 import ScheduleScreen from "@/screens/provider/ScheduleScreen";
-import LeadsScreen from "@/screens/provider/LeadsScreen";
 import FinancialsScreen from "@/screens/provider/FinancialsScreen";
 import ProviderMoreScreen from "@/screens/provider/ProviderMoreScreen";
 import { useTheme } from "@/hooks/useTheme";
@@ -19,11 +18,12 @@ import { useLeadsBadgeCount } from "@/hooks/useLeadsBadgeCount";
 import { useNetworkStore } from "@/state/networkStore";
 import { Colors, Spacing, Typography, BorderRadius } from "@/constants/theme";
 
+export type ClientsTabFilter = "all" | "lead" | "active" | "inactive" | "has_upcoming" | "overdue";
+
 export type ProviderTabParamList = {
   HomeTab: undefined;
-  ClientsTab: undefined;
+  ClientsTab: { initialFilter?: ClientsTabFilter } | undefined;
   ScheduleTab: undefined;
-  LeadsTab: undefined;
   FinancialsTab: undefined;
   MoreTab: undefined;
 };
@@ -38,8 +38,6 @@ function getIconName(routeName: string): keyof typeof Feather.glyphMap {
       return "users";
     case "ScheduleTab":
       return "calendar";
-    case "LeadsTab":
-      return "inbox";
     case "FinancialsTab":
       return "bar-chart-2";
     case "MoreTab":
@@ -254,6 +252,7 @@ export default function ProviderTabNavigator() {
           options={{
             title: "Clients",
             headerShown: false,
+            tabBarBadge: leadsBadge > 0 ? leadsBadge : undefined,
           }}
         />
         <Tab.Screen
@@ -262,15 +261,6 @@ export default function ProviderTabNavigator() {
           options={{
             title: "Schedule",
             headerTitle: "Schedule",
-          }}
-        />
-        <Tab.Screen
-          name="LeadsTab"
-          component={LeadsScreen}
-          options={{
-            title: "Leads",
-            headerTitle: "Leads",
-            tabBarBadge: leadsBadge > 0 ? leadsBadge : undefined,
           }}
         />
         <Tab.Screen

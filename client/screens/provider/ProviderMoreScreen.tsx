@@ -42,6 +42,7 @@ export default function ProviderMoreScreen() {
     logout,
     crewMemberships,
     setActiveCrewProvider,
+    setActiveRole,
   } = useAuthStore();
   const [showCrewPicker, setShowCrewPicker] = useState(false);
 
@@ -53,6 +54,11 @@ export default function ProviderMoreScreen() {
       return;
     }
     setShowCrewPicker(true);
+  };
+
+  const handleSwitchToHomeowner = () => {
+    setActiveRole("homeowner");
+    navigation.reset({ index: 0, routes: [{ name: "Main" }] });
   };
   const toggleDarkMode = useThemeStore((s) => s.toggleDarkMode);
 
@@ -215,7 +221,14 @@ export default function ProviderMoreScreen() {
               subtitle="Send messages and push notifications to clients"
               leftIcon="send"
               onPress={() => navigation.navigate("Communications")}
+            />
+            <ListRow
+              title="Switch to Homeowner"
+              subtitle="View HomeBase as a homeowner"
+              leftIcon="home"
+              onPress={handleSwitchToHomeowner}
               isLast={crewMemberships.length === 0}
+              testID="row-switch-to-homeowner"
             />
             {crewMemberships.length > 0 ? (
               <ListRow
