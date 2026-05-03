@@ -4,6 +4,7 @@ import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "./ThemedText";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Colors, Spacing, BorderRadius } from "@/constants/theme";
 
 export interface FilterOption<T extends string> {
@@ -30,6 +31,7 @@ export function FilterChips<T extends string>({
   style,
 }: FilterChipsProps<T>) {
   const { theme } = useTheme();
+  const { horizontalPadding } = useLayout();
 
   const handleSelect = (key: T) => {
     if (key !== selected) {
@@ -73,7 +75,7 @@ export function FilterChips<T extends string>({
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContainer, style]}
+        contentContainerStyle={[styles.scrollContainer, { paddingHorizontal: horizontalPadding }, style]}
       >
         {options.map(renderChip)}
       </ScrollView>
@@ -96,7 +98,6 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flexDirection: "row",
     gap: Spacing.sm,
-    paddingHorizontal: Spacing.screenPadding,
   },
   chip: {
     paddingHorizontal: Spacing.md,

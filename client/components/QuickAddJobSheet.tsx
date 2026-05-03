@@ -21,6 +21,7 @@ import { ThemedText } from "./ThemedText";
 import { GlassCard } from "./GlassCard";
 import { PrimaryButton } from "./PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Typography, Colors, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest } from "@/lib/query-client";
@@ -87,6 +88,7 @@ export function QuickAddJobSheet({
 }: QuickAddJobSheetProps) {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  const { isTablet, horizontalPadding } = useLayout();
   const queryClient = useQueryClient();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -222,13 +224,15 @@ export function QuickAddJobSheet({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <Pressable style={[styles.backdrop, isTablet && styles.backdropTablet]} onPress={onClose}>
         <Pressable
           style={[
             styles.sheet,
             {
               backgroundColor: theme.backgroundElevated,
               paddingBottom: insets.bottom + Spacing.lg,
+              paddingHorizontal: horizontalPadding,
+              ...(isTablet && { maxWidth: 600, width: "100%", borderRadius: BorderRadius.xl }),
             },
           ]}
           onPress={(e) => e.stopPropagation()}
@@ -517,10 +521,12 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.45)",
     justifyContent: "flex-end",
   },
+  backdropTablet: {
+    alignItems: "center",
+  },
   sheet: {
     borderTopLeftRadius: BorderRadius.xl,
     borderTopRightRadius: BorderRadius.xl,
-    paddingHorizontal: Spacing.screenPadding,
     paddingTop: Spacing.sm,
     maxHeight: "88%",
   },
