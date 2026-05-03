@@ -20,6 +20,22 @@ const { getDefaultConfig } = require('expo/metro-config');
 
 const config = getDefaultConfig(__dirname);
 
+const path = require('path');
+const emptyModule = path.resolve(__dirname, 'client/lib/empty-module.js');
+const originalResolveRequest = config.resolver?.resolveRequest;
+config.resolver = {
+  ...config.resolver,
+  resolveRequest: (context, moduleName, platform) => {
+    if (platform === 'web' && (moduleName === 'react-native-maps' || moduleName.startsWith('react-native-maps/'))) {
+      return { type: 'sourceFile', filePath: emptyModule };
+    }
+    if (originalResolveRequest) {
+      return originalResolveRequest(context, moduleName, platform);
+    }
+    return context.resolveRequest(context, moduleName, platform);
+  },
+};
+
 config.transformer = {
   ...config.transformer,
   minifierConfig: {
@@ -32,8 +48,6 @@ config.transformer = {
     },
   },
 };
-
-const path = require('path');
 
 const FONT_TYPES = { '.ttf': 'font/ttf', '.otf': 'font/otf', '.woff': 'font/woff', '.woff2': 'font/woff2' };
 
