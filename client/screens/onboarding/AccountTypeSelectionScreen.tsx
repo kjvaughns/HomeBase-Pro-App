@@ -101,7 +101,7 @@ export default function AccountTypeSelectionScreen({ navigation }: Props) {
     startSignupTimer();
     trackEvent(AnalyticsEvents.SignupStarted, { role: "provider" });
     setAccountType("provider");
-    navigation.navigate("EssentialSetup");
+    navigation.navigate("ProviderOnboarding");
   };
 
   const RoleCard = ({
