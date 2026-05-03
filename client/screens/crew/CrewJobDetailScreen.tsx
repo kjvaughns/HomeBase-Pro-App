@@ -37,13 +37,40 @@ interface JobRow {
   description: string | null;
 }
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  scheduled:    { label: "Scheduled",    color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
-  confirmed:    { label: "Confirmed",    color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
-  in_progress:  { label: "In Progress",  color: Colors.accent, bg: Colors.accentLight },
-  completed:    { label: "Completed",    color: "#6B7280", bg: "rgba(107,114,128,0.12)" },
-  cancelled:    { label: "Cancelled",    color: "#EF4444", bg: "rgba(239,68,68,0.12)" },
-  weather_held: { label: "Weather Hold", color: "#F59E0B", bg: "rgba(245,158,11,0.12)" },
+const STATUS_CONFIG: Record<
+  string,
+  { label: string; color: string; bg: string }
+> = {
+  scheduled: {
+    label: "Scheduled",
+    color: "#3B82F6",
+    bg: "rgba(59,130,246,0.12)",
+  },
+  confirmed: {
+    label: "Confirmed",
+    color: "#3B82F6",
+    bg: "rgba(59,130,246,0.12)",
+  },
+  in_progress: {
+    label: "In Progress",
+    color: Colors.accent,
+    bg: Colors.accentLight,
+  },
+  completed: {
+    label: "Completed",
+    color: "#6B7280",
+    bg: "rgba(107,114,128,0.12)",
+  },
+  cancelled: {
+    label: "Cancelled",
+    color: "#EF4444",
+    bg: "rgba(239,68,68,0.12)",
+  },
+  weather_held: {
+    label: "Weather Hold",
+    color: "#F59E0B",
+    bg: "rgba(245,158,11,0.12)",
+  },
 };
 
 function formatTime(t: string | null): string {
@@ -112,7 +139,9 @@ export default function CrewJobDetailScreen() {
         (r) => r.json(),
       ),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId, "photos"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/jobs", jobId, "photos"],
+      });
     },
     onError: (e: Error) => Alert.alert("Couldn't upload photo", e.message),
   });
@@ -174,7 +203,6 @@ export default function CrewJobDetailScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Title + status pill */}
         <View style={styles.titleBlock}>
           <ThemedText style={styles.title}>{job.title}</ThemedText>
           <View style={[styles.statusPill, { backgroundColor: cfg.bg }]}>
@@ -185,20 +213,31 @@ export default function CrewJobDetailScreen() {
           </View>
         </View>
 
-        {/* Details card */}
         {hasDetailCard ? (
           <View
-            style={[styles.detailCard, { backgroundColor: theme.cardBackground }]}
+            style={[
+              styles.detailCard,
+              { backgroundColor: theme.cardBackground },
+            ]}
           >
             {dateLabel ? (
-              <View style={[styles.detailRow, { borderBottomColor: theme.separator }]}>
+              <View
+                style={[
+                  styles.detailRow,
+                  { borderBottomColor: theme.separator },
+                ]}
+              >
                 <View
                   style={[
                     styles.iconBubble,
                     { backgroundColor: theme.backgroundSecondary },
                   ]}
                 >
-                  <Feather name="calendar" size={14} color={theme.textSecondary} />
+                  <Feather
+                    name="calendar"
+                    size={14}
+                    color={theme.textSecondary}
+                  />
                 </View>
                 <View style={{ flex: 1 }}>
                   <ThemedText
@@ -221,10 +260,16 @@ export default function CrewJobDetailScreen() {
                     `https://maps.apple.com/?q=${encodeURIComponent(job.address!)}`,
                   )
                 }
-                style={[styles.detailRow, { borderBottomColor: theme.separator }]}
+                style={[
+                  styles.detailRow,
+                  { borderBottomColor: theme.separator },
+                ]}
               >
                 <View
-                  style={[styles.iconBubble, { backgroundColor: Colors.accentLight }]}
+                  style={[
+                    styles.iconBubble,
+                    { backgroundColor: Colors.accentLight },
+                  ]}
                 >
                   <Feather name="map-pin" size={14} color={Colors.accent} />
                 </View>
@@ -258,7 +303,11 @@ export default function CrewJobDetailScreen() {
                     { backgroundColor: theme.backgroundSecondary },
                   ]}
                 >
-                  <Feather name="file-text" size={14} color={theme.textSecondary} />
+                  <Feather
+                    name="file-text"
+                    size={14}
+                    color={theme.textSecondary}
+                  />
                 </View>
                 <View style={{ flex: 1 }}>
                   <ThemedText
@@ -275,7 +324,6 @@ export default function CrewJobDetailScreen() {
           </View>
         ) : null}
 
-        {/* Notes */}
         <ThemedText
           style={[styles.sectionLabel, { color: theme.textSecondary }]}
         >
@@ -303,7 +351,6 @@ export default function CrewJobDetailScreen() {
           </PrimaryButton>
         ) : null}
 
-        {/* Photos */}
         <ThemedText
           style={[
             styles.sectionLabel,
@@ -342,10 +389,12 @@ export default function CrewJobDetailScreen() {
           </Pressable>
         </View>
 
-        {/* Action card */}
-        {(canStart || canComplete) ? (
+        {canStart || canComplete ? (
           <View
-            style={[styles.actionsCard, { backgroundColor: theme.cardBackground }]}
+            style={[
+              styles.actionsCard,
+              { backgroundColor: theme.cardBackground },
+            ]}
           >
             <ThemedText
               style={[styles.actionsLabel, { color: theme.textSecondary }]}

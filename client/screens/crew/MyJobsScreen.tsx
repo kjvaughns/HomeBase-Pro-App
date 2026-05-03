@@ -32,13 +32,40 @@ interface CrewJob {
   notes: string | null;
 }
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  scheduled:    { label: "Scheduled",    color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
-  confirmed:    { label: "Confirmed",    color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
-  in_progress:  { label: "In Progress",  color: Colors.accent, bg: Colors.accentLight },
-  completed:    { label: "Completed",    color: "#6B7280", bg: "rgba(107,114,128,0.12)" },
-  cancelled:    { label: "Cancelled",    color: "#EF4444", bg: "rgba(239,68,68,0.12)" },
-  weather_held: { label: "Weather Hold", color: "#F59E0B", bg: "rgba(245,158,11,0.12)" },
+const STATUS_CONFIG: Record<
+  string,
+  { label: string; color: string; bg: string }
+> = {
+  scheduled: {
+    label: "Scheduled",
+    color: "#3B82F6",
+    bg: "rgba(59,130,246,0.12)",
+  },
+  confirmed: {
+    label: "Confirmed",
+    color: "#3B82F6",
+    bg: "rgba(59,130,246,0.12)",
+  },
+  in_progress: {
+    label: "In Progress",
+    color: Colors.accent,
+    bg: Colors.accentLight,
+  },
+  completed: {
+    label: "Completed",
+    color: "#6B7280",
+    bg: "rgba(107,114,128,0.12)",
+  },
+  cancelled: {
+    label: "Cancelled",
+    color: "#EF4444",
+    bg: "rgba(239,68,68,0.12)",
+  },
+  weather_held: {
+    label: "Weather Hold",
+    color: "#F59E0B",
+    bg: "rgba(245,158,11,0.12)",
+  },
 };
 
 function formatDate(dateStr: string): string {
@@ -52,7 +79,11 @@ function formatDate(dateStr: string): string {
     a.getDate() === b.getDate();
   if (sameDay(d, today)) return "Today";
   if (sameDay(d, tomorrow)) return "Tomorrow";
-  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  return d.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function formatTime(t: string | null): string {
@@ -67,11 +98,16 @@ export default function MyJobsScreen() {
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useFloatingTabBarHeight();
   const { theme } = useTheme();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { activeCrewProviderId, crewMemberships } = useAuthStore();
-  const membership = crewMemberships.find((m) => m.providerId === activeCrewProviderId);
+  const membership = crewMemberships.find(
+    (m) => m.providerId === activeCrewProviderId,
+  );
 
-  const { data, isLoading, refetch, isFetching } = useQuery<{ jobs: CrewJob[] }>({
+  const { data, isLoading, refetch, isFetching } = useQuery<{
+    jobs: CrewJob[];
+  }>({
     queryKey: [`/api/crew/me/jobs?providerId=${activeCrewProviderId ?? ""}`],
     enabled: !!activeCrewProviderId,
   });
@@ -95,7 +131,10 @@ export default function MyJobsScreen() {
   const todayCount = upcoming.filter((j) => {
     if (!j.scheduledDate) return false;
     const d = new Date(j.scheduledDate);
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() === todayStart;
+    return (
+      new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() ===
+      todayStart
+    );
   }).length;
 
   return (
@@ -117,10 +156,16 @@ export default function MyJobsScreen() {
         }
       >
         {membership ? (
-          <View style={[styles.banner, { backgroundColor: Colors.accentLight }]}>
-            <View style={[styles.bannerDot, { backgroundColor: Colors.accent }]} />
+          <View
+            style={[styles.banner, { backgroundColor: Colors.accentLight }]}
+          >
+            <View
+              style={[styles.bannerDot, { backgroundColor: Colors.accent }]}
+            />
             <View style={{ flex: 1 }}>
-              <ThemedText style={[styles.bannerProvider, { color: Colors.accent }]}>
+              <ThemedText
+                style={[styles.bannerProvider, { color: Colors.accent }]}
+              >
                 {membership.providerName}
               </ThemedText>
               <ThemedText style={[styles.bannerSub, { color: Colors.accent }]}>
@@ -134,35 +179,60 @@ export default function MyJobsScreen() {
         ) : null}
 
         {isLoading ? (
-          <ActivityIndicator color={Colors.accent} style={{ marginTop: Spacing["2xl"] }} />
+          <ActivityIndicator
+            color={Colors.accent}
+            style={{ marginTop: Spacing["2xl"] }}
+          />
         ) : (
           <>
-            <ThemedText style={[styles.sectionTitle, { color: theme.textSecondary }]}>
+            <ThemedText
+              style={[styles.sectionTitle, { color: theme.textSecondary }]}
+            >
               Upcoming
             </ThemedText>
 
             {upcoming.length === 0 ? (
-              <View style={[styles.emptyBox, { backgroundColor: theme.backgroundSecondary }]}>
+              <View
+                style={[
+                  styles.emptyBox,
+                  { backgroundColor: theme.backgroundSecondary },
+                ]}
+              >
                 <Feather name="calendar" size={20} color={theme.textTertiary} />
-                <ThemedText style={[styles.emptyText, { color: theme.textSecondary }]}>
+                <ThemedText
+                  style={[styles.emptyText, { color: theme.textSecondary }]}
+                >
                   No upcoming jobs assigned to you
                 </ThemedText>
               </View>
             ) : (
               upcoming.map((j) => (
-                <JobCard key={j.id} job={j} navigation={navigation} theme={theme} />
+                <JobCard
+                  key={j.id}
+                  job={j}
+                  navigation={navigation}
+                  theme={theme}
+                />
               ))
             )}
 
             {history.length > 0 ? (
               <>
                 <ThemedText
-                  style={[styles.sectionTitle, { color: theme.textSecondary, marginTop: Spacing.xl }]}
+                  style={[
+                    styles.sectionTitle,
+                    { color: theme.textSecondary, marginTop: Spacing.xl },
+                  ]}
                 >
                   History
                 </ThemedText>
                 {history.map((j) => (
-                  <JobCard key={j.id} job={j} navigation={navigation} theme={theme} />
+                  <JobCard
+                    key={j.id}
+                    job={j}
+                    navigation={navigation}
+                    theme={theme}
+                  />
                 ))}
               </>
             ) : null}
@@ -187,7 +257,9 @@ function JobCard({
     color: "#6B7280",
     bg: "rgba(107,114,128,0.12)",
   };
-  const dateLabel = job.scheduledDate ? formatDate(job.scheduledDate) : "Unscheduled";
+  const dateLabel = job.scheduledDate
+    ? formatDate(job.scheduledDate)
+    : "Unscheduled";
   const timeLabel = formatTime(job.scheduledTime);
 
   return (

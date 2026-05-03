@@ -31,11 +31,11 @@ interface CrewJob {
 }
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string }> = {
-  scheduled:    { color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
-  confirmed:    { color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
-  in_progress:  { color: Colors.accent, bg: Colors.accentLight },
-  completed:    { color: "#6B7280", bg: "rgba(107,114,128,0.12)" },
-  cancelled:    { color: "#EF4444", bg: "rgba(239,68,68,0.12)" },
+  scheduled: { color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
+  confirmed: { color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
+  in_progress: { color: Colors.accent, bg: Colors.accentLight },
+  completed: { color: "#6B7280", bg: "rgba(107,114,128,0.12)" },
+  cancelled: { color: "#EF4444", bg: "rgba(239,68,68,0.12)" },
   weather_held: { color: "#F59E0B", bg: "rgba(245,158,11,0.12)" },
 };
 
@@ -55,7 +55,8 @@ export default function CrewScheduleScreen() {
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useFloatingTabBarHeight();
   const { theme } = useTheme();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { activeCrewProviderId } = useAuthStore();
   const [offset, setOffset] = useState(0);
 
@@ -70,9 +71,9 @@ export default function CrewScheduleScreen() {
     queryKey: [`/api/crew/me/jobs?providerId=${activeCrewProviderId ?? ""}`],
     enabled: !!activeCrewProviderId,
   });
-  const jobs = data?.jobs ?? [];
 
   const grouped = useMemo(() => {
+    const jobs = data?.jobs ?? [];
     const map = new Map<string, CrewJob[]>();
     for (const j of jobs) {
       if (!j.scheduledDate || j.status === "cancelled") continue;
@@ -82,7 +83,7 @@ export default function CrewScheduleScreen() {
       map.set(k, arr);
     }
     return map;
-  }, [jobs]);
+  }, [data]);
 
   const dayJobs = (grouped.get(dateKey(selected)) ?? []).sort((a, b) =>
     (a.scheduledTime ?? "").localeCompare(b.scheduledTime ?? ""),
@@ -159,20 +160,30 @@ export default function CrewScheduleScreen() {
                       color: isSelected
                         ? "#FFF"
                         : isToday
-                        ? Colors.accent
-                        : theme.text,
+                          ? Colors.accent
+                          : theme.text,
                     },
                   ]}
                 >
                   {d.getDate()}
                 </ThemedText>
                 {isToday && !isSelected ? (
-                  <View style={[styles.dot, { backgroundColor: Colors.accent }]} />
+                  <View
+                    style={[styles.dot, { backgroundColor: Colors.accent }]}
+                  />
                 ) : jobCount > 0 && !isSelected ? (
-                  <View style={[styles.dot, { backgroundColor: theme.textTertiary }]} />
+                  <View
+                    style={[
+                      styles.dot,
+                      { backgroundColor: theme.textTertiary },
+                    ]}
+                  />
                 ) : isSelected && jobCount > 0 ? (
                   <View
-                    style={[styles.dot, { backgroundColor: "rgba(255,255,255,0.7)" }]}
+                    style={[
+                      styles.dot,
+                      { backgroundColor: "rgba(255,255,255,0.7)" },
+                    ]}
                   />
                 ) : (
                   <View style={styles.dot} />
@@ -205,13 +216,21 @@ export default function CrewScheduleScreen() {
         showsVerticalScrollIndicator={false}
       >
         {isLoading ? (
-          <ActivityIndicator color={Colors.accent} style={{ marginTop: Spacing.xl }} />
+          <ActivityIndicator
+            color={Colors.accent}
+            style={{ marginTop: Spacing.xl }}
+          />
         ) : dayJobs.length === 0 ? (
           <View
-            style={[styles.emptyBox, { backgroundColor: theme.backgroundSecondary }]}
+            style={[
+              styles.emptyBox,
+              { backgroundColor: theme.backgroundSecondary },
+            ]}
           >
             <Feather name="sun" size={20} color={theme.textTertiary} />
-            <ThemedText style={[styles.emptyText, { color: theme.textSecondary }]}>
+            <ThemedText
+              style={[styles.emptyText, { color: theme.textSecondary }]}
+            >
               No jobs scheduled for this day
             </ThemedText>
           </View>
@@ -264,7 +283,9 @@ export default function CrewScheduleScreen() {
                     ]}
                     testID={`crew-schedule-job-${j.id}`}
                   >
-                    <View style={[styles.cardBar, { backgroundColor: cfg.color }]} />
+                    <View
+                      style={[styles.cardBar, { backgroundColor: cfg.color }]}
+                    />
                     <View style={styles.cardContent}>
                       <ThemedText style={styles.cardTitle} numberOfLines={1}>
                         {j.title}
@@ -277,7 +298,10 @@ export default function CrewScheduleScreen() {
                             color={theme.textTertiary}
                           />
                           <ThemedText
-                            style={[styles.addrText, { color: theme.textSecondary }]}
+                            style={[
+                              styles.addrText,
+                              { color: theme.textSecondary },
+                            ]}
                             numberOfLines={1}
                           >
                             {j.address}
