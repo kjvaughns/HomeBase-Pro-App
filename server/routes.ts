@@ -10701,7 +10701,7 @@ Respond with JSON only:
     requireAuth,
     async (req: Request, res: Response) => {
       try {
-        const userId = req.user?.userId;
+        const userId = req.authenticatedUserId;
         if (!userId) return res.status(401).json({ error: "Unauthorized" });
         const provider = await storage.getProviderByUserId(userId);
         if (!provider) return res.json({ candidates: [] });
