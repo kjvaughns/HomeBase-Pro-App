@@ -85,6 +85,17 @@ export async function runBootMigrations(): Promise<void> {
     // ── payments: missing amount_cents column ─────────────────────────────
     await runSql("payments.amount_cents", `ALTER TABLE payments ADD COLUMN IF NOT EXISTS amount_cents INTEGER NOT NULL DEFAULT 0`);
 
+    // ── payments: Task #295 manual payment metadata ───────────────────────
+    await runSql("payments.photo_url",   `ALTER TABLE payments ADD COLUMN IF NOT EXISTS photo_url TEXT`);
+    await runSql("payments.received_at", `ALTER TABLE payments ADD COLUMN IF NOT EXISTS received_at TIMESTAMP`);
+    await runSql("payments.created_by",  `ALTER TABLE payments ADD COLUMN IF NOT EXISTS created_by VARCHAR REFERENCES users(id) ON DELETE SET NULL`);
+    await runSql("payments.voided_at",   `ALTER TABLE payments ADD COLUMN IF NOT EXISTS voided_at TIMESTAMP`);
+    await runSql("payments.voided_by",   `ALTER TABLE payments ADD COLUMN IF NOT EXISTS voided_by VARCHAR REFERENCES users(id) ON DELETE SET NULL`);
+    await runSql(
+      "payments.received_at.backfill",
+      `UPDATE payments SET received_at = created_at WHERE received_at IS NULL`,
+    );
+
     // ── payments.status: drift discovered in Task #203 audit. Schema declares
     // payment_status enum on this column but Supabase was missing it.
     await runSql("payments.status", `ALTER TABLE payments ADD COLUMN IF NOT EXISTS status payment_status DEFAULT 'requires_payment'`);

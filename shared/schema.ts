@@ -1077,6 +1077,15 @@ export const payments = pgTable("payments", {
 
   reference: text("reference"), // transaction ID or check number
   notes: text("notes"),
+  // Task #295: manual payment metadata. `photoUrl` stores receipt proof in
+  // the `job-photos` Supabase bucket; `receivedAt` is the date the payment
+  // was actually collected (defaults to createdAt for stripe rows). The
+  // void columns power the soft-delete + audit trail for manual entries.
+  photoUrl: text("photo_url"),
+  receivedAt: timestamp("received_at"),
+  createdBy: varchar("created_by").references(() => users.id, { onDelete: "set null" }),
+  voidedAt: timestamp("voided_at"),
+  voidedBy: varchar("voided_by").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
   // Task #245: enforce idempotency on webhook-driven payment upserts. A

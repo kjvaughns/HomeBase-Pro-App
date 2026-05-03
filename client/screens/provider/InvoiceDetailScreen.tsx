@@ -31,6 +31,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useLayout } from "@/hooks/useLayout";
 import { apiRequest } from "@/lib/query-client";
 import { recordHappyMoment } from "@/state/appReviewStore";
+import { RecordPaymentSheet, type ExistingPayment } from "@/components/RecordPaymentSheet";
 
 type RouteParams = {
   InvoiceDetail: { invoiceId: string };
@@ -51,7 +52,9 @@ interface Invoice {
   invoiceNumber?: string;
   amount: string;
   total?: string;
-  status: "draft" | "sent" | "paid" | "overdue" | "cancelled";
+  status: "draft" | "sent" | "paid" | "partially_paid" | "overdue" | "cancelled";
+  totalAmount?: string;
+  amountCents?: number;
   dueDate?: string;
   paidAt?: string;
   notes?: string;
@@ -131,6 +134,9 @@ export default function InvoiceDetailScreen() {
   const [confirmType, setConfirmType] = useState<ConfirmType>(null);
   const [paymentLinkUrl, setPaymentLinkUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [paymentSheetOpen, setPaymentSheetOpen] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<ExistingPayment | null>(null);
+  const [confirmVoidId, setConfirmVoidId] = useState<string | null>(null);
   const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showBanner = (msg: string) => {
@@ -195,6 +201,56 @@ export default function InvoiceDetailScreen() {
   const { data: connectData } = useQuery<{ chargesEnabled: boolean; stripeAccountId?: string | null }>({
     queryKey: ["/api/stripe/connect/status", providerId],
     enabled: !!providerId,
+  });
+
+  // Task #295: load manual payments + Stripe payments recorded against this
+  // invoice so the provider can review, edit and void out-of-band entries.
+  interface PaymentRow {
+    id: string;
+    amountCents: number;
+    method: string;
+    status: string;
+    reference?: string | null;
+    notes?: string | null;
+    receivedAt?: string | null;
+    photoUrl?: string | null;
+    voidedAt?: string | null;
+    createdAt: string;
+  }
+  const { data: paymentsData } = useQuery<{ payments: PaymentRow[] }>({
+    queryKey: ["/api/invoices", invoiceId, "payments"],
+    enabled: !!invoiceId,
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/invoices/${invoiceId}/payments`);
+      if (!res.ok) throw new Error("Failed to load payments");
+      return res.json();
+    },
+  });
+  const payments = paymentsData?.payments ?? [];
+
+  const voidPaymentMutation = useMutation({
+    mutationFn: async (paymentId: string) => {
+      const res = await apiRequest("POST", `/api/payments/${paymentId}/void`, {});
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || "Failed to void payment");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      setConfirmVoidId(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/invoices", invoiceId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/invoices", invoiceId, "payments"] });
+      if (providerId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "invoices"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/providers", providerId, "manual-payments"] });
+      }
+      showBanner("Payment voided");
+    },
+    onError: (err: Error) => {
+      setConfirmVoidId(null);
+      Alert.alert("Couldn't void payment", err.message);
+    },
   });
 
   const stripeReady = !!(connectData?.chargesEnabled);
@@ -315,11 +371,17 @@ export default function InvoiceDetailScreen() {
   const getStatusType = (status: Invoice["status"]): "success" | "warning" | "info" | "neutral" => {
     switch (status) {
       case "paid": return "success";
+      case "partially_paid": return "warning";
       case "sent": return "info";
       case "overdue": return "warning";
       default: return "neutral";
     }
   };
+
+  const formatStatusLabel = (status: Invoice["status"]) =>
+    status === "partially_paid"
+      ? "Partially Paid"
+      : status.charAt(0).toUpperCase() + status.slice(1);
 
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
@@ -351,6 +413,15 @@ export default function InvoiceDetailScreen() {
 
   const client = getClient(invoice.clientId);
   const displayAmount = invoice.total || invoice.amount || "0";
+  const invoiceTotalCents =
+    typeof invoice.amountCents === "number" && invoice.amountCents > 0
+      ? invoice.amountCents
+      : Math.round(parseFloat(displayAmount || "0") * 100);
+  const collectedCents = payments.reduce(
+    (sum, p) => (p.voidedAt ? sum : sum + (p.amountCents ?? 0)),
+    0,
+  );
+  const outstandingCents = Math.max(0, invoiceTotalCents - collectedCents);
   const activePaymentUrl = paymentLinkUrl || invoice.hostedInvoiceUrl || null;
   const anyPending = sendMutation.isPending || markPaidMutation.isPending || cancelMutation.isPending || remindMutation.isPending || paymentLinkMutation.isPending;
 
@@ -395,7 +466,7 @@ export default function InvoiceDetailScreen() {
             </View>
             <StatusPill
               status={getStatusType(invoice.status)}
-              label={invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
+              label={formatStatusLabel(invoice.status)}
             />
           </View>
         </GlassCard>
@@ -567,6 +638,130 @@ export default function InvoiceDetailScreen() {
           </GlassCard>
         ) : null}
 
+        {/* Payments list (Task #295) */}
+        {payments.length > 0 ? (
+          <GlassCard style={styles.section}>
+            <ThemedText style={styles.sectionTitle}>Payments</ThemedText>
+            {payments.map((p, idx) => {
+              const isVoided = !!p.voidedAt;
+              const dollars = (p.amountCents / 100).toFixed(2);
+              const dt = p.receivedAt || p.createdAt;
+              const methodLabel =
+                p.method === "bank_transfer"
+                  ? "Bank Transfer"
+                  : p.method.charAt(0).toUpperCase() + p.method.slice(1);
+              return (
+                <View key={p.id}>
+                  {idx > 0 ? (
+                    <View
+                      style={[styles.itemDivider, { backgroundColor: theme.separator }]}
+                    />
+                  ) : null}
+                  <View style={styles.lineItemRow}>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <ThemedText
+                          style={[
+                            styles.lineItemName,
+                            isVoided ? { textDecorationLine: "line-through", color: theme.textTertiary } : undefined,
+                          ]}
+                        >
+                          ${dollars} • {methodLabel}
+                        </ThemedText>
+                        {isVoided ? (
+                          <View
+                            style={{
+                              paddingHorizontal: 6,
+                              paddingVertical: 2,
+                              borderRadius: 6,
+                              backgroundColor: theme.backgroundSecondary,
+                            }}
+                          >
+                            <ThemedText style={{ fontSize: 10, color: theme.textSecondary, fontWeight: "700" }}>
+                              VOIDED
+                            </ThemedText>
+                          </View>
+                        ) : null}
+                      </View>
+                      <ThemedText style={[styles.lineItemMeta, { color: theme.textTertiary }]}>
+                        {formatDate(dt)}
+                        {p.reference ? ` • Ref ${p.reference}` : ""}
+                      </ThemedText>
+                      {p.notes ? (
+                        <ThemedText
+                          style={[styles.lineItemMeta, { color: theme.textSecondary, marginTop: 2 }]}
+                        >
+                          {p.notes}
+                        </ThemedText>
+                      ) : null}
+                    </View>
+                    {!isVoided && p.method !== "stripe" ? (
+                      confirmVoidId === p.id ? (
+                        <View style={{ flexDirection: "row", gap: 6 }}>
+                          <Pressable
+                            onPress={() => setConfirmVoidId(null)}
+                            hitSlop={6}
+                            style={{ paddingHorizontal: 8, paddingVertical: 4 }}
+                          >
+                            <ThemedText style={{ color: theme.textSecondary, fontSize: 12 }}>
+                              Cancel
+                            </ThemedText>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => voidPaymentMutation.mutate(p.id)}
+                            hitSlop={6}
+                            style={{
+                              paddingHorizontal: 8,
+                              paddingVertical: 4,
+                              backgroundColor: "#EF4444",
+                              borderRadius: 6,
+                            }}
+                            testID={`button-confirm-void-${p.id}`}
+                          >
+                            <ThemedText style={{ color: "#fff", fontSize: 12, fontWeight: "600" }}>
+                              {voidPaymentMutation.isPending ? "..." : "Void"}
+                            </ThemedText>
+                          </Pressable>
+                        </View>
+                      ) : (
+                        <View style={{ flexDirection: "row", gap: 4 }}>
+                          <Pressable
+                            onPress={() => {
+                              setEditingPayment({
+                                id: p.id,
+                                amountCents: p.amountCents,
+                                method: p.method as any,
+                                reference: p.reference ?? null,
+                                notes: p.notes ?? null,
+                                receivedAt: p.receivedAt ?? null,
+                                photoUrl: p.photoUrl ?? null,
+                              });
+                              setPaymentSheetOpen(true);
+                            }}
+                            hitSlop={8}
+                            style={{ padding: 6 }}
+                            testID={`button-edit-payment-${p.id}`}
+                          >
+                            <Feather name="edit-2" size={16} color={Colors.accent} />
+                          </Pressable>
+                          <Pressable
+                            onPress={() => setConfirmVoidId(p.id)}
+                            hitSlop={8}
+                            style={{ padding: 6 }}
+                            testID={`button-void-payment-${p.id}`}
+                          >
+                            <Feather name="trash-2" size={16} color={theme.textSecondary} />
+                          </Pressable>
+                        </View>
+                      )
+                    ) : null}
+                  </View>
+                </View>
+              );
+            })}
+          </GlassCard>
+        ) : null}
+
         {/* Actions */}
         <View style={styles.buttons}>
           {/* Draft: Send Invoice */}
@@ -581,30 +776,24 @@ export default function InvoiceDetailScreen() {
             </PrimaryButton>
           ) : null}
 
-          {/* Sent / Overdue: Mark Paid (Cash/Offline)
-              Stripe-paid invoices flip to "paid" automatically via the webhook
-              after the homeowner finishes Checkout, so this button is only for
-              recording out-of-band (cash, check, transfer) payments. When the
-              provider has Stripe set up, we explain that to avoid confusion. */}
-          {(invoice.status === "sent" || invoice.status === "overdue") ? (
-            confirmType === "mark-paid" ? (
-              <InlineConfirm
-                message="Record this invoice as paid outside of Stripe (cash, check, transfer)? Stripe payments update automatically."
-                confirmLabel="Yes, Mark Paid (Offline)"
-                onConfirm={() => markPaidMutation.mutate()}
-                onCancel={() => setConfirmType(null)}
-                loading={markPaidMutation.isPending}
-                theme={theme}
-              />
-            ) : (
-              <SecondaryButton
-                onPress={() => setConfirmType("mark-paid")}
-                disabled={anyPending}
-                testID="button-mark-paid"
-              >
-                {stripeReady ? "Mark Paid (Cash/Offline)" : "Mark as Paid"}
-              </SecondaryButton>
-            )
+          {/* Sent / Partially Paid / Overdue: Record a manual (cash, check,
+              card, transfer) payment. Stripe-paid invoices update via webhook
+              automatically — this flow records out-of-band collections and
+              transitions the invoice to partially_paid or paid based on the
+              cumulative non-voided amount. */}
+          {(invoice.status === "sent" ||
+            invoice.status === "overdue" ||
+            invoice.status === "partially_paid") ? (
+            <SecondaryButton
+              onPress={() => {
+                setEditingPayment(null);
+                setPaymentSheetOpen(true);
+              }}
+              disabled={anyPending}
+              testID="button-record-payment"
+            >
+              Record Payment
+            </SecondaryButton>
           ) : null}
 
           {stripeReady && (invoice.status === "sent" || invoice.status === "overdue") ? (
@@ -668,6 +857,21 @@ export default function InvoiceDetailScreen() {
           ) : null}
         </View>
       </ScrollView>
+
+      <RecordPaymentSheet
+        visible={paymentSheetOpen}
+        onClose={() => {
+          setPaymentSheetOpen(false);
+          setEditingPayment(null);
+        }}
+        invoiceId={invoiceId!}
+        providerId={providerId}
+        suggestedAmountCents={editingPayment ? undefined : outstandingCents}
+        existing={editingPayment}
+        onSuccess={() => {
+          showBanner(editingPayment ? "Payment updated" : "Payment recorded");
+        }}
+      />
     </ThemedView>
   );
 }

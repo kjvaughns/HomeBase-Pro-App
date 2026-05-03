@@ -502,14 +502,107 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPaymentsByInvoice(invoiceId: string): Promise<Payment[]> {
-    return db.select().from(payments).where(eq(payments.invoiceId, invoiceId));
+    return db
+      .select()
+      .from(payments)
+      .where(eq(payments.invoiceId, invoiceId))
+      .orderBy(desc(payments.receivedAt));
   }
 
   async createPayment(payment: InsertPayment): Promise<Payment> {
     const [newPayment] = await db.insert(payments).values(payment).returning();
-    // Also mark invoice as paid
+    // Also mark invoice as paid (legacy stripe path)
     await this.markInvoicePaid(payment.invoiceId);
     return newPayment;
+  }
+
+  // ── Task #295: manual (cash/check/other) payment helpers ──────────────
+  // The plain `createPayment` above auto-marks the invoice as fully paid,
+  // which is correct for Stripe webhook upserts (one payment == full
+  // settlement). Manual payments support partial collection, so we
+  // recompute status from the sum of non-voided rows instead.
+
+  async recomputeInvoiceStatusFromPayments(invoiceId: string): Promise<Invoice | undefined> {
+    const [invoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+    if (!invoice) return undefined;
+    // void / cancelled / refunded invoices should not auto-flip back.
+    if (
+      invoice.status === "void" ||
+      invoice.status === "cancelled" ||
+      invoice.status === "refunded"
+    ) {
+      return invoice;
+    }
+
+    const rows = await db
+      .select({ amountCents: payments.amountCents })
+      .from(payments)
+      .where(and(eq(payments.invoiceId, invoiceId), sql`${payments.voidedAt} IS NULL`));
+    const collectedCents = rows.reduce((sum, r) => sum + (r.amountCents ?? 0), 0);
+    const totalCents = invoice.totalCents ?? 0;
+
+    let nextStatus: Invoice["status"] = invoice.status;
+    let nextPaidAt: Date | null = invoice.paidAt ?? null;
+    if (totalCents > 0 && collectedCents >= totalCents) {
+      nextStatus = "paid";
+      nextPaidAt = invoice.paidAt ?? new Date();
+    } else if (collectedCents > 0) {
+      nextStatus = "partially_paid";
+      nextPaidAt = null;
+    } else {
+      // No payments left (e.g. all voided) — revert to sent or draft.
+      nextStatus = invoice.sentAt ? "sent" : "draft";
+      nextPaidAt = null;
+    }
+
+    if (nextStatus === invoice.status && nextPaidAt === invoice.paidAt) {
+      return invoice;
+    }
+    const [updated] = await db
+      .update(invoices)
+      .set({ status: nextStatus, paidAt: nextPaidAt })
+      .where(eq(invoices.id, invoiceId))
+      .returning();
+    return updated;
+  }
+
+  async createManualPayment(payment: InsertPayment): Promise<Payment> {
+    const [row] = await db.insert(payments).values(payment).returning();
+    await this.recomputeInvoiceStatusFromPayments(payment.invoiceId);
+    return row;
+  }
+
+  async updateManualPayment(
+    id: string,
+    patch: Partial<Pick<Payment, "amountCents" | "method" | "receivedAt" | "reference" | "notes" | "photoUrl">>,
+  ): Promise<Payment | undefined> {
+    const [row] = await db.update(payments).set(patch).where(eq(payments.id, id)).returning();
+    if (row) await this.recomputeInvoiceStatusFromPayments(row.invoiceId);
+    return row || undefined;
+  }
+
+  async voidPayment(id: string, voidedBy: string): Promise<Payment | undefined> {
+    const [row] = await db
+      .update(payments)
+      .set({ voidedAt: new Date(), voidedBy, status: "refunded" })
+      .where(eq(payments.id, id))
+      .returning();
+    if (row) await this.recomputeInvoiceStatusFromPayments(row.invoiceId);
+    return row || undefined;
+  }
+
+  async getPayment(id: string): Promise<Payment | undefined> {
+    const [row] = await db.select().from(payments).where(eq(payments.id, id));
+    return row || undefined;
+  }
+
+  async getManualPayments(providerId: string): Promise<Payment[]> {
+    // Excludes Stripe (those are tracked via the Stripe payouts feed).
+    return db
+      .select()
+      .from(payments)
+      .where(and(eq(payments.providerId, providerId), sql`${payments.method} <> 'stripe'`))
+      .orderBy(desc(payments.receivedAt));
   }
 
   // Provider dashboard stats

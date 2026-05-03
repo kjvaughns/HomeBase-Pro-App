@@ -20,6 +20,7 @@ import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { getApiUrl } from "@/lib/query-client";
 import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { RecordPaymentSheet } from "@/components/RecordPaymentSheet";
 
 interface ProviderMessageRecord {
   id: string;
@@ -221,6 +222,8 @@ export default function ClientDetailScreen() {
   const providerId = providerProfile?.id;
 
   const [activeTab, setActiveTab] = useState<TabType>("overview");
+  const [paymentSheetOpen, setPaymentSheetOpen] = useState(false);
+  const [paymentInvoiceId, setPaymentInvoiceId] = useState<string | null>(null);
 
   const { data: clientDetailData, isLoading } = useQuery<{
     client: ClientRecord;
@@ -344,8 +347,28 @@ export default function ClientDetailScreen() {
                 {formatCurrency(client.outstandingBalance ?? 0)}
               </ThemedText>
             </View>
-            <Pressable style={[styles.alertButton, { backgroundColor: "#EF4444" }]}>
-              <ThemedText type="caption" style={{ color: "#FFFFFF" }}>Send Reminder</ThemedText>
+            <Pressable
+              style={[styles.alertButton, { backgroundColor: Colors.accent }]}
+              onPress={() => {
+                const unpaid = invoices.find(
+                  (inv) =>
+                    inv.status === "sent" ||
+                    inv.status === "overdue" ||
+                    inv.status === "partially_paid",
+                );
+                if (!unpaid) {
+                  Alert.alert(
+                    "No open invoice",
+                    "Create or send an invoice first to record a payment against it.",
+                  );
+                  return;
+                }
+                setPaymentInvoiceId(unpaid.id);
+                setPaymentSheetOpen(true);
+              }}
+              testID="button-record-payment-client"
+            >
+              <ThemedText type="caption" style={{ color: "#FFFFFF" }}>Record Payment</ThemedText>
             </Pressable>
           </View>
         </GlassCard>
@@ -917,6 +940,22 @@ export default function ClientDetailScreen() {
           {activeTab === "messages" && renderMessages()}
         </View>
       </ScrollView>
+
+      {paymentInvoiceId ? (
+        <RecordPaymentSheet
+          visible={paymentSheetOpen}
+          onClose={() => {
+            setPaymentSheetOpen(false);
+            setPaymentInvoiceId(null);
+          }}
+          invoiceId={paymentInvoiceId}
+          providerId={providerId}
+          onSuccess={() => {
+            setPaymentSheetOpen(false);
+            setPaymentInvoiceId(null);
+          }}
+        />
+      ) : null}
     </ThemedView>
   );
 }

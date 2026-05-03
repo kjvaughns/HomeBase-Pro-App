@@ -20,6 +20,7 @@ import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { RecordPaymentSheet } from "@/components/RecordPaymentSheet";
 
 type JobStatus = "scheduled" | "confirmed" | "on_my_way" | "arrived" | "in_progress" | "completed" | "cancelled" | "weather_held";
 
@@ -798,6 +799,33 @@ export default function ProviderJobDetailScreen() {
     }
   }, [job, navigation]);
 
+  // Task #295: surface manual payment recording on completed jobs that have
+  // a generated invoice — providers often collect cash/check on-site.
+  interface JobInvoice {
+    id: string;
+    status: string;
+    invoiceNumber: string | null;
+  }
+  const { data: jobInvoiceData } = useQuery<{ invoice: JobInvoice | null }>({
+    queryKey: ["/api/jobs", jobId, "invoice"],
+    enabled: !!jobId,
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/jobs/${jobId}/invoice`);
+      if (!res.ok) {
+        if (res.status === 404) return { invoice: null };
+        throw new Error("Failed to load invoice");
+      }
+      return res.json();
+    },
+  });
+  const jobInvoice = jobInvoiceData?.invoice ?? null;
+  const canRecordPayment =
+    !!jobInvoice &&
+    (jobInvoice.status === "sent" ||
+      jobInvoice.status === "overdue" ||
+      jobInvoice.status === "partially_paid");
+  const [paymentSheetOpen, setPaymentSheetOpen] = useState(false);
+
   const requestReviewMutation = useMutation({
     mutationFn: async () => {
       if (!job) throw new Error("Missing job");
@@ -1131,9 +1159,19 @@ export default function ProviderJobDetailScreen() {
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing.md, backgroundColor: theme.backgroundRoot }]}>
         {resolvedDisplayStatus === "completed" ? (
           <>
-            <PrimaryButton onPress={handleCreateInvoice} style={styles.actionButton}>
-              Create Invoice
-            </PrimaryButton>
+            {canRecordPayment ? (
+              <PrimaryButton
+                onPress={() => setPaymentSheetOpen(true)}
+                style={styles.actionButton}
+                testID="button-record-payment-job"
+              >
+                Record Payment
+              </PrimaryButton>
+            ) : (
+              <PrimaryButton onPress={handleCreateInvoice} style={styles.actionButton}>
+                Create Invoice
+              </PrimaryButton>
+            )}
             <PrimaryButton
               onPress={handleRequestReview}
               style={styles.actionButton}
@@ -1204,6 +1242,15 @@ export default function ProviderJobDetailScreen() {
           </>
         ) : null}
       </View>
+      {jobInvoice ? (
+        <RecordPaymentSheet
+          visible={paymentSheetOpen}
+          onClose={() => setPaymentSheetOpen(false)}
+          invoiceId={jobInvoice.id}
+          providerId={providerId}
+          onSuccess={() => setPaymentSheetOpen(false)}
+        />
+      ) : null}
       <NativeDatePickerSheet
         visible={rescheduleStep === "date"}
         value={rescheduleDraft}

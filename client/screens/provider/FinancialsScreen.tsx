@@ -96,7 +96,22 @@ interface InvoiceRecord {
 }
 
 type SectionTab = "overview" | "transactions" | "more";
-type TransactionTab = "invoices" | "payouts";
+type TransactionTab = "invoices" | "payments" | "payouts";
+
+interface ManualPaymentRecord {
+  id: string;
+  invoiceId: string;
+  amountCents: number;
+  method: string;
+  status: string;
+  reference: string | null;
+  notes: string | null;
+  receivedAt: string | null;
+  voidedAt: string | null;
+  createdAt: string;
+  invoiceNumber: string | null;
+  clientId: string | null;
+}
 type DateRange = "week" | "month" | "quarter" | "year" | "custom";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -1224,6 +1239,30 @@ export default function FinancialsScreen() {
     staleTime: 60_000,
   });
 
+  // ── Manual Payments (Task #295) ────────────────────────────────────────────
+
+  const {
+    data: manualPaymentsData,
+    isLoading: manualPaymentsLoading,
+    refetch: refetchManualPayments,
+  } = useQuery<{ payments: ManualPaymentRecord[] }>({
+    queryKey: ["/api/providers", providerId, "manual-payments"],
+    queryFn: async () => {
+      const url = new URL(
+        `/api/providers/${providerId}/manual-payments`,
+        getApiUrl(),
+      );
+      const res = await fetch(url.toString(), { headers: getAuthHeaders() });
+      if (res.status === 404) return { payments: [] };
+      if (!res.ok) throw new Error("Failed to fetch manual payments");
+      return res.json();
+    },
+    enabled: !!providerId,
+    staleTime: 30_000,
+  });
+
+  const manualPayments = manualPaymentsData?.payments ?? [];
+
   // ── Stripe onboard mutation ────────────────────────────────────────────────
 
   const onboardMutation = useMutation({
@@ -1265,6 +1304,7 @@ export default function FinancialsScreen() {
       refetchStripeStatus(),
       refetchInvoices(),
       refetchPayouts(),
+      refetchManualPayments(),
       refetchNextPayout(),
     ]);
     setRefreshing(false);
@@ -1272,6 +1312,7 @@ export default function FinancialsScreen() {
     refetchStats,
     refetchStripeStatus,
     refetchInvoices,
+    refetchManualPayments,
     refetchPayouts,
     refetchNextPayout,
   ]);
@@ -1341,6 +1382,7 @@ export default function FinancialsScreen() {
 
   const TRANS_TABS: { key: TransactionTab; label: string }[] = [
     { key: "invoices", label: "Invoices" },
+    { key: "payments", label: "Payments" },
     { key: "payouts", label: "Payouts" },
   ];
 
@@ -1380,6 +1422,81 @@ export default function FinancialsScreen() {
               label={invoiceStatusLabel(effectiveStatus)}
               size="small"
             />
+          </View>
+        </Pressable>
+      </Animated.View>
+    );
+  };
+
+  const renderManualPayment = ({ item, index }: { item: ManualPaymentRecord; index: number }) => {
+    const isVoided = !!item.voidedAt;
+    const clientName = item.clientId ? clientMap.get(item.clientId) : null;
+    const methodLabel =
+      item.method === "bank_transfer"
+        ? "Bank Transfer"
+        : item.method.charAt(0).toUpperCase() + item.method.slice(1);
+    const dt = item.receivedAt || item.createdAt;
+    const methodColor =
+      item.method === "cash"
+        ? "#34C759"
+        : item.method === "check"
+        ? "#5856D6"
+        : item.method === "card"
+        ? "#FF9F0A"
+        : item.method === "bank_transfer"
+        ? "#0A84FF"
+        : theme.textSecondary;
+    return (
+      <Animated.View entering={FadeInDown.delay(index * 40).duration(300)}>
+        <Pressable
+          style={[styles.row, { backgroundColor: theme.cardBackground }]}
+          onPress={() => navigation.navigate("InvoiceDetail", { invoiceId: item.invoiceId })}
+          testID={`manual-payment-${item.id}`}
+        >
+          <View style={[styles.rowIcon, { backgroundColor: `${methodColor}22` }]}>
+            <Feather name="dollar-sign" size={16} color={methodColor} />
+          </View>
+          <View style={styles.rowInfo}>
+            <ThemedText
+              style={[
+                styles.rowTitle,
+                isVoided ? { textDecorationLine: "line-through", color: theme.textTertiary } : undefined,
+              ]}
+            >
+              {clientName ?? `Invoice ${item.invoiceNumber ?? ""}`.trim()}
+            </ThemedText>
+            <ThemedText style={[styles.rowSub, { color: theme.textSecondary }]}>
+              {formatDate(dt)}
+              {item.reference ? ` \u00b7 Ref ${item.reference}` : ""}
+            </ThemedText>
+          </View>
+          <View style={styles.rowRight}>
+            <ThemedText
+              style={[
+                styles.rowAmount,
+                isVoided ? { textDecorationLine: "line-through", color: theme.textTertiary } : undefined,
+              ]}
+            >
+              {formatCents(item.amountCents)}
+            </ThemedText>
+            <View
+              style={{
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                borderRadius: 6,
+                backgroundColor: isVoided ? theme.backgroundSecondary : `${methodColor}22`,
+              }}
+            >
+              <ThemedText
+                style={{
+                  fontSize: 11,
+                  fontWeight: "700",
+                  color: isVoided ? theme.textSecondary : methodColor,
+                }}
+              >
+                {isVoided ? "VOIDED" : methodLabel.toUpperCase()}
+              </ThemedText>
+            </View>
           </View>
         </Pressable>
       </Animated.View>
@@ -1847,6 +1964,46 @@ export default function FinancialsScreen() {
           keyExtractor={(item) => item.id}
           ListHeaderComponent={<SharedHeader />}
           ListEmptyComponent={<IncomeEmpty />}
+          contentContainerStyle={{
+            paddingTop: headerHeight + Spacing.md,
+            paddingBottom: tabBarHeight + Spacing.xl,
+            paddingHorizontal: horizontalPadding,
+          }}
+          scrollIndicatorInsets={{ bottom: insets.bottom }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
+          }
+        />
+      </ThemedView>
+    );
+  }
+
+  // Transactions — Payments tab (manual cash/check/etc)
+  if (transactionTab === "payments") {
+    const PaymentsEmpty = () => {
+      if (manualPaymentsLoading) {
+        return <View>{SKELETON_KEYS.map((k) => <SkeletonRow key={k} theme={theme} />)}</View>;
+      }
+      return (
+        <View style={styles.emptyContainer}>
+          <EmptyState
+            image={require("../../../assets/images/empty-bookings.png")}
+            title="No payments recorded"
+            description="Cash, check, and other manual payments you record will show up here."
+          />
+        </View>
+      );
+    };
+    return (
+      <ThemedView style={styles.container}>
+        {howModal}
+        <FlatList<ManualPaymentRecord>
+          data={manualPayments}
+          renderItem={renderManualPayment}
+          keyExtractor={(item) => item.id}
+          ListHeaderComponent={<SharedHeader />}
+          ListEmptyComponent={<PaymentsEmpty />}
           contentContainerStyle={{
             paddingTop: headerHeight + Spacing.md,
             paddingBottom: tabBarHeight + Spacing.xl,
