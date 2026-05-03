@@ -225,29 +225,8 @@ export default function ProviderMoreScreen() {
               subtitle="Send messages and push notifications to clients"
               leftIcon="send"
               onPress={() => navigation.navigate("Communications")}
+              isLast
             />
-            <ListRow
-              title="Switch to Homeowner"
-              subtitle="View HomeBase as a homeowner"
-              leftIcon="home"
-              onPress={handleSwitchToHomeowner}
-              isLast={crewMemberships.length === 0}
-              testID="row-switch-to-homeowner"
-            />
-            {crewMemberships.length > 0 ? (
-              <ListRow
-                title="Switch to Crew Mode"
-                subtitle={
-                  crewMemberships.length === 1
-                    ? `Run jobs for ${crewMemberships[0].providerName}`
-                    : `Run jobs for ${crewMemberships.length} businesses`
-                }
-                leftIcon="users"
-                onPress={handleSwitchToCrew}
-                isLast
-                testID="row-switch-to-crew"
-              />
-            ) : null}
           </View>
         </Animated.View>
 
@@ -302,8 +281,29 @@ export default function ProviderMoreScreen() {
               title="Notification Preferences"
               leftIcon="sliders"
               onPress={() => navigation.navigate("NotificationPreferences")}
-              isLast
             />
+            <ListRow
+              title="Switch to Homeowner Mode"
+              subtitle="Browse and book services"
+              leftIcon="home"
+              onPress={handleSwitchToHomeowner}
+              isLast={crewMemberships.length === 0}
+              testID="row-switch-to-homeowner"
+            />
+            {crewMemberships.length > 0 ? (
+              <ListRow
+                title="Switch to Crew Mode"
+                subtitle={
+                  crewMemberships.length === 1
+                    ? `Run jobs for ${crewMemberships[0].providerName}`
+                    : `Run jobs for ${crewMemberships.length} businesses`
+                }
+                leftIcon="users"
+                onPress={handleSwitchToCrew}
+                isLast
+                testID="row-switch-to-crew"
+              />
+            ) : null}
           </View>
         </Animated.View>
 
