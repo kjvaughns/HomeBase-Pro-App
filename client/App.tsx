@@ -20,6 +20,7 @@ import { useThemeStore } from "@/state/themeStore";
 import { useOnboardingStore } from "@/state/onboardingStore";
 import { initAppReviewTracker } from "@/state/appReviewStore";
 import { useAuthStore } from "@/state/authStore";
+import { initNetworkStore } from "@/state/networkStore";
 import { initSentry, setSentryUser } from "@/lib/sentry";
 import { initAnalytics, identifyUser, resetAnalytics } from "@/lib/analytics";
 import { useTheme } from "@/hooks/useTheme";
@@ -101,6 +102,7 @@ export default function App() {
     // init helpers are idempotent + no-op when env keys are missing, so
     // calling them here is safe even when also called in the boot effect.
     initSentry();
+    initNetworkStore();
     void initAnalytics().then(() => {
       if (isAuthenticated && userId) {
         setSentryUser({ id: userId });

@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   StyleProp,
   ViewStyle,
+  Alert,
 } from "react-native";
 import {
   Gesture,
@@ -36,6 +37,12 @@ import { apiRequest } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { QuickAddJobSheet } from "@/components/QuickAddJobSheet";
 import { RouteView } from "@/components/RouteView";
+import { useNetworkStore } from "@/state/networkStore";
+import {
+  saveScheduleSnapshot,
+  loadScheduleSnapshot,
+  formatLastUpdated,
+} from "@/lib/offline-cache";
 
 // ─── Long-press wrapper using react-native-gesture-handler ───────────────────
 
@@ -1093,8 +1100,63 @@ export default function ScheduleScreen() {
     return m;
   }, [crew]);
 
-  const jobs = jobsData?.jobs || [];
-  const clients = clientsData?.clients || [];
+  const isOnline = useNetworkStore((s) => s.isOnline);
+  const [offlineSnapshot, setOfflineSnapshot] = useState<{
+    jobs: Job[];
+    clients: Client[];
+    savedAt: number;
+  } | null>(null);
+
+  // Hydrate the cached snapshot once we know who the provider is so the
+  // offline path always has data to render even before the first online fetch.
+  useEffect(() => {
+    if (!providerId) return;
+    let cancelled = false;
+    loadScheduleSnapshot<Job, Client>(providerId).then((snap) => {
+      if (!cancelled && snap) setOfflineSnapshot(snap);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [providerId]);
+
+  // Persist the next 7 days of jobs (and the client roster needed to render
+  // them) every time a fresh fetch lands.
+  useEffect(() => {
+    if (!providerId) return;
+    if (!jobsData?.jobs || !clientsData?.clients) return;
+    void saveScheduleSnapshot(
+      providerId,
+      jobsData.jobs,
+      clientsData.clients,
+    ).then(() => {
+      // Re-read what we just persisted so the in-memory snapshot is bound by
+      // the same 7-day trimming as the on-disk copy.
+      loadScheduleSnapshot<Job, Client>(providerId).then((snap) => {
+        if (snap) setOfflineSnapshot(snap);
+      });
+    });
+  }, [providerId, jobsData, clientsData]);
+
+  // When connectivity returns, force a refetch so the read-only banner
+  // disappears and the data catches up.
+  useEffect(() => {
+    if (!isOnline || !providerId) return;
+    queryClient.invalidateQueries({
+      queryKey: ["/api/provider", providerId, "jobs"],
+    });
+    queryClient.invalidateQueries({
+      queryKey: ["/api/provider", providerId, "clients"],
+    });
+  }, [isOnline, providerId, queryClient]);
+
+  const liveJobs = jobsData?.jobs;
+  const liveClients = clientsData?.clients;
+  const useOfflineData = !isOnline && !liveJobs && !!offlineSnapshot;
+  const jobs = useOfflineData ? offlineSnapshot!.jobs : liveJobs || [];
+  const clients = useOfflineData
+    ? offlineSnapshot!.clients
+    : liveClients || [];
 
   const getClientName = useCallback(
     (clientId: string) => {
@@ -1130,11 +1192,15 @@ export default function ScheduleScreen() {
 
   const handleQuickAction = useCallback(
     (jobId: string, action: string) => {
+      if (!isOnline) {
+        Alert.alert("You're offline", "Reconnect to update job status.");
+        return;
+      }
       setActionLoadingId(jobId);
       if (action === "start") startMutation.mutate(jobId);
       else if (action === "complete") completeMutation.mutate(jobId);
     },
-    [startMutation, completeMutation],
+    [startMutation, completeMutation, isOnline],
   );
 
   const onRefresh = async () => {
@@ -1291,6 +1357,7 @@ export default function ScheduleScreen() {
   type ListRow =
     | { type: "banner"; key: string }
     | { type: "backfill"; key: string }
+    | { type: "offline"; key: string; savedAt: number }
     | { type: "dateHeader"; key: string; label: string }
     | { type: "job"; key: string; job: Job }
     | { type: "empty"; key: string }
@@ -1298,6 +1365,9 @@ export default function ScheduleScreen() {
 
   const listData = useMemo((): ListRow[] => {
     const rows: ListRow[] = [];
+    if (!isOnline && offlineSnapshot) {
+      rows.push({ type: "offline", key: "offline", savedAt: offlineSnapshot.savedAt });
+    }
     if (
       !dismissedBackfill &&
       backfillCandidates.length > 0 &&
@@ -1331,6 +1401,8 @@ export default function ScheduleScreen() {
     backfillCandidates.length,
     dismissedBackfill,
     backfillMutation.isPending,
+    isOnline,
+    offlineSnapshot,
   ]);
 
   const isCalendarMode = viewMode === "month";
@@ -1609,6 +1681,36 @@ export default function ScheduleScreen() {
                         </Pressable>
                       </View>
                     </GlassCard>
+                  </Animated.View>
+                );
+              }
+              if (item.type === "offline") {
+                return (
+                  <Animated.View entering={FadeInDown.duration(250)}>
+                    <View
+                      style={[
+                        styles.offlineBanner,
+                        { borderColor: theme.border, backgroundColor: theme.backgroundSecondary },
+                      ]}
+                      testID="banner-schedule-offline"
+                    >
+                      <View style={styles.offlineBannerIconWrap}>
+                        <Feather name="wifi-off" size={16} color={theme.text} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <ThemedText style={styles.offlineBannerTitle}>
+                          Offline — read-only
+                        </ThemedText>
+                        <ThemedText
+                          style={[
+                            styles.offlineBannerSubtitle,
+                            { color: theme.textSecondary },
+                          ]}
+                        >
+                          Last updated {formatLastUpdated(item.savedAt)}. Reconnect to make changes.
+                        </ThemedText>
+                      </View>
+                    </View>
                   </Animated.View>
                 );
               }
@@ -1911,6 +2013,32 @@ const styles = StyleSheet.create({
   backfillBtnText: {
     fontSize: 14,
     fontWeight: "600",
+  },
+
+  // Offline read-only banner
+  offlineBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: Spacing.sm,
+  },
+  offlineBannerIconWrap: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  offlineBannerTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  offlineBannerSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
   },
 
   // Today Banner

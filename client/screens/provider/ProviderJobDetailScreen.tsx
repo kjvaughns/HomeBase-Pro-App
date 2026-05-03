@@ -21,6 +21,8 @@ import { useAuthStore } from "@/state/authStore";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { RecordPaymentSheet } from "@/components/RecordPaymentSheet";
+import { useNetworkStore } from "@/state/networkStore";
+import { loadScheduleSnapshot } from "@/lib/offline-cache";
 
 type JobStatus = "scheduled" | "confirmed" | "on_my_way" | "arrived" | "in_progress" | "completed" | "cancelled" | "weather_held";
 
@@ -413,18 +415,59 @@ export default function ProviderJobDetailScreen() {
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
   const checklistFetched = useRef(false);
 
+  const isOnline = useNetworkStore((s) => s.isOnline);
+
   const { data: jobData, isLoading } = useQuery<{ job: ApiJob }>({
     queryKey: ["/api/jobs", jobId],
-    enabled: !!jobId,
+    enabled: !!jobId && isOnline,
   });
 
-  const job = jobData?.job;
+  // Offline fallback: hydrate this job (and its client) from the schedule
+  // snapshot the provider previously cached. Read-only — write actions stay
+  // gated behind the connectivity check below.
+  const [offlineJob, setOfflineJob] = useState<ApiJob | null>(null);
+  const [offlineClient, setOfflineClient] = useState<ApiClient | null>(null);
+  useEffect(() => {
+    if (!providerId || !jobId) return;
+    let cancelled = false;
+    loadScheduleSnapshot<ApiJob, ApiClient>(providerId).then((snap) => {
+      if (cancelled || !snap) return;
+      const matchedJob = snap.jobs.find((j) => j.id === jobId) ?? null;
+      setOfflineJob(matchedJob);
+      if (matchedJob) {
+        setOfflineClient(
+          snap.clients.find((c) => c.id === matchedJob.clientId) ?? null,
+        );
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [providerId, jobId]);
+
+  // When connectivity returns, refetch the live data so the screen exits
+  // read-only mode and reflects any server changes.
+  useEffect(() => {
+    if (!isOnline || !jobId) return;
+    queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
+  }, [isOnline, jobId, queryClient]);
+
+  const job = jobData?.job ?? offlineJob ?? undefined;
 
   const { data: clientData } = useQuery<{ client: ApiClient }>({
     queryKey: ["/api/clients", job?.clientId],
-    enabled: !!job?.clientId,
+    enabled: !!job?.clientId && isOnline,
   });
-  const client = clientData?.client;
+  const client = clientData?.client ?? offlineClient ?? undefined;
+
+  const blockOffline = useCallback((): boolean => {
+    if (isOnline) return false;
+    Alert.alert(
+      "You're offline",
+      "Reconnect to update this job.",
+    );
+    return true;
+  }, [isOnline]);
 
   const resolvedDisplayStatus: DisplayStatus = useMemo(() => {
     if (displayStatus !== null) return displayStatus;
@@ -541,6 +584,7 @@ export default function ProviderJobDetailScreen() {
 
   const handleUpdateStatus = useCallback((newDisplayStatus: DisplayStatus) => {
     if (!job) return;
+    if (blockOffline()) return;
     if (updateJobMutation.isPending || completeJobMutation.isPending) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
@@ -592,9 +636,10 @@ export default function ProviderJobDetailScreen() {
 
   const handleReschedulePress = useCallback(() => {
     if (!job?.scheduledDate) return;
+    if (blockOffline()) return;
     setRescheduleDraft(new Date(job.scheduledDate));
     setRescheduleStep("date");
-  }, [job?.scheduledDate]);
+  }, [job?.scheduledDate, blockOffline]);
 
   const finalizeReschedule = useCallback(
     (newDate: Date) => {
@@ -684,6 +729,7 @@ export default function ProviderJobDetailScreen() {
 
   const handleWeatherHold = useCallback(() => {
     if (!job) return;
+    if (blockOffline()) return;
     const base = job.scheduledDate ? new Date(job.scheduledDate) : new Date();
     const nextWeek = new Date(base);
     nextWeek.setDate(nextWeek.getDate() + 7);
@@ -716,8 +762,9 @@ export default function ProviderJobDetailScreen() {
   }, [job, weatherHoldMutation]);
 
   const handleRestore = useCallback(() => {
+    if (blockOffline()) return;
     restoreJobMutation.mutate();
-  }, [restoreJobMutation]);
+  }, [restoreJobMutation, blockOffline]);
 
   const cancelSeriesMutation = useMutation({
     mutationFn: async () => {
@@ -738,6 +785,7 @@ export default function ProviderJobDetailScreen() {
   });
 
   const handleCancel = useCallback(() => {
+    if (blockOffline()) return;
     // When this job belongs to a recurring series, ask the provider whether
     // they're cancelling just this occurrence or the whole series. For
     // one-offs, keep the original two-button confirm.
@@ -774,7 +822,7 @@ export default function ProviderJobDetailScreen() {
         },
       ]
     );
-  }, [updateJobMutation, cancelSeriesMutation, job?.seriesId]);
+  }, [updateJobMutation, cancelSeriesMutation, job?.seriesId, blockOffline]);
 
   const handleCall = useCallback(() => {
     if (client?.phone) {
@@ -795,10 +843,11 @@ export default function ProviderJobDetailScreen() {
   }, [job]);
 
   const handleCreateInvoice = useCallback(() => {
+    if (blockOffline()) return;
     if (job) {
       navigation.navigate("AddInvoice", { clientId: job.clientId });
     }
-  }, [job, navigation]);
+  }, [job, navigation, blockOffline]);
 
   // Task #295: surface manual payment recording on completed jobs that have
   // a generated invoice — providers often collect cash/check on-site.
@@ -847,10 +896,12 @@ export default function ProviderJobDetailScreen() {
   });
 
   const handleRequestReview = useCallback(() => {
+    if (blockOffline()) return;
     requestReviewMutation.mutate();
-  }, [requestReviewMutation]);
+  }, [requestReviewMutation, blockOffline]);
 
   const handleUploadPhotos = useCallback(async () => {
+    if (blockOffline()) return;
     if (Platform.OS === "web") {
       Alert.alert("Not Available", "Photo upload is available on mobile devices via Expo Go.");
       return;
@@ -896,9 +947,9 @@ export default function ProviderJobDetailScreen() {
     } finally {
       setIsUploadingPhotos(false);
     }
-  }, [jobId]);
+  }, [jobId, blockOffline]);
 
-  if (isLoading) {
+  if (isLoading && !job) {
     return (
       <ThemedView style={styles.container}>
         <View style={[styles.notFound, { paddingTop: headerHeight + Spacing.xl }]}>
@@ -946,6 +997,28 @@ export default function ProviderJobDetailScreen() {
         <Animated.View entering={FadeInDown.duration(400)}>
           <StatusBanner status={resolvedDisplayStatus} />
         </Animated.View>
+
+        {!isOnline ? (
+          <Animated.View entering={FadeInDown.duration(250)}>
+            <View
+              style={[
+                styles.offlineBanner,
+                { borderColor: theme.border, backgroundColor: theme.backgroundSecondary },
+              ]}
+              testID="banner-job-offline"
+            >
+              <Feather name="wifi-off" size={16} color={theme.text} />
+              <View style={{ flex: 1 }}>
+                <ThemedText style={styles.offlineBannerTitle}>
+                  Offline — read-only
+                </ThemedText>
+                <ThemedText style={[styles.offlineBannerSubtitle, { color: theme.textSecondary }]}>
+                  Reconnect to update this job. Call, text, and directions still work.
+                </ThemedText>
+              </View>
+            </View>
+          </Animated.View>
+        ) : null}
 
         {job.homeId ? <HomeownerNotesBanner homeId={job.homeId} /> : null}
 
@@ -1148,9 +1221,12 @@ export default function ProviderJobDetailScreen() {
               ) : null}
               <Pressable
                 testID="button-upload-job-photos"
-                style={[styles.photoUploadButton, { borderColor: Colors.accent }]}
+                style={[
+                  styles.photoUploadButton,
+                  { borderColor: Colors.accent, opacity: isOnline ? 1 : 0.5 },
+                ]}
                 onPress={handleUploadPhotos}
-                disabled={isUploadingPhotos}
+                disabled={isUploadingPhotos || !isOnline}
               >
                 {isUploadingPhotos ? (
                   <ActivityIndicator size="small" color={Colors.accent} />
@@ -1167,18 +1243,31 @@ export default function ProviderJobDetailScreen() {
       </ScrollView>
 
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing.md, backgroundColor: theme.backgroundRoot }]}>
+        {!isOnline ? (
+          <ThemedText
+            style={[styles.offlineBottomCaption, { color: theme.textSecondary }]}
+            testID="text-offline-reconnect"
+          >
+            Reconnect to update
+          </ThemedText>
+        ) : null}
         {resolvedDisplayStatus === "completed" ? (
           <>
             {canRecordPayment ? (
               <PrimaryButton
                 onPress={() => setPaymentSheetOpen(true)}
                 style={styles.actionButton}
+                disabled={!isOnline}
                 testID="button-record-payment-job"
               >
                 Record Payment
               </PrimaryButton>
             ) : (
-              <PrimaryButton onPress={handleCreateInvoice} style={styles.actionButton}>
+              <PrimaryButton
+                onPress={handleCreateInvoice}
+                style={styles.actionButton}
+                disabled={!isOnline}
+              >
                 Create Invoice
               </PrimaryButton>
             )}
@@ -1186,7 +1275,7 @@ export default function ProviderJobDetailScreen() {
               onPress={handleRequestReview}
               style={styles.actionButton}
               loading={requestReviewMutation.isPending}
-              disabled={requestReviewMutation.isPending}
+              disabled={requestReviewMutation.isPending || !isOnline}
               testID="button-request-review-job"
             >
               Request a Review
@@ -1196,7 +1285,7 @@ export default function ProviderJobDetailScreen() {
           <PrimaryButton
             onPress={() => handleUpdateStatus(nextAction.status)}
             style={styles.actionButton}
-            disabled={updateJobMutation.isPending || completeJobMutation.isPending}
+            disabled={updateJobMutation.isPending || completeJobMutation.isPending || !isOnline}
           >
             {(updateJobMutation.isPending || completeJobMutation.isPending) ? "Updating..." : nextAction.label}
           </PrimaryButton>
@@ -1204,9 +1293,12 @@ export default function ProviderJobDetailScreen() {
 
         {resolvedDisplayStatus === "weather_held" ? (
           <Pressable
-            style={[styles.cancelButton, { borderColor: Colors.accent }]}
+            style={[
+              styles.cancelButton,
+              { borderColor: Colors.accent, opacity: isOnline ? 1 : 0.5 },
+            ]}
             onPress={handleRestore}
-            disabled={restoreJobMutation.isPending}
+            disabled={restoreJobMutation.isPending || !isOnline}
             testID="button-restore-job"
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -1221,9 +1313,12 @@ export default function ProviderJobDetailScreen() {
         {resolvedDisplayStatus !== "cancelled" && resolvedDisplayStatus !== "completed" && resolvedDisplayStatus !== "weather_held" ? (
           <>
             <Pressable
-              style={[styles.cancelButton, { borderColor: theme.border }]}
+              style={[
+                styles.cancelButton,
+                { borderColor: theme.border, opacity: isOnline ? 1 : 0.5 },
+              ]}
               onPress={handleReschedulePress}
-              disabled={rescheduleMutation.isPending}
+              disabled={rescheduleMutation.isPending || !isOnline}
               testID="button-reschedule-job"
             >
               <ThemedText type="body">
@@ -1231,9 +1326,12 @@ export default function ProviderJobDetailScreen() {
               </ThemedText>
             </Pressable>
             <Pressable
-              style={[styles.cancelButton, { borderColor: theme.border }]}
+              style={[
+                styles.cancelButton,
+                { borderColor: theme.border, opacity: isOnline ? 1 : 0.5 },
+              ]}
               onPress={handleWeatherHold}
-              disabled={weatherHoldMutation.isPending}
+              disabled={weatherHoldMutation.isPending || !isOnline}
               testID="button-weather-hold-job"
             >
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -1244,8 +1342,12 @@ export default function ProviderJobDetailScreen() {
               </View>
             </Pressable>
             <Pressable
-              style={[styles.cancelButton, { borderColor: "#EF4444" }]}
+              style={[
+                styles.cancelButton,
+                { borderColor: "#EF4444", opacity: isOnline ? 1 : 0.5 },
+              ]}
               onPress={handleCancel}
+              disabled={!isOnline}
             >
               <ThemedText type="body" style={{ color: "#EF4444" }}>Cancel Job</ThemedText>
             </Pressable>
@@ -1598,6 +1700,29 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingVertical: Spacing.xs,
+  },
+  offlineBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: Spacing.sm,
+  },
+  offlineBannerTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  offlineBannerSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  offlineBottomCaption: {
+    fontSize: 12,
+    textAlign: "center",
+    marginBottom: Spacing.xs,
   },
   bottomBar: {
     position: "absolute",
