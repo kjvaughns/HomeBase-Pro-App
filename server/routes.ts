@@ -12935,6 +12935,131 @@ Respond with JSON only:
     return null;
   }
 
+  // GET /api/providers/:providerId/next-payout — plain-English next-payout
+  // summary for the Financials screen. Combines the Connect account's
+  // pending/in-transit payouts and current balance with the default bank
+  // account so the client can render a single sentence like
+  //   "Friday, Nov 8 — $610.00 → Chase ••4421"
+  // States returned via `status`:
+  //   - "not_onboarded"          — no Connect account yet
+  //   - "onboarding_incomplete"  — account exists but payouts not enabled
+  //   - "ready"                  — usable response (nextPayout may still be null)
+  app.get(
+    "/api/providers/:providerId/next-payout",
+    requireAuth,
+    async (req: Request<{ providerId: string }>, res: Response) => {
+      try {
+        const { providerId } = req.params;
+        if (!(await assertProviderOwnership(req, providerId, res))) return;
+
+        const connectAccount = await getConnectAccount(providerId);
+        if (!connectAccount?.stripeAccountId) {
+          return res.json({ status: "not_onboarded" });
+        }
+        if (!connectAccount.payoutsEnabled) {
+          return res.json({ status: "onboarding_incomplete" });
+        }
+
+        const stripe = getStripe();
+        const acctId = connectAccount.stripeAccountId;
+
+        // Default external bank account (for "Chase ••4421" line). Stripe
+        // returns up to 10 bank accounts per Connect account; we prefer the
+        // one flagged default_for_currency, falling back to the first.
+        let bankName: string | null = null;
+        let last4: string | null = null;
+        try {
+          const banks = await stripe.accounts.listExternalAccounts(acctId, {
+            object: "bank_account",
+            limit: 10,
+          });
+          type BankRow = {
+            bank_name?: string | null;
+            last4?: string | null;
+            default_for_currency?: boolean | null;
+          };
+          const list = banks.data as unknown as BankRow[];
+          const defaultBank =
+            list.find((b) => b.default_for_currency === true) ?? list[0];
+          if (defaultBank) {
+            bankName = defaultBank.bank_name ?? null;
+            last4 = defaultBank.last4 ?? null;
+          }
+        } catch (err) {
+          console.warn(
+            "[next-payout] listExternalAccounts failed:",
+            err instanceof Error ? err.message : err,
+          );
+        }
+
+        // Find the soonest scheduled payout. Stripe doesn't accept multi-status
+        // filters in one call, so query each pending state and merge.
+        const [pending, inTransit] = await Promise.all([
+          stripe.payouts.list(
+            { status: "pending", limit: 5 },
+            { stripeAccount: acctId },
+          ),
+          stripe.payouts.list(
+            { status: "in_transit", limit: 5 },
+            { stripeAccount: acctId },
+          ),
+        ]);
+        const next = [...pending.data, ...inTransit.data].sort(
+          (a, b) => (a.arrival_date ?? 0) - (b.arrival_date ?? 0),
+        )[0];
+
+        if (next) {
+          return res.json({
+            status: "ready",
+            nextPayout: {
+              id: next.id,
+              amountCents: next.amount,
+              currency: next.currency,
+              arrivalDate: next.arrival_date
+                ? new Date(next.arrival_date * 1000).toISOString()
+                : null,
+              bankName,
+              last4,
+              payoutStatus: next.status,
+            },
+            pendingBalanceCents: 0,
+          });
+        }
+
+        // No scheduled payout — report the current pending balance so the
+        // card can read "New payments since your last payout: $X."
+        let pendingBalanceCents = 0;
+        try {
+          const balance = await stripe.balance.retrieve(undefined, {
+            stripeAccount: acctId,
+          });
+          pendingBalanceCents = (balance.pending ?? []).reduce(
+            (sum, b) => sum + (b.amount ?? 0),
+            0,
+          );
+        } catch (err) {
+          console.warn(
+            "[next-payout] balance.retrieve failed:",
+            err instanceof Error ? err.message : err,
+          );
+        }
+
+        return res.json({
+          status: "ready",
+          nextPayout: null,
+          pendingBalanceCents,
+          bankName,
+          last4,
+        });
+      } catch (error) {
+        console.error("[next-payout] error:", error);
+        const message =
+          error instanceof Error ? error.message : "Failed to load next payout";
+        res.status(500).json({ error: message });
+      }
+    },
+  );
+
   // GET /api/providers/:providerId/stripe-payouts — live Stripe payout list
   app.get(
     "/api/providers/:providerId/stripe-payouts",

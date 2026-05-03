@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -8,6 +8,7 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
+  Modal,
   useWindowDimensions,
 } from "react-native";
 import { openExternalUrl } from "@/lib/openExternalUrl";
@@ -62,6 +63,22 @@ interface StripePayout {
   description: string | null;
   createdAt: string;
   bankLast4: string | null;
+}
+
+interface NextPayoutData {
+  status: "not_onboarded" | "onboarding_incomplete" | "ready";
+  nextPayout?: {
+    id: string;
+    amountCents: number;
+    currency: string;
+    arrivalDate: string | null;
+    bankName: string | null;
+    last4: string | null;
+    payoutStatus: string;
+  } | null;
+  pendingBalanceCents?: number;
+  bankName?: string | null;
+  last4?: string | null;
 }
 
 interface InvoiceRecord {
@@ -120,6 +137,27 @@ function formatArrivalDate(iso: string | null): string {
   if (diffDays === 1) return "Tomorrow";
   if (diffDays > 1 && diffDays <= 7) return `In ${diffDays} days`;
   return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+
+// Long-form weekday + month/day, e.g. "Friday, Nov 8" — used in the
+// next-payout summary line on the Financials overview.
+function formatPayoutLongDate(iso: string | null): string {
+  if (!iso) return "Soon";
+  return new Date(iso).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function formatBankLine(
+  bankName: string | null | undefined,
+  last4: string | null | undefined,
+): string | null {
+  if (!bankName && !last4) return null;
+  const name = bankName ?? "Bank";
+  if (!last4) return name;
+  return `${name} \u2022\u2022${last4}`;
 }
 
 function payoutStatusType(status: string): StatusType {
@@ -731,6 +769,287 @@ function SkeletonRow({ theme }: { theme: ReturnType<typeof useTheme>["theme"] })
 
 const SKELETON_KEYS = ["sk1", "sk2", "sk3", "sk4", "sk5"];
 
+// ─── Next Payout Card ────────────────────────────────────────────────────────
+
+interface NextPayoutCardProps {
+  data: NextPayoutData | undefined;
+  isLoading: boolean;
+  isError: boolean;
+  theme: ReturnType<typeof useTheme>["theme"];
+  onPress: () => void;
+  onOnboard: () => void;
+  onHowItWorks: () => void;
+}
+
+function NextPayoutCard({
+  data,
+  isLoading,
+  isError,
+  theme,
+  onPress,
+  onOnboard,
+  onHowItWorks,
+}: NextPayoutCardProps) {
+  // ── Loading skeleton ────────────────────────────────────────────────────
+  if (isLoading) {
+    return (
+      <View
+        style={[nextPayoutStyles.card, { backgroundColor: theme.cardBackground }]}
+        testID="next-payout-card-loading"
+      >
+        <View style={[nextPayoutStyles.iconWrap, { backgroundColor: theme.separator }]} />
+        <View style={{ flex: 1 }}>
+          <View
+            style={[
+              nextPayoutStyles.skelLine,
+              { backgroundColor: theme.separator, width: "40%" },
+            ]}
+          />
+          <View
+            style={[
+              nextPayoutStyles.skelLine,
+              { backgroundColor: theme.separator, width: "75%", marginTop: 8, height: 16 },
+            ]}
+          />
+        </View>
+      </View>
+    );
+  }
+
+  // ── Error (muted, tappable to retry via parent) ─────────────────────────
+  if (isError || !data) {
+    return (
+      <View
+        style={[nextPayoutStyles.card, { backgroundColor: theme.cardBackground }]}
+        testID="next-payout-card-error"
+      >
+        <View style={[nextPayoutStyles.iconWrap, { backgroundColor: theme.separator }]}>
+          <Feather name="alert-circle" size={18} color={theme.textSecondary} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <ThemedText style={nextPayoutStyles.label}>Next Payout</ThemedText>
+          <ThemedText style={[nextPayoutStyles.subtle, { color: theme.textSecondary }]}>
+            Couldn't load payout info. Pull to refresh.
+          </ThemedText>
+        </View>
+      </View>
+    );
+  }
+
+  // ── Not onboarded — CTA to Stripe Connect ───────────────────────────────
+  if (data.status === "not_onboarded" || data.status === "onboarding_incomplete") {
+    const isPending = data.status === "onboarding_incomplete";
+    return (
+      <Pressable
+        style={[
+          nextPayoutStyles.card,
+          {
+            backgroundColor: theme.cardBackground,
+            borderColor: Colors.accent + "30",
+            borderWidth: 1,
+          },
+        ]}
+        onPress={onOnboard}
+        testID="next-payout-card-onboard"
+      >
+        <View style={[nextPayoutStyles.iconWrap, { backgroundColor: Colors.accentLight }]}>
+          <Feather name="credit-card" size={18} color={Colors.accent} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <ThemedText style={[nextPayoutStyles.label, { color: Colors.accent }]}>
+            {isPending ? "Finish Stripe Setup" : "Set Up Payouts"}
+          </ThemedText>
+          <ThemedText style={[nextPayoutStyles.subtle, { color: theme.textSecondary }]}>
+            {isPending
+              ? "Complete onboarding to start receiving payouts."
+              : "Connect your bank to get paid for completed jobs."}
+          </ThemedText>
+        </View>
+        <Feather name="chevron-right" size={16} color={theme.textSecondary} />
+      </Pressable>
+    );
+  }
+
+  const next = data.nextPayout;
+  const bankLine = formatBankLine(
+    next?.bankName ?? data.bankName ?? null,
+    next?.last4 ?? data.last4 ?? null,
+  );
+
+  // ── No scheduled payout — show pending balance state ────────────────────
+  if (!next) {
+    const pendingCents = data.pendingBalanceCents ?? 0;
+    return (
+      <View
+        style={[nextPayoutStyles.card, { backgroundColor: theme.cardBackground }]}
+        testID="next-payout-card-no-payout"
+      >
+        <View style={[nextPayoutStyles.iconWrap, { backgroundColor: Colors.accentLight }]}>
+          <Feather name="clock" size={18} color={Colors.accent} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <ThemedText style={nextPayoutStyles.label}>No payout scheduled</ThemedText>
+          <ThemedText style={nextPayoutStyles.summaryLine}>
+            {pendingCents > 0
+              ? `${formatCents(pendingCents)} building since your last payout`
+              : "Pending payments will appear here"}
+            {bankLine ? ` \u2192 ${bankLine}` : ""}
+          </ThemedText>
+          <Pressable
+            onPress={onHowItWorks}
+            hitSlop={8}
+            testID="button-how-payouts-work"
+          >
+            <ThemedText style={[nextPayoutStyles.helpLink, { color: Colors.accent }]}>
+              How payouts work
+            </ThemedText>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  // ── Scheduled payout — main happy-path ──────────────────────────────────
+  return (
+    <Pressable
+      style={[nextPayoutStyles.card, { backgroundColor: theme.cardBackground }]}
+      onPress={onPress}
+      testID="next-payout-card"
+    >
+      <View style={[nextPayoutStyles.iconWrap, { backgroundColor: Colors.accentLight }]}>
+        <Feather name="arrow-down-circle" size={18} color={Colors.accent} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <ThemedText style={nextPayoutStyles.label}>Next Payout</ThemedText>
+        <ThemedText style={nextPayoutStyles.summaryLine} testID="text-next-payout-summary">
+          {formatPayoutLongDate(next.arrivalDate)} \u2014 {formatCents(next.amountCents)}
+          {bankLine ? ` \u2192 ${bankLine}` : ""}
+        </ThemedText>
+        <Pressable onPress={onHowItWorks} hitSlop={8} testID="button-how-payouts-work">
+          <ThemedText style={[nextPayoutStyles.helpLink, { color: Colors.accent }]}>
+            How payouts work
+          </ThemedText>
+        </Pressable>
+      </View>
+      <Feather name="chevron-right" size={16} color={theme.textSecondary} />
+    </Pressable>
+  );
+}
+
+const nextPayoutStyles = StyleSheet.create({
+  card: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.card,
+    marginBottom: Spacing.md,
+  },
+  iconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  label: {
+    ...Typography.footnote,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+    marginBottom: 4,
+  },
+  summaryLine: { ...Typography.callout, fontWeight: "600" },
+  subtle: { ...Typography.footnote, marginTop: 2, lineHeight: 18 },
+  helpLink: { ...Typography.caption1, fontWeight: "600", marginTop: 6 },
+  skelLine: { height: 12, borderRadius: 6 },
+});
+
+// ─── How Payouts Work modal ──────────────────────────────────────────────────
+
+function HowPayoutsModal({
+  visible,
+  onClose,
+  theme,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  theme: ReturnType<typeof useTheme>["theme"];
+}) {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <Pressable style={howModalStyles.backdrop} onPress={onClose}>
+        <Pressable
+          style={[howModalStyles.sheet, { backgroundColor: theme.cardBackground }]}
+          onPress={(e) => e.stopPropagation()}
+        >
+          <View style={howModalStyles.headerRow}>
+            <ThemedText style={howModalStyles.title}>How payouts work</ThemedText>
+            <Pressable onPress={onClose} hitSlop={10} testID="button-close-how-payouts">
+              <Feather name="x" size={20} color={theme.textSecondary} />
+            </Pressable>
+          </View>
+          <ThemedText style={[howModalStyles.body, { color: theme.text }]}>
+            When a client pays an invoice, the funds first sit in a pending balance
+            with Stripe.
+          </ThemedText>
+          <ThemedText style={[howModalStyles.body, { color: theme.text }]}>
+            On Stripe's standard schedule, those funds become available about 2
+            business days after the payment, then get bundled into a single
+            payout to your linked bank account.
+          </ThemedText>
+          <ThemedText style={[howModalStyles.body, { color: theme.text }]}>
+            Most payouts arrive 1–2 business days after they're sent. You'll see
+            the exact arrival date here as soon as Stripe schedules one.
+          </ThemedText>
+          <Pressable
+            style={[howModalStyles.doneBtn, { backgroundColor: Colors.accent }]}
+            onPress={onClose}
+            testID="button-done-how-payouts"
+          >
+            <ThemedText style={howModalStyles.doneText}>Got it</ThemedText>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+const howModalStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    padding: Spacing.lg,
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    paddingBottom: Spacing["2xl"],
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.md,
+  },
+  title: { ...Typography.title3, fontWeight: "700" },
+  body: { ...Typography.body, lineHeight: 22, marginBottom: Spacing.sm },
+  doneBtn: {
+    marginTop: Spacing.md,
+    height: 48,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  doneText: { ...Typography.callout, fontWeight: "700", color: "#FFFFFF" },
+});
+
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 export default function FinancialsScreen() {
@@ -749,6 +1068,12 @@ export default function FinancialsScreen() {
   const [dateRange, setDateRange] = useState<DateRange>("month");
   const [refreshing, setRefreshing] = useState(false);
   const [showInlinePicker, setShowInlinePicker] = useState(false);
+  const [howPayoutsOpen, setHowPayoutsOpen] = useState(false);
+  // When the user taps the NextPayoutCard we jump to the Payouts list and
+  // scroll to the corresponding row. This holds the target id until the
+  // FlatList ref is mounted with the right data, then it's cleared.
+  const [pendingScrollPayoutId, setPendingScrollPayoutId] = useState<string | null>(null);
+  const payoutsListRef = useRef<FlatList<StripePayout> | null>(null);
 
   const defaultCustomStart = useMemo(() => {
     const d = new Date();
@@ -768,6 +1093,10 @@ export default function FinancialsScreen() {
     useCallback(() => {
       if (providerId) {
         queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "stats"] });
+        // Re-pull the payout summary so the card reflects any Stripe Connect
+        // state changes after returning from the StripeConnect screen.
+        queryClient.invalidateQueries({ queryKey: ["/api/providers", providerId, "next-payout"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/stripe/connect/status", providerId] });
       }
     }, [providerId, queryClient])
   );
@@ -846,6 +1175,26 @@ export default function FinancialsScreen() {
     return map;
   }, [clientsData]);
 
+  // ── Next Payout summary (top-of-screen card) ───────────────────────────────
+
+  const {
+    data: nextPayoutData,
+    isLoading: nextPayoutLoading,
+    isError: nextPayoutError,
+    refetch: refetchNextPayout,
+  } = useQuery<NextPayoutData>({
+    queryKey: ["/api/providers", providerId, "next-payout"],
+    queryFn: async () => {
+      const url = new URL(`/api/providers/${providerId}/next-payout`, getApiUrl());
+      const res = await fetch(url.toString(), { headers: getAuthHeaders() });
+      if (!res.ok) throw new Error("Failed to fetch next payout");
+      return res.json();
+    },
+    enabled: !!providerId,
+    staleTime: 60_000,
+    retry: 1,
+  });
+
   // ── Stripe Payouts ─────────────────────────────────────────────────────────
 
   const {
@@ -906,9 +1255,67 @@ export default function FinancialsScreen() {
       refetchStripeStatus(),
       refetchInvoices(),
       refetchPayouts(),
+      refetchNextPayout(),
     ]);
     setRefreshing(false);
-  }, [refetchStats, refetchStripeStatus, refetchInvoices, refetchPayouts]);
+  }, [
+    refetchStats,
+    refetchStripeStatus,
+    refetchInvoices,
+    refetchPayouts,
+    refetchNextPayout,
+  ]);
+
+  // ── NextPayoutCard interactions ────────────────────────────────────────────
+
+  const handleNextPayoutPress = useCallback(() => {
+    Haptics.selectionAsync();
+    const targetId = nextPayoutData?.nextPayout?.id ?? null;
+    setSectionTab("transactions");
+    setTransactionTab("payouts");
+    setPendingScrollPayoutId(targetId);
+  }, [nextPayoutData?.nextPayout?.id]);
+
+  const handleOnboardPress = useCallback(() => {
+    Haptics.selectionAsync();
+    navigation.navigate("StripeConnect");
+  }, [navigation]);
+
+  // After the user taps the card we land on the Payouts list. Once the data
+  // is loaded and the FlatList is mounted, scroll to the matching row. If
+  // the id isn't present (Stripe list-window mismatch) we fall back to the
+  // top of the list so they at least see the most recent payouts.
+  const stripePayoutsLoaded = !payoutsLoading;
+  useEffect(() => {
+    if (!pendingScrollPayoutId) return;
+    if (sectionTab !== "transactions" || transactionTab !== "payouts") return;
+    if (!stripePayoutsLoaded) return;
+    const list = payoutsData?.payouts ?? [];
+    const idx = list.findIndex((p) => p.id === pendingScrollPayoutId);
+    const timer = setTimeout(() => {
+      try {
+        if (idx >= 0) {
+          payoutsListRef.current?.scrollToIndex({
+            index: idx,
+            animated: true,
+            viewPosition: 0.2,
+          });
+        } else {
+          payoutsListRef.current?.scrollToOffset({ offset: 0, animated: true });
+        }
+      } catch {
+        // scrollToIndex can throw if the list hasn't measured yet — safe to ignore
+      }
+      setPendingScrollPayoutId(null);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [
+    pendingScrollPayoutId,
+    sectionTab,
+    transactionTab,
+    stripePayoutsLoaded,
+    payoutsData?.payouts,
+  ]);
 
   const SECTION_TABS: { key: SectionTab; label: string }[] = [
     { key: "overview", label: "Overview" },
@@ -1048,6 +1455,22 @@ export default function FinancialsScreen() {
 
   const OverviewContent = () => (
     <View>
+      {/* Next payout summary — plain-English line at the very top */}
+      <Animated.View entering={FadeInDown.delay(40).duration(400)}>
+        <NextPayoutCard
+          data={nextPayoutData}
+          isLoading={nextPayoutLoading}
+          isError={nextPayoutError}
+          theme={theme}
+          onPress={handleNextPayoutPress}
+          onOnboard={handleOnboardPress}
+          onHowItWorks={() => {
+            Haptics.selectionAsync();
+            setHowPayoutsOpen(true);
+          }}
+        />
+      </Animated.View>
+
       {/* Date range toggler */}
       <Animated.View entering={FadeInDown.delay(60).duration(400)}>
         <View style={[styles.dateRangeBar, { backgroundColor: theme.backgroundSecondary }]}>
@@ -1348,9 +1771,18 @@ export default function FinancialsScreen() {
 
   // ── Overview / More rendering (ScrollView) ─────────────────────────────────
 
+  const howModal = (
+    <HowPayoutsModal
+      visible={howPayoutsOpen}
+      onClose={() => setHowPayoutsOpen(false)}
+      theme={theme}
+    />
+  );
+
   if (sectionTab === "overview" || sectionTab === "more") {
     return (
       <ThemedView style={styles.container}>
+        {howModal}
         <ScrollView
           contentContainerStyle={{
             paddingTop: headerHeight + Spacing.md,
@@ -1392,6 +1824,7 @@ export default function FinancialsScreen() {
 
     return (
       <ThemedView style={styles.container}>
+        {howModal}
         <FlatList<InvoiceRecord>
           data={invoices}
           renderItem={renderInvoice}
@@ -1432,12 +1865,23 @@ export default function FinancialsScreen() {
 
   return (
     <ThemedView style={styles.container}>
+      {howModal}
       <FlatList<StripePayout>
+        ref={payoutsListRef}
         data={stripePayouts}
         renderItem={renderPayout}
         keyExtractor={(item) => item.id}
         ListHeaderComponent={<SharedHeader />}
         ListEmptyComponent={<PayoutsEmpty />}
+        onScrollToIndexFailed={({ index, averageItemLength }) => {
+          // Items aren't measured yet — retry after a tick using estimated offset.
+          setTimeout(() => {
+            payoutsListRef.current?.scrollToOffset({
+              offset: Math.max(0, index * (averageItemLength || 80)),
+              animated: true,
+            });
+          }, 80);
+        }}
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.md,
           paddingBottom: tabBarHeight + Spacing.xl,
