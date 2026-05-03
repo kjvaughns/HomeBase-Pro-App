@@ -21,7 +21,7 @@ import { useAuthStore } from "@/state/authStore";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
-type JobStatus = "scheduled" | "confirmed" | "on_my_way" | "arrived" | "in_progress" | "completed" | "cancelled";
+type JobStatus = "scheduled" | "confirmed" | "on_my_way" | "arrived" | "in_progress" | "completed" | "cancelled" | "weather_held";
 
 type DBJobStatus = JobStatus;
 type DisplayStatus = JobStatus;
@@ -171,6 +171,9 @@ const STATUS_CONFIG: Record<DisplayStatus, { label: string; color: string; icon:
   in_progress: { label: "In Progress", color: Colors.warning, icon: "tool" },
   completed: { label: "Completed", color: Colors.accent, icon: "check" },
   cancelled: { label: "Cancelled", color: "#EF4444", icon: "x-circle" },
+  // Task #303: weather hold uses a neutral grey + rain glyph (not red) so
+  // providers and customers read it as "paused, not failed".
+  weather_held: { label: "Weather Hold", color: "#6B7280", icon: "cloud-rain" },
 };
 
 const STATUS_ORDER: DisplayStatus[] = ["scheduled", "confirmed", "on_my_way", "arrived", "in_progress", "completed"];
@@ -227,12 +230,18 @@ function StatusBanner({ status }: StatusBannerProps) {
             {config.label}
           </ThemedText>
           <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-            {status === "completed" ? "Job finished" : status === "cancelled" ? "Job cancelled" : "In progress"}
+            {status === "completed"
+              ? "Job finished"
+              : status === "cancelled"
+                ? "Job cancelled"
+                : status === "weather_held"
+                  ? "Paused for weather — not counted as a cancellation"
+                  : "In progress"}
           </ThemedText>
         </View>
       </View>
 
-      {status !== "cancelled" ? (
+      {status !== "cancelled" && status !== "weather_held" ? (
         <View style={styles.progressBar}>
           {STATUS_ORDER.map((s, index) => {
             const isCompleted = index <= currentIndex;
@@ -617,6 +626,93 @@ export default function ProviderJobDetailScreen() {
     },
     [job, rescheduleMutation],
   );
+
+  // ── Task #303: weather hold ────────────────────────────────────────────
+  const weatherHoldMutation = useMutation({
+    mutationFn: async (params: { newDate?: Date }) => {
+      const url = new URL(`/api/jobs/${jobId}/weather-hold`, getApiUrl());
+      const body: { newDate?: string; newTime?: string } = {};
+      if (params.newDate) {
+        body.newDate = params.newDate.toISOString();
+        const hh = String(params.newDate.getHours()).padStart(2, "0");
+        const mm = String(params.newDate.getMinutes()).padStart(2, "0");
+        body.newTime = `${hh}:${mm}`;
+      }
+      const res = await apiRequest("POST", url.toString(), body);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || "Failed to hold for weather");
+      }
+      return (await res.json()) as { job: ApiJob };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/provider", providerId, "jobs"],
+      });
+      setDisplayStatus("weather_held");
+      Alert.alert(
+        "Weather hold set",
+        "We've notified your customer. The job is paused — restore it any time once skies clear.",
+      );
+    },
+    onError: (err: Error) => {
+      Alert.alert("Couldn't hold for weather", err.message);
+    },
+  });
+
+  const restoreJobMutation = useMutation({
+    mutationFn: async () => {
+      const url = new URL(`/api/jobs/${jobId}/restore`, getApiUrl());
+      const res = await apiRequest("POST", url.toString(), {});
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || "Failed to restore job");
+      }
+      return (await res.json()) as { job: ApiJob };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/provider", providerId, "jobs"],
+      });
+      setDisplayStatus("scheduled");
+    },
+    onError: (err: Error) => {
+      Alert.alert("Couldn't restore job", err.message);
+    },
+  });
+
+  const handleWeatherHold = useCallback(() => {
+    if (!job) return;
+    const base = job.scheduledDate ? new Date(job.scheduledDate) : new Date();
+    const nextWeek = new Date(base);
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    const niceDate = nextWeek.toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "short",
+      day: "numeric",
+    });
+    Alert.alert(
+      "Hold for weather?",
+      `We'll let your customer know:\n\n"Heads up — weather is moving us. We've placed your appointment on a weather hold and will reschedule shortly."\n\nWould you also like to move it to ${niceDate} (same time) now?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Hold only",
+          onPress: () => weatherHoldMutation.mutate({}),
+        },
+        {
+          text: `Hold & move to ${niceDate.split(",")[0]}`,
+          onPress: () => weatherHoldMutation.mutate({ newDate: nextWeek }),
+        },
+      ],
+    );
+  }, [job, weatherHoldMutation]);
+
+  const handleRestore = useCallback(() => {
+    restoreJobMutation.mutate();
+  }, [restoreJobMutation]);
 
   const cancelSeriesMutation = useMutation({
     mutationFn: async () => {
@@ -1055,7 +1151,23 @@ export default function ProviderJobDetailScreen() {
           </PrimaryButton>
         ) : null}
 
-        {resolvedDisplayStatus !== "cancelled" && resolvedDisplayStatus !== "completed" ? (
+        {resolvedDisplayStatus === "weather_held" ? (
+          <Pressable
+            style={[styles.cancelButton, { borderColor: Colors.accent }]}
+            onPress={handleRestore}
+            disabled={restoreJobMutation.isPending}
+            testID="button-restore-job"
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Feather name="sun" size={16} color={Colors.accent} />
+              <ThemedText type="body" style={{ color: Colors.accent }}>
+                {restoreJobMutation.isPending ? "Restoring..." : "Restore job"}
+              </ThemedText>
+            </View>
+          </Pressable>
+        ) : null}
+
+        {resolvedDisplayStatus !== "cancelled" && resolvedDisplayStatus !== "completed" && resolvedDisplayStatus !== "weather_held" ? (
           <>
             <Pressable
               style={[styles.cancelButton, { borderColor: theme.border }]}
@@ -1066,6 +1178,19 @@ export default function ProviderJobDetailScreen() {
               <ThemedText type="body">
                 {rescheduleMutation.isPending ? "Rescheduling..." : "Reschedule"}
               </ThemedText>
+            </Pressable>
+            <Pressable
+              style={[styles.cancelButton, { borderColor: theme.border }]}
+              onPress={handleWeatherHold}
+              disabled={weatherHoldMutation.isPending}
+              testID="button-weather-hold-job"
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Feather name="cloud-rain" size={16} color={theme.text} />
+                <ThemedText type="body">
+                  {weatherHoldMutation.isPending ? "Holding..." : "Hold for weather"}
+                </ThemedText>
+              </View>
             </Pressable>
             <Pressable
               style={[styles.cancelButton, { borderColor: "#EF4444" }]}

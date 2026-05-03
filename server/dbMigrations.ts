@@ -906,10 +906,29 @@ export async function runBootMigrations(): Promise<void> {
       )`,
     );
 
+    // ── Task #303: weather-hold job state ────────────────────────────────
+    // ALTER TYPE ... ADD VALUE must run in its own transaction (each runSql
+    // call is autocommitted) before the new value can be referenced by
+    // subsequent queries. The two ALTER TABLEs are simple additive columns.
+    await runSql(
+      "job_status.weather_held",
+      `ALTER TYPE job_status ADD VALUE IF NOT EXISTS 'weather_held'`,
+    );
+    await runSql(
+      "jobs.weather_held_at",
+      `ALTER TABLE jobs ADD COLUMN IF NOT EXISTS weather_held_at TIMESTAMP`,
+    );
+    await runSql(
+      "jobs.original_scheduled_at",
+      `ALTER TABLE jobs ADD COLUMN IF NOT EXISTS original_scheduled_at TIMESTAMP`,
+    );
+
     verifications.push(
       ["provider_route_orders", `SELECT provider_id FROM provider_route_orders LIMIT 0`],
       ["job_series table",      `SELECT id FROM job_series LIMIT 0`],
       ["jobs.series_id column", `SELECT series_id FROM jobs LIMIT 0`],
+      ["jobs.weather_held_at column",       `SELECT weather_held_at FROM jobs LIMIT 0`],
+      ["jobs.original_scheduled_at column", `SELECT original_scheduled_at FROM jobs LIMIT 0`],
     );
 
     const verificationErrors: string[] = [];

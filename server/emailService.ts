@@ -1115,6 +1115,7 @@ export async function sendJobStatusChangedEmail(data: {
     completed: "Completed",
     cancelled: "Cancelled",
     on_hold: "On Hold",
+    weather_held: "Weather Hold",
   };
 
   type StepCopy = {
@@ -1161,6 +1162,12 @@ export async function sendJobStatusChangedEmail(data: {
       headline: "Appointment Cancelled",
       lead: `Your ${sSvc} appointment with ${sProv} has been cancelled.`,
       closing: `If this wasn't expected, please reach out to ${sProv} through the HomeBase app.`,
+    },
+    weather_held: {
+      subject: `Weather hold — your ${data.serviceName} appointment is being moved`,
+      headline: "Weather Hold",
+      lead: `Heads up — weather is moving us. ${sProv} has placed your ${sSvc} appointment on a weather hold and will reschedule shortly.`,
+      closing: `No action needed on your end — ${sProv} will follow up with the new time. You can review the details any time in the HomeBase app.`,
     },
   };
 

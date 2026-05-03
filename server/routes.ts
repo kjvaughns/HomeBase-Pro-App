@@ -7070,7 +7070,7 @@ Respond with JSON only:
               and(
                 eq(jobs.customServiceId, req.params.id),
                 eq(jobs.providerId, req.params.providerId),
-                notInArray(jobs.status, ["completed", "cancelled"]),
+                notInArray(jobs.status, ["completed", "cancelled", "weather_held"]),
                 gte(jobs.scheduledDate, todayStart),
               ),
             )
@@ -9603,6 +9603,183 @@ Respond with JSON only:
       } catch (error) {
         console.error("Update job error:", error);
         res.status(500).json({ error: "Failed to update job" });
+      }
+    },
+  );
+
+  // ── Task #303: weather hold ────────────────────────────────────────────
+  // Distinct from cancellation: marks a job as paused-for-weather, snapshots
+  // the original slot, optionally moves the job to a new slot, and notifies
+  // the customer through the existing communications dispatcher. Excluded
+  // from cancellation/completion stats.
+  // Pull "HH:MM" out of a Date without locale/timezone surprises. Used so
+  // restore can put `scheduledTime` (text) back in lockstep with the
+  // snapshot we hold in `originalScheduledAt` (timestamp).
+  const formatTimeFromDate = (d: Date): string => {
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    return `${hh}:${mm}`;
+  };
+
+  app.post(
+    "/api/jobs/:id/weather-hold",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const existing = await storage.getJob(req.params.id);
+        if (!existing) return res.status(404).json({ error: "Job not found" });
+        if (!(await assertProviderOwnership(req, existing.providerId, res)))
+          return;
+        if (existing.status === "completed" || existing.status === "cancelled") {
+          return res
+            .status(400)
+            .json({ error: "Cannot weather-hold a completed or cancelled job" });
+        }
+
+        const body = req.body as {
+          newDate?: string;
+          newTime?: string;
+        };
+
+        let parsedNewDate: Date | undefined;
+        if (body.newDate) {
+          parsedNewDate = new Date(body.newDate);
+          if (Number.isNaN(parsedNewDate.getTime())) {
+            return res.status(400).json({ error: "Invalid newDate" });
+          }
+        }
+
+        // Idempotency: if the job is already weather-held AND the caller
+        // didn't ask to move it, return the existing record without
+        // re-notifying the customer (avoid duplicate push/email).
+        if (
+          existing.status === "weather_held" &&
+          !parsedNewDate &&
+          body.newTime === undefined
+        ) {
+          return res.json({ job: existing, idempotent: true });
+        }
+
+        const wasAlreadyHeld = existing.status === "weather_held";
+
+        const update: Record<string, unknown> = {
+          status: "weather_held",
+        };
+        if (!wasAlreadyHeld) {
+          update.weatherHeldAt = new Date();
+        }
+        // Snapshot the original slot only the first time so repeated holds
+        // (e.g., extended rainy stretch) don't overwrite the true original.
+        if (!existing.originalScheduledAt && existing.scheduledDate) {
+          update.originalScheduledAt = new Date(existing.scheduledDate);
+        }
+        if (parsedNewDate) update.scheduledDate = parsedNewDate;
+        if (body.newTime !== undefined) update.scheduledTime = body.newTime;
+
+        // Wrap the job + appointment writes in a single DB transaction so a
+        // partial failure can't leave them inconsistent. Mirror date/time
+        // (not status — appointments have no weather_held value) onto the
+        // paired homeowner appointment.
+        const job = await db.transaction(async (tx) => {
+          const [updated] = await tx
+            .update(jobs)
+            .set(update)
+            .where(eq(jobs.id, req.params.id))
+            .returning();
+          if (!updated) throw new Error("Job update returned no row");
+
+          if (
+            updated.appointmentId &&
+            (parsedNewDate || body.newTime !== undefined)
+          ) {
+            const apptUpdate: Record<string, unknown> = {};
+            if (parsedNewDate) apptUpdate.scheduledDate = parsedNewDate;
+            if (body.newTime !== undefined) apptUpdate.scheduledTime = body.newTime;
+            await tx
+              .update(appointments)
+              .set(apptUpdate)
+              .where(eq(appointments.id, updated.appointmentId));
+          }
+          return updated;
+        });
+
+        // Suppress duplicate notifications when the call was a pure
+        // metadata change to an already-held job.
+        if (!wasAlreadyHeld) {
+          dispatchJobStatusEmail(job, "weather_held").catch((e: unknown) =>
+            console.error("weather-hold dispatch error:", e),
+          );
+        }
+
+        res.json({ job });
+      } catch (error) {
+        console.error("Weather-hold job error:", error);
+        res.status(500).json({ error: "Failed to place job on weather hold" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/jobs/:id/restore",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const existing = await storage.getJob(req.params.id);
+        if (!existing) return res.status(404).json({ error: "Job not found" });
+        if (!(await assertProviderOwnership(req, existing.providerId, res)))
+          return;
+
+        // Idempotent restore: if the job is already off weather hold,
+        // return success rather than 400. The provider's UI can call this
+        // safely (e.g., double-tap, retry) without surfacing an error.
+        if (existing.status !== "weather_held") {
+          return res.json({ job: existing, idempotent: true });
+        }
+
+        const update: Record<string, unknown> = {
+          status: "scheduled",
+          weatherHeldAt: null,
+        };
+        // One-tap restore: put the job back on its original slot if we have
+        // one snapshotted. Otherwise leave the current scheduledDate alone.
+        let restoredDate: Date | null = null;
+        if (existing.originalScheduledAt) {
+          restoredDate = new Date(existing.originalScheduledAt);
+          update.scheduledDate = restoredDate;
+          // Keep the text scheduledTime in lockstep with the timestamp so
+          // they don't drift after a reschedule-during-hold.
+          update.scheduledTime = formatTimeFromDate(restoredDate);
+          update.originalScheduledAt = null;
+        }
+
+        const job = await db.transaction(async (tx) => {
+          const [updated] = await tx
+            .update(jobs)
+            .set(update)
+            .where(eq(jobs.id, req.params.id))
+            .returning();
+          if (!updated) throw new Error("Job update returned no row");
+
+          if (updated.appointmentId && restoredDate) {
+            await tx
+              .update(appointments)
+              .set({
+                scheduledDate: restoredDate,
+                scheduledTime: formatTimeFromDate(restoredDate),
+              })
+              .where(eq(appointments.id, updated.appointmentId));
+          }
+          return updated;
+        });
+
+        dispatchJobStatusEmail(job, "scheduled").catch((e: unknown) =>
+          console.error("restore dispatch error:", e),
+        );
+
+        res.json({ job });
+      } catch (error) {
+        console.error("Restore job error:", error);
+        res.status(500).json({ error: "Failed to restore job" });
       }
     },
   );

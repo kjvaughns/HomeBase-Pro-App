@@ -516,6 +516,7 @@ async function _dispatch(event: NotificationEvent, payload: DispatchPayload): Pr
         in_progress: { title: 'Work has started', body: `${providerName} has started your ${serviceName}.` },
         completed:   { title: 'Service complete', body: `${providerName} finished your ${serviceName}. Thank you!` },
         cancelled:   { title: 'Appointment cancelled', body: `Your ${serviceName} with ${providerName} was cancelled.` },
+        weather_held:{ title: 'Weather hold',           body: `Weather is moving us — ${providerName} placed your ${serviceName} on hold and will reschedule shortly.` },
       };
       const push = pushCopy[newStatus] ?? { title: 'Job update', body: `Your ${serviceName} status changed.` };
 

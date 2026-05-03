@@ -95,7 +95,10 @@ type JobStatus =
   | "arrived"
   | "in_progress"
   | "completed"
-  | "cancelled";
+  | "cancelled"
+  // Task #303: weather hold — distinct from cancellation. Excluded from
+  // cancellation/completion stats; surfaced with a rain glyph on the card.
+  | "weather_held";
 
 type StatusFilter = "all" | "scheduled" | "active" | "done";
 type ViewMode = "list" | "month" | "route";
@@ -163,6 +166,9 @@ const STATUS_COLOR: Record<JobStatus, string> = {
   in_progress: Colors.warning,
   completed: Colors.accent,
   cancelled: "#9CA3AF",
+  // Neutral grayscale tone for the held state — accent #38AE5F is reserved
+  // for active forward motion (per design preferences).
+  weather_held: "#6B7280",
 };
 
 const STATUS_LABEL: Record<JobStatus, string> = {
@@ -173,6 +179,13 @@ const STATUS_LABEL: Record<JobStatus, string> = {
   in_progress: "In Progress",
   completed: "Completed",
   cancelled: "Cancelled",
+  weather_held: "Weather Hold",
+};
+
+// Task #303: rain glyph rendered on schedule cards / month dots / row icon
+// so a held job is visually distinct without color noise.
+const STATUS_ICON: Partial<Record<JobStatus, keyof typeof Feather.glyphMap>> = {
+  weather_held: "cloud-rain",
 };
 
 const STATUS_CHIPS: { key: StatusFilter; label: string }[] = [
@@ -663,9 +676,18 @@ function EnhancedJobCard({
                   },
                 ]}
               >
-                <View
-                  style={[styles.statusDot, { backgroundColor: statusColor }]}
-                />
+                {STATUS_ICON[job.status] ? (
+                  <Feather
+                    name={STATUS_ICON[job.status]!}
+                    size={11}
+                    color={statusColor}
+                    testID={`job-weather-${job.id}`}
+                  />
+                ) : (
+                  <View
+                    style={[styles.statusDot, { backgroundColor: statusColor }]}
+                  />
+                )}
                 <ThemedText
                   style={[styles.statusPillText, { color: statusColor }]}
                 >

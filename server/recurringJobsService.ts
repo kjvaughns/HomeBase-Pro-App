@@ -733,6 +733,9 @@ export async function applyToFollowing(
           gte(jobs.scheduledDate, pivotDate),
           ne(jobs.status, "cancelled"),
           ne(jobs.status, "completed"),
+          // Task #303: weather-held jobs sit on a custom date set by the
+          // provider; don't trample that with a series-wide field/time edit.
+          ne(jobs.status, "weather_held"),
         ),
       )
       .returning({
@@ -786,6 +789,9 @@ export async function applyToFollowing(
           gte(jobs.scheduledDate, pivotDate),
           ne(jobs.status, "cancelled"),
           ne(jobs.status, "completed"),
+          // Task #303: weather-held jobs hold their custom date; skip the
+          // bulk shift so a "Restore" still puts them back in their slot.
+          ne(jobs.status, "weather_held"),
         ),
       )
       .returning({ id: jobs.id, appointmentId: jobs.appointmentId });
