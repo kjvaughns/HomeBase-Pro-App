@@ -1118,17 +1118,6 @@ export default function BusinessHubScreen() {
           <Feather name="chevron-right" size={16} color={theme.textTertiary} />
         </Pressable>
 
-        <Pressable
-          style={[styles.previewBtn, { borderColor: theme.borderLight }]}
-          onPress={() => navigation.navigate("Crew")}
-          testID="button-manage-crew"
-        >
-          <Feather name="users" size={16} color={theme.textSecondary} />
-          <ThemedText style={[styles.previewBtnText, { color: theme.textSecondary }]}>
-            Manage Crew
-          </ThemedText>
-          <Feather name="chevron-right" size={16} color={theme.textTertiary} />
-        </Pressable>
       </Animated.View>
     </KeyboardAwareScrollViewCompat>
   );

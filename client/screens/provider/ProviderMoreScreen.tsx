@@ -221,6 +221,13 @@ export default function ProviderMoreScreen() {
               onPress={() => navigation.navigate("BusinessHub")}
             />
             <ListRow
+              title="Manage Crew"
+              subtitle="Add and manage your team members"
+              leftIcon="users"
+              onPress={() => navigation.navigate("Crew")}
+              testID="button-manage-crew"
+            />
+            <ListRow
               title="Communications"
               subtitle="Send messages and push notifications to clients"
               leftIcon="send"
