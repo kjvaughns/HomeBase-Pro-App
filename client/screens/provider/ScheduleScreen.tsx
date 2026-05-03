@@ -1630,10 +1630,26 @@ export default function ScheduleScreen() {
             <View style={styles.loadingBox}>
               <ThemedText
                 type="caption"
-                style={{ color: theme.textSecondary, textAlign: "center", paddingHorizontal: Spacing.lg }}
+                style={{ color: theme.textSecondary, textAlign: "center", paddingHorizontal: Spacing.lg, marginBottom: Spacing.md }}
               >
                 Route optimization is unavailable offline. Reconnect to plan today's route.
               </ThemedText>
+              <Pressable
+                onPress={() => setViewMode("list")}
+                style={{
+                  paddingHorizontal: Spacing.lg,
+                  paddingVertical: Spacing.sm,
+                  borderRadius: BorderRadius.md,
+                  backgroundColor: theme.backgroundSecondary,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                }}
+                testID="button-offline-route-fallback"
+              >
+                <ThemedText type="body" style={{ color: theme.text, fontWeight: "600" }}>
+                  View cached schedule
+                </ThemedText>
+              </Pressable>
             </View>
           ) : providerId ? (
             <RouteView

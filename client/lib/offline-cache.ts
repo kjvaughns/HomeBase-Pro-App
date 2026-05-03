@@ -16,6 +16,11 @@ function scheduleKey(providerId: string): string {
 
 interface JobLike {
   scheduledDate?: string | null;
+  clientId?: string | null;
+}
+
+interface ClientLike {
+  id?: string;
 }
 
 function withinHorizon(job: JobLike, now: Date): boolean {
@@ -28,7 +33,7 @@ function withinHorizon(job: JobLike, now: Date): boolean {
   return when >= startOfToday && when < horizonEnd;
 }
 
-export async function saveScheduleSnapshot<TJob extends JobLike, TClient>(
+export async function saveScheduleSnapshot<TJob extends JobLike, TClient extends ClientLike>(
   providerId: string,
   jobs: TJob[],
   clients: TClient[],
@@ -36,9 +41,13 @@ export async function saveScheduleSnapshot<TJob extends JobLike, TClient>(
   if (!providerId) return;
   const now = new Date();
   const trimmedJobs = jobs.filter((j) => withinHorizon(j, now));
+  const referencedClientIds = new Set(
+    trimmedJobs.map((j) => j.clientId).filter((id): id is string => !!id),
+  );
+  const trimmedClients = clients.filter((c) => c.id && referencedClientIds.has(c.id));
   const payload: OfflineScheduleSnapshot<TJob, TClient> = {
     jobs: trimmedJobs,
-    clients,
+    clients: trimmedClients,
     savedAt: Date.now(),
   };
   try {
