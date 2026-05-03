@@ -7,7 +7,14 @@ import {
   RefreshControl,
   Pressable,
   ActivityIndicator,
+  StyleProp,
+  ViewStyle,
 } from "react-native";
+import {
+  Gesture,
+  GestureDetector,
+} from "react-native-gesture-handler";
+import { scheduleOnRN } from "react-native-worklets";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
@@ -28,6 +35,55 @@ import { useAuthStore } from "@/state/authStore";
 import { apiRequest } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { QuickAddJobSheet } from "@/components/QuickAddJobSheet";
+
+// ─── Long-press wrapper using react-native-gesture-handler ───────────────────
+
+interface LongPressableProps {
+  children: React.ReactNode;
+  onPress?: () => void;
+  onLongPress?: () => void;
+  style?: StyleProp<ViewStyle>;
+  testID?: string;
+  hitSlop?: number;
+  delay?: number;
+  disabled?: boolean;
+}
+
+function LongPressable({
+  children,
+  onPress,
+  onLongPress,
+  style,
+  testID,
+  hitSlop,
+  delay = 350,
+  disabled,
+}: LongPressableProps) {
+  const longPress = useMemo(
+    () =>
+      Gesture.LongPress()
+        .minDuration(delay)
+        .enabled(!!onLongPress && !disabled)
+        .onStart(() => {
+          "worklet";
+          if (onLongPress) scheduleOnRN(onLongPress);
+        }),
+    [onLongPress, delay, disabled],
+  );
+  return (
+    <GestureDetector gesture={longPress}>
+      <Pressable
+        onPress={onPress}
+        style={style}
+        testID={testID}
+        hitSlop={hitSlop}
+        disabled={disabled}
+      >
+        {children}
+      </Pressable>
+    </GestureDetector>
+  );
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -277,7 +333,7 @@ function WeekStrip({
         const jobCount = jobCountByDate[date.toDateString()] || 0;
 
         return (
-          <Pressable
+          <LongPressable
             key={date.toISOString()}
             style={[
               styles.weekDay,
@@ -285,8 +341,9 @@ function WeekStrip({
               isSelected && { backgroundColor: Colors.accent },
             ]}
             onPress={() => onDateSelect(date)}
-            onLongPress={() => onDateLongPress?.(date)}
-            delayLongPress={350}
+            onLongPress={
+              onDateLongPress ? () => onDateLongPress(date) : undefined
+            }
             testID={`week-day-${date.toISOString().slice(0, 10)}`}
           >
             <ThemedText
@@ -331,7 +388,7 @@ function WeekStrip({
             ) : (
               <View style={styles.weekDotPlaceholder} />
             )}
-          </Pressable>
+          </LongPressable>
         );
       })}
     </ScrollView>
@@ -482,10 +539,9 @@ function EnhancedJobCard({
   const quickAction = getQuickAction(job.status);
 
   return (
-    <Pressable
+    <LongPressable
       onPress={onPress}
       onLongPress={onLongPress}
-      delayLongPress={350}
       testID={`job-card-${job.id}`}
     >
       <GlassCard style={styles.jobCard} noPadding>
@@ -637,7 +693,133 @@ function EnhancedJobCard({
           </View>
         </View>
       </GlassCard>
-    </Pressable>
+    </LongPressable>
+  );
+}
+
+// ─── Time Slot Grid (selected day) ────────────────────────────────────────────
+
+interface TimeSlotGridProps {
+  date: Date;
+  jobs: Job[];
+  onSlotLongPress: (time: string) => void;
+  onJobLongPress: (jobId: string) => void;
+}
+
+const SLOT_START_MINUTES = 7 * 60; // 7:00 AM
+const SLOT_END_MINUTES = 20 * 60; // 8:00 PM
+const SLOT_STEP_MINUTES = 30;
+
+function minutesToHHMM(total: number): string {
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+function TimeSlotGrid({
+  date,
+  jobs,
+  onSlotLongPress,
+  onJobLongPress,
+}: TimeSlotGridProps) {
+  const { theme } = useTheme();
+
+  // Map each slot to the job (if any) whose time range covers it.
+  const slots = useMemo(() => {
+    const out: { time: string; minutes: number; job: Job | null }[] = [];
+    for (
+      let m = SLOT_START_MINUTES;
+      m < SLOT_END_MINUTES;
+      m += SLOT_STEP_MINUTES
+    ) {
+      let occ: Job | null = null;
+      for (const j of jobs) {
+        if (!j.scheduledTime) continue;
+        const [hStr, mStr] = j.scheduledTime.split(":");
+        const start = parseInt(hStr, 10) * 60 + parseInt(mStr || "0", 10);
+        const end = start + (j.estimatedDuration ?? 60);
+        if (m >= start && m < end) {
+          occ = j;
+          break;
+        }
+      }
+      out.push({ time: minutesToHHMM(m), minutes: m, job: occ });
+    }
+    return out;
+  }, [jobs]);
+
+  return (
+    <View style={styles.slotGrid}>
+      <View style={styles.slotHeaderRow}>
+        <ThemedText
+          style={[styles.slotHeaderText, { color: theme.textTertiary }]}
+        >
+          ADD AT SPECIFIC TIME · {formatDateLabel(date)}
+        </ThemedText>
+      </View>
+      <View
+        style={[
+          styles.slotList,
+          { backgroundColor: theme.backgroundElevated },
+        ]}
+      >
+        {slots.map((s, idx) => {
+          const occupied = !!s.job;
+          return (
+            <LongPressable
+              key={s.time}
+              style={[
+                styles.slotRow,
+                idx > 0 && {
+                  borderTopWidth: StyleSheet.hairlineWidth,
+                  borderTopColor: theme.separator,
+                },
+              ]}
+              onLongPress={
+                occupied
+                  ? () => onJobLongPress(s.job!.id)
+                  : () => onSlotLongPress(s.time)
+              }
+              testID={`slot-${date.toISOString().slice(0, 10)}-${s.time}`}
+            >
+              <ThemedText
+                style={[
+                  styles.slotTime,
+                  { color: occupied ? theme.textTertiary : theme.textSecondary },
+                ]}
+              >
+                {formatTime(s.time)}
+              </ThemedText>
+              {occupied ? (
+                <View style={styles.slotOccupied}>
+                  <View
+                    style={[
+                      styles.slotDot,
+                      { backgroundColor: STATUS_COLOR[s.job!.status] },
+                    ]}
+                  />
+                  <ThemedText
+                    style={[
+                      styles.slotJobLabel,
+                      { color: theme.textSecondary },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {s.job!.title}
+                  </ThemedText>
+                </View>
+              ) : (
+                <ThemedText
+                  style={[styles.slotHint, { color: theme.textTertiary }]}
+                >
+                  Hold to add
+                </ThemedText>
+              )}
+            </LongPressable>
+          );
+        })}
+      </View>
+    </View>
   );
 }
 
@@ -735,7 +917,7 @@ function MonthView({
             const isSelected = isSameDay(date, selectedDate);
 
             return (
-              <Pressable
+              <LongPressable
                 key={date.toISOString()}
                 style={[
                   styles.calendarDay,
@@ -745,7 +927,6 @@ function MonthView({
                 ]}
                 onPress={() => onDateSelect(date)}
                 onLongPress={() => onDateLongPress(date)}
-                delayLongPress={350}
                 testID={`month-day-${date.toISOString().slice(0, 10)}`}
               >
                 <ThemedText
@@ -774,7 +955,7 @@ function MonthView({
                     ))}
                   </View>
                 ) : null}
-              </Pressable>
+              </LongPressable>
             );
           })}
         </View>
@@ -945,17 +1126,14 @@ export default function ScheduleScreen() {
     [jobs],
   );
 
-  const openQuickAddForDate = useCallback(
-    (date: Date) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      setQuickAdd({
-        visible: true,
-        date: startOfDay(date),
-        time: computeDefaultTime(date),
-      });
-    },
-    [computeDefaultTime],
-  );
+  const openQuickAddForSlot = useCallback((date: Date, time: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setQuickAdd({
+      visible: true,
+      date: startOfDay(date),
+      time,
+    });
+  }, []);
 
   const handleJobLongPress = useCallback(
     (jobId: string) => {
@@ -963,6 +1141,31 @@ export default function ScheduleScreen() {
       navigation.navigate("ProviderJobDetail", { jobId });
     },
     [navigation],
+  );
+
+  // Long-press on a day-level slot:
+  //  - If the day has any non-cancelled jobs (occupied), open the earliest
+  //    job's detail screen instead of creating a duplicate.
+  //  - Otherwise open Quick Add with a sensible default time.
+  const handleDayLongPress = useCallback(
+    (date: Date) => {
+      const dayJobs = jobs
+        .filter(
+          (j) =>
+            j.status !== "cancelled" &&
+            isSameDay(new Date(j.scheduledDate), date),
+        )
+        .sort((a, b) =>
+          (a.scheduledTime || "").localeCompare(b.scheduledTime || ""),
+        );
+      if (dayJobs.length > 0) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        navigation.navigate("ProviderJobDetail", { jobId: dayJobs[0].id });
+        return;
+      }
+      openQuickAddForSlot(date, computeDefaultTime(date));
+    },
+    [jobs, navigation, openQuickAddForSlot, computeDefaultTime],
   );
 
   const handleDateSelect = (date: Date) => {
@@ -992,7 +1195,8 @@ export default function ScheduleScreen() {
     | { type: "banner"; key: string }
     | { type: "dateHeader"; key: string; label: string }
     | { type: "job"; key: string; job: Job }
-    | { type: "empty"; key: string };
+    | { type: "empty"; key: string }
+    | { type: "slots"; key: string };
 
   const listData = useMemo((): ListRow[] => {
     const rows: ListRow[] = [];
@@ -1011,6 +1215,9 @@ export default function ScheduleScreen() {
         rows.push({ type: "job", key: `job-${job.id}`, job });
       }
     }
+    // Always show a time-slot rail for the selected day so providers can
+    // long-press a specific empty slot to Quick Add at that exact time.
+    rows.push({ type: "slots", key: "slots" });
     return rows;
   }, [filteredJobs, isToday, selectedDate]);
 
@@ -1069,7 +1276,7 @@ export default function ScheduleScreen() {
               selectedDate={selectedDate}
               jobs={jobs}
               onDateSelect={handleDateSelect}
-              onDateLongPress={openQuickAddForDate}
+              onDateLongPress={handleDayLongPress}
             />
           </View>
         ) : null}
@@ -1118,7 +1325,7 @@ export default function ScheduleScreen() {
             clients={clients}
             getClientName={getClientName}
             onDateSelect={handleDateSelect}
-            onDateLongPress={openQuickAddForDate}
+            onDateLongPress={handleDayLongPress}
             onJobLongPress={handleJobLongPress}
             onMonthChange={(delta) => {
               setCalendarMonth((prev) => {
@@ -1269,6 +1476,31 @@ export default function ScheduleScreen() {
                         handleQuickAction(item.job.id, action)
                       }
                       isActionLoading={actionLoadingId === item.job.id}
+                    />
+                  </Animated.View>
+                );
+              }
+              if (item.type === "slots") {
+                // Occupancy must consider ALL non-cancelled jobs for the
+                // day, not just those passing the current status filter,
+                // so a long-press on a real (but filtered-out) job still
+                // routes to its detail instead of creating a duplicate.
+                const occupancyJobs = jobs.filter(
+                  (j) =>
+                    j.status !== "cancelled" &&
+                    isSameDay(new Date(j.scheduledDate), selectedDate),
+                );
+                return (
+                  <Animated.View
+                    entering={FadeInDown.delay(60).duration(300)}
+                  >
+                    <TimeSlotGrid
+                      date={selectedDate}
+                      jobs={occupancyJobs}
+                      onSlotLongPress={(time) =>
+                        openQuickAddForSlot(selectedDate, time)
+                      }
+                      onJobLongPress={handleJobLongPress}
                     />
                   </Animated.View>
                 );
@@ -1618,6 +1850,56 @@ const styles = StyleSheet.create({
     ...Typography.subhead,
     fontWeight: "700",
     color: "#FFFFFF",
+  },
+
+  // Time Slot Grid
+  slotGrid: {
+    marginTop: Spacing.md,
+  },
+  slotHeaderRow: {
+    paddingHorizontal: Spacing.xs,
+    marginBottom: Spacing.xs,
+  },
+  slotHeaderText: {
+    ...Typography.caption2,
+    fontWeight: "700",
+    letterSpacing: 0.6,
+  },
+  slotList: {
+    borderRadius: BorderRadius.lg,
+    overflow: "hidden",
+  },
+  slotRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    minHeight: 40,
+    gap: Spacing.md,
+  },
+  slotTime: {
+    ...Typography.subhead,
+    width: 72,
+  },
+  slotHint: {
+    ...Typography.caption1,
+    flex: 1,
+    textAlign: "right",
+  },
+  slotOccupied: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  slotDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  slotJobLabel: {
+    ...Typography.subhead,
+    flex: 1,
   },
 
   // Month View

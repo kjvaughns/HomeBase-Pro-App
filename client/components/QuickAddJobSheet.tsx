@@ -8,6 +8,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Platform,
+  type TextStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -28,6 +29,13 @@ import {
   type PublishedProviderService,
 } from "@/hooks/useProviderPublishedServices";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+
+// `outlineStyle` is a web-only CSS property not present on RN TextStyle.
+// Cast through `unknown` so styles still satisfy TextStyle on native.
+const WEB_NO_OUTLINE: TextStyle =
+  Platform.OS === "web"
+    ? ({ outlineStyle: "none" } as unknown as TextStyle)
+    : {};
 
 interface ClientLite {
   id: string;
@@ -569,7 +577,7 @@ const styles = StyleSheet.create({
     flex: 1,
     ...Typography.body,
     padding: 0,
-    ...(Platform.OS === "web" ? { outlineStyle: "none" as any } : {}),
+    ...WEB_NO_OUTLINE,
   },
   optionRow: {
     flexDirection: "row",
@@ -619,7 +627,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     minHeight: 64,
     textAlignVertical: "top",
-    ...(Platform.OS === "web" ? { outlineStyle: "none" as any } : {}),
+    ...WEB_NO_OUTLINE,
   },
   emptyServices: {
     paddingHorizontal: Spacing.sm,
