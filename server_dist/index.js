@@ -8630,6 +8630,142 @@ function checkRescheduleAllowed(policy, scheduledAt, currentRescheduleCount, now
 init_subscriptionService();
 init_schema();
 init_recurringJobsService();
+
+// server/routeOptimizationService.ts
+var FALLBACK_SPEED_MPH = 30;
+var FALLBACK_DETOUR_FACTOR = 1.35;
+async function getLeg(from, to, apiKey) {
+  if (apiKey) {
+    try {
+      const url = new URL(
+        "https://maps.googleapis.com/maps/api/distancematrix/json"
+      );
+      url.searchParams.set("origins", `${from.lat},${from.lng}`);
+      url.searchParams.set("destinations", `${to.lat},${to.lng}`);
+      url.searchParams.set("units", "imperial");
+      url.searchParams.set("key", apiKey);
+      const r = await fetch(url.toString());
+      const data = await r.json();
+      const el = data.rows?.[0]?.elements?.[0];
+      if (data.status === "OK" && el?.status === "OK" && el.distance && el.duration) {
+        return {
+          distanceMiles: el.distance.value / 1609.344,
+          durationMinutes: el.duration.value / 60,
+          source: "google"
+        };
+      }
+    } catch (err) {
+      console.error("[routeOptimizer] Distance Matrix error:", err);
+    }
+  }
+  const miles = haversineMiles(from.lat, from.lng, to.lat, to.lng) * FALLBACK_DETOUR_FACTOR;
+  return {
+    distanceMiles: miles,
+    durationMinutes: miles / FALLBACK_SPEED_MPH * 60,
+    source: "haversine"
+  };
+}
+async function geocodeJobs(jobs2) {
+  const resolved = [];
+  const missing = [];
+  for (const j of jobs2) {
+    if (typeof j.lat === "number" && typeof j.lng === "number") {
+      resolved.push({ ...j, lat: j.lat, lng: j.lng, address: j.address });
+      continue;
+    }
+    if (!j.address || j.address.trim().length < 3) {
+      missing.push(j);
+      continue;
+    }
+    const g = await geocodeAddress(j.address);
+    if (!g) {
+      missing.push(j);
+      continue;
+    }
+    resolved.push({
+      ...j,
+      lat: g.latitude,
+      lng: g.longitude,
+      address: g.formattedAddress
+    });
+  }
+  return { resolved, missing };
+}
+function nearestNeighborOrder(origin, points) {
+  const remaining = points.slice();
+  const ordered = [];
+  let current = origin;
+  while (remaining.length > 0) {
+    let bestIdx = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < remaining.length; i++) {
+      const p = remaining[i];
+      const d = haversineMiles(current.lat, current.lng, p.lat, p.lng);
+      if (d < bestDist) {
+        bestDist = d;
+        bestIdx = i;
+      }
+    }
+    const next = remaining.splice(bestIdx, 1)[0];
+    ordered.push(next);
+    current = next;
+  }
+  return ordered;
+}
+async function buildRoute(opts) {
+  const apiKey = process.env.GOOGLE_API_KEY;
+  let ordered;
+  if (opts.manualOrder && opts.manualOrder.length > 0) {
+    const byId = new Map(opts.jobs.map((j) => [j.jobId, j]));
+    ordered = [];
+    for (const id of opts.manualOrder) {
+      const j = byId.get(id);
+      if (j) {
+        ordered.push(j);
+        byId.delete(id);
+      }
+    }
+    const tail = Array.from(byId.values());
+    if (tail.length > 0) {
+      const tailOrigin = ordered.length > 0 ? ordered[ordered.length - 1] : opts.origin;
+      ordered.push(...nearestNeighborOrder(tailOrigin, tail));
+    }
+  } else {
+    ordered = nearestNeighborOrder(opts.origin, opts.jobs);
+  }
+  const stops = [];
+  let totalMiles = 0;
+  let totalMinutes = 0;
+  let prev = opts.origin;
+  let source = "haversine";
+  for (const p of ordered) {
+    const leg = await getLeg(prev, p, apiKey);
+    if (leg.source === "google") source = "google";
+    totalMiles += leg.distanceMiles;
+    totalMinutes += leg.durationMinutes;
+    stops.push({
+      jobId: p.jobId,
+      title: p.title,
+      scheduledTime: p.scheduledTime,
+      clientName: p.clientName,
+      lat: p.lat,
+      lng: p.lng,
+      address: p.address,
+      distanceMilesFromPrev: leg.distanceMiles,
+      etaMinutesFromPrev: leg.durationMinutes
+    });
+    prev = p;
+  }
+  return {
+    origin: opts.origin,
+    stops,
+    totalMiles,
+    totalMinutes,
+    driveTimeSource: source
+  };
+}
+
+// server/routes.ts
 init_auth();
 var BCRYPT_SALT_ROUNDS = 10;
 var requireAuth = authenticateJWT;
@@ -14523,6 +14659,179 @@ Line 3: rating caption for ${insights.rating} stars`
       }
     }
   );
+  app2.post(
+    "/api/provider/:providerId/route/optimize",
+    requireAuth,
+    async (req, res) => {
+      try {
+        if (!await assertProviderOwnership(req, req.params.providerId, res))
+          return;
+        const { date, originLat, originLng, originAddress, order } = req.body;
+        if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+          return res.status(400).json({ error: "date (YYYY-MM-DD) is required" });
+        }
+        const dayStart = /* @__PURE__ */ new Date(`${date}T00:00:00`);
+        const dayEnd = /* @__PURE__ */ new Date(`${date}T23:59:59`);
+        const allJobs = await storage.getJobs(req.params.providerId);
+        const dayJobs = allJobs.filter((j) => {
+          const d = new Date(j.scheduledDate);
+          return d >= dayStart && d <= dayEnd && j.status !== "cancelled";
+        });
+        if (dayJobs.length === 0) {
+          return res.json({
+            origin: null,
+            stops: [],
+            totalMinutes: 0,
+            totalMiles: 0,
+            driveTimeSource: "haversine",
+            missing: []
+          });
+        }
+        const clientIds = Array.from(
+          new Set(dayJobs.map((j) => j.clientId).filter(Boolean))
+        );
+        const clientMap = /* @__PURE__ */ new Map();
+        for (const cid of clientIds) {
+          const c = await storage.getClient(cid);
+          if (c) {
+            clientMap.set(cid, {
+              firstName: c.firstName ?? null,
+              lastName: c.lastName ?? null
+            });
+          }
+        }
+        const inputs = dayJobs.map((j) => {
+          const c = j.clientId ? clientMap.get(j.clientId) : null;
+          const clientName = c ? [c.firstName, c.lastName].filter(Boolean).join(" ") || null : null;
+          return {
+            jobId: j.id,
+            title: j.title || "Job",
+            scheduledTime: j.scheduledTime ?? null,
+            clientName,
+            address: j.address ?? ""
+          };
+        });
+        const { resolved, missing } = await geocodeJobs(inputs);
+        if (resolved.length === 0) {
+          return res.json({
+            origin: null,
+            stops: [],
+            totalMinutes: 0,
+            totalMiles: 0,
+            driveTimeSource: "haversine",
+            missing: missing.map((m) => ({
+              jobId: m.jobId,
+              title: m.title,
+              address: m.address
+            }))
+          });
+        }
+        let origin = null;
+        const validCoords = typeof originLat === "number" && typeof originLng === "number" && Number.isFinite(originLat) && Number.isFinite(originLng) && originLat >= -90 && originLat <= 90 && originLng >= -180 && originLng <= 180 && !(originLat === 0 && originLng === 0);
+        if (validCoords) {
+          origin = {
+            lat: originLat,
+            lng: originLng,
+            address: originAddress?.trim() || "Current location"
+          };
+        } else if (originAddress && originAddress.trim().length >= 3) {
+          const g = await geocodeAddress(originAddress.trim());
+          if (g) {
+            origin = {
+              lat: g.latitude,
+              lng: g.longitude,
+              address: g.formattedAddress
+            };
+          }
+        }
+        if (!origin) {
+          origin = {
+            lat: resolved[0].lat,
+            lng: resolved[0].lng,
+            address: resolved[0].address
+          };
+        }
+        const route = await buildRoute({
+          origin,
+          jobs: resolved,
+          manualOrder: Array.isArray(order) ? order : void 0
+        });
+        return res.json({
+          origin: route.origin,
+          stops: route.stops,
+          totalMinutes: route.totalMinutes,
+          totalMiles: route.totalMiles,
+          driveTimeSource: route.driveTimeSource,
+          missing: missing.map((m) => ({
+            jobId: m.jobId,
+            title: m.title,
+            address: m.address
+          }))
+        });
+      } catch (err) {
+        console.error("[route/optimize] error:", err);
+        res.status(500).json({ error: "Failed to optimize route" });
+      }
+    }
+  );
+  app2.get(
+    "/api/provider/:providerId/route/order/:date",
+    requireAuth,
+    async (req, res) => {
+      try {
+        if (!await assertProviderOwnership(req, req.params.providerId, res))
+          return;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.date)) {
+          return res.status(400).json({ error: "date must be YYYY-MM-DD" });
+        }
+        const r = await pool.query(
+          `SELECT order_json FROM provider_route_orders
+            WHERE provider_id = $1 AND route_date = $2`,
+          [req.params.providerId, req.params.date]
+        );
+        return res.json({ order: r.rows[0]?.order_json ?? null });
+      } catch (err) {
+        console.error("[route/order GET] error:", err);
+        res.status(500).json({ error: "Failed to load route order" });
+      }
+    }
+  );
+  app2.put(
+    "/api/provider/:providerId/route/order/:date",
+    requireAuth,
+    async (req, res) => {
+      try {
+        if (!await assertProviderOwnership(req, req.params.providerId, res))
+          return;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.date)) {
+          return res.status(400).json({ error: "date must be YYYY-MM-DD" });
+        }
+        const { order, clear } = req.body;
+        if (clear || !order || order.length === 0) {
+          await pool.query(
+            `DELETE FROM provider_route_orders
+              WHERE provider_id = $1 AND route_date = $2`,
+            [req.params.providerId, req.params.date]
+          );
+          return res.json({ ok: true, cleared: true });
+        }
+        if (!Array.isArray(order) || order.some((s) => typeof s !== "string" || s.length === 0)) {
+          return res.status(400).json({ error: "order must be string[]" });
+        }
+        await pool.query(
+          `INSERT INTO provider_route_orders (provider_id, route_date, order_json, updated_at)
+           VALUES ($1, $2, $3::jsonb, NOW())
+           ON CONFLICT (provider_id, route_date)
+           DO UPDATE SET order_json = EXCLUDED.order_json, updated_at = NOW()`,
+          [req.params.providerId, req.params.date, JSON.stringify(order)]
+        );
+        return res.json({ ok: true });
+      } catch (err) {
+        console.error("[route/order PUT] error:", err);
+        res.status(500).json({ error: "Failed to save route order" });
+      }
+    }
+  );
   app2.get(
     "/api/jobs/:id",
     requireAuth,
@@ -19692,7 +20001,18 @@ async function runBootMigrations() {
          ON jobs (series_id, (scheduled_date::date))
          WHERE series_id IS NOT NULL`
     );
+    await runSql(
+      "provider_route_orders.create",
+      `CREATE TABLE IF NOT EXISTS provider_route_orders (
+        provider_id  VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+        route_date   DATE    NOT NULL,
+        order_json   JSONB   NOT NULL,
+        updated_at   TIMESTAMP NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (provider_id, route_date)
+      )`
+    );
     verifications.push(
+      ["provider_route_orders", `SELECT provider_id FROM provider_route_orders LIMIT 0`],
       ["job_series table", `SELECT id FROM job_series LIMIT 0`],
       ["jobs.series_id column", `SELECT series_id FROM jobs LIMIT 0`]
     );

@@ -1,11 +1,11 @@
 {
-  "id": "3dcf0869-30c1-4232-9858-689bb58f2303",
-  "createdAt": "2026-04-19T03:29:08.390Z",
+  "id": "2fbf0e12-e782-4902-a455-9f4d6acc04b6",
+  "createdAt": "2026-05-03T02:27:36.207Z",
   "runtimeVersion": "1.1.0",
   "launchAsset": {
-    "key": "bundle-1776569348390-82958",
+    "key": "bundle-1777775256207-34927",
     "contentType": "application/javascript",
-    "url": "https://71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo.spock.replit.dev/1776569348390-82958/_expo/static/js/ios/bundle.js"
+    "url": "https://71129757-19ee-4d00-8a43-9880a08ca0af-00-1288tp1ymjozo.spock.replit.dev/1777775256207-34927/_expo/static/js/ios/bundle.js"
   },
   "assets": [],
   "metadata": {},
@@ -33,6 +33,128 @@
           "NSPhotoLibraryAddUsageDescription": "HomeBase saves photos related to your home projects and service records to your photo library.",
           "NSLocationWhenInUseUsageDescription": "HomeBase uses your location to find nearby service providers and verify service addresses.",
           "NSUserNotificationsUsageDescription": "HomeBase sends you appointment reminders, booking confirmations, and service updates."
+        },
+        "privacyManifests": {
+          "NSPrivacyTracking": false,
+          "NSPrivacyTrackingDomains": [],
+          "NSPrivacyAccessedAPITypes": [],
+          "NSPrivacyCollectedDataTypes": [
+            {
+              "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeEmailAddress",
+              "NSPrivacyCollectedDataTypeLinked": true,
+              "NSPrivacyCollectedDataTypeTracking": false,
+              "NSPrivacyCollectedDataTypePurposes": [
+                "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+                "NSPrivacyCollectedDataTypePurposeCustomerSupport"
+              ]
+            },
+            {
+              "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeName",
+              "NSPrivacyCollectedDataTypeLinked": true,
+              "NSPrivacyCollectedDataTypeTracking": false,
+              "NSPrivacyCollectedDataTypePurposes": [
+                "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+              ]
+            },
+            {
+              "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypePhoneNumber",
+              "NSPrivacyCollectedDataTypeLinked": true,
+              "NSPrivacyCollectedDataTypeTracking": false,
+              "NSPrivacyCollectedDataTypePurposes": [
+                "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+              ]
+            },
+            {
+              "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypePhysicalAddress",
+              "NSPrivacyCollectedDataTypeLinked": true,
+              "NSPrivacyCollectedDataTypeTracking": false,
+              "NSPrivacyCollectedDataTypePurposes": [
+                "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+              ]
+            },
+            {
+              "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypePreciseLocation",
+              "NSPrivacyCollectedDataTypeLinked": true,
+              "NSPrivacyCollectedDataTypeTracking": false,
+              "NSPrivacyCollectedDataTypePurposes": [
+                "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+              ]
+            },
+            {
+              "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypePhotosorVideos",
+              "NSPrivacyCollectedDataTypeLinked": true,
+              "NSPrivacyCollectedDataTypeTracking": false,
+              "NSPrivacyCollectedDataTypePurposes": [
+                "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+              ]
+            },
+            {
+              "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypePaymentInfo",
+              "NSPrivacyCollectedDataTypeLinked": true,
+              "NSPrivacyCollectedDataTypeTracking": false,
+              "NSPrivacyCollectedDataTypePurposes": [
+                "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+              ]
+            },
+            {
+              "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeUserID",
+              "NSPrivacyCollectedDataTypeLinked": true,
+              "NSPrivacyCollectedDataTypeTracking": false,
+              "NSPrivacyCollectedDataTypePurposes": [
+                "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+              ]
+            },
+            {
+              "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeDeviceID",
+              "NSPrivacyCollectedDataTypeLinked": true,
+              "NSPrivacyCollectedDataTypeTracking": false,
+              "NSPrivacyCollectedDataTypePurposes": [
+                "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+                "NSPrivacyCollectedDataTypePurposeAnalytics"
+              ]
+            },
+            {
+              "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeProductInteraction",
+              "NSPrivacyCollectedDataTypeLinked": true,
+              "NSPrivacyCollectedDataTypeTracking": false,
+              "NSPrivacyCollectedDataTypePurposes": [
+                "NSPrivacyCollectedDataTypePurposeAnalytics",
+                "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+              ]
+            },
+            {
+              "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeCrashData",
+              "NSPrivacyCollectedDataTypeLinked": false,
+              "NSPrivacyCollectedDataTypeTracking": false,
+              "NSPrivacyCollectedDataTypePurposes": [
+                "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+              ]
+            },
+            {
+              "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypePerformanceData",
+              "NSPrivacyCollectedDataTypeLinked": false,
+              "NSPrivacyCollectedDataTypeTracking": false,
+              "NSPrivacyCollectedDataTypePurposes": [
+                "NSPrivacyCollectedDataTypePurposeAnalytics"
+              ]
+            },
+            {
+              "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeOtherDiagnosticData",
+              "NSPrivacyCollectedDataTypeLinked": false,
+              "NSPrivacyCollectedDataTypeTracking": false,
+              "NSPrivacyCollectedDataTypePurposes": [
+                "NSPrivacyCollectedDataTypePurposeAnalytics"
+              ]
+            },
+            {
+              "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeOtherUserContent",
+              "NSPrivacyCollectedDataTypeLinked": true,
+              "NSPrivacyCollectedDataTypeTracking": false,
+              "NSPrivacyCollectedDataTypePurposes": [
+                "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+              ]
+            }
+          ]
         }
       },
       "android": {
@@ -73,6 +195,13 @@
         "expo-font",
         "expo-image",
         "expo-location",
+        [
+          "expo-notifications",
+          {
+            "iosDisplayInForeground": true
+          }
+        ],
+        "./plugins/withPrivacyManifest.js",
         [
           "expo-build-properties",
           {
@@ -129,6 +258,10 @@
             "name": "expo-location",
             "version": "55.1.8"
           },
+          "expo-notifications": {
+            "name": "expo-notifications",
+            "version": "55.0.14"
+          },
           "@stripe/stripe-react-native": {
             "name": "@stripe/stripe-react-native",
             "version": "0.38.6"
@@ -155,6 +288,6 @@
       },
       "mainModuleName": "client/index"
     },
-    "scopeKey": "@anonymous/homebase-9588e196-d13c-4617-8746-900b620aaeed"
+    "scopeKey": "@anonymous/homebase-e77d15e7-bf14-4691-9d6a-3af8fdcc414c"
   }
 }
