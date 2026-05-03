@@ -171,9 +171,8 @@ var init_schema = __esm({
       "in_progress",
       "completed",
       "cancelled",
-      // Task #303: weather hold — distinct from cancellation. The job is paused
-      // because of weather, not because the customer or provider bailed. Excluded
-      // from cancellation/completion stats.
+      // Distinct from "cancelled" — the job is paused for weather, not bailed on.
+      // Excluded from cancellation/completion stats.
       "weather_held"
     ]);
     invoiceStatusEnum = pgEnum("invoice_status", [
@@ -866,10 +865,9 @@ var init_schema = __esm({
       createdAt: timestamp("created_at").defaultNow().notNull(),
       updatedAt: timestamp("updated_at").defaultNow().notNull(),
       completedAt: timestamp("completed_at"),
-      // Task #303: weather-hold tracking. `weatherHeldAt` records when the job
-      // was put on weather hold; `originalScheduledAt` snapshots the original
-      // scheduled timestamp so a one-tap "Restore" can put the job back on the
-      // exact slot it was pulled from.
+      // `originalScheduledAt` is a combined date+time snapshot taken when the job
+      // is first put on weather hold, so "Restore" can put it back on the exact
+      // slot (both date and time) it was pulled from.
       weatherHeldAt: timestamp("weather_held_at"),
       originalScheduledAt: timestamp("original_scheduled_at")
     });
@@ -2206,6 +2204,27 @@ async function sendProviderScheduledJobEmail(data) {
   );
 }
 async function sendJobStatusChangedEmail(data) {
+  const formattedSlot = (() => {
+    if (!data.scheduledDate) return void 0;
+    const d = new Date(data.scheduledDate);
+    if (Number.isNaN(d.getTime())) return data.scheduledDate;
+    const datePart = d.toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "short",
+      day: "numeric"
+    });
+    if (data.scheduledTime) {
+      const m = /^(\d{1,2}):(\d{2})/.exec(data.scheduledTime);
+      if (m) {
+        let hh = Number(m[1]);
+        const mm = m[2];
+        const ampm = hh >= 12 ? "PM" : "AM";
+        hh = hh % 12 || 12;
+        return `${datePart} at ${hh}:${mm} ${ampm}`;
+      }
+    }
+    return datePart;
+  })();
   const statusLabel = {
     scheduled: "Scheduled",
     confirmed: "Confirmed",
@@ -2259,8 +2278,8 @@ async function sendJobStatusChangedEmail(data) {
     weather_held: {
       subject: `Weather hold \u2014 your ${data.serviceName} appointment is being moved`,
       headline: "Weather Hold",
-      lead: `Heads up \u2014 weather is moving us. ${sProv} has placed your ${sSvc} appointment on a weather hold and will reschedule shortly.`,
-      closing: `No action needed on your end \u2014 ${sProv} will follow up with the new time. You can review the details any time in the HomeBase app.`
+      lead: data.wasRescheduled && formattedSlot ? `Heads up \u2014 weather is moving us. ${sProv} has placed your ${sSvc} appointment on a weather hold and tentatively moved it to ${escapeHtml(formattedSlot)}.` : `Heads up \u2014 weather is moving us. ${sProv} has placed your ${sSvc} appointment on a weather hold and will reschedule shortly.`,
+      closing: `No action needed on your end \u2014 ${sProv} will follow up to confirm the new time. You can review the details any time in the HomeBase app.`
     }
   };
   const copy = stepCopy[data.newStatus];
@@ -2269,8 +2288,8 @@ async function sendJobStatusChangedEmail(data) {
   const subject = copy?.subject ?? `Job Update: ${data.serviceName} is now ${label}`;
   const lead = copy?.lead ?? `The status of your ${sSvc} job with ${sProv} has been updated to ${label}.`;
   const closing = copy?.closing ?? `If you have any questions, please reach out through the HomeBase app.`;
-  const body = greeting(data.clientName) + paragraph(lead) + (data.scheduledDate || data.notes ? infoBox(
-    (data.scheduledDate ? infoRow("Scheduled", data.scheduledDate) : "") + (data.notes ? infoRow("Notes", data.notes) : "")
+  const body = greeting(data.clientName) + paragraph(lead) + (formattedSlot || data.notes ? infoBox(
+    (formattedSlot ? infoRow("Scheduled", formattedSlot) : "") + (data.notes ? infoRow("Notes", data.notes) : "")
   ) : "") + paragraph(closing);
   return sendEmail(
     data.clientEmail,
@@ -2765,7 +2784,7 @@ async function _dispatch(event, payload) {
       break;
     }
     case "job.status_changed": {
-      const { clientEmail, clientName, providerName, serviceName, newStatus, scheduledDate, notes } = payload;
+      const { clientEmail, clientName, providerName, serviceName, newStatus, scheduledDate, scheduledTime, wasRescheduled, notes } = payload;
       if (!providerName || !serviceName || !newStatus) {
         console.log("[notification] job.status_changed skipped \u2014 missing provider/service/status");
         break;
@@ -2796,7 +2815,7 @@ async function _dispatch(event, payload) {
             relatedRecordId: payload.relatedRecordId
           });
           try {
-            const result = await sendJobStatusChangedEmail({ clientEmail, clientName, providerName, serviceName, newStatus, scheduledDate, notes });
+            const result = await sendJobStatusChangedEmail({ clientEmail, clientName, providerName, serviceName, newStatus, scheduledDate, scheduledTime, wasRescheduled, notes });
             await updateDelivery(deliveryId, result.success ? "sent" : "failed", result.messageId, result.error);
             console.log(`[notification] job.status_changed(${newStatus}) email ${result.success ? "sent" : "failed"} to ${clientEmail}`);
           } catch (err) {
@@ -5655,8 +5674,8 @@ async function applyToFollowing(fromJobId, patch) {
         gte2(jobs.scheduledDate, pivotDate),
         ne(jobs.status, "cancelled"),
         ne(jobs.status, "completed"),
-        // Task #303: weather-held jobs sit on a custom date set by the
-        // provider; don't trample that with a series-wide field/time edit.
+        // Weather-held jobs sit on a custom date set by the provider;
+        // don't trample it with a series-wide field/time edit.
         ne(jobs.status, "weather_held")
       )
     ).returning({
@@ -5689,8 +5708,8 @@ async function applyToFollowing(fromJobId, patch) {
         gte2(jobs.scheduledDate, pivotDate),
         ne(jobs.status, "cancelled"),
         ne(jobs.status, "completed"),
-        // Task #303: weather-held jobs hold their custom date; skip the
-        // bulk shift so a "Restore" still puts them back in their slot.
+        // Weather-held jobs hold their custom date; skip the bulk shift
+        // so "Restore" still puts them back in their original slot.
         ne(jobs.status, "weather_held")
       )
     ).returning({ id: jobs.id, appointmentId: jobs.appointmentId });
@@ -8611,17 +8630,6 @@ function computeDepositCents(policy, estimatedTotalCents) {
     1,
     Math.ceil(estimatedTotalCents * policy.depositPercent / 100)
   );
-}
-function combineDateAndTime(scheduledDate, scheduledTime) {
-  const base = scheduledDate instanceof Date ? new Date(scheduledDate.getTime()) : scheduledDate ? new Date(scheduledDate) : null;
-  if (!base || isNaN(base.getTime())) return null;
-  if (!scheduledTime || typeof scheduledTime !== "string") return base;
-  const m = scheduledTime.trim().match(/^(\d{1,2}):(\d{2})/);
-  if (!m) return base;
-  const hh = Math.min(23, Math.max(0, parseInt(m[1], 10)));
-  const mm = Math.min(59, Math.max(0, parseInt(m[2], 10)));
-  base.setHours(hh, mm, 0, 0);
-  return base;
 }
 function computeCancellationFee(policy, estimatedTotalCents, scheduledAt, now = /* @__PURE__ */ new Date()) {
   const scheduled = scheduledAt instanceof Date ? scheduledAt : scheduledAt ? new Date(scheduledAt) : null;
@@ -11892,7 +11900,7 @@ Reason: ${reason}
         const quote = computeCancellationFee(
           policy,
           totalCents,
-          combineDateAndTime(existing.scheduledDate, existing.scheduledTime)
+          combineDateAndTime2(existing.scheduledDate, existing.scheduledTime)
         );
         const feeCents = isProvider ? 0 : quote.feeCents;
         res.json({
@@ -11932,7 +11940,7 @@ Reason: ${reason}
           const quote = computeCancellationFee(
             policy,
             totalCents,
-            combineDateAndTime(existing.scheduledDate, existing.scheduledTime)
+            combineDateAndTime2(existing.scheduledDate, existing.scheduledTime)
           );
           if (quote.feeCents > 0) {
             const acceptFee = req.body?.acceptFee === true;
@@ -12030,7 +12038,7 @@ Reason: ${reason}
           );
           const check = checkRescheduleAllowed(
             policy,
-            combineDateAndTime(existing.scheduledDate, existing.scheduledTime),
+            combineDateAndTime2(existing.scheduledDate, existing.scheduledTime),
             existing.rescheduleCount ?? 0
           );
           if (!check.allowed) {
@@ -15157,7 +15165,7 @@ Line 3: rating caption for ${insights.rating} stars`
       }
     }
   );
-  async function dispatchJobStatusEmail(job, newStatus) {
+  async function dispatchJobStatusEmail(job, newStatus, extra) {
     if (!job.clientId || !job.providerId) return;
     const [client] = await db.select().from(clients).where(eq10(clients.id, job.clientId)).catch(() => [null]);
     const [provider] = await db.select().from(providers).where(eq10(providers.id, job.providerId)).catch(() => [null]);
@@ -15172,7 +15180,9 @@ Line 3: rating caption for ${insights.rating} stars`
       serviceName: job.title ?? "your job",
       newStatus,
       scheduledDate: job.scheduledDate ? String(job.scheduledDate) : void 0,
+      scheduledTime: job.scheduledTime ?? void 0,
       notes: job.notes ?? void 0,
+      wasRescheduled: extra?.wasRescheduled,
       relatedRecordType: "job",
       relatedRecordId: job.id,
       recipientUserId: client.homeownerUserId ?? void 0
@@ -15543,6 +15553,18 @@ Line 3: rating caption for ${insights.rating} stars`
     const mm = String(d.getMinutes()).padStart(2, "0");
     return `${hh}:${mm}`;
   };
+  const combineDateAndTime2 = (date, time) => {
+    if (!date) return null;
+    const base = new Date(date);
+    if (Number.isNaN(base.getTime())) return null;
+    if (time) {
+      const m = /^(\d{1,2}):(\d{2})/.exec(time);
+      if (m) {
+        base.setHours(Number(m[1]), Number(m[2]), 0, 0);
+      }
+    }
+    return base;
+  };
   app2.post(
     "/api/jobs/:id/weather-hold",
     requireAuth,
@@ -15573,8 +15595,12 @@ Line 3: rating caption for ${insights.rating} stars`
         if (!wasAlreadyHeld) {
           update.weatherHeldAt = /* @__PURE__ */ new Date();
         }
-        if (!existing.originalScheduledAt && existing.scheduledDate) {
-          update.originalScheduledAt = new Date(existing.scheduledDate);
+        if (!existing.originalScheduledAt) {
+          const snapshot = combineDateAndTime2(
+            existing.scheduledDate,
+            existing.scheduledTime
+          );
+          if (snapshot) update.originalScheduledAt = snapshot;
         }
         if (parsedNewDate) update.scheduledDate = parsedNewDate;
         if (body.newTime !== void 0) update.scheduledTime = body.newTime;
@@ -15590,7 +15616,8 @@ Line 3: rating caption for ${insights.rating} stars`
           return updated;
         });
         if (!wasAlreadyHeld) {
-          dispatchJobStatusEmail(job, "weather_held").catch(
+          const wasRescheduled = Boolean(parsedNewDate || body.newTime !== void 0);
+          dispatchJobStatusEmail(job, "weather_held", { wasRescheduled }).catch(
             (e) => console.error("weather-hold dispatch error:", e)
           );
         }
