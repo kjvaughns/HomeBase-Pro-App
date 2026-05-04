@@ -1776,6 +1776,663 @@ var init_db = __esm({
   }
 });
 
+// server/storage.ts
+import { eq, and, or, desc, sql as sql2, gte, lte } from "drizzle-orm";
+import { hash, compare } from "bcryptjs";
+var SALT_ROUNDS, DatabaseStorage, storage;
+var init_storage = __esm({
+  "server/storage.ts"() {
+    "use strict";
+    init_schema();
+    init_db();
+    SALT_ROUNDS = 10;
+    DatabaseStorage = class {
+      async getUser(id) {
+        const [user] = await db.select().from(users).where(eq(users.id, id));
+        return user || void 0;
+      }
+      async getUserByEmail(email) {
+        const [user] = await db.select().from(users).where(
+          sql2`LOWER(${users.email}) = LOWER(${email})`
+        );
+        return user || void 0;
+      }
+      async createUser(insertUser) {
+        const hashedPassword = await hash(insertUser.password, SALT_ROUNDS);
+        const [user] = await db.insert(users).values({ ...insertUser, password: hashedPassword }).returning();
+        return user;
+      }
+      async updateUser(id, data) {
+        const updateData = { ...data, updatedAt: /* @__PURE__ */ new Date() };
+        if (data.password) {
+          updateData.password = await hash(data.password, SALT_ROUNDS);
+        }
+        const [user] = await db.update(users).set(updateData).where(eq(users.id, id)).returning();
+        return user || void 0;
+      }
+      async verifyPassword(email, password) {
+        const user = await this.getUserByEmail(email);
+        if (!user) return null;
+        const valid = await compare(password, user.password);
+        return valid ? user : null;
+      }
+      async getHomes(userId) {
+        return db.select().from(homes).where(eq(homes.userId, userId)).orderBy(desc(homes.isDefault));
+      }
+      async getHome(id) {
+        const [home] = await db.select().from(homes).where(eq(homes.id, id));
+        return home || void 0;
+      }
+      async createHome(home) {
+        if (home.isDefault) {
+          await db.update(homes).set({ isDefault: false }).where(eq(homes.userId, home.userId));
+        }
+        const [newHome] = await db.insert(homes).values(home).returning();
+        return newHome;
+      }
+      async updateHome(id, data) {
+        const updateData = { ...data, updatedAt: /* @__PURE__ */ new Date() };
+        const [home] = await db.update(homes).set(updateData).where(eq(homes.id, id)).returning();
+        return home || void 0;
+      }
+      async deleteHome(id) {
+        const result = await db.delete(homes).where(eq(homes.id, id)).returning();
+        return result.length > 0;
+      }
+      async getCategories() {
+        return db.select().from(serviceCategories).orderBy(serviceCategories.sortOrder);
+      }
+      async getServices(categoryId) {
+        if (categoryId) {
+          return db.select().from(services).where(eq(services.categoryId, categoryId));
+        }
+        return db.select().from(services);
+      }
+      async getProviders(categoryId) {
+        if (categoryId) {
+          const catalogIds = await db.select({ providerId: providerServices.providerId }).from(providerServices).where(eq(providerServices.categoryId, categoryId));
+          const [catRow] = await db.select({ name: serviceCategories.name }).from(serviceCategories).where(eq(serviceCategories.id, categoryId));
+          const customIds = catRow ? await db.select({ providerId: providerCustomServices.providerId }).from(providerCustomServices).where(sql2`lower(${providerCustomServices.category}) = lower(${catRow.name})`) : [];
+          const nameIds = catRow ? await db.select({ providerId: providers.id }).from(providers).where(
+            and(
+              sql2`lower(${providers.businessName}) like ${"%" + catRow.name.toLowerCase() + "%"}`,
+              eq(providers.isActive, true)
+            )
+          ) : [];
+          const allProviderIds = [
+            ...catalogIds.map((r) => r.providerId),
+            ...customIds.map((r) => r.providerId),
+            ...nameIds.map((r) => r.providerId)
+          ];
+          if (allProviderIds.length === 0) return [];
+          const uniqueIds = [...new Set(allProviderIds)];
+          const expiredRows = await db.select({ providerId: providerPlans.providerId }).from(providerPlans).where(
+            and(
+              eq(providerPlans.isSubscribed, false),
+              eq(providerPlans.isPartner, false),
+              sql2`${providerPlans.gracePeriodEndsAt} IS NOT NULL`,
+              sql2`${providerPlans.gracePeriodEndsAt} < NOW()`
+            )
+          );
+          const expiredSet = new Set(expiredRows.map((r) => r.providerId));
+          const results = [];
+          for (const id of uniqueIds) {
+            if (expiredSet.has(id)) continue;
+            const [provider] = await db.select().from(providers).where(eq(providers.id, id));
+            if (provider && provider.isActive && provider.isPublic && provider.userId) {
+              results.push(provider);
+            }
+          }
+          return results;
+        }
+        return db.select().from(providers).where(
+          and(
+            eq(providers.isActive, true),
+            eq(providers.isPublic, true),
+            sql2`${providers.userId} IS NOT NULL`,
+            sql2`NOT EXISTS (SELECT 1 FROM provider_plans pp WHERE pp.provider_id = ${providers.id} AND COALESCE(pp.is_subscribed, false) = false AND COALESCE(pp.is_partner, false) = false AND pp.grace_period_ends_at IS NOT NULL AND pp.grace_period_ends_at < NOW())`
+          )
+        );
+      }
+      async getProvider(id) {
+        const [provider] = await db.select().from(providers).where(eq(providers.id, id));
+        return provider || void 0;
+      }
+      async getProviderServices(providerId) {
+        const ps = await db.select({ serviceId: providerServices.serviceId }).from(providerServices).where(eq(providerServices.providerId, providerId));
+        const results = [];
+        for (const { serviceId } of ps) {
+          const [service] = await db.select().from(services).where(eq(services.id, serviceId));
+          if (service) results.push(service);
+        }
+        return results;
+      }
+      async getAppointments(userId) {
+        return db.select().from(appointments).where(eq(appointments.userId, userId)).orderBy(desc(appointments.scheduledDate));
+      }
+      async getAppointment(id) {
+        const [appointment] = await db.select().from(appointments).where(eq(appointments.id, id));
+        return appointment || void 0;
+      }
+      async createAppointment(appointment) {
+        if (appointment.userId && appointment.providerId && appointment.scheduledDate) {
+          const slotFilter = and(
+            eq(appointments.userId, appointment.userId),
+            eq(appointments.providerId, appointment.providerId),
+            eq(appointments.scheduledDate, appointment.scheduledDate)
+          );
+          const [existing] = await db.select().from(appointments).where(slotFilter).limit(1);
+          if (existing) return { appointment: existing, created: false };
+          const inserted = await db.insert(appointments).values(appointment).onConflictDoNothing().returning();
+          if (inserted[0]) return { appointment: inserted[0], created: true };
+          const [winner] = await db.select().from(appointments).where(slotFilter).limit(1);
+          if (winner) return { appointment: winner, created: false };
+          throw new Error(
+            "createAppointment: insert skipped on conflict but no existing row found"
+          );
+        }
+        const [newAppointment] = await db.insert(appointments).values(appointment).returning();
+        return { appointment: newAppointment, created: true };
+      }
+      async updateAppointment(id, data) {
+        const updateData = { ...data, updatedAt: /* @__PURE__ */ new Date() };
+        const [appointment] = await db.update(appointments).set(updateData).where(eq(appointments.id, id)).returning();
+        return appointment || void 0;
+      }
+      async cancelAppointment(id) {
+        const [appointment] = await db.update(appointments).set({ status: "cancelled", cancelledAt: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date() }).where(eq(appointments.id, id)).returning();
+        return appointment || void 0;
+      }
+      async getNotifications(userId) {
+        return db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(desc(notifications.createdAt));
+      }
+      async getNotification(id) {
+        const [notification] = await db.select().from(notifications).where(eq(notifications.id, id));
+        return notification;
+      }
+      async markNotificationRead(id) {
+        await db.update(notifications).set({ isRead: true }).where(eq(notifications.id, id));
+      }
+      async createNotification(userId, title, message, type, data) {
+        const [notification] = await db.insert(notifications).values({ userId, title, message, type, data }).returning();
+        return notification;
+      }
+      // Provider methods
+      async createProvider(provider) {
+        const [newProvider] = await db.insert(providers).values(provider).returning();
+        return newProvider;
+      }
+      async getProviderByUserId(userId) {
+        const [provider] = await db.select().from(providers).where(eq(providers.userId, userId));
+        return provider || void 0;
+      }
+      async updateProvider(id, data) {
+        const [provider] = await db.update(providers).set(data).where(eq(providers.id, id)).returning();
+        return provider || void 0;
+      }
+      // Client methods
+      async getClients(providerId) {
+        return db.select().from(clients).where(eq(clients.providerId, providerId)).orderBy(desc(clients.createdAt));
+      }
+      async getClient(id) {
+        const [client] = await db.select().from(clients).where(eq(clients.id, id));
+        return client || void 0;
+      }
+      async createClient(client) {
+        const [newClient] = await db.insert(clients).values(client).returning();
+        return newClient;
+      }
+      async updateClient(id, data) {
+        const updateData = { ...data, updatedAt: /* @__PURE__ */ new Date() };
+        const [client] = await db.update(clients).set(updateData).where(eq(clients.id, id)).returning();
+        return client || void 0;
+      }
+      async deleteClient(id) {
+        const result = await db.delete(clients).where(eq(clients.id, id)).returning();
+        return result.length > 0;
+      }
+      // Job methods
+      async getJobs(providerId) {
+        return db.select().from(jobs).where(eq(jobs.providerId, providerId)).orderBy(desc(jobs.scheduledDate));
+      }
+      async getJobsByClient(clientId) {
+        return db.select().from(jobs).where(eq(jobs.clientId, clientId)).orderBy(desc(jobs.scheduledDate));
+      }
+      async getJob(id) {
+        const [job] = await db.select().from(jobs).where(eq(jobs.id, id));
+        return job || void 0;
+      }
+      async createJob(job) {
+        const [newJob] = await db.insert(jobs).values(job).returning();
+        return newJob;
+      }
+      async updateJob(id, data) {
+        const updateData = { ...data, updatedAt: /* @__PURE__ */ new Date() };
+        const [job] = await db.update(jobs).set(updateData).where(eq(jobs.id, id)).returning();
+        return job || void 0;
+      }
+      async completeJob(id, finalPrice) {
+        const updateData = {
+          status: "completed",
+          completedAt: /* @__PURE__ */ new Date(),
+          updatedAt: /* @__PURE__ */ new Date()
+        };
+        if (finalPrice) updateData.finalPrice = finalPrice;
+        const [job] = await db.update(jobs).set(updateData).where(eq(jobs.id, id)).returning();
+        return job || void 0;
+      }
+      async deleteJob(id) {
+        const result = await db.delete(jobs).where(eq(jobs.id, id)).returning();
+        return result.length > 0;
+      }
+      // Crew member methods (Task #302)
+      async getCrewMembers(providerId) {
+        return db.select().from(crewMembers).where(eq(crewMembers.providerId, providerId)).orderBy(desc(crewMembers.createdAt));
+      }
+      async getCrewMember(id) {
+        const [member] = await db.select().from(crewMembers).where(eq(crewMembers.id, id));
+        return member || void 0;
+      }
+      async createCrewMember(member) {
+        const [newMember] = await db.insert(crewMembers).values(member).returning();
+        return newMember;
+      }
+      async updateCrewMember(id, data) {
+        const [member] = await db.update(crewMembers).set(data).where(eq(crewMembers.id, id)).returning();
+        return member || void 0;
+      }
+      async deleteCrewMember(id) {
+        const result = await db.delete(crewMembers).where(eq(crewMembers.id, id)).returning();
+        return result.length > 0;
+      }
+      async countJobsAssignedToCrewMember(id) {
+        const rows = await db.select({ id: jobs.id }).from(jobs).where(eq(jobs.assignedCrewMemberId, id));
+        return rows.length;
+      }
+      // Invoice methods
+      async getInvoices(providerId) {
+        return db.select().from(invoices).where(eq(invoices.providerId, providerId)).orderBy(desc(invoices.createdAt));
+      }
+      async getInvoicesByClient(clientId) {
+        return db.select().from(invoices).where(eq(invoices.clientId, clientId)).orderBy(desc(invoices.createdAt));
+      }
+      async getInvoice(id) {
+        const [invoice] = await db.select().from(invoices).where(eq(invoices.id, id));
+        return invoice || void 0;
+      }
+      async createInvoice(invoice) {
+        const [newInvoice] = await db.insert(invoices).values(invoice).returning();
+        return newInvoice;
+      }
+      async updateInvoice(id, data) {
+        const [invoice] = await db.update(invoices).set(data).where(eq(invoices.id, id)).returning();
+        return invoice || void 0;
+      }
+      async sendInvoice(id) {
+        const [invoice] = await db.update(invoices).set({ status: "sent", sentAt: /* @__PURE__ */ new Date() }).where(eq(invoices.id, id)).returning();
+        return invoice || void 0;
+      }
+      async markInvoicePaid(id) {
+        const [invoice] = await db.update(invoices).set({ status: "paid", paidAt: /* @__PURE__ */ new Date() }).where(eq(invoices.id, id)).returning();
+        return invoice || void 0;
+      }
+      async cancelInvoice(id) {
+        const [invoice] = await db.update(invoices).set({ status: "cancelled" }).where(eq(invoices.id, id)).returning();
+        return invoice || void 0;
+      }
+      // Payment methods
+      async getPayments(providerId) {
+        return db.select().from(payments).where(eq(payments.providerId, providerId)).orderBy(desc(payments.createdAt));
+      }
+      async getPaymentsByInvoice(invoiceId) {
+        return db.select().from(payments).where(eq(payments.invoiceId, invoiceId)).orderBy(desc(payments.receivedAt));
+      }
+      async createPayment(payment) {
+        const [newPayment] = await db.insert(payments).values(payment).returning();
+        await this.markInvoicePaid(payment.invoiceId);
+        return newPayment;
+      }
+      // ── Task #295: manual (cash/check/other) payment helpers ──────────────
+      // The plain `createPayment` above auto-marks the invoice as fully paid,
+      // which is correct for Stripe webhook upserts (one payment == full
+      // settlement). Manual payments support partial collection, so we
+      // recompute status from the sum of non-voided rows instead.
+      async recomputeInvoiceStatusFromPayments(invoiceId) {
+        const [invoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+        if (!invoice) return void 0;
+        if (invoice.status === "void" || invoice.status === "cancelled" || invoice.status === "refunded") {
+          return invoice;
+        }
+        const rows = await db.select({ amountCents: payments.amountCents }).from(payments).where(and(eq(payments.invoiceId, invoiceId), sql2`${payments.voidedAt} IS NULL`));
+        const collectedCents = rows.reduce((sum, r) => sum + (r.amountCents ?? 0), 0);
+        const totalCents = invoice.totalCents ?? 0;
+        let nextStatus = invoice.status;
+        let nextPaidAt = invoice.paidAt ?? null;
+        if (totalCents > 0 && collectedCents >= totalCents) {
+          nextStatus = "paid";
+          nextPaidAt = invoice.paidAt ?? /* @__PURE__ */ new Date();
+        } else if (collectedCents > 0) {
+          nextStatus = "partially_paid";
+          nextPaidAt = null;
+        } else {
+          nextStatus = invoice.sentAt ? "sent" : "draft";
+          nextPaidAt = null;
+        }
+        if (nextStatus === invoice.status && nextPaidAt === invoice.paidAt) {
+          return invoice;
+        }
+        const [updated] = await db.update(invoices).set({ status: nextStatus, paidAt: nextPaidAt }).where(eq(invoices.id, invoiceId)).returning();
+        return updated;
+      }
+      async createManualPayment(payment) {
+        const [row] = await db.insert(payments).values(payment).returning();
+        await this.recomputeInvoiceStatusFromPayments(payment.invoiceId);
+        return row;
+      }
+      async updateManualPayment(id, patch) {
+        const [row] = await db.update(payments).set(patch).where(eq(payments.id, id)).returning();
+        if (row) await this.recomputeInvoiceStatusFromPayments(row.invoiceId);
+        return row || void 0;
+      }
+      async voidPayment(id, voidedBy) {
+        const [row] = await db.update(payments).set({ voidedAt: /* @__PURE__ */ new Date(), voidedBy, status: "refunded" }).where(eq(payments.id, id)).returning();
+        if (row) await this.recomputeInvoiceStatusFromPayments(row.invoiceId);
+        return row || void 0;
+      }
+      async getPayment(id) {
+        const [row] = await db.select().from(payments).where(eq(payments.id, id));
+        return row || void 0;
+      }
+      async getManualPayments(providerId) {
+        return db.select().from(payments).where(and(eq(payments.providerId, providerId), sql2`${payments.method} <> 'stripe'`)).orderBy(desc(payments.receivedAt));
+      }
+      // Provider dashboard stats
+      async getProviderStats(providerId, startDate, endDate) {
+        const start = startDate ?? (() => {
+          const d = /* @__PURE__ */ new Date();
+          d.setDate(1);
+          d.setHours(0, 0, 0, 0);
+          return d;
+        })();
+        const end = endDate ?? /* @__PURE__ */ new Date();
+        const paidInvoices = await db.select({ total: invoices.total, paidAt: invoices.paidAt }).from(invoices).where(
+          and(
+            eq(invoices.providerId, providerId),
+            eq(invoices.status, "paid"),
+            gte(invoices.paidAt, start),
+            lte(invoices.paidAt, end)
+          )
+        );
+        const revenueMTD = paidInvoices.reduce((sum, inv) => sum + parseFloat(inv.total || "0"), 0);
+        const averageJobValue = paidInvoices.length > 0 ? revenueMTD / paidInvoices.length : 0;
+        const diffMs = end.getTime() - start.getTime();
+        const diffDays = diffMs / (1e3 * 60 * 60 * 24);
+        const bucketCount = diffDays <= 7 ? 7 : diffDays <= 31 ? Math.ceil(diffDays / 7) : diffDays <= 92 ? 13 : 12;
+        const bucketSizeMs = diffMs / bucketCount;
+        const revenueByPeriod = [];
+        for (let i = 0; i < bucketCount; i++) {
+          const bucketStart = new Date(start.getTime() + i * bucketSizeMs);
+          const bucketEnd = new Date(start.getTime() + (i + 1) * bucketSizeMs);
+          const bucketRevenue = paidInvoices.filter((inv) => {
+            if (!inv.paidAt) return false;
+            const t = new Date(inv.paidAt).getTime();
+            return t >= bucketStart.getTime() && t < bucketEnd.getTime();
+          }).reduce((sum, inv) => sum + parseFloat(inv.total || "0"), 0);
+          let label;
+          if (diffDays <= 7) {
+            label = bucketStart.toLocaleDateString("en-US", { weekday: "short" });
+          } else if (diffDays <= 31) {
+            label = bucketStart.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+          } else if (diffDays <= 92) {
+            label = `W${i + 1}`;
+          } else {
+            label = bucketStart.toLocaleDateString("en-US", { month: "short" });
+          }
+          revenueByPeriod.push({ label, value: bucketRevenue });
+        }
+        const completedJobs = await db.select({ id: jobs.id }).from(jobs).where(
+          and(
+            eq(jobs.providerId, providerId),
+            eq(jobs.status, "completed"),
+            gte(jobs.completedAt, start),
+            lte(jobs.completedAt, end)
+          )
+        );
+        const jobsCompleted = completedJobs.length;
+        const clientList = await this.getClients(providerId);
+        const activeClients = clientList.length;
+        const startOfToday = /* @__PURE__ */ new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        const upcomingJobsList = await db.select({ id: jobs.id }).from(jobs).where(
+          and(
+            eq(jobs.providerId, providerId),
+            or(
+              eq(jobs.status, "in_progress"),
+              and(eq(jobs.status, "scheduled"), gte(jobs.scheduledDate, startOfToday))
+            )
+          )
+        );
+        const upcomingJobs = upcomingJobsList.length;
+        return { revenueMTD, jobsCompleted, activeClients, upcomingJobs, averageJobValue, revenueByPeriod };
+      }
+      // Provider business insights — real numbers for the dashboard metric grid
+      // and an 8-week revenue trend. Also returns internal fields used by the
+      // milestone-notification pipeline (allTimeRevenue, clientGrowthPct, rating,
+      // reviewCount) so the route handler can fire those without a second query.
+      async getProviderInsights(providerId) {
+        const now = /* @__PURE__ */ new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+        const prevMonthCutoff = new Date(
+          now.getFullYear(),
+          now.getMonth() - 1,
+          now.getDate(),
+          23,
+          59,
+          59,
+          999
+        );
+        const completedJobRows = await db.select({
+          finalPrice: jobs.finalPrice,
+          completedAt: jobs.completedAt,
+          clientId: jobs.clientId
+        }).from(jobs).where(and(eq(jobs.providerId, providerId), eq(jobs.status, "completed")));
+        const allTimeRevenue = completedJobRows.reduce(
+          (sum, j) => sum + parseFloat(j.finalPrice || "0"),
+          0
+        );
+        const inWindow = (d, start, end) => !!d && d >= start && d <= end;
+        const currentJobs = completedJobRows.filter(
+          (j) => inWindow(j.completedAt, startOfMonth, now)
+        );
+        const priorJobs = completedJobRows.filter(
+          (j) => inWindow(j.completedAt, startOfPrevMonth, prevMonthCutoff)
+        );
+        const sumPrices = (rows) => rows.reduce((s, j) => s + parseFloat(j.finalPrice || "0"), 0);
+        const revenueMtd = sumPrices(currentJobs);
+        const revenuePrev = sumPrices(priorJobs);
+        const jobsCompleted = currentJobs.length;
+        const jobsCompletedPrev = priorJobs.length;
+        const avgJobValue = jobsCompleted > 0 ? revenueMtd / jobsCompleted : 0;
+        const avgJobValuePrev = jobsCompletedPrev > 0 ? revenuePrev / jobsCompletedPrev : 0;
+        const activeClientsThis = new Set(
+          currentJobs.map((j) => j.clientId).filter(Boolean)
+        ).size;
+        const activeClientsPrev = new Set(
+          priorJobs.map((j) => j.clientId).filter(Boolean)
+        ).size;
+        const pctDelta = (current, prior) => {
+          if (prior <= 0) {
+            if (current <= 0) return null;
+            return 100;
+          }
+          return Math.round((current - prior) / prior * 100);
+        };
+        const startOfThisWeek = (() => {
+          const d = new Date(now);
+          d.setHours(0, 0, 0, 0);
+          const day = d.getDay();
+          const diffToMonday = (day + 6) % 7;
+          d.setDate(d.getDate() - diffToMonday);
+          return d;
+        })();
+        const weeklyRevenueSeries = [];
+        for (let i = 7; i >= 0; i--) {
+          const weekStart = new Date(startOfThisWeek);
+          weekStart.setDate(weekStart.getDate() - i * 7);
+          const weekEnd = new Date(weekStart);
+          weekEnd.setDate(weekEnd.getDate() + 6);
+          weekEnd.setHours(23, 59, 59, 999);
+          const value = completedJobRows.filter((j) => inWindow(j.completedAt, weekStart, weekEnd)).reduce((s, j) => s + parseFloat(j.finalPrice || "0"), 0);
+          const label = weekStart.toLocaleDateString("en-US", {
+            month: "numeric",
+            day: "numeric"
+          });
+          weeklyRevenueSeries.push({ label, value });
+        }
+        const quarterMonth = Math.floor(now.getMonth() / 3) * 3;
+        const startOfThisQuarter = new Date(now.getFullYear(), quarterMonth, 1, 0, 0, 0, 0);
+        const startOfLastQuarter = new Date(now.getFullYear(), quarterMonth - 3, 1, 0, 0, 0, 0);
+        const endOfLastQuarter = new Date(startOfThisQuarter.getTime() - 1);
+        const clientsThisQuarter = await db.select({ id: clients.id }).from(clients).where(and(eq(clients.providerId, providerId), gte(clients.createdAt, startOfThisQuarter)));
+        const clientsLastQuarter = await db.select({ id: clients.id }).from(clients).where(
+          and(
+            eq(clients.providerId, providerId),
+            gte(clients.createdAt, startOfLastQuarter),
+            lte(clients.createdAt, endOfLastQuarter)
+          )
+        );
+        const clientGrowthPct = clientsLastQuarter.length > 0 ? Math.round(
+          (clientsThisQuarter.length - clientsLastQuarter.length) / clientsLastQuarter.length * 100
+        ) : clientsThisQuarter.length > 0 ? 100 : 0;
+        const [providerRow] = await db.select({ rating: providers.rating, reviewCount: providers.reviewCount }).from(providers).where(eq(providers.id, providerId));
+        const totalClientsRow = await db.select({ id: clients.id }).from(clients).where(eq(clients.providerId, providerId));
+        const hasAnyData = completedJobRows.length > 0 || totalClientsRow.length > 0;
+        return {
+          revenueMtd,
+          revenueMtdDelta: pctDelta(revenueMtd, revenuePrev),
+          jobsCompleted,
+          jobsCompletedDelta: pctDelta(jobsCompleted, jobsCompletedPrev),
+          activeClients: activeClientsThis,
+          activeClientsDelta: pctDelta(activeClientsThis, activeClientsPrev),
+          avgJobValue,
+          avgJobValueDelta: pctDelta(avgJobValue, avgJobValuePrev),
+          weeklyRevenueSeries,
+          hasAnyData,
+          allTimeRevenue,
+          clientGrowthPct,
+          rating: providerRow?.rating ?? "0",
+          reviewCount: providerRow?.reviewCount ?? 0
+        };
+      }
+      // Get next invoice number
+      async getNextInvoiceNumber(providerId) {
+        const existingInvoices = await db.select({ invoiceNumber: invoices.invoiceNumber }).from(invoices).where(eq(invoices.providerId, providerId));
+        const nextNum = existingInvoices.length + 1;
+        return `INV-${String(nextNum).padStart(4, "0")}`;
+      }
+      // ── Task #296: Estimate methods ───────────────────────────────────────
+      async getNextEstimateNumber(providerId) {
+        const rows = await db.select({ estimateNumber: estimates.estimateNumber }).from(estimates).where(eq(estimates.providerId, providerId));
+        const nextNum = rows.length + 1;
+        return `EST-${String(nextNum).padStart(4, "0")}`;
+      }
+      async getEstimates(providerId) {
+        return db.select().from(estimates).where(eq(estimates.providerId, providerId)).orderBy(desc(estimates.createdAt));
+      }
+      async getEstimatesByClient(clientId) {
+        return db.select().from(estimates).where(eq(estimates.clientId, clientId)).orderBy(desc(estimates.createdAt));
+      }
+      async getEstimate(id) {
+        const [row] = await db.select().from(estimates).where(eq(estimates.id, id));
+        return row || void 0;
+      }
+      async getEstimateByPublicToken(token) {
+        const [row] = await db.select().from(estimates).where(eq(estimates.publicToken, token));
+        return row || void 0;
+      }
+      async createEstimate(data) {
+        const [row] = await db.insert(estimates).values(data).returning();
+        return row;
+      }
+      async updateEstimate(id, data) {
+        const [row] = await db.update(estimates).set({ ...data, updatedAt: /* @__PURE__ */ new Date() }).where(eq(estimates.id, id)).returning();
+        return row || void 0;
+      }
+      async deleteEstimate(id) {
+        const result = await db.delete(estimates).where(eq(estimates.id, id)).returning();
+        return result.length > 0;
+      }
+      async getEstimateLineItems(estimateId) {
+        return db.select().from(estimateLineItems).where(eq(estimateLineItems.estimateId, estimateId)).orderBy(estimateLineItems.createdAt);
+      }
+      async replaceEstimateLineItems(estimateId, items) {
+        await db.delete(estimateLineItems).where(eq(estimateLineItems.estimateId, estimateId));
+        if (items.length === 0) return [];
+        const inserted = await db.insert(estimateLineItems).values(items.map((it) => ({ ...it, estimateId }))).returning();
+        return inserted;
+      }
+      // Booking Links
+      async getBookingLink(id) {
+        const [link] = await db.select().from(bookingLinks).where(eq(bookingLinks.id, id));
+        return link || void 0;
+      }
+      async getBookingLinkBySlug(slug) {
+        const [link] = await db.select().from(bookingLinks).where(eq(bookingLinks.slug, slug));
+        return link || void 0;
+      }
+      async getBookingLinksByProvider(providerId) {
+        return await db.select().from(bookingLinks).where(eq(bookingLinks.providerId, providerId));
+      }
+      async createBookingLink(data) {
+        const [link] = await db.insert(bookingLinks).values(data).returning();
+        return link;
+      }
+      async updateBookingLink(id, data) {
+        const [link] = await db.update(bookingLinks).set({ ...data, updatedAt: /* @__PURE__ */ new Date() }).where(eq(bookingLinks.id, id)).returning();
+        return link || void 0;
+      }
+      async deleteBookingLink(id) {
+        const result = await db.delete(bookingLinks).where(eq(bookingLinks.id, id));
+        return true;
+      }
+      // Intake Submissions
+      async getIntakeSubmission(id) {
+        const [submission] = await db.select().from(intakeSubmissions).where(eq(intakeSubmissions.id, id));
+        return submission || void 0;
+      }
+      async getIntakeSubmissionsByProvider(providerId) {
+        return await db.select().from(intakeSubmissions).where(eq(intakeSubmissions.providerId, providerId)).orderBy(desc(intakeSubmissions.createdAt));
+      }
+      async getIntakeSubmissionsByBookingLink(bookingLinkId) {
+        return await db.select().from(intakeSubmissions).where(eq(intakeSubmissions.bookingLinkId, bookingLinkId)).orderBy(desc(intakeSubmissions.createdAt));
+      }
+      async createIntakeSubmission(data) {
+        const [submission] = await db.insert(intakeSubmissions).values(data).returning();
+        return submission;
+      }
+      async updateIntakeSubmission(id, data) {
+        const [submission] = await db.update(intakeSubmissions).set({ ...data, updatedAt: /* @__PURE__ */ new Date() }).where(eq(intakeSubmissions.id, id)).returning();
+        return submission || void 0;
+      }
+      async getNotificationPreferences(userId) {
+        const [prefs] = await db.select().from(notificationPreferences).where(eq(notificationPreferences.userId, userId));
+        return prefs || void 0;
+      }
+      async upsertNotificationPreferences(userId, data) {
+        const existing = await this.getNotificationPreferences(userId);
+        if (existing) {
+          const [updated] = await db.update(notificationPreferences).set({ ...data, updatedAt: /* @__PURE__ */ new Date() }).where(eq(notificationPreferences.userId, userId)).returning();
+          return updated;
+        }
+        const [created] = await db.insert(notificationPreferences).values({ userId, ...data }).returning();
+        return created;
+      }
+    };
+    storage = new DatabaseStorage();
+  }
+});
+
 // server/emailService.ts
 var emailService_exports = {};
 __export(emailService_exports, {
@@ -1813,7 +2470,7 @@ __export(emailService_exports, {
   sendWelcomeEmail: () => sendWelcomeEmail
 });
 import { Resend } from "resend";
-async function getCredentials() {
+async function getCredentials2() {
   const envApiKey = process.env.RESEND_API_KEY;
   const envFromEmail = process.env.RESEND_FROM_EMAIL || "HomeBase <noreply@updates.homebaseproapp.com>";
   if (envApiKey) {
@@ -1823,7 +2480,7 @@ async function getCredentials() {
   const xReplitToken = process.env.REPL_IDENTITY ? "repl " + process.env.REPL_IDENTITY : process.env.WEB_REPL_RENEWAL ? "depl " + process.env.WEB_REPL_RENEWAL : null;
   if (hostname && xReplitToken) {
     try {
-      connectionSettings = await fetch(
+      connectionSettings2 = await fetch(
         "https://" + hostname + "/api/v2/connection?include_secrets=true&connector_names=resend",
         {
           headers: {
@@ -1832,10 +2489,10 @@ async function getCredentials() {
           }
         }
       ).then((res) => res.json()).then((data) => data.items?.[0]);
-      if (connectionSettings?.settings?.api_key) {
+      if (connectionSettings2?.settings?.api_key) {
         return {
-          apiKey: connectionSettings.settings.api_key,
-          fromEmail: connectionSettings.settings.from_email || envFromEmail
+          apiKey: connectionSettings2.settings.api_key,
+          fromEmail: connectionSettings2.settings.from_email || envFromEmail
         };
       }
     } catch (e) {
@@ -1846,7 +2503,7 @@ async function getCredentials() {
   );
 }
 async function getResendClient() {
-  const { apiKey, fromEmail } = await getCredentials();
+  const { apiKey, fromEmail } = await getCredentials2();
   return {
     client: new Resend(apiKey),
     fromEmail
@@ -2676,7 +3333,7 @@ async function sendCrewInviteEmail(to, crewName, providerName, acceptUrl) {
     buildEmailBase("Crew Invite", body, "Accept Invite", acceptUrl)
   );
 }
-var connectionSettings, SUBSCRIBE_DEEP_LINK;
+var connectionSettings2, SUBSCRIBE_DEEP_LINK;
 var init_emailService = __esm({
   "server/emailService.ts"() {
     "use strict";
@@ -2696,7 +3353,7 @@ __export(notificationService_exports, {
   sendPush: () => sendPush,
   sendReviewNudge: () => sendReviewNudge
 });
-import { eq, and } from "drizzle-orm";
+import { eq as eq2, and as and2 } from "drizzle-orm";
 async function logDelivery(opts) {
   try {
     const [row] = await db.insert(notificationDeliveries).values({
@@ -2735,7 +3392,7 @@ async function claimNotificationDelivery(eventType, dedupKey, channel) {
 async function updateDelivery(id, status, externalMessageId, error) {
   if (!id) return;
   try {
-    await db.update(notificationDeliveries).set({ status, externalMessageId: externalMessageId ?? null, error: error ?? null, updatedAt: /* @__PURE__ */ new Date() }).where(eq(notificationDeliveries.id, id));
+    await db.update(notificationDeliveries).set({ status, externalMessageId: externalMessageId ?? null, error: error ?? null, updatedAt: /* @__PURE__ */ new Date() }).where(eq2(notificationDeliveries.id, id));
   } catch (err) {
     console.error("Failed to update notification delivery:", err);
   }
@@ -2744,7 +3401,7 @@ async function isEmailAllowed(event, recipientUserId) {
   const prefField = EVENT_PREF_FIELD[event];
   if (!prefField || !recipientUserId) return true;
   try {
-    const [prefs] = await db.select().from(notificationPreferences).where(eq(notificationPreferences.userId, recipientUserId));
+    const [prefs] = await db.select().from(notificationPreferences).where(eq2(notificationPreferences.userId, recipientUserId));
     if (!prefs) return true;
     const allowed = prefs[prefField];
     return allowed !== false;
@@ -3114,7 +3771,7 @@ async function _dispatch(event, payload) {
       };
       const push = pushCopy[newStatus] ?? { title: "Job update", body: `Your ${serviceName} status changed.` };
       if (clientEmail && clientName) {
-        const [prefs] = payload.recipientUserId ? await db.select().from(notificationPreferences).where(eq(notificationPreferences.userId, payload.recipientUserId)).catch(() => [null]) : [null];
+        const [prefs] = payload.recipientUserId ? await db.select().from(notificationPreferences).where(eq2(notificationPreferences.userId, payload.recipientUserId)).catch(() => [null]) : [null];
         const emailOptedOut = prefs?.emailBookingConfirmation === false;
         if (emailOptedOut) {
           console.log(`[notification] job.status_changed(${newStatus}) email skipped \u2014 user ${payload.recipientUserId} opted out`);
@@ -3342,11 +3999,11 @@ async function _dispatch(event, payload) {
 async function hasDeliveryForRecord(eventType, relatedRecordId, channel = "email") {
   try {
     const rows = await db.select({ id: notificationDeliveries.id }).from(notificationDeliveries).where(
-      and(
-        eq(notificationDeliveries.eventType, eventType),
-        eq(notificationDeliveries.relatedRecordId, relatedRecordId),
-        eq(notificationDeliveries.channel, channel),
-        eq(notificationDeliveries.status, "sent")
+      and2(
+        eq2(notificationDeliveries.eventType, eventType),
+        eq2(notificationDeliveries.relatedRecordId, relatedRecordId),
+        eq2(notificationDeliveries.channel, channel),
+        eq2(notificationDeliveries.status, "sent")
       )
     ).limit(1);
     return rows.length > 0;
@@ -3384,11 +4041,11 @@ async function sendExpoPushNotifications(messages) {
 }
 async function sendPush(userId, title, body, data = {}, _category = "bookings") {
   try {
-    const [prefs] = await db.select().from(notificationPreferences).where(eq(notificationPreferences.userId, userId));
+    const [prefs] = await db.select().from(notificationPreferences).where(eq2(notificationPreferences.userId, userId));
     if (prefs && prefs.pushEnabled === false) {
       return;
     }
-    const tokens = await db.select({ token: pushTokens.token }).from(pushTokens).where(and(eq(pushTokens.userId, userId), eq(pushTokens.isActive, true)));
+    const tokens = await db.select({ token: pushTokens.token }).from(pushTokens).where(and2(eq2(pushTokens.userId, userId), eq2(pushTokens.isActive, true)));
     if (tokens.length === 0) return;
     const uniqueTokens = Array.from(new Set(tokens.map((t) => t.token)));
     const messages = uniqueTokens.map((token) => ({
@@ -3420,11 +4077,11 @@ async function dispatchNotification(userId, title, message, type, data = {}, cat
 }
 async function sendReviewNudge(appointmentId) {
   try {
-    const [appointment] = await db.select().from(appointments).where(eq(appointments.id, appointmentId)).limit(1);
+    const [appointment] = await db.select().from(appointments).where(eq2(appointments.id, appointmentId)).limit(1);
     if (!appointment) return;
     if (appointment.status === "cancelled") return;
     if (!REVIEW_NUDGE_REVIEWABLE_STATUSES.has(appointment.status || "")) return;
-    const [existingReview] = await db.select({ id: reviews.id }).from(reviews).where(eq(reviews.appointmentId, appointmentId)).limit(1);
+    const [existingReview] = await db.select({ id: reviews.id }).from(reviews).where(eq2(reviews.appointmentId, appointmentId)).limit(1);
     if (existingReview) return;
     const alreadyNudged = await hasDeliveryForRecord(
       REVIEW_NUDGE_EVENT,
@@ -3432,8 +4089,8 @@ async function sendReviewNudge(appointmentId) {
       "push"
     );
     if (alreadyNudged) return;
-    const [homeowner] = await db.select().from(users).where(eq(users.id, appointment.userId)).limit(1);
-    const [provider] = appointment.providerId ? await db.select().from(providers).where(eq(providers.id, appointment.providerId)).limit(1) : [null];
+    const [homeowner] = await db.select().from(users).where(eq2(users.id, appointment.userId)).limit(1);
+    const [provider] = appointment.providerId ? await db.select().from(providers).where(eq2(providers.id, appointment.providerId)).limit(1) : [null];
     const providerName = provider?.businessName || "your provider";
     const serviceName = appointment.serviceName || "your service";
     const baseUrl = process.env.PUBLIC_BASE_URL || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "https://homebaseproapp.com");
@@ -3533,7 +4190,7 @@ __export(subscriptionService_exports, {
   sendGraceReminderNotification: () => sendGraceReminderNotification,
   sendGraceStartNotification: () => sendGraceStartNotification
 });
-import { eq as eq2 } from "drizzle-orm";
+import { eq as eq4 } from "drizzle-orm";
 function computeSubscriptionStatus(plan, now = /* @__PURE__ */ new Date()) {
   const isSubscribed = !!plan?.isSubscribed;
   const firstPaidAt = plan?.firstPaidBookingAt ? new Date(plan.firstPaidBookingAt) : null;
@@ -3600,7 +4257,7 @@ function computeSubscriptionStatus(plan, now = /* @__PURE__ */ new Date()) {
   };
 }
 async function getProviderSubscriptionStatus(providerId) {
-  const [plan] = await db.select().from(providerPlans2).where(eq2(providerPlans2.providerId, providerId));
+  const [plan] = await db.select().from(providerPlans2).where(eq4(providerPlans2.providerId, providerId));
   return computeSubscriptionStatus(plan ?? null);
 }
 async function checkSubscriptionGate(providerId, res) {
@@ -3617,7 +4274,7 @@ async function checkSubscriptionGate(providerId, res) {
 }
 async function maybeStartGracePeriod(providerId) {
   try {
-    const [existing] = await db.select().from(providerPlans2).where(eq2(providerPlans2.providerId, providerId));
+    const [existing] = await db.select().from(providerPlans2).where(eq4(providerPlans2.providerId, providerId));
     if (existing?.firstPaidBookingAt || existing?.isSubscribed) return;
     const now = /* @__PURE__ */ new Date();
     const graceEnd = new Date(
@@ -3628,7 +4285,7 @@ async function maybeStartGracePeriod(providerId) {
         firstPaidBookingAt: now,
         gracePeriodEndsAt: graceEnd,
         updatedAt: now
-      }).where(eq2(providerPlans2.id, existing.id));
+      }).where(eq4(providerPlans2.id, existing.id));
     } else {
       await db.insert(providerPlans2).values({
         providerId,
@@ -3642,9 +4299,9 @@ async function maybeStartGracePeriod(providerId) {
   }
 }
 async function getProviderUser(providerId) {
-  const [provider] = await db.select().from(providers).where(eq2(providers.id, providerId));
+  const [provider] = await db.select().from(providers).where(eq4(providers.id, providerId));
   if (!provider?.userId) return null;
-  const [user] = await db.select().from(users).where(eq2(users.id, provider.userId));
+  const [user] = await db.select().from(users).where(eq4(users.id, provider.userId));
   if (!user) return null;
   return { provider, user };
 }
@@ -3770,7 +4427,7 @@ __export(stripeWebhookRouter_exports, {
   reserveEvent: () => reserveEvent,
   resolveConnectedProvider: () => resolveConnectedProvider
 });
-import { eq as eq3, sql as sql2 } from "drizzle-orm";
+import { eq as eq5, sql as sql3 } from "drizzle-orm";
 async function getHandlers() {
   if (handlersCache) return handlersCache;
   const svc = await Promise.resolve().then(() => (init_stripeConnectService(), stripeConnectService_exports));
@@ -3927,17 +4584,17 @@ async function reserveEvent(event, endpoint) {
       throw err;
     }
   }
-  const [row] = await db.select({ processedAt: stripeWebhookEvents.processedAt }).from(stripeWebhookEvents).where(eq3(stripeWebhookEvents.stripeEventId, event.id));
+  const [row] = await db.select({ processedAt: stripeWebhookEvents.processedAt }).from(stripeWebhookEvents).where(eq5(stripeWebhookEvents.stripeEventId, event.id));
   if (row && row.processedAt !== null) {
     return "duplicate";
   }
   return "retry";
 }
 async function markEventProcessed(eventId) {
-  await db.update(stripeWebhookEvents).set({ processedAt: sql2`NOW()` }).where(eq3(stripeWebhookEvents.stripeEventId, eventId));
+  await db.update(stripeWebhookEvents).set({ processedAt: sql3`NOW()` }).where(eq5(stripeWebhookEvents.stripeEventId, eventId));
 }
 async function resolveConnectedProvider(stripeAccountId) {
-  const [row] = await db.select().from(stripeConnectAccounts).where(eq3(stripeConnectAccounts.stripeAccountId, stripeAccountId));
+  const [row] = await db.select().from(stripeConnectAccounts).where(eq5(stripeConnectAccounts.stripeAccountId, stripeAccountId));
   return row ?? null;
 }
 var handlersCache;
@@ -3957,6 +4614,7 @@ __export(stripeConnectService_exports, {
   applyCreditsToInvoice: () => applyCreditsToInvoice,
   calculateFeePreview: () => calculateFeePreview,
   calculatePlatformFee: () => calculatePlatformFee,
+  calculateStripePassthroughFee: () => calculateStripePassthroughFee,
   createCancellationFeeCheckoutSession: () => createCancellationFeeCheckoutSession,
   createConnectAccountLink: () => createConnectAccountLink,
   createDepositCheckoutSession: () => createDepositCheckoutSession,
@@ -3993,8 +4651,8 @@ __export(stripeConnectService_exports, {
   resendStripeInvoice: () => resendStripeInvoice,
   sendStripeInvoiceEmail: () => sendStripeInvoiceEmail
 });
-import Stripe from "stripe";
-import { eq as eq4, and as and2, inArray } from "drizzle-orm";
+import Stripe2 from "stripe";
+import { eq as eq6, and as and3, inArray } from "drizzle-orm";
 function getStripe() {
   if (!stripe) {
     const isProd = process.env.NODE_ENV === "production";
@@ -4009,7 +4667,7 @@ function getStripe() {
         `[stripe] WARNING: NODE_ENV=production but STRIPE_SECRET_KEY does not start with sk_live_. The app will run in Stripe test mode \u2014 real payments will NOT be processed.`
       );
     }
-    stripe = new Stripe(apiKey);
+    stripe = new Stripe2(apiKey);
   }
   return stripe;
 }
@@ -4022,7 +4680,7 @@ function isStripeLiveMode() {
   return !!apiKey && apiKey.startsWith("sk_live_");
 }
 async function getProviderPlan(providerId) {
-  const [plan] = await db.select().from(providerPlans2).where(eq4(providerPlans2.providerId, providerId));
+  const [plan] = await db.select().from(providerPlans2).where(eq6(providerPlans2.providerId, providerId));
   if (!plan) {
     return {
       id: null,
@@ -4043,8 +4701,11 @@ function calculatePlatformFee(totalCents, feePercent, fixedCents = 0) {
     totalCents: percentFee + fixedCents
   };
 }
+function calculateStripePassthroughFee(jobCents) {
+  return Math.round(jobCents * 0.029 + 30);
+}
 async function getConnectAccount(providerId) {
-  const [account] = await db.select().from(stripeConnectAccounts).where(eq4(stripeConnectAccounts.providerId, providerId));
+  const [account] = await db.select().from(stripeConnectAccounts).where(eq6(stripeConnectAccounts.providerId, providerId));
   return account;
 }
 async function isProviderReadyForCharges(providerId) {
@@ -4054,9 +4715,9 @@ async function isProviderReadyForCharges(providerId) {
 async function getProviderReadinessSet(providerIds) {
   if (providerIds.length === 0) return /* @__PURE__ */ new Set();
   const rows = await db.select({ providerId: stripeConnectAccounts.providerId }).from(stripeConnectAccounts).where(
-    and2(
+    and3(
       inArray(stripeConnectAccounts.providerId, providerIds),
-      eq4(stripeConnectAccounts.chargesEnabled, true)
+      eq6(stripeConnectAccounts.chargesEnabled, true)
     )
   );
   return new Set(rows.map((r) => r.providerId));
@@ -4064,7 +4725,7 @@ async function getProviderReadinessSet(providerIds) {
 async function createConnectAccountLink(providerId) {
   let connectAccount = await getConnectAccount(providerId);
   if (!connectAccount) {
-    const [provider] = await db.select().from(providers).where(eq4(providers.id, providerId));
+    const [provider] = await db.select().from(providers).where(eq6(providers.id, providerId));
     if (!provider) {
       throw new Error("Provider not found");
     }
@@ -4168,7 +4829,7 @@ async function getConnectStatus(providerId) {
     detailsSubmitted: account.details_submitted || false,
     livemode: account.livemode ?? isStripeLiveMode(),
     updatedAt: /* @__PURE__ */ new Date()
-  }).where(eq4(stripeConnectAccounts.id, connectAccount.id));
+  }).where(eq6(stripeConnectAccounts.id, connectAccount.id));
   const accountLivemode = account.livemode ?? isStripeLiveMode();
   const needsReonboarding = isStripeLiveMode() && !accountLivemode;
   return {
@@ -4184,11 +4845,11 @@ async function getConnectStatus(providerId) {
   };
 }
 async function reonboardConnectAccount(providerId) {
-  await db.delete(stripeConnectAccounts).where(eq4(stripeConnectAccounts.providerId, providerId));
+  await db.delete(stripeConnectAccounts).where(eq6(stripeConnectAccounts.providerId, providerId));
   return createConnectAccountLink(providerId);
 }
 async function createInvoicePaymentIntent(invoiceId, payerUserId) {
-  const [invoice] = await db.select().from(invoices).where(eq4(invoices.id, invoiceId));
+  const [invoice] = await db.select().from(invoices).where(eq6(invoices.id, invoiceId));
   if (!invoice) {
     throw new Error("Invoice not found");
   }
@@ -4202,8 +4863,10 @@ async function createInvoicePaymentIntent(invoiceId, payerUserId) {
   if (!connectAccount.chargesEnabled) {
     throw new Error("Provider payment processing is not yet enabled");
   }
+  const stripeFeeCents = calculateStripePassthroughFee(invoice.totalCents);
+  const homeownerTotalCents = invoice.totalCents + stripeFeeCents;
   const paymentIntent = await getStripe().paymentIntents.create({
-    amount: invoice.totalCents,
+    amount: homeownerTotalCents,
     currency: invoice.currency || "usd",
     application_fee_amount: invoice.platformFeeCents || 0,
     transfer_data: {
@@ -4212,18 +4875,20 @@ async function createInvoicePaymentIntent(invoiceId, payerUserId) {
     metadata: {
       invoiceId: invoice.id,
       providerId: invoice.providerId,
-      payerUserId: payerUserId || ""
+      payerUserId: payerUserId || "",
+      jobAmountCents: String(invoice.totalCents),
+      stripeFeeCents: String(stripeFeeCents)
     }
   });
   await db.update(invoices).set({
     stripePaymentIntentId: paymentIntent.id,
     updatedAt: /* @__PURE__ */ new Date()
-  }).where(eq4(invoices.id, invoiceId));
+  }).where(eq6(invoices.id, invoiceId));
   await db.insert(payments).values({
     invoiceId: invoice.id,
     providerId: invoice.providerId,
-    amountCents: invoice.totalCents,
-    amount: (invoice.totalCents / 100).toFixed(2),
+    amountCents: homeownerTotalCents,
+    amount: (homeownerTotalCents / 100).toFixed(2),
     method: "stripe",
     status: "requires_payment",
     stripePaymentIntentId: paymentIntent.id
@@ -4231,11 +4896,13 @@ async function createInvoicePaymentIntent(invoiceId, payerUserId) {
   return {
     clientSecret: paymentIntent.client_secret,
     paymentIntentId: paymentIntent.id,
-    amount: invoice.totalCents
+    amount: homeownerTotalCents,
+    jobAmountCents: invoice.totalCents,
+    stripeFeeCents
   };
 }
 async function createStripeInvoice(invoiceId) {
-  const [invoice] = await db.select().from(invoices).where(eq4(invoices.id, invoiceId));
+  const [invoice] = await db.select().from(invoices).where(eq6(invoices.id, invoiceId));
   if (!invoice) throw new Error("Invoice not found");
   if (invoice.stripeInvoiceId && invoice.hostedInvoiceUrl) {
     try {
@@ -4270,7 +4937,7 @@ async function createStripeInvoice(invoiceId) {
   }
   const connectId = connectAccount.stripeAccountId;
   if (!invoice.clientId) throw new Error("Invoice has no client");
-  const [client] = await db.select().from(clients).where(eq4(clients.id, invoice.clientId));
+  const [client] = await db.select().from(clients).where(eq6(clients.id, invoice.clientId));
   if (!client) throw new Error("Client not found");
   let stripeCustomerId = client.stripeConnectCustomerId;
   if (stripeCustomerId) {
@@ -4301,7 +4968,7 @@ async function createStripeInvoice(invoiceId) {
       { stripeAccount: connectId }
     );
     stripeCustomerId = customer.id;
-    await db.update(clients).set({ stripeConnectCustomerId: stripeCustomerId, updatedAt: /* @__PURE__ */ new Date() }).where(eq4(clients.id, client.id));
+    await db.update(clients).set({ stripeConnectCustomerId: stripeCustomerId, updatedAt: /* @__PURE__ */ new Date() }).where(eq6(clients.id, client.id));
   }
   const rawItems = invoice.lineItems;
   const lineItems = rawItems ? Array.isArray(rawItems) ? rawItems : JSON.parse(rawItems) : [];
@@ -4337,6 +5004,18 @@ async function createStripeInvoice(invoiceId) {
       { stripeAccount: connectId }
     );
   }
+  const stripePassthroughFeeCentsForInvoice = calculateStripePassthroughFee(
+    invoice.totalCents || Math.round(parseFloat(invoice.total?.toString() || "0") * 100)
+  );
+  await getStripe().invoiceItems.create(
+    {
+      customer: stripeCustomerId,
+      amount: stripePassthroughFeeCentsForInvoice,
+      currency: invoice.currency || "usd",
+      description: "Processing fee (2.9% + $0.30)"
+    },
+    { stripeAccount: connectId }
+  );
   const platformFeeCents = invoice.platformFeeCents || 0;
   const daysUntilDue = invoice.dueDate ? Math.max(
     1,
@@ -4371,11 +5050,11 @@ async function createStripeInvoice(invoiceId) {
     stripeInvoiceId: finalized.id,
     hostedInvoiceUrl,
     updatedAt: /* @__PURE__ */ new Date()
-  }).where(eq4(invoices.id, invoiceId));
+  }).where(eq6(invoices.id, invoiceId));
   return { stripeInvoiceId: finalized.id, hostedInvoiceUrl };
 }
 async function createStripeCheckoutSession(invoiceId) {
-  const [invoice] = await db.select().from(invoices).where(eq4(invoices.id, invoiceId));
+  const [invoice] = await db.select().from(invoices).where(eq6(invoices.id, invoiceId));
   if (!invoice) {
     throw new Error("Invoice not found");
   }
@@ -4390,8 +5069,8 @@ async function createStripeCheckoutSession(invoiceId) {
     err.code = "stripe_not_ready";
     throw err;
   }
-  const [provider] = await db.select().from(providers).where(eq4(providers.id, invoice.providerId));
-  const lineItemsData = await db.select().from(invoiceLineItems).where(eq4(invoiceLineItems.invoiceId, invoiceId));
+  const [provider] = await db.select().from(providers).where(eq6(providers.id, invoice.providerId));
+  const lineItemsData = await db.select().from(invoiceLineItems).where(eq6(invoiceLineItems.invoiceId, invoiceId));
   const stripeLineItems = lineItemsData.map((item) => ({
     price_data: {
       currency: invoice.currency || "usd",
@@ -4416,6 +5095,15 @@ async function createStripeCheckoutSession(invoiceId) {
       quantity: 1
     });
   }
+  const checkoutStripeFeeCents = calculateStripePassthroughFee(invoice.totalCents);
+  stripeLineItems.push({
+    price_data: {
+      currency: invoice.currency || "usd",
+      product_data: { name: "Processing fee (2.9% + $0.30)" },
+      unit_amount: checkoutStripeFeeCents
+    },
+    quantity: 1
+  });
   const session = await getStripe().checkout.sessions.create({
     mode: "payment",
     line_items: stripeLineItems,
@@ -4440,7 +5128,7 @@ async function createStripeCheckoutSession(invoiceId) {
     stripeCheckoutSessionId: session.id,
     hostedInvoiceUrl: session.url,
     updatedAt: /* @__PURE__ */ new Date()
-  }).where(eq4(invoices.id, invoiceId));
+  }).where(eq6(invoices.id, invoiceId));
   return {
     sessionId: session.id,
     checkoutUrl: session.url
@@ -4452,7 +5140,7 @@ async function createDirectCheckoutSession(_invoiceId, _reqHost) {
   );
 }
 async function applyCreditsToInvoice(invoiceId, userId, amountCents) {
-  const [invoice] = await db.select().from(invoices).where(eq4(invoices.id, invoiceId));
+  const [invoice] = await db.select().from(invoices).where(eq6(invoices.id, invoiceId));
   if (!invoice) {
     throw new Error("Invoice not found");
   }
@@ -4460,7 +5148,7 @@ async function applyCreditsToInvoice(invoiceId, userId, amountCents) {
   if (!allowedMethods.includes("credits")) {
     throw new Error("This invoice does not accept credit payments");
   }
-  const [userCredit] = await db.select().from(userCredits).where(eq4(userCredits.userId, userId));
+  const [userCredit] = await db.select().from(userCredits).where(eq6(userCredits.userId, userId));
   if (!userCredit || (userCredit.balanceCents || 0) < amountCents) {
     throw new Error("Insufficient credits");
   }
@@ -4472,7 +5160,7 @@ async function applyCreditsToInvoice(invoiceId, userId, amountCents) {
   await db.update(userCredits).set({
     balanceCents: (userCredit.balanceCents || 0) - actualAmount,
     updatedAt: /* @__PURE__ */ new Date()
-  }).where(eq4(userCredits.userId, userId));
+  }).where(eq6(userCredits.userId, userId));
   await db.insert(creditLedger).values({
     userId,
     deltaCents: -actualAmount,
@@ -4493,7 +5181,7 @@ async function applyCreditsToInvoice(invoiceId, userId, amountCents) {
     status: isFullyPaid ? "paid" : "partially_paid",
     paidAt: isFullyPaid ? /* @__PURE__ */ new Date() : void 0,
     updatedAt: /* @__PURE__ */ new Date()
-  }).where(eq4(invoices.id, invoiceId));
+  }).where(eq6(invoices.id, invoiceId));
   return {
     applied: actualAmount,
     remainingBalance: (userCredit.balanceCents || 0) - actualAmount,
@@ -4502,7 +5190,7 @@ async function applyCreditsToInvoice(invoiceId, userId, amountCents) {
 }
 async function getPaidAmount(invoiceId) {
   const allPayments = await db.select().from(payments).where(
-    and2(eq4(payments.invoiceId, invoiceId), eq4(payments.status, "succeeded"))
+    and3(eq6(payments.invoiceId, invoiceId), eq6(payments.status, "succeeded"))
   );
   return allPayments.reduce((sum, p) => sum + (p.amountCents || 0), 0);
 }
@@ -4511,7 +5199,7 @@ async function handleStripeWebhook(event) {
   return processStripeEvent2(event, "connect");
 }
 async function handleAccountUpdated(account) {
-  const [connectAccount] = await db.select().from(stripeConnectAccounts).where(eq4(stripeConnectAccounts.stripeAccountId, account.id));
+  const [connectAccount] = await db.select().from(stripeConnectAccounts).where(eq6(stripeConnectAccounts.stripeAccountId, account.id));
   if (!connectAccount) return;
   let onboardingStatus = "pending";
   if (account.charges_enabled && account.payouts_enabled && account.details_submitted) {
@@ -4523,7 +5211,7 @@ async function handleAccountUpdated(account) {
     payoutsEnabled: account.payouts_enabled,
     detailsSubmitted: account.details_submitted || false,
     updatedAt: /* @__PURE__ */ new Date()
-  }).where(eq4(stripeConnectAccounts.id, connectAccount.id));
+  }).where(eq6(stripeConnectAccounts.id, connectAccount.id));
 }
 function resolveExpandableId(value) {
   if (!value) return null;
@@ -4536,11 +5224,11 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
     paymentIntent.invoice
   );
   if (!invoiceId && piInvoice) {
-    const [linked] = await db.select({ id: invoices.id }).from(invoices).where(eq4(invoices.stripeInvoiceId, piInvoice));
+    const [linked] = await db.select({ id: invoices.id }).from(invoices).where(eq6(invoices.stripeInvoiceId, piInvoice));
     if (linked) invoiceId = linked.id;
   }
   if (!invoiceId) return;
-  const [invForUpsert] = await db.select({ providerId: invoices.providerId, totalCents: invoices.totalCents }).from(invoices).where(eq4(invoices.id, invoiceId));
+  const [invForUpsert] = await db.select({ providerId: invoices.providerId, totalCents: invoices.totalCents }).from(invoices).where(eq6(invoices.id, invoiceId));
   if (!invForUpsert) return;
   const amountCents = paymentIntent.amount ?? invForUpsert.totalCents ?? 0;
   const stripeChargeId = paymentIntent.latest_charge?.toString() ?? null;
@@ -4565,7 +5253,7 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
     paidAt: /* @__PURE__ */ new Date(),
     stripePaymentIntentId: paymentIntent.id,
     updatedAt: /* @__PURE__ */ new Date()
-  }).where(eq4(invoices.id, invoiceId)).returning();
+  }).where(eq6(invoices.id, invoiceId)).returning();
   if (updatedInvoice) {
     try {
       const { maybeStartGracePeriod: maybeStartGracePeriod2 } = await Promise.resolve().then(() => (init_subscriptionService(), subscriptionService_exports));
@@ -4576,17 +5264,17 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
   }
   if (updatedInvoice) {
     try {
-      const [provider] = await db.select().from(providers).where(eq4(providers.id, updatedInvoice.providerId));
+      const [provider] = await db.select().from(providers).where(eq6(providers.id, updatedInvoice.providerId));
       let clientEmail;
       let clientName;
       if (updatedInvoice.homeownerUserId) {
-        const [homeowner] = await db.select().from(users).where(eq4(users.id, updatedInvoice.homeownerUserId));
+        const [homeowner] = await db.select().from(users).where(eq6(users.id, updatedInvoice.homeownerUserId));
         if (homeowner) {
           clientEmail = homeowner.email;
           clientName = `${homeowner.firstName || ""} ${homeowner.lastName || ""}`.trim() || homeowner.email;
         }
       } else if (updatedInvoice.clientId) {
-        const [client] = await db.select().from(clients).where(eq4(clients.id, updatedInvoice.clientId));
+        const [client] = await db.select().from(clients).where(eq6(clients.id, updatedInvoice.clientId));
         if (client) {
           clientEmail = client.email ?? void 0;
           clientName = `${client.firstName || ""} ${client.lastName || ""}`.trim() || clientEmail;
@@ -4671,7 +5359,7 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
             invoiceNumber: updatedInvoice.invoiceNumber
           };
           if (updatedInvoice.jobId) {
-            const jobRows = await db.select({ appointmentId: jobs.appointmentId }).from(jobs).where(eq4(jobs.id, updatedInvoice.jobId)).limit(1).catch(() => []);
+            const jobRows = await db.select({ appointmentId: jobs.appointmentId }).from(jobs).where(eq6(jobs.id, updatedInvoice.jobId)).limit(1).catch(() => []);
             const appointmentId = jobRows[0]?.appointmentId ?? null;
             if (appointmentId) {
               data.screen = "AppointmentDetail";
@@ -4711,31 +5399,31 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
           const [entry] = await db.select({
             id: housefaxEntries.id,
             costCents: housefaxEntries.costCents
-          }).from(housefaxEntries).where(eq4(housefaxEntries.jobId, jobId));
+          }).from(housefaxEntries).where(eq6(housefaxEntries.jobId, jobId));
           if (entry) {
-            await db.update(housefaxEntries).set({ costCents }).where(eq4(housefaxEntries.id, entry.id));
+            await db.update(housefaxEntries).set({ costCents }).where(eq6(housefaxEntries.id, entry.id));
             console.log(
               `[HouseFax] Updated cost for job ${jobId} to ${costCents} cents via payment webhook`
             );
           } else {
-            const [job] = await db.select().from(jobs).where(eq4(jobs.id, jobId));
+            const [job] = await db.select().from(jobs).where(eq6(jobs.id, jobId));
             if (job && job.status === "completed") {
               let homeId = null;
               if (job.appointmentId) {
-                const [appt] = await db.select({ homeId: appointments.homeId }).from(appointments).where(eq4(appointments.id, job.appointmentId));
+                const [appt] = await db.select({ homeId: appointments.homeId }).from(appointments).where(eq6(appointments.id, job.appointmentId));
                 if (appt) homeId = appt.homeId;
               }
               if (!homeId) {
-                const [inv] = await db.select({ homeownerUserId: invoices.homeownerUserId }).from(invoices).where(eq4(invoices.jobId, job.id));
+                const [inv] = await db.select({ homeownerUserId: invoices.homeownerUserId }).from(invoices).where(eq6(invoices.jobId, job.id));
                 if (inv?.homeownerUserId) {
-                  const [home] = await db.select({ id: homes.id }).from(homes).where(eq4(homes.userId, inv.homeownerUserId));
+                  const [home] = await db.select({ id: homes.id }).from(homes).where(eq6(homes.userId, inv.homeownerUserId));
                   if (home) homeId = home.id;
                 }
               }
               if (homeId) {
-                const [existing] = await db.select({ id: housefaxEntries.id }).from(housefaxEntries).where(eq4(housefaxEntries.jobId, job.id));
+                const [existing] = await db.select({ id: housefaxEntries.id }).from(housefaxEntries).where(eq6(housefaxEntries.jobId, job.id));
                 if (!existing) {
-                  const [provider2] = job.providerId ? await db.select({ businessName: providers.businessName }).from(providers).where(eq4(providers.id, job.providerId)) : [null];
+                  const [provider2] = job.providerId ? await db.select({ businessName: providers.businessName }).from(providers).where(eq6(providers.id, job.providerId)) : [null];
                   await db.insert(housefaxEntries).values({
                     homeId,
                     jobId: job.id,
@@ -4769,25 +5457,25 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
 }
 async function handlePaymentIntentFailed(paymentIntent) {
   const invoiceId = paymentIntent.metadata?.invoiceId;
-  const [payment] = await db.select().from(payments).where(eq4(payments.stripePaymentIntentId, paymentIntent.id));
+  const [payment] = await db.select().from(payments).where(eq6(payments.stripePaymentIntentId, paymentIntent.id));
   if (payment) {
-    await db.update(payments).set({ status: "failed" }).where(eq4(payments.id, payment.id));
+    await db.update(payments).set({ status: "failed" }).where(eq6(payments.id, payment.id));
   }
   if (invoiceId) {
     try {
-      const [failedInvoice] = await db.select().from(invoices).where(eq4(invoices.id, invoiceId));
+      const [failedInvoice] = await db.select().from(invoices).where(eq6(invoices.id, invoiceId));
       if (failedInvoice) {
-        const [provider] = await db.select().from(providers).where(eq4(providers.id, failedInvoice.providerId));
+        const [provider] = await db.select().from(providers).where(eq6(providers.id, failedInvoice.providerId));
         let clientEmail;
         let clientName;
         if (failedInvoice.homeownerUserId) {
-          const [homeowner] = await db.select().from(users).where(eq4(users.id, failedInvoice.homeownerUserId));
+          const [homeowner] = await db.select().from(users).where(eq6(users.id, failedInvoice.homeownerUserId));
           if (homeowner) {
             clientEmail = homeowner.email;
             clientName = `${homeowner.firstName || ""} ${homeowner.lastName || ""}`.trim() || homeowner.email;
           }
         } else if (failedInvoice.clientId) {
-          const [client] = await db.select().from(clients).where(eq4(clients.id, failedInvoice.clientId));
+          const [client] = await db.select().from(clients).where(eq6(clients.id, failedInvoice.clientId));
           if (client) {
             clientEmail = client.email ?? void 0;
             clientName = `${client.firstName || ""} ${client.lastName || ""}`.trim() || clientEmail;
@@ -4830,7 +5518,7 @@ async function handleStripeInvoicePaid(stripeInvoice) {
     paidAt: /* @__PURE__ */ new Date(),
     ...stripePaymentIntentId ? { stripePaymentIntentId } : {},
     updatedAt: /* @__PURE__ */ new Date()
-  }).where(eq4(invoices.id, homebaseInvoiceId)).returning();
+  }).where(eq6(invoices.id, homebaseInvoiceId)).returning();
   if (!updatedInvoice) return;
   if (stripePaymentIntentId) {
     const amountCents = stripeInvoice.amount_paid ?? stripeInvoice.amount_due ?? updatedInvoice.totalCents ?? 0;
@@ -4859,17 +5547,17 @@ async function handleStripeInvoicePaid(stripeInvoice) {
     }
   }
   try {
-    const [provider] = await db.select().from(providers).where(eq4(providers.id, updatedInvoice.providerId));
+    const [provider] = await db.select().from(providers).where(eq6(providers.id, updatedInvoice.providerId));
     let clientEmail;
     let clientName;
     if (updatedInvoice.clientId) {
-      const [client] = await db.select().from(clients).where(eq4(clients.id, updatedInvoice.clientId));
+      const [client] = await db.select().from(clients).where(eq6(clients.id, updatedInvoice.clientId));
       if (client) {
         clientEmail = client.email ?? void 0;
         clientName = `${client.firstName || ""} ${client.lastName || ""}`.trim() || clientEmail;
       }
     } else if (updatedInvoice.homeownerUserId) {
-      const [homeowner] = await db.select().from(users).where(eq4(users.id, updatedInvoice.homeownerUserId));
+      const [homeowner] = await db.select().from(users).where(eq6(users.id, updatedInvoice.homeownerUserId));
       if (homeowner) {
         clientEmail = homeowner.email;
         clientName = `${homeowner.firstName || ""} ${homeowner.lastName || ""}`.trim() || homeowner.email;
@@ -4963,7 +5651,7 @@ async function handleStripeInvoicePaid(stripeInvoice) {
           invoiceNumber: updatedInvoice.invoiceNumber
         };
         if (updatedInvoice.jobId) {
-          const jobRows = await db.select({ appointmentId: jobs.appointmentId }).from(jobs).where(eq4(jobs.id, updatedInvoice.jobId)).limit(1).catch(() => []);
+          const jobRows = await db.select({ appointmentId: jobs.appointmentId }).from(jobs).where(eq6(jobs.id, updatedInvoice.jobId)).limit(1).catch(() => []);
           const appointmentId = jobRows[0]?.appointmentId ?? null;
           if (appointmentId) {
             data.screen = "AppointmentDetail";
@@ -5006,19 +5694,19 @@ async function handleStripeInvoicePaymentFailed(stripeInvoice) {
   const homebaseInvoiceId = stripeInvoice.metadata?.homebaseInvoiceId;
   if (!homebaseInvoiceId) return;
   try {
-    const [invoice] = await db.select().from(invoices).where(eq4(invoices.id, homebaseInvoiceId));
+    const [invoice] = await db.select().from(invoices).where(eq6(invoices.id, homebaseInvoiceId));
     if (!invoice) return;
-    const [provider] = await db.select().from(providers).where(eq4(providers.id, invoice.providerId));
+    const [provider] = await db.select().from(providers).where(eq6(providers.id, invoice.providerId));
     let clientEmail;
     let clientName;
     if (invoice.clientId) {
-      const [client] = await db.select().from(clients).where(eq4(clients.id, invoice.clientId));
+      const [client] = await db.select().from(clients).where(eq6(clients.id, invoice.clientId));
       if (client) {
         clientEmail = client.email ?? void 0;
         clientName = `${client.firstName || ""} ${client.lastName || ""}`.trim() || clientEmail;
       }
     } else if (invoice.homeownerUserId) {
-      const [homeowner] = await db.select().from(users).where(eq4(users.id, invoice.homeownerUserId));
+      const [homeowner] = await db.select().from(users).where(eq6(users.id, invoice.homeownerUserId));
       if (homeowner) {
         clientEmail = homeowner.email;
         clientName = `${homeowner.firstName || ""} ${homeowner.lastName || ""}`.trim() || homeowner.email;
@@ -5052,22 +5740,22 @@ async function handleChargeRefunded(charge) {
   const chargeId = charge.id;
   let payment;
   if (paymentIntentId) {
-    const [byIntent] = await db.select().from(payments).where(eq4(payments.stripePaymentIntentId, paymentIntentId));
+    const [byIntent] = await db.select().from(payments).where(eq6(payments.stripePaymentIntentId, paymentIntentId));
     payment = byIntent;
   }
   if (!payment) {
-    const [byCharge] = await db.select().from(payments).where(eq4(payments.stripeChargeId, chargeId));
+    const [byCharge] = await db.select().from(payments).where(eq6(payments.stripeChargeId, chargeId));
     payment = byCharge;
   }
   if (payment) {
-    await db.update(payments).set({ status: "refunded" }).where(eq4(payments.id, payment.id));
+    await db.update(payments).set({ status: "refunded" }).where(eq6(payments.id, payment.id));
     await db.update(invoices).set({
       status: "refunded",
       updatedAt: /* @__PURE__ */ new Date()
-    }).where(eq4(invoices.id, payment.invoiceId));
+    }).where(eq6(invoices.id, payment.invoiceId));
     if (charge.refunds?.data?.length) {
       for (const stripeRefund of charge.refunds.data) {
-        const existing = await db.select().from(refunds).where(eq4(refunds.stripeRefundId, stripeRefund.id));
+        const existing = await db.select().from(refunds).where(eq6(refunds.stripeRefundId, stripeRefund.id));
         if (existing.length === 0) {
           await db.insert(refunds).values({
             providerId: payment.providerId,
@@ -5081,7 +5769,7 @@ async function handleChargeRefunded(charge) {
         } else {
           await db.update(refunds).set({
             status: stripeRefund.status ?? "pending"
-          }).where(eq4(refunds.stripeRefundId, stripeRefund.id));
+          }).where(eq6(refunds.stripeRefundId, stripeRefund.id));
         }
       }
     }
@@ -5089,7 +5777,7 @@ async function handleChargeRefunded(charge) {
 }
 async function resolveProviderFromConnectAccount(connectedAccountId) {
   if (!connectedAccountId) return null;
-  const [connectAccount] = await db.select({ providerId: stripeConnectAccounts.providerId }).from(stripeConnectAccounts).where(eq4(stripeConnectAccounts.stripeAccountId, connectedAccountId));
+  const [connectAccount] = await db.select({ providerId: stripeConnectAccounts.providerId }).from(stripeConnectAccounts).where(eq6(stripeConnectAccounts.stripeAccountId, connectedAccountId));
   return connectAccount?.providerId ?? null;
 }
 async function handlePayoutCreated(payout, connectedAccountId) {
@@ -5101,7 +5789,7 @@ async function handlePayoutCreated(payout, connectedAccountId) {
     return;
   }
   const arrivalDate = payout.arrival_date ? new Date(payout.arrival_date * 1e3) : null;
-  const [existingPayout] = await db.select().from(payouts).where(eq4(payouts.stripePayoutId, payout.id));
+  const [existingPayout] = await db.select().from(payouts).where(eq6(payouts.stripePayoutId, payout.id));
   const stripeStatus = payout.status;
   if (!existingPayout) {
     await db.insert(payouts).values({
@@ -5117,18 +5805,18 @@ async function handlePayoutCreated(payout, connectedAccountId) {
       status: stripeStatus,
       arrivalDate,
       description: payout.description ?? null
-    }).where(eq4(payouts.id, existingPayout.id));
+    }).where(eq6(payouts.id, existingPayout.id));
   }
 }
 async function handlePayoutPaid(payout, connectedAccountId) {
   const arrivalDate = payout.arrival_date ? new Date(payout.arrival_date * 1e3) : null;
-  const [existingPayout] = await db.select().from(payouts).where(eq4(payouts.stripePayoutId, payout.id));
+  const [existingPayout] = await db.select().from(payouts).where(eq6(payouts.stripePayoutId, payout.id));
   if (existingPayout) {
     await db.update(payouts).set({
       status: "paid",
       arrivalDate: arrivalDate ?? existingPayout.arrivalDate,
       description: payout.description ?? existingPayout.description
-    }).where(eq4(payouts.id, existingPayout.id));
+    }).where(eq6(payouts.id, existingPayout.id));
   } else {
     const providerId = await resolveProviderFromConnectAccount(connectedAccountId);
     if (providerId) {
@@ -5144,9 +5832,9 @@ async function handlePayoutPaid(payout, connectedAccountId) {
   }
 }
 async function handlePayoutFailed(payout, _connectedAccountId) {
-  const [existingPayout] = await db.select().from(payouts).where(eq4(payouts.stripePayoutId, payout.id));
+  const [existingPayout] = await db.select().from(payouts).where(eq6(payouts.stripePayoutId, payout.id));
   if (existingPayout) {
-    await db.update(payouts).set({ status: "failed" }).where(eq4(payouts.id, existingPayout.id));
+    await db.update(payouts).set({ status: "failed" }).where(eq6(payouts.id, existingPayout.id));
   }
 }
 async function handleCheckoutSessionCompleted(session) {
@@ -5169,10 +5857,10 @@ async function handleCheckoutSessionCompleted(session) {
     status: "paid",
     paidAt: /* @__PURE__ */ new Date(),
     updatedAt: /* @__PURE__ */ new Date()
-  }).where(eq4(invoices.id, invoiceId));
+  }).where(eq6(invoices.id, invoiceId));
   const paymentIntentId = session.payment_intent?.toString();
   if (paymentIntentId) {
-    const [invoice] = await db.select().from(invoices).where(eq4(invoices.id, invoiceId));
+    const [invoice] = await db.select().from(invoices).where(eq6(invoices.id, invoiceId));
     if (invoice) {
       await db.insert(payments).values({
         invoiceId,
@@ -5187,7 +5875,7 @@ async function handleCheckoutSessionCompleted(session) {
   }
 }
 async function handleDepositCheckoutCompleted(appointmentId, session) {
-  const [appt] = await db.select().from(appointments).where(eq4(appointments.id, appointmentId));
+  const [appt] = await db.select().from(appointments).where(eq6(appointments.id, appointmentId));
   if (!appt) {
     console.warn(
       "[stripe-webhook] deposit completion for unknown appointment",
@@ -5203,7 +5891,7 @@ async function handleDepositCheckoutCompleted(appointmentId, session) {
     // appointment with no deposit policy lands in `confirmed` immediately.
     status: appt.status === "pending" ? "confirmed" : appt.status,
     updatedAt: /* @__PURE__ */ new Date()
-  }).where(eq4(appointments.id, appointmentId));
+  }).where(eq6(appointments.id, appointmentId));
   try {
     if (appt.userId) {
       await dispatchNotification(
@@ -5215,8 +5903,8 @@ async function handleDepositCheckoutCompleted(appointmentId, session) {
         "bookings"
       );
     }
-    const [bookedUser] = appt.userId ? await db.select().from(users).where(eq4(users.id, appt.userId)) : [null];
-    const [bookedProvider] = await db.select().from(providers).where(eq4(providers.id, appt.providerId));
+    const [bookedUser] = appt.userId ? await db.select().from(users).where(eq6(users.id, appt.userId)) : [null];
+    const [bookedProvider] = await db.select().from(providers).where(eq6(providers.id, appt.providerId));
     if (bookedUser && bookedProvider) {
       await dispatch("booking.created", {
         clientEmail: bookedUser.email,
@@ -5241,13 +5929,13 @@ async function handleDepositCheckoutCompleted(appointmentId, session) {
   }
 }
 async function handleCancellationFeeCheckoutCompleted(appointmentId, session) {
-  const [appt] = await db.select().from(appointments).where(eq4(appointments.id, appointmentId));
+  const [appt] = await db.select().from(appointments).where(eq6(appointments.id, appointmentId));
   if (!appt) return;
   await db.update(appointments).set({
     cancellationFeeStatus: "paid",
     cancellationFeePaymentIntentId: session.payment_intent?.toString() || null,
     updatedAt: /* @__PURE__ */ new Date()
-  }).where(eq4(appointments.id, appointmentId));
+  }).where(eq6(appointments.id, appointmentId));
 }
 async function createDepositCheckoutSession(params) {
   const { appointmentId, providerId, amountCents, description } = params;
@@ -5263,6 +5951,7 @@ async function createDepositCheckoutSession(params) {
     plan.platformFeePercent || "3.00",
     plan.platformFeeFixedCents || 0
   );
+  const depositStripeFeeCents = calculateStripePassthroughFee(amountCents);
   const session = await getStripe().checkout.sessions.create({
     mode: "payment",
     line_items: [
@@ -5276,6 +5965,14 @@ async function createDepositCheckoutSession(params) {
           unit_amount: amountCents
         },
         quantity: 1
+      },
+      {
+        price_data: {
+          currency: "usd",
+          product_data: { name: "Processing fee (2.9% + $0.30)" },
+          unit_amount: depositStripeFeeCents
+        },
+        quantity: 1
       }
     ],
     payment_intent_data: {
@@ -5283,7 +5980,9 @@ async function createDepositCheckoutSession(params) {
       transfer_data: { destination: connectAccount.stripeAccountId },
       metadata: {
         depositForAppointment: appointmentId,
-        providerId
+        providerId,
+        jobAmountCents: String(amountCents),
+        stripeFeeCents: String(depositStripeFeeCents)
       }
     },
     success_url: `${PUBLIC_REDIRECT_BASE}/payment-success?appointmentId=${encodeURIComponent(appointmentId)}&session_id={CHECKOUT_SESSION_ID}`,
@@ -5296,7 +5995,7 @@ async function createDepositCheckoutSession(params) {
   await db.update(appointments).set({
     depositCheckoutSessionId: session.id,
     updatedAt: /* @__PURE__ */ new Date()
-  }).where(eq4(appointments.id, appointmentId));
+  }).where(eq6(appointments.id, appointmentId));
   return { sessionId: session.id, checkoutUrl: session.url };
 }
 async function createCancellationFeeCheckoutSession(params) {
@@ -5313,6 +6012,7 @@ async function createCancellationFeeCheckoutSession(params) {
     plan.platformFeePercent || "3.00",
     plan.platformFeeFixedCents || 0
   );
+  const cancelStripeFeeCents = calculateStripePassthroughFee(amountCents);
   const session = await getStripe().checkout.sessions.create({
     mode: "payment",
     line_items: [
@@ -5326,6 +6026,14 @@ async function createCancellationFeeCheckoutSession(params) {
           unit_amount: amountCents
         },
         quantity: 1
+      },
+      {
+        price_data: {
+          currency: "usd",
+          product_data: { name: "Processing fee (2.9% + $0.30)" },
+          unit_amount: cancelStripeFeeCents
+        },
+        quantity: 1
       }
     ],
     payment_intent_data: {
@@ -5333,7 +6041,9 @@ async function createCancellationFeeCheckoutSession(params) {
       transfer_data: { destination: connectAccount.stripeAccountId },
       metadata: {
         cancellationFeeForAppointment: appointmentId,
-        providerId
+        providerId,
+        jobAmountCents: String(amountCents),
+        stripeFeeCents: String(cancelStripeFeeCents)
       }
     },
     success_url: `${PUBLIC_REDIRECT_BASE}/payment-success?appointmentId=${encodeURIComponent(appointmentId)}&session_id={CHECKOUT_SESSION_ID}`,
@@ -5347,7 +6057,7 @@ async function createCancellationFeeCheckoutSession(params) {
     cancellationFeeCheckoutSessionId: session.id,
     cancellationFeeStatus: "awaiting",
     updatedAt: /* @__PURE__ */ new Date()
-  }).where(eq4(appointments.id, appointmentId));
+  }).where(eq6(appointments.id, appointmentId));
   return { sessionId: session.id, checkoutUrl: session.url };
 }
 async function calculateFeePreview(providerId, totalCents) {
@@ -5357,16 +6067,20 @@ async function calculateFeePreview(providerId, totalCents) {
     plan.platformFeePercent || "3.00",
     plan.platformFeeFixedCents || 0
   );
+  const stripePassthroughFeeCents = calculateStripePassthroughFee(totalCents);
   return {
     planTier: plan.planTier,
     feePercent: fee.percent,
     feeFixedCents: fee.fixedCents,
-    totalFeeCents: fee.totalCents,
-    providerReceivesCents: totalCents - fee.totalCents
+    platformFeeCents: fee.totalCents,
+    stripePassthroughFeeCents,
+    homeownerTotalCents: totalCents + stripePassthroughFeeCents,
+    providerReceivesCents: totalCents,
+    totalFeeCents: fee.totalCents
   };
 }
 async function resendStripeInvoice(invoiceId) {
-  const [invoice] = await db.select().from(invoices).where(eq4(invoices.id, invoiceId));
+  const [invoice] = await db.select().from(invoices).where(eq6(invoices.id, invoiceId));
   if (!invoice) throw new Error("Invoice not found");
   if (!invoice.stripeInvoiceId)
     throw new Error("Invoice has no Stripe invoice yet \u2014 call send first");
@@ -5384,7 +6098,7 @@ async function resendStripeInvoice(invoiceId) {
 }
 async function sendStripeInvoiceEmail(invoiceId) {
   const { stripeInvoiceId, hostedInvoiceUrl } = await createStripeInvoice(invoiceId);
-  const [inv] = await db.select({ providerId: invoices.providerId }).from(invoices).where(eq4(invoices.id, invoiceId));
+  const [inv] = await db.select({ providerId: invoices.providerId }).from(invoices).where(eq6(invoices.id, invoiceId));
   if (!inv) throw new Error("Invoice not found");
   const connectAccount = await getConnectAccount(inv.providerId);
   if (!connectAccount?.stripeAccountId)
@@ -5395,7 +6109,7 @@ async function sendStripeInvoiceEmail(invoiceId) {
   return { stripeInvoiceId, hostedInvoiceUrl };
 }
 async function getOrCreateUserStripeCustomer(userId) {
-  const [user] = await db.select().from(users).where(eq4(users.id, userId));
+  const [user] = await db.select().from(users).where(eq6(users.id, userId));
   if (!user) throw new Error("User not found");
   const stripe2 = getStripe();
   if (user.stripeCustomerId) {
@@ -5411,7 +6125,7 @@ async function getOrCreateUserStripeCustomer(userId) {
     name: fullName,
     metadata: { userId, source: "homebase_pro_subscription" }
   });
-  await db.update(users).set({ stripeCustomerId: customer.id, updatedAt: /* @__PURE__ */ new Date() }).where(eq4(users.id, userId));
+  await db.update(users).set({ stripeCustomerId: customer.id, updatedAt: /* @__PURE__ */ new Date() }).where(eq6(users.id, userId));
   return customer.id;
 }
 async function createSubscriptionCheckoutSession(opts) {
@@ -5419,7 +6133,7 @@ async function createSubscriptionCheckoutSession(opts) {
   if (!priceId) {
     throw new Error("STRIPE_SUBSCRIPTION_PRICE_ID is not configured");
   }
-  const [provider] = await db.select().from(providers).where(eq4(providers.id, opts.providerId));
+  const [provider] = await db.select().from(providers).where(eq6(providers.id, opts.providerId));
   if (!provider) throw new Error("Provider not found");
   if (provider.userId !== opts.userId) {
     const err = new Error("forbidden");
@@ -5451,7 +6165,7 @@ async function createSubscriptionCheckoutSession(opts) {
   return { url: session.url, sessionId: session.id };
 }
 async function createSubscriptionPortalSession(opts) {
-  const [user] = await db.select().from(users).where(eq4(users.id, opts.userId));
+  const [user] = await db.select().from(users).where(eq6(users.id, opts.userId));
   if (!user) throw new Error("User not found");
   if (!user.stripeCustomerId) {
     const err = new Error("no_subscription");
@@ -5469,7 +6183,7 @@ function planTierForStatus(status) {
   return status === "active" || status === "trialing" ? "professional" : "free";
 }
 async function upsertProviderPlanSubscription(providerId, patch) {
-  const existing = await db.select().from(providerPlans2).where(eq4(providerPlans2.providerId, providerId));
+  const existing = await db.select().from(providerPlans2).where(eq6(providerPlans2.providerId, providerId));
   if (existing.length === 0) {
     await db.insert(providerPlans2).values({
       providerId,
@@ -5477,12 +6191,12 @@ async function upsertProviderPlanSubscription(providerId, patch) {
       ...patch
     });
   } else {
-    await db.update(providerPlans2).set({ ...patch, updatedAt: /* @__PURE__ */ new Date() }).where(eq4(providerPlans2.providerId, providerId));
+    await db.update(providerPlans2).set({ ...patch, updatedAt: /* @__PURE__ */ new Date() }).where(eq6(providerPlans2.providerId, providerId));
   }
 }
 async function notifyProviderUser(providerId, title, message, type) {
   try {
-    const [provider] = await db.select().from(providers).where(eq4(providers.id, providerId));
+    const [provider] = await db.select().from(providers).where(eq6(providers.id, providerId));
     if (!provider?.userId) return;
     const { dispatchNotification: dispatchNotification2 } = await Promise.resolve().then(() => (init_notificationService(), notificationService_exports));
     await dispatchNotification2(
@@ -5562,7 +6276,7 @@ async function handleSubscriptionInvoicePaymentFailed(stripeInvoice) {
   if (!subscriptionId) return;
   let providerId = stripeInvoice.subscription_details?.metadata?.providerId;
   if (!providerId) {
-    const [plan] = await db.select().from(providerPlans2).where(eq4(providerPlans2.stripeSubscriptionId, subscriptionId));
+    const [plan] = await db.select().from(providerPlans2).where(eq6(providerPlans2.stripeSubscriptionId, subscriptionId));
     providerId = plan?.providerId;
   }
   if (!providerId) {
@@ -5593,666 +6307,6 @@ var init_stripeConnectService = __esm({
     APP_URL = process.env.APP_URL || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "https://homebase.replit.app");
     PUBLIC_REDIRECT_BASE = process.env.PUBLIC_APP_URL || process.env.SUBSCRIPTION_RETURN_URL || "https://homebaseproapp.com";
     SUBSCRIPTION_RETURN_BASE = process.env.SUBSCRIPTION_RETURN_URL || "https://homebaseproapp.com";
-  }
-});
-
-// server/storage.ts
-import { eq as eq5, and as and3, or, desc, sql as sql3, gte, lte } from "drizzle-orm";
-import { hash, compare } from "bcryptjs";
-var SALT_ROUNDS, DatabaseStorage, storage;
-var init_storage = __esm({
-  "server/storage.ts"() {
-    "use strict";
-    init_schema();
-    init_db();
-    init_stripeConnectService();
-    SALT_ROUNDS = 10;
-    DatabaseStorage = class {
-      async getUser(id) {
-        const [user] = await db.select().from(users).where(eq5(users.id, id));
-        return user || void 0;
-      }
-      async getUserByEmail(email) {
-        const [user] = await db.select().from(users).where(
-          sql3`LOWER(${users.email}) = LOWER(${email})`
-        );
-        return user || void 0;
-      }
-      async createUser(insertUser) {
-        const hashedPassword = await hash(insertUser.password, SALT_ROUNDS);
-        const [user] = await db.insert(users).values({ ...insertUser, password: hashedPassword }).returning();
-        return user;
-      }
-      async updateUser(id, data) {
-        const updateData = { ...data, updatedAt: /* @__PURE__ */ new Date() };
-        if (data.password) {
-          updateData.password = await hash(data.password, SALT_ROUNDS);
-        }
-        const [user] = await db.update(users).set(updateData).where(eq5(users.id, id)).returning();
-        return user || void 0;
-      }
-      async verifyPassword(email, password) {
-        const user = await this.getUserByEmail(email);
-        if (!user) return null;
-        const valid = await compare(password, user.password);
-        return valid ? user : null;
-      }
-      async getHomes(userId) {
-        return db.select().from(homes).where(eq5(homes.userId, userId)).orderBy(desc(homes.isDefault));
-      }
-      async getHome(id) {
-        const [home] = await db.select().from(homes).where(eq5(homes.id, id));
-        return home || void 0;
-      }
-      async createHome(home) {
-        if (home.isDefault) {
-          await db.update(homes).set({ isDefault: false }).where(eq5(homes.userId, home.userId));
-        }
-        const [newHome] = await db.insert(homes).values(home).returning();
-        return newHome;
-      }
-      async updateHome(id, data) {
-        const updateData = { ...data, updatedAt: /* @__PURE__ */ new Date() };
-        const [home] = await db.update(homes).set(updateData).where(eq5(homes.id, id)).returning();
-        return home || void 0;
-      }
-      async deleteHome(id) {
-        const result = await db.delete(homes).where(eq5(homes.id, id)).returning();
-        return result.length > 0;
-      }
-      async getCategories() {
-        return db.select().from(serviceCategories).orderBy(serviceCategories.sortOrder);
-      }
-      async getServices(categoryId) {
-        if (categoryId) {
-          return db.select().from(services).where(eq5(services.categoryId, categoryId));
-        }
-        return db.select().from(services);
-      }
-      async getProviders(categoryId) {
-        if (categoryId) {
-          const catalogIds = await db.select({ providerId: providerServices.providerId }).from(providerServices).where(eq5(providerServices.categoryId, categoryId));
-          const [catRow] = await db.select({ name: serviceCategories.name }).from(serviceCategories).where(eq5(serviceCategories.id, categoryId));
-          const customIds = catRow ? await db.select({ providerId: providerCustomServices.providerId }).from(providerCustomServices).where(sql3`lower(${providerCustomServices.category}) = lower(${catRow.name})`) : [];
-          const nameIds = catRow ? await db.select({ providerId: providers.id }).from(providers).where(
-            and3(
-              sql3`lower(${providers.businessName}) like ${"%" + catRow.name.toLowerCase() + "%"}`,
-              eq5(providers.isActive, true)
-            )
-          ) : [];
-          const allProviderIds = [
-            ...catalogIds.map((r) => r.providerId),
-            ...customIds.map((r) => r.providerId),
-            ...nameIds.map((r) => r.providerId)
-          ];
-          if (allProviderIds.length === 0) return [];
-          const uniqueIds = [...new Set(allProviderIds)];
-          const expiredRows = await db.select({ providerId: providerPlans.providerId }).from(providerPlans).where(
-            and3(
-              eq5(providerPlans.isSubscribed, false),
-              sql3`${providerPlans.gracePeriodEndsAt} IS NOT NULL`,
-              sql3`${providerPlans.gracePeriodEndsAt} < NOW()`
-            )
-          );
-          const expiredSet = new Set(expiredRows.map((r) => r.providerId));
-          const results = [];
-          for (const id of uniqueIds) {
-            if (expiredSet.has(id)) continue;
-            const [provider] = await db.select().from(providers).where(eq5(providers.id, id));
-            if (provider && provider.isActive && provider.isPublic && provider.userId) {
-              results.push(provider);
-            }
-          }
-          const readySet2 = await getProviderReadinessSet(results.map((p) => p.id));
-          return results.filter((p) => readySet2.has(p.id));
-        }
-        const baseList = await db.select().from(providers).where(
-          and3(
-            eq5(providers.isActive, true),
-            eq5(providers.isPublic, true),
-            sql3`${providers.userId} IS NOT NULL`,
-            sql3`NOT EXISTS (SELECT 1 FROM provider_plans pp WHERE pp.provider_id = ${providers.id} AND COALESCE(pp.is_subscribed, false) = false AND pp.grace_period_ends_at IS NOT NULL AND pp.grace_period_ends_at < NOW())`
-          )
-        );
-        const readySet = await getProviderReadinessSet(baseList.map((p) => p.id));
-        return baseList.filter((p) => readySet.has(p.id));
-      }
-      async getProvider(id) {
-        const [provider] = await db.select().from(providers).where(eq5(providers.id, id));
-        return provider || void 0;
-      }
-      async getProviderServices(providerId) {
-        const ps = await db.select({ serviceId: providerServices.serviceId }).from(providerServices).where(eq5(providerServices.providerId, providerId));
-        const results = [];
-        for (const { serviceId } of ps) {
-          const [service] = await db.select().from(services).where(eq5(services.id, serviceId));
-          if (service) results.push(service);
-        }
-        return results;
-      }
-      async getAppointments(userId) {
-        return db.select().from(appointments).where(eq5(appointments.userId, userId)).orderBy(desc(appointments.scheduledDate));
-      }
-      async getAppointment(id) {
-        const [appointment] = await db.select().from(appointments).where(eq5(appointments.id, id));
-        return appointment || void 0;
-      }
-      async createAppointment(appointment) {
-        if (appointment.userId && appointment.providerId && appointment.scheduledDate) {
-          const slotFilter = and3(
-            eq5(appointments.userId, appointment.userId),
-            eq5(appointments.providerId, appointment.providerId),
-            eq5(appointments.scheduledDate, appointment.scheduledDate)
-          );
-          const [existing] = await db.select().from(appointments).where(slotFilter).limit(1);
-          if (existing) return { appointment: existing, created: false };
-          const inserted = await db.insert(appointments).values(appointment).onConflictDoNothing().returning();
-          if (inserted[0]) return { appointment: inserted[0], created: true };
-          const [winner] = await db.select().from(appointments).where(slotFilter).limit(1);
-          if (winner) return { appointment: winner, created: false };
-          throw new Error(
-            "createAppointment: insert skipped on conflict but no existing row found"
-          );
-        }
-        const [newAppointment] = await db.insert(appointments).values(appointment).returning();
-        return { appointment: newAppointment, created: true };
-      }
-      async updateAppointment(id, data) {
-        const updateData = { ...data, updatedAt: /* @__PURE__ */ new Date() };
-        const [appointment] = await db.update(appointments).set(updateData).where(eq5(appointments.id, id)).returning();
-        return appointment || void 0;
-      }
-      async cancelAppointment(id) {
-        const [appointment] = await db.update(appointments).set({ status: "cancelled", cancelledAt: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date() }).where(eq5(appointments.id, id)).returning();
-        return appointment || void 0;
-      }
-      async getNotifications(userId) {
-        return db.select().from(notifications).where(eq5(notifications.userId, userId)).orderBy(desc(notifications.createdAt));
-      }
-      async getNotification(id) {
-        const [notification] = await db.select().from(notifications).where(eq5(notifications.id, id));
-        return notification;
-      }
-      async markNotificationRead(id) {
-        await db.update(notifications).set({ isRead: true }).where(eq5(notifications.id, id));
-      }
-      async createNotification(userId, title, message, type, data) {
-        const [notification] = await db.insert(notifications).values({ userId, title, message, type, data }).returning();
-        return notification;
-      }
-      // Provider methods
-      async createProvider(provider) {
-        const [newProvider] = await db.insert(providers).values(provider).returning();
-        return newProvider;
-      }
-      async getProviderByUserId(userId) {
-        const [provider] = await db.select().from(providers).where(eq5(providers.userId, userId));
-        return provider || void 0;
-      }
-      async updateProvider(id, data) {
-        const [provider] = await db.update(providers).set(data).where(eq5(providers.id, id)).returning();
-        return provider || void 0;
-      }
-      // Client methods
-      async getClients(providerId) {
-        return db.select().from(clients).where(eq5(clients.providerId, providerId)).orderBy(desc(clients.createdAt));
-      }
-      async getClient(id) {
-        const [client] = await db.select().from(clients).where(eq5(clients.id, id));
-        return client || void 0;
-      }
-      async createClient(client) {
-        const [newClient] = await db.insert(clients).values(client).returning();
-        return newClient;
-      }
-      async updateClient(id, data) {
-        const updateData = { ...data, updatedAt: /* @__PURE__ */ new Date() };
-        const [client] = await db.update(clients).set(updateData).where(eq5(clients.id, id)).returning();
-        return client || void 0;
-      }
-      async deleteClient(id) {
-        const result = await db.delete(clients).where(eq5(clients.id, id)).returning();
-        return result.length > 0;
-      }
-      // Job methods
-      async getJobs(providerId) {
-        return db.select().from(jobs).where(eq5(jobs.providerId, providerId)).orderBy(desc(jobs.scheduledDate));
-      }
-      async getJobsByClient(clientId) {
-        return db.select().from(jobs).where(eq5(jobs.clientId, clientId)).orderBy(desc(jobs.scheduledDate));
-      }
-      async getJob(id) {
-        const [job] = await db.select().from(jobs).where(eq5(jobs.id, id));
-        return job || void 0;
-      }
-      async createJob(job) {
-        const [newJob] = await db.insert(jobs).values(job).returning();
-        return newJob;
-      }
-      async updateJob(id, data) {
-        const updateData = { ...data, updatedAt: /* @__PURE__ */ new Date() };
-        const [job] = await db.update(jobs).set(updateData).where(eq5(jobs.id, id)).returning();
-        return job || void 0;
-      }
-      async completeJob(id, finalPrice) {
-        const updateData = {
-          status: "completed",
-          completedAt: /* @__PURE__ */ new Date(),
-          updatedAt: /* @__PURE__ */ new Date()
-        };
-        if (finalPrice) updateData.finalPrice = finalPrice;
-        const [job] = await db.update(jobs).set(updateData).where(eq5(jobs.id, id)).returning();
-        return job || void 0;
-      }
-      async deleteJob(id) {
-        const result = await db.delete(jobs).where(eq5(jobs.id, id)).returning();
-        return result.length > 0;
-      }
-      // Crew member methods (Task #302)
-      async getCrewMembers(providerId) {
-        return db.select().from(crewMembers).where(eq5(crewMembers.providerId, providerId)).orderBy(desc(crewMembers.createdAt));
-      }
-      async getCrewMember(id) {
-        const [member] = await db.select().from(crewMembers).where(eq5(crewMembers.id, id));
-        return member || void 0;
-      }
-      async createCrewMember(member) {
-        const [newMember] = await db.insert(crewMembers).values(member).returning();
-        return newMember;
-      }
-      async updateCrewMember(id, data) {
-        const [member] = await db.update(crewMembers).set(data).where(eq5(crewMembers.id, id)).returning();
-        return member || void 0;
-      }
-      async deleteCrewMember(id) {
-        const result = await db.delete(crewMembers).where(eq5(crewMembers.id, id)).returning();
-        return result.length > 0;
-      }
-      async countJobsAssignedToCrewMember(id) {
-        const rows = await db.select({ id: jobs.id }).from(jobs).where(eq5(jobs.assignedCrewMemberId, id));
-        return rows.length;
-      }
-      // Invoice methods
-      async getInvoices(providerId) {
-        return db.select().from(invoices).where(eq5(invoices.providerId, providerId)).orderBy(desc(invoices.createdAt));
-      }
-      async getInvoicesByClient(clientId) {
-        return db.select().from(invoices).where(eq5(invoices.clientId, clientId)).orderBy(desc(invoices.createdAt));
-      }
-      async getInvoice(id) {
-        const [invoice] = await db.select().from(invoices).where(eq5(invoices.id, id));
-        return invoice || void 0;
-      }
-      async createInvoice(invoice) {
-        const [newInvoice] = await db.insert(invoices).values(invoice).returning();
-        return newInvoice;
-      }
-      async updateInvoice(id, data) {
-        const [invoice] = await db.update(invoices).set(data).where(eq5(invoices.id, id)).returning();
-        return invoice || void 0;
-      }
-      async sendInvoice(id) {
-        const [invoice] = await db.update(invoices).set({ status: "sent", sentAt: /* @__PURE__ */ new Date() }).where(eq5(invoices.id, id)).returning();
-        return invoice || void 0;
-      }
-      async markInvoicePaid(id) {
-        const [invoice] = await db.update(invoices).set({ status: "paid", paidAt: /* @__PURE__ */ new Date() }).where(eq5(invoices.id, id)).returning();
-        return invoice || void 0;
-      }
-      async cancelInvoice(id) {
-        const [invoice] = await db.update(invoices).set({ status: "cancelled" }).where(eq5(invoices.id, id)).returning();
-        return invoice || void 0;
-      }
-      // Payment methods
-      async getPayments(providerId) {
-        return db.select().from(payments).where(eq5(payments.providerId, providerId)).orderBy(desc(payments.createdAt));
-      }
-      async getPaymentsByInvoice(invoiceId) {
-        return db.select().from(payments).where(eq5(payments.invoiceId, invoiceId)).orderBy(desc(payments.receivedAt));
-      }
-      async createPayment(payment) {
-        const [newPayment] = await db.insert(payments).values(payment).returning();
-        await this.markInvoicePaid(payment.invoiceId);
-        return newPayment;
-      }
-      // ── Task #295: manual (cash/check/other) payment helpers ──────────────
-      // The plain `createPayment` above auto-marks the invoice as fully paid,
-      // which is correct for Stripe webhook upserts (one payment == full
-      // settlement). Manual payments support partial collection, so we
-      // recompute status from the sum of non-voided rows instead.
-      async recomputeInvoiceStatusFromPayments(invoiceId) {
-        const [invoice] = await db.select().from(invoices).where(eq5(invoices.id, invoiceId));
-        if (!invoice) return void 0;
-        if (invoice.status === "void" || invoice.status === "cancelled" || invoice.status === "refunded") {
-          return invoice;
-        }
-        const rows = await db.select({ amountCents: payments.amountCents }).from(payments).where(and3(eq5(payments.invoiceId, invoiceId), sql3`${payments.voidedAt} IS NULL`));
-        const collectedCents = rows.reduce((sum, r) => sum + (r.amountCents ?? 0), 0);
-        const totalCents = invoice.totalCents ?? 0;
-        let nextStatus = invoice.status;
-        let nextPaidAt = invoice.paidAt ?? null;
-        if (totalCents > 0 && collectedCents >= totalCents) {
-          nextStatus = "paid";
-          nextPaidAt = invoice.paidAt ?? /* @__PURE__ */ new Date();
-        } else if (collectedCents > 0) {
-          nextStatus = "partially_paid";
-          nextPaidAt = null;
-        } else {
-          nextStatus = invoice.sentAt ? "sent" : "draft";
-          nextPaidAt = null;
-        }
-        if (nextStatus === invoice.status && nextPaidAt === invoice.paidAt) {
-          return invoice;
-        }
-        const [updated] = await db.update(invoices).set({ status: nextStatus, paidAt: nextPaidAt }).where(eq5(invoices.id, invoiceId)).returning();
-        return updated;
-      }
-      async createManualPayment(payment) {
-        const [row] = await db.insert(payments).values(payment).returning();
-        await this.recomputeInvoiceStatusFromPayments(payment.invoiceId);
-        return row;
-      }
-      async updateManualPayment(id, patch) {
-        const [row] = await db.update(payments).set(patch).where(eq5(payments.id, id)).returning();
-        if (row) await this.recomputeInvoiceStatusFromPayments(row.invoiceId);
-        return row || void 0;
-      }
-      async voidPayment(id, voidedBy) {
-        const [row] = await db.update(payments).set({ voidedAt: /* @__PURE__ */ new Date(), voidedBy, status: "refunded" }).where(eq5(payments.id, id)).returning();
-        if (row) await this.recomputeInvoiceStatusFromPayments(row.invoiceId);
-        return row || void 0;
-      }
-      async getPayment(id) {
-        const [row] = await db.select().from(payments).where(eq5(payments.id, id));
-        return row || void 0;
-      }
-      async getManualPayments(providerId) {
-        return db.select().from(payments).where(and3(eq5(payments.providerId, providerId), sql3`${payments.method} <> 'stripe'`)).orderBy(desc(payments.receivedAt));
-      }
-      // Provider dashboard stats
-      async getProviderStats(providerId, startDate, endDate) {
-        const start = startDate ?? (() => {
-          const d = /* @__PURE__ */ new Date();
-          d.setDate(1);
-          d.setHours(0, 0, 0, 0);
-          return d;
-        })();
-        const end = endDate ?? /* @__PURE__ */ new Date();
-        const paidInvoices = await db.select({ total: invoices.total, paidAt: invoices.paidAt }).from(invoices).where(
-          and3(
-            eq5(invoices.providerId, providerId),
-            eq5(invoices.status, "paid"),
-            gte(invoices.paidAt, start),
-            lte(invoices.paidAt, end)
-          )
-        );
-        const revenueMTD = paidInvoices.reduce((sum, inv) => sum + parseFloat(inv.total || "0"), 0);
-        const averageJobValue = paidInvoices.length > 0 ? revenueMTD / paidInvoices.length : 0;
-        const diffMs = end.getTime() - start.getTime();
-        const diffDays = diffMs / (1e3 * 60 * 60 * 24);
-        const bucketCount = diffDays <= 7 ? 7 : diffDays <= 31 ? Math.ceil(diffDays / 7) : diffDays <= 92 ? 13 : 12;
-        const bucketSizeMs = diffMs / bucketCount;
-        const revenueByPeriod = [];
-        for (let i = 0; i < bucketCount; i++) {
-          const bucketStart = new Date(start.getTime() + i * bucketSizeMs);
-          const bucketEnd = new Date(start.getTime() + (i + 1) * bucketSizeMs);
-          const bucketRevenue = paidInvoices.filter((inv) => {
-            if (!inv.paidAt) return false;
-            const t = new Date(inv.paidAt).getTime();
-            return t >= bucketStart.getTime() && t < bucketEnd.getTime();
-          }).reduce((sum, inv) => sum + parseFloat(inv.total || "0"), 0);
-          let label;
-          if (diffDays <= 7) {
-            label = bucketStart.toLocaleDateString("en-US", { weekday: "short" });
-          } else if (diffDays <= 31) {
-            label = bucketStart.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-          } else if (diffDays <= 92) {
-            label = `W${i + 1}`;
-          } else {
-            label = bucketStart.toLocaleDateString("en-US", { month: "short" });
-          }
-          revenueByPeriod.push({ label, value: bucketRevenue });
-        }
-        const completedJobs = await db.select({ id: jobs.id }).from(jobs).where(
-          and3(
-            eq5(jobs.providerId, providerId),
-            eq5(jobs.status, "completed"),
-            gte(jobs.completedAt, start),
-            lte(jobs.completedAt, end)
-          )
-        );
-        const jobsCompleted = completedJobs.length;
-        const clientList = await this.getClients(providerId);
-        const activeClients = clientList.length;
-        const startOfToday = /* @__PURE__ */ new Date();
-        startOfToday.setHours(0, 0, 0, 0);
-        const upcomingJobsList = await db.select({ id: jobs.id }).from(jobs).where(
-          and3(
-            eq5(jobs.providerId, providerId),
-            or(
-              eq5(jobs.status, "in_progress"),
-              and3(eq5(jobs.status, "scheduled"), gte(jobs.scheduledDate, startOfToday))
-            )
-          )
-        );
-        const upcomingJobs = upcomingJobsList.length;
-        return { revenueMTD, jobsCompleted, activeClients, upcomingJobs, averageJobValue, revenueByPeriod };
-      }
-      // Provider business insights — real numbers for the dashboard metric grid
-      // and an 8-week revenue trend. Also returns internal fields used by the
-      // milestone-notification pipeline (allTimeRevenue, clientGrowthPct, rating,
-      // reviewCount) so the route handler can fire those without a second query.
-      async getProviderInsights(providerId) {
-        const now = /* @__PURE__ */ new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-        const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
-        const prevMonthCutoff = new Date(
-          now.getFullYear(),
-          now.getMonth() - 1,
-          now.getDate(),
-          23,
-          59,
-          59,
-          999
-        );
-        const completedJobRows = await db.select({
-          finalPrice: jobs.finalPrice,
-          completedAt: jobs.completedAt,
-          clientId: jobs.clientId
-        }).from(jobs).where(and3(eq5(jobs.providerId, providerId), eq5(jobs.status, "completed")));
-        const allTimeRevenue = completedJobRows.reduce(
-          (sum, j) => sum + parseFloat(j.finalPrice || "0"),
-          0
-        );
-        const inWindow = (d, start, end) => !!d && d >= start && d <= end;
-        const currentJobs = completedJobRows.filter(
-          (j) => inWindow(j.completedAt, startOfMonth, now)
-        );
-        const priorJobs = completedJobRows.filter(
-          (j) => inWindow(j.completedAt, startOfPrevMonth, prevMonthCutoff)
-        );
-        const sumPrices = (rows) => rows.reduce((s, j) => s + parseFloat(j.finalPrice || "0"), 0);
-        const revenueMtd = sumPrices(currentJobs);
-        const revenuePrev = sumPrices(priorJobs);
-        const jobsCompleted = currentJobs.length;
-        const jobsCompletedPrev = priorJobs.length;
-        const avgJobValue = jobsCompleted > 0 ? revenueMtd / jobsCompleted : 0;
-        const avgJobValuePrev = jobsCompletedPrev > 0 ? revenuePrev / jobsCompletedPrev : 0;
-        const activeClientsThis = new Set(
-          currentJobs.map((j) => j.clientId).filter(Boolean)
-        ).size;
-        const activeClientsPrev = new Set(
-          priorJobs.map((j) => j.clientId).filter(Boolean)
-        ).size;
-        const pctDelta = (current, prior) => {
-          if (prior <= 0) {
-            if (current <= 0) return null;
-            return 100;
-          }
-          return Math.round((current - prior) / prior * 100);
-        };
-        const startOfThisWeek = (() => {
-          const d = new Date(now);
-          d.setHours(0, 0, 0, 0);
-          const day = d.getDay();
-          const diffToMonday = (day + 6) % 7;
-          d.setDate(d.getDate() - diffToMonday);
-          return d;
-        })();
-        const weeklyRevenueSeries = [];
-        for (let i = 7; i >= 0; i--) {
-          const weekStart = new Date(startOfThisWeek);
-          weekStart.setDate(weekStart.getDate() - i * 7);
-          const weekEnd = new Date(weekStart);
-          weekEnd.setDate(weekEnd.getDate() + 6);
-          weekEnd.setHours(23, 59, 59, 999);
-          const value = completedJobRows.filter((j) => inWindow(j.completedAt, weekStart, weekEnd)).reduce((s, j) => s + parseFloat(j.finalPrice || "0"), 0);
-          const label = weekStart.toLocaleDateString("en-US", {
-            month: "numeric",
-            day: "numeric"
-          });
-          weeklyRevenueSeries.push({ label, value });
-        }
-        const quarterMonth = Math.floor(now.getMonth() / 3) * 3;
-        const startOfThisQuarter = new Date(now.getFullYear(), quarterMonth, 1, 0, 0, 0, 0);
-        const startOfLastQuarter = new Date(now.getFullYear(), quarterMonth - 3, 1, 0, 0, 0, 0);
-        const endOfLastQuarter = new Date(startOfThisQuarter.getTime() - 1);
-        const clientsThisQuarter = await db.select({ id: clients.id }).from(clients).where(and3(eq5(clients.providerId, providerId), gte(clients.createdAt, startOfThisQuarter)));
-        const clientsLastQuarter = await db.select({ id: clients.id }).from(clients).where(
-          and3(
-            eq5(clients.providerId, providerId),
-            gte(clients.createdAt, startOfLastQuarter),
-            lte(clients.createdAt, endOfLastQuarter)
-          )
-        );
-        const clientGrowthPct = clientsLastQuarter.length > 0 ? Math.round(
-          (clientsThisQuarter.length - clientsLastQuarter.length) / clientsLastQuarter.length * 100
-        ) : clientsThisQuarter.length > 0 ? 100 : 0;
-        const [providerRow] = await db.select({ rating: providers.rating, reviewCount: providers.reviewCount }).from(providers).where(eq5(providers.id, providerId));
-        const totalClientsRow = await db.select({ id: clients.id }).from(clients).where(eq5(clients.providerId, providerId));
-        const hasAnyData = completedJobRows.length > 0 || totalClientsRow.length > 0;
-        return {
-          revenueMtd,
-          revenueMtdDelta: pctDelta(revenueMtd, revenuePrev),
-          jobsCompleted,
-          jobsCompletedDelta: pctDelta(jobsCompleted, jobsCompletedPrev),
-          activeClients: activeClientsThis,
-          activeClientsDelta: pctDelta(activeClientsThis, activeClientsPrev),
-          avgJobValue,
-          avgJobValueDelta: pctDelta(avgJobValue, avgJobValuePrev),
-          weeklyRevenueSeries,
-          hasAnyData,
-          allTimeRevenue,
-          clientGrowthPct,
-          rating: providerRow?.rating ?? "0",
-          reviewCount: providerRow?.reviewCount ?? 0
-        };
-      }
-      // Get next invoice number
-      async getNextInvoiceNumber(providerId) {
-        const existingInvoices = await db.select({ invoiceNumber: invoices.invoiceNumber }).from(invoices).where(eq5(invoices.providerId, providerId));
-        const nextNum = existingInvoices.length + 1;
-        return `INV-${String(nextNum).padStart(4, "0")}`;
-      }
-      // ── Task #296: Estimate methods ───────────────────────────────────────
-      async getNextEstimateNumber(providerId) {
-        const rows = await db.select({ estimateNumber: estimates.estimateNumber }).from(estimates).where(eq5(estimates.providerId, providerId));
-        const nextNum = rows.length + 1;
-        return `EST-${String(nextNum).padStart(4, "0")}`;
-      }
-      async getEstimates(providerId) {
-        return db.select().from(estimates).where(eq5(estimates.providerId, providerId)).orderBy(desc(estimates.createdAt));
-      }
-      async getEstimatesByClient(clientId) {
-        return db.select().from(estimates).where(eq5(estimates.clientId, clientId)).orderBy(desc(estimates.createdAt));
-      }
-      async getEstimate(id) {
-        const [row] = await db.select().from(estimates).where(eq5(estimates.id, id));
-        return row || void 0;
-      }
-      async getEstimateByPublicToken(token) {
-        const [row] = await db.select().from(estimates).where(eq5(estimates.publicToken, token));
-        return row || void 0;
-      }
-      async createEstimate(data) {
-        const [row] = await db.insert(estimates).values(data).returning();
-        return row;
-      }
-      async updateEstimate(id, data) {
-        const [row] = await db.update(estimates).set({ ...data, updatedAt: /* @__PURE__ */ new Date() }).where(eq5(estimates.id, id)).returning();
-        return row || void 0;
-      }
-      async deleteEstimate(id) {
-        const result = await db.delete(estimates).where(eq5(estimates.id, id)).returning();
-        return result.length > 0;
-      }
-      async getEstimateLineItems(estimateId) {
-        return db.select().from(estimateLineItems).where(eq5(estimateLineItems.estimateId, estimateId)).orderBy(estimateLineItems.createdAt);
-      }
-      async replaceEstimateLineItems(estimateId, items) {
-        await db.delete(estimateLineItems).where(eq5(estimateLineItems.estimateId, estimateId));
-        if (items.length === 0) return [];
-        const inserted = await db.insert(estimateLineItems).values(items.map((it) => ({ ...it, estimateId }))).returning();
-        return inserted;
-      }
-      // Booking Links
-      async getBookingLink(id) {
-        const [link] = await db.select().from(bookingLinks).where(eq5(bookingLinks.id, id));
-        return link || void 0;
-      }
-      async getBookingLinkBySlug(slug) {
-        const [link] = await db.select().from(bookingLinks).where(eq5(bookingLinks.slug, slug));
-        return link || void 0;
-      }
-      async getBookingLinksByProvider(providerId) {
-        return await db.select().from(bookingLinks).where(eq5(bookingLinks.providerId, providerId));
-      }
-      async createBookingLink(data) {
-        const [link] = await db.insert(bookingLinks).values(data).returning();
-        return link;
-      }
-      async updateBookingLink(id, data) {
-        const [link] = await db.update(bookingLinks).set({ ...data, updatedAt: /* @__PURE__ */ new Date() }).where(eq5(bookingLinks.id, id)).returning();
-        return link || void 0;
-      }
-      async deleteBookingLink(id) {
-        const result = await db.delete(bookingLinks).where(eq5(bookingLinks.id, id));
-        return true;
-      }
-      // Intake Submissions
-      async getIntakeSubmission(id) {
-        const [submission] = await db.select().from(intakeSubmissions).where(eq5(intakeSubmissions.id, id));
-        return submission || void 0;
-      }
-      async getIntakeSubmissionsByProvider(providerId) {
-        return await db.select().from(intakeSubmissions).where(eq5(intakeSubmissions.providerId, providerId)).orderBy(desc(intakeSubmissions.createdAt));
-      }
-      async getIntakeSubmissionsByBookingLink(bookingLinkId) {
-        return await db.select().from(intakeSubmissions).where(eq5(intakeSubmissions.bookingLinkId, bookingLinkId)).orderBy(desc(intakeSubmissions.createdAt));
-      }
-      async createIntakeSubmission(data) {
-        const [submission] = await db.insert(intakeSubmissions).values(data).returning();
-        return submission;
-      }
-      async updateIntakeSubmission(id, data) {
-        const [submission] = await db.update(intakeSubmissions).set({ ...data, updatedAt: /* @__PURE__ */ new Date() }).where(eq5(intakeSubmissions.id, id)).returning();
-        return submission || void 0;
-      }
-      async getNotificationPreferences(userId) {
-        const [prefs] = await db.select().from(notificationPreferences).where(eq5(notificationPreferences.userId, userId));
-        return prefs || void 0;
-      }
-      async upsertNotificationPreferences(userId, data) {
-        const existing = await this.getNotificationPreferences(userId);
-        if (existing) {
-          const [updated] = await db.update(notificationPreferences).set({ ...data, updatedAt: /* @__PURE__ */ new Date() }).where(eq5(notificationPreferences.userId, userId)).returning();
-          return updated;
-        }
-        const [created] = await db.insert(notificationPreferences).values({ userId, ...data }).returning();
-        return created;
-      }
-    };
-    storage = new DatabaseStorage();
   }
 });
 
@@ -8752,9 +8806,9 @@ function parseIntakeQuestions(raw) {
 init_schema();
 
 // server/stripeClient.ts
-import Stripe2 from "stripe";
-var connectionSettings2;
-async function getCredentials2() {
+import Stripe from "stripe";
+var connectionSettings;
+async function getCredentials() {
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
   const xReplitToken = process.env.REPL_IDENTITY ? "repl " + process.env.REPL_IDENTITY : process.env.WEB_REPL_RENEWAL ? "depl " + process.env.WEB_REPL_RENEWAL : null;
   if (!xReplitToken) {
@@ -8774,27 +8828,27 @@ async function getCredentials2() {
     }
   });
   const data = await response.json();
-  connectionSettings2 = data.items?.[0];
-  if (!connectionSettings2 || (!connectionSettings2.settings.publishable || !connectionSettings2.settings.secret)) {
+  connectionSettings = data.items?.[0];
+  if (!connectionSettings || (!connectionSettings.settings.publishable || !connectionSettings.settings.secret)) {
     throw new Error(`Stripe ${targetEnvironment} connection not found`);
   }
   return {
-    publishableKey: connectionSettings2.settings.publishable,
-    secretKey: connectionSettings2.settings.secret
+    publishableKey: connectionSettings.settings.publishable,
+    secretKey: connectionSettings.settings.secret
   };
 }
 async function getUncachableStripeClient() {
-  const { secretKey } = await getCredentials2();
-  return new Stripe2(secretKey, {
+  const { secretKey } = await getCredentials();
+  return new Stripe(secretKey, {
     apiVersion: "2025-11-17.clover"
   });
 }
 async function getStripePublishableKey() {
-  const { publishableKey } = await getCredentials2();
+  const { publishableKey } = await getCredentials();
   return publishableKey;
 }
 async function getStripeSecretKey() {
-  const { secretKey } = await getCredentials2();
+  const { secretKey } = await getCredentials();
   return secretKey;
 }
 var stripeSync = null;
@@ -9191,7 +9245,7 @@ Recent Work: ${faxData.recentWork.join(", ")}
 // server/homeProfileService.ts
 init_db();
 init_schema();
-import { eq as eq6, desc as desc2 } from "drizzle-orm";
+import { eq as eq3, desc as desc2 } from "drizzle-orm";
 function stringify(value) {
   if (value === null || value === void 0) return null;
   if (value instanceof Date) return value.toISOString();
@@ -9200,7 +9254,7 @@ function stringify(value) {
 }
 async function updateHomeWithChangeLog(params) {
   const { homeId, updates, source, changedByUserId, onlyIfEmpty } = params;
-  const [existing] = await db.select().from(homes).where(eq6(homes.id, homeId));
+  const [existing] = await db.select().from(homes).where(eq3(homes.id, homeId));
   if (!existing) return void 0;
   const toApply = {};
   const changes = [];
@@ -9230,7 +9284,7 @@ async function updateHomeWithChangeLog(params) {
     updateData.detailsUpdatedAt = /* @__PURE__ */ new Date();
     if (changedByUserId) updateData.detailsUpdatedBy = changedByUserId;
   }
-  const [updated] = await db.update(homes).set(updateData).where(eq6(homes.id, homeId)).returning();
+  const [updated] = await db.update(homes).set(updateData).where(eq3(homes.id, homeId)).returning();
   let insertedChanges = [];
   if (changes.length > 0) {
     insertedChanges = await db.insert(homeFieldChanges).values(changes).returning();
@@ -9238,7 +9292,7 @@ async function updateHomeWithChangeLog(params) {
   return { home: updated, changes: insertedChanges };
 }
 async function getHomeFieldChanges(homeId, limit = 50) {
-  return db.select().from(homeFieldChanges).where(eq6(homeFieldChanges.homeId, homeId)).orderBy(desc2(homeFieldChanges.changedAt)).limit(limit);
+  return db.select().from(homeFieldChanges).where(eq3(homeFieldChanges.homeId, homeId)).orderBy(desc2(homeFieldChanges.changedAt)).limit(limit);
 }
 
 // server/routes.ts
@@ -19787,8 +19841,10 @@ Respond with JSON only:
           customerId = customer.id;
           await db.update(users).set({ stripeCustomerId: customerId, updatedAt: /* @__PURE__ */ new Date() }).where(eq10(users.id, authUserId));
         }
+        const paymentSheetStripeFeeCents = calculateStripePassthroughFee(invoice.totalCents);
+        const paymentSheetTotalCents = invoice.totalCents + paymentSheetStripeFeeCents;
         const paymentIntent = await stripe2.paymentIntents.create({
-          amount: invoice.totalCents,
+          amount: paymentSheetTotalCents,
           currency: invoice.currency || "usd",
           customer: customerId,
           application_fee_amount: invoice.platformFeeCents || 0,
@@ -19797,7 +19853,9 @@ Respond with JSON only:
           metadata: {
             invoiceId: invoice.id,
             providerId: invoice.providerId,
-            payerUserId: authUserId
+            payerUserId: authUserId,
+            jobAmountCents: String(invoice.totalCents),
+            stripeFeeCents: String(paymentSheetStripeFeeCents)
           }
         });
         const ephemeralKey = await stripe2.ephemeralKeys.create(
@@ -19812,7 +19870,9 @@ Respond with JSON only:
           paymentIntentClientSecret: paymentIntent.client_secret,
           ephemeralKeySecret: ephemeralKey.secret,
           customerId,
-          amount: invoice.totalCents
+          amount: paymentSheetTotalCents,
+          jobAmountCents: invoice.totalCents,
+          stripeFeeCents: paymentSheetStripeFeeCents
         });
       } catch (error) {
         console.error("Payment sheet error:", error);

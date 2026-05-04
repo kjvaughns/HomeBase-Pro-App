@@ -224,6 +224,12 @@ export default function PaymentScreen() {
   const invoice = data.invoice;
   const totalAmount = invoice.total || invoice.amount || "0.00";
   const isPaid = invoice.status === "paid";
+
+  const jobCents = invoice.totalCents || Math.round(parseFloat(totalAmount) * 100);
+  const processingFeeCents = Math.round(jobCents * 0.029 + 30);
+  const homeownerTotalCents = jobCents + processingFeeCents;
+  const homeownerTotal = (homeownerTotalCents / 100).toFixed(2);
+  const processingFeeAmount = (processingFeeCents / 100).toFixed(2);
   const effectiveJobId = jobId ?? invoice.jobId ?? null;
 
   if (isPaid) {
@@ -334,9 +340,21 @@ export default function PaymentScreen() {
             </View>
           ) : null}
 
+          <View style={styles.feeBreakdownRow}>
+            <ThemedText style={[styles.feeBreakdownLabel, { color: theme.textSecondary }]}>Job Total</ThemedText>
+            <ThemedText style={[styles.feeBreakdownValue, { color: theme.textSecondary }]}>${parseFloat(totalAmount).toFixed(2)}</ThemedText>
+          </View>
+          <View style={styles.feeBreakdownRow}>
+            <View style={styles.feeBreakdownLabelRow}>
+              <ThemedText style={[styles.feeBreakdownLabel, { color: theme.textSecondary }]}>Processing Fee</ThemedText>
+              <ThemedText style={[styles.feeBreakdownNote, { color: theme.textTertiary }]}>  2.9% + $0.30</ThemedText>
+            </View>
+            <ThemedText style={[styles.feeBreakdownValue, { color: theme.textSecondary }]}>${processingFeeAmount}</ThemedText>
+          </View>
+          <View style={[styles.divider, { backgroundColor: theme.borderLight }]} />
           <View style={styles.totalRow}>
             <ThemedText style={styles.totalLabel}>Total Due</ThemedText>
-            <ThemedText style={styles.totalAmount}>${parseFloat(totalAmount).toFixed(2)}</ThemedText>
+            <ThemedText style={styles.totalAmount}>${homeownerTotal}</ThemedText>
           </View>
         </GlassCard>
 
@@ -374,8 +392,8 @@ export default function PaymentScreen() {
           testID="button-pay-invoice"
         >
           {openedExternal
-            ? `Reopen Stripe to Pay $${parseFloat(totalAmount).toFixed(2)}`
-            : `Pay $${parseFloat(totalAmount).toFixed(2)} on Stripe`}
+            ? `Reopen Stripe to Pay $${homeownerTotal}`
+            : `Pay $${homeownerTotal} on Stripe`}
         </PrimaryButton>
         {paymentError ? (
           <View style={[styles.errorBox, { borderColor: "#EF4444", marginTop: Spacing.sm }]} testID="text-payment-error">
@@ -417,6 +435,11 @@ const styles = StyleSheet.create({
   notesRow: { marginBottom: 0 },
   notesLabel: { ...Typography.caption1, marginBottom: Spacing.xs },
   notesText: { ...Typography.body, marginBottom: Spacing.sm },
+  feeBreakdownRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.xs },
+  feeBreakdownLabelRow: { flexDirection: "row", alignItems: "baseline", flex: 1 },
+  feeBreakdownLabel: { ...Typography.body },
+  feeBreakdownNote: { ...Typography.caption2, marginLeft: 4 },
+  feeBreakdownValue: { ...Typography.body, fontWeight: "500" },
   totalRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   totalLabel: { ...Typography.headline },
   totalAmount: { ...Typography.title1, fontWeight: "700", color: Colors.accent },

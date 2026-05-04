@@ -124,6 +124,23 @@ export function calculatePlatformFee(
   };
 }
 
+/**
+ * Stripe processing fee passed through to the homeowner: 2.9% + $0.30.
+ *
+ * Adding this on top of the provider's quoted price means:
+ *   - Provider receives their full quoted amount (untouched)
+ *   - Platform keeps a clean 3% via application_fee_amount
+ *   - Homeowner absorbs Stripe's processing cost as a transparent line item
+ *
+ * Residual: Stripe's 2.9% applies to the total charge (job + this fee), so
+ * the platform absorbs a ~0.14% shortfall per transaction. The recursive
+ * formula that eliminates this would charge homeowners ~6% instead of 2.9%
+ * + $0.30 — not a reasonable trade-off.
+ */
+export function calculateStripePassthroughFee(jobCents: number): number {
+  return Math.round(jobCents * 0.029 + 30);
+}
+
 export async function getConnectAccount(providerId: string) {
   const [account] = await db
     .select()
@@ -366,8 +383,11 @@ export async function createInvoicePaymentIntent(
     throw new Error("Provider payment processing is not yet enabled");
   }
 
+  const stripeFeeCents = calculateStripePassthroughFee(invoice.totalCents);
+  const homeownerTotalCents = invoice.totalCents + stripeFeeCents;
+
   const paymentIntent = await getStripe().paymentIntents.create({
-    amount: invoice.totalCents,
+    amount: homeownerTotalCents,
     currency: invoice.currency || "usd",
     application_fee_amount: invoice.platformFeeCents || 0,
     transfer_data: {
@@ -377,6 +397,8 @@ export async function createInvoicePaymentIntent(
       invoiceId: invoice.id,
       providerId: invoice.providerId,
       payerUserId: payerUserId || "",
+      jobAmountCents: String(invoice.totalCents),
+      stripeFeeCents: String(stripeFeeCents),
     },
   });
 
@@ -391,8 +413,8 @@ export async function createInvoicePaymentIntent(
   await db.insert(payments).values({
     invoiceId: invoice.id,
     providerId: invoice.providerId,
-    amountCents: invoice.totalCents,
-    amount: (invoice.totalCents / 100).toFixed(2),
+    amountCents: homeownerTotalCents,
+    amount: (homeownerTotalCents / 100).toFixed(2),
     method: "stripe",
     status: "requires_payment",
     stripePaymentIntentId: paymentIntent.id,
@@ -401,7 +423,9 @@ export async function createInvoicePaymentIntent(
   return {
     clientSecret: paymentIntent.client_secret,
     paymentIntentId: paymentIntent.id,
-    amount: invoice.totalCents,
+    amount: homeownerTotalCents,
+    jobAmountCents: invoice.totalCents,
+    stripeFeeCents,
   };
 }
 
@@ -547,6 +571,24 @@ export async function createStripeInvoice(
     );
   }
 
+  // ── 2b. Add Stripe processing fee as a transparent line item ────────────
+  // This passes the 2.9% + $0.30 cost through to the homeowner so the
+  // provider receives their full quoted amount and the platform keeps a
+  // clean 3% via application_fee_amount.
+  const stripePassthroughFeeCentsForInvoice = calculateStripePassthroughFee(
+    invoice.totalCents ||
+      Math.round(parseFloat(invoice.total?.toString() || "0") * 100),
+  );
+  await getStripe().invoiceItems.create(
+    {
+      customer: stripeCustomerId,
+      amount: stripePassthroughFeeCentsForInvoice,
+      currency: invoice.currency || "usd",
+      description: "Processing fee (2.9% + $0.30)",
+    },
+    { stripeAccount: connectId },
+  );
+
   // ── 3. Create and finalise the Stripe Invoice ───────────────────────────
   // NOTE on the Connect billing model: Stripe Invoices created on a connected
   // account use the *direct charge* model — funds settle directly to the
@@ -673,6 +715,18 @@ export async function createStripeCheckoutSession(invoiceId: string) {
       quantity: 1,
     });
   }
+
+  // Pass Stripe processing fee through to the homeowner as a visible line item
+  // so the provider receives their full quoted amount untouched.
+  const checkoutStripeFeeCents = calculateStripePassthroughFee(invoice.totalCents);
+  stripeLineItems.push({
+    price_data: {
+      currency: invoice.currency || "usd",
+      product_data: { name: "Processing fee (2.9% + $0.30)" },
+      unit_amount: checkoutStripeFeeCents,
+    },
+    quantity: 1,
+  });
 
   const session = await getStripe().checkout.sessions.create({
     mode: "payment",
@@ -1991,6 +2045,8 @@ export async function createDepositCheckoutSession(params: {
     plan.platformFeeFixedCents || 0,
   );
 
+  const depositStripeFeeCents = calculateStripePassthroughFee(amountCents);
+
   const session = await getStripe().checkout.sessions.create({
     mode: "payment",
     line_items: [
@@ -2005,6 +2061,14 @@ export async function createDepositCheckoutSession(params: {
         },
         quantity: 1,
       },
+      {
+        price_data: {
+          currency: "usd",
+          product_data: { name: "Processing fee (2.9% + $0.30)" },
+          unit_amount: depositStripeFeeCents,
+        },
+        quantity: 1,
+      },
     ],
     payment_intent_data: {
       application_fee_amount: fee.totalCents,
@@ -2012,6 +2076,8 @@ export async function createDepositCheckoutSession(params: {
       metadata: {
         depositForAppointment: appointmentId,
         providerId,
+        jobAmountCents: String(amountCents),
+        stripeFeeCents: String(depositStripeFeeCents),
       },
     },
     success_url: `${PUBLIC_REDIRECT_BASE}/payment-success?appointmentId=${encodeURIComponent(appointmentId)}&session_id={CHECKOUT_SESSION_ID}`,
@@ -2059,6 +2125,8 @@ export async function createCancellationFeeCheckoutSession(params: {
     plan.platformFeeFixedCents || 0,
   );
 
+  const cancelStripeFeeCents = calculateStripePassthroughFee(amountCents);
+
   const session = await getStripe().checkout.sessions.create({
     mode: "payment",
     line_items: [
@@ -2073,6 +2141,14 @@ export async function createCancellationFeeCheckoutSession(params: {
         },
         quantity: 1,
       },
+      {
+        price_data: {
+          currency: "usd",
+          product_data: { name: "Processing fee (2.9% + $0.30)" },
+          unit_amount: cancelStripeFeeCents,
+        },
+        quantity: 1,
+      },
     ],
     payment_intent_data: {
       application_fee_amount: fee.totalCents,
@@ -2080,6 +2156,8 @@ export async function createCancellationFeeCheckoutSession(params: {
       metadata: {
         cancellationFeeForAppointment: appointmentId,
         providerId,
+        jobAmountCents: String(amountCents),
+        stripeFeeCents: String(cancelStripeFeeCents),
       },
     },
     success_url: `${PUBLIC_REDIRECT_BASE}/payment-success?appointmentId=${encodeURIComponent(appointmentId)}&session_id={CHECKOUT_SESSION_ID}`,
@@ -2113,12 +2191,17 @@ export async function calculateFeePreview(
     plan.platformFeeFixedCents || 0,
   );
 
+  const stripePassthroughFeeCents = calculateStripePassthroughFee(totalCents);
+
   return {
     planTier: plan.planTier,
     feePercent: fee.percent,
     feeFixedCents: fee.fixedCents,
+    platformFeeCents: fee.totalCents,
+    stripePassthroughFeeCents,
+    homeownerTotalCents: totalCents + stripePassthroughFeeCents,
+    providerReceivesCents: totalCents,
     totalFeeCents: fee.totalCents,
-    providerReceivesCents: totalCents - fee.totalCents,
   };
 }
 

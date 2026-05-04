@@ -84,6 +84,7 @@ import {
   calculateFeePreview,
   getProviderPlan,
   calculatePlatformFee,
+  calculateStripePassthroughFee,
   getStripe,
   createSubscriptionCheckoutSession,
   createSubscriptionPortalSession,
@@ -14274,8 +14275,11 @@ Respond with JSON only:
             .where(eq(users.id, authUserId));
         }
 
+        const paymentSheetStripeFeeCents = calculateStripePassthroughFee(invoice.totalCents);
+        const paymentSheetTotalCents = invoice.totalCents + paymentSheetStripeFeeCents;
+
         const paymentIntent = await stripe.paymentIntents.create({
-          amount: invoice.totalCents,
+          amount: paymentSheetTotalCents,
           currency: invoice.currency || "usd",
           customer: customerId,
           application_fee_amount: invoice.platformFeeCents || 0,
@@ -14285,6 +14289,8 @@ Respond with JSON only:
             invoiceId: invoice.id,
             providerId: invoice.providerId,
             payerUserId: authUserId,
+            jobAmountCents: String(invoice.totalCents),
+            stripeFeeCents: String(paymentSheetStripeFeeCents),
           },
         });
 
@@ -14305,7 +14311,9 @@ Respond with JSON only:
           paymentIntentClientSecret: paymentIntent.client_secret,
           ephemeralKeySecret: ephemeralKey.secret,
           customerId,
-          amount: invoice.totalCents,
+          amount: paymentSheetTotalCents,
+          jobAmountCents: invoice.totalCents,
+          stripeFeeCents: paymentSheetStripeFeeCents,
         });
       } catch (error: any) {
         console.error("Payment sheet error:", error);
