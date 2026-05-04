@@ -221,6 +221,7 @@ export class DatabaseStorage implements IStorage {
         .where(
           and(
             eq(providerPlans.isSubscribed, false),
+            eq(providerPlans.isPartner, false),
             sql`${providerPlans.gracePeriodEndsAt} IS NOT NULL`,
             sql`${providerPlans.gracePeriodEndsAt} < NOW()`,
           ),
@@ -234,26 +235,18 @@ export class DatabaseStorage implements IStorage {
           results.push(provider);
         }
       }
-      // Final gate: only providers whose Stripe Connect account can accept
-      // charges are surfaced to homeowners. Prevents listing profiles that
-      // can't actually take a payment.
-      const readySet = await getProviderReadinessSet(results.map((p) => p.id));
-      return results.filter((p) => readySet.has(p.id));
+      return results;
     }
     // No filter — return only providers that are active, public, and owned by a real user.
     // Also exclude providers whose subscription grace period has expired.
-    const baseList = await db.select().from(providers).where(
+    return db.select().from(providers).where(
       and(
         eq(providers.isActive, true),
         eq(providers.isPublic, true),
         sql`${providers.userId} IS NOT NULL`,
-        sql`NOT EXISTS (SELECT 1 FROM provider_plans pp WHERE pp.provider_id = ${providers.id} AND COALESCE(pp.is_subscribed, false) = false AND pp.grace_period_ends_at IS NOT NULL AND pp.grace_period_ends_at < NOW())`
+        sql`NOT EXISTS (SELECT 1 FROM provider_plans pp WHERE pp.provider_id = ${providers.id} AND COALESCE(pp.is_subscribed, false) = false AND COALESCE(pp.is_partner, false) = false AND pp.grace_period_ends_at IS NOT NULL AND pp.grace_period_ends_at < NOW())`
       )
     );
-    // Final gate: only providers whose Stripe Connect account can accept
-    // charges are surfaced to homeowners.
-    const readySet = await getProviderReadinessSet(baseList.map((p) => p.id));
-    return baseList.filter((p) => readySet.has(p.id));
   }
 
   async getProvider(id: string): Promise<Provider | undefined> {
