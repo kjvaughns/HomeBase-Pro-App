@@ -1,0 +1,80 @@
+Here’s every referral mechanism worth building, ranked by how well they’d work for your specific model:
+
+Provider Referral Mechanisms
+1 — Provider Refers Provider (Strongest One)
+When a provider shares their booking link and another service pro sees it, clicks it, and thinks “I want this for my business” — capture that moment.
+How it works:
+	•	Every provider gets a unique referral code
+	•	When they refer another provider who completes their first job
+	•	Referring provider gets 1 free month added to their account automatically
+	•	No manual process, fully automated
+This is powerful because providers talk to other providers constantly. Lawn care guys know other lawn care guys. Cleaners are in the same Facebook groups. The social circles are tight and trust is high.
+
+2 — “Powered by HomeBase” on Booking Pages
+Every provider’s branded booking page has a subtle but clickable “Powered by HomeBase” at the bottom — similar to how Calendly does it.
+A competing provider sees their peer’s slick booking page, clicks that link, and lands on a HomeBase signup page.
+This is completely passive. Zero effort from you or the provider. Every booking page becomes a recruitment tool indefinitely.
+
+3 — Provider Milestone Rewards
+Gamify their growth inside the app:
+
+
+
+|Milestone                      |Reward                                 |
+|-------------------------------|---------------------------------------|
+|First completed job            |Subscription unlocks (expected)        |
+|10 completed jobs              |HomeBase profile badge — “Verified Pro”|
+|First 5-star review            |Featured placement in homeowner search |
+|25 jobs completed              |1 free month                           |
+|Refer 3 providers              |Permanent 10% discount on subscription |
+|$10K processed through HomeBase|“Top Provider” badge + priority listing|
+
+Badges and status matter deeply to small business owners. It validates them publicly and gives them something to show clients. They’ll work toward these without being asked.
+
+4 — Team Invite Referral
+When a provider invites a crew member and that crew member eventually starts their own business — HomeBase is the only tool they know. Make the crew member experience so good that going independent means staying on HomeBase.
+Crew member gets a discounted first 3 months when they upgrade to their own provider account.
+
+Homeowner Referral Mechanisms
+5 — Homeowner Refers Homeowner
+After a homeowner completes a booking and payment:
+Trigger an automated message:
+“Love how easy that was? Give a friend $10 off their first HomeBase booking — and get $10 credit yourself when they book.”
+Double-sided credit referral. Both sides win. This is the exact mechanic that made Uber, Airbnb, and Cash App explode in early growth.
+The timing matters — send it immediately after payment when the positive experience is freshest.
+
+6 — Post-Service Share Prompt
+After a job is marked complete and the homeowner pays:
+Show them a screen that says:
+“Your lawn looks great ✅ Share your provider with a neighbor?”
+One tap generates a pre-written text or social post with the provider’s booking link. The homeowner becomes a distributor for the provider — and by extension HomeBase — completely organically.
+Neighbors are the highest trust referral source for home services. Nobody asks Yelp who to hire — they text their neighbor.
+
+7 — Homeowner Loyalty Credits
+Every X bookings completed through HomeBase earns the homeowner platform credits toward future services:
+
+
+
+|Activity                      |Credit Earned|
+|------------------------------|-------------|
+|Complete first booking        |$5 credit    |
+|Leave a provider review       |$3 credit    |
+|Refer a friend who books      |$10 credit   |
+|Book 5 different service types|$15 credit   |
+
+This incentivizes cross-category discovery — the behavior that makes your model compound. A homeowner who books lawn care, cleaning, AND handyman through HomeBase is essentially locked in. Their entire home management life is on your platform.
+
+8 — Neighborhood Social Proof
+When a homeowner opens the app show them:
+“14 homeowners in your area booked through HomeBase this month”
+Or on a provider’s profile:
+“3 of your neighbors use this provider”
+Social proof localized to their neighborhood is incredibly persuasive for home services specifically. If their neighbor already vetted someone it removes the biggest friction point — trust in a stranger entering their home.
+
+The Two You Should Build First
+If I had to prioritize based on what moves the needle fastest for HomeBase right now:
+1 — “Powered by HomeBase” on booking pages
+Zero development complexity, completely passive, starts working the moment you have any providers at all. Every booking page becomes a recruitment ad forever.
+2 — Post-payment homeowner referral prompt
+Catches homeowners at peak satisfaction, costs you nothing until someone actually converts, and turns your existing homeowner base into a salesforce automatically.
+Both of these require almost no behavior change from users. They work in the background while you focus on provider acquisition. That’s the kind of referral mechanism that compounds quietly and then suddenly feels like it’s everywhere.​​​​​​​​​​​​​​​​
