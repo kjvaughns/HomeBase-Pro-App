@@ -64,14 +64,18 @@ const env = {
 
 const metro = spawn(
   "npx",
-  ["expo", "start", "--port", "8081"],
+  ["expo", "start", "--port", "8081", "--go"],
   { env, stdio: ["pipe", "inherit", "inherit"] }
 );
 
-// After 5 seconds, send a newline to dismiss any default-answerable prompts
-setTimeout(() => {
+// Repeatedly send a newline to dismiss the Expo login prompt loop
+// (it re-presents multiple times in non-interactive terminals)
+let promptDismissCount = 0;
+const promptDismissInterval = setInterval(() => {
   try { metro.stdin.write("\n"); } catch (_) {}
-}, 5000);
+  promptDismissCount++;
+  if (promptDismissCount >= 20) clearInterval(promptDismissInterval);
+}, 2000);
 
 metro.on("exit", (code) => process.exit(code || 0));
 process.on("SIGTERM", () => metro.kill("SIGTERM"));
