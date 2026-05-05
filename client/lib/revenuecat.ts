@@ -1,8 +1,8 @@
 import { Platform } from "react-native";
 
-// react-native-purchases is iOS/Android only. Importing it eagerly on the
-// web build can break the bundler (it pulls in native-only modules). We
-// lazy-load it only when running on a native platform.
+// react-native-purchases and react-native-purchases-ui are iOS/Android only.
+// Importing them eagerly on the web build can break the bundler (they pull in
+// native-only modules). We lazy-load them only when running on a native platform.
 type PurchasesModule = typeof import("react-native-purchases");
 type PurchasesNamespace = PurchasesModule["default"];
 type CustomerInfo = import("react-native-purchases").CustomerInfo;
@@ -15,7 +15,10 @@ const REVENUECAT_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY || "";
 // provider subscription. All gating in the app keys off this entitlement.
 export const PRO_ENTITLEMENT_ID = "pro";
 
-let configured = false;
+// Replaced the `configured: boolean` flag with a Promise so that any code
+// calling SDK methods can await configuration completion rather than racing
+// against it. The promise is set once and reused on subsequent calls.
+let configurePromise: Promise<void> | null = null;
 let currentAppUserId: string | null = null;
 let purchasesPromise: Promise<PurchasesNamespace | null> | null = null;
 
@@ -45,9 +48,10 @@ async function loadPurchases(): Promise<PurchasesNamespace | null> {
 }
 
 /**
- * Configure the RevenueCat SDK once per app launch. Safe to call multiple
- * times — subsequent calls after configuration are no-ops. On web this is a
- * no-op since IAP is iOS/Android only (web subscribers use Stripe).
+ * Configure the RevenueCat SDK once per app launch. Returns a stable Promise
+ * so callers can await configuration completion before calling other SDK
+ * methods. Subsequent calls return the same promise (no-op once configured).
+ * On web this is a no-op since IAP is iOS/Android only (web uses Stripe).
  */
 export async function configurePurchases(
   appUserId?: string | null,
@@ -59,29 +63,46 @@ export async function configurePurchases(
     );
     return;
   }
-  if (configured) return;
-  const Purchases = await loadPurchases();
-  if (!Purchases) return;
-  try {
-    const { LOG_LEVEL } = await import("react-native-purchases");
-    Purchases.setLogLevel(LOG_LEVEL.WARN);
-    Purchases.configure({
-      apiKey: REVENUECAT_API_KEY,
-      appUserID: appUserId || null,
-    });
-    configured = true;
-    currentAppUserId = appUserId || null;
-  } catch (err) {
-    console.error("[revenuecat] configure error:", err);
+  if (configurePromise) return configurePromise;
+
+  configurePromise = (async () => {
+    const Purchases = await loadPurchases();
+    if (!Purchases) return;
+    try {
+      const { LOG_LEVEL } = await import("react-native-purchases");
+      Purchases.setLogLevel(LOG_LEVEL.WARN);
+      Purchases.configure({
+        apiKey: REVENUECAT_API_KEY,
+        appUserID: appUserId || null,
+      });
+      currentAppUserId = appUserId || null;
+    } catch (err) {
+      // Reset so a subsequent call can retry configuration.
+      configurePromise = null;
+      console.error("[revenuecat] configure error:", err);
+    }
+  })();
+
+  return configurePromise;
+}
+
+/**
+ * Await SDK configuration before calling any method that requires it.
+ * If configurePurchases hasn't been called yet (e.g. the paywall is opened
+ * before App.tsx auth state resolves), this triggers configuration with no
+ * app user ID so the SDK is at least usable anonymously, rather than silently
+ * no-oping and leaving callers blocked on a null promise.
+ */
+export async function waitForConfiguration(): Promise<void> {
+  if (!configurePromise) {
+    return configurePurchases();
   }
+  return configurePromise;
 }
 
 export async function loginPurchasesUser(appUserId: string): Promise<void> {
   if (!isPurchasesAvailable()) return;
-  if (!configured) {
-    await configurePurchases(appUserId);
-    return;
-  }
+  await waitForConfiguration();
   if (currentAppUserId === appUserId) return;
   const Purchases = await loadPurchases();
   if (!Purchases) return;
@@ -95,7 +116,7 @@ export async function loginPurchasesUser(appUserId: string): Promise<void> {
 
 export async function logoutPurchasesUser(): Promise<void> {
   if (!isPurchasesAvailable()) return;
-  if (!configured) return;
+  if (!configurePromise) return;
   const Purchases = await loadPurchases();
   if (!Purchases) return;
   try {
@@ -107,127 +128,6 @@ export async function logoutPurchasesUser(): Promise<void> {
   }
 }
 
-export async function getProOffering(): Promise<PurchasesOffering | null> {
-  const result = await fetchProOffering();
-  return result.status === "ok" ? result.offering : null;
-}
-
-export type OfferingFetchResult =
-  | { status: "ok"; offering: PurchasesOffering }
-  | { status: "empty"; reason: string }
-  | { status: "error"; errorCode?: string; errorMessage: string };
-
-/**
- * Fetch the current "pro" offering from RevenueCat with retry/backoff on
- * transient errors. Distinguishes three outcomes so the UI can render the
- * right state:
- *   - ok: a current offering with at least one package is available
- *   - empty: SDK responded but no current offering / no packages are configured
- *            (a dashboard/StoreKit configuration issue, not a transient error)
- *   - error: SDK threw or returned in a way that suggests retry may help
- *            (network down, store unreachable, SDK not yet configured, etc.)
- */
-export async function fetchProOffering(): Promise<OfferingFetchResult> {
-  if (!isPurchasesAvailable()) {
-    return {
-      status: "error",
-      errorMessage: "In-app purchases are only available on iOS.",
-    };
-  }
-  const Purchases = await loadPurchases();
-  if (!Purchases) {
-    return {
-      status: "error",
-      errorMessage: "In-app purchases failed to load.",
-    };
-  }
-
-  const maxAttempts = 3;
-  let lastErr: any = null;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const offerings = await Purchases.getOfferings();
-      const current = offerings.current;
-      const packageCount = current?.availablePackages?.length ?? 0;
-      console.log(
-        "[revenuecat] getOfferings result:",
-        JSON.stringify({
-          attempt,
-          currentId: current?.identifier ?? null,
-          currentPackageCount: packageCount,
-          allOfferingIds: Object.keys(offerings.all || {}),
-        }),
-      );
-      if (current && packageCount > 0) {
-        return { status: "ok", offering: current };
-      }
-      // SDK responded successfully but no current offering / packages are
-      // configured. Retrying won't help — surface as "empty" immediately.
-      return {
-        status: "empty",
-        reason: !current
-          ? "No current offering is set in RevenueCat."
-          : "Current offering has no available packages.",
-      };
-    } catch (err: any) {
-      lastErr = err;
-      console.error(
-        `[revenuecat] getOfferings error (attempt ${attempt}/${maxAttempts}):`,
-        {
-          code: err?.code,
-          message: err?.message,
-          underlyingErrorMessage: err?.underlyingErrorMessage,
-        },
-      );
-      if (attempt < maxAttempts) {
-        // Exponential-ish backoff: 400ms, 1000ms.
-        const delay = attempt === 1 ? 400 : 1000;
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      }
-    }
-  }
-  return {
-    status: "error",
-    errorCode: lastErr?.code,
-    errorMessage:
-      lastErr?.message ||
-      "Couldn't reach the App Store. Check your connection and try again.",
-  };
-}
-
-export interface PurchaseResult {
-  success: boolean;
-  customerInfo?: CustomerInfo;
-  userCancelled?: boolean;
-  errorMessage?: string;
-}
-
-export async function purchasePackage(
-  pkg: PurchasesPackage,
-): Promise<PurchaseResult> {
-  if (!isPurchasesAvailable()) {
-    return {
-      success: false,
-      errorMessage: "Purchases unavailable on this platform",
-    };
-  }
-  const Purchases = await loadPurchases();
-  if (!Purchases) {
-    return {
-      success: false,
-      errorMessage: "In-app purchases failed to load. Please try again.",
-    };
-  }
-  try {
-    const { customerInfo } = await Purchases.purchasePackage(pkg);
-    return { success: true, customerInfo };
-  } catch (err: any) {
-    if (err?.userCancelled) return { success: false, userCancelled: true };
-    console.error("[revenuecat] purchase error:", err);
-    return { success: false, errorMessage: err?.message || "Purchase failed" };
-  }
-}
-
 export async function restorePurchases(): Promise<PurchaseResult> {
   if (!isPurchasesAvailable()) {
     return {
@@ -235,6 +135,7 @@ export async function restorePurchases(): Promise<PurchaseResult> {
       errorMessage: "Purchases unavailable on this platform",
     };
   }
+  await waitForConfiguration();
   const Purchases = await loadPurchases();
   if (!Purchases) {
     return {
@@ -253,6 +154,7 @@ export async function restorePurchases(): Promise<PurchaseResult> {
 
 export async function getCustomerInfo(): Promise<CustomerInfo | null> {
   if (!isPurchasesAvailable()) return null;
+  await waitForConfiguration();
   const Purchases = await loadPurchases();
   if (!Purchases) return null;
   try {
@@ -282,6 +184,13 @@ export function getManageSubscriptionUrl(): string {
     return "https://play.google.com/store/account/subscriptions";
   }
   return "";
+}
+
+export interface PurchaseResult {
+  success: boolean;
+  customerInfo?: CustomerInfo;
+  userCancelled?: boolean;
+  errorMessage?: string;
 }
 
 export type { CustomerInfo, PurchasesOffering, PurchasesPackage };

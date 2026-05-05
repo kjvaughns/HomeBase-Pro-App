@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   StyleSheet,
   View,
@@ -32,13 +32,10 @@ import { apiRequest } from "@/lib/query-client";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import {
   isPurchasesAvailable,
-  fetchProOffering,
-  purchasePackage,
   restorePurchases,
   getManageSubscriptionUrl,
   isProEntitled,
-  type PurchasesOffering,
-  type PurchasesPackage,
+  waitForConfiguration,
 } from "@/lib/revenuecat";
 
 const PRIVACY_URL = "https://homebaseproapp.com/privacy";
@@ -55,13 +52,6 @@ interface CopyForState {
   body: string;
   caption?: string;
 }
-
-type OfferingState =
-  | { kind: "idle" }
-  | { kind: "loading" }
-  | { kind: "ok"; offering: PurchasesOffering }
-  | { kind: "empty"; reason: string }
-  | { kind: "error"; message: string; errorCode?: string };
 
 export default function SubscriptionScreen() {
   const { theme, isDark } = useTheme();
@@ -84,57 +74,8 @@ export default function SubscriptionScreen() {
   } = useSubscriptionStatus();
   const [busy, setBusy] = useState(false);
   const [restoring, setRestoring] = useState(false);
-  const [offeringState, setOfferingState] = useState<OfferingState>(
-    isPurchasesAvailable() ? { kind: "loading" } : { kind: "idle" },
-  );
-  const fetchTokenRef = React.useRef(0);
 
   const useIAP = isPurchasesAvailable();
-
-  const loadOffering = useCallback(() => {
-    if (!useIAP) return;
-    const token = ++fetchTokenRef.current;
-    setOfferingState({ kind: "loading" });
-    fetchProOffering()
-      .then((result) => {
-        // Drop stale results if a newer fetch was kicked off (e.g. Retry).
-        if (token !== fetchTokenRef.current) return;
-        if (result.status === "ok") {
-          setOfferingState({ kind: "ok", offering: result.offering });
-        } else if (result.status === "empty") {
-          setOfferingState({ kind: "empty", reason: result.reason });
-        } else {
-          setOfferingState({
-            kind: "error",
-            message: result.errorMessage,
-            errorCode: result.errorCode,
-          });
-        }
-      })
-      .catch((err) => {
-        if (token !== fetchTokenRef.current) return;
-        setOfferingState({
-          kind: "error",
-          message:
-            err?.message ||
-            "Couldn't reach the App Store. Check your connection and try again.",
-        });
-      });
-  }, [useIAP]);
-
-  // Load the current RevenueCat offering on mount (native only). Re-load when
-  // the signed-in provider changes so receipts attach to the right account.
-  useEffect(() => {
-    loadOffering();
-    return () => {
-      // Invalidate any in-flight fetch on unmount.
-      fetchTokenRef.current++;
-    };
-  }, [loadOffering, providerId]);
-
-  const offering =
-    offeringState.kind === "ok" ? offeringState.offering : null;
-  const loadingOffering = offeringState.kind === "loading";
 
   const handleDeleteAccount = useCallback(() => {
     navigation.navigate("AccountSecurity");
@@ -148,14 +89,6 @@ export default function SubscriptionScreen() {
       );
     });
   }, []);
-
-  const proPackage: PurchasesPackage | null =
-    offering?.monthly ?? offering?.availablePackages?.[0] ?? null;
-  const nativePriceLabel = proPackage?.product?.priceString ?? null;
-  // Web fallback: we don't hardcode a marketing price — Stripe owns the
-  // canonical price. The "Subscribe" button works without the price label;
-  // the localized native price (StoreKit/Play Billing) is shown when available.
-  const priceLabel = useIAP ? nativePriceLabel : null;
 
   // After a successful purchase or restore, the RevenueCat webhook will mark
   // the provider as subscribed server-side, but the webhook can lag a few
@@ -201,36 +134,46 @@ export default function SubscriptionScreen() {
   );
 
   // ─── Native (iOS/Android) IAP actions ────────────────────────────────────────
+  // Present RevenueCat's native paywall UI. The SDK reads offerings and handles
+  // the purchase internally — no manual offering fetch or purchasePackage call needed.
   const handleNativeSubscribe = useCallback(async () => {
     if (busy) return;
-    if (!proPackage) {
-      Alert.alert(
-        "Subscriptions unavailable",
-        "We couldn't load the subscription. Please check your connection and try again.",
-      );
-      return;
-    }
     setBusy(true);
-    let entitled = false;
     try {
-      const result = await purchasePackage(proPackage);
-      entitled = !!(result.success && isProEntitled(result.customerInfo));
-      if (entitled) {
-        await refreshEntitlement(true);
-        Alert.alert("Subscription active", "Welcome to HomeBase Pro!");
-      } else if (!result.success && !result.userCancelled) {
-        Alert.alert(
-          "Purchase failed",
-          result.errorMessage ||
-            "We couldn't complete the purchase. Please try again.",
-        );
+      // Ensure the SDK is configured before presenting the paywall.
+      await waitForConfiguration();
+      const { default: RevenueCatUI, PAYWALL_RESULT } = await import(
+        "react-native-purchases-ui"
+      );
+      const result = await RevenueCatUI.presentPaywall();
+      switch (result) {
+        case PAYWALL_RESULT.PURCHASED:
+        case PAYWALL_RESULT.RESTORED: {
+          await refreshEntitlement(true);
+          Alert.alert("Subscription active", "Welcome to HomeBase Pro!");
+          break;
+        }
+        case PAYWALL_RESULT.CANCELLED:
+          // User dismissed — no action needed.
+          break;
+        case PAYWALL_RESULT.ERROR:
+        case PAYWALL_RESULT.NOT_PRESENTED:
+        default:
+          Alert.alert(
+            "Couldn't open paywall",
+            "Please check your connection and try again, or contact support.",
+          );
       }
+    } catch (err: any) {
+      console.error("[SubscriptionScreen] presentPaywall error:", err);
+      Alert.alert(
+        "Something went wrong",
+        err?.message || "Please try again or contact support.",
+      );
     } finally {
       setBusy(false);
-      // Reconcile with server even on cancel/failure to avoid stale state.
-      if (!entitled) void refreshEntitlement(false);
     }
-  }, [busy, proPackage, refreshEntitlement]);
+  }, [busy, refreshEntitlement]);
 
   const handleRestore = useCallback(async () => {
     if (restoring) return;
@@ -371,13 +314,6 @@ export default function SubscriptionScreen() {
   // Partners bypass the paywall entirely — no subscribe/manage controls,
   // since their access is admin-granted and not billed.
   const showSubscribeButton = !isSubscribed && !isPartner;
-  const subscribeLabel = priceLabel
-    ? stateKey === "free"
-      ? `Subscribe early — ${priceLabel}`
-      : `Subscribe — ${priceLabel}`
-    : "Subscribe";
-
-  const showDisclosure = !!priceLabel;
 
   const sourceLabel = (() => {
     switch (data?.subscriptionSource) {
@@ -444,20 +380,6 @@ export default function SubscriptionScreen() {
               {copy.body}
             </ThemedText>
 
-            {/* Plan pricing card — visible for all non-subscribed states so
-                providers can see the plan name, billing period, and price
-                before tapping Subscribe. Hidden for subscribed providers
-                and Partners since there is no upsell needed. */}
-            {showSubscribeButton ? (
-              <PlanCard
-                loadingOffering={useIAP && offeringState.kind === "loading"}
-                priceLabel={useIAP ? nativePriceLabel : null}
-                useIAP={useIAP}
-                isDark={isDark}
-                theme={theme}
-              />
-            ) : null}
-
             {/* Apple 3.1.2(c): EULA + Privacy must be visible BEFORE the
                 purchase confirmation, not just in a footer. We render the
                 same legal row above the Subscribe/Manage button on every
@@ -503,119 +425,33 @@ export default function SubscriptionScreen() {
             {/* Primary action — partners get no billing controls at all
                 (their access is admin-granted, not billed). */}
             {isPartner ? null : showSubscribeButton ? (
-              useIAP && offeringState.kind === "loading" ? (
-                <View
-                  style={[styles.button, styles.skeletonButton]}
-                  testID="subscribe-loading-skeleton"
-                >
-                  <ActivityIndicator size="small" color={Colors.accent} />
-                  <ThemedText
-                    style={[
-                      styles.skeletonText,
-                      { color: theme.textSecondary },
-                    ]}
-                  >
-                    Loading subscription…
-                  </ThemedText>
-                </View>
-              ) : useIAP &&
-                (offeringState.kind === "error" ||
-                  offeringState.kind === "empty") ? (
-                <View
-                  style={styles.errorBlock}
-                  testID="subscribe-error-block"
-                >
-                  <ThemedText
-                    style={[
-                      styles.errorTitle,
-                      { color: theme.text },
-                    ]}
-                  >
-                    {offeringState.kind === "empty"
-                      ? "Subscriptions aren't available right now"
-                      : "Couldn't load subscription"}
-                  </ThemedText>
-                  <ThemedText
-                    style={[styles.caption, { color: theme.textSecondary }]}
-                  >
-                    {offeringState.kind === "empty"
-                      ? "We can't show subscription pricing right now. Please try again shortly or contact support if this keeps happening."
-                      : offeringState.message}
-                  </ThemedText>
-                  {offeringState.kind === "error" && offeringState.errorCode ? (
-                    <ThemedText
-                      style={[styles.caption, { color: theme.textTertiary }]}
-                      testID="text-offering-error-code"
-                    >
-                      Error code: {offeringState.errorCode}
-                    </ThemedText>
-                  ) : null}
-                  <View style={styles.errorActions}>
-                    <Pressable
-                      onPress={loadOffering}
-                      disabled={loadingOffering}
-                      style={({ pressed }) => [
-                        styles.button,
-                        styles.retryButton,
-                        {
-                          backgroundColor: pressed
-                            ? Colors.accentPressed
-                            : Colors.accent,
-                          opacity: loadingOffering ? 0.6 : 1,
-                        },
-                      ]}
-                      testID="button-retry-offering"
-                    >
-                      <Feather name="refresh-cw" size={16} color="#fff" />
-                      <ThemedText style={styles.buttonText}>Retry</ThemedText>
-                    </Pressable>
-                    <Pressable
-                      onPress={handleContactSupport}
-                      style={styles.secondaryButton}
-                      testID="button-contact-support-error"
-                    >
-                      <ThemedText
-                        style={[
-                          styles.secondaryButtonText,
-                          { color: Colors.accent },
-                        ]}
-                      >
-                        Contact support
-                      </ThemedText>
-                    </Pressable>
-                  </View>
-                </View>
-              ) : (
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.button,
-                    {
-                      backgroundColor: pressed
-                        ? Colors.accentPressed
-                        : Colors.accent,
-                      opacity: busy || (useIAP && !proPackage) ? 0.6 : 1,
-                    },
-                  ]}
-                  onPress={
-                    useIAP
-                      ? handleNativeSubscribe
-                      : () => openStripeFlow("subscribe")
-                  }
-                  disabled={busy || (useIAP && !proPackage)}
-                  testID="button-subscribe"
-                >
-                  {busy ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <>
-                      <Feather name="credit-card" size={16} color="#fff" />
-                      <ThemedText style={styles.buttonText}>
-                        {subscribeLabel}
-                      </ThemedText>
-                    </>
-                  )}
-                </Pressable>
-              )
+              <Pressable
+                style={({ pressed }) => [
+                  styles.button,
+                  {
+                    backgroundColor: pressed
+                      ? Colors.accentPressed
+                      : Colors.accent,
+                    opacity: busy ? 0.6 : 1,
+                  },
+                ]}
+                onPress={
+                  useIAP
+                    ? handleNativeSubscribe
+                    : () => openStripeFlow("subscribe")
+                }
+                disabled={busy}
+                testID="button-subscribe"
+              >
+                {busy ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Feather name="credit-card" size={16} color="#fff" />
+                    <ThemedText style={styles.buttonText}>Subscribe</ThemedText>
+                  </>
+                )}
+              </Pressable>
             ) : (
               <Pressable
                 style={({ pressed }) => [
@@ -692,22 +528,6 @@ export default function SubscriptionScreen() {
 
           </View>
         )}
-
-        {/* Apple-required renewal disclosure — only when we have a real
-            localized price (or the marketing price on web). */}
-        {showSubscribeButton && showDisclosure ? (
-          <View style={styles.disclosureBlock}>
-            <ThemedText
-              style={[styles.disclosure, { color: theme.textTertiary }]}
-            >
-              {useIAP
-                ? Platform.OS === "ios"
-                  ? `HomeBase Pro is an auto-renewing subscription billed at ${priceLabel}. Payment is charged to your Apple ID at confirmation. Your subscription renews automatically unless auto-renew is turned off at least 24 hours before the end of the current period. You can manage and cancel your subscription in your Apple ID account settings after purchase.`
-                  : `HomeBase Pro is an auto-renewing subscription billed at ${priceLabel}. Payment is charged to your Google Play account at confirmation. Your subscription renews automatically unless cancelled at least 24 hours before the end of the current period. You can manage and cancel your subscription in your Google Play subscriptions settings after purchase.`
-                : `HomeBase Pro is an auto-renewing subscription billed at ${priceLabel} via Stripe. Manage or cancel anytime from the billing portal.`}
-            </ThemedText>
-          </View>
-        ) : null}
 
         {/* Legal + support quick links — ALWAYS visible on the Subscription
             screen so reviewers and users can find them in every state. */}
@@ -825,120 +645,14 @@ export default function SubscriptionScreen() {
             </ThemedText>
             <ThemedText
               style={[styles.debugLine, { color: theme.textTertiary }]}
-              testID="text-debug-offering-state"
+              testID="text-debug-paywall"
             >
-              Offering state: {offeringState.kind}
+              Paywall: RevenueCatUI.presentPaywall()
             </ThemedText>
-            {offeringState.kind === "ok" ? (
-              <>
-                <ThemedText
-                  style={[styles.debugLine, { color: theme.textTertiary }]}
-                  testID="text-debug-current-offering"
-                >
-                  Current offering: {offeringState.offering.identifier}
-                </ThemedText>
-                <ThemedText
-                  style={[styles.debugLine, { color: theme.textTertiary }]}
-                >
-                  Packages ({offeringState.offering.availablePackages.length}):
-                </ThemedText>
-                {offeringState.offering.availablePackages.map((pkg) => (
-                  <ThemedText
-                    key={pkg.identifier}
-                    style={[styles.debugLine, { color: theme.textTertiary }]}
-                    testID={`text-debug-package-${pkg.identifier}`}
-                  >
-                    {"  • "}
-                    {pkg.identifier} → {pkg.product.identifier} (
-                    {pkg.product.priceString})
-                  </ThemedText>
-                ))}
-              </>
-            ) : offeringState.kind === "empty" ? (
-              <ThemedText
-                style={[styles.debugLine, { color: theme.textTertiary }]}
-              >
-                Empty: {offeringState.reason}
-              </ThemedText>
-            ) : offeringState.kind === "error" ? (
-              <ThemedText
-                style={[styles.debugLine, { color: theme.textTertiary }]}
-              >
-                Error loading offering
-                {offeringState.errorCode
-                  ? ` (code ${offeringState.errorCode})`
-                  : ""}
-              </ThemedText>
-            ) : null}
           </View>
         ) : null}
       </ScrollView>
     </ThemedView>
-  );
-}
-
-// ─── Plan pricing card ───────────────────────────────────────────────────────
-// Shown between the status card body and the subscribe button for all
-// non-subscribed, non-partner states. Surfaces the plan name, billing
-// period, and price at a glance so providers know what they are buying.
-interface PlanCardProps {
-  loadingOffering: boolean;
-  priceLabel: string | null;
-  useIAP: boolean;
-  isDark: boolean;
-  theme: ReturnType<typeof useTheme>["theme"];
-}
-
-function PlanCard({ loadingOffering, priceLabel, useIAP, isDark, theme }: PlanCardProps) {
-  // On native: show the localized price from StoreKit/Play Billing when
-  // available, "Price unavailable" when the offering failed to load (the
-  // retry block below the card lets providers try again), and a spinner
-  // while loading. On web: Stripe owns the canonical price, so show the
-  // static "Billed monthly" label instead of a potentially stale amount.
-  const displayPrice = priceLabel
-    ? `${priceLabel} / month`
-    : "$29.99 / month";
-
-  return (
-    <View
-      style={[
-        styles.planCard,
-        {
-          backgroundColor: isDark
-            ? "rgba(56, 174, 95, 0.10)"
-            : "rgba(56, 174, 95, 0.07)",
-          borderColor: Colors.accent + "33",
-        },
-      ]}
-      testID="plan-card"
-    >
-      <View style={styles.planCardLeft}>
-        <ThemedText style={styles.planName} testID="text-plan-name">
-          HomeBase Pro
-        </ThemedText>
-        <ThemedText
-          style={[styles.planPeriod, { color: theme.textSecondary }]}
-          testID="text-plan-period"
-        >
-          Monthly
-        </ThemedText>
-      </View>
-
-      <View style={styles.planCardRight}>
-        {loadingOffering ? (
-          <View style={styles.planPriceSkeleton} testID="plan-price-skeleton">
-            <ActivityIndicator size="small" color={Colors.accent} />
-          </View>
-        ) : (
-          <ThemedText
-            style={[styles.planPrice, { color: Colors.accent }]}
-            testID="text-plan-price"
-          >
-            {displayPrice}
-          </ThemedText>
-        )}
-      </View>
-    </View>
   );
 }
 
@@ -1117,54 +831,43 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: Spacing.md,
   },
-  disclosureBlock: {
-    marginTop: Spacing.lg,
-    paddingHorizontal: Spacing.sm,
-  },
-  disclosure: {
-    ...Typography.caption2,
-    lineHeight: 16,
-    textAlign: "center",
-  },
   legalRow: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
     gap: Spacing.xs,
     marginTop: Spacing.md,
+    flexWrap: "wrap",
   },
   legalRowAbove: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    flexWrap: "wrap",
     gap: Spacing.xs,
-    marginBottom: Spacing.md,
-    alignSelf: "stretch",
+    marginBottom: Spacing.lg,
+    flexWrap: "wrap",
   },
   legalLink: {
     ...Typography.caption1,
-    fontWeight: "600",
+    fontWeight: "500",
   },
   legalSep: {
     ...Typography.caption1,
   },
-  meta: {
-    ...Typography.caption2,
-    textAlign: "center",
-    marginTop: Spacing.lg,
-  },
   metaBlock: {
     marginTop: Spacing.lg,
-    gap: Spacing.xs,
     alignItems: "center",
+    gap: Spacing.xs,
   },
-  partnerCard: {
-    alignItems: "stretch",
+  meta: {
+    ...Typography.caption1,
+    textAlign: "center",
   },
+  partnerCard: {},
   perkList: {
     alignSelf: "stretch",
     gap: Spacing.md,
+    marginTop: Spacing.sm,
     marginBottom: Spacing.lg,
   },
   perkRow: {
@@ -1173,98 +876,28 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   perkIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 2,
+    flexShrink: 0,
   },
   perkText: {
     flex: 1,
+    gap: 2,
   },
   perkTitle: {
     ...Typography.subhead,
-    fontWeight: "700",
-    marginBottom: 2,
+    fontWeight: "600",
   },
   perkBody: {
-    ...Typography.footnote,
+    ...Typography.caption1,
     lineHeight: 18,
   },
   partnerFootnote: {
-    ...Typography.caption1,
+    ...Typography.caption2,
     textAlign: "center",
-    alignSelf: "stretch",
-  },
-  errorBlock: {
-    alignSelf: "stretch",
-    alignItems: "center",
-    paddingVertical: Spacing.sm,
-    gap: Spacing.xs,
-  },
-  errorTitle: {
-    ...Typography.subhead,
-    fontWeight: "700",
-    textAlign: "center",
-  },
-  errorActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.lg,
     marginTop: Spacing.sm,
-    flexWrap: "wrap",
-    justifyContent: "center",
-  },
-  retryButton: {
-    flexShrink: 1,
-    alignSelf: "auto",
-    paddingVertical: 12,
-    paddingHorizontal: Spacing.lg,
-  },
-  skeletonButton: {
-    backgroundColor: "rgba(127, 127, 127, 0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(127, 127, 127, 0.18)",
-  },
-  skeletonText: {
-    ...Typography.callout,
-    fontWeight: "600",
-  },
-  planCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    alignSelf: "stretch",
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg,
-    marginBottom: Spacing.lg,
-  },
-  planCardLeft: {
-    flex: 1,
-    gap: Spacing.xxs,
-  },
-  planCardRight: {
-    alignItems: "flex-end",
-    justifyContent: "center",
-    marginLeft: Spacing.sm,
-  },
-  planName: {
-    ...Typography.subhead,
-    fontWeight: "700",
-  },
-  planPeriod: {
-    ...Typography.caption1,
-  },
-  planPrice: {
-    ...Typography.subhead,
-    fontWeight: "700",
-    textAlign: "right",
-  },
-  planPriceSkeleton: {
-    width: 60,
-    alignItems: "center",
   },
 });
