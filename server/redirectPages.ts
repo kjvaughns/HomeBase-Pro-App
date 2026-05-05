@@ -8,7 +8,7 @@ import {
   invoices,
 } from "@shared/schema";
 
-const APP_STORE_URL = "https://apps.apple.com/app/homebase-pro/id6739456140";
+const APP_STORE_URL = "https://apps.apple.com/app/homebase-pro-app/id6760936703";
 const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.homebase.app";
 const HOMEPAGE_URL = "https://homebaseproapp.com";
 

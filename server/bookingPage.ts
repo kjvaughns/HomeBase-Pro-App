@@ -894,7 +894,7 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
       <div class="summary-box" id="summary-box"></div>
       <div class="app-cta">
         <p>Track your appointment and get updates in the HomeBase Pro app.</p>
-        <a href="https://apps.apple.com/app/homebase-pro/id6739456140" target="_blank" rel="noopener">Download on the App Store</a>
+        <a href="https://apps.apple.com/app/homebase-pro-app/id6760936703" target="_blank" rel="noopener">Download on the App Store</a>
       </div>
     </div>
 

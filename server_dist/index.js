@@ -2570,7 +2570,7 @@ function appDownloadSection() {
     <p style="color:#166534;font-weight:600;margin:0 0 6px;font-size:14px;">Manage your home services with HomeBase</p>
     <p style="color:#15803d;font-size:13px;margin:0 0 14px;">Track invoices, book services, and get instant quotes &mdash; all in one app.</p>
     <div>
-      <a href="https://apps.apple.com/app/homebase" style="display:inline-block;background:#111827;color:#fff;padding:9px 18px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:500;margin:0 4px;">App Store</a>
+      <a href="https://apps.apple.com/app/homebase-pro-app/id6760936703" style="display:inline-block;background:#111827;color:#fff;padding:9px 18px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:500;margin:0 4px;">App Store</a>
       <a href="https://play.google.com/store/apps/details?id=com.homebase" style="display:inline-block;background:#111827;color:#fff;padding:9px 18px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:500;margin:0 4px;">Google Play</a>
     </div>
   </div>`;
@@ -8219,7 +8219,7 @@ async function renderBookingPage(slug, db2) {
       <div class="summary-box" id="summary-box"></div>
       <div class="app-cta">
         <p>Track your appointment and get updates in the HomeBase Pro app.</p>
-        <a href="https://apps.apple.com/app/homebase-pro/id6739456140" target="_blank" rel="noopener">Download on the App Store</a>
+        <a href="https://apps.apple.com/app/homebase-pro-app/id6760936703" target="_blank" rel="noopener">Download on the App Store</a>
       </div>
     </div>
 
@@ -22654,7 +22654,7 @@ import { eq as eq13, and as and7, gte as gte4, lte as lte2, lt } from "drizzle-o
 init_db();
 init_schema();
 import { eq as eq11 } from "drizzle-orm";
-var APP_STORE_URL = "https://apps.apple.com/app/homebase-pro/id6739456140";
+var APP_STORE_URL = "https://apps.apple.com/app/homebase-pro-app/id6760936703";
 var PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.homebase.app";
 var HOMEPAGE_URL = "https://homebaseproapp.com";
 function escapeHtml2(value) {
