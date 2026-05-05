@@ -59,7 +59,7 @@ const env = {
   REACT_NATIVE_PACKAGER_HOSTNAME: replitDomain,
   // Override the proxy URL so bundle URLs use port 80 (not 8081)
   // Replit maps external port 80 → internal 8081 (Metro)
-  EXPO_PACKAGER_PROXY_URL: `http://${replitDomain}`,
+  EXPO_PACKAGER_PROXY_URL: `https://${replitDomain}`,
 };
 
 const metro = spawn(
