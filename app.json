@@ -2,8 +2,8 @@
   "expo": {
     "name": "HomeBase",
     "slug": "homebase",
-    "version": "1.1.0",
-    "runtimeVersion": "1.1.0",
+    "version": "1.2.0",
+    "runtimeVersion": "1.2.0",
     "updates": {
       "url": "https://u.expo.dev/16db0e26-c342-42df-934c-b619f917e881"
     },
