@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   StyleSheet,
   View,
@@ -17,6 +17,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import Constants from "expo-constants";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { ThemedText } from "@/components/ThemedText";
@@ -36,6 +37,9 @@ import {
   getManageSubscriptionUrl,
   isProEntitled,
   waitForConfiguration,
+  getRevenueCatDiagnostics,
+  getRevenueCatLivePrice,
+  type RevenueCatDiagnosticsResult,
 } from "@/lib/revenuecat";
 
 const PRIVACY_URL = "https://homebaseproapp.com/privacy";
@@ -75,7 +79,58 @@ export default function SubscriptionScreen() {
   const [busy, setBusy] = useState(false);
   const [restoring, setRestoring] = useState(false);
 
+  // Dev-mode diagnostics — fetched once on mount on iOS in __DEV__
+  const [diagnostics, setDiagnostics] =
+    useState<RevenueCatDiagnosticsResult | null>(null);
+  const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
+
+  // In-screen paywall failure state — shown as a fallback card when the
+  // native paywall cannot be presented, so users always have actionable info.
+  const [paywallFailure, setPaywallFailure] = useState<{
+    code: string | null;
+    message: string;
+  } | null>(null);
+
+  // Live price string fetched from RevenueCat offerings (falls back to static copy)
+  const [livePrice, setLivePrice] = useState<string | null>(null);
+
   const useIAP = isPurchasesAvailable();
+
+  // Fetch live price + (dev only) full diagnostics on mount when on iOS.
+  // getRevenueCatLivePrice() is safe for production — no raw JSON logging.
+  // getRevenueCatDiagnostics() is heavy (full JSON logging) and only runs in dev.
+  useEffect(() => {
+    if (!useIAP) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        if (__DEV__) {
+          // Dev: run full diagnostics (includes price + heavy logging)
+          setDiagnosticsLoading(true);
+          const result = await getRevenueCatDiagnostics();
+          if (cancelled) return;
+          setDiagnostics(result);
+          if (result.firstPackagePriceString) {
+            setLivePrice(result.firstPackagePriceString);
+          }
+        } else {
+          // Production: lightweight price fetch only — no raw JSON logging
+          const price = await getRevenueCatLivePrice();
+          if (cancelled) return;
+          if (price) setLivePrice(price);
+        }
+      } catch {
+        // Best-effort; never crash the screen
+      } finally {
+        if (!cancelled) setDiagnosticsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [useIAP]);
 
   const handleDeleteAccount = useCallback(() => {
     navigation.navigate("AccountSecurity");
@@ -139,6 +194,8 @@ export default function SubscriptionScreen() {
   const handleNativeSubscribe = useCallback(async () => {
     if (busy) return;
     setBusy(true);
+    // Clear any previous failure state when the user retries.
+    setPaywallFailure(null);
     try {
       // Ensure the SDK is configured before presenting the paywall.
       await waitForConfiguration();
@@ -156,20 +213,52 @@ export default function SubscriptionScreen() {
         case PAYWALL_RESULT.CANCELLED:
           // User dismissed — no action needed.
           break;
-        case PAYWALL_RESULT.ERROR:
+        case PAYWALL_RESULT.ERROR: {
+          // In dev, fetch fresh diagnostics so the panel reflects current SDK
+          // state. In production, skip the heavy diagnostics call to avoid
+          // raw JSON logging; use a static actionable message instead.
+          let errCode: string | null = null;
+          let errMsg =
+            "The paywall could not be shown. Check that the product IDs in RevenueCat match App Store Connect exactly and that Agreements, Tax & Banking are Active.";
+          if (__DEV__) {
+            const fresh = await getRevenueCatDiagnostics();
+            setDiagnostics(fresh);
+            errCode = fresh.errorCode;
+            if (fresh.error) {
+              errMsg = `${fresh.error}${fresh.errorCode ? ` (code ${fresh.errorCode})` : ""}`;
+            }
+          }
+          setPaywallFailure({ code: errCode, message: errMsg });
+          break;
+        }
         case PAYWALL_RESULT.NOT_PRESENTED:
-        default:
-          Alert.alert(
-            "Couldn't open paywall",
-            "Please check your connection and try again, or contact support.",
-          );
+        default: {
+          // Use the synthetic code "NOT_PRESENTED" so support triage always
+          // has a deterministic identifier, even when the SDK returns no code.
+          let npMsg =
+            "The paywall could not be displayed. Please check your connection and try again, or contact support.";
+          if (__DEV__) {
+            const fresh = await getRevenueCatDiagnostics();
+            setDiagnostics(fresh);
+            if (fresh.packageCount === 0) {
+              npMsg =
+                "No products were found in RevenueCat. Make sure the default Offering has at least one Package attached and the product ID matches App Store Connect exactly.";
+            } else if (fresh.error) {
+              npMsg = `${fresh.error}${fresh.errorCode ? ` (code ${fresh.errorCode})` : ""}`;
+            }
+          }
+          setPaywallFailure({ code: "NOT_PRESENTED", message: npMsg });
+          break;
+        }
       }
     } catch (err: any) {
       console.error("[SubscriptionScreen] presentPaywall error:", err);
-      Alert.alert(
-        "Something went wrong",
-        err?.message || "Please try again or contact support.",
-      );
+      const code: string | null = err?.code != null ? String(err.code) : null;
+      const msg: string =
+        code === "23"
+          ? "Error 23: No products could be fetched from App Store Connect. Verify that the product IDs in RevenueCat match App Store Connect exactly, and that Agreements, Tax & Banking are all Active in App Store Connect."
+          : err?.message ?? "Please try again or contact support.";
+      setPaywallFailure({ code, message: msg });
     } finally {
       setBusy(false);
     }
@@ -331,6 +420,10 @@ export default function SubscriptionScreen() {
     ? new Date(data.currentPeriodEnd).toLocaleDateString()
     : null;
 
+  // The displayed price: use live price from RevenueCat when available,
+  // fall back to static copy so the screen is never blank.
+  const displayedPrice = livePrice ?? "$29.99 / month";
+
   return (
     <ThemedView style={styles.container}>
       <ScrollView
@@ -379,6 +472,33 @@ export default function SubscriptionScreen() {
             <ThemedText style={[styles.body, { color: theme.textSecondary }]}>
               {copy.body}
             </ThemedText>
+
+            {/* Price-aware info row — shown on all non-subscribed states so
+                Apple Review can see pricing before the purchase confirmation.
+                Satisfies App Review rule 3.1.1 (price must be visible in app).
+                Shown only on iOS (IAP path); web/Android use Stripe. */}
+            {useIAP && showSubscribeButton ? (
+              <View
+                style={[
+                  styles.priceRow,
+                  {
+                    backgroundColor: isDark
+                      ? "rgba(56,174,95,0.12)"
+                      : "rgba(56,174,95,0.08)",
+                    borderColor: Colors.accent + "33",
+                  },
+                ]}
+                testID="price-info-row"
+              >
+                <Feather name="tag" size={14} color={Colors.accent} />
+                <ThemedText
+                  style={[styles.priceText, { color: Colors.accent }]}
+                  testID="text-live-price"
+                >
+                  HomeBase Pro — {displayedPrice}
+                </ThemedText>
+              </View>
+            ) : null}
 
             {/* Apple 3.1.2(c): EULA + Privacy must be visible BEFORE the
                 purchase confirmation, not just in a footer. We render the
@@ -529,6 +649,120 @@ export default function SubscriptionScreen() {
           </View>
         )}
 
+        {/* In-screen paywall failure card — shown instead of a dismissible
+            alert so the user always has the error details + management path
+            visible on screen. Includes product name, price, trial terms, and
+            an App Store manage link so users can check their subscriptions.
+            Cleared when the user retries Subscribe. */}
+        {useIAP && paywallFailure ? (
+          <View
+            style={[
+              styles.failureCard,
+              {
+                backgroundColor: isDark ? "#2a1a1a" : "#fff5f5",
+                borderColor: "#dc262640",
+              },
+            ]}
+            testID="paywall-failure-card"
+          >
+            <View style={styles.failureHeader}>
+              <Feather name="alert-circle" size={16} color="#dc2626" />
+              <ThemedText style={[styles.failureTitle, { color: "#dc2626" }]}>
+                {paywallFailure.code
+                  ? `Couldn't open subscription (error ${paywallFailure.code})`
+                  : "Couldn't open subscription"}
+              </ThemedText>
+            </View>
+
+            {/* Product summary — gives users pricing context even when the
+                native paywall can't open. Satisfies App Review 3.1.1. */}
+            <View
+              style={[
+                styles.failureProductRow,
+                {
+                  backgroundColor: isDark
+                    ? "rgba(56,174,95,0.10)"
+                    : "rgba(56,174,95,0.07)",
+                  borderColor: Colors.accent + "30",
+                },
+              ]}
+              testID="failure-product-row"
+            >
+              <ThemedText
+                style={[styles.failureProductName, { color: theme.text }]}
+                testID="text-failure-product-name"
+              >
+                HomeBase Pro
+              </ThemedText>
+              <ThemedText
+                style={[styles.failureProductPrice, { color: Colors.accent }]}
+                testID="text-failure-product-price"
+              >
+                {displayedPrice}
+              </ThemedText>
+              <ThemedText
+                style={[styles.failureProductTrial, { color: theme.textTertiary }]}
+                testID="text-failure-trial-terms"
+              >
+                Free until your first paid booking, then 7-day trial — no
+                charge until the trial ends.
+              </ThemedText>
+            </View>
+
+            <ThemedText
+              style={[styles.failureBody, { color: theme.textSecondary }]}
+              testID="text-paywall-failure-message"
+            >
+              {paywallFailure.message}
+            </ThemedText>
+            <View style={styles.failureActions}>
+              <Pressable
+                onPress={handleNativeSubscribe}
+                disabled={busy}
+                style={({ pressed }) => [
+                  styles.failureRetryButton,
+                  {
+                    backgroundColor: pressed
+                      ? Colors.accentPressed
+                      : Colors.accent,
+                    opacity: busy ? 0.6 : 1,
+                  },
+                ]}
+                testID="button-paywall-retry"
+              >
+                <ThemedText style={styles.failureRetryText}>
+                  Try again
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                onPress={() =>
+                  Linking.openURL(getManageSubscriptionUrl()).catch(() => {})
+                }
+                hitSlop={8}
+                testID="button-paywall-manage-appstore"
+              >
+                <ThemedText
+                  style={[styles.failureSupportLink, { color: Colors.accent }]}
+                >
+                  Manage in App Store
+                </ThemedText>
+              </Pressable>
+            </View>
+            <Pressable
+              onPress={handleContactSupport}
+              hitSlop={8}
+              style={styles.failureContactRow}
+              testID="button-paywall-failure-support"
+            >
+              <ThemedText
+                style={[styles.failureSupportLink, { color: theme.textTertiary }]}
+              >
+                Still having trouble? Contact support
+              </ThemedText>
+            </Pressable>
+          </View>
+        ) : null}
+
         {/* Legal + support quick links — ALWAYS visible on the Subscription
             screen so reviewers and users can find them in every state. */}
         <View style={styles.legalRow}>
@@ -608,6 +842,8 @@ export default function SubscriptionScreen() {
           </ThemedText>
         ) : null}
 
+        {/* Dev-mode diagnostics panel — expands significantly with
+            getRevenueCatDiagnostics() output so error 23 is pinpointable. */}
         {__DEV__ && useIAP ? (
           <View
             style={[
@@ -639,6 +875,12 @@ export default function SubscriptionScreen() {
             </ThemedText>
             <ThemedText
               style={[styles.debugLine, { color: theme.textTertiary }]}
+              testID="text-debug-bundle-id"
+            >
+              Bundle ID: {Constants.expoConfig?.ios?.bundleIdentifier ?? "(unknown)"}
+            </ThemedText>
+            <ThemedText
+              style={[styles.debugLine, { color: theme.textTertiary }]}
               testID="text-debug-entitlement"
             >
               Entitlement: pro
@@ -649,6 +891,115 @@ export default function SubscriptionScreen() {
             >
               Paywall: RevenueCatUI.presentPaywall()
             </ThemedText>
+
+            {/* Diagnostics results */}
+            {diagnosticsLoading ? (
+              <ActivityIndicator
+                size="small"
+                color={Colors.accent}
+                style={{ marginTop: Spacing.sm }}
+              />
+            ) : diagnostics ? (
+              <>
+                <View
+                  style={[
+                    styles.debugDivider,
+                    { borderColor: isDark ? "#333" : "#E0E0E0" },
+                  ]}
+                />
+                <ThemedText
+                  style={[styles.debugSubtitle, { color: theme.textSecondary }]}
+                >
+                  Offerings diagnostics
+                </ThemedText>
+                <ThemedText
+                  style={[styles.debugLine, { color: diagnostics.offeringsAvailable ? Colors.accent : "#dc2626" }]}
+                  testID="text-debug-offerings-available"
+                >
+                  Offerings available: {diagnostics.offeringsAvailable ? "YES" : "NO"}
+                </ThemedText>
+                <ThemedText
+                  style={[styles.debugLine, { color: theme.textTertiary }]}
+                  testID="text-debug-default-offering"
+                >
+                  Default offering ID: {diagnostics.defaultOfferingId ?? "(none)"}
+                </ThemedText>
+                <ThemedText
+                  style={[styles.debugLine, { color: theme.textTertiary }]}
+                  testID="text-debug-package-count"
+                >
+                  Package count: {diagnostics.packageCount}
+                </ThemedText>
+                <ThemedText
+                  style={[styles.debugLine, { color: theme.textTertiary }]}
+                  testID="text-debug-product-id"
+                >
+                  First product ID: {diagnostics.firstPackageProductId ?? "(none)"}
+                </ThemedText>
+                <ThemedText
+                  style={[styles.debugLine, { color: theme.textTertiary }]}
+                  testID="text-debug-price-string"
+                >
+                  First product price: {diagnostics.firstPackagePriceString ?? "(none)"}
+                </ThemedText>
+                <ThemedText
+                  style={[styles.debugLine, { color: diagnostics.entitlementActive ? Colors.accent : theme.textTertiary }]}
+                  testID="text-debug-entitlement-active"
+                >
+                  Entitlement active: {diagnostics.entitlementActive ? "YES" : "NO"}
+                </ThemedText>
+                {diagnostics.error ? (
+                  <ThemedText
+                    style={[styles.debugLine, { color: "#dc2626" }]}
+                    testID="text-debug-error"
+                  >
+                    Error {diagnostics.errorCode ? `(code ${diagnostics.errorCode})` : ""}: {diagnostics.error}
+                  </ThemedText>
+                ) : null}
+                {diagnostics.rawOfferingsJson && diagnostics.rawOfferingsJson !== "{}" ? (
+                  <>
+                    <ThemedText
+                      style={[styles.debugSubtitle, { color: theme.textSecondary, marginTop: Spacing.xs }]}
+                    >
+                      Raw offerings JSON
+                    </ThemedText>
+                    <ScrollView
+                      style={styles.debugJsonScroll}
+                      nestedScrollEnabled
+                      showsVerticalScrollIndicator
+                    >
+                      <ThemedText
+                        style={[styles.debugJson, { color: theme.textTertiary }]}
+                        testID="text-debug-raw-offerings-json"
+                      >
+                        {diagnostics.rawOfferingsJson}
+                      </ThemedText>
+                    </ScrollView>
+                  </>
+                ) : null}
+                {diagnostics.rawCustomerInfoJson && diagnostics.rawCustomerInfoJson !== "{}" ? (
+                  <>
+                    <ThemedText
+                      style={[styles.debugSubtitle, { color: theme.textSecondary, marginTop: Spacing.xs }]}
+                    >
+                      Raw customer info JSON
+                    </ThemedText>
+                    <ScrollView
+                      style={styles.debugJsonScroll}
+                      nestedScrollEnabled
+                      showsVerticalScrollIndicator
+                    >
+                      <ThemedText
+                        style={[styles.debugJson, { color: theme.textTertiary }]}
+                        testID="text-debug-raw-customer-json"
+                      >
+                        {diagnostics.rawCustomerInfoJson}
+                      </ThemedText>
+                    </ScrollView>
+                  </>
+                ) : null}
+              </>
+            ) : null}
           </View>
         ) : null}
       </ScrollView>
@@ -762,6 +1113,22 @@ function PartnerPerksCard({ isDark, theme }: PartnerPerksCardProps) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   loading: { paddingVertical: Spacing.xl * 2, alignItems: "center" },
+  priceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.card,
+    borderWidth: 1,
+    marginBottom: Spacing.md,
+    alignSelf: "stretch",
+    justifyContent: "center",
+  },
+  priceText: {
+    ...Typography.subhead,
+    fontWeight: "600",
+  },
   debugBlock: {
     marginTop: Spacing.lg,
     padding: Spacing.md,
@@ -773,9 +1140,28 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginBottom: Spacing.xs,
   },
+  debugSubtitle: {
+    ...Typography.caption1,
+    fontWeight: "600",
+    marginTop: Spacing.xs,
+    marginBottom: 2,
+  },
+  debugDivider: {
+    borderTopWidth: 1,
+    marginVertical: Spacing.sm,
+  },
   debugLine: {
     ...Typography.caption2,
     marginTop: 2,
+  },
+  debugJsonScroll: {
+    maxHeight: 160,
+    marginTop: 4,
+  },
+  debugJson: {
+    ...Typography.caption2,
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+    lineHeight: 16,
   },
   card: {
     borderRadius: BorderRadius.card,
@@ -862,6 +1248,70 @@ const styles = StyleSheet.create({
   meta: {
     ...Typography.caption1,
     textAlign: "center",
+  },
+  failureCard: {
+    marginTop: Spacing.lg,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.card,
+    borderWidth: 1.5,
+    gap: Spacing.sm,
+  },
+  failureHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+  },
+  failureTitle: {
+    ...Typography.subhead,
+    fontWeight: "700",
+    flex: 1,
+  },
+  failureBody: {
+    ...Typography.caption1,
+    lineHeight: 18,
+  },
+  failureActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    marginTop: Spacing.xs,
+  },
+  failureRetryButton: {
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.button,
+  },
+  failureRetryText: {
+    color: "#fff",
+    ...Typography.caption1,
+    fontWeight: "700",
+  },
+  failureSupportLink: {
+    ...Typography.caption1,
+    fontWeight: "500",
+  },
+  failureContactRow: {
+    marginTop: Spacing.xs,
+    alignSelf: "flex-start",
+  },
+  failureProductRow: {
+    borderRadius: BorderRadius.card,
+    borderWidth: 1,
+    padding: Spacing.sm,
+    gap: 2,
+  },
+  failureProductName: {
+    ...Typography.subhead,
+    fontWeight: "700",
+  },
+  failureProductPrice: {
+    ...Typography.subhead,
+    fontWeight: "600",
+  },
+  failureProductTrial: {
+    ...Typography.caption2,
+    lineHeight: 16,
+    marginTop: 2,
   },
   partnerCard: {},
   perkList: {
