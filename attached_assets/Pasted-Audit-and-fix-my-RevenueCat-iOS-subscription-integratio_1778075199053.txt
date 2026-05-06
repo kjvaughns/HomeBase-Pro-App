@@ -1,0 +1,23 @@
+Audit and fix my RevenueCat iOS subscription integration for HomeBase Pro App.
+
+Current issue:
+The subscription screen shows RevenueCat error code 23 and says none of the products registered in RevenueCat could be fetched from App Store Connect. The paywall is not loading and the price shows unavailable.
+
+I need a full end to end fix, not guesses.
+
+Please do all of the following:
+
+1. Inspect the iOS RevenueCat initialization code and confirm the app is using the correct RevenueCat public Apple SDK key for the correct project.
+2. Verify the app is using the correct bundle identifier and that it matches the App Store Connect app and RevenueCat project.
+3. Inspect the subscription product identifiers used in code and confirm they match App Store Connect and RevenueCat exactly.
+4. Verify RevenueCat offerings are being fetched correctly and log the raw result of getOfferings or the equivalent method.
+5. Confirm the default offering has a current package attached and that the package points to the correct iOS subscription product.
+6. If I am using RevenueCat’s paywall UI, confirm the correct RevenueCat UI package is installed and wired properly. If it is missing, install it and update the code to render the paywall correctly.
+7. Confirm the purchase flow works on iOS production builds, not just local development.
+8. Add strong error logging for RevenueCat initialization, offerings fetch, and purchase attempts.
+9. Add a user friendly fallback state if the paywall fails to load so users are not stuck on a broken subscription page.
+10. Check if App Store Connect product availability, agreements, tax, banking, or subscription metadata could block StoreKit product fetching, and list anything I still need to finish manually.
+11. Make sure the subscription screen clearly shows the subscription title, duration, price, Privacy Policy link, and Terms of Use link for App Review compliance.
+12. Return a short root cause summary, the exact files changed, and the exact manual App Store Connect or RevenueCat dashboard steps I still need to complete.
+
+Do not stop at “might be the UI package.” Trace the full subscription path from app startup to RevenueCat to StoreKit to paywall rendering and make it production safe.
