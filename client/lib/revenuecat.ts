@@ -33,8 +33,8 @@
  *    (character-for-character, e.g. `com.homebasepro.app.pro_monthly`).
  * 8. Offering: An Offering named "default" must exist and have at least one
  *    Package attached that points to the product above.
- * 9. Entitlement: An Entitlement named `pro` must exist and the product must
- *    be attached to it.
+ * 9. Entitlement: An Entitlement named `HomeBase Pro` must exist and the product
+ *    must be attached to it.
  * 10. API Key: `EXPO_PUBLIC_REVENUECAT_API_KEY` in Replit Secrets must match
  *     the Apple **public** SDK key shown in RevenueCat → Project Settings →
  *     API Keys. It starts with `appl_`. Using a secret key here will not work.
@@ -69,7 +69,7 @@ const REVENUECAT_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY || "";
 
 // The entitlement identifier configured in RevenueCat for the HomeBase Pro
 // provider subscription. All gating in the app keys off this entitlement.
-export const PRO_ENTITLEMENT_ID = "pro";
+export const PRO_ENTITLEMENT_ID = "HomeBase Pro";
 
 // Replaced the `configured: boolean` flag with a Promise so that any code
 // calling SDK methods can await configuration completion rather than racing
