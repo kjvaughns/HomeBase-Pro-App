@@ -427,14 +427,16 @@ export default function ReviewsScreen() {
                 ]}
                 onPress={() => setFilter(key)}
               >
-                <ThemedText
-                  style={[
-                    styles.filterLabel,
-                    { color: theme.textSecondary },
-                    filter === key && { color: "#FFFFFF" },
-                  ]}
-                >
-                  {key === "all" ? "All" : `${key}`}
+                <View style={styles.filterChipContent}>
+                  <ThemedText
+                    style={[
+                      styles.filterLabel,
+                      { color: theme.textSecondary },
+                      filter === key && { color: "#FFFFFF" },
+                    ]}
+                  >
+                    {key === "all" ? "All" : `${key}`}
+                  </ThemedText>
                   {key !== "all" ? (
                     <Ionicons
                       name="star"
@@ -442,7 +444,7 @@ export default function ReviewsScreen() {
                       color={filter === key ? "#FFFFFF" : theme.textTertiary}
                     />
                   ) : null}
-                </ThemedText>
+                </View>
               </Pressable>
             ))}
           </View>
@@ -708,6 +710,11 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.xs,
     borderRadius: BorderRadius.full,
     borderWidth: 1,
+  },
+  filterChipContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
   },
   filterLabel: { ...Typography.caption1, fontWeight: "500" },
   reviewCard: {

@@ -99,7 +99,10 @@ export default function FirstLaunchScreen({ navigation }: Props) {
         >
           <Image source={AppLogo} style={styles.logo} resizeMode="contain" />
         </View>
-        <ThemedText style={[styles.brand, { color: theme.text }]}>
+        <ThemedText
+          style={[styles.brand, { color: theme.text }]}
+          numberOfLines={1}
+        >
           HomeBase
         </ThemedText>
         <ThemedText
@@ -171,12 +174,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     flex: 1,
+    alignSelf: "stretch",
   },
   brand: {
     fontSize: 28,
     fontWeight: "700",
     letterSpacing: -0.4,
     marginTop: Spacing.lg,
+    textAlign: "center",
   },
   tagline: {
     fontSize: 15,

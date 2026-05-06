@@ -29,7 +29,7 @@ export default function WelcomeScreen({ navigation }: Props) {
       <View style={[styles.content, { paddingTop: insets.top + Spacing["2xl"], paddingHorizontal: horizontalPadding }]}>
         <View style={styles.logoSection}>
           <Image source={AppLogo} style={styles.logo} resizeMode="contain" />
-          <ThemedText style={styles.appName}>HomeBase</ThemedText>
+          <ThemedText style={styles.appName} numberOfLines={1}>HomeBase</ThemedText>
           <ThemedText style={[styles.tagline, { color: theme.textSecondary }]}>
             Trusted pros. Peace of mind.
           </ThemedText>
