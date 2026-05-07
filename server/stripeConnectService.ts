@@ -555,23 +555,44 @@ export async function createStripeInvoice(
       : JSON.parse(rawItems as string)
     : [];
 
+  // actualServiceCents tracks the exact cents being sent to Stripe so that
+  // the passthrough fee and platform fee are both computed from the same base.
+  let actualServiceCents = 0;
+
   if (lineItems.length > 0) {
     let validItemCount = 0;
     for (const item of lineItems) {
-      // Ensure the unit price is a valid finite dollar amount, then convert
-      // to integer cents for the Stripe API (Stripe always expects cents).
+      // FIX: Use the pre-calculated line total (qty × unitPrice with real float
+      // precision) stored as `item.total` rather than recomputing from
+      // integer-rounded qty. The old `Math.max(1, Math.round(rawQty))` rounding
+      // inflated Stripe amounts for fractional quantities (e.g. qty=0.265 billed
+      // as qty=1 × unitPrice, 4× the intended amount), while the DB correctly
+      // stored the real total — causing a mismatch between what Stripe charged
+      // and what `platformFeeCents` was calculated on.
+      const rawLineTotal = parseFloat(item.total?.toString() || "0");
       const rawUnitPrice = parseFloat(item.unitPrice?.toString() || "0");
-      const unitAmountCents = Math.round(
-        (Number.isFinite(rawUnitPrice) ? rawUnitPrice : 0) * 100,
-      );
       const rawQty = parseFloat(item.quantity?.toString() || "1");
-      const qty = Number.isFinite(rawQty) ? Math.max(1, Math.round(rawQty)) : 1;
-      const lineTotalCents = unitAmountCents * qty;
-      // Final invariant: Stripe requires a finite positive integer for `amount`.
-      // Skip any item that would violate this (zero-price items, NaN, etc.).
+
+      let lineTotalCents: number;
+      if (Number.isFinite(rawLineTotal) && rawLineTotal > 0) {
+        // Primary path: stored total exactly matches what the DB used for
+        // subtotalCents, so both amounts are always in sync.
+        lineTotalCents = Math.round(rawLineTotal * 100);
+      } else {
+        // Fallback for older line items without a `total` field: use real float
+        // qty (not rounded to integer) so Stripe still gets the correct amount.
+        const unitAmountCents = Math.round(
+          (Number.isFinite(rawUnitPrice) ? rawUnitPrice : 0) * 100,
+        );
+        const qty = Number.isFinite(rawQty) && rawQty > 0 ? rawQty : 1;
+        lineTotalCents = Math.round(unitAmountCents * qty);
+      }
+
+      // Stripe requires a finite positive integer for `amount`.
       if (!Number.isFinite(lineTotalCents) || !Number.isInteger(lineTotalCents) || lineTotalCents <= 0) {
         continue;
       }
+      actualServiceCents += lineTotalCents;
       validItemCount++;
       await getStripe().invoiceItems.create(
         {
@@ -603,6 +624,7 @@ export async function createStripeInvoice(
         "Invoice total must be a valid positive amount to create a Stripe invoice.",
       );
     }
+    actualServiceCents = totalCents;
     await getStripe().invoiceItems.create(
       {
         customer: stripeCustomerId,
@@ -615,14 +637,10 @@ export async function createStripeInvoice(
   }
 
   // ── 2b. Add Stripe processing fee as a transparent line item ────────────
-  // This passes the 2.9% + $0.30 cost through to the homeowner so the
-  // provider receives their full quoted amount and the platform keeps a
-  // clean 3% via application_fee_amount.
-  const baseCentsForFee =
-    invoice.totalCents ||
-    Math.round(parseFloat(invoice.total?.toString() || "0") * 100);
+  // Use actualServiceCents (sum of what was actually sent to Stripe) rather than
+  // the stored invoice.totalCents, which may be stale from an earlier draft.
   const stripePassthroughFeeCentsForInvoice = calculateStripePassthroughFee(
-    Number.isFinite(baseCentsForFee) ? baseCentsForFee : 0,
+    actualServiceCents,
   );
   if (
     Number.isFinite(stripePassthroughFeeCentsForInvoice) &&
@@ -648,7 +666,24 @@ export async function createStripeInvoice(
   // (that field is only valid on PaymentIntents / Checkout Sessions, which we
   // do use in `createInvoicePaymentIntent` and `createStripeCheckoutSession`).
   // Both routes are valid Stripe Connect payment flows for the platform.
-  const platformFeeCents = invoice.platformFeeCents || 0;
+
+  // FIX: Recalculate platform fee from actualServiceCents rather than using the
+  // stored invoice.platformFeeCents, which may be stale (set when the invoice
+  // was first drafted) and might not match the real line items being billed now.
+  const plan = await getProviderPlan(invoice.providerId);
+  const platformFeeCents = calculatePlatformFee(
+    actualServiceCents,
+    plan.platformFeePercent,
+    plan.platformFeeFixedCents,
+  ).totalCents;
+
+  // Persist the corrected platform fee so DB stays in sync with Stripe.
+  if (platformFeeCents !== (invoice.platformFeeCents ?? 0)) {
+    await db
+      .update(invoices)
+      .set({ platformFeeCents, updatedAt: new Date() })
+      .where(eq(invoices.id, invoice.id));
+  }
   const daysUntilDue = invoice.dueDate
     ? Math.max(
         1,
