@@ -5063,6 +5063,11 @@ async function createStripeInvoice(invoiceId) {
       customer: stripeCustomerId,
       collection_method: "send_invoice",
       days_until_due: daysUntilDue,
+      // Stripe SDK v20+ changed standalone invoice behaviour: pending invoice
+      // items are NOT automatically included unless explicitly requested.
+      // Without this flag every invoice we create is $0 because the items
+      // we added above sit in the pending pool and are never attached.
+      pending_invoice_items_behavior: "include",
       ...platformFeeCents > 0 ? { application_fee_amount: platformFeeCents } : {},
       metadata: {
         homebaseInvoiceId: invoice.id,
@@ -5071,10 +5076,23 @@ async function createStripeInvoice(invoiceId) {
     },
     { stripeAccount: connectId }
   );
+  console.log(
+    `[stripe-invoice] created draft ${stripeInvoice.id} for customer ${stripeCustomerId} on ${connectId} \u2014 finalizing`
+  );
   const finalized = await getStripe().invoices.finalizeInvoice(
     stripeInvoice.id,
     { stripeAccount: connectId }
   );
+  console.log(
+    `[stripe-invoice] finalized ${finalized.id} | total=${finalized.total} | lines=${finalized.lines?.total_count ?? "?"} | status=${finalized.status} | invoiceId=${invoiceId}`
+  );
+  if (!finalized.total || finalized.total <= 0) {
+    await getStripe().invoices.voidInvoice(finalized.id, { stripeAccount: connectId }).catch(() => {
+    });
+    throw new Error(
+      `[stripe-invoice] Invoice ${finalized.id} finalized with total=${finalized.total} \u2014 refusing to send a $0 invoice. Pending items were not attached. (invoiceId=${invoiceId})`
+    );
+  }
   const hostedInvoiceUrl = finalized.hosted_invoice_url || "";
   await db.update(invoices).set({
     stripeInvoiceId: finalized.id,

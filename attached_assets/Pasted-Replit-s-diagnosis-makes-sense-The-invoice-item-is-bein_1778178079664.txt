@@ -1,0 +1,59 @@
+Replit’s diagnosis makes sense.
+
+The invoice item is being created, but the actual invoice is not pulling that pending item into the invoice. So Stripe sends a valid invoice, but total is $0.00.
+
+Give Replit this:
+
+Switch to Build mode and fix the Stripe $0 invoice bug.
+Root cause:
+When creating standalone Stripe invoices, pending invoice items are not being included in the invoice. The app creates invoice items, but invoices.create does not include them, so Stripe sends $0.00 invoices.
+Fix:
+In createStripeInvoice or whatever function creates the Stripe invoice, update the invoices.create call to include:
+pending_invoice_items_behavior: "include"
+Example:
+const invoice = await stripe.invoices.create({
+  customer: stripeCustomerId,
+  collection_method: "send_invoice",
+  days_until_due: 7,
+  pending_invoice_items_behavior: "include",
+  metadata: {
+    jobId,
+    providerId,
+    clientId
+  }
+});
+Also verify:
+1. Invoice item is created BEFORE invoice creation
+2. Invoice item has correct customer ID
+3. Invoice item amount is in cents, not dollars
+4. Invoice item uses the correct connected account if Stripe Connect is involved
+5. Invoice gets finalized and sent after creation
+6. Invoice total is greater than 0 before sending
+7. Add logging for invoice item amount, invoice total, invoice ID, and job ID
+8. If invoice total is 0, do not send it. Throw a clear error instead.
+Test:
+Create a job with a $150 service.
+Generate invoice.
+Confirm the email shows $150, not $0.
+Confirm Stripe dashboard invoice has line item attached.
+Confirm provider portal shows correct invoice status.
+
+Also make sure they don’t miss this part:
+
+await stripe.invoiceItems.create({
+  customer: stripeCustomerId,
+  amount: finalAmountInCents,
+  currency: "usd",
+  description: jobSummary,
+});
+
+Then invoice after:
+
+const invoice = await stripe.invoices.create({
+  customer: stripeCustomerId,
+  collection_method: "send_invoice",
+  days_until_due: 7,
+  pending_invoice_items_behavior: "include",
+});
+
+The order matters. Invoice item first, invoice second.
