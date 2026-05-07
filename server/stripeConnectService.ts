@@ -537,6 +537,7 @@ export async function createStripeInvoice(
     : [];
 
   if (lineItems.length > 0) {
+    let validItemCount = 0;
     for (const item of lineItems) {
       // Ensure the unit price is a valid finite dollar amount, then convert
       // to integer cents for the Stripe API (Stripe always expects cents).
@@ -549,9 +550,10 @@ export async function createStripeInvoice(
       const lineTotalCents = unitAmountCents * qty;
       // Final invariant: Stripe requires a finite positive integer for `amount`.
       // Skip any item that would violate this (zero-price items, NaN, etc.).
-      if (!Number.isFinite(lineTotalCents) || lineTotalCents <= 0) {
+      if (!Number.isFinite(lineTotalCents) || !Number.isInteger(lineTotalCents) || lineTotalCents <= 0) {
         continue;
       }
+      validItemCount++;
       await getStripe().invoiceItems.create(
         {
           customer: stripeCustomerId,
@@ -565,13 +567,21 @@ export async function createStripeInvoice(
         { stripeAccount: connectId },
       );
     }
+    // Fail closed: if every line item was invalid, refuse to create a partial
+    // invoice that would contain only a processing fee with no service lines.
+    if (validItemCount === 0) {
+      throw new Error(
+        "Invoice has no valid billable line items — all amounts are zero or invalid.",
+      );
+    }
   } else {
-    const totalCents =
+    const rawTotal =
       invoice.totalCents ||
       Math.round(parseFloat(invoice.total?.toString() || "0") * 100);
-    if (totalCents <= 0) {
+    const totalCents = Number.isFinite(rawTotal) ? rawTotal : 0;
+    if (!Number.isFinite(totalCents) || !Number.isInteger(totalCents) || totalCents <= 0) {
       throw new Error(
-        "Invoice total must be greater than zero to create a Stripe invoice.",
+        "Invoice total must be a valid positive amount to create a Stripe invoice.",
       );
     }
     await getStripe().invoiceItems.create(
@@ -589,19 +599,27 @@ export async function createStripeInvoice(
   // This passes the 2.9% + $0.30 cost through to the homeowner so the
   // provider receives their full quoted amount and the platform keeps a
   // clean 3% via application_fee_amount.
-  const stripePassthroughFeeCentsForInvoice = calculateStripePassthroughFee(
+  const baseCentsForFee =
     invoice.totalCents ||
-      Math.round(parseFloat(invoice.total?.toString() || "0") * 100),
+    Math.round(parseFloat(invoice.total?.toString() || "0") * 100);
+  const stripePassthroughFeeCentsForInvoice = calculateStripePassthroughFee(
+    Number.isFinite(baseCentsForFee) ? baseCentsForFee : 0,
   );
-  await getStripe().invoiceItems.create(
-    {
-      customer: stripeCustomerId,
-      amount: stripePassthroughFeeCentsForInvoice,
-      currency: invoice.currency || "usd",
-      description: "Processing fee (2.9% + $0.30)",
-    },
-    { stripeAccount: connectId },
-  );
+  if (
+    Number.isFinite(stripePassthroughFeeCentsForInvoice) &&
+    Number.isInteger(stripePassthroughFeeCentsForInvoice) &&
+    stripePassthroughFeeCentsForInvoice > 0
+  ) {
+    await getStripe().invoiceItems.create(
+      {
+        customer: stripeCustomerId,
+        amount: stripePassthroughFeeCentsForInvoice,
+        currency: invoice.currency || "usd",
+        description: "Processing fee (2.9% + $0.30)",
+      },
+      { stripeAccount: connectId },
+    );
+  }
 
   // ── 3. Create and finalise the Stripe Invoice ───────────────────────────
   // NOTE on the Connect billing model: Stripe Invoices created on a connected

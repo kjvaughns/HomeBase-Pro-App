@@ -4974,6 +4974,7 @@ async function createStripeInvoice(invoiceId) {
   const rawItems = invoice.lineItems;
   const lineItems = rawItems ? Array.isArray(rawItems) ? rawItems : JSON.parse(rawItems) : [];
   if (lineItems.length > 0) {
+    let validItemCount = 0;
     for (const item of lineItems) {
       const rawUnitPrice = parseFloat(item.unitPrice?.toString() || "0");
       const unitAmountCents = Math.round(
@@ -4982,9 +4983,10 @@ async function createStripeInvoice(invoiceId) {
       const rawQty = parseFloat(item.quantity?.toString() || "1");
       const qty = Number.isFinite(rawQty) ? Math.max(1, Math.round(rawQty)) : 1;
       const lineTotalCents = unitAmountCents * qty;
-      if (!Number.isFinite(lineTotalCents) || lineTotalCents <= 0) {
+      if (!Number.isFinite(lineTotalCents) || !Number.isInteger(lineTotalCents) || lineTotalCents <= 0) {
         continue;
       }
+      validItemCount++;
       await getStripe().invoiceItems.create(
         {
           customer: stripeCustomerId,
@@ -4998,11 +5000,17 @@ async function createStripeInvoice(invoiceId) {
         { stripeAccount: connectId }
       );
     }
-  } else {
-    const totalCents = invoice.totalCents || Math.round(parseFloat(invoice.total?.toString() || "0") * 100);
-    if (totalCents <= 0) {
+    if (validItemCount === 0) {
       throw new Error(
-        "Invoice total must be greater than zero to create a Stripe invoice."
+        "Invoice has no valid billable line items \u2014 all amounts are zero or invalid."
+      );
+    }
+  } else {
+    const rawTotal = invoice.totalCents || Math.round(parseFloat(invoice.total?.toString() || "0") * 100);
+    const totalCents = Number.isFinite(rawTotal) ? rawTotal : 0;
+    if (!Number.isFinite(totalCents) || !Number.isInteger(totalCents) || totalCents <= 0) {
+      throw new Error(
+        "Invoice total must be a valid positive amount to create a Stripe invoice."
       );
     }
     await getStripe().invoiceItems.create(
@@ -5015,18 +5023,21 @@ async function createStripeInvoice(invoiceId) {
       { stripeAccount: connectId }
     );
   }
+  const baseCentsForFee = invoice.totalCents || Math.round(parseFloat(invoice.total?.toString() || "0") * 100);
   const stripePassthroughFeeCentsForInvoice = calculateStripePassthroughFee(
-    invoice.totalCents || Math.round(parseFloat(invoice.total?.toString() || "0") * 100)
+    Number.isFinite(baseCentsForFee) ? baseCentsForFee : 0
   );
-  await getStripe().invoiceItems.create(
-    {
-      customer: stripeCustomerId,
-      amount: stripePassthroughFeeCentsForInvoice,
-      currency: invoice.currency || "usd",
-      description: "Processing fee (2.9% + $0.30)"
-    },
-    { stripeAccount: connectId }
-  );
+  if (Number.isFinite(stripePassthroughFeeCentsForInvoice) && Number.isInteger(stripePassthroughFeeCentsForInvoice) && stripePassthroughFeeCentsForInvoice > 0) {
+    await getStripe().invoiceItems.create(
+      {
+        customer: stripeCustomerId,
+        amount: stripePassthroughFeeCentsForInvoice,
+        currency: invoice.currency || "usd",
+        description: "Processing fee (2.9% + $0.30)"
+      },
+      { stripeAccount: connectId }
+    );
+  }
   const platformFeeCents = invoice.platformFeeCents || 0;
   const daysUntilDue = invoice.dueDate ? Math.max(
     1,
