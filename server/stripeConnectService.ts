@@ -386,10 +386,22 @@ export async function createInvoicePaymentIntent(
   const stripeFeeCents = calculateStripePassthroughFee(invoice.totalCents);
   const homeownerTotalCents = invoice.totalCents + stripeFeeCents;
 
+  // In the destination-charge model the platform is the merchant of record and
+  // pays Stripe's processing fee itself. To make the provider receive
+  // (jobAmount - platformFee) — i.e. $97 on a $100 job — the
+  // application_fee_amount must cover BOTH the platform's cut AND the Stripe
+  // passthrough fee. Stripe then transfers (charge - application_fee_amount) to
+  // the connected account, which equals the provider's net.
+  //   transfer = homeownerTotal - (platformFee + processingFee)
+  //            = (job + processingFee) - platformFee - processingFee
+  //            = job - platformFee  ← provider receives their share
+  const platformFeeCents = invoice.platformFeeCents || 0;
+  const destinationAppFee = platformFeeCents + stripeFeeCents;
+
   const paymentIntent = await getStripe().paymentIntents.create({
     amount: homeownerTotalCents,
     currency: invoice.currency || "usd",
-    application_fee_amount: invoice.platformFeeCents || 0,
+    application_fee_amount: destinationAppFee,
     transfer_data: {
       destination: connectAccount.stripeAccountId,
     },
@@ -398,6 +410,7 @@ export async function createInvoicePaymentIntent(
       providerId: invoice.providerId,
       payerUserId: payerUserId || "",
       jobAmountCents: String(invoice.totalCents),
+      platformFeeCents: String(platformFeeCents),
       stripeFeeCents: String(stripeFeeCents),
     },
   });
@@ -760,17 +773,23 @@ export async function createStripeCheckoutSession(invoiceId: string) {
     quantity: 1,
   });
 
+  // Destination-charge model: application_fee_amount = platformFee + processingFee
+  // so the transfer to the connected account = jobAmount - platformFee (e.g. $97).
+  const checkoutAppFee = (invoice.platformFeeCents || 0) + checkoutStripeFeeCents;
+
   const session = await getStripe().checkout.sessions.create({
     mode: "payment",
     line_items: stripeLineItems,
     payment_intent_data: {
-      application_fee_amount: invoice.platformFeeCents || 0,
+      application_fee_amount: checkoutAppFee,
       transfer_data: {
         destination: connectAccount.stripeAccountId,
       },
       metadata: {
         invoiceId: invoice.id,
         providerId: invoice.providerId,
+        platformFeeCents: String(invoice.platformFeeCents || 0),
+        stripeFeeCents: String(checkoutStripeFeeCents),
       },
     },
     success_url: `${PUBLIC_REDIRECT_BASE}/payment-success?invoiceId=${encodeURIComponent(invoiceId)}${invoice.jobId ? `&jobId=${encodeURIComponent(invoice.jobId)}` : ""}&session_id={CHECKOUT_SESSION_ID}`,
@@ -2103,12 +2122,15 @@ export async function createDepositCheckoutSession(params: {
       },
     ],
     payment_intent_data: {
-      application_fee_amount: fee.totalCents,
+      // Destination-charge model: include processingFee in application_fee_amount
+      // so provider receives amountCents - platformFee (e.g. $97 on $100 deposit).
+      application_fee_amount: fee.totalCents + depositStripeFeeCents,
       transfer_data: { destination: connectAccount.stripeAccountId },
       metadata: {
         depositForAppointment: appointmentId,
         providerId,
         jobAmountCents: String(amountCents),
+        platformFeeCents: String(fee.totalCents),
         stripeFeeCents: String(depositStripeFeeCents),
       },
     },
@@ -2183,12 +2205,15 @@ export async function createCancellationFeeCheckoutSession(params: {
       },
     ],
     payment_intent_data: {
-      application_fee_amount: fee.totalCents,
+      // Destination-charge model: include processingFee in application_fee_amount
+      // so provider receives amountCents - platformFee (e.g. $97 on $100 fee).
+      application_fee_amount: fee.totalCents + cancelStripeFeeCents,
       transfer_data: { destination: connectAccount.stripeAccountId },
       metadata: {
         cancellationFeeForAppointment: appointmentId,
         providerId,
         jobAmountCents: String(amountCents),
+        platformFeeCents: String(fee.totalCents),
         stripeFeeCents: String(cancelStripeFeeCents),
       },
     },
@@ -2232,7 +2257,10 @@ export async function calculateFeePreview(
     platformFeeCents: fee.totalCents,
     stripePassthroughFeeCents,
     homeownerTotalCents: totalCents + stripePassthroughFeeCents,
-    providerReceivesCents: totalCents,
+    // Provider receives the job amount minus the 3% platform fee.
+    // The homeowner's processing fee covers Stripe's cost — it does not
+    // reach the provider's account.
+    providerReceivesCents: totalCents - fee.totalCents,
     totalFeeCents: fee.totalCents,
   };
 }
