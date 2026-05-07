@@ -79,7 +79,7 @@ const newLineItem = (description = "", unitPrice = ""): LineItem => ({
 
 function calcTotal(items: LineItem[]): number {
   return items.reduce((sum, item) => {
-    const qty = parseFloat(item.qty) || 0;
+    const qty = parseFloat(item.qty) || 1;
     const price = parseFloat(item.unitPrice) || 0;
     return sum + qty * price;
   }, 0);
@@ -514,7 +514,7 @@ export default function AddInvoiceScreen() {
                     <View style={styles.lineTotalWrap}>
                       <ThemedText style={[styles.fieldMini, { color: theme.textTertiary }]}>TOTAL</ThemedText>
                       <ThemedText style={[styles.lineTotalText, { color: Colors.accent }]}>
-                        ${((parseFloat(item.qty) || 0) * (parseFloat(item.unitPrice) || 0)).toFixed(2)}
+                        ${((parseFloat(item.qty) || 1) * (parseFloat(item.unitPrice) || 0)).toFixed(2)}
                       </ThemedText>
                     </View>
                   </View>

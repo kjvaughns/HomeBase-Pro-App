@@ -4973,21 +4973,27 @@ async function createStripeInvoice(invoiceId) {
   }
   const rawItems = invoice.lineItems;
   const lineItems = rawItems ? Array.isArray(rawItems) ? rawItems : JSON.parse(rawItems) : [];
-  console.log(`[createStripeInvoice] invoiceId=${invoiceId} totalCents=${invoice.totalCents} total=${invoice.total} rawItems=${JSON.stringify(rawItems)} parsedLineItems=${JSON.stringify(lineItems)}`);
   if (lineItems.length > 0) {
     for (const item of lineItems) {
+      const rawUnitPrice = parseFloat(item.unitPrice?.toString() || "0");
       const unitAmountCents = Math.round(
-        parseFloat(item.unitPrice?.toString() || "0") * 100
+        (Number.isFinite(rawUnitPrice) ? rawUnitPrice : 0) * 100
       );
       const qty = Math.max(
         1,
         Math.round(parseFloat(item.quantity?.toString() || "1"))
       );
-      console.log(`[createStripeInvoice] item: desc=${item.description} unitPrice=${item.unitPrice} qty=${qty} unitAmountCents=${unitAmountCents} lineTotal=${unitAmountCents * qty}`);
+      const lineTotalCents = unitAmountCents * qty;
+      if (lineTotalCents <= 0) {
+        continue;
+      }
       await getStripe().invoiceItems.create(
         {
           customer: stripeCustomerId,
-          amount: unitAmountCents * qty,
+          // `amount` is the total for this line in the smallest currency unit
+          // (cents for USD). Using `amount` (not `unit_amount`) is the correct
+          // Stripe Invoice Items API field for a pre-calculated total.
+          amount: lineTotalCents,
           currency: invoice.currency || "usd",
           description: item.description || item.name || "Service"
         },
@@ -4996,7 +5002,11 @@ async function createStripeInvoice(invoiceId) {
     }
   } else {
     const totalCents = invoice.totalCents || Math.round(parseFloat(invoice.total?.toString() || "0") * 100);
-    console.log(`[createStripeInvoice] no lineItems \u2014 using totalCents=${totalCents} (fallback)`);
+    if (totalCents <= 0) {
+      throw new Error(
+        "Invoice total must be greater than zero to create a Stripe invoice."
+      );
+    }
     await getStripe().invoiceItems.create(
       {
         customer: stripeCustomerId,
@@ -5010,7 +5020,6 @@ async function createStripeInvoice(invoiceId) {
   const stripePassthroughFeeCentsForInvoice = calculateStripePassthroughFee(
     invoice.totalCents || Math.round(parseFloat(invoice.total?.toString() || "0") * 100)
   );
-  console.log(`[createStripeInvoice] processingFeeCents=${stripePassthroughFeeCentsForInvoice}`);
   await getStripe().invoiceItems.create(
     {
       customer: stripeCustomerId,
@@ -17488,7 +17497,6 @@ Respond with JSON only:
         const lineItemsInput = Array.isArray(req.body.lineItems) ? req.body.lineItems : [];
         let amount;
         let lineItems;
-        console.log(`[create-and-send] body.amount=${req.body.amount} body.lineItems=${JSON.stringify(req.body.lineItems)}`);
         if (lineItemsInput.length > 0) {
           lineItems = lineItemsInput.map((item) => ({
             description: item.description || "Service",
@@ -17500,10 +17508,8 @@ Respond with JSON only:
             (sum, item) => sum + item.total,
             0
           );
-          console.log(`[create-and-send] computed amount=${amount} from lineItems=${JSON.stringify(lineItems)}`);
         } else {
           amount = parseFloat(req.body.amount) || 0;
-          console.log(`[create-and-send] no lineItems \u2014 using body.amount=${amount}`);
           lineItems = [
             {
               description: req.body.notes || "Service",
