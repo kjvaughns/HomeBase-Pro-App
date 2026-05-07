@@ -7326,6 +7326,119 @@ var init_revenuecatService = __esm({
   }
 });
 
+// server/connectWebhookManager.ts
+var connectWebhookManager_exports = {};
+__export(connectWebhookManager_exports, {
+  ensureConnectWebhook: () => ensureConnectWebhook,
+  getStoredConnectSecret: () => getStoredConnectSecret
+});
+async function getStoredConnectSecret() {
+  const client = await pool.connect();
+  try {
+    const res = await client.query(
+      "SELECT value FROM app_settings WHERE key = $1 LIMIT 1",
+      [SETTING_KEY]
+    );
+    return res.rows[0]?.value ?? null;
+  } catch {
+    return null;
+  } finally {
+    client.release();
+  }
+}
+async function storeConnectSecret(secret) {
+  const client = await pool.connect();
+  try {
+    await client.query(
+      `INSERT INTO app_settings (key, value, updated_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+      [SETTING_KEY, secret]
+    );
+  } finally {
+    client.release();
+  }
+}
+async function ensureConnectWebhook(baseUrl) {
+  const connectUrl = `${baseUrl}/api/stripe/webhook/connect`;
+  const stripe2 = getStripe();
+  try {
+    const endpoints = await stripe2.webhookEndpoints.list({ limit: 100 });
+    const existing = endpoints.data.find((ep) => ep.url === connectUrl);
+    if (existing) {
+      const storedSecret = await getStoredConnectSecret();
+      if (storedSecret) {
+        const missingEvents = CONNECT_WEBHOOK_EVENTS.filter(
+          (e) => !existing.enabled_events.includes(e)
+        );
+        if (missingEvents.length > 0) {
+          const merged = Array.from(
+            /* @__PURE__ */ new Set([...existing.enabled_events, ...CONNECT_WEBHOOK_EVENTS])
+          );
+          await stripe2.webhookEndpoints.update(existing.id, {
+            enabled_events: merged
+          });
+          console.log(
+            `[connect-webhook] Updated events on ${existing.id}: added ${missingEvents.join(", ")}`
+          );
+        } else {
+          console.log(
+            `[connect-webhook] Webhook ${existing.id} up-to-date, secret already stored`
+          );
+        }
+        return;
+      }
+      console.log(
+        `[connect-webhook] Webhook ${existing.id} found but secret unknown \u2014 recreating to obtain fresh secret`
+      );
+      await stripe2.webhookEndpoints.del(existing.id);
+    }
+    const created = await stripe2.webhookEndpoints.create({
+      url: connectUrl,
+      enabled_events: CONNECT_WEBHOOK_EVENTS,
+      connect: true,
+      description: "HomeBase Connect webhook (auto-managed)"
+    });
+    if (!created.secret) {
+      console.error(
+        "[connect-webhook] Stripe did not return a secret on create \u2014 check API version"
+      );
+      return;
+    }
+    await storeConnectSecret(created.secret);
+    console.log(
+      `[connect-webhook] Created webhook ${created.id} at ${connectUrl} and stored signing secret`
+    );
+  } catch (err) {
+    console.error(
+      "[connect-webhook] Failed to ensure Connect webhook:",
+      err?.message ?? err
+    );
+  }
+}
+var SETTING_KEY, CONNECT_WEBHOOK_EVENTS;
+var init_connectWebhookManager = __esm({
+  "server/connectWebhookManager.ts"() {
+    "use strict";
+    init_stripeConnectService();
+    init_db();
+    SETTING_KEY = "stripe_connect_webhook_secret";
+    CONNECT_WEBHOOK_EVENTS = [
+      "account.updated",
+      "charge.refunded",
+      "checkout.session.completed",
+      "invoice.finalized",
+      "invoice.paid",
+      "invoice.payment_failed",
+      "payment_intent.payment_failed",
+      "payment_intent.succeeded",
+      "payout.created",
+      "payout.failed",
+      "payout.paid"
+    ];
+  }
+});
+
 // server/estimateViewer.ts
 var estimateViewer_exports = {};
 __export(estimateViewer_exports, {
@@ -22695,6 +22808,14 @@ async function runBootMigrations() {
        EXCEPTION WHEN duplicate_object THEN null;
        END $$`
     );
+    await runSql(
+      "table.app_settings",
+      `CREATE TABLE IF NOT EXISTS app_settings (
+        key        TEXT PRIMARY KEY,
+        value      TEXT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`
+    );
     verifications.push(
       ["provider_route_orders", `SELECT provider_id FROM provider_route_orders LIMIT 0`],
       ["job_series table", `SELECT id FROM job_series LIMIT 0`],
@@ -23141,6 +23262,17 @@ function resolveWebhookSecret(endpoint) {
   }
   return void 0;
 }
+async function resolveWebhookSecretAsync(endpoint) {
+  if (endpoint === "connect") {
+    try {
+      const { getStoredConnectSecret: getStoredConnectSecret2 } = await Promise.resolve().then(() => (init_connectWebhookManager(), connectWebhookManager_exports));
+      const fromDb = await getStoredConnectSecret2();
+      if (fromDb) return fromDb;
+    } catch {
+    }
+  }
+  return resolveWebhookSecret(endpoint);
+}
 
 // server/index.ts
 var app = express();
@@ -23228,7 +23360,7 @@ async function handlePlatformWebhook(req, res) {
 }
 async function handleConnectWebhook(req, res) {
   const sigHeader = req.headers["stripe-signature"];
-  const endpointSecret = resolveWebhookSecret("connect");
+  const endpointSecret = await resolveWebhookSecretAsync("connect");
   if (!sigHeader) {
     console.error("[stripe-webhook] endpoint=connect outcome=rejected reason=missing_signature");
     return res.status(400).json({ error: "Missing stripe-signature header" });
@@ -23327,6 +23459,8 @@ async function initStripe() {
           `${webhookBaseUrl}/api/stripe/webhook/platform`
         );
         console.log(`Webhook configured: ${webhook?.url ?? "unknown"}`);
+        const { ensureConnectWebhook: ensureConnectWebhook2 } = await Promise.resolve().then(() => (init_connectWebhookManager(), connectWebhookManager_exports));
+        await ensureConnectWebhook2(webhookBaseUrl);
       }
       console.log("Syncing Stripe data...");
       stripeSync2.syncBackfill().then(() => {

@@ -1089,6 +1089,16 @@ export async function runBootMigrations(): Promise<void> {
        END $$`,
     );
 
+    // ── app_settings: generic key/value store for server-managed config ───
+    await runSql(
+      "table.app_settings",
+      `CREATE TABLE IF NOT EXISTS app_settings (
+        key        TEXT PRIMARY KEY,
+        value      TEXT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`,
+    );
+
     verifications.push(
       ["provider_route_orders", `SELECT provider_id FROM provider_route_orders LIMIT 0`],
       ["job_series table",      `SELECT id FROM job_series LIMIT 0`],

@@ -94,7 +94,7 @@ function setupCors(app: express.Application) {
 // (server/webhookSecrets.ts) so regression tests can import + exercise it
 // without booting the whole server. Re-exported here for backwards compat
 // with existing callers in this file.
-import { resolveWebhookSecret } from "./webhookSecrets";
+import { resolveWebhookSecret, resolveWebhookSecretAsync } from "./webhookSecrets";
 export { resolveWebhookSecret };
 
 // -----------------------------------------------------------------------------
@@ -163,7 +163,10 @@ async function handlePlatformWebhook(req: Request, res: Response) {
 // -----------------------------------------------------------------------------
 async function handleConnectWebhook(req: Request, res: Response) {
   const sigHeader = req.headers["stripe-signature"];
-  const endpointSecret = resolveWebhookSecret("connect");
+  // Prefer the DB-stored secret (written by ensureConnectWebhook at startup)
+  // so a domain change that triggers webhook recreation never needs a manual
+  // env-var update. Falls back to STRIPE_CONNECT_WEBHOOK_SECRET / STRIPE_WEBHOOK_SECRET_CONNECT.
+  const endpointSecret = await resolveWebhookSecretAsync("connect");
 
   if (!sigHeader) {
     console.error("[stripe-webhook] endpoint=connect outcome=rejected reason=missing_signature");
@@ -301,6 +304,12 @@ async function initStripe() {
           `${webhookBaseUrl}/api/stripe/webhook/platform`
         );
         console.log(`Webhook configured: ${webhook?.url ?? 'unknown'}`);
+
+        // Auto-manage the Connect webhook so the signing secret is always
+        // current in the DB — avoids bad_signature rejections when the
+        // deployment domain changes between deploys.
+        const { ensureConnectWebhook } = await import("./connectWebhookManager");
+        await ensureConnectWebhook(webhookBaseUrl);
       }
 
       console.log('Syncing Stripe data...');
