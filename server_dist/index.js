@@ -4916,7 +4916,12 @@ async function createStripeInvoice(invoiceId) {
           invoice.stripeInvoiceId,
           { stripeAccount: connectAccount2.stripeAccountId }
         );
-        if (existing && existing.status !== "void" && existing.status !== "uncollectible") {
+        if (existing && existing.status !== "void" && existing.status !== "uncollectible" && // A Stripe invoice with total === 0 was auto-marked as paid by Stripe
+        // when it was created under the old `unit_amount` bug (Stripe ignores
+        // unknown params and creates $0 items, then auto-closes the invoice).
+        // Treat any $0 invoice as corrupt and fall through to create a fresh
+        // one with the correct amounts.
+        existing.total > 0) {
           const hostedInvoiceUrl2 = existing.hosted_invoice_url || invoice.hostedInvoiceUrl;
           return { stripeInvoiceId: invoice.stripeInvoiceId, hostedInvoiceUrl: hostedInvoiceUrl2 };
         }
