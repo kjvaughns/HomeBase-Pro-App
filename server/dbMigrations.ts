@@ -950,6 +950,19 @@ export async function runBootMigrations(): Promise<void> {
 
     // ALTER TYPE ADD VALUE must commit before subsequent queries reference
     // it; each runSql autocommits so enum-add must come before column-add.
+    // Backfill any job_status values that predate the current schema.
+    await runSql(
+      "job_status.confirmed",
+      `ALTER TYPE job_status ADD VALUE IF NOT EXISTS 'confirmed'`,
+    );
+    await runSql(
+      "job_status.on_my_way",
+      `ALTER TYPE job_status ADD VALUE IF NOT EXISTS 'on_my_way'`,
+    );
+    await runSql(
+      "job_status.arrived",
+      `ALTER TYPE job_status ADD VALUE IF NOT EXISTS 'arrived'`,
+    );
     await runSql(
       "job_status.weather_held",
       `ALTER TYPE job_status ADD VALUE IF NOT EXISTS 'weather_held'`,

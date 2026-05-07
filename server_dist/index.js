@@ -22514,6 +22514,18 @@ async function runBootMigrations() {
       )`
     );
     await runSql(
+      "job_status.confirmed",
+      `ALTER TYPE job_status ADD VALUE IF NOT EXISTS 'confirmed'`
+    );
+    await runSql(
+      "job_status.on_my_way",
+      `ALTER TYPE job_status ADD VALUE IF NOT EXISTS 'on_my_way'`
+    );
+    await runSql(
+      "job_status.arrived",
+      `ALTER TYPE job_status ADD VALUE IF NOT EXISTS 'arrived'`
+    );
+    await runSql(
       "job_status.weather_held",
       `ALTER TYPE job_status ADD VALUE IF NOT EXISTS 'weather_held'`
     );
