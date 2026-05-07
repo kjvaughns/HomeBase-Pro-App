@@ -11151,6 +11151,8 @@ Respond with JSON only:
         let amount: number;
         let lineItems: any[];
 
+        console.log(`[create-and-send] body.amount=${req.body.amount} body.lineItems=${JSON.stringify(req.body.lineItems)}`);
+
         if (lineItemsInput.length > 0) {
           lineItems = lineItemsInput.map((item: any) => ({
             description: item.description || "Service",
@@ -11164,8 +11166,10 @@ Respond with JSON only:
             (sum: number, item: any) => sum + item.total,
             0,
           );
+          console.log(`[create-and-send] computed amount=${amount} from lineItems=${JSON.stringify(lineItems)}`);
         } else {
           amount = parseFloat(req.body.amount) || 0;
+          console.log(`[create-and-send] no lineItems — using body.amount=${amount}`);
           lineItems = [
             {
               description: req.body.notes || "Service",

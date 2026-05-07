@@ -536,6 +536,8 @@ export async function createStripeInvoice(
       : JSON.parse(rawItems as string)
     : [];
 
+  console.log(`[createStripeInvoice] invoiceId=${invoiceId} totalCents=${invoice.totalCents} total=${invoice.total} rawItems=${JSON.stringify(rawItems)} parsedLineItems=${JSON.stringify(lineItems)}`);
+
   if (lineItems.length > 0) {
     for (const item of lineItems) {
       const unitAmountCents = Math.round(
@@ -545,6 +547,7 @@ export async function createStripeInvoice(
         1,
         Math.round(parseFloat(item.quantity?.toString() || "1")),
       );
+      console.log(`[createStripeInvoice] item: desc=${item.description} unitPrice=${item.unitPrice} qty=${qty} unitAmountCents=${unitAmountCents} lineTotal=${unitAmountCents * qty}`);
       await getStripe().invoiceItems.create(
         {
           customer: stripeCustomerId,
@@ -559,6 +562,7 @@ export async function createStripeInvoice(
     const totalCents =
       invoice.totalCents ||
       Math.round(parseFloat(invoice.total?.toString() || "0") * 100);
+    console.log(`[createStripeInvoice] no lineItems — using totalCents=${totalCents} (fallback)`);
     await getStripe().invoiceItems.create(
       {
         customer: stripeCustomerId,
@@ -578,6 +582,7 @@ export async function createStripeInvoice(
     invoice.totalCents ||
       Math.round(parseFloat(invoice.total?.toString() || "0") * 100),
   );
+  console.log(`[createStripeInvoice] processingFeeCents=${stripePassthroughFeeCentsForInvoice}`);
   await getStripe().invoiceItems.create(
     {
       customer: stripeCustomerId,
