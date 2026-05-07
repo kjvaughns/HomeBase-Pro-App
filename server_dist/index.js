@@ -4979,12 +4979,10 @@ async function createStripeInvoice(invoiceId) {
       const unitAmountCents = Math.round(
         (Number.isFinite(rawUnitPrice) ? rawUnitPrice : 0) * 100
       );
-      const qty = Math.max(
-        1,
-        Math.round(parseFloat(item.quantity?.toString() || "1"))
-      );
+      const rawQty = parseFloat(item.quantity?.toString() || "1");
+      const qty = Number.isFinite(rawQty) ? Math.max(1, Math.round(rawQty)) : 1;
       const lineTotalCents = unitAmountCents * qty;
-      if (lineTotalCents <= 0) {
+      if (!Number.isFinite(lineTotalCents) || lineTotalCents <= 0) {
         continue;
       }
       await getStripe().invoiceItems.create(
@@ -17520,6 +17518,11 @@ Respond with JSON only:
           ];
         }
         const subtotalCents = Math.round(amount * 100);
+        if (!Number.isFinite(subtotalCents) || subtotalCents <= 0) {
+          return res.status(400).json({
+            error: "Invoice total must be greater than zero."
+          });
+        }
         const sendPlan = await getProviderPlan(bodyProviderId);
         const sendFee = calculatePlatformFee(
           subtotalCents,

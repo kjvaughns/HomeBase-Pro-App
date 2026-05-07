@@ -544,13 +544,12 @@ export async function createStripeInvoice(
       const unitAmountCents = Math.round(
         (Number.isFinite(rawUnitPrice) ? rawUnitPrice : 0) * 100,
       );
-      const qty = Math.max(
-        1,
-        Math.round(parseFloat(item.quantity?.toString() || "1")),
-      );
+      const rawQty = parseFloat(item.quantity?.toString() || "1");
+      const qty = Number.isFinite(rawQty) ? Math.max(1, Math.round(rawQty)) : 1;
       const lineTotalCents = unitAmountCents * qty;
-      if (lineTotalCents <= 0) {
-        // Skip zero-amount line items — Stripe rejects them
+      // Final invariant: Stripe requires a finite positive integer for `amount`.
+      // Skip any item that would violate this (zero-price items, NaN, etc.).
+      if (!Number.isFinite(lineTotalCents) || lineTotalCents <= 0) {
         continue;
       }
       await getStripe().invoiceItems.create(

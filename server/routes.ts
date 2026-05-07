@@ -11177,6 +11177,11 @@ Respond with JSON only:
         }
 
         const subtotalCents = Math.round(amount * 100);
+        if (!Number.isFinite(subtotalCents) || subtotalCents <= 0) {
+          return res.status(400).json({
+            error: "Invoice total must be greater than zero.",
+          });
+        }
         // Compute platform fee so the eventual Connect destination charge
         // / Stripe Invoice carries the right application_fee (Task #150).
         const sendPlan = await getProviderPlan(bodyProviderId);
