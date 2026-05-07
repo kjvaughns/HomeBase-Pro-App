@@ -18114,6 +18114,37 @@ Respond with JSON only:
         if (!invoice) {
           return res.status(404).json({ error: "Invoice not found" });
         }
+        if (existing.stripeInvoiceId) {
+          try {
+            const connectAccount = await getConnectAccount(existing.providerId);
+            if (connectAccount?.stripeAccountId) {
+              const stripeInv = await getStripe().invoices.retrieve(
+                existing.stripeInvoiceId,
+                { stripeAccount: connectAccount.stripeAccountId }
+              );
+              if (stripeInv.status === "draft") {
+                await getStripe().invoices.del(existing.stripeInvoiceId, {
+                  stripeAccount: connectAccount.stripeAccountId
+                });
+              } else if (stripeInv.status === "open") {
+                await getStripe().invoices.voidInvoice(
+                  existing.stripeInvoiceId,
+                  { stripeAccount: connectAccount.stripeAccountId }
+                );
+              } else if (stripeInv.status === "paid") {
+                await getStripe().invoices.markUncollectible(
+                  existing.stripeInvoiceId,
+                  { stripeAccount: connectAccount.stripeAccountId }
+                );
+              }
+            }
+          } catch (stripeErr) {
+            console.error(
+              "[invoice-cancel] Stripe sync failed:",
+              stripeErr?.message
+            );
+          }
+        }
         res.json({ invoice });
       } catch (error) {
         console.error("Cancel invoice error:", error);

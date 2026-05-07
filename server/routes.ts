@@ -11874,10 +11874,51 @@ Respond with JSON only:
         }
         if (!(await assertProviderOwnership(req, existing.providerId, res)))
           return;
+
+        // Cancel in our DB first
         const invoice = await storage.cancelInvoice(req.params.id);
         if (!invoice) {
           return res.status(404).json({ error: "Invoice not found" });
         }
+
+        // Mirror cancellation to Stripe if a Stripe invoice exists
+        if (existing.stripeInvoiceId) {
+          try {
+            const connectAccount = await getConnectAccount(existing.providerId);
+            if (connectAccount?.stripeAccountId) {
+              const stripeInv = await getStripe().invoices.retrieve(
+                existing.stripeInvoiceId,
+                { stripeAccount: connectAccount.stripeAccountId },
+              );
+              if (stripeInv.status === "draft") {
+                // Draft invoices can be hard-deleted
+                await getStripe().invoices.del(existing.stripeInvoiceId, {
+                  stripeAccount: connectAccount.stripeAccountId,
+                });
+              } else if (stripeInv.status === "open") {
+                // Open/sent invoices must be voided
+                await getStripe().invoices.voidInvoice(
+                  existing.stripeInvoiceId,
+                  { stripeAccount: connectAccount.stripeAccountId },
+                );
+              } else if (stripeInv.status === "paid") {
+                // Paid invoices cannot be voided — mark uncollectible instead
+                await getStripe().invoices.markUncollectible(
+                  existing.stripeInvoiceId,
+                  { stripeAccount: connectAccount.stripeAccountId },
+                );
+              }
+              // void / uncollectible / deleted → already cancelled, nothing to do
+            }
+          } catch (stripeErr: any) {
+            // Log but don't fail the request — our DB cancel already succeeded
+            console.error(
+              "[invoice-cancel] Stripe sync failed:",
+              stripeErr?.message,
+            );
+          }
+        }
+
         res.json({ invoice });
       } catch (error) {
         console.error("Cancel invoice error:", error);
