@@ -548,8 +548,7 @@ export async function createStripeInvoice(
       await getStripe().invoiceItems.create(
         {
           customer: stripeCustomerId,
-          unit_amount: unitAmountCents,
-          quantity: qty,
+          amount: unitAmountCents * qty,
           currency: invoice.currency || "usd",
           description: item.description || item.name || "Service",
         },
