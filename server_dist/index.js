@@ -17731,25 +17731,18 @@ Respond with JSON only:
         let hostedUrl;
         let stripeError;
         let stripeErrorCode;
-        if (!invoice.stripeInvoiceId) {
-          const platformResult = await sendStripeInvoiceEmail(
-            invoiceId
-          ).catch((err) => {
-            stripeError = err?.message || "Stripe invoice send failed";
-            stripeErrorCode = err?.code;
-            console.error("[stripe-invoice-send] platform:", stripeError);
-            return null;
-          });
-          if (platformResult?.hostedInvoiceUrl)
-            hostedUrl = platformResult.hostedInvoiceUrl;
-        } else {
+        const platformResult = await sendStripeInvoiceEmail(
+          invoiceId
+        ).catch((err) => {
+          stripeError = err?.message || "Stripe invoice send failed";
+          stripeErrorCode = err?.code;
+          console.error("[stripe-invoice-send] platform:", stripeError);
+          return null;
+        });
+        if (platformResult?.hostedInvoiceUrl)
+          hostedUrl = platformResult.hostedInvoiceUrl;
+        else if (!hostedUrl)
           hostedUrl = invoice.hostedInvoiceUrl || void 0;
-          await resendStripeInvoice(invoiceId).catch((err) => {
-            stripeError = err?.message;
-            stripeErrorCode = err?.code;
-            console.warn("[stripe-invoice-resend]", stripeError);
-          });
-        }
         if (stripeErrorCode === "stripe_not_ready") {
           return res.status(409).json({
             code: "stripe_not_ready",

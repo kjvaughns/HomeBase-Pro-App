@@ -11416,8 +11416,12 @@ Respond with JSON only:
           });
         }
 
-        // Send a proper Stripe Invoice — Stripe emails the client at invoice.stripe.com
-        // Primary: platform account (no Connect required). Fallback: existing Connect flow.
+        // Send a proper Stripe Invoice — Stripe emails the client at invoice.stripe.com.
+        // Always route through sendStripeInvoiceEmail so the idempotency guard in
+        // createStripeInvoice can detect and replace any stale $0 Stripe invoice
+        // created under the old unit_amount bug. The function is fully idempotent:
+        // it returns an existing valid invoice (total > 0) unchanged, recreates only
+        // corrupt $0 ones, and always emails the client the correct amount.
         let hostedUrl: string | undefined;
         let stripeError: string | undefined;
 
@@ -11426,28 +11430,18 @@ Respond with JSON only:
         // account is not ready. Mirror the behavior already added to
         // POST /api/stripe/invoices/:invoiceId/send.
         let stripeErrorCode: string | undefined;
-        if (!invoice.stripeInvoiceId) {
-          // No existing Stripe invoice — create and send one now
-          const platformResult = await sendStripeInvoiceEmail(
-            invoiceId,
-          ).catch((err: any) => {
-            stripeError = err?.message || "Stripe invoice send failed";
-            stripeErrorCode = err?.code;
-            console.error("[stripe-invoice-send] platform:", stripeError);
-            return null;
-          });
-          if (platformResult?.hostedInvoiceUrl)
-            hostedUrl = platformResult.hostedInvoiceUrl;
-        } else {
-          // Stripe invoice already exists on the provider's connected account
-          // — resend via the Connect-aware helper (Task #150).
+        const platformResult = await sendStripeInvoiceEmail(
+          invoiceId,
+        ).catch((err: any) => {
+          stripeError = err?.message || "Stripe invoice send failed";
+          stripeErrorCode = err?.code;
+          console.error("[stripe-invoice-send] platform:", stripeError);
+          return null;
+        });
+        if (platformResult?.hostedInvoiceUrl)
+          hostedUrl = platformResult.hostedInvoiceUrl;
+        else if (!hostedUrl)
           hostedUrl = invoice.hostedInvoiceUrl || undefined;
-          await resendStripeInvoice(invoiceId).catch((err: any) => {
-            stripeError = err?.message;
-            stripeErrorCode = err?.code;
-            console.warn("[stripe-invoice-resend]", stripeError);
-          });
-        }
         if (stripeErrorCode === "stripe_not_ready") {
           return res.status(409).json({
             code: "stripe_not_ready",
