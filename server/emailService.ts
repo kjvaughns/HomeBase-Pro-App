@@ -100,6 +100,7 @@ function buildEmailBase(
     <div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.08);">
       <!-- Header -->
       <div style="background:#38AE5F;padding:28px 32px;text-align:center;">
+        <img src="https://homebaseproapp.com/assets/homebase-logo.png" alt="HomeBase" width="56" height="56" style="display:block;margin:0 auto 10px;filter:brightness(0) invert(1);" />
         <div style="font-size:22px;font-weight:700;color:#fff;letter-spacing:-0.3px;">HomeBase</div>
         <div style="font-size:13px;color:rgba(255,255,255,0.8);margin-top:4px;">The smart way to manage home services</div>
       </div>
