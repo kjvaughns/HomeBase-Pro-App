@@ -1722,10 +1722,11 @@ export class DatabaseStorage implements IStorage {
 
   async deleteAdminAuditLogs(ids: string[]): Promise<number> {
     if (ids.length === 0) return 0;
-    const result = await db
+    const deleted = await db
       .delete(adminAuditLogs)
-      .where(inArray(adminAuditLogs.id, ids));
-    return ids.length;
+      .where(inArray(adminAuditLogs.id, ids))
+      .returning({ id: adminAuditLogs.id });
+    return deleted.length;
   }
 
   async listAdminAuditLogs(params: {
@@ -1792,7 +1793,20 @@ export class DatabaseStorage implements IStorage {
     limit: number;
     offset: number;
   }): Promise<{
-    rows: Array<typeof providers.$inferSelect & {
+    rows: Array<{
+      id: string;
+      userId: string | null;
+      businessName: string;
+      email: string | null;
+      phone: string | null;
+      description: string | null;
+      isActive: boolean | null;
+      isPublic: boolean | null;
+      isVerified: boolean | null;
+      averageRating: string | null;
+      reviewCount: number | null;
+      serviceArea: string | null;
+      createdAt: Date;
       subscriptionStatus: string | null;
       isSubscribed: boolean;
       isPartner: boolean;
@@ -1844,12 +1858,7 @@ export class DatabaseStorage implements IStorage {
       averageRating: providers.averageRating,
       reviewCount: providers.reviewCount,
       serviceArea: providers.serviceArea,
-      logoUrl: providers.logoUrl,
-      website: providers.website,
       createdAt: providers.createdAt,
-      updatedAt: providers.updatedAt,
-      stripeAccountId: providers.stripeAccountId,
-      stripeAccountStatus: providers.stripeAccountStatus,
       subscriptionStatus: providerPlans.subscriptionStatus,
       isSubscribed: providerPlans.isSubscribed,
       isPartner: providerPlans.isPartner,
