@@ -18,7 +18,10 @@ localPort = 25580
 run = "pnpm --filter @workspace/admin-portal run dev"
 
 [services.production]
-build = [ "sh", "-c", "BASE_PATH=/ pnpm --filter @workspace/admin-portal run build" ]
+# BASE_PATH=/ → app serves from root on admin.homebaseproapp.com
+# VITE_API_URL must be set to the backend *origin* (no /api suffix)
+# e.g. https://homebaseproapp.com  →  /api/auth/login resolves correctly
+build = [ "sh", "-c", "BASE_PATH=/ VITE_API_URL=${VITE_API_URL} pnpm --filter @workspace/admin-portal run build" ]
 publicDir = "artifacts/admin-portal/dist/public"
 serve = "static"
 
@@ -29,3 +32,7 @@ to = "/index.html"
 [services.env]
 PORT = "25580"
 BASE_PATH = "/admin-portal/"
+# VITE_API_URL: set to backend origin at deploy time.
+# Example: https://homebaseproapp.com
+# Leave empty in dev — /api/* routes via the Replit shared proxy.
+VITE_API_URL = ""

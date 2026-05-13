@@ -1,9 +1,16 @@
 import axios from "axios";
 
-const BASE_URL = import.meta.env.VITE_API_URL || "";
+// VITE_API_URL — the backend *origin* (no trailing slash, no /api suffix).
+//   Example: "https://homebaseproapp.com"
+//   In development, leave unset (empty string). All /api/* requests then
+//   travel through the Replit shared proxy → api-server on port 8080.
+//   In production at admin.homebaseproapp.com, set this build-time env var
+//   so requests like /api/auth/login become
+//   https://homebaseproapp.com/api/auth/login (axios combines origin + path).
+const BACKEND_ORIGIN = import.meta.env.VITE_API_URL ?? "";
 
 export const api = axios.create({
-  baseURL: BASE_URL,
+  baseURL: BACKEND_ORIGIN,
   headers: { "Content-Type": "application/json" },
 });
 
