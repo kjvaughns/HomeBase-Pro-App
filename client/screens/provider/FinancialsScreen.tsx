@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Platform,
   useWindowDimensions,
 } from "react-native";
 import { openExternalUrl } from "@/lib/openExternalUrl";
@@ -34,6 +35,8 @@ import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { estimateStatusLabel, estimateStatusTone } from "@/constants/estimateStatuses";
+import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
+import { SubscriptionGateModal } from "@/components/SubscriptionGateModal";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -68,6 +71,7 @@ interface StripePayout {
 
 interface NextPayoutData {
   status: "not_onboarded" | "onboarding_incomplete" | "ready";
+  subscriptionGated?: boolean;
   nextPayout?: {
     id: string;
     amountCents: number;
@@ -809,6 +813,9 @@ interface NextPayoutCardProps {
   onPress: () => void;
   onOnboard: () => void;
   onHowItWorks: () => void;
+  onSubscribePress: () => void;
+  onInstantPayout: () => void;
+  instantPayoutPending: boolean;
 }
 
 function NextPayoutCard({
@@ -819,6 +826,9 @@ function NextPayoutCard({
   onPress,
   onOnboard,
   onHowItWorks,
+  onSubscribePress,
+  onInstantPayout,
+  instantPayoutPending,
 }: NextPayoutCardProps) {
   // ── Loading skeleton ────────────────────────────────────────────────────
   if (isLoading) {
@@ -900,6 +910,50 @@ function NextPayoutCard({
     );
   }
 
+  // ── Subscription gated — show balance but prompt to subscribe ───────────
+  // Only show the locked card when there are actual funds waiting; if balance
+  // is zero fall through to the normal no-payout card state.
+  const _gatedPendingCents =
+    (data.pendingBalanceCents ?? 0) + (data.nextPayout?.amountCents ?? 0);
+  if (data.subscriptionGated && _gatedPendingCents > 0) {
+    // Sum pending balance and any already-scheduled payout — both are earned
+    // funds the provider can't receive until they subscribe.
+    const pendingCents = _gatedPendingCents;
+    return (
+      <Pressable
+        style={[
+          nextPayoutStyles.card,
+          {
+            backgroundColor: theme.cardBackground,
+            borderColor: Colors.accent + "40",
+            borderWidth: 1,
+            opacity: 0.92,
+          },
+        ]}
+        onPress={onSubscribePress}
+        testID="next-payout-card-gated"
+      >
+        <View style={[nextPayoutStyles.iconWrap, { backgroundColor: Colors.accentLight }]}>
+          <Feather name="lock" size={18} color={Colors.accent} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <ThemedText style={[nextPayoutStyles.label, { color: theme.textSecondary }]}>
+            Payouts Locked
+          </ThemedText>
+          <ThemedText style={[nextPayoutStyles.summaryLine, { opacity: 0.6 }]}>
+            {pendingCents > 0
+              ? `${formatCents(pendingCents)} ready`
+              : "Funds ready"}
+          </ThemedText>
+          <ThemedText style={[nextPayoutStyles.helpLink, { color: Colors.accent }]}>
+            Subscribe to unlock payouts
+          </ThemedText>
+        </View>
+        <Feather name="chevron-right" size={16} color={Colors.accent} />
+      </Pressable>
+    );
+  }
+
   const next = data.nextPayout;
   const bankLine = formatBankLine(
     next?.bankName ?? data.bankName ?? null,
@@ -925,15 +979,25 @@ function NextPayoutCard({
               : "Pending payments will appear here."}
             {bankLine ? ` \u2192 ${bankLine}` : ""}
           </ThemedText>
-          <Pressable
-            onPress={onHowItWorks}
-            hitSlop={8}
-            testID="button-how-payouts-work"
-          >
-            <ThemedText style={[nextPayoutStyles.helpLink, { color: Colors.accent }]}>
-              How payouts work
-            </ThemedText>
-          </Pressable>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md, marginTop: 6 }}>
+            <Pressable onPress={onHowItWorks} hitSlop={8} testID="button-how-payouts-work">
+              <ThemedText style={[nextPayoutStyles.helpLink, { color: Colors.accent }]}>
+                How payouts work
+              </ThemedText>
+            </Pressable>
+            {pendingCents > 0 ? (
+              <Pressable
+                onPress={onInstantPayout}
+                disabled={instantPayoutPending}
+                hitSlop={8}
+                testID="button-instant-payout"
+              >
+                <ThemedText style={[nextPayoutStyles.helpLink, { color: Colors.accent }]}>
+                  {instantPayoutPending ? "Requesting..." : "Instant Payout"}
+                </ThemedText>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
       </View>
     );
@@ -1139,7 +1203,11 @@ export default function FinancialsScreen() {
   // scroll to the corresponding row. This holds the target id until the
   // FlatList ref is mounted with the right data, then it's cleared.
   const [pendingScrollPayoutId, setPendingScrollPayoutId] = useState<string | null>(null);
+  const [showSubscriptionGate, setShowSubscriptionGate] = useState(false);
+  const [payoutBannerDismissed, setPayoutBannerDismissed] = useState(false);
   const payoutsListRef = useRef<FlatList<StripePayout> | null>(null);
+
+  const { isGated } = useSubscriptionStatus();
 
   const defaultCustomStart = useMemo(() => {
     const d = new Date();
@@ -1344,6 +1412,54 @@ export default function FinancialsScreen() {
     onError: (error: unknown) => {
       const message = error instanceof Error ? error.message : "Failed to start onboarding";
       Alert.alert("Error", message);
+    },
+  });
+
+  // Instant payout mutation — uses fetch directly (not apiRequest) so we can
+  // inspect the response body on 403 SUBSCRIPTION_REQUIRED before throwing.
+  // apiRequest calls throwIfResNotOk which throws on any non-2xx before we can
+  // read the body, so we bypass it here for targeted 403 handling.
+  const instantPayoutMutation = useMutation({
+    mutationFn: async () => {
+      const url = new URL(
+        `/api/providers/${providerId}/stripe-instant-payout`,
+        getApiUrl(),
+      );
+      const response = await fetch(url.toString(), {
+        method: "POST",
+        headers: {
+          ...getAuthHeaders(),
+          "Content-Type": "application/json",
+          "X-Client-Platform": Platform.OS,
+        },
+        credentials: "include",
+      });
+      if (response.status === 403) {
+        const body = await response.json().catch(() => ({}));
+        if (body?.code === "SUBSCRIPTION_REQUIRED") {
+          throw Object.assign(new Error("SUBSCRIPTION_REQUIRED"), {
+            code: "SUBSCRIPTION_REQUIRED",
+          });
+        }
+      }
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body?.error || "Failed to initiate instant payout");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      refetchNextPayout();
+      refetchPayouts();
+    },
+    onError: (error: unknown) => {
+      if ((error as { code?: string })?.code === "SUBSCRIPTION_REQUIRED") {
+        setShowSubscriptionGate(true);
+        return;
+      }
+      const message =
+        error instanceof Error ? error.message : "Failed to initiate instant payout";
+      Alert.alert("Payout Failed", message);
     },
   });
 
@@ -1738,8 +1854,47 @@ export default function FinancialsScreen() {
 
   // ── Overview header content ────────────────────────────────────────────────
 
+  const subscriptionGated = nextPayoutData?.subscriptionGated ?? isGated;
+  // Available balance = pending balance (not yet in a payout) PLUS any
+  // already-scheduled payout amount. Both represent funds the provider has
+  // earned that are waiting to land in their bank.
+  const availableBalanceCents =
+    (nextPayoutData?.pendingBalanceCents ?? 0) +
+    (nextPayoutData?.nextPayout?.amountCents ?? 0);
+  const showPayoutBanner = subscriptionGated && availableBalanceCents > 0 && !payoutBannerDismissed;
+
   const OverviewContent = () => (
     <View>
+      {/* Subscription gate banner — shown when gated and there are funds waiting */}
+      {showPayoutBanner ? (
+        <Animated.View entering={FadeInDown.delay(20).duration(350)}>
+          <View
+            style={[
+              payoutBannerStyles.banner,
+              { backgroundColor: Colors.accentLight, borderColor: Colors.accent + "40" },
+            ]}
+            testID="banner-subscription-gate-payout"
+          >
+            <Feather name="alert-circle" size={15} color={Colors.accent} />
+            <Pressable
+              style={{ flex: 1 }}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowSubscriptionGate(true); }}
+            >
+              <ThemedText style={[payoutBannerStyles.text, { color: Colors.accent }]}>
+                Funds are ready — subscribe to receive payouts.
+              </ThemedText>
+            </Pressable>
+            <Pressable
+              onPress={() => { Haptics.selectionAsync(); setPayoutBannerDismissed(true); }}
+              hitSlop={10}
+              testID="button-dismiss-payout-banner"
+            >
+              <Feather name="x" size={15} color={Colors.accent} />
+            </Pressable>
+          </View>
+        </Animated.View>
+      ) : null}
+
       {/* Next payout summary — plain-English line at the very top */}
       <Animated.View entering={FadeInDown.delay(40).duration(400)}>
         <NextPayoutCard
@@ -1753,6 +1908,15 @@ export default function FinancialsScreen() {
             Haptics.selectionAsync();
             setHowPayoutsOpen(true);
           }}
+          onSubscribePress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setShowSubscriptionGate(true);
+          }}
+          onInstantPayout={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            instantPayoutMutation.mutate();
+          }}
+          instantPayoutPending={instantPayoutMutation.isPending}
         />
       </Animated.View>
 
@@ -2151,10 +2315,20 @@ export default function FinancialsScreen() {
     />
   );
 
+  const subGateModal = (
+    <SubscriptionGateModal
+      visible={showSubscriptionGate}
+      onClose={() => setShowSubscriptionGate(false)}
+      title="Subscribe to unlock payouts"
+      description="You have funds ready to be paid out. Subscribe to HomeBase Pro to start receiving payouts to your bank account."
+    />
+  );
+
   if (sectionTab === "overview" || sectionTab === "more") {
     return (
       <ThemedView style={styles.container}>
         {howModal}
+        {subGateModal}
         <ScrollView
           contentContainerStyle={{
             paddingTop: headerHeight + Spacing.md,
@@ -2197,6 +2371,7 @@ export default function FinancialsScreen() {
     return (
       <ThemedView style={styles.container}>
         {howModal}
+        {subGateModal}
         <FlatList<UnifiedTxRow>
           data={unifiedRows}
           renderItem={renderUnifiedRow}
@@ -2244,6 +2419,7 @@ export default function FinancialsScreen() {
   return (
     <ThemedView style={styles.container}>
       {howModal}
+      {subGateModal}
       <FlatList<StripePayout>
         ref={payoutsListRef}
         data={stripePayouts}
@@ -2493,4 +2669,21 @@ const styles = StyleSheet.create({
 
   // Empty
   emptyContainer: { paddingTop: Spacing["2xl"], alignItems: "center" },
+});
+
+const payoutBannerStyles = StyleSheet.create({
+  banner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.card,
+    borderWidth: 1,
+    marginBottom: Spacing.sm,
+  },
+  text: {
+    ...Typography.footnote,
+    fontWeight: "600",
+    flex: 1,
+  },
 });

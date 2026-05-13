@@ -14654,12 +14654,15 @@ Respond with JSON only:
         const { providerId } = req.params;
         if (!(await assertProviderOwnership(req, providerId, res))) return;
 
+        const subInfo = await getProviderSubscriptionStatus(providerId);
+        const subscriptionGated = subInfo.status === "expired";
+
         const connectAccount = await getConnectAccount(providerId);
         if (!connectAccount?.stripeAccountId) {
-          return res.json({ status: "not_onboarded" });
+          return res.json({ status: "not_onboarded", subscriptionGated });
         }
         if (!connectAccount.payoutsEnabled) {
-          return res.json({ status: "onboarding_incomplete" });
+          return res.json({ status: "onboarding_incomplete", subscriptionGated });
         }
 
         const stripe = getStripe();
@@ -14713,6 +14716,7 @@ Respond with JSON only:
         if (next) {
           return res.json({
             status: "ready",
+            subscriptionGated,
             nextPayout: {
               id: next.id,
               amountCents: next.amount,
@@ -14748,6 +14752,7 @@ Respond with JSON only:
 
         return res.json({
           status: "ready",
+          subscriptionGated,
           nextPayout: null,
           pendingBalanceCents,
           bankName,
@@ -14806,6 +14811,66 @@ Respond with JSON only:
         res
           .status(500)
           .json({ error: error.message || "Failed to fetch Stripe payouts" });
+      }
+    },
+  );
+
+  // POST /api/providers/:providerId/stripe-instant-payout — trigger an instant
+  // payout to the provider's default bank account. Requires an active
+  // subscription (expired grace period → 403 SUBSCRIPTION_REQUIRED).
+  app.post(
+    "/api/providers/:providerId/stripe-instant-payout",
+    requireAuth,
+    async (req: Request<{ providerId: string }>, res: Response) => {
+      try {
+        const { providerId } = req.params;
+        if (!(await assertProviderOwnership(req, providerId, res))) return;
+
+        if (!(await checkSubscriptionGate(providerId, res))) return;
+
+        const connectAccount = await getConnectAccount(providerId);
+        if (!connectAccount?.stripeAccountId) {
+          return res.status(400).json({ error: "stripe_not_connected" });
+        }
+        if (!connectAccount.payoutsEnabled) {
+          return res.status(400).json({ error: "stripe_payouts_not_enabled" });
+        }
+
+        const stripe = getStripe();
+        const acctId = connectAccount.stripeAccountId;
+
+        const balance = await stripe.balance.retrieve(undefined, {
+          stripeAccount: acctId,
+        });
+        const availableCents = (balance.available ?? []).reduce(
+          (sum, b) => (b.currency === "usd" ? sum + b.amount : sum),
+          0,
+        );
+
+        if (availableCents <= 0) {
+          return res.status(400).json({ error: "no_available_balance" });
+        }
+
+        const payout = await stripe.payouts.create(
+          {
+            amount: availableCents,
+            currency: "usd",
+            method: "instant",
+          },
+          { stripeAccount: acctId },
+        );
+
+        return res.json({
+          id: payout.id,
+          amountCents: payout.amount,
+          status: payout.status,
+          arrivalDate: payout.arrival_date
+            ? new Date(payout.arrival_date * 1000).toISOString()
+            : null,
+        });
+      } catch (error: any) {
+        console.error("[stripe-instant-payout] error:", error);
+        res.status(500).json({ error: error.message || "Failed to initiate instant payout" });
       }
     },
   );
