@@ -96,7 +96,7 @@ export default function AuditLogs() {
     <Layout>
       <PageHeader
         title="Audit Logs"
-        subtitle={data?.total != null ? `${data.total} entries` : "Immutable record of all admin actions"}
+        subtitle={data?.total != null ? `${data.total} entries` : "Record of all admin actions"}
       />
 
       {selectedCount > 0 && (
