@@ -58,11 +58,12 @@ export default function AuditLogs() {
   const deleteMutation = useMutation({
     mutationFn: (ids: string[]) =>
       api.delete("/api/admin/audit-logs", { data: { ids } }),
-    onSuccess: () => {
+    onSuccess: (_data, ids) => {
       qc.invalidateQueries({ queryKey: ["/api/admin/audit-logs"] });
-      addToast(`${selectedIds.size} log${selectedIds.size !== 1 ? "s" : ""} deleted`, "success");
+      addToast(`${ids.length} log${ids.length !== 1 ? "s" : ""} deleted`, "success");
       setSelectedIds(new Set());
       setConfirmDelete(false);
+      setConfirmSingleDelete(null);
     },
     onError: (err) => addToast(getApiErrorMessage(err), "error"),
   });
@@ -151,9 +152,9 @@ export default function AuditLogs() {
           </thead>
           <tbody>
             {isLoading ? (
-              Array.from({ length: 10 }).map((_, i) => <SkeletonRow key={i} cols={8} />)
+              Array.from({ length: 10 }).map((_, i) => <SkeletonRow key={i} cols={9} />)
             ) : logs.length === 0 ? (
-              <tr><td colSpan={8} style={styles.empty}>No audit log entries</td></tr>
+              <tr><td colSpan={9} style={styles.empty}>No audit log entries</td></tr>
             ) : (
               logs.map((log) => {
                 const isSelected = selectedIds.has(log.id);
