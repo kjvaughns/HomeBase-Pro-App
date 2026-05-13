@@ -248,6 +248,7 @@ export default function AuditLogs() {
 
 const styles: Record<string, React.CSSProperties> = {
   bulkBar: {
+    position: "sticky", top: 0, zIndex: 10,
     display: "flex", alignItems: "center", gap: 10,
     background: "rgba(56,174,95,0.08)", border: "1px solid rgba(56,174,95,0.2)",
     borderRadius: 8, padding: "10px 16px", marginBottom: 12,

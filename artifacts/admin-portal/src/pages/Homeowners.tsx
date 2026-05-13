@@ -213,6 +213,7 @@ function btnStyle(variant: "neutral" | "danger"): React.CSSProperties {
 
 const styles: Record<string, React.CSSProperties> = {
   bulkBar: {
+    position: "sticky", top: 0, zIndex: 10,
     display: "flex",
     alignItems: "center",
     gap: 10,

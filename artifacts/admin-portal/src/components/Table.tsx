@@ -43,15 +43,6 @@ export default function Table<T extends Record<string, unknown>>({
     }
   };
 
-  const toggleRow = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!onSelectionChange) return;
-    const next = new Set(selectedIds);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    onSelectionChange(next);
-  };
-
   return (
     <div style={styles.wrapper}>
       <table style={styles.table}>
