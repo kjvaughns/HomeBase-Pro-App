@@ -13795,8 +13795,11 @@ Respond with JSON only:
         const limit = Math.min(Math.max(parseInt((req.query.limit as string) ?? "50", 10) || 50, 1), 200);
         const offset = Math.max(parseInt((req.query.offset as string) ?? "0", 10) || 0, 0);
 
-        const enriched = await storage.getAdminProviders({ search, subscriptionStatus, isPartner, limit, offset });
-        res.json({ providers: enriched, limit, offset });
+        const sortBy = (req.query.sortBy as string | undefined)?.trim() ?? "";
+        const isActiveRaw = req.query.isActive as string | undefined;
+        const isActiveParsed = isActiveRaw === "true" ? true : isActiveRaw === "false" ? false : null;
+        const { rows: enriched, total } = await storage.getAdminProviders({ search, subscriptionStatus, isPartner, isActive: isActiveParsed, sortBy, limit, offset });
+        res.json({ providers: enriched, total, limit, offset });
       } catch (err: any) {
         console.error("[admin] list providers error:", err);
         res.status(500).json({ error: err.message || "Failed to list providers" });
@@ -17086,15 +17089,43 @@ Respond with JSON only:
 
   // ─── Admin Portal Endpoints ──────────────────────────────────────────────
 
-  // GET /api/admin/stats — aggregate dashboard counts
+  // GET /api/admin/stats — aggregate dashboard counts + recent signups/bookings
   app.get(
     "/api/admin/stats",
     requireAuth,
     requireAdmin,
     async (_req: Request, res: Response) => {
       try {
-        const stats = await storage.getAdminStats();
-        res.json(stats);
+        const [stats, recentSignups, recentBookings] = await Promise.all([
+          storage.getAdminStats(),
+          db
+            .select({
+              id: users.id,
+              email: users.email,
+              firstName: users.firstName,
+              lastName: users.lastName,
+              isProvider: users.isProvider,
+              createdAt: users.createdAt,
+            })
+            .from(users)
+            .orderBy(desc(users.createdAt))
+            .limit(8),
+          db
+            .select({
+              id: appointments.id,
+              scheduledDate: appointments.scheduledDate,
+              status: appointments.status,
+              providerName: providers.businessName,
+              homeownerName: users.firstName,
+              homeownerEmail: users.email,
+            })
+            .from(appointments)
+            .leftJoin(users, eq(users.id, appointments.userId))
+            .leftJoin(providers, eq(providers.id, appointments.providerId))
+            .orderBy(desc(appointments.createdAt))
+            .limit(8),
+        ]);
+        res.json({ stats, recentSignups, recentBookings });
       } catch (err: any) {
         console.error("[admin] stats error:", err);
         res.status(500).json({ error: err.message || "Failed to fetch stats" });
@@ -17119,8 +17150,9 @@ Respond with JSON only:
           return res.status(400).json({ error: "role must be one of: admin, provider, homeowner" });
         }
 
-        const rows = await storage.getAdminUsers({ search, role, limit, offset });
-        res.json({ users: rows, limit, offset });
+        const sortBy = (req.query.sortBy as string | undefined)?.trim() ?? "";
+        const { rows, total } = await storage.getAdminUsers({ search, role, sortBy, limit, offset });
+        res.json({ users: rows, total, limit, offset });
       } catch (err: any) {
         console.error("[admin] list users error:", err);
         res.status(500).json({ error: err.message || "Failed to list users" });
@@ -17253,7 +17285,7 @@ Respond with JSON only:
         const offset = Math.max(parseInt((req.query.offset as string) ?? "0", 10) || 0, 0);
 
         const TICKET_STATUSES = ["open", "in_progress", "resolved", "closed"];
-        const TICKET_PRIORITIES = ["low", "medium", "high", "urgent"];
+        const TICKET_PRIORITIES = ["low", "medium", "normal", "high", "urgent"];
         const TICKET_USER_TYPES = ["homeowner", "provider"];
         if (status && !TICKET_STATUSES.includes(status)) {
           return res.status(400).json({ error: `status must be one of: ${TICKET_STATUSES.join(", ")}` });
@@ -17265,8 +17297,9 @@ Respond with JSON only:
           return res.status(400).json({ error: `userType must be one of: ${TICKET_USER_TYPES.join(", ")}` });
         }
 
-        const rows = await storage.listSupportTickets({ status, priority, userType, limit, offset });
-        res.json({ tickets: rows, limit, offset });
+        const q = (req.query.q as string | undefined)?.trim() ?? "";
+        const { rows, total } = await storage.listSupportTickets({ q, status, priority, userType, limit, offset });
+        res.json({ tickets: rows, total, limit, offset });
       } catch (err: any) {
         console.error("[admin] list support tickets error:", err);
         res.status(500).json({ error: err.message || "Failed to list tickets" });
@@ -17303,7 +17336,7 @@ Respond with JSON only:
         const adminUserId = req.authenticatedUserId!;
 
         const VALID_STATUSES = ["open", "in_progress", "resolved", "closed"];
-        const VALID_PRIORITIES = ["low", "medium", "high", "urgent"];
+        const VALID_PRIORITIES = ["low", "medium", "normal", "high", "urgent"];
         const ALLOWED = ["status", "priority", "assignedTo"] as const;
         const patch: Record<string, unknown> = {};
         for (const key of ALLOWED) {
@@ -17380,7 +17413,7 @@ Respond with JSON only:
     requireAdmin,
     async (req: Request, res: Response) => {
       try {
-        const { title, body: broadcastBody, audience, channel } = req.body;
+        const { title, body: broadcastBody, audience, channels: rawChannels, channel: rawChannel } = req.body;
         const adminUserId = req.authenticatedUserId!;
 
         const VALID_AUDIENCES = ["all", "homeowners", "providers"] as const;
@@ -17392,76 +17425,91 @@ Respond with JSON only:
         if (!VALID_AUDIENCES.includes(audience)) {
           return res.status(400).json({ error: `audience must be one of: ${VALID_AUDIENCES.join(", ")}` });
         }
-        if (!VALID_CHANNELS.includes(channel)) {
+
+        // Accept channels array (multi-select) or legacy single channel string
+        const channelList: string[] = Array.isArray(rawChannels) && rawChannels.length > 0
+          ? rawChannels
+          : (rawChannel ? [rawChannel] : []);
+
+        if (channelList.length === 0) {
+          return res.status(400).json({ error: "at least one channel is required" });
+        }
+        const invalidChannel = channelList.find(c => !VALID_CHANNELS.includes(c as typeof VALID_CHANNELS[number]));
+        if (invalidChannel) {
           return res.status(400).json({ error: `channel must be one of: ${VALID_CHANNELS.join(", ")}` });
         }
 
         const recipientIds = await storage.resolveBroadcastRecipientIds(audience);
-        const broadcast = await storage.createBroadcast({
-          sentByUserId: adminUserId,
-          title: title.trim(),
-          body: broadcastBody.trim(),
-          audience,
-          channel,
-          recipientCount: recipientIds.length,
-        });
+
+        // Create one broadcast record per channel and fan out each
+        const broadcasts = await Promise.all(
+          channelList.map(ch =>
+            storage.createBroadcast({
+              sentByUserId: adminUserId,
+              title: title.trim(),
+              body: broadcastBody.trim(),
+              audience,
+              channel: ch,
+              recipientCount: recipientIds.length,
+            }),
+          ),
+        );
 
         // Return 202 immediately; all remaining work runs in background
-        res.status(202).json({ broadcast, recipientCount: recipientIds.length });
+        res.status(202).json({ broadcast: broadcasts[0], recipientCount: recipientIds.length });
 
-        // Background fan-out — nothing awaited after res.json() to avoid double-response risk
         const capturedTitle = title.trim();
         const capturedBody = broadcastBody.trim();
-        const capturedChannel = channel as string;
         const capturedRecipientIds = recipientIds.slice();
 
         setImmediate(async () => {
-          try {
-            if (capturedRecipientIds.length === 0) {
-              await storage.updateBroadcastStatus(broadcast.id, "sent");
-              return;
-            }
+          for (const broadcast of broadcasts) {
+            const capturedChannel = broadcast.channel as string;
+            try {
+              if (capturedRecipientIds.length === 0) {
+                await storage.updateBroadcastStatus(broadcast.id, "sent");
+                continue;
+              }
 
-            // Pre-fetch email/name data inside the background task so DB errors
-            // cannot interfere with the already-sent 202 response
-            const userEmailMap = capturedChannel === "email"
-              ? await storage.fetchBroadcastEmailMap(capturedRecipientIds)
-              : new Map<string, { email: string; firstName: string | null }>();
+              const userEmailMap = capturedChannel === "email"
+                ? await storage.fetchBroadcastEmailMap(capturedRecipientIds)
+                : new Map<string, { email: string; firstName: string | null }>();
 
-            const batchSize = 50;
-            for (let i = 0; i < capturedRecipientIds.length; i += batchSize) {
-              const batch = capturedRecipientIds.slice(i, i + batchSize);
-              for (const userId of batch) {
-                try {
-                  if (capturedChannel === "push" || capturedChannel === "in_app") {
-                    await dispatchNotification(
-                      userId,
-                      capturedTitle,
-                      capturedBody,
-                      "admin.broadcast",
-                      { broadcastId: broadcast.id },
-                      "reminders",
-                    );
-                  } else if (capturedChannel === "email") {
-                    const userInfo = userEmailMap.get(userId);
-                    if (!userInfo?.email) throw new Error("No email for user");
-                    await sendAdminBroadcastEmail({
-                      to: userInfo.email,
-                      recipientName: userInfo.firstName ?? "there",
-                      title: capturedTitle,
-                      body: capturedBody,
-                    });
+              const batchSize = 50;
+              for (let i = 0; i < capturedRecipientIds.length; i += batchSize) {
+                const batch = capturedRecipientIds.slice(i, i + batchSize);
+                for (const userId of batch) {
+                  try {
+                    if (capturedChannel === "push" || capturedChannel === "in_app") {
+                      await dispatchNotification(
+                        userId,
+                        capturedTitle,
+                        capturedBody,
+                        "admin.broadcast",
+                        { broadcastId: broadcast.id },
+                        "reminders",
+                      );
+                    } else if (capturedChannel === "email") {
+                      const userInfo = userEmailMap.get(userId);
+                      if (!userInfo?.email) throw new Error("No email for user");
+                      await sendAdminBroadcastEmail({
+                        to: userInfo.email,
+                        recipientName: userInfo.firstName ?? "there",
+                        title: capturedTitle,
+                        body: capturedBody,
+                      });
+                    }
+                    await storage.recordBroadcastRecipient(broadcast.id, userId, capturedChannel, "delivered", new Date());
+                  } catch {
+                    await storage.recordBroadcastRecipient(broadcast.id, userId, capturedChannel, "failed");
                   }
-                  await storage.recordBroadcastRecipient(broadcast.id, userId, capturedChannel, "delivered", new Date());
-                } catch {
-                  await storage.recordBroadcastRecipient(broadcast.id, userId, capturedChannel, "failed");
                 }
               }
+              await storage.updateBroadcastStatus(broadcast.id, "sent");
+            } catch (fanoutErr) {
+              console.error("[admin] broadcast fan-out error:", fanoutErr);
+              await storage.updateBroadcastStatus(broadcast.id, "failed");
             }
-            await storage.updateBroadcastStatus(broadcast.id, "sent");
-          } catch (fanoutErr) {
-            console.error("[admin] broadcast fan-out error:", fanoutErr);
-            await storage.updateBroadcastStatus(broadcast.id, "failed");
           }
         });
       } catch (err: any) {
@@ -17538,8 +17586,8 @@ Respond with JSON only:
           return res.status(400).json({ error: "until must be a valid ISO 8601 date string" });
         }
 
-        const rows = await storage.listAdminAuditLogs({ adminUserId, action, since, until, limit, offset });
-        res.json({ logs: rows, limit, offset });
+        const { rows, total } = await storage.listAdminAuditLogs({ adminUserId, action, since, until, limit, offset });
+        res.json({ logs: rows, total, limit, offset });
       } catch (err: any) {
         console.error("[admin] audit logs error:", err);
         res.status(500).json({ error: err.message || "Failed to fetch audit logs" });

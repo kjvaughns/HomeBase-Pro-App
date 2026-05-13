@@ -766,6 +766,16 @@ function configureExpoAndLanding(app: express.Application) {
   app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
   app.use(express.static(path.resolve(process.cwd(), "static-build")));
 
+  // Serve the Admin Portal SPA at /admin/*
+  const adminDistPath = path.resolve(process.cwd(), "server/admin-dist");
+  if (fs.existsSync(adminDistPath)) {
+    app.use("/admin", express.static(adminDistPath));
+    app.get("/admin/{*path}", (_req, res) => {
+      res.sendFile(path.join(adminDistPath, "index.html"));
+    });
+    log("Admin Portal static files served at /admin");
+  }
+
   log("Expo routing: Checking expo-platform header on / and /manifest");
 }
 

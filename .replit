@@ -15,6 +15,10 @@ localPort = 5000
 externalPort = 80
 
 [[ports]]
+localPort = 5173
+externalPort = 5173
+
+[[ports]]
 localPort = 8081
 externalPort = 8081
 
@@ -44,6 +48,10 @@ args = "Start App"
 [[workflows.workflow.tasks]]
 task = "workflow.run"
 args = "Start Frontend"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Admin Portal"
 
 [[workflows.workflow]]
 name = "Start App"
@@ -79,6 +87,17 @@ outputType = "console"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "EXPO_PUBLIC_DOMAIN=$REPLIT_DEV_DOMAIN REACT_NATIVE_DEBUGGER_OPEN=0 node expo-start.py"
+
+[[workflows.workflow]]
+name = "Admin Portal"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd admin-portal && node ../node_modules/.bin/vite"
 
 [userenv]
 

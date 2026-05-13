@@ -63,7 +63,7 @@ import {
   type AdminBroadcast,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, or, desc, asc, sql, gte, lte, ilike, inArray, lt } from "drizzle-orm";
+import { eq, and, or, desc, asc, sql, gte, lte, ilike, inArray, lt, SQL } from "drizzle-orm";
 import { getProviderReadinessSet } from "./stripeConnectService";
 import { hash, compare } from "bcryptjs";
 
@@ -1128,42 +1128,58 @@ export class DatabaseStorage implements IStorage {
   async getAdminStats(): Promise<{
     totalUsers: number;
     totalProviders: number;
+    activeProviders: number;
+    inactiveProviders: number;
+    partnerProviders: number;
     totalAppointments: number;
     totalJobs: number;
     totalRevenueCents: number;
     openTickets: number;
+    totalTickets: number;
   }> {
     const [counts] = await db
       .select({
         totalUsers: sql<number>`(SELECT COUNT(*) FROM users)`,
         totalProviders: sql<number>`(SELECT COUNT(*) FROM providers)`,
+        activeProviders: sql<number>`(SELECT COUNT(*) FROM providers WHERE is_active = true)`,
+        inactiveProviders: sql<number>`(SELECT COUNT(*) FROM providers WHERE is_active = false)`,
+        partnerProviders: sql<number>`(SELECT COUNT(*) FROM provider_plans WHERE is_partner = true)`,
         totalAppointments: sql<number>`(SELECT COUNT(*) FROM appointments)`,
         totalJobs: sql<number>`(SELECT COUNT(*) FROM jobs)`,
         totalRevenueCents: sql<number>`COALESCE((SELECT SUM(amount_cents) FROM payments WHERE status = 'succeeded'), 0)`,
         openTickets: sql<number>`(SELECT COUNT(*) FROM support_tickets WHERE status = 'open')`,
+        totalTickets: sql<number>`(SELECT COUNT(*) FROM support_tickets)`,
       })
       .from(sql`(SELECT 1) AS dual`);
     return {
       totalUsers: Number(counts.totalUsers),
       totalProviders: Number(counts.totalProviders),
+      activeProviders: Number(counts.activeProviders),
+      inactiveProviders: Number(counts.inactiveProviders),
+      partnerProviders: Number(counts.partnerProviders),
       totalAppointments: Number(counts.totalAppointments),
       totalJobs: Number(counts.totalJobs),
       totalRevenueCents: Number(counts.totalRevenueCents),
       openTickets: Number(counts.openTickets),
+      totalTickets: Number(counts.totalTickets),
     };
   }
 
   async getAdminUsers(params: {
     search: string;
     role: string;
+    sortBy: string;
     limit: number;
     offset: number;
-  }): Promise<Array<{
-    id: string; email: string; firstName: string | null; lastName: string | null;
-    phone: string | null; isProvider: boolean; isAdmin: boolean;
-    lastActiveAt: Date | null; createdAt: Date;
-  }>> {
-    const { search, role, limit, offset } = params;
+  }): Promise<{
+    rows: Array<{
+      id: string; email: string; firstName: string | null; lastName: string | null;
+      phone: string | null; isProvider: boolean; isAdmin: boolean;
+      lastActiveAt: Date | null; createdAt: Date;
+    }>;
+    total: number;
+  }> {
+    const { search, role, sortBy, limit, offset } = params;
     type Condition = ReturnType<typeof eq>;
     const conditions: Condition[] = [];
     if (search) {
@@ -1179,7 +1195,13 @@ export class DatabaseStorage implements IStorage {
     if (role === "provider") conditions.push(eq(users.isProvider, true));
     if (role === "homeowner") conditions.push(eq(users.isProvider, false));
 
-    const query = db
+    const orderClause =
+      sortBy === "name_asc" ? asc(users.firstName) :
+      sortBy === "name_desc" ? desc(users.firstName) :
+      sortBy === "oldest" ? asc(users.createdAt) :
+      desc(users.createdAt); // default: newest
+
+    const rowsQuery = db
       .select({
         id: users.id,
         email: users.email,
@@ -1190,13 +1212,31 @@ export class DatabaseStorage implements IStorage {
         isAdmin: users.isAdmin,
         lastActiveAt: users.lastActiveAt,
         createdAt: users.createdAt,
+        homeCount: sql<number>`(SELECT COUNT(*)::int FROM homes WHERE homes.user_id = ${users.id})`,
+        bookingCount: sql<number>`(SELECT COUNT(*)::int FROM appointments WHERE appointments.user_id = ${users.id})`,
+        creditBalanceCents: sql<number>`(SELECT COALESCE(balance_cents, 0) FROM user_credits WHERE user_credits.user_id = ${users.id} LIMIT 1)`,
       })
       .from(users);
 
-    return (conditions.length > 0 ? query.where(and(...conditions)) : query)
-      .orderBy(desc(users.createdAt))
-      .limit(limit)
-      .offset(offset);
+    const countQuery = db.select({ count: sql<number>`COUNT(*)` }).from(users);
+
+    const [rows, [countRow]] = await Promise.all([
+      (conditions.length > 0 ? rowsQuery.where(and(...conditions)) : rowsQuery)
+        .orderBy(orderClause)
+        .limit(limit)
+        .offset(offset),
+      conditions.length > 0 ? countQuery.where(and(...conditions)) : countQuery,
+    ]);
+
+    return {
+      rows: rows.map(r => ({
+        ...r,
+        homeCount: Number(r.homeCount ?? 0),
+        bookingCount: Number(r.bookingCount ?? 0),
+        creditBalanceCents: Number(r.creditBalanceCents ?? 0),
+      })),
+      total: Number(countRow?.count ?? 0),
+    };
   }
 
   async getAdminUserDetail(id: string): Promise<{
@@ -1389,24 +1429,42 @@ export class DatabaseStorage implements IStorage {
   }
 
   async listSupportTickets(params: {
+    q: string;
     status: string;
     priority: string;
     userType: string;
     limit: number;
     offset: number;
-  }): Promise<SupportTicket[]> {
-    const { status, priority, userType, limit, offset } = params;
+  }): Promise<{ rows: SupportTicket[]; total: number }> {
+    const { q, status, priority, userType, limit, offset } = params;
     type Condition = ReturnType<typeof eq>;
     const conditions: Condition[] = [];
+    if (q) {
+      conditions.push(
+        or(
+          ilike(supportTickets.subject, `%${q}%`),
+          ilike(supportTickets.message, `%${q}%`),
+          ilike(supportTickets.email, `%${q}%`),
+          ilike(supportTickets.name, `%${q}%`),
+        ) as unknown as Condition,
+      );
+    }
     if (status) conditions.push(eq(supportTickets.status, status));
     if (priority) conditions.push(eq(supportTickets.priority, priority));
     if (userType) conditions.push(eq(supportTickets.userType, userType));
 
-    const query = db.select().from(supportTickets);
-    return (conditions.length > 0 ? query.where(and(...conditions)) : query)
-      .orderBy(desc(supportTickets.createdAt))
-      .limit(limit)
-      .offset(offset);
+    const rowsQuery = db.select().from(supportTickets);
+    const countQuery = db.select({ count: sql<number>`COUNT(*)` }).from(supportTickets);
+
+    const [rows, [countRow]] = await Promise.all([
+      (conditions.length > 0 ? rowsQuery.where(and(...conditions)) : rowsQuery)
+        .orderBy(desc(supportTickets.createdAt))
+        .limit(limit)
+        .offset(offset),
+      conditions.length > 0 ? countQuery.where(and(...conditions)) : countQuery,
+    ]);
+
+    return { rows, total: Number(countRow?.count ?? 0) };
   }
 
   async getSupportTicketWithMessages(
@@ -1669,7 +1727,10 @@ export class DatabaseStorage implements IStorage {
     until: string;
     limit: number;
     offset: number;
-  }): Promise<typeof adminAuditLogs.$inferSelect[]> {
+  }): Promise<{
+    rows: Array<typeof adminAuditLogs.$inferSelect & { adminName: string | null; adminEmail: string | null }>;
+    total: number;
+  }> {
     const { limit, offset } = params;
     type Condition = ReturnType<typeof eq>;
     const conditions: Condition[] = [];
@@ -1678,28 +1739,62 @@ export class DatabaseStorage implements IStorage {
     if (params.since) conditions.push(gte(adminAuditLogs.createdAt, new Date(params.since)) as unknown as Condition);
     if (params.until) conditions.push(lt(adminAuditLogs.createdAt, new Date(params.until)) as unknown as Condition);
 
-    const query = db.select().from(adminAuditLogs);
-    return (conditions.length > 0 ? query.where(and(...conditions)) : query)
-      .orderBy(desc(adminAuditLogs.createdAt))
-      .limit(limit)
-      .offset(offset);
+    const rowsQuery = db
+      .select({
+        id: adminAuditLogs.id,
+        adminUserId: adminAuditLogs.adminUserId,
+        action: adminAuditLogs.action,
+        targetType: adminAuditLogs.targetType,
+        targetId: adminAuditLogs.targetId,
+        beforeValue: adminAuditLogs.beforeValue,
+        afterValue: adminAuditLogs.afterValue,
+        createdAt: adminAuditLogs.createdAt,
+        adminName: sql<string | null>`CONCAT(COALESCE(${users.firstName}, ''), ' ', COALESCE(${users.lastName}, ''))`,
+        adminEmail: users.email,
+      })
+      .from(adminAuditLogs)
+      .leftJoin(users, eq(users.id, adminAuditLogs.adminUserId));
+
+    const countQuery = db.select({ count: sql<number>`COUNT(*)` }).from(adminAuditLogs);
+
+    const [rows, [countRow]] = await Promise.all([
+      (conditions.length > 0 ? rowsQuery.where(and(...conditions)) : rowsQuery)
+        .orderBy(desc(adminAuditLogs.createdAt))
+        .limit(limit)
+        .offset(offset),
+      conditions.length > 0 ? countQuery.where(and(...conditions)) : countQuery,
+    ]);
+
+    return {
+      rows: rows.map(r => ({
+        ...r,
+        adminName: r.adminName?.trim() || null,
+        adminEmail: r.adminEmail ?? null,
+      })),
+      total: Number(countRow?.count ?? 0),
+    };
   }
 
   async getAdminProviders(params: {
     search: string;
     subscriptionStatus: string;
     isPartner: boolean | null;
+    isActive: boolean | null;
+    sortBy: string;
     limit: number;
     offset: number;
-  }): Promise<Array<typeof providers.$inferSelect & {
-    subscriptionStatus: string | null;
-    isSubscribed: boolean;
-    isPartner: boolean;
-    partnerSince: Date | null;
-    bookingCount: number;
-    totalRevenueCents: number;
-  }>> {
-    const { search, subscriptionStatus, isPartner, limit, offset } = params;
+  }): Promise<{
+    rows: Array<typeof providers.$inferSelect & {
+      subscriptionStatus: string | null;
+      isSubscribed: boolean;
+      isPartner: boolean;
+      partnerSince: Date | null;
+      bookingCount: number;
+      totalRevenueCents: number;
+    }>;
+    total: number;
+  }> {
+    const { search, subscriptionStatus, isPartner, isActive, limit, offset } = params;
     type Condition = ReturnType<typeof eq>;
     const conditions: Condition[] = [];
     if (search) {
@@ -1710,76 +1805,77 @@ export class DatabaseStorage implements IStorage {
         ) as unknown as Condition,
       );
     }
-
-    let baseQuery = db
-      .select({
-        id: providers.id,
-        userId: providers.userId,
-        businessName: providers.businessName,
-        email: providers.email,
-        phone: providers.phone,
-        description: providers.description,
-        isActive: providers.isActive,
-        isPublic: providers.isPublic,
-        isVerified: providers.isVerified,
-        averageRating: providers.averageRating,
-        reviewCount: providers.reviewCount,
-        serviceArea: providers.serviceArea,
-        logoUrl: providers.logoUrl,
-        website: providers.website,
-        createdAt: providers.createdAt,
-        updatedAt: providers.updatedAt,
-        stripeAccountId: providers.stripeAccountId,
-        stripeAccountStatus: providers.stripeAccountStatus,
-        subscriptionStatus: providerPlans.subscriptionStatus,
-        isSubscribed: providerPlans.isSubscribed,
-        isPartner: providerPlans.isPartner,
-        partnerSince: providerPlans.partnerSince,
-      })
-      .from(providers)
-      .leftJoin(providerPlans, eq(providerPlans.providerId, providers.id));
-
-    const query = conditions.length > 0 ? baseQuery.where(and(...conditions)) : baseQuery;
-
-    let rows = await query
-      .orderBy(desc(providerPlans.partnerSince), providers.businessName)
-      .limit(limit)
-      .offset(offset);
-
+    if (isActive !== null) {
+      conditions.push(eq(providers.isActive, isActive) as unknown as Condition);
+    }
     if (isPartner !== null) {
-      rows = rows.filter(r => (r.isPartner ?? false) === isPartner);
+      conditions.push(eq(providerPlans.isPartner, isPartner) as unknown as Condition);
     }
     if (subscriptionStatus) {
-      rows = rows.filter(r => r.subscriptionStatus === subscriptionStatus);
+      conditions.push(eq(providerPlans.subscriptionStatus, subscriptionStatus) as unknown as Condition);
     }
 
-    const providerIds = rows.map(r => r.id);
-    if (providerIds.length === 0) return rows.map(r => ({ ...r, bookingCount: 0, totalRevenueCents: 0, isSubscribed: r.isSubscribed ?? false, isPartner: r.isPartner ?? false, partnerSince: r.partnerSince ?? null }));
+    // Correlated subqueries included in SELECT so ORDER BY can reference them
+    // before LIMIT/OFFSET — avoids the two-pass pagination bug
+    const bookingCountExpr = sql<number>`(SELECT COUNT(*)::int FROM appointments WHERE appointments.provider_id = ${providers.id})`;
+    const revenueExpr = sql<number>`(SELECT COALESCE(SUM(amount_cents), 0)::bigint FROM payments WHERE payments.provider_id = ${providers.id} AND status = 'succeeded')`;
 
-    const [bookingCounts, revenueCounts] = await Promise.all([
-      db
-        .select({ providerId: appointments.providerId, bookingCount: sql<number>`COUNT(*)` })
-        .from(appointments)
-        .where(inArray(appointments.providerId, providerIds))
-        .groupBy(appointments.providerId),
-      db
-        .select({ providerId: payments.providerId, totalRevenueCents: sql<number>`COALESCE(SUM(${payments.amountCents}), 0)` })
-        .from(payments)
-        .where(and(inArray(payments.providerId, providerIds), eq(payments.status, "succeeded")))
-        .groupBy(payments.providerId),
+    const baseSelect = {
+      id: providers.id,
+      userId: providers.userId,
+      businessName: providers.businessName,
+      email: providers.email,
+      phone: providers.phone,
+      description: providers.description,
+      isActive: providers.isActive,
+      isPublic: providers.isPublic,
+      isVerified: providers.isVerified,
+      averageRating: providers.averageRating,
+      reviewCount: providers.reviewCount,
+      serviceArea: providers.serviceArea,
+      logoUrl: providers.logoUrl,
+      website: providers.website,
+      createdAt: providers.createdAt,
+      updatedAt: providers.updatedAt,
+      stripeAccountId: providers.stripeAccountId,
+      stripeAccountStatus: providers.stripeAccountStatus,
+      subscriptionStatus: providerPlans.subscriptionStatus,
+      isSubscribed: providerPlans.isSubscribed,
+      isPartner: providerPlans.isPartner,
+      partnerSince: providerPlans.partnerSince,
+      bookingCount: bookingCountExpr,
+      totalRevenueCents: revenueExpr,
+    };
+
+    const orderClause: SQL[] =
+      params.sortBy === "bookings" ? [desc(bookingCountExpr)] :
+      params.sortBy === "revenue" ? [desc(revenueExpr)] :
+      [desc(providerPlans.partnerSince), asc(providers.businessName)];
+
+    const baseQuery = db.select(baseSelect).from(providers).leftJoin(providerPlans, eq(providerPlans.providerId, providers.id));
+    const countBaseQuery = db.select({ count: sql<number>`COUNT(*)` }).from(providers).leftJoin(providerPlans, eq(providerPlans.providerId, providers.id));
+
+    const filteredQuery = conditions.length > 0 ? baseQuery.where(and(...conditions)) : baseQuery;
+    const filteredCountQuery = conditions.length > 0 ? countBaseQuery.where(and(...conditions)) : countBaseQuery;
+
+    const [rows, [countRow]] = await Promise.all([
+      filteredQuery.orderBy(...orderClause).limit(limit).offset(offset),
+      filteredCountQuery,
     ]);
 
-    const bookingMap = new Map(bookingCounts.map(r => [r.providerId, Number(r.bookingCount)]));
-    const revenueMap = new Map(revenueCounts.map(r => [r.providerId, Number(r.totalRevenueCents)]));
+    const total = Number(countRow?.count ?? 0);
 
-    return rows.map(p => ({
-      ...p,
-      isSubscribed: p.isSubscribed ?? false,
-      isPartner: p.isPartner ?? false,
-      partnerSince: p.partnerSince ?? null,
-      bookingCount: bookingMap.get(p.id) ?? 0,
-      totalRevenueCents: revenueMap.get(p.id) ?? 0,
-    }));
+    return {
+      rows: rows.map(r => ({
+        ...r,
+        isSubscribed: r.isSubscribed ?? false,
+        isPartner: r.isPartner ?? false,
+        partnerSince: r.partnerSince ?? null,
+        bookingCount: Number(r.bookingCount ?? 0),
+        totalRevenueCents: Number(r.totalRevenueCents ?? 0),
+      })),
+      total,
+    };
   }
 }
 
