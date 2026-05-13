@@ -1,0 +1,337 @@
+I need you to scan the entire HomeBase app codebase and backend structure so we can create a detailed Lovable prompt for a new HomeBase Admin Portal.
+
+The goal is not to build anything yet. First, fully inspect the app and produce a complete technical blueprint that Lovable can use to build an admin portal connected to the existing Supabase backend.
+
+Scan the following:
+
+1. Supabase database schema
+2. Auth system and user roles
+3. Homeowner tables and provider tables
+4. Provider subscription logic
+5. RevenueCat or Stripe subscription fields
+6. Existing partner badge logic, if any
+7. Support ticket logic, if any
+8. Notification, email, SMS, or broadcast systems
+9. Booking, invoice, payment, and job tracking tables
+10. Public provider profile data
+11. Any existing admin, moderation, or internal tools
+12. Row Level Security policies
+13. API routes, edge functions, server functions, or backend service files
+14. Any role based permissions that may affect admin access
+
+After scanning, create a detailed Lovable prompt for building a HomeBase Admin Portal.
+
+The admin portal should allow the HomeBase founder/admin to manage the platform from one place.
+
+Core admin portal features needed:
+
+1. Dashboard Overview
+
+Create an admin dashboard that shows:
+
+• Total homeowners
+• Total providers
+• Total active providers
+• Total inactive providers
+• Total HomeBase Partners
+• Total bookings
+• Total revenue if available
+• Total support tickets
+• Open support tickets
+• Recent user signups
+• Recent bookings
+• Recent payments or invoices if available
+
+The dashboard should feel clean, modern, and founder focused. It should give a quick pulse on the entire platform.
+
+2. User Management
+
+Create a users area where I can view and manage all users.
+
+Separate users into:
+
+• Homeowners
+• Providers
+• Admins if applicable
+
+For each user, show:
+
+• Name
+• Email
+• Phone number if available
+• Account type
+• Signup date
+• Last active date if available
+• Status
+• Subscription status if available
+• Total bookings
+• Total spend or revenue generated if available
+
+Add search, filters, sorting, and user detail pages.
+
+3. Provider Management
+
+Create a dedicated provider management section.
+
+For every provider, show:
+
+• Business name
+• Owner name
+• Email
+• Phone number
+• Service category
+• City or service area
+• Subscription status
+• Partner badge status
+• Booking count
+• Revenue generated
+• Rating or review count if available
+• Public profile status
+• Created date
+• Last active date if available
+
+On the provider detail page, allow the admin to:
+
+• View full provider profile
+• Edit basic provider information
+• View services
+• View bookings
+• View reviews
+• View payment or subscription status if available
+• Promote provider to HomeBase Partner
+• Remove HomeBase Partner status
+• Activate or deactivate provider if supported
+• View public booking link
+• Copy public booking link
+
+Important logic:
+
+HomeBase Partner providers should have a badge and should not have to pay for the app subscription. Scan the current app to determine how subscription access is controlled, then recommend the safest way to implement this.
+
+If no partner field exists, propose adding a field such as:
+
+provider_profiles.is_homebase_partner boolean default false
+
+or the closest table structure that fits the current schema.
+
+Also recommend how this should affect subscription checks inside the app.
+
+4. HomeBase Partner Badge Management
+
+Create a simple admin control that lets me toggle a provider as a HomeBase Partner.
+
+When enabled:
+
+• Provider gets HomeBase Partner badge
+• Provider does not have to pay subscription
+• Provider keeps access to paid/provider features
+• Badge can appear on marketplace profile if the app supports it
+
+When disabled:
+
+• Badge is removed
+• Provider returns to normal subscription logic
+
+Include the exact database fields, policies, and app logic that need to change.
+
+5. Support Ticket Management
+
+Create a support ticket center inside the admin portal.
+
+Support tickets should include:
+
+• Ticket title
+• User who submitted it
+• User type, homeowner or provider
+• Email
+• Category
+• Priority
+• Status
+• Created date
+• Last updated date
+• Full message
+• Conversation thread if available
+
+Admin should be able to:
+
+• View all tickets
+• Filter by open, pending, resolved, closed
+• Filter by homeowner or provider
+• Respond to tickets inside the portal
+• Change ticket status
+• Assign internal priority
+• Search tickets
+• See recent ticket activity
+
+If support tickets do not currently exist in the backend, propose a clean Supabase schema for:
+
+support_tickets
+support_ticket_messages
+
+The admin response should either send an email to the user, save the response in the app, or both depending on the current notification/email system.
+
+6. Broadcast Feature
+
+Create an admin broadcast system.
+
+The admin should be able to send announcements to:
+
+• One individual user
+• A selected group of users
+• All homeowners
+• All providers
+• Everyone
+• HomeBase Partners only if possible
+
+Broadcast channels should support whatever the app currently supports:
+
+• In app notifications
+• Email
+• SMS if already integrated
+• Push notifications if already integrated
+
+The admin broadcast screen should include:
+
+• Audience selector
+• Message title
+• Message body
+• Channel selector
+• Preview
+• Send now button
+• Broadcast history
+• Delivery status if available
+
+Broadcast history should show:
+
+• Message title
+• Audience
+• Channel
+• Sent date
+• Sent by admin
+• Number of recipients
+• Delivery status if available
+
+If no broadcast tables exist, propose schema for:
+
+admin_broadcasts
+admin_broadcast_recipients
+
+Also inspect existing notification/email/SMS logic and recommend the safest integration path.
+
+7. Top Performing Providers
+
+Create a top providers analytics section.
+
+Rank providers by:
+
+• Number of bookings
+• Revenue generated
+• Repeat customers
+• Average rating
+• Review count
+• Completed jobs
+• Conversion rate if available
+• Recent activity
+
+Allow filters by:
+
+• Time period
+• Category
+• City
+• Partner status
+• Subscription status
+
+Create provider ranking cards and a table.
+
+Each provider should link to their admin provider detail page.
+
+8. Admin Authentication and Security
+
+The admin portal must be secure.
+
+Scan the current auth and role system and recommend how admin access should work.
+
+Preferred setup:
+
+• Only users with role = admin can access the admin portal
+• Admin role should be checked through Supabase Auth metadata or a database role field
+• Row Level Security should prevent regular homeowners and providers from accessing admin data
+• Admin actions such as promoting partners, responding to tickets, and sending broadcasts should be logged
+
+If needed, propose an admin_audit_logs table.
+
+Admin audit logs should track:
+
+• Admin user
+• Action taken
+• Target user/provider/ticket/broadcast
+• Timestamp
+• Before and after values if possible
+
+9. Design Direction
+
+The admin portal should look like a serious SaaS command center.
+
+Style direction:
+
+• HomeBase branded
+• Clean dark and light friendly UI
+• Use HomeBase green as primary accent
+• Modern cards
+• Clean sidebar navigation
+• Tables that are easy to scan
+• Search and filters everywhere
+• Mobile responsive but optimized for desktop
+• Minimal clutter
+• Fast founder dashboard feel
+
+Suggested sidebar navigation:
+
+• Dashboard
+• Homeowners
+• Providers
+• HomeBase Partners
+• Support Tickets
+• Broadcasts
+• Analytics
+• Settings
+• Audit Logs
+
+10. Output Needed From Replit
+
+After scanning the app, give me:
+
+A. A clear summary of the current backend structure
+
+B. A list of the exact tables related to:
+• Users
+• Homeowners
+• Providers
+• Subscriptions
+• Bookings
+• Payments
+• Reviews
+• Support
+• Notifications
+
+C. A list of missing database fields or tables needed for the admin portal
+
+D. The safest implementation plan
+
+E. The full Lovable prompt to build the admin portal
+
+F. Any Supabase SQL migrations needed
+
+G. Any RLS policy changes needed
+
+H. Any app code changes needed so the admin portal works correctly
+
+I. Any risks or things that could break if implemented incorrectly
+
+Important:
+
+Do not guess table names. Inspect the actual codebase and Supabase schema first.
+
+Do not build the admin portal yet.
+
+The final output should be a complete Lovable ready prompt with exact references to the real HomeBase database structure.
