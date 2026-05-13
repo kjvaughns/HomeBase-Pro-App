@@ -18,7 +18,7 @@ localPort = 25580
 run = "pnpm --filter @workspace/admin-portal run dev"
 
 [services.production]
-build = [ "pnpm", "--filter", "@workspace/admin-portal", "run", "build" ]
+build = [ "sh", "-c", "BASE_PATH=/ pnpm --filter @workspace/admin-portal run build" ]
 publicDir = "artifacts/admin-portal/dist/public"
 serve = "static"
 
