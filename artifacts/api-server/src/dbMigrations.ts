@@ -1172,6 +1172,14 @@ export async function runBootMigrations(): Promise<void> {
       )
     `);
 
+    // ── Task #392: Admin portal — users.is_active + audit log columns ────────
+    await runSql("users.is_active",
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE`);
+    await runSql("admin_audit_logs.before_value",
+      `ALTER TABLE admin_audit_logs ADD COLUMN IF NOT EXISTS before_value JSONB`);
+    await runSql("admin_audit_logs.after_value",
+      `ALTER TABLE admin_audit_logs ADD COLUMN IF NOT EXISTS after_value JSONB`);
+
     // ── Task #376: Performance indexes ────────────────────────────────────────
     const adminIndexes: Array<[string, string]> = [
       ["idx.admin_audit_logs_admin",
@@ -1207,6 +1215,9 @@ export async function runBootMigrations(): Promise<void> {
       ["admin_broadcasts table",                   `SELECT id FROM admin_broadcasts LIMIT 0`],
       ["admin_broadcast_recipients table",         `SELECT id FROM admin_broadcast_recipients LIMIT 0`],
       ["admin_audit_logs table",                   `SELECT id FROM admin_audit_logs LIMIT 0`],
+      ["users.is_active column",                   `SELECT is_active FROM users LIMIT 0`],
+      ["admin_audit_logs.before_value column",     `SELECT before_value FROM admin_audit_logs LIMIT 0`],
+      ["admin_audit_logs.after_value column",      `SELECT after_value FROM admin_audit_logs LIMIT 0`],
     );
 
     const verificationErrors: string[] = [];

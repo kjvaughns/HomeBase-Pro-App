@@ -33,6 +33,7 @@ export default function AuditLogs() {
   const [offset, setOffset] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmSingleDelete, setConfirmSingleDelete] = useState<string | null>(null);
 
   React.useEffect(() => {
     const t = setTimeout(() => { setDebouncedAdminId(adminUserIdFilter); setOffset(0); }, 500);
@@ -143,7 +144,7 @@ export default function AuditLogs() {
                   onChange={toggleAll}
                 />
               </th>
-              {["Admin", "Action", "Target Type", "Target ID", "Before", "After", "Timestamp"].map((h) => (
+              {["Admin", "Action", "Target Type", "Target ID", "Before", "After", "Timestamp", ""].map((h) => (
                 <th key={h} style={styles.th}>{h}</th>
               ))}
             </tr>
@@ -195,6 +196,14 @@ export default function AuditLogs() {
                         {log.createdAt ? format(new Date(log.createdAt as string), "MMM d, yyyy h:mm a") : "—"}
                       </span>
                     </td>
+                    <td style={{ ...styles.td, width: 80 }}>
+                      <button
+                        style={styles.deleteRowBtn}
+                        onClick={() => setConfirmSingleDelete(log.id)}
+                      >
+                        Delete
+                      </button>
+                    </td>
                   </tr>
                 );
               })
@@ -220,6 +229,17 @@ export default function AuditLogs() {
         loading={deleteMutation.isPending}
         onConfirm={() => deleteMutation.mutate([...selectedIds])}
         onCancel={() => setConfirmDelete(false)}
+      />
+
+      <ConfirmModal
+        open={confirmSingleDelete !== null}
+        title="Delete Log Entry?"
+        message="This audit log entry will be permanently deleted and cannot be recovered."
+        confirmLabel="Delete"
+        danger
+        loading={deleteMutation.isPending}
+        onConfirm={() => confirmSingleDelete && deleteMutation.mutate([confirmSingleDelete])}
+        onCancel={() => setConfirmSingleDelete(null)}
       />
     </Layout>
   );
@@ -251,6 +271,11 @@ const styles: Record<string, React.CSSProperties> = {
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
   th: { padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "var(--text-muted)", background: "var(--surface-2)", borderBottom: "1px solid var(--border)", textTransform: "uppercase", whiteSpace: "nowrap", letterSpacing: "0.04em" },
   td: { padding: "10px 14px", borderBottom: "1px solid var(--border-light)", color: "var(--text-primary)", verticalAlign: "middle", maxWidth: 220 },
+  deleteRowBtn: {
+    padding: "3px 10px", fontSize: 11, fontWeight: 500,
+    border: "1px solid rgba(239,68,68,0.3)", borderRadius: 6,
+    background: "rgba(239,68,68,0.06)", color: "#ef4444", cursor: "pointer",
+  },
   empty: { padding: "40px 14px", textAlign: "center", color: "var(--text-muted)", fontSize: 14 },
   code: { fontFamily: "monospace", fontSize: 12, background: "var(--accent-light)", color: "#38AE5F", padding: "2px 6px", borderRadius: 4 },
   jsonCode: { fontFamily: "monospace", fontSize: 11, color: "var(--text-secondary)", wordBreak: "break-all" },
