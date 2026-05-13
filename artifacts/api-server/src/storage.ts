@@ -62,7 +62,7 @@ import {
   type SupportTicketMessage,
   type AdminBroadcast,
 } from "@workspace/db";
-import { db } from "./db";
+import { db, pool } from "./db";
 import { eq, and, or, desc, asc, sql, gte, lte, ilike, inArray, lt, SQL } from "drizzle-orm";
 import { getProviderReadinessSet } from "./stripeConnectService";
 import { hash, compare } from "bcryptjs";
@@ -1816,86 +1816,112 @@ export class DatabaseStorage implements IStorage {
     }>;
     total: number;
   }> {
+    // Raw SQL avoids Drizzle 0.45.2 orderSelectedFields crash on LEFT JOIN
+    // with correlated-subquery columns mixed in the select list.
     const { search, subscriptionStatus, isPartner, isActive, limit, offset } = params;
-    type Condition = ReturnType<typeof eq>;
-    const conditions: Condition[] = [];
+
+    const whereParts: string[] = [];
+    const queryValues: unknown[] = [];
+
     if (search) {
-      conditions.push(
-        or(
-          ilike(providers.businessName, `%${search}%`),
-          ilike(providers.email, `%${search}%`),
-        ) as unknown as Condition,
-      );
+      queryValues.push(`%${search}%`);
+      whereParts.push(`(p.business_name ILIKE $${queryValues.length} OR p.email ILIKE $${queryValues.length})`);
     }
     if (isActive !== null) {
-      conditions.push(eq(providers.isActive, isActive) as unknown as Condition);
+      queryValues.push(isActive);
+      whereParts.push(`p.is_active = $${queryValues.length}`);
     }
     if (isPartner !== null) {
-      conditions.push(eq(providerPlans.isPartner, isPartner) as unknown as Condition);
+      queryValues.push(isPartner);
+      whereParts.push(`COALESCE(pp.is_partner, FALSE) = $${queryValues.length}`);
       if (isPartner === true) {
-        conditions.push(eq(providers.isVerified, true) as unknown as Condition);
+        whereParts.push(`p.is_verified = TRUE`);
       }
     }
     if (subscriptionStatus) {
-      conditions.push(eq(providerPlans.subscriptionStatus, subscriptionStatus) as unknown as Condition);
+      queryValues.push(subscriptionStatus);
+      whereParts.push(`pp.subscription_status = $${queryValues.length}`);
     }
 
-    // Correlated subqueries included in SELECT so ORDER BY can reference them
-    // before LIMIT/OFFSET — avoids the two-pass pagination bug
-    const bookingCountExpr = sql<number>`(SELECT COUNT(*)::int FROM appointments WHERE appointments.provider_id = ${providers.id})`;
-    const revenueExpr = sql<number>`(SELECT COALESCE(SUM(amount_cents), 0)::bigint FROM payments WHERE payments.provider_id = ${providers.id} AND status = 'succeeded')`;
+    const whereClause = whereParts.length > 0 ? `WHERE ${whereParts.join(" AND ")}` : "";
 
-    const baseSelect = {
-      id: providers.id,
-      userId: providers.userId,
-      businessName: providers.businessName,
-      email: providers.email,
-      phone: providers.phone,
-      description: providers.description,
-      isActive: providers.isActive,
-      isPublic: providers.isPublic,
-      isVerified: providers.isVerified,
-      averageRating: providers.averageRating,
-      reviewCount: providers.reviewCount,
-      serviceArea: providers.serviceArea,
-      createdAt: providers.createdAt,
-      subscriptionStatus: providerPlans.subscriptionStatus,
-      isSubscribed: providerPlans.isSubscribed,
-      isPartner: providerPlans.isPartner,
-      partnerSince: providerPlans.partnerSince,
-      bookingCount: bookingCountExpr,
-      totalRevenueCents: revenueExpr,
-    };
+    const orderClause =
+      params.sortBy === "bookings" ? "ORDER BY booking_count DESC NULLS LAST" :
+      params.sortBy === "revenue"  ? "ORDER BY total_revenue_cents DESC NULLS LAST" :
+      "ORDER BY pp.partner_since DESC NULLS LAST, p.business_name ASC";
 
-    const orderClause: SQL[] =
-      params.sortBy === "bookings" ? [desc(bookingCountExpr)] :
-      params.sortBy === "revenue" ? [desc(revenueExpr)] :
-      [desc(providerPlans.partnerSince), asc(providers.businessName)];
+    const mainQuery = `
+      SELECT
+        p.id,
+        p.user_id                                                            AS "userId",
+        p.business_name                                                      AS "businessName",
+        p.email,
+        p.phone,
+        p.description,
+        p.is_active                                                          AS "isActive",
+        p.is_public                                                          AS "isPublic",
+        p.is_verified                                                        AS "isVerified",
+        p.average_rating                                                     AS "averageRating",
+        p.review_count                                                       AS "reviewCount",
+        p.service_area                                                       AS "serviceArea",
+        p.created_at                                                         AS "createdAt",
+        pp.subscription_status                                               AS "subscriptionStatus",
+        COALESCE(pp.is_subscribed, FALSE)                                    AS "isSubscribed",
+        COALESCE(pp.is_partner, FALSE)                                       AS "isPartner",
+        pp.partner_since                                                     AS "partnerSince",
+        (SELECT COUNT(*)::int  FROM appointments WHERE provider_id = p.id)   AS "bookingCount",
+        (SELECT COALESCE(SUM(amount_cents), 0)::bigint
+           FROM payments WHERE provider_id = p.id AND status = 'succeeded') AS "totalRevenueCents"
+      FROM providers p
+      LEFT JOIN provider_plans pp ON pp.provider_id = p.id
+      ${whereClause}
+      ${orderClause}
+      LIMIT $${queryValues.length + 1} OFFSET $${queryValues.length + 2}
+    `;
 
-    const baseQuery = db.select(baseSelect).from(providers).leftJoin(providerPlans, eq(providerPlans.providerId, providers.id));
-    const countBaseQuery = db.select({ count: sql<number>`COUNT(*)` }).from(providers).leftJoin(providerPlans, eq(providerPlans.providerId, providers.id));
+    const countQuery = `
+      SELECT COUNT(*)::int AS total
+      FROM providers p
+      LEFT JOIN provider_plans pp ON pp.provider_id = p.id
+      ${whereClause}
+    `;
 
-    const filteredQuery = conditions.length > 0 ? baseQuery.where(and(...conditions)) : baseQuery;
-    const filteredCountQuery = conditions.length > 0 ? countBaseQuery.where(and(...conditions)) : countBaseQuery;
+    const client = await pool.connect();
+    try {
+      const [rowsResult, countResult] = await Promise.all([
+        client.query(mainQuery, [...queryValues, limit, offset]),
+        client.query(countQuery, queryValues),
+      ]);
 
-    const [rows, [countRow]] = await Promise.all([
-      filteredQuery.orderBy(...orderClause).limit(limit).offset(offset),
-      filteredCountQuery,
-    ]);
-
-    const total = Number(countRow?.count ?? 0);
-
-    return {
-      rows: rows.map(r => ({
-        ...r,
-        isSubscribed: r.isSubscribed ?? false,
-        isPartner: r.isPartner ?? false,
-        partnerSince: r.partnerSince ?? null,
-        bookingCount: Number(r.bookingCount ?? 0),
-        totalRevenueCents: Number(r.totalRevenueCents ?? 0),
-      })),
-      total,
-    };
+      return {
+        rows: rowsResult.rows.map((r: Record<string, unknown>) => ({
+          id: r["id"] as string,
+          userId: (r["userId"] as string | null) ?? null,
+          businessName: r["businessName"] as string,
+          email: (r["email"] as string | null) ?? null,
+          phone: (r["phone"] as string | null) ?? null,
+          description: (r["description"] as string | null) ?? null,
+          isActive: (r["isActive"] as boolean | null) ?? null,
+          isPublic: (r["isPublic"] as boolean | null) ?? null,
+          isVerified: (r["isVerified"] as boolean | null) ?? null,
+          averageRating: (r["averageRating"] as string | null) ?? null,
+          reviewCount: (r["reviewCount"] as number | null) ?? null,
+          serviceArea: (r["serviceArea"] as string | null) ?? null,
+          createdAt: r["createdAt"] instanceof Date ? r["createdAt"] : new Date(r["createdAt"] as string),
+          subscriptionStatus: (r["subscriptionStatus"] as string | null) ?? null,
+          isSubscribed: Boolean(r["isSubscribed"]),
+          isPartner: Boolean(r["isPartner"]),
+          partnerSince: r["partnerSince"]
+            ? (r["partnerSince"] instanceof Date ? r["partnerSince"] : new Date(r["partnerSince"] as string))
+            : null,
+          bookingCount: Number(r["bookingCount"] ?? 0),
+          totalRevenueCents: Number(r["totalRevenueCents"] ?? 0),
+        })),
+        total: Number(countResult.rows[0]?.["total"] ?? 0),
+      };
+    } finally {
+      client.release();
+    }
   }
 }
 
