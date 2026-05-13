@@ -1846,9 +1846,9 @@ export class DatabaseStorage implements IStorage {
     const whereClause = whereParts.length > 0 ? `WHERE ${whereParts.join(" AND ")}` : "";
 
     const orderClause =
-      params.sortBy === "bookings" ? "ORDER BY booking_count DESC NULLS LAST" :
-      params.sortBy === "revenue"  ? "ORDER BY total_revenue_cents DESC NULLS LAST" :
-      "ORDER BY pp.partner_since DESC NULLS LAST, p.business_name ASC";
+      params.sortBy === "bookings" ? `ORDER BY "bookingCount" DESC NULLS LAST` :
+      params.sortBy === "revenue"  ? `ORDER BY "totalRevenueCents" DESC NULLS LAST` :
+      `ORDER BY pp.partner_since DESC NULLS LAST, p.business_name ASC`;
 
     const mainQuery = `
       SELECT
