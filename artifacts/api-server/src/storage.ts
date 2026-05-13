@@ -1818,6 +1818,9 @@ export class DatabaseStorage implements IStorage {
     }
     if (isPartner !== null) {
       conditions.push(eq(providerPlans.isPartner, isPartner) as unknown as Condition);
+      if (isPartner === true) {
+        conditions.push(eq(providers.isVerified, true) as unknown as Condition);
+      }
     }
     if (subscriptionStatus) {
       conditions.push(eq(providerPlans.subscriptionStatus, subscriptionStatus) as unknown as Condition);

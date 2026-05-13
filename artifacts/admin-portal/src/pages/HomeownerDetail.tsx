@@ -37,9 +37,19 @@ export default function HomeownerDetail() {
   }
 
   if (error || !data?.user) {
+    const is404 = (error as { response?: { status?: number } })?.response?.status === 404;
     return (
       <Layout>
-        <div style={{ padding: 40, textAlign: "center", color: "var(--danger)" }}>User not found.</div>
+        <button onClick={() => navigate(-1)} style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", fontWeight: 500, marginBottom: 24 }}>← Back</button>
+        <div style={{ padding: 40, textAlign: "center" }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>{is404 ? "404" : "!"}</div>
+          <div style={{ fontSize: 18, fontWeight: 600, color: "var(--text-primary)", marginBottom: 8 }}>
+            {is404 ? "Homeowner not found" : "Failed to load homeowner"}
+          </div>
+          <div style={{ color: "var(--text-muted)", fontSize: 14 }}>
+            {is404 ? "This user may have been deleted or the ID is incorrect." : "A server error occurred. Please try again."}
+          </div>
+        </div>
       </Layout>
     );
   }

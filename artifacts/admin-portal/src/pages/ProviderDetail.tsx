@@ -21,7 +21,7 @@ export default function ProviderDetail() {
   const [confirmPartner, setConfirmPartner] = useState<"grant" | "revoke" | null>(null);
   const [confirmToggle, setConfirmToggle] = useState<{ field: "isActive" | "isPublic"; value: boolean } | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["/api/admin/providers", id],
     queryFn: () => api.get(`/api/admin/providers/${id}`).then((r) => r.data),
   });
@@ -66,8 +66,22 @@ export default function ProviderDetail() {
     );
   }
 
-  if (!data?.provider) {
-    return <Layout><div style={{ padding: 60, textAlign: "center", color: "var(--danger)" }}>Provider not found</div></Layout>;
+  if (error || !data?.provider) {
+    const is404 = (error as { response?: { status?: number } })?.response?.status === 404;
+    return (
+      <Layout>
+        <button onClick={() => navigate(-1)} style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", fontWeight: 500, marginBottom: 24 }}>← Back</button>
+        <div style={{ padding: 40, textAlign: "center" }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>{is404 ? "404" : "!"}</div>
+          <div style={{ fontSize: 18, fontWeight: 600, color: "var(--text-primary)", marginBottom: 8 }}>
+            {is404 ? "Provider not found" : "Failed to load provider"}
+          </div>
+          <div style={{ color: "var(--text-muted)", fontSize: 14 }}>
+            {is404 ? "This provider may have been deleted or the ID is incorrect." : "A server error occurred. Please try again."}
+          </div>
+        </div>
+      </Layout>
+    );
   }
 
   const { provider, plan, connectAccount, bookings = [], jobs = [], invoices = [], reviews = [], crew = [] } = data;
