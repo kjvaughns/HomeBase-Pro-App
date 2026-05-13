@@ -168,6 +168,7 @@ export default function AuditLogs() {
                         onChange={() => toggleRow(log.id)}
                       />
                     </td>
+
                     <td style={styles.td}>
                       <div style={{ fontWeight: 500 }}>{(log.adminName as string | null | undefined) || "—"}</div>
                       <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{(log.adminEmail as string | null | undefined) || ""}</div>

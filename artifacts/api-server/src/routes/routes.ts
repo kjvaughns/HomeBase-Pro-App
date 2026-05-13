@@ -17194,6 +17194,9 @@ Respond with JSON only:
         if (req.body.isAdmin !== undefined && typeof req.body.isAdmin !== "boolean") {
           return res.status(400).json({ error: "isAdmin must be a boolean" });
         }
+        if (req.body.isActive !== undefined && typeof req.body.isActive !== "boolean") {
+          return res.status(400).json({ error: "isActive must be a boolean" });
+        }
 
         const allowed: Array<keyof typeof users.$inferSelect> = ["isAdmin", "isActive"];
         const patch: Record<string, unknown> = {};
