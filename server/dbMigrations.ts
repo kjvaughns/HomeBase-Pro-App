@@ -1099,6 +1099,96 @@ export async function runBootMigrations(): Promise<void> {
       )`,
     );
 
+    // ── Task #376: Admin Portal migrations ────────────────────────────────
+
+    // ── Task #376 Migration 1: support_tickets — new admin columns ───────────
+    // Using individual ADD COLUMN IF NOT EXISTS for idempotency (Postgres does
+    // not support IF NOT EXISTS in a multi-column ALTER TABLE statement).
+    const supportTicketAlters: Array<[string, string]> = [
+      ["support_tickets.priority",    `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'normal'`],
+      ["support_tickets.user_type",   `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS user_type TEXT`],
+      ["support_tickets.assigned_to", `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS assigned_to VARCHAR REFERENCES users(id)`],
+      ["support_tickets.updated_at",  `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT now()`],
+      ["support_tickets.resolved_at", `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP`],
+    ];
+    for (const [label, sql] of supportTicketAlters) {
+      await runSql(label, sql);
+    }
+
+    // ── Task #376 Migration 2: users — last active timestamp ─────────────────
+    await runSql("users.last_active_at", `ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP`);
+
+    // ── Task #376 Migration 3: support_ticket_messages (threaded replies) ────
+    await runSql("table.support_ticket_messages", `
+      CREATE TABLE IF NOT EXISTS support_ticket_messages (
+        id          VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        ticket_id   VARCHAR NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+        sender_id   VARCHAR REFERENCES users(id),
+        sender_type TEXT NOT NULL DEFAULT 'admin',
+        body        TEXT NOT NULL,
+        created_at  TIMESTAMP NOT NULL DEFAULT now()
+      )
+    `);
+
+    // ── Task #376 Migration 4: admin_broadcasts (broadcast campaigns) ─────────
+    await runSql("table.admin_broadcasts", `
+      CREATE TABLE IF NOT EXISTS admin_broadcasts (
+        id              VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        sent_by_user_id VARCHAR NOT NULL REFERENCES users(id),
+        title           TEXT NOT NULL,
+        body            TEXT NOT NULL,
+        audience        TEXT NOT NULL,
+        channel         TEXT NOT NULL,
+        recipient_count INTEGER NOT NULL DEFAULT 0,
+        status          TEXT NOT NULL DEFAULT 'draft',
+        sent_at         TIMESTAMP,
+        created_at      TIMESTAMP NOT NULL DEFAULT now()
+      )
+    `);
+
+    // ── Task #376 Migration 5: admin_broadcast_recipients ─────────────────────
+    await runSql("table.admin_broadcast_recipients", `
+      CREATE TABLE IF NOT EXISTS admin_broadcast_recipients (
+        id           VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        broadcast_id VARCHAR NOT NULL REFERENCES admin_broadcasts(id) ON DELETE CASCADE,
+        user_id      VARCHAR NOT NULL REFERENCES users(id),
+        channel      TEXT NOT NULL,
+        status       TEXT NOT NULL DEFAULT 'queued',
+        delivered_at TIMESTAMP
+      )
+    `);
+
+    // ── Task #376 Migration 6: admin_audit_logs (immutable audit log) ─────────
+    await runSql("table.admin_audit_logs", `
+      CREATE TABLE IF NOT EXISTS admin_audit_logs (
+        id            VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        admin_user_id VARCHAR NOT NULL REFERENCES users(id),
+        action        TEXT NOT NULL,
+        target_type   TEXT,
+        target_id     VARCHAR,
+        before_value  JSONB,
+        after_value   JSONB,
+        created_at    TIMESTAMP NOT NULL DEFAULT now()
+      )
+    `);
+
+    // ── Task #376: Performance indexes ────────────────────────────────────────
+    const adminIndexes: Array<[string, string]> = [
+      ["idx.admin_audit_logs_admin",
+        `CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_admin ON admin_audit_logs(admin_user_id)`],
+      ["idx.admin_audit_logs_created",
+        `CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_created ON admin_audit_logs(created_at DESC)`],
+      ["idx.support_ticket_messages_ticket",
+        `CREATE INDEX IF NOT EXISTS idx_support_ticket_messages_ticket ON support_ticket_messages(ticket_id)`],
+      ["idx.admin_broadcast_recipients_broadcast",
+        `CREATE INDEX IF NOT EXISTS idx_admin_broadcast_recipients_broadcast ON admin_broadcast_recipients(broadcast_id)`],
+      ["idx.users_last_active",
+        `CREATE INDEX IF NOT EXISTS idx_users_last_active ON users(last_active_at DESC)`],
+    ];
+    for (const [label, sql] of adminIndexes) {
+      await runSql(label, sql);
+    }
+
     verifications.push(
       ["provider_route_orders", `SELECT provider_id FROM provider_route_orders LIMIT 0`],
       ["job_series table",      `SELECT id FROM job_series LIMIT 0`],
@@ -1109,6 +1199,14 @@ export async function runBootMigrations(): Promise<void> {
       ["jobs.assigned_crew_member_id",      `SELECT assigned_crew_member_id FROM jobs LIMIT 0`],
       ["estimates table",                   `SELECT id FROM estimates LIMIT 0`],
       ["estimate_line_items table",         `SELECT id FROM estimate_line_items LIMIT 0`],
+      // Task #376: Admin Portal tables and columns
+      ["support_tickets.priority column",          `SELECT priority FROM support_tickets LIMIT 0`],
+      ["support_tickets.updated_at column",        `SELECT updated_at FROM support_tickets LIMIT 0`],
+      ["users.last_active_at column",              `SELECT last_active_at FROM users LIMIT 0`],
+      ["support_ticket_messages table",            `SELECT id FROM support_ticket_messages LIMIT 0`],
+      ["admin_broadcasts table",                   `SELECT id FROM admin_broadcasts LIMIT 0`],
+      ["admin_broadcast_recipients table",         `SELECT id FROM admin_broadcast_recipients LIMIT 0`],
+      ["admin_audit_logs table",                   `SELECT id FROM admin_audit_logs LIMIT 0`],
     );
 
     const verificationErrors: string[] = [];

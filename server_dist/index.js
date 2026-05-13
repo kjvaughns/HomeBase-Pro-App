@@ -17,6 +17,12 @@ var __export = (target, all) => {
 // shared/schema.ts
 var schema_exports = {};
 __export(schema_exports, {
+  adminAuditLogs: () => adminAuditLogs,
+  adminAuditLogsRelations: () => adminAuditLogsRelations,
+  adminBroadcastRecipients: () => adminBroadcastRecipients,
+  adminBroadcastRecipientsRelations: () => adminBroadcastRecipientsRelations,
+  adminBroadcasts: () => adminBroadcasts,
+  adminBroadcastsRelations: () => adminBroadcastsRelations,
   appointmentStatusEnum: () => appointmentStatusEnum,
   appointments: () => appointments,
   appointmentsRelations: () => appointmentsRelations,
@@ -42,6 +48,9 @@ __export(schema_exports, {
   homesRelations: () => homesRelations,
   housefaxEntries: () => housefaxEntries,
   housefaxEntriesRelations: () => housefaxEntriesRelations,
+  insertAdminAuditLogSchema: () => insertAdminAuditLogSchema,
+  insertAdminBroadcastRecipientSchema: () => insertAdminBroadcastRecipientSchema,
+  insertAdminBroadcastSchema: () => insertAdminBroadcastSchema,
   insertAppointmentSchema: () => insertAppointmentSchema,
   insertBookingLinkSchema: () => insertBookingLinkSchema,
   insertClientSchema: () => insertClientSchema,
@@ -66,6 +75,7 @@ __export(schema_exports, {
   insertProviderSchema: () => insertProviderSchema,
   insertQuickQuoteSchema: () => insertQuickQuoteSchema,
   insertStripeConnectAccountSchema: () => insertStripeConnectAccountSchema,
+  insertSupportTicketMessageSchema: () => insertSupportTicketMessageSchema,
   insertSupportTicketSchema: () => insertSupportTicketSchema,
   insertUserCreditsSchema: () => insertUserCreditsSchema,
   insertUserSchema: () => insertUserSchema,
@@ -138,6 +148,8 @@ __export(schema_exports, {
   stripeConnectAccounts: () => stripeConnectAccounts,
   stripeConnectAccountsRelations: () => stripeConnectAccountsRelations,
   stripeWebhookEvents: () => stripeWebhookEvents,
+  supportTicketMessages: () => supportTicketMessages,
+  supportTicketMessagesRelations: () => supportTicketMessagesRelations,
   supportTickets: () => supportTickets,
   supportTicketsRelations: () => supportTicketsRelations,
   urgencyEnum: () => urgencyEnum,
@@ -162,7 +174,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-var propertyTypeEnum, appointmentStatusEnum, urgencyEnum, jobSizeEnum, jobStatusEnum, invoiceStatusEnum, estimateStatusEnum, paymentMethodEnum, paymentStatusEnum, payoutStatusEnum, connectOnboardingStatusEnum, providerPlanTierEnum, users, usersRelations, homes, homesRelations, serviceCategories, serviceCategoriesRelations, services, servicesRelations, providers, providersRelations, crewMembers, crewMembersRelations, providerServices, providerServicesRelations, pricingTypeEnum, providerCustomServices, providerCustomServicesRelations, insertProviderCustomServiceSchema, appointments, appointmentsRelations, reviews, reviewsRelations, savedProviders, savedProvidersRelations, reviewReports, reviewReportsRelations, notifications, notificationsRelations, maintenanceReminderFrequencyEnum, maintenanceReminders, maintenanceRemindersRelations, providerPlans2, providerPlansRelations, stripeConnectAccounts, stripeConnectAccountsRelations, userCredits, userCreditsRelations, creditLedger, creditLedgerRelations, payouts, payoutsRelations, refundStatusEnum, refunds, refundsRelations, stripeWebhookEvents, invoiceLineItems, estimateLineItems, invoiceLineItemsRelations, clients, clientsRelations, jobs, jobsRelations, jobSeries, jobSeriesRelations, invoices, invoicesRelations, estimates, estimatesRelations, estimateLineItemsRelations, payments, paymentsRelations, bookingLinkStatusEnum, quoteModeEnum, intakeStatusEnum, bookingLinks, bookingLinksRelations, intakeSubmissions, intakeSubmissionsRelations, insertUserSchema, loginSchema, insertHomeSchema, homeProfileUpdateSchema, homeFieldChanges, homeFieldChangesRelations, insertAppointmentSchema, insertClientSchema, insertJobSchema, insertInvoiceSchema, insertPaymentSchema, insertProviderSchema, insertProviderPlanSchema, insertStripeConnectAccountSchema, insertInvoiceLineItemSchema, insertEstimateSchema, insertEstimateLineItemSchema, insertPayoutSchema, insertUserCreditsSchema, insertCreditLedgerSchema, insertCrewMemberSchema, insertBookingLinkSchema, insertIntakeSubmissionSchema, notificationChannelEnum, notificationDeliveryStatusEnum, pushTokens, notificationPreferences, notificationDeliveries, messageChannelEnum, messageStatusEnum, providerMessages, providerMessagesRelations, insertProviderMessageSchema, messageTemplates, messageTemplatesRelations, insertMessageTemplateSchema, leads, insertLeadSchema, insertNotificationPreferenceSchema, housefaxEntries, housefaxEntriesRelations, insertHousefaxEntrySchema, supportTickets, supportTicketsRelations, insertSupportTicketSchema, quickQuotes, quickQuotesRelations, insertQuickQuoteSchema;
+var propertyTypeEnum, appointmentStatusEnum, urgencyEnum, jobSizeEnum, jobStatusEnum, invoiceStatusEnum, estimateStatusEnum, paymentMethodEnum, paymentStatusEnum, payoutStatusEnum, connectOnboardingStatusEnum, providerPlanTierEnum, users, usersRelations, homes, homesRelations, serviceCategories, serviceCategoriesRelations, services, servicesRelations, providers, providersRelations, crewMembers, crewMembersRelations, providerServices, providerServicesRelations, pricingTypeEnum, providerCustomServices, providerCustomServicesRelations, insertProviderCustomServiceSchema, appointments, appointmentsRelations, reviews, reviewsRelations, savedProviders, savedProvidersRelations, reviewReports, reviewReportsRelations, notifications, notificationsRelations, maintenanceReminderFrequencyEnum, maintenanceReminders, maintenanceRemindersRelations, providerPlans2, providerPlansRelations, stripeConnectAccounts, stripeConnectAccountsRelations, userCredits, userCreditsRelations, creditLedger, creditLedgerRelations, payouts, payoutsRelations, refundStatusEnum, refunds, refundsRelations, stripeWebhookEvents, invoiceLineItems, estimateLineItems, invoiceLineItemsRelations, clients, clientsRelations, jobs, jobsRelations, jobSeries, jobSeriesRelations, invoices, invoicesRelations, estimates, estimatesRelations, estimateLineItemsRelations, payments, paymentsRelations, bookingLinkStatusEnum, quoteModeEnum, intakeStatusEnum, bookingLinks, bookingLinksRelations, intakeSubmissions, intakeSubmissionsRelations, insertUserSchema, loginSchema, insertHomeSchema, homeProfileUpdateSchema, homeFieldChanges, homeFieldChangesRelations, insertAppointmentSchema, insertClientSchema, insertJobSchema, insertInvoiceSchema, insertPaymentSchema, insertProviderSchema, insertProviderPlanSchema, insertStripeConnectAccountSchema, insertInvoiceLineItemSchema, insertEstimateSchema, insertEstimateLineItemSchema, insertPayoutSchema, insertUserCreditsSchema, insertCreditLedgerSchema, insertCrewMemberSchema, insertBookingLinkSchema, insertIntakeSubmissionSchema, notificationChannelEnum, notificationDeliveryStatusEnum, pushTokens, notificationPreferences, notificationDeliveries, messageChannelEnum, messageStatusEnum, providerMessages, providerMessagesRelations, insertProviderMessageSchema, messageTemplates, messageTemplatesRelations, insertMessageTemplateSchema, leads, insertLeadSchema, insertNotificationPreferenceSchema, housefaxEntries, housefaxEntriesRelations, insertHousefaxEntrySchema, supportTickets, supportTicketsRelations, insertSupportTicketSchema, supportTicketMessages, supportTicketMessagesRelations, insertSupportTicketMessageSchema, adminBroadcasts, adminBroadcastsRelations, insertAdminBroadcastSchema, adminBroadcastRecipients, adminBroadcastRecipientsRelations, insertAdminBroadcastRecipientSchema, adminAuditLogs, adminAuditLogsRelations, insertAdminAuditLogSchema, quickQuotes, quickQuotesRelations, insertQuickQuoteSchema;
 var init_schema = __esm({
   "shared/schema.ts"() {
     "use strict";
@@ -263,6 +275,7 @@ var init_schema = __esm({
       stripeCustomerId: text("stripe_customer_id"),
       defaultPaymentMethodId: text("default_payment_method_id"),
       tokenVersion: integer("token_version").notNull().default(0),
+      lastActiveAt: timestamp("last_active_at"),
       createdAt: timestamp("created_at").defaultNow().notNull(),
       updatedAt: timestamp("updated_at").defaultNow().notNull()
     });
@@ -1698,14 +1711,108 @@ var init_schema = __esm({
       subject: text("subject").notNull(),
       message: text("message").notNull(),
       status: text("status").notNull().default("open"),
+      priority: text("priority").notNull().default("normal"),
+      userType: text("user_type"),
+      assignedTo: varchar("assigned_to").references(() => users.id),
+      updatedAt: timestamp("updated_at").defaultNow().notNull(),
+      resolvedAt: timestamp("resolved_at"),
       createdAt: timestamp("created_at").defaultNow().notNull()
     });
-    supportTicketsRelations = relations(supportTickets, ({ one }) => ({
-      user: one(users, { fields: [supportTickets.userId], references: [users.id] })
+    supportTicketsRelations = relations(supportTickets, ({ one, many }) => ({
+      user: one(users, { fields: [supportTickets.userId], references: [users.id], relationName: "ticketUser" }),
+      assignedAdmin: one(users, { fields: [supportTickets.assignedTo], references: [users.id], relationName: "ticketAssignee" }),
+      messages: many(supportTicketMessages)
     }));
     insertSupportTicketSchema = createInsertSchema(
       supportTickets
     ).omit({
+      id: true,
+      createdAt: true,
+      updatedAt: true
+    });
+    supportTicketMessages = pgTable("support_ticket_messages", {
+      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+      ticketId: varchar("ticket_id").notNull().references(() => supportTickets.id, { onDelete: "cascade" }),
+      senderId: varchar("sender_id").references(() => users.id),
+      senderType: text("sender_type").notNull().default("admin"),
+      body: text("body").notNull(),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    supportTicketMessagesRelations = relations(supportTicketMessages, ({ one }) => ({
+      ticket: one(supportTickets, {
+        fields: [supportTicketMessages.ticketId],
+        references: [supportTickets.id]
+      }),
+      sender: one(users, {
+        fields: [supportTicketMessages.senderId],
+        references: [users.id]
+      })
+    }));
+    insertSupportTicketMessageSchema = createInsertSchema(supportTicketMessages).omit({
+      id: true,
+      createdAt: true
+    });
+    adminBroadcasts = pgTable("admin_broadcasts", {
+      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+      sentByUserId: varchar("sent_by_user_id").notNull().references(() => users.id),
+      title: text("title").notNull(),
+      body: text("body").notNull(),
+      audience: text("audience").notNull(),
+      channel: text("channel").notNull(),
+      recipientCount: integer("recipient_count").notNull().default(0),
+      status: text("status").notNull().default("draft"),
+      sentAt: timestamp("sent_at"),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    adminBroadcastsRelations = relations(adminBroadcasts, ({ one, many }) => ({
+      sentByUser: one(users, {
+        fields: [adminBroadcasts.sentByUserId],
+        references: [users.id]
+      }),
+      recipients: many(adminBroadcastRecipients)
+    }));
+    insertAdminBroadcastSchema = createInsertSchema(adminBroadcasts).omit({
+      id: true,
+      createdAt: true
+    });
+    adminBroadcastRecipients = pgTable("admin_broadcast_recipients", {
+      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+      broadcastId: varchar("broadcast_id").notNull().references(() => adminBroadcasts.id, { onDelete: "cascade" }),
+      userId: varchar("user_id").notNull().references(() => users.id),
+      channel: text("channel").notNull(),
+      status: text("status").notNull().default("queued"),
+      deliveredAt: timestamp("delivered_at")
+    });
+    adminBroadcastRecipientsRelations = relations(adminBroadcastRecipients, ({ one }) => ({
+      broadcast: one(adminBroadcasts, {
+        fields: [adminBroadcastRecipients.broadcastId],
+        references: [adminBroadcasts.id]
+      }),
+      user: one(users, {
+        fields: [adminBroadcastRecipients.userId],
+        references: [users.id]
+      })
+    }));
+    insertAdminBroadcastRecipientSchema = createInsertSchema(adminBroadcastRecipients).omit({
+      id: true
+    });
+    adminAuditLogs = pgTable("admin_audit_logs", {
+      id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+      adminUserId: varchar("admin_user_id").notNull().references(() => users.id),
+      action: text("action").notNull(),
+      targetType: text("target_type"),
+      targetId: varchar("target_id"),
+      beforeValue: jsonb("before_value"),
+      afterValue: jsonb("after_value"),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    });
+    adminAuditLogsRelations = relations(adminAuditLogs, ({ one }) => ({
+      adminUser: one(users, {
+        fields: [adminAuditLogs.adminUserId],
+        references: [users.id]
+      })
+    }));
+    insertAdminAuditLogSchema = createInsertSchema(adminAuditLogs).omit({
       id: true,
       createdAt: true
     });
@@ -20265,12 +20372,14 @@ Respond with JSON only:
       try {
         const { providerId } = req.params;
         if (!await assertProviderOwnership(req, providerId, res)) return;
+        const subInfo = await getProviderSubscriptionStatus(providerId);
+        const subscriptionGated = subInfo.status === "expired";
         const connectAccount = await getConnectAccount(providerId);
         if (!connectAccount?.stripeAccountId) {
-          return res.json({ status: "not_onboarded" });
+          return res.json({ status: "not_onboarded", subscriptionGated });
         }
         if (!connectAccount.payoutsEnabled) {
-          return res.json({ status: "onboarding_incomplete" });
+          return res.json({ status: "onboarding_incomplete", subscriptionGated });
         }
         const stripe2 = getStripe();
         const acctId = connectAccount.stripeAccountId;
@@ -20309,6 +20418,7 @@ Respond with JSON only:
         if (next) {
           return res.json({
             status: "ready",
+            subscriptionGated,
             nextPayout: {
               id: next.id,
               amountCents: next.amount,
@@ -20338,6 +20448,7 @@ Respond with JSON only:
         }
         return res.json({
           status: "ready",
+          subscriptionGated,
           nextPayout: null,
           pendingBalanceCents,
           bankName,
@@ -20387,6 +20498,53 @@ Respond with JSON only:
       } catch (error) {
         console.error("Stripe payouts error:", error);
         res.status(500).json({ error: error.message || "Failed to fetch Stripe payouts" });
+      }
+    }
+  );
+  app2.post(
+    "/api/providers/:providerId/stripe-instant-payout",
+    requireAuth,
+    async (req, res) => {
+      try {
+        const { providerId } = req.params;
+        if (!await assertProviderOwnership(req, providerId, res)) return;
+        if (!await checkSubscriptionGate(providerId, res)) return;
+        const connectAccount = await getConnectAccount(providerId);
+        if (!connectAccount?.stripeAccountId) {
+          return res.status(400).json({ error: "stripe_not_connected" });
+        }
+        if (!connectAccount.payoutsEnabled) {
+          return res.status(400).json({ error: "stripe_payouts_not_enabled" });
+        }
+        const stripe2 = getStripe();
+        const acctId = connectAccount.stripeAccountId;
+        const balance = await stripe2.balance.retrieve(void 0, {
+          stripeAccount: acctId
+        });
+        const availableCents = (balance.available ?? []).reduce(
+          (sum, b) => b.currency === "usd" ? sum + b.amount : sum,
+          0
+        );
+        if (availableCents <= 0) {
+          return res.status(400).json({ error: "no_available_balance" });
+        }
+        const payout = await stripe2.payouts.create(
+          {
+            amount: availableCents,
+            currency: "usd",
+            method: "instant"
+          },
+          { stripeAccount: acctId }
+        );
+        return res.json({
+          id: payout.id,
+          amountCents: payout.amount,
+          status: payout.status,
+          arrivalDate: payout.arrival_date ? new Date(payout.arrival_date * 1e3).toISOString() : null
+        });
+      } catch (error) {
+        console.error("[stripe-instant-payout] error:", error);
+        res.status(500).json({ error: error.message || "Failed to initiate instant payout" });
       }
     }
   );
@@ -22832,6 +22990,88 @@ async function runBootMigrations() {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`
     );
+    const supportTicketAlters = [
+      ["support_tickets.priority", `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'normal'`],
+      ["support_tickets.user_type", `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS user_type TEXT`],
+      ["support_tickets.assigned_to", `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS assigned_to VARCHAR REFERENCES users(id)`],
+      ["support_tickets.updated_at", `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT now()`],
+      ["support_tickets.resolved_at", `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP`]
+    ];
+    for (const [label, sql6] of supportTicketAlters) {
+      await runSql(label, sql6);
+    }
+    await runSql("users.last_active_at", `ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP`);
+    await runSql("table.support_ticket_messages", `
+      CREATE TABLE IF NOT EXISTS support_ticket_messages (
+        id          VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        ticket_id   VARCHAR NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+        sender_id   VARCHAR REFERENCES users(id),
+        sender_type TEXT NOT NULL DEFAULT 'admin',
+        body        TEXT NOT NULL,
+        created_at  TIMESTAMP NOT NULL DEFAULT now()
+      )
+    `);
+    await runSql("table.admin_broadcasts", `
+      CREATE TABLE IF NOT EXISTS admin_broadcasts (
+        id              VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        sent_by_user_id VARCHAR NOT NULL REFERENCES users(id),
+        title           TEXT NOT NULL,
+        body            TEXT NOT NULL,
+        audience        TEXT NOT NULL,
+        channel         TEXT NOT NULL,
+        recipient_count INTEGER NOT NULL DEFAULT 0,
+        status          TEXT NOT NULL DEFAULT 'draft',
+        sent_at         TIMESTAMP,
+        created_at      TIMESTAMP NOT NULL DEFAULT now()
+      )
+    `);
+    await runSql("table.admin_broadcast_recipients", `
+      CREATE TABLE IF NOT EXISTS admin_broadcast_recipients (
+        id           VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        broadcast_id VARCHAR NOT NULL REFERENCES admin_broadcasts(id) ON DELETE CASCADE,
+        user_id      VARCHAR NOT NULL REFERENCES users(id),
+        channel      TEXT NOT NULL,
+        status       TEXT NOT NULL DEFAULT 'queued',
+        delivered_at TIMESTAMP
+      )
+    `);
+    await runSql("table.admin_audit_logs", `
+      CREATE TABLE IF NOT EXISTS admin_audit_logs (
+        id            VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        admin_user_id VARCHAR NOT NULL REFERENCES users(id),
+        action        TEXT NOT NULL,
+        target_type   TEXT,
+        target_id     VARCHAR,
+        before_value  JSONB,
+        after_value   JSONB,
+        created_at    TIMESTAMP NOT NULL DEFAULT now()
+      )
+    `);
+    const adminIndexes = [
+      [
+        "idx.admin_audit_logs_admin",
+        `CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_admin ON admin_audit_logs(admin_user_id)`
+      ],
+      [
+        "idx.admin_audit_logs_created",
+        `CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_created ON admin_audit_logs(created_at DESC)`
+      ],
+      [
+        "idx.support_ticket_messages_ticket",
+        `CREATE INDEX IF NOT EXISTS idx_support_ticket_messages_ticket ON support_ticket_messages(ticket_id)`
+      ],
+      [
+        "idx.admin_broadcast_recipients_broadcast",
+        `CREATE INDEX IF NOT EXISTS idx_admin_broadcast_recipients_broadcast ON admin_broadcast_recipients(broadcast_id)`
+      ],
+      [
+        "idx.users_last_active",
+        `CREATE INDEX IF NOT EXISTS idx_users_last_active ON users(last_active_at DESC)`
+      ]
+    ];
+    for (const [label, sql6] of adminIndexes) {
+      await runSql(label, sql6);
+    }
     verifications.push(
       ["provider_route_orders", `SELECT provider_id FROM provider_route_orders LIMIT 0`],
       ["job_series table", `SELECT id FROM job_series LIMIT 0`],
@@ -22841,7 +23081,15 @@ async function runBootMigrations() {
       ["crew_members table", `SELECT id FROM crew_members LIMIT 0`],
       ["jobs.assigned_crew_member_id", `SELECT assigned_crew_member_id FROM jobs LIMIT 0`],
       ["estimates table", `SELECT id FROM estimates LIMIT 0`],
-      ["estimate_line_items table", `SELECT id FROM estimate_line_items LIMIT 0`]
+      ["estimate_line_items table", `SELECT id FROM estimate_line_items LIMIT 0`],
+      // Task #376: Admin Portal tables and columns
+      ["support_tickets.priority column", `SELECT priority FROM support_tickets LIMIT 0`],
+      ["support_tickets.updated_at column", `SELECT updated_at FROM support_tickets LIMIT 0`],
+      ["users.last_active_at column", `SELECT last_active_at FROM users LIMIT 0`],
+      ["support_ticket_messages table", `SELECT id FROM support_ticket_messages LIMIT 0`],
+      ["admin_broadcasts table", `SELECT id FROM admin_broadcasts LIMIT 0`],
+      ["admin_broadcast_recipients table", `SELECT id FROM admin_broadcast_recipients LIMIT 0`],
+      ["admin_audit_logs table", `SELECT id FROM admin_audit_logs LIMIT 0`]
     );
     const verificationErrors = [];
     for (const [label, sql6] of verifications) {

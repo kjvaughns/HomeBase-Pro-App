@@ -121,6 +121,7 @@ export const users = pgTable("users", {
   stripeCustomerId: text("stripe_customer_id"),
   defaultPaymentMethodId: text("default_payment_method_id"),
   tokenVersion: integer("token_version").notNull().default(0),
+  lastActiveAt: timestamp("last_active_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -1966,11 +1967,18 @@ export const supportTickets = pgTable("support_tickets", {
   subject: text("subject").notNull(),
   message: text("message").notNull(),
   status: text("status").notNull().default("open"),
+  priority: text("priority").notNull().default("normal"),
+  userType: text("user_type"),
+  assignedTo: varchar("assigned_to").references(() => users.id),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  resolvedAt: timestamp("resolved_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const supportTicketsRelations = relations(supportTickets, ({ one }) => ({
-  user: one(users, { fields: [supportTickets.userId], references: [users.id] }),
+export const supportTicketsRelations = relations(supportTickets, ({ one, many }) => ({
+  user: one(users, { fields: [supportTickets.userId], references: [users.id], relationName: "ticketUser" }),
+  assignedAdmin: one(users, { fields: [supportTickets.assignedTo], references: [users.id], relationName: "ticketAssignee" }),
+  messages: many(supportTicketMessages),
 }));
 
 export const insertSupportTicketSchema = createInsertSchema(
@@ -1978,10 +1986,147 @@ export const insertSupportTicketSchema = createInsertSchema(
 ).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
 });
 
 export type SupportTicket = typeof supportTickets.$inferSelect;
 export type InsertSupportTicket = z.infer<typeof insertSupportTicketSchema>;
+
+// ─── Support Ticket Messages ──────────────────────────────────────────────────
+
+export const supportTicketMessages = pgTable("support_ticket_messages", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  ticketId: varchar("ticket_id")
+    .notNull()
+    .references(() => supportTickets.id, { onDelete: "cascade" }),
+  senderId: varchar("sender_id").references(() => users.id),
+  senderType: text("sender_type").notNull().default("admin"),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const supportTicketMessagesRelations = relations(supportTicketMessages, ({ one }) => ({
+  ticket: one(supportTickets, {
+    fields: [supportTicketMessages.ticketId],
+    references: [supportTickets.id],
+  }),
+  sender: one(users, {
+    fields: [supportTicketMessages.senderId],
+    references: [users.id],
+  }),
+}));
+
+export const insertSupportTicketMessageSchema = createInsertSchema(supportTicketMessages).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type SupportTicketMessage = typeof supportTicketMessages.$inferSelect;
+export type InsertSupportTicketMessage = z.infer<typeof insertSupportTicketMessageSchema>;
+
+// ─── Admin Broadcasts ─────────────────────────────────────────────────────────
+
+export const adminBroadcasts = pgTable("admin_broadcasts", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  sentByUserId: varchar("sent_by_user_id")
+    .notNull()
+    .references(() => users.id),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  audience: text("audience").notNull(),
+  channel: text("channel").notNull(),
+  recipientCount: integer("recipient_count").notNull().default(0),
+  status: text("status").notNull().default("draft"),
+  sentAt: timestamp("sent_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const adminBroadcastsRelations = relations(adminBroadcasts, ({ one, many }) => ({
+  sentByUser: one(users, {
+    fields: [adminBroadcasts.sentByUserId],
+    references: [users.id],
+  }),
+  recipients: many(adminBroadcastRecipients),
+}));
+
+export const insertAdminBroadcastSchema = createInsertSchema(adminBroadcasts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type AdminBroadcast = typeof adminBroadcasts.$inferSelect;
+export type InsertAdminBroadcast = z.infer<typeof insertAdminBroadcastSchema>;
+
+// ─── Admin Broadcast Recipients ───────────────────────────────────────────────
+
+export const adminBroadcastRecipients = pgTable("admin_broadcast_recipients", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  broadcastId: varchar("broadcast_id")
+    .notNull()
+    .references(() => adminBroadcasts.id, { onDelete: "cascade" }),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id),
+  channel: text("channel").notNull(),
+  status: text("status").notNull().default("queued"),
+  deliveredAt: timestamp("delivered_at"),
+});
+
+export const adminBroadcastRecipientsRelations = relations(adminBroadcastRecipients, ({ one }) => ({
+  broadcast: one(adminBroadcasts, {
+    fields: [adminBroadcastRecipients.broadcastId],
+    references: [adminBroadcasts.id],
+  }),
+  user: one(users, {
+    fields: [adminBroadcastRecipients.userId],
+    references: [users.id],
+  }),
+}));
+
+export const insertAdminBroadcastRecipientSchema = createInsertSchema(adminBroadcastRecipients).omit({
+  id: true,
+});
+
+export type AdminBroadcastRecipient = typeof adminBroadcastRecipients.$inferSelect;
+export type InsertAdminBroadcastRecipient = z.infer<typeof insertAdminBroadcastRecipientSchema>;
+
+// ─── Admin Audit Logs ─────────────────────────────────────────────────────────
+
+export const adminAuditLogs = pgTable("admin_audit_logs", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  adminUserId: varchar("admin_user_id")
+    .notNull()
+    .references(() => users.id),
+  action: text("action").notNull(),
+  targetType: text("target_type"),
+  targetId: varchar("target_id"),
+  beforeValue: jsonb("before_value"),
+  afterValue: jsonb("after_value"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const adminAuditLogsRelations = relations(adminAuditLogs, ({ one }) => ({
+  adminUser: one(users, {
+    fields: [adminAuditLogs.adminUserId],
+    references: [users.id],
+  }),
+}));
+
+export const insertAdminAuditLogSchema = createInsertSchema(adminAuditLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type AdminAuditLog = typeof adminAuditLogs.$inferSelect;
+export type InsertAdminAuditLog = z.infer<typeof insertAdminAuditLogSchema>;
 
 // ─── Quick Quotes (Task #300) ─────────────────────────────────────────────────
 
