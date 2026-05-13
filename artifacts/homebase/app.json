@@ -1,0 +1,98 @@
+{
+  "expo": {
+    "name": "HomeBase",
+    "slug": "homebase",
+    "version": "1.1.1",
+    "runtimeVersion": "1.1.1",
+    "updates": {
+      "url": "https://u.expo.dev/16db0e26-c342-42df-934c-b619f917e881"
+    },
+    "privacyPolicyUrl": "https://homebaseproapp.com/privacy",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "homebase",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.homebasepro.app",
+      "buildNumber": "2",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryUsageDescription": "HomeBase accesses your photo library so you can attach photos of your home, projects, or documents to service requests and job records.",
+        "NSPhotoLibraryAddUsageDescription": "HomeBase saves photos related to your home projects and service records to your photo library.",
+        "NSLocationWhenInUseUsageDescription": "HomeBase uses your location to find nearby service providers and verify service addresses.",
+        "NSUserNotificationsUsageDescription": "HomeBase sends you appointment reminders, booking confirmations, and service updates."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#38AE5F",
+        "foregroundImage": "./assets/images/icon.png"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.homebase.app",
+      "versionCode": 2,
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
+    },
+    "web": {
+      "output": "single",
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": "https://replit.com/"
+        }
+      ],
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff",
+          "dark": {
+            "backgroundColor": "#0F1419"
+          }
+        }
+      ],
+      "expo-web-browser",
+      "expo-image",
+      "expo-location",
+      [
+        "expo-notifications",
+        {
+          "iosDisplayInForeground": true
+        }
+      ],
+      "./plugins/withPrivacyManifest.js",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
+      ],
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.homebasepro.app"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "16db0e26-c342-42df-934c-b619f917e881"
+      }
+    }
+  }
+}

@@ -1,0 +1,2181 @@
+import { sql, relations } from "drizzle-orm";
+import {
+  pgTable,
+  text,
+  varchar,
+  integer,
+  timestamp,
+  boolean,
+  decimal,
+  pgEnum,
+  json,
+  jsonb,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
+import { createInsertSchema, createSelectSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+
+export const propertyTypeEnum = pgEnum("property_type", [
+  "single_family",
+  "condo",
+  "townhouse",
+  "apartment",
+  "multi_family",
+]);
+export const appointmentStatusEnum = pgEnum("appointment_status", [
+  "pending",
+  "confirmed",
+  "in_progress",
+  "completed",
+  "cancelled",
+]);
+export const urgencyEnum = pgEnum("urgency", ["flexible", "soon", "urgent"]);
+export const jobSizeEnum = pgEnum("job_size", ["small", "medium", "large"]);
+export const jobStatusEnum = pgEnum("job_status", [
+  "scheduled",
+  "confirmed",
+  "on_my_way",
+  "arrived",
+  "in_progress",
+  "completed",
+  "cancelled",
+  "weather_held",
+]);
+export const invoiceStatusEnum = pgEnum("invoice_status", [
+  "draft",
+  "sent",
+  "viewed",
+  "paid",
+  "partially_paid",
+  "overdue",
+  "void",
+  "refunded",
+  "cancelled",
+]);
+// Task #296: Estimates as a first-class object (separate from invoices).
+// Lifecycle: draft -> sent -> viewed -> accepted | declined | expired,
+// then optionally accepted -> converted (when promoted into an invoice).
+// Stripe is NEVER charged for an estimate — payment only happens after
+// conversion to an invoice.
+export const estimateStatusEnum = pgEnum("estimate_status", [
+  "draft",
+  "sent",
+  "viewed",
+  "accepted",
+  "declined",
+  "expired",
+  "converted",
+]);
+
+export const paymentMethodEnum = pgEnum("payment_method", [
+  "cash",
+  "card",
+  "bank_transfer",
+  "check",
+  "stripe",
+  "credits",
+  "other",
+]);
+export const paymentStatusEnum = pgEnum("payment_status", [
+  "requires_payment",
+  "processing",
+  "succeeded",
+  "failed",
+  "refunded",
+]);
+export const payoutStatusEnum = pgEnum("payout_status", [
+  "pending",
+  "in_transit",
+  "paid",
+  "failed",
+]);
+export const connectOnboardingStatusEnum = pgEnum("connect_onboarding_status", [
+  "not_started",
+  "pending",
+  "complete",
+]);
+export const providerPlanTierEnum = pgEnum("provider_plan_tier", [
+  "free",
+  "starter",
+  "professional",
+  "enterprise",
+]);
+
+export const users = pgTable("users", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  email: text("email").notNull().unique(),
+  password: text("password").notNull(),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  phone: text("phone"),
+  avatarUrl: text("avatar_url"),
+  isProvider: boolean("is_provider").default(false),
+  // Admin flag (Task #220) — DB-backed replacement for the previous
+  // ADMIN_EMAILS env-only gate so admin access can be granted in-app
+  // (and by ops via SQL) without redeploying. The requireAdmin
+  // middleware accepts either this column OR a match in ADMIN_EMAILS
+  // env so existing deployments still work.
+  isAdmin: boolean("is_admin").notNull().default(false),
+  stripeCustomerId: text("stripe_customer_id"),
+  defaultPaymentMethodId: text("default_payment_method_id"),
+  tokenVersion: integer("token_version").notNull().default(0),
+  lastActiveAt: timestamp("last_active_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const usersRelations = relations(users, ({ many }) => ({
+  homes: many(homes),
+  appointments: many(appointments),
+}));
+
+export const homes = pgTable("homes", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  label: text("label").notNull(),
+  street: text("street").notNull(),
+  city: text("city").notNull(),
+  state: text("state").notNull(),
+  zip: text("zip").notNull(),
+  propertyType: propertyTypeEnum("property_type").default("single_family"),
+  bedrooms: integer("bedrooms"),
+  bathrooms: integer("bathrooms"),
+  squareFeet: integer("square_feet"),
+  yearBuilt: integer("year_built"),
+  isDefault: boolean("is_default").default(false),
+
+  // HouseFax enrichment fields - Zillow data
+  lotSize: integer("lot_size"), // in sqft
+  estimatedValue: decimal("estimated_value", { precision: 12, scale: 2 }),
+  zillowId: text("zillow_id"),
+  zillowUrl: text("zillow_url"),
+  taxAssessedValue: decimal("tax_assessed_value", { precision: 12, scale: 2 }),
+  lastSoldDate: text("last_sold_date"),
+  lastSoldPrice: decimal("last_sold_price", { precision: 12, scale: 2 }),
+  stories: integer("stories"),
+
+  // Home profile - HVAC
+  hvacType: text("hvac_type"),
+  hvacInstalledYear: integer("hvac_installed_year"),
+  hvacLastServicedAt: timestamp("hvac_last_serviced_at"),
+  coolingType: text("cooling_type"),
+
+  // Home profile - Water heater
+  waterHeaterType: text("water_heater_type"),
+  waterHeaterInstalledYear: integer("water_heater_installed_year"),
+
+  // Home profile - Roof
+  roofMaterial: text("roof_material"),
+  roofInstalledYear: integer("roof_installed_year"),
+
+  // Home profile - Exterior
+  sidingMaterial: text("siding_material"),
+  foundationType: text("foundation_type"),
+  yardSizeSqft: integer("yard_size_sqft"),
+  hasBasement: boolean("has_basement"),
+  hasGarage: boolean("has_garage"),
+  hasPool: boolean("has_pool"),
+  hasDeck: boolean("has_deck"),
+  hasSprinklers: boolean("has_sprinklers"),
+  hasTreesNearRoof: boolean("has_trees_near_roof"),
+
+  // Home profile - Electrical & plumbing
+  electricalPanelAmps: integer("electrical_panel_amps"),
+  electricalPanelType: text("electrical_panel_type"),
+  plumbingMaterial: text("plumbing_material"),
+  sewerType: text("sewer_type"),
+
+  // Home profile - Amenities + notes
+  amenities: jsonb("amenities").$type<string[]>(),
+  knownIssues: text("known_issues"),
+
+  // Audit
+  detailsUpdatedAt: timestamp("details_updated_at"),
+  detailsUpdatedBy: varchar("details_updated_by"),
+
+  // HouseFax enrichment fields - Google data
+  latitude: decimal("latitude", { precision: 10, scale: 7 }),
+  longitude: decimal("longitude", { precision: 10, scale: 7 }),
+  placeId: text("place_id"),
+  formattedAddress: text("formatted_address"),
+  neighborhoodName: text("neighborhood_name"),
+  countyName: text("county_name"),
+
+  // HouseFax AI-accumulated data
+  housefaxData: text("housefax_data"), // JSON: systems, materials, known issues, etc.
+  housefaxScore: integer("housefax_score"), // Home health score (0-100)
+  housefaxEnrichedAt: timestamp("housefax_enriched_at"),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const homesRelations = relations(homes, ({ one, many }) => ({
+  user: one(users, { fields: [homes.userId], references: [users.id] }),
+  appointments: many(appointments),
+  housefaxEntries: many(housefaxEntries),
+}));
+
+export const serviceCategories = pgTable("service_categories", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  icon: text("icon"),
+  sortOrder: integer("sort_order").default(0),
+});
+
+export const serviceCategoriesRelations = relations(
+  serviceCategories,
+  ({ many }) => ({
+    services: many(services),
+    providers: many(providerServices),
+  }),
+);
+
+export const services = pgTable("services", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  categoryId: varchar("category_id")
+    .notNull()
+    .references(() => serviceCategories.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  basePrice: decimal("base_price", { precision: 10, scale: 2 }),
+  isPublic: boolean("is_public").default(true),
+});
+
+export const servicesRelations = relations(services, ({ one, many }) => ({
+  category: one(serviceCategories, {
+    fields: [services.categoryId],
+    references: [serviceCategories.id],
+  }),
+  providerServices: many(providerServices),
+}));
+
+export const providers = pgTable("providers", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  businessName: text("business_name").notNull(),
+  description: text("description"),
+  avatarUrl: text("avatar_url"),
+  phone: text("phone"),
+  email: text("email"),
+  rating: decimal("rating", { precision: 2, scale: 1 }).default("0"),
+  reviewCount: integer("review_count").default(0),
+  averageRating: decimal("average_rating", { precision: 3, scale: 2 }).default(
+    "0",
+  ),
+  hourlyRate: decimal("hourly_rate", { precision: 10, scale: 2 }),
+  isVerified: boolean("is_verified").default(false),
+  isActive: boolean("is_active").default(true),
+  serviceArea: text("service_area"),
+  yearsExperience: integer("years_experience").default(0),
+  capabilityTags: text("capability_tags")
+    .array()
+    .default(sql`ARRAY[]::text[]`),
+  businessHours: json("business_hours"),
+  bookingPolicies: json("booking_policies"),
+  serviceRadius: integer("service_radius"),
+  serviceZipCodes: text("service_zip_codes").array(),
+  serviceCities: text("service_cities").array(),
+  isPublic: boolean("is_public").default(false),
+  slug: text("slug").unique(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const providersRelations = relations(providers, ({ one, many }) => ({
+  user: one(users, { fields: [providers.userId], references: [users.id] }),
+  services: many(providerServices),
+  appointments: many(appointments),
+  clients: many(clients),
+  jobs: many(jobs),
+  invoices: many(invoices),
+  payments: many(payments),
+  crewMembers: many(crewMembers),
+}));
+
+export const crewMembers = pgTable("crew_members", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  phone: text("phone"),
+  email: text("email"),
+  color: text("color").notNull().default("#38AE5F"),
+  invitedUserId: varchar("invited_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const crewMembersRelations = relations(crewMembers, ({ one }) => ({
+  provider: one(providers, {
+    fields: [crewMembers.providerId],
+    references: [providers.id],
+  }),
+  invitedUser: one(users, {
+    fields: [crewMembers.invitedUserId],
+    references: [users.id],
+  }),
+}));
+
+export const providerServices = pgTable("provider_services", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  serviceId: varchar("service_id")
+    .notNull()
+    .references(() => services.id, { onDelete: "cascade" }),
+  categoryId: varchar("category_id")
+    .notNull()
+    .references(() => serviceCategories.id, { onDelete: "cascade" }),
+  price: decimal("price", { precision: 10, scale: 2 }),
+});
+
+export const providerServicesRelations = relations(
+  providerServices,
+  ({ one }) => ({
+    provider: one(providers, {
+      fields: [providerServices.providerId],
+      references: [providers.id],
+    }),
+    service: one(services, {
+      fields: [providerServices.serviceId],
+      references: [services.id],
+    }),
+    category: one(serviceCategories, {
+      fields: [providerServices.categoryId],
+      references: [serviceCategories.id],
+    }),
+  }),
+);
+
+export const pricingTypeEnum = pgEnum("pricing_type", [
+  "fixed",
+  "variable",
+  "service_call",
+  "quote",
+]);
+
+export const providerCustomServices = pgTable("provider_custom_services", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  category: text("category").notNull().default("General"),
+  description: text("description"),
+  pricingType: pricingTypeEnum("pricing_type").notNull().default("fixed"),
+  basePrice: decimal("base_price", { precision: 10, scale: 2 }),
+  priceFrom: decimal("price_from", { precision: 10, scale: 2 }),
+  priceTo: decimal("price_to", { precision: 10, scale: 2 }),
+  priceTiersJson: text("price_tiers_json"),
+  duration: integer("duration").default(60),
+  isPublished: boolean("is_published").default(true),
+  isAddon: boolean("is_addon").default(false),
+  isRecurring: boolean("is_recurring").default(false),
+  recurringFrequency: text("recurring_frequency"),
+  recurringPrice: decimal("recurring_price", { precision: 10, scale: 2 }),
+  intakeQuestionsJson: text("intake_questions_json"),
+  addOnsJson: text("add_ons_json"),
+  checklistTemplateJson: jsonb("checklist_template_json").$type<{ id: string; label: string }[]>(),
+  bookingMode: text("booking_mode").default("instant"),
+  aiPricingInsight: text("ai_pricing_insight"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const providerCustomServicesRelations = relations(
+  providerCustomServices,
+  ({ one }) => ({
+    provider: one(providers, {
+      fields: [providerCustomServices.providerId],
+      references: [providers.id],
+    }),
+  }),
+);
+
+export const insertProviderCustomServiceSchema = createInsertSchema(
+  providerCustomServices,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ProviderCustomService = typeof providerCustomServices.$inferSelect;
+export type InsertProviderCustomService = z.infer<
+  typeof insertProviderCustomServiceSchema
+>;
+
+export const appointments = pgTable(
+  "appointments",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: varchar("user_id").references(() => users.id, {
+      onDelete: "cascade",
+    }),
+    homeId: varchar("home_id").references(() => homes.id, {
+      onDelete: "cascade",
+    }),
+    providerId: varchar("provider_id")
+      .notNull()
+      .references(() => providers.id, { onDelete: "cascade" }),
+    serviceId: varchar("service_id").references(() => services.id, {
+      onDelete: "set null",
+    }),
+    serviceName: text("service_name").notNull(),
+    description: text("description"),
+    jobSummary: text("job_summary"),
+    urgency: urgencyEnum("urgency").default("flexible"),
+    jobSize: jobSizeEnum("job_size").default("small"),
+    scheduledDate: timestamp("scheduled_date").notNull(),
+    scheduledTime: text("scheduled_time"),
+    status: appointmentStatusEnum("status").default("pending"),
+    estimatedPrice: decimal("estimated_price", { precision: 10, scale: 2 }),
+    finalPrice: decimal("final_price", { precision: 10, scale: 2 }),
+    providerDiagnosis: text("provider_diagnosis"),
+    statusHistory: text("status_history"),
+    notes: text("notes"),
+    isRecurring: boolean("is_recurring").default(false),
+    recurringFrequency: text("recurring_frequency"),
+    // Task #236: deposit + cancellation-fee tracking. Populated by booking
+    // policy enforcement; null/zero when the provider has no deposit policy.
+    depositAmountCents: integer("deposit_amount_cents").default(0),
+    depositStatus: text("deposit_status").default("not_required"),
+    depositPaymentIntentId: text("deposit_payment_intent_id"),
+    depositCheckoutSessionId: text("deposit_checkout_session_id"),
+    cancellationFeeCents: integer("cancellation_fee_cents").default(0),
+    cancellationFeeStatus: text("cancellation_fee_status"),
+    cancellationFeePaymentIntentId: text("cancellation_fee_payment_intent_id"),
+    cancellationFeeCheckoutSessionId: text(
+      "cancellation_fee_checkout_session_id",
+    ),
+    rescheduleCount: integer("reschedule_count").notNull().default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    completedAt: timestamp("completed_at"),
+    cancelledAt: timestamp("cancelled_at"),
+  },
+  (table) => ({
+    // Task #226: prevent duplicate appointment rows for the same homeowner +
+    // provider + slot. Partial because public-booking rows have user_id NULL
+    // until the homeowner registers. Backed by SQL migration that deduped
+    // 134 historical duplicates before the index was added.
+    userProviderSlotUnique: uniqueIndex("appointments_user_provider_slot_unique")
+      .on(table.userId, table.providerId, table.scheduledDate)
+      .where(sql`user_id IS NOT NULL AND scheduled_date IS NOT NULL`),
+  }),
+);
+
+export const appointmentsRelations = relations(appointments, ({ one }) => ({
+  user: one(users, { fields: [appointments.userId], references: [users.id] }),
+  home: one(homes, { fields: [appointments.homeId], references: [homes.id] }),
+  provider: one(providers, {
+    fields: [appointments.providerId],
+    references: [providers.id],
+  }),
+  service: one(services, {
+    fields: [appointments.serviceId],
+    references: [services.id],
+  }),
+}));
+
+export const reviews = pgTable("reviews", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  appointmentId: varchar("appointment_id")
+    .notNull()
+    .references(() => appointments.id, { onDelete: "cascade" }),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  rating: integer("rating").notNull(),
+  comment: text("comment"),
+  providerReply: text("provider_reply"),
+  providerReplyAt: timestamp("provider_reply_at"),
+  providerReplyUpdatedAt: timestamp("provider_reply_updated_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const reviewsRelations = relations(reviews, ({ one }) => ({
+  appointment: one(appointments, {
+    fields: [reviews.appointmentId],
+    references: [appointments.id],
+  }),
+  user: one(users, { fields: [reviews.userId], references: [users.id] }),
+  provider: one(providers, {
+    fields: [reviews.providerId],
+    references: [providers.id],
+  }),
+}));
+
+export const savedProviders = pgTable("saved_providers", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  userProviderIdx: uniqueIndex("saved_providers_user_provider_unique").on(t.userId, t.providerId),
+}));
+
+export const savedProvidersRelations = relations(savedProviders, ({ one }) => ({
+  user: one(users, { fields: [savedProviders.userId], references: [users.id] }),
+  provider: one(providers, { fields: [savedProviders.providerId], references: [providers.id] }),
+}));
+
+export const reviewReports = pgTable("review_reports", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  reviewId: varchar("review_id")
+    .notNull()
+    .references(() => reviews.id, { onDelete: "cascade" }),
+  reporterUserId: varchar("reporter_user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  reason: text("reason").notNull(),
+  details: text("details"),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const reviewReportsRelations = relations(reviewReports, ({ one }) => ({
+  review: one(reviews, { fields: [reviewReports.reviewId], references: [reviews.id] }),
+  reporter: one(users, { fields: [reviewReports.reporterUserId], references: [users.id] }),
+}));
+
+export const notifications = pgTable("notifications", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  type: text("type").notNull(),
+  isRead: boolean("is_read").default(false),
+  data: text("data"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user: one(users, { fields: [notifications.userId], references: [users.id] }),
+}));
+
+export const maintenanceReminderFrequencyEnum = pgEnum(
+  "maintenance_reminder_frequency",
+  ["monthly", "quarterly", "biannually", "annually", "custom"],
+);
+
+export const maintenanceReminders = pgTable("maintenance_reminders", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  homeId: varchar("home_id")
+    .notNull()
+    .references(() => homes.id, { onDelete: "cascade" }),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  category: text("category"),
+  frequency: maintenanceReminderFrequencyEnum("frequency").default("annually"),
+  lastCompletedAt: timestamp("last_completed_at"),
+  nextDueAt: timestamp("next_due_at").notNull(),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const maintenanceRemindersRelations = relations(
+  maintenanceReminders,
+  ({ one }) => ({
+    home: one(homes, {
+      fields: [maintenanceReminders.homeId],
+      references: [homes.id],
+    }),
+    user: one(users, {
+      fields: [maintenanceReminders.userId],
+      references: [users.id],
+    }),
+  }),
+);
+
+// Provider plan tiers with platform fees
+export const providerPlans = pgTable("provider_plans", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  planTier: providerPlanTierEnum("plan_tier").default("free"),
+  platformFeePercent: decimal("platform_fee_percent", {
+    precision: 5,
+    scale: 2,
+  }).default("10.00"), // 10% default
+  platformFeeFixedCents: integer("platform_fee_fixed_cents").default(0), // additional fixed fee in cents
+  // Subscription gating: providers use the app free until first invoice is paid,
+  // then enter a 7-day grace period, then must subscribe to keep creating jobs/invoices.
+  firstPaidBookingAt: timestamp("first_paid_booking_at"),
+  gracePeriodEndsAt: timestamp("grace_period_ends_at"),
+  isSubscribed: boolean("is_subscribed").default(false).notNull(),
+  // Real Stripe billing fields (Task #124)
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  subscriptionStatus: text("subscription_status"),
+  subscriptionStartedAt: timestamp("subscription_started_at"),
+  subscriptionEndedAt: timestamp("subscription_ended_at"),
+  // Source of the active subscription (Task #132)
+  // - 'revenuecat_ios' / 'revenuecat_android': IAP via Apple / Google Play
+  // - 'stripe_web': Stripe Checkout via the web app
+  subscriptionSource: text("subscription_source"),
+  revenuecatProductId: text("revenuecat_product_id"),
+  currentPeriodEnd: timestamp("current_period_end"),
+  // HomeBase Partner status (Task #211): admin-granted complimentary Pro
+  // access. Partners bypass the trial/grace/expired flow and never see the
+  // subscription paywall, but standard platform transaction fees still apply.
+  isPartner: boolean("is_partner").default(false).notNull(),
+  partnerSince: timestamp("partner_since"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const providerPlansRelations = relations(providerPlans, ({ one }) => ({
+  provider: one(providers, {
+    fields: [providerPlans.providerId],
+    references: [providers.id],
+  }),
+}));
+
+// Stripe Connect accounts for providers
+export const stripeConnectAccounts = pgTable("stripe_connect_accounts", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" })
+    .unique(),
+  stripeAccountId: text("stripe_account_id").notNull().unique(),
+  onboardingStatus:
+    connectOnboardingStatusEnum("onboarding_status").default("not_started"),
+  chargesEnabled: boolean("charges_enabled").default(false),
+  payoutsEnabled: boolean("payouts_enabled").default(false),
+  detailsSubmitted: boolean("details_submitted").default(false),
+  // `true` if this Stripe account was created against live mode; `false` for test mode.
+  // Used to detect legacy test-mode accounts that must re-onboard before live payments.
+  livemode: boolean("livemode").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const stripeConnectAccountsRelations = relations(
+  stripeConnectAccounts,
+  ({ one }) => ({
+    provider: one(providers, {
+      fields: [stripeConnectAccounts.providerId],
+      references: [providers.id],
+    }),
+  }),
+);
+
+// User credits wallet (for RevenueCat integration)
+export const userCredits = pgTable("user_credits", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" })
+    .unique(),
+  balanceCents: integer("balance_cents").default(0),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const userCreditsRelations = relations(userCredits, ({ one, many }) => ({
+  user: one(users, { fields: [userCredits.userId], references: [users.id] }),
+  ledger: many(creditLedger),
+}));
+
+// Credit ledger for tracking credit transactions
+export const creditLedger = pgTable("credit_ledger", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  deltaCents: integer("delta_cents").notNull(), // positive for credit, negative for debit
+  reason: text("reason").notNull(), // e.g., "revenuecat_purchase", "invoice_payment", "refund"
+  invoiceId: varchar("invoice_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const creditLedgerRelations = relations(creditLedger, ({ one }) => ({
+  user: one(users, { fields: [creditLedger.userId], references: [users.id] }),
+  credits: one(userCredits, {
+    fields: [creditLedger.userId],
+    references: [userCredits.userId],
+  }),
+}));
+
+// Payouts to providers via Stripe Connect
+export const payouts = pgTable("payouts", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  amountCents: integer("amount_cents").notNull(),
+  status: payoutStatusEnum("status").default("pending"),
+  stripeTransferId: text("stripe_transfer_id"),
+  stripePayoutId: text("stripe_payout_id"),
+  arrivalDate: timestamp("arrival_date"),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const payoutsRelations = relations(payouts, ({ one }) => ({
+  provider: one(providers, {
+    fields: [payouts.providerId],
+    references: [providers.id],
+  }),
+}));
+
+export const refundStatusEnum = pgEnum("refund_status", [
+  "pending",
+  "succeeded",
+  "failed",
+  "canceled",
+]);
+
+export const refunds = pgTable("refunds", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  paymentId: varchar("payment_id").references(() => payments.id, {
+    onDelete: "set null",
+  }),
+  stripeRefundId: text("stripe_refund_id").unique(),
+  stripeChargeId: text("stripe_charge_id"),
+  amountCents: integer("amount_cents").notNull(),
+  reason: text("reason"),
+  status: refundStatusEnum("status").default("pending"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const refundsRelations = relations(refunds, ({ one }) => ({
+  provider: one(providers, {
+    fields: [refunds.providerId],
+    references: [providers.id],
+  }),
+  payment: one(payments, {
+    fields: [refunds.paymentId],
+    references: [payments.id],
+  }),
+}));
+
+// Stripe webhook events for idempotency
+// `endpoint` records which webhook endpoint received the event ("platform" or
+// "connect") so we can audit per-endpoint deliveries and detect cross-routing
+// (e.g. a Connect event delivered to the platform endpoint).
+export const stripeWebhookEvents = pgTable("stripe_webhook_events", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  stripeEventId: text("stripe_event_id").notNull().unique(),
+  eventType: text("event_type").notNull(),
+  endpoint: text("endpoint"), // 'platform' | 'connect' (nullable for legacy rows)
+  stripeAccountId: text("stripe_account_id"), // event.account, null on platform events
+  // Nullable: row is inserted at "reserve" time with processed_at=NULL,
+  // then UPDATEd to NOW() once the handler succeeds. A retry that finds
+  // the row but processed_at IS NULL re-runs the handler.
+  processedAt: timestamp("processed_at"),
+  payload: text("payload"), // JSON string of event data
+});
+
+// Invoice line items (normalized from JSON)
+export const invoiceLineItems = pgTable("invoice_line_items", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  invoiceId: varchar("invoice_id")
+    .notNull()
+    .references(() => invoices.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  quantity: decimal("quantity", { precision: 10, scale: 2 }).default("1"),
+  unitPriceCents: integer("unit_price_cents").notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  metadata: text("metadata"), // JSON for additional data
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Task #296: Estimate line items mirror invoice line items but live on
+// estimates. Kept as a separate table so estimate edits never disturb the
+// invoice once the estimate is converted.
+export const estimateLineItems = pgTable("estimate_line_items", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  estimateId: varchar("estimate_id").notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  quantity: decimal("quantity", { precision: 10, scale: 2 }).default("1"),
+  unitPriceCents: integer("unit_price_cents").notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  metadata: text("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const invoiceLineItemsRelations = relations(
+  invoiceLineItems,
+  ({ one }) => ({
+    invoice: one(invoices, {
+      fields: [invoiceLineItems.invoiceId],
+      references: [invoices.id],
+    }),
+  }),
+);
+
+// Provider's clients (their customers)
+export const clients = pgTable("clients", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name"),
+  email: text("email"),
+  phone: text("phone"),
+  address: text("address"),
+  city: text("city"),
+  state: text("state"),
+  zip: text("zip"),
+  notes: text("notes"),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeConnectCustomerId: text("stripe_connect_customer_id"),
+  homeData: text("home_data"), // JSON: legacy HouseFax cache (deprecated in favor of homeId)
+  homeId: varchar("home_id").references(() => homes.id, {
+    onDelete: "set null",
+  }),
+  // Cached homeowner user ID resolved from homes.userId. Populated when a client's
+  // homeId points at a home that has a registered homeowner account, so all
+  // notification + ownership lookups can use a single field instead of joining.
+  homeownerUserId: varchar("homeowner_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const clientsRelations = relations(clients, ({ one, many }) => ({
+  provider: one(providers, {
+    fields: [clients.providerId],
+    references: [providers.id],
+  }),
+  jobs: many(jobs),
+  invoices: many(invoices),
+}));
+
+// Provider-initiated jobs (work orders)
+export const jobs = pgTable("jobs", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  clientId: varchar("client_id").references(() => clients.id, {
+    onDelete: "set null",
+  }),
+  appointmentId: varchar("appointment_id").references(() => appointments.id, {
+    onDelete: "set null",
+  }),
+  serviceId: varchar("service_id").references(() => services.id, {
+    onDelete: "set null",
+  }),
+  customServiceId: varchar("custom_service_id").references(
+    () => providerCustomServices.id,
+    { onDelete: "set null" },
+  ),
+  // Link to job_series for auto-generated recurring occurrences (nullable
+  // for one-off jobs). Declared as a bare varchar so we don't create a
+  // circular type reference with the jobSeries table (which is defined
+  // below jobs but logically points back at the same provider scope). The
+  // physical FK constraint is added by the boot migration.
+  seriesId: varchar("series_id"),
+  title: text("title").notNull(),
+  description: text("description"),
+  scheduledDate: timestamp("scheduled_date").notNull(),
+  scheduledTime: text("scheduled_time"),
+  estimatedDuration: integer("estimated_duration"), // in minutes
+  status: jobStatusEnum("status").default("scheduled"),
+  address: text("address"),
+  estimatedPrice: decimal("estimated_price", { precision: 10, scale: 2 }),
+  finalPrice: decimal("final_price", { precision: 10, scale: 2 }),
+  notes: text("notes"),
+  checklist: jsonb("checklist"), // [{ id, label, completed }] — AI-generated, persisted
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+  weatherHeldAt: timestamp("weather_held_at"),
+  originalScheduledAt: timestamp("original_scheduled_at"),
+  // Task #302: optional crew member assigned to this job. Set null if the
+  // crew member is later deleted so jobs aren't orphaned.
+  assignedCrewMemberId: varchar("assigned_crew_member_id").references(
+    () => crewMembers.id,
+    { onDelete: "set null" },
+  ),
+});
+
+export const jobsRelations = relations(jobs, ({ one, many }) => ({
+  provider: one(providers, {
+    fields: [jobs.providerId],
+    references: [providers.id],
+  }),
+  client: one(clients, { fields: [jobs.clientId], references: [clients.id] }),
+  appointment: one(appointments, {
+    fields: [jobs.appointmentId],
+    references: [appointments.id],
+  }),
+  service: one(services, {
+    fields: [jobs.serviceId],
+    references: [services.id],
+  }),
+  customService: one(providerCustomServices, {
+    fields: [jobs.customServiceId],
+    references: [providerCustomServices.id],
+  }),
+  invoices: many(invoices),
+  series: one(jobSeries, {
+    fields: [jobs.seriesId],
+    references: [jobSeries.id],
+  }),
+}));
+
+// ─── Recurring Job Series ────────────────────────────────────────────────────
+// Materializes recurring service bookings onto the calendar. The originating
+// job becomes occurrence #1 and the generator inserts subsequent occurrences
+// (jobs + paired appointments) up to a rolling horizon. Cancelling the series
+// cancels future occurrences but leaves completed history intact via
+// ON DELETE SET NULL on jobs.series_id.
+export const jobSeries = pgTable("job_series", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  clientId: varchar("client_id").references(() => clients.id, {
+    onDelete: "set null",
+  }),
+  customServiceId: varchar("custom_service_id").references(
+    () => providerCustomServices.id,
+    { onDelete: "set null" },
+  ),
+  title: text("title").notNull(),
+  // Snapshotted from the anchor job so each materialized occurrence inherits
+  // the same description (intake summary), provider notes, and duration.
+  description: text("description"),
+  notes: text("notes"),
+  estimatedDuration: integer("estimated_duration"), // minutes
+  // weekly | biweekly | monthly | quarterly
+  frequency: text("frequency").notNull(),
+  // HH:MM (24h) — preferred time-of-day for each occurrence
+  scheduledTime: text("scheduled_time"),
+  estimatedPrice: decimal("estimated_price", { precision: 10, scale: 2 }),
+  address: text("address"),
+  // Anchor date — first occurrence's scheduled_date. All subsequent
+  // occurrences are computed from this anchor by frequency offset.
+  anchorDate: timestamp("anchor_date").notNull(),
+  // Furthest scheduled_date materialized so far (rolling horizon).
+  generatedThrough: timestamp("generated_through"),
+  // active | cancelled
+  status: text("status").notNull().default("active"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  cancelledAt: timestamp("cancelled_at"),
+});
+
+export const jobSeriesRelations = relations(jobSeries, ({ one, many }) => ({
+  provider: one(providers, {
+    fields: [jobSeries.providerId],
+    references: [providers.id],
+  }),
+  client: one(clients, {
+    fields: [jobSeries.clientId],
+    references: [clients.id],
+  }),
+  customService: one(providerCustomServices, {
+    fields: [jobSeries.customServiceId],
+    references: [providerCustomServices.id],
+  }),
+  jobs: many(jobs),
+}));
+
+// Invoices for jobs (enhanced for Stripe Connect)
+export const invoices = pgTable("invoices", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  clientId: varchar("client_id").references(() => clients.id, {
+    onDelete: "set null",
+  }),
+  homeownerUserId: varchar("homeowner_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  jobId: varchar("job_id").references(() => jobs.id, { onDelete: "set null" }),
+  invoiceNumber: text("invoice_number").notNull(),
+  currency: text("currency").default("usd"),
+
+  // Amount breakdown in cents for precision
+  subtotalCents: integer("subtotal_cents").notNull().default(0),
+  taxCents: integer("tax_cents").default(0),
+  discountCents: integer("discount_cents").default(0),
+  platformFeeCents: integer("platform_fee_cents").default(0),
+  totalCents: integer("total_cents").notNull().default(0),
+
+  // Legacy decimal fields for backwards compatibility
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull().default("0"),
+  tax: decimal("tax", { precision: 10, scale: 2 }).default("0"),
+  total: decimal("total", { precision: 10, scale: 2 }).notNull().default("0"),
+
+  status: invoiceStatusEnum("status").default("draft"),
+  dueDate: timestamp("due_date"),
+  notes: text("notes"),
+  lineItems: text("line_items"), // JSON string of line items (legacy)
+  paymentMethodsAllowed: text("payment_methods_allowed").default(
+    "stripe,credits",
+  ), // JSON array
+
+  // Stripe Connect fields
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  stripeCheckoutSessionId: text("stripe_checkout_session_id"),
+  stripePaymentLinkId: text("stripe_payment_link_id"),
+  stripeInvoiceId: text("stripe_invoice_id"),
+  hostedInvoiceUrl: text("hosted_invoice_url"),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  sentAt: timestamp("sent_at"),
+  viewedAt: timestamp("viewed_at"),
+  paidAt: timestamp("paid_at"),
+});
+
+export const invoicesRelations = relations(invoices, ({ one, many }) => ({
+  provider: one(providers, {
+    fields: [invoices.providerId],
+    references: [providers.id],
+  }),
+  client: one(clients, {
+    fields: [invoices.clientId],
+    references: [clients.id],
+  }),
+  homeownerUser: one(users, {
+    fields: [invoices.homeownerUserId],
+    references: [users.id],
+  }),
+  job: one(jobs, { fields: [invoices.jobId], references: [jobs.id] }),
+  payments: many(payments),
+  lineItemsNormalized: many(invoiceLineItems),
+}));
+
+// Task #296: Estimates — proposals sent to clients before any work or
+// payment. Kept entirely separate from invoices (no Stripe fields).
+// `convertedInvoiceId` is set when an accepted estimate is promoted into
+// an invoice (status moves to 'converted').
+export const estimates = pgTable("estimates", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  clientId: varchar("client_id").references(() => clients.id, {
+    onDelete: "set null",
+  }),
+  homeownerUserId: varchar("homeowner_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  jobId: varchar("job_id").references(() => jobs.id, { onDelete: "set null" }),
+
+  estimateNumber: text("estimate_number").notNull(),
+  currency: text("currency").default("usd"),
+
+  subtotalCents: integer("subtotal_cents").notNull().default(0),
+  taxCents: integer("tax_cents").default(0),
+  discountCents: integer("discount_cents").default(0),
+  totalCents: integer("total_cents").notNull().default(0),
+
+  status: estimateStatusEnum("status").default("draft"),
+  expiresAt: timestamp("expires_at"),
+  notes: text("notes"),
+  // Snapshot of line items at the moment of acceptance/decline so the
+  // client-facing record stays stable even if the provider edits later.
+  acceptedSnapshot: text("accepted_snapshot"),
+
+  // Public viewer token (random, unguessable) used by the homeowner to
+  // open the estimate without authenticating.
+  publicToken: text("public_token").notNull().unique(),
+
+  // Convert link: when an accepted estimate is promoted into an invoice
+  // we record the invoice id here. The reverse pointer (invoices.estimateId)
+  // is added in the migration so the FK isn't a circular Drizzle reference.
+  convertedInvoiceId: varchar("converted_invoice_id"),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  sentAt: timestamp("sent_at"),
+  viewedAt: timestamp("viewed_at"),
+  decidedAt: timestamp("decided_at"),
+  convertedAt: timestamp("converted_at"),
+});
+
+export const estimatesRelations = relations(estimates, ({ one, many }) => ({
+  provider: one(providers, {
+    fields: [estimates.providerId],
+    references: [providers.id],
+  }),
+  client: one(clients, {
+    fields: [estimates.clientId],
+    references: [clients.id],
+  }),
+  homeownerUser: one(users, {
+    fields: [estimates.homeownerUserId],
+    references: [users.id],
+  }),
+  job: one(jobs, { fields: [estimates.jobId], references: [jobs.id] }),
+  lineItems: many(estimateLineItems),
+}));
+
+export const estimateLineItemsRelations = relations(
+  estimateLineItems,
+  ({ one }) => ({
+    estimate: one(estimates, {
+      fields: [estimateLineItems.estimateId],
+      references: [estimates.id],
+    }),
+  }),
+);
+
+// Payments received (enhanced for Stripe Connect)
+export const payments = pgTable("payments", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  invoiceId: varchar("invoice_id")
+    .notNull()
+    .references(() => invoices.id, { onDelete: "cascade" }),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  amountCents: integer("amount_cents").notNull().default(0),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull().default("0"), // Legacy
+  method: paymentMethodEnum("method").default("stripe"),
+  status: paymentStatusEnum("status").default("requires_payment"),
+
+  // Stripe fields
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  stripeChargeId: text("stripe_charge_id"),
+
+  reference: text("reference"), // transaction ID or check number
+  notes: text("notes"),
+  // Task #295: manual payment metadata. `photoUrl` stores receipt proof in
+  // the `job-photos` Supabase bucket; `receivedAt` is the date the payment
+  // was actually collected (defaults to createdAt for stripe rows). The
+  // void columns power the soft-delete + audit trail for manual entries.
+  photoUrl: text("photo_url"),
+  receivedAt: timestamp("received_at"),
+  createdBy: varchar("created_by").references(() => users.id, { onDelete: "set null" }),
+  voidedAt: timestamp("voided_at"),
+  voidedBy: varchar("voided_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  // Task #245: enforce idempotency on webhook-driven payment upserts. A
+  // single Stripe PaymentIntent must map to at most one payments row so
+  // ON CONFLICT (stripe_payment_intent_id) DO UPDATE works in handlers.
+  // Note: Postgres allows multiple NULLs in a UNIQUE index by default
+  // (NULL ≠ NULL), so a non-partial index is safe even though most rows
+  // for non-Stripe payment methods have NULL here. We keep the index
+  // non-partial because ON CONFLICT cannot infer a partial-index target
+  // unless its WHERE predicate is restated, which Drizzle's onConflict
+  // helper doesn't currently support.
+  paymentIntentUnique: uniqueIndex("payments_stripe_payment_intent_id_unique")
+    .on(table.stripePaymentIntentId),
+}));
+
+export const paymentsRelations = relations(payments, ({ one }) => ({
+  invoice: one(invoices, {
+    fields: [payments.invoiceId],
+    references: [invoices.id],
+  }),
+  provider: one(providers, {
+    fields: [payments.providerId],
+    references: [providers.id],
+  }),
+}));
+
+// Booking link status enum
+export const bookingLinkStatusEnum = pgEnum("booking_link_status", [
+  "active",
+  "paused",
+  "disabled",
+]);
+
+// Quote mode enum for intake submissions
+export const quoteModeEnum = pgEnum("quote_mode", [
+  "range",
+  "fixed",
+  "estimate_after_review",
+]);
+
+// Intake submission status enum
+export const intakeStatusEnum = pgEnum("intake_status", [
+  "submitted",
+  "confirmed",
+  "reviewed",
+  "converted",
+  "declined",
+  "expired",
+]);
+
+// Provider booking links (public intake pages)
+export const bookingLinks = pgTable("booking_links", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id")
+    .notNull()
+    .unique()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  slug: text("slug").notNull().unique(),
+  status: bookingLinkStatusEnum("status").default("active"),
+  isActive: boolean("is_active").default(true),
+  instantBooking: boolean("instant_booking").default(false),
+  showPricing: boolean("show_pricing").default(true),
+  customTitle: text("custom_title"),
+  customDescription: text("custom_description"),
+  depositRequired: boolean("deposit_required").default(false),
+  depositAmount: decimal("deposit_amount", { precision: 10, scale: 2 }),
+  depositPercentage: integer("deposit_percentage"),
+  serviceCatalog: text("service_catalog"),
+  availabilityRules: text("availability_rules"),
+  intakeQuestions: text("intake_questions"),
+  welcomeMessage: text("welcome_message"),
+  confirmationMessage: text("confirmation_message"),
+  brandColor: text("brand_color"),
+  logoUrl: text("logo_url"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const bookingLinksRelations = relations(
+  bookingLinks,
+  ({ one, many }) => ({
+    provider: one(providers, {
+      fields: [bookingLinks.providerId],
+      references: [providers.id],
+    }),
+    intakeSubmissions: many(intakeSubmissions),
+  }),
+);
+
+// Intake submissions from booking links
+export const intakeSubmissions = pgTable("intake_submissions", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  bookingLinkId: varchar("booking_link_id")
+    .notNull()
+    .references(() => bookingLinks.id, { onDelete: "cascade" }),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  homeownerUserId: varchar("homeowner_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+
+  // Client info (may or may not have an account)
+  clientName: text("client_name").notNull(),
+  clientPhone: text("client_phone"),
+  clientEmail: text("client_email"),
+  address: text("address"),
+
+  // Problem description
+  problemDescription: text("problem_description").notNull(),
+  categoryId: varchar("category_id").references(() => serviceCategories.id, {
+    onDelete: "set null",
+  }),
+  answersJson: text("answers_json"), // JSON: responses to intake questions
+  photosJson: text("photos_json"), // JSON: array of photo URLs
+  preferredTimesJson: text("preferred_times_json"), // JSON: preferred appointment times
+
+  // Quoting
+  quoteMode: quoteModeEnum("quote_mode").default("estimate_after_review"),
+  quoteLow: decimal("quote_low", { precision: 10, scale: 2 }),
+  quoteHigh: decimal("quote_high", { precision: 10, scale: 2 }),
+  quoteFixed: decimal("quote_fixed", { precision: 10, scale: 2 }),
+
+  // Status and conversion
+  status: intakeStatusEnum("status").default("submitted"),
+  convertedJobId: varchar("converted_job_id").references(() => jobs.id, {
+    onDelete: "set null",
+  }),
+  convertedClientId: varchar("converted_client_id").references(
+    () => clients.id,
+    { onDelete: "set null" },
+  ),
+
+  // Deposit payment
+  depositPaid: boolean("deposit_paid").default(false),
+  depositAmount: decimal("deposit_amount", { precision: 10, scale: 2 }),
+  depositPaymentId: varchar("deposit_payment_id"),
+
+  reviewedAt: timestamp("reviewed_at"),
+  convertedAt: timestamp("converted_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const intakeSubmissionsRelations = relations(
+  intakeSubmissions,
+  ({ one }) => ({
+    bookingLink: one(bookingLinks, {
+      fields: [intakeSubmissions.bookingLinkId],
+      references: [bookingLinks.id],
+    }),
+    provider: one(providers, {
+      fields: [intakeSubmissions.providerId],
+      references: [providers.id],
+    }),
+    homeownerUser: one(users, {
+      fields: [intakeSubmissions.homeownerUserId],
+      references: [users.id],
+    }),
+    category: one(serviceCategories, {
+      fields: [intakeSubmissions.categoryId],
+      references: [serviceCategories.id],
+    }),
+    convertedJob: one(jobs, {
+      fields: [intakeSubmissions.convertedJobId],
+      references: [jobs.id],
+    }),
+    convertedClient: one(clients, {
+      fields: [intakeSubmissions.convertedClientId],
+      references: [clients.id],
+    }),
+  }),
+);
+
+export const insertUserSchema = createInsertSchema(users).pick({
+  email: true,
+  password: true,
+  firstName: true,
+  lastName: true,
+  phone: true,
+});
+
+export const loginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
+});
+
+export const insertHomeSchema = createInsertSchema(homes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Editable home profile fields - used by the Home Profile editor.
+// Picks only the fields homeowners can edit; everything is optional.
+export const homeProfileUpdateSchema = createInsertSchema(homes)
+  .pick({
+    propertyType: true,
+    bedrooms: true,
+    bathrooms: true,
+    squareFeet: true,
+    yearBuilt: true,
+    stories: true,
+    lotSize: true,
+    hvacType: true,
+    hvacInstalledYear: true,
+    hvacLastServicedAt: true,
+    coolingType: true,
+    waterHeaterType: true,
+    waterHeaterInstalledYear: true,
+    roofMaterial: true,
+    roofInstalledYear: true,
+    sidingMaterial: true,
+    foundationType: true,
+    yardSizeSqft: true,
+    hasBasement: true,
+    hasGarage: true,
+    hasPool: true,
+    hasDeck: true,
+    hasSprinklers: true,
+    hasTreesNearRoof: true,
+    electricalPanelAmps: true,
+    electricalPanelType: true,
+    plumbingMaterial: true,
+    sewerType: true,
+    amenities: true,
+    knownIssues: true,
+  })
+  .partial();
+export type HomeProfileUpdate = z.infer<typeof homeProfileUpdateSchema>;
+
+// Change-log table — every edit to a home profile field gets a row.
+export const homeFieldChanges = pgTable("home_field_changes", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  homeId: varchar("home_id")
+    .notNull()
+    .references(() => homes.id, { onDelete: "cascade" }),
+  fieldName: text("field_name").notNull(),
+  oldValue: text("old_value"),
+  newValue: text("new_value"),
+  source: text("source").notNull(), // "zillow_import" | "homeowner" | "health_score" | "survival_kit" | "provider"
+  changedByUserId: varchar("changed_by_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  changedAt: timestamp("changed_at").defaultNow().notNull(),
+});
+
+export const homeFieldChangesRelations = relations(
+  homeFieldChanges,
+  ({ one }) => ({
+    home: one(homes, {
+      fields: [homeFieldChanges.homeId],
+      references: [homes.id],
+    }),
+    changedByUser: one(users, {
+      fields: [homeFieldChanges.changedByUserId],
+      references: [users.id],
+    }),
+  }),
+);
+
+export type HomeFieldChange = typeof homeFieldChanges.$inferSelect;
+export type InsertHomeFieldChange = typeof homeFieldChanges.$inferInsert;
+
+export const insertAppointmentSchema = createInsertSchema(appointments, {
+  scheduledDate: z.coerce.date(),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  completedAt: true,
+  cancelledAt: true,
+});
+
+export const insertClientSchema = createInsertSchema(clients).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertJobSchema = createInsertSchema(jobs, {
+  scheduledDate: z.coerce.date(),
+  // clientId is optional for provider-initiated jobs (no homeowner link yet)
+  clientId: z.string().optional(),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  completedAt: true,
+  // Server-owned: only recurring service code / backfill may set series_id.
+  // Allowing clients to submit it would let them attach jobs to another
+  // provider's series.
+  seriesId: true,
+});
+
+export const insertInvoiceSchema = createInsertSchema(invoices).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  sentAt: true,
+  viewedAt: true,
+  paidAt: true,
+});
+
+export const insertPaymentSchema = createInsertSchema(payments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertProviderSchema = createInsertSchema(providers).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertProviderPlanSchema = createInsertSchema(providerPlans).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertStripeConnectAccountSchema = createInsertSchema(
+  stripeConnectAccounts,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertInvoiceLineItemSchema = createInsertSchema(
+  invoiceLineItems,
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertEstimateSchema = createInsertSchema(estimates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  sentAt: true,
+  viewedAt: true,
+  decidedAt: true,
+  convertedAt: true,
+  publicToken: true,
+});
+
+export const insertEstimateLineItemSchema = createInsertSchema(
+  estimateLineItems,
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertPayoutSchema = createInsertSchema(payouts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertUserCreditsSchema = createInsertSchema(userCredits).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export const insertCreditLedgerSchema = createInsertSchema(creditLedger).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCrewMemberSchema = createInsertSchema(crewMembers).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type CrewMember = typeof crewMembers.$inferSelect;
+export type InsertCrewMember = z.infer<typeof insertCrewMemberSchema>;
+
+export const insertBookingLinkSchema = createInsertSchema(bookingLinks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertIntakeSubmissionSchema = createInsertSchema(
+  intakeSubmissions,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type User = typeof users.$inferSelect;
+export type Home = typeof homes.$inferSelect;
+export type InsertHome = z.infer<typeof insertHomeSchema>;
+export type ServiceCategory = typeof serviceCategories.$inferSelect;
+export type Service = typeof services.$inferSelect;
+export type Provider = typeof providers.$inferSelect;
+export type InsertProvider = z.infer<typeof insertProviderSchema>;
+export type Appointment = typeof appointments.$inferSelect;
+export type InsertAppointment = z.infer<typeof insertAppointmentSchema>;
+export type Review = typeof reviews.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
+export type Client = typeof clients.$inferSelect;
+export type InsertClient = z.infer<typeof insertClientSchema>;
+export type Job = typeof jobs.$inferSelect;
+export type InsertJob = z.infer<typeof insertJobSchema>;
+export type Invoice = typeof invoices.$inferSelect;
+export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
+export type Payment = typeof payments.$inferSelect;
+export type InsertPayment = z.infer<typeof insertPaymentSchema>;
+export type ProviderPlan = typeof providerPlans.$inferSelect;
+export type InsertProviderPlan = z.infer<typeof insertProviderPlanSchema>;
+export type StripeConnectAccount = typeof stripeConnectAccounts.$inferSelect;
+export type InsertStripeConnectAccount = z.infer<
+  typeof insertStripeConnectAccountSchema
+>;
+export type InvoiceLineItem = typeof invoiceLineItems.$inferSelect;
+export type InsertInvoiceLineItem = z.infer<typeof insertInvoiceLineItemSchema>;
+export type Estimate = typeof estimates.$inferSelect;
+export type InsertEstimate = z.infer<typeof insertEstimateSchema>;
+export type EstimateLineItem = typeof estimateLineItems.$inferSelect;
+export type InsertEstimateLineItem = z.infer<typeof insertEstimateLineItemSchema>;
+export type Payout = typeof payouts.$inferSelect;
+export type InsertPayout = z.infer<typeof insertPayoutSchema>;
+export type UserCredits = typeof userCredits.$inferSelect;
+export type InsertUserCredits = z.infer<typeof insertUserCreditsSchema>;
+export type CreditLedgerEntry = typeof creditLedger.$inferSelect;
+export type InsertCreditLedgerEntry = z.infer<typeof insertCreditLedgerSchema>;
+export type StripeWebhookEvent = typeof stripeWebhookEvents.$inferSelect;
+export type BookingLink = typeof bookingLinks.$inferSelect;
+export type InsertBookingLink = z.infer<typeof insertBookingLinkSchema>;
+export type IntakeSubmission = typeof intakeSubmissions.$inferSelect;
+export type InsertIntakeSubmission = z.infer<
+  typeof insertIntakeSubmissionSchema
+>;
+
+// ─── Communications & Notifications ───────────────────────────────────────────
+
+export const notificationChannelEnum = pgEnum("notification_channel", [
+  "email",
+  "push",
+  "in_app",
+  "sms",
+]);
+export const notificationDeliveryStatusEnum = pgEnum(
+  "notification_delivery_status",
+  ["queued", "sent", "delivered", "failed", "pending_sms"],
+);
+
+export const pushTokens = pgTable(
+  "push_tokens",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    token: text("token").notNull(),
+    platform: text("platform").notNull(), // ios | android
+    isActive: boolean("is_active").default(true),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userTokenUnique: uniqueIndex("push_tokens_user_id_token_unique").on(
+      table.userId,
+      table.token,
+    ),
+  }),
+);
+
+export const notificationPreferences = pgTable("notification_preferences", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" })
+    .unique(),
+  emailBookingConfirmation: boolean("email_booking_confirmation").default(true),
+  emailBookingReminder: boolean("email_booking_reminder").default(true),
+  emailBookingCancelled: boolean("email_booking_cancelled").default(true),
+  emailInvoiceCreated: boolean("email_invoice_created").default(true),
+  emailInvoiceReminder: boolean("email_invoice_reminder").default(true),
+  emailInvoicePaid: boolean("email_invoice_paid").default(true),
+  emailPaymentFailed: boolean("email_payment_failed").default(true),
+  emailReviewRequest: boolean("email_review_request").default(true),
+  pushEnabled: boolean("push_enabled").default(true),
+  inAppEnabled: boolean("in_app_enabled").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const notificationDeliveries = pgTable("notification_deliveries", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  channel: notificationChannelEnum("channel").notNull(),
+  status: notificationDeliveryStatusEnum("status").default("queued"),
+  eventType: text("event_type").notNull(),
+  recipientUserId: varchar("recipient_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  recipientEmail: text("recipient_email"),
+  relatedRecordType: text("related_record_type"), // invoice | job | appointment | user
+  relatedRecordId: varchar("related_record_id"),
+  externalMessageId: text("external_message_id"),
+  error: text("error"),
+  metadata: text("metadata"), // JSON
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type PushToken = typeof pushTokens.$inferSelect;
+export type NotificationPreference =
+  typeof notificationPreferences.$inferSelect;
+export type NotificationDelivery = typeof notificationDeliveries.$inferSelect;
+
+// ─── Provider Messages ────────────────────────────────────────────────────────
+
+export const messageChannelEnum = pgEnum("message_channel", ["email", "sms"]);
+export const messageStatusEnum = pgEnum("message_status", [
+  "sent",
+  "failed",
+  "pending_sms",
+]);
+
+export const providerMessages = pgTable("provider_messages", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  clientId: varchar("client_id")
+    .notNull()
+    .references(() => clients.id, { onDelete: "cascade" }),
+  jobId: varchar("job_id").references(() => jobs.id, { onDelete: "set null" }),
+  invoiceId: varchar("invoice_id").references(() => invoices.id, {
+    onDelete: "set null",
+  }),
+  channel: messageChannelEnum("channel").notNull().default("email"),
+  subject: text("subject"),
+  body: text("body").notNull(),
+  status: messageStatusEnum("status").notNull().default("sent"),
+  resendMessageId: text("resend_message_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const providerMessagesRelations = relations(
+  providerMessages,
+  ({ one }) => ({
+    provider: one(providers, {
+      fields: [providerMessages.providerId],
+      references: [providers.id],
+    }),
+    client: one(clients, {
+      fields: [providerMessages.clientId],
+      references: [clients.id],
+    }),
+    job: one(jobs, { fields: [providerMessages.jobId], references: [jobs.id] }),
+    invoice: one(invoices, {
+      fields: [providerMessages.invoiceId],
+      references: [invoices.id],
+    }),
+  }),
+);
+
+export const insertProviderMessageSchema = createInsertSchema(
+  providerMessages,
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProviderMessage = typeof providerMessages.$inferSelect;
+export type InsertProviderMessage = z.infer<typeof insertProviderMessageSchema>;
+
+// ─── Message Templates ─────────────────────────────────────────────────────────
+
+export const messageTemplates = pgTable("message_templates", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  channel: messageChannelEnum("channel").notNull().default("email"),
+  subject: text("subject"),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const messageTemplatesRelations = relations(
+  messageTemplates,
+  ({ one }) => ({
+    provider: one(providers, {
+      fields: [messageTemplates.providerId],
+      references: [providers.id],
+    }),
+  }),
+);
+
+export const insertMessageTemplateSchema = createInsertSchema(
+  messageTemplates,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MessageTemplate = typeof messageTemplates.$inferSelect;
+export type InsertMessageTemplate = z.infer<typeof insertMessageTemplateSchema>;
+
+// ─── Leads ────────────────────────────────────────────────────────────────────
+
+export const leads = pgTable("leads", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  service: text("service"),
+  message: text("message"),
+  status: text("status").notNull().default("new"),
+  source: text("source").default("direct"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertLeadSchema = createInsertSchema(leads).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type Lead = typeof leads.$inferSelect;
+export type InsertLead = z.infer<typeof insertLeadSchema>;
+
+export const insertNotificationPreferenceSchema = createInsertSchema(
+  notificationPreferences,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertNotificationPreference = z.infer<
+  typeof insertNotificationPreferenceSchema
+>;
+
+// ─── HouseFax Entries ─────────────────────────────────────────────────────────
+
+export const housefaxEntries = pgTable("housefax_entries", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  homeId: varchar("home_id")
+    .notNull()
+    .references(() => homes.id, { onDelete: "cascade" }),
+  appointmentId: varchar("appointment_id").references(() => appointments.id, {
+    onDelete: "set null",
+  }),
+  jobId: varchar("job_id").references(() => jobs.id, { onDelete: "set null" }),
+  serviceCategory: text("service_category").notNull().default("General"),
+  serviceName: text("service_name").notNull(),
+  providerId: varchar("provider_id").references(() => providers.id, {
+    onDelete: "set null",
+  }),
+  providerName: text("provider_name"),
+  completedAt: timestamp("completed_at").notNull(),
+  costCents: integer("cost_cents").default(0),
+  aiSummary: text("ai_summary"),
+  photos: json("photos").$type<string[]>().default([]),
+  systemAffected: text("system_affected"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const housefaxEntriesRelations = relations(
+  housefaxEntries,
+  ({ one }) => ({
+    home: one(homes, {
+      fields: [housefaxEntries.homeId],
+      references: [homes.id],
+    }),
+    appointment: one(appointments, {
+      fields: [housefaxEntries.appointmentId],
+      references: [appointments.id],
+    }),
+    job: one(jobs, { fields: [housefaxEntries.jobId], references: [jobs.id] }),
+    provider: one(providers, {
+      fields: [housefaxEntries.providerId],
+      references: [providers.id],
+    }),
+  }),
+);
+
+export const insertHousefaxEntrySchema = createInsertSchema(
+  housefaxEntries,
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type HousefaxEntry = typeof housefaxEntries.$inferSelect;
+export type InsertHousefaxEntry = z.infer<typeof insertHousefaxEntrySchema>;
+
+// ─── Support Tickets ──────────────────────────────────────────────────────────
+
+export const supportTickets = pgTable("support_tickets", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  category: text("category").notNull(),
+  subject: text("subject").notNull(),
+  message: text("message").notNull(),
+  status: text("status").notNull().default("open"),
+  priority: text("priority").notNull().default("normal"),
+  userType: text("user_type"),
+  assignedTo: varchar("assigned_to").references(() => users.id),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  resolvedAt: timestamp("resolved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const supportTicketsRelations = relations(supportTickets, ({ one, many }) => ({
+  user: one(users, { fields: [supportTickets.userId], references: [users.id], relationName: "ticketUser" }),
+  assignedAdmin: one(users, { fields: [supportTickets.assignedTo], references: [users.id], relationName: "ticketAssignee" }),
+  messages: many(supportTicketMessages),
+}));
+
+export const insertSupportTicketSchema = createInsertSchema(
+  supportTickets,
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SupportTicket = typeof supportTickets.$inferSelect;
+export type InsertSupportTicket = z.infer<typeof insertSupportTicketSchema>;
+
+// ─── Support Ticket Messages ──────────────────────────────────────────────────
+
+export const supportTicketMessages = pgTable("support_ticket_messages", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  ticketId: varchar("ticket_id")
+    .notNull()
+    .references(() => supportTickets.id, { onDelete: "cascade" }),
+  senderId: varchar("sender_id").references(() => users.id),
+  senderType: text("sender_type").notNull().default("admin"),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const supportTicketMessagesRelations = relations(supportTicketMessages, ({ one }) => ({
+  ticket: one(supportTickets, {
+    fields: [supportTicketMessages.ticketId],
+    references: [supportTickets.id],
+  }),
+  sender: one(users, {
+    fields: [supportTicketMessages.senderId],
+    references: [users.id],
+  }),
+}));
+
+export const insertSupportTicketMessageSchema = createInsertSchema(supportTicketMessages).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type SupportTicketMessage = typeof supportTicketMessages.$inferSelect;
+export type InsertSupportTicketMessage = z.infer<typeof insertSupportTicketMessageSchema>;
+
+// ─── Admin Broadcasts ─────────────────────────────────────────────────────────
+
+export const adminBroadcasts = pgTable("admin_broadcasts", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  sentByUserId: varchar("sent_by_user_id")
+    .notNull()
+    .references(() => users.id),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  audience: text("audience").notNull(),
+  channel: text("channel").notNull(),
+  recipientCount: integer("recipient_count").notNull().default(0),
+  status: text("status").notNull().default("draft"),
+  sentAt: timestamp("sent_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const adminBroadcastsRelations = relations(adminBroadcasts, ({ one, many }) => ({
+  sentByUser: one(users, {
+    fields: [adminBroadcasts.sentByUserId],
+    references: [users.id],
+  }),
+  recipients: many(adminBroadcastRecipients),
+}));
+
+export const insertAdminBroadcastSchema = createInsertSchema(adminBroadcasts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type AdminBroadcast = typeof adminBroadcasts.$inferSelect;
+export type InsertAdminBroadcast = z.infer<typeof insertAdminBroadcastSchema>;
+
+// ─── Admin Broadcast Recipients ───────────────────────────────────────────────
+
+export const adminBroadcastRecipients = pgTable("admin_broadcast_recipients", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  broadcastId: varchar("broadcast_id")
+    .notNull()
+    .references(() => adminBroadcasts.id, { onDelete: "cascade" }),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id),
+  channel: text("channel").notNull(),
+  status: text("status").notNull().default("queued"),
+  deliveredAt: timestamp("delivered_at"),
+});
+
+export const adminBroadcastRecipientsRelations = relations(adminBroadcastRecipients, ({ one }) => ({
+  broadcast: one(adminBroadcasts, {
+    fields: [adminBroadcastRecipients.broadcastId],
+    references: [adminBroadcasts.id],
+  }),
+  user: one(users, {
+    fields: [adminBroadcastRecipients.userId],
+    references: [users.id],
+  }),
+}));
+
+export const insertAdminBroadcastRecipientSchema = createInsertSchema(adminBroadcastRecipients).omit({
+  id: true,
+});
+
+export type AdminBroadcastRecipient = typeof adminBroadcastRecipients.$inferSelect;
+export type InsertAdminBroadcastRecipient = z.infer<typeof insertAdminBroadcastRecipientSchema>;
+
+// ─── Admin Audit Logs ─────────────────────────────────────────────────────────
+
+export const adminAuditLogs = pgTable("admin_audit_logs", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  adminUserId: varchar("admin_user_id")
+    .notNull()
+    .references(() => users.id),
+  action: text("action").notNull(),
+  targetType: text("target_type"),
+  targetId: varchar("target_id"),
+  beforeValue: jsonb("before_value"),
+  afterValue: jsonb("after_value"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const adminAuditLogsRelations = relations(adminAuditLogs, ({ one }) => ({
+  adminUser: one(users, {
+    fields: [adminAuditLogs.adminUserId],
+    references: [users.id],
+  }),
+}));
+
+export const insertAdminAuditLogSchema = createInsertSchema(adminAuditLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type AdminAuditLog = typeof adminAuditLogs.$inferSelect;
+export type InsertAdminAuditLog = z.infer<typeof insertAdminAuditLogSchema>;
+
+// ─── Quick Quotes (Task #300) ─────────────────────────────────────────────────
+
+export const quickQuotes = pgTable("quick_quotes", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  address: text("address").notNull(),
+  formattedAddress: text("formatted_address"),
+  placeId: text("place_id"),
+  latitude: decimal("latitude", { precision: 10, scale: 7 }),
+  longitude: decimal("longitude", { precision: 10, scale: 7 }),
+  lotSize: integer("lot_size"),
+  squareFeet: integer("square_feet"),
+  customServiceId: varchar("custom_service_id").references(
+    () => providerCustomServices.id,
+    { onDelete: "set null" },
+  ),
+  serviceName: text("service_name").notNull(),
+  lowPrice: decimal("low_price", { precision: 10, scale: 2 }).notNull(),
+  midPrice: decimal("mid_price", { precision: 10, scale: 2 }).notNull(),
+  highPrice: decimal("high_price", { precision: 10, scale: 2 }).notNull(),
+  finalPrice: decimal("final_price", { precision: 10, scale: 2 }).notNull(),
+  pricingBasis: text("pricing_basis"),
+  aiInsight: text("ai_insight"),
+  notes: text("notes"),
+  sentVia: text("sent_via"),
+  status: text("status").notNull().default("draft"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const quickQuotesRelations = relations(quickQuotes, ({ one }) => ({
+  provider: one(providers, {
+    fields: [quickQuotes.providerId],
+    references: [providers.id],
+  }),
+  customService: one(providerCustomServices, {
+    fields: [quickQuotes.customServiceId],
+    references: [providerCustomServices.id],
+  }),
+}));
+
+export const insertQuickQuoteSchema = createInsertSchema(quickQuotes).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type QuickQuote = typeof quickQuotes.$inferSelect;
+export type InsertQuickQuote = z.infer<typeof insertQuickQuoteSchema>;

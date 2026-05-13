@@ -1,0 +1,1106 @@
+import React, { useState, useRef, useEffect } from "react";
+import {
+  StyleSheet,
+  View,
+  ScrollView,
+  Pressable,
+  Dimensions,
+  Modal,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useHeaderHeight } from "@react-navigation/elements";
+import { useNavigation } from "@react-navigation/native";
+import { Feather } from "@expo/vector-icons";
+import Animated, {
+  FadeInDown,
+  FadeIn,
+  useSharedValue,
+  useAnimatedProps,
+  withTiming,
+  Easing,
+} from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
+import Svg, { Circle } from "react-native-svg";
+
+import { ThemedText } from "@/components/ThemedText";
+import { ThemedView } from "@/components/ThemedView";
+import { GlassCard } from "@/components/GlassCard";
+import { PrimaryButton } from "@/components/PrimaryButton";
+import { HomeSelector, Home } from "@/components/HomeSelector";
+import { useTheme } from "@/hooks/useTheme";
+import { useLayout } from "@/hooks/useLayout";
+import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
+import { useAuthStore } from "@/state/authStore";
+import { apiRequest, getApiUrl, getAuthHeaders } from "@/lib/query-client";
+import {
+  ageBucketFromYear,
+  roofAgeBucketFromYear,
+  bucketToInstalledYear,
+  healthScoreRoofBucketFromYear,
+  healthScoreSystemBucketFromYear,
+} from "@/lib/homeProfile";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+interface HealthScoreRun {
+  id: string;
+  date: string;
+  score: number;
+  breakdown: {
+    safety: number;
+    water: number;
+    energy: number;
+    comfort: number;
+    exterior: number;
+  };
+  confidence: "low" | "medium" | "high";
+  topRisks: string[];
+}
+
+
+function computeScoreFromAnswers(answers: Record<string, unknown>): {
+  score: number;
+  breakdown: { safety: number; water: number; energy: number; comfort: number; exterior: number };
+  topRisks: string[];
+} {
+  let safety = 100, water = 100, energy = 100, comfort = 100, exterior = 100;
+  const risks: string[] = [];
+
+  // Home age
+  if (answers["home-age"] === "30+ years") { comfort -= 15; exterior -= 10; }
+  else if (answers["home-age"] === "15-30 years") { comfort -= 5; }
+
+  // Roof age
+  if (answers["roof-age"] === "20+ years") { exterior -= 30; risks.push("Roof replacement overdue"); }
+  else if (answers["roof-age"] === "10-20 years") { exterior -= 15; risks.push("Schedule roof inspection"); }
+  else if (answers["roof-age"] === "Unknown") { exterior -= 10; }
+
+  // HVAC age
+  if (answers["hvac-age"] === "15+ years") { energy -= 25; comfort -= 20; risks.push("HVAC system nearing end of life"); }
+  else if (answers["hvac-age"] === "10-15 years") { energy -= 15; comfort -= 10; }
+  else if (answers["hvac-age"] === "Unknown") { energy -= 5; }
+
+  // Water heater
+  if (answers["water-heater"] === "15+ years") { water -= 30; risks.push("Water heater replacement recommended"); }
+  else if (answers["water-heater"] === "10-15 years") { water -= 15; risks.push("Water heater aging — inspect soon"); }
+  else if (answers["water-heater"] === "Unknown") { water -= 5; }
+
+  // Visible symptoms (each symptom -5 to most relevant category)
+  const symptoms: string[] = Array.isArray(answers["symptoms"])
+    ? (answers["symptoms"] as string[])
+    : [];
+  if (symptoms.includes("Leaks or water stains")) { water -= 20; risks.push("Active leaks or water stains detected"); }
+  if (symptoms.includes("Uneven temperatures")) { comfort -= 15; energy -= 10; }
+  if (symptoms.includes("High energy bills")) { energy -= 15; risks.push("High energy bills — check insulation and HVAC"); }
+  if (symptoms.includes("Slow drains")) { water -= 10; }
+  if (symptoms.includes("Roof stains or damage")) { exterior -= 20; risks.push("Roof stains or visible damage"); }
+  if (symptoms.includes("Mold or musty smell")) { water -= 20; safety -= 15; risks.push("Mold or moisture — investigate immediately"); }
+  if (symptoms.includes("Gutter overflow")) { exterior -= 10; risks.push("Gutters need cleaning"); }
+  if (symptoms.includes("Wall or foundation cracks")) { safety -= 20; risks.push("Foundation or wall cracks — inspect structurally"); }
+  if (symptoms.includes("Pest activity")) { safety -= 10; }
+
+  // Safety checks
+  if (answers["smoke-co"] === false) { safety -= 20; risks.push("Test smoke and CO detectors"); }
+  if (answers["gfci"] === "No" || answers["gfci"] === "Not sure") { safety -= 15; risks.push("Install GFCI outlets in wet areas"); }
+  if (answers["water-shutoff"] === false) { safety -= 10; risks.push("Locate main water shutoff valve"); }
+
+  // Maintenance habits
+  if (answers["filter-cadence"] === "Rarely/Never") { energy -= 15; comfort -= 10; risks.push("HVAC filter replacement overdue"); }
+  else if (answers["filter-cadence"] === "Every 6 months") { energy -= 5; }
+  if (answers["gutter-cleaning"] === "Never") { exterior -= 15; risks.push("Gutters need cleaning"); }
+  else if (answers["gutter-cleaning"] === "Less than yearly") { exterior -= 8; }
+  if (answers["hvac-service"] === false) { energy -= 10; comfort -= 5; }
+  if (answers["pest-control"] === "Never") { safety -= 5; }
+
+  // Clamp all values between 0 and 100
+  const clamp = (v: number) => Math.max(0, Math.min(100, v));
+  const breakdown = {
+    safety: clamp(safety),
+    water: clamp(water),
+    energy: clamp(energy),
+    comfort: clamp(comfort),
+    exterior: clamp(exterior),
+  };
+
+  // Overall score is weighted average
+  const score = Math.round(
+    (breakdown.safety * 0.25 + breakdown.water * 0.25 + breakdown.energy * 0.2 + breakdown.comfort * 0.15 + breakdown.exterior * 0.15)
+  );
+
+  return { score, breakdown, topRisks: risks.slice(0, 5) };
+}
+
+interface ActionPlanItem {
+  title: string;
+  due: string;
+  cost: string;
+  category: string;
+}
+
+const RISK_ACTION_MAP: Record<string, ActionPlanItem> = {
+  "Roof replacement overdue":            { title: "Replace roof", due: "ASAP", cost: "$5,000-15,000", category: "Roof" },
+  "Schedule roof inspection":            { title: "Schedule roof inspection", due: "This month", cost: "$200-400", category: "Roof" },
+  "HVAC system nearing end of life":     { title: "HVAC replacement/tune-up", due: "This season", cost: "$3,000-8,000", category: "HVAC" },
+  "Water heater replacement recommended":{ title: "Replace water heater", due: "This month", cost: "$800-2,000", category: "Plumbing" },
+  "Water heater aging — inspect soon":   { title: "Water heater inspection", due: "Next month", cost: "$100-150", category: "Plumbing" },
+  "Active leaks or water stains detected":{ title: "Fix leaks / water damage", due: "This week", cost: "$200-2,000", category: "Plumbing" },
+  "High energy bills — check insulation and HVAC": { title: "Energy audit + insulation check", due: "This month", cost: "$200-600", category: "Energy" },
+  "Roof stains or visible damage":       { title: "Roof repair assessment", due: "This month", cost: "$300-800", category: "Roof" },
+  "Mold or moisture — investigate immediately": { title: "Mold remediation assessment", due: "ASAP", cost: "$500-3,000", category: "Safety" },
+  "Gutters need cleaning":               { title: "Gutter cleaning", due: "This month", cost: "$150-250", category: "Exterior" },
+  "Foundation or wall cracks — inspect structurally": { title: "Structural inspection", due: "ASAP", cost: "$300-600", category: "Safety" },
+  "Test smoke and CO detectors":         { title: "Test + replace smoke/CO detectors", due: "This week", cost: "$20-60", category: "Safety" },
+  "Install GFCI outlets in wet areas":   { title: "Install GFCI outlets", due: "This month", cost: "$150-400", category: "Electrical" },
+  "Locate main water shutoff valve":     { title: "Locate water shutoff valve", due: "This week", cost: "Free", category: "Safety" },
+  "HVAC filter replacement overdue":     { title: "Replace HVAC filters", due: "This week", cost: "$20-40", category: "HVAC" },
+};
+
+function buildActionPlan(topRisks: string[]): ActionPlanItem[] {
+  const items: ActionPlanItem[] = topRisks
+    .map(risk => RISK_ACTION_MAP[risk])
+    .filter((item): item is ActionPlanItem => !!item);
+
+  if (items.length === 0) {
+    items.push({ title: "Schedule HVAC tune-up", due: "This season", cost: "$100-200", category: "HVAC" });
+    items.push({ title: "Clean gutters", due: "This month", cost: "$150-250", category: "Exterior" });
+  }
+  return items;
+}
+
+function estimateCostIfIgnored(topRisks: string[]): string {
+  const highCostRisks = ["Roof replacement overdue", "HVAC system nearing end of life", "Active leaks or water stains detected", "Mold or moisture — investigate immediately", "Foundation or wall cracks — inspect structurally"];
+  const hasHighCost = topRisks.some(r => highCostRisks.includes(r));
+  if (topRisks.length === 0) return "$500 - $1,500";
+  if (hasHighCost) return "$5,000 - $15,000";
+  return "$1,500 - $5,000";
+}
+
+function estimateQuickWinSavings(breakdown: { energy: number; water: number }): string {
+  const energyGap = 100 - breakdown.energy;
+  const waterGap = 100 - breakdown.water;
+  const total = energyGap + waterGap;
+  if (total >= 40) return "$400 - $800/yr";
+  if (total >= 20) return "$200 - $400/yr";
+  return "$100 - $200/yr";
+}
+
+interface WizardStep {
+  id: string;
+  section: string;
+  question: string;
+  type: "single" | "multi" | "slider" | "toggle" | "number";
+  options?: string[];
+  helperText?: string;
+  prefilled?: string | number | boolean;
+}
+
+const WIZARD_STEPS: WizardStep[] = [
+  { id: "home-age", section: "Home Context", question: "How old is your home?", type: "single", options: ["0-5 years", "5-15 years", "15-30 years", "30+ years"], helperText: "Older homes may need more frequent maintenance checks" },
+  { id: "roof-age", section: "Home Context", question: "When was your roof last replaced or inspected?", type: "single", options: ["< 5 years", "5-10 years", "10-20 years", "20+ years", "Unknown"], helperText: "Roofs typically need replacement every 20-25 years" },
+  { id: "hvac-age", section: "Home Context", question: "How old is your HVAC system?", type: "single", options: ["< 5 years", "5-10 years", "10-15 years", "15+ years", "Unknown"], helperText: "HVAC systems last 15-20 years on average" },
+  { id: "water-heater", section: "Home Context", question: "How old is your water heater?", type: "single", options: ["< 5 years", "5-10 years", "10-15 years", "15+ years", "Unknown"], helperText: "Water heaters typically last 8-12 years" },
+  { id: "symptoms", section: "Visible Symptoms", question: "Select any issues you've noticed:", type: "multi", options: ["Leaks or water stains", "Uneven temperatures", "High energy bills", "Slow drains", "Roof stains or damage", "Pest activity", "Gutter overflow", "Dryer takes too long", "Wall or foundation cracks", "Mold or musty smell"], helperText: "Check all that apply to get a more accurate assessment" },
+  { id: "smoke-co", section: "Safety Checks", question: "Have you tested smoke and CO detectors in the last 6 months?", type: "toggle", helperText: "Detectors should be tested monthly and replaced every 10 years" },
+  { id: "gfci", section: "Safety Checks", question: "Are GFCI outlets present in wet areas (kitchen, bathrooms)?", type: "single", options: ["Yes, all areas", "Some areas", "No", "Not sure"], helperText: "GFCI outlets prevent electrical shocks in wet areas" },
+  { id: "water-shutoff", section: "Safety Checks", question: "Do you know where your main water shutoff is?", type: "toggle", helperText: "Knowing this can prevent major water damage in emergencies" },
+  { id: "filter-cadence", section: "Maintenance Habits", question: "How often do you replace HVAC filters?", type: "single", options: ["Monthly", "Every 3 months", "Every 6 months", "Rarely/Never"], helperText: "Most filters should be changed every 1-3 months" },
+  { id: "gutter-cleaning", section: "Maintenance Habits", question: "How often are your gutters cleaned?", type: "single", options: ["Twice a year", "Once a year", "Less than yearly", "Never"], helperText: "Gutters should be cleaned at least twice yearly" },
+  { id: "hvac-service", section: "Maintenance Habits", question: "Do you get annual HVAC service?", type: "toggle", helperText: "Annual maintenance extends system life and improves efficiency" },
+  { id: "pest-control", section: "Maintenance Habits", question: "Do you have regular pest control?", type: "single", options: ["Quarterly", "As needed", "Never"], helperText: "Preventive pest control is cheaper than addressing infestations" },
+  { id: "risk-tolerance", section: "Preferences", question: "What's your maintenance approach?", type: "single", options: ["Conservative - Prevent all issues", "Balanced - Address risks promptly", "Aggressive - Fix only when broken"], helperText: "We'll tailor recommendations to your preference" },
+  { id: "photos", section: "Optional", question: "Would you like to add photos of any issues?", type: "toggle", helperText: "Photos help us provide more accurate assessments" },
+];
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
+function ScoreRing({ score, size = 120, strokeWidth = 10, animating = false }: { score: number; size?: number; strokeWidth?: number; animating?: boolean }) {
+  const { theme } = useTheme();
+  const radius = (size - strokeWidth) / 2;
+  const circumference = radius * 2 * Math.PI;
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    if (animating) {
+      progress.value = 0;
+      progress.value = withTiming(score / 100, { duration: 1500, easing: Easing.out(Easing.cubic) });
+    } else {
+      progress.value = score / 100;
+    }
+  }, [score, animating]);
+
+  const animatedProps = useAnimatedProps(() => ({
+    strokeDashoffset: circumference * (1 - progress.value),
+  }));
+
+  const getScoreColor = (s: number) => {
+    if (s >= 80) return Colors.accent;
+    if (s >= 60) return Colors.warning;
+    return Colors.error;
+  };
+
+  return (
+    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+      <Svg width={size} height={size} style={{ position: "absolute", transform: [{ rotate: "-90deg" }] }}>
+        <Circle cx={size / 2} cy={size / 2} r={radius} stroke={theme.separator} strokeWidth={strokeWidth} fill="none" />
+        <AnimatedCircle cx={size / 2} cy={size / 2} r={radius} stroke={getScoreColor(score)} strokeWidth={strokeWidth} fill="none" strokeDasharray={`${circumference} ${circumference}`} strokeLinecap="round" animatedProps={animatedProps} />
+      </Svg>
+      <View style={{ alignItems: "center" }}>
+        <ThemedText style={[styles.scoreValue, { color: getScoreColor(score) }]}>{score}</ThemedText>
+        <ThemedText style={[styles.scoreLabel, { color: theme.textSecondary }]}>/ 100</ThemedText>
+      </View>
+    </View>
+  );
+}
+
+type HomeWithProfile = Home & {
+  hvacInstalledYear?: number | null;
+  roofInstalledYear?: number | null;
+  waterHeaterInstalledYear?: number | null;
+  knownIssues?: string[] | null;
+  hasBasement?: boolean | null;
+  hasPool?: boolean | null;
+  yardSizeSqft?: number | null;
+};
+
+type HealthAnswers = Record<string, string | string[] | boolean | number>;
+
+function buildPrefilledAnswers(home: Home | null): HealthAnswers {
+  const answers: HealthAnswers = {};
+  if (!home) return answers;
+  const h = home as HomeWithProfile;
+  const now = new Date().getFullYear();
+
+  if (home.yearBuilt) {
+    const age = now - home.yearBuilt;
+    answers["home-age"] =
+      age <= 5 ? "0-5 years" : age <= 15 ? "5-15 years" : age <= 30 ? "15-30 years" : "30+ years";
+  }
+  const roofBucket = healthScoreRoofBucketFromYear(h.roofInstalledYear);
+  if (roofBucket) answers["roof-age"] = roofBucket;
+  const hvacBucket = healthScoreSystemBucketFromYear(h.hvacInstalledYear);
+  if (hvacBucket) answers["hvac-age"] = hvacBucket;
+  const wHeaterBucket = healthScoreSystemBucketFromYear(h.waterHeaterInstalledYear);
+  if (wHeaterBucket) answers["water-heater"] = wHeaterBucket;
+  return answers;
+}
+
+function firstUnansweredStepIndex(answers: HealthAnswers): number {
+  for (let i = 0; i < WIZARD_STEPS.length; i++) {
+    const v = answers[WIZARD_STEPS[i].id];
+    if (v === undefined || v === "" || (Array.isArray(v) && v.length === 0)) {
+      return i;
+    }
+  }
+  return 0;
+}
+
+async function writeBackHealthAnswers(
+  homeId: string,
+  answers: HealthAnswers,
+) {
+  const payload: Record<string, unknown> = {};
+  const now = new Date().getFullYear();
+
+  const homeAgeToYear: Record<string, number> = {
+    "0-5 years": now - 2,
+    "5-15 years": now - 10,
+    "15-30 years": now - 22,
+    "30+ years": now - 40,
+  };
+  const roofAgeToYear: Record<string, number> = {
+    "< 5 years": now - 2,
+    "5-10 years": now - 7,
+    "10-20 years": now - 15,
+    "20+ years": now - 22,
+  };
+  const hvacAgeToYear: Record<string, number> = {
+    "< 5 years": now - 2,
+    "5-10 years": now - 7,
+    "10-15 years": now - 12,
+    "15+ years": now - 18,
+  };
+  const waterHeaterAgeToYear: Record<string, number> = {
+    "< 5 years": now - 2,
+    "5-10 years": now - 7,
+    "10-15 years": now - 12,
+    "15+ years": now - 18,
+  };
+
+  const homeAge = answers["home-age"];
+  if (typeof homeAge === "string" && homeAgeToYear[homeAge]) {
+    payload.yearBuilt = homeAgeToYear[homeAge];
+  }
+  const roofAge = answers["roof-age"];
+  if (typeof roofAge === "string" && roofAgeToYear[roofAge]) {
+    payload.roofInstalledYear = roofAgeToYear[roofAge];
+  }
+  const hvacAge = answers["hvac-age"];
+  if (typeof hvacAge === "string" && hvacAgeToYear[hvacAge]) {
+    payload.hvacInstalledYear = hvacAgeToYear[hvacAge];
+  }
+  const waterHeaterAge = answers["water-heater"];
+  if (typeof waterHeaterAge === "string" && waterHeaterAgeToYear[waterHeaterAge]) {
+    payload.waterHeaterInstalledYear = waterHeaterAgeToYear[waterHeaterAge];
+  }
+
+  if (Object.keys(payload).length === 0) return;
+  try {
+    await apiRequest("PATCH", `/api/homes/${homeId}/profile`, {
+      ...payload,
+      source: "health_score",
+    });
+  } catch (e) {
+    console.error("Health Score write-back failed:", e);
+  }
+}
+
+export default function HealthScoreScreen() {
+  const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
+  const navigation = useNavigation<any>();
+  const { theme } = useTheme();
+  const { user } = useAuthStore();
+
+  const [selectedHome, setSelectedHome] = useState<Home | null>(null);
+  const [showWizard, setShowWizard] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+  const [wizardStep, setWizardStep] = useState(0);
+  const [answers, setAnswers] = useState<Record<string, unknown>>({});
+  const [prefilledKeys, setPrefilledKeys] = useState<Set<string>>(new Set());
+  const [currentResult, setCurrentResult] = useState<HealthScoreRun | null>(null);
+  const [showScoringDrawer, setShowScoringDrawer] = useState(false);
+  const [activeTab, setActiveTab] = useState<"overview" | "risks" | "plan" | "history">("overview");
+  const [scoreRuns, setScoreRuns] = useState<HealthScoreRun[]>([]);
+  const [isFetchingScore, setIsFetchingScore] = useState(false);
+
+  const loadHouseFaxScore = async (homeId: string) => {
+    setIsFetchingScore(true);
+    try {
+      const url = new URL(`/api/housefax/${homeId}`, getApiUrl());
+      const res = await fetch(url.toString(), { headers: getAuthHeaders(), credentials: "include" });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.score != null && data.score > 0) {
+        // Approximate breakdown from overall score — each category estimated proportionally.
+        // Per-category breakdown is only available after completing the wizard.
+        const s = data.score as number;
+        const approxBreakdown = {
+          safety: Math.min(100, Math.round(s * 1.05)),
+          water: Math.min(100, Math.round(s * 1.0)),
+          energy: Math.min(100, Math.round(s * 0.98)),
+          comfort: Math.min(100, Math.round(s * 0.95)),
+          exterior: Math.min(100, Math.round(s * 0.93)),
+        };
+        const run: HealthScoreRun = {
+          id: `housefax-${homeId}`,
+          date: new Date().toISOString().split("T")[0],
+          score: s,
+          breakdown: approxBreakdown,
+          confidence: data.entries?.length >= 3 ? "high" : data.entries?.length >= 1 ? "medium" : "low",
+          topRisks: (data.insights || []).slice(0, 5),
+        };
+        setScoreRuns([run]);
+      } else {
+        setScoreRuns([]);
+      }
+    } catch {
+      setScoreRuns([]);
+    } finally {
+      setIsFetchingScore(false);
+    }
+  };
+
+  const handleSelectHome = (home: Home) => {
+    setSelectedHome(home);
+    setScoreRuns([]);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    loadHouseFaxScore(home.id);
+  };
+  const lastRun = scoreRuns[0] ?? null;
+  const previousRun = scoreRuns[1] ?? null;
+  const trendDiff = lastRun && previousRun ? lastRun.score - previousRun.score : 0;
+
+  const handleStartAssessment = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const prefilled = buildPrefilledAnswers(selectedHome);
+    setAnswers(prefilled);
+    setPrefilledKeys(new Set(Object.keys(prefilled)));
+    setWizardStep(firstUnansweredStepIndex(prefilled));
+    setShowWizard(true);
+  };
+
+  const handleViewPrevious = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setCurrentResult(lastRun);
+    setShowResults(true);
+  };
+
+  const handleWizardNext = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (wizardStep < WIZARD_STEPS.length - 1) {
+      setWizardStep(wizardStep + 1);
+    } else {
+      const answeredCount = Object.keys(answers).length;
+      const { score, breakdown, topRisks } = computeScoreFromAnswers(answers);
+      const confidence: "low" | "medium" | "high" = answeredCount > 10 ? "high" : answeredCount > 6 ? "medium" : "low";
+      const newResult: HealthScoreRun = {
+        id: `run-${Date.now()}`,
+        date: new Date().toISOString().split("T")[0],
+        score,
+        breakdown,
+        confidence,
+        topRisks: topRisks.length > 0 ? topRisks : ["Regular maintenance keeps your home healthy"],
+      };
+
+      // Persist the computed score to the backend
+      if (selectedHome?.id) {
+        try {
+          await apiRequest("PUT", `/api/homes/${selectedHome.id}`, { housefaxScore: score });
+        } catch {
+          // Non-blocking — score is still shown locally
+        }
+        await writeBackHealthAnswers(selectedHome.id, answers as HealthAnswers);
+      }
+
+      setCurrentResult(newResult);
+      setScoreRuns((prev) => [newResult, ...prev].slice(0, 10));
+      setShowWizard(false);
+      setShowResults(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  };
+
+  const handleWizardBack = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (wizardStep > 0) {
+      setWizardStep(wizardStep - 1);
+    } else {
+      setShowWizard(false);
+    }
+  };
+
+  const handleAnswerSelect = (stepId: string, value: any) => {
+    Haptics.selectionAsync();
+    setAnswers({ ...answers, [stepId]: value });
+  };
+
+  const handleMultiSelect = (stepId: string, option: string) => {
+    const current = Array.isArray(answers[stepId])
+      ? (answers[stepId] as string[])
+      : [];
+    const updated = current.includes(option)
+      ? current.filter((o) => o !== option)
+      : [...current, option];
+    setAnswers({ ...answers, [stepId]: updated });
+  };
+
+  const getScoreLabel = (score: number) => {
+    if (score >= 90) return "Excellent";
+    if (score >= 80) return "Good";
+    if (score >= 70) return "Fair";
+    if (score >= 60) return "Needs Attention";
+    return "Action Required";
+  };
+
+  const getConfidenceColor = (conf: string) => {
+    if (conf === "high") return Colors.accent;
+    if (conf === "medium") return Colors.warning;
+    return Colors.error;
+  };
+
+  const renderEntryScreen = () => (
+    <ScrollView
+      contentContainerStyle={[styles.content, { paddingTop: headerHeight + Spacing.lg, paddingBottom: insets.bottom + Spacing.xl + 88, paddingHorizontal: horizontalPadding }]}
+      showsVerticalScrollIndicator={false}
+    >
+      <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+        <HomeSelector
+          selectedHome={selectedHome}
+          onSelectHome={handleSelectHome}
+          onAddNew={() => navigation.navigate("Addresses")}
+          compact
+        />
+      </Animated.View>
+
+      <Animated.View entering={FadeInDown.delay(200).duration(400)}>
+        <GlassCard style={styles.heroCard}>
+          <ThemedText style={styles.heroTitle}>Home Health Score</ThemedText>
+          <ThemedText style={[styles.heroSubtitle, { color: theme.textSecondary }]}>
+            Know what matters most right now and what it will cost later.
+          </ThemedText>
+          {lastRun ? (
+            <View style={styles.lastScorePreview}>
+              <View style={styles.lastScoreHeader}>
+                <ThemedText style={[styles.lastScoreLabel, { color: theme.textSecondary }]}>Last Score</ThemedText>
+                <View style={styles.trendBadge}>
+                  <Feather name={trendDiff >= 0 ? "trending-up" : "trending-down"} size={14} color={trendDiff >= 0 ? Colors.accent : Colors.error} />
+                  <ThemedText style={[styles.trendText, { color: trendDiff >= 0 ? Colors.accent : Colors.error }]}>
+                    {trendDiff >= 0 ? "+" : ""}{trendDiff} pts
+                  </ThemedText>
+                </View>
+              </View>
+              <View style={styles.lastScoreRow}>
+                <ScoreRing score={lastRun.score} size={80} strokeWidth={8} />
+                <View style={styles.lastScoreInfo}>
+                  <ThemedText style={styles.lastScoreValue}>{getScoreLabel(lastRun.score)}</ThemedText>
+                  <ThemedText style={[styles.lastScoreDate, { color: theme.textSecondary }]}>
+                    Ran on {new Date(lastRun.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </ThemedText>
+                  <View style={styles.confidenceBadge}>
+                    <View style={[styles.confidenceDot, { backgroundColor: getConfidenceColor(lastRun.confidence) }]} />
+                    <ThemedText style={[styles.confidenceText, { color: theme.textSecondary }]}>
+                      {lastRun.confidence.charAt(0).toUpperCase() + lastRun.confidence.slice(1)} confidence
+                    </ThemedText>
+                  </View>
+                </View>
+              </View>
+            </View>
+          ) : null}
+          <PrimaryButton onPress={handleStartAssessment} style={styles.heroButton}>
+            Run Assessment
+          </PrimaryButton>
+          {lastRun ? (
+            <Pressable onPress={handleViewPrevious} style={styles.secondaryButton}>
+              <ThemedText style={[styles.secondaryButtonText, { color: Colors.accent }]}>View Previous Scores</ThemedText>
+            </Pressable>
+          ) : null}
+        </GlassCard>
+      </Animated.View>
+
+      {lastRun ? (
+        <Animated.View entering={FadeInDown.delay(300).duration(400)}>
+          <ThemedText style={styles.sectionTitle}>Top Risks</ThemedText>
+          {lastRun.topRisks.map((risk, index) => (
+            <GlassCard key={index} style={styles.riskCard}>
+              <View style={[styles.riskIcon, { backgroundColor: Colors.warningLight }]}>
+                <Feather name="alert-triangle" size={18} color={Colors.warning} />
+              </View>
+              <View style={styles.riskContent}>
+                <ThemedText style={styles.riskTitle}>{risk}</ThemedText>
+                <ThemedText style={[styles.riskAction, { color: Colors.accent }]}>Book Now</ThemedText>
+              </View>
+              <Feather name="chevron-right" size={20} color={theme.textTertiary} />
+            </GlassCard>
+          ))}
+        </Animated.View>
+      ) : null}
+
+      {lastRun ? (
+        <Animated.View entering={FadeInDown.delay(400).duration(400)}>
+          <ThemedText style={styles.sectionTitle}>Score Breakdown</ThemedText>
+          <GlassCard style={styles.breakdownCard}>
+            {Object.entries(lastRun.breakdown).map(([key, value]) => (
+              <View key={key} style={styles.breakdownRow}>
+                <View style={styles.breakdownLabel}>
+                  <Feather
+                    name={key === "safety" ? "shield" : key === "water" ? "droplet" : key === "energy" ? "zap" : key === "comfort" ? "thermometer" : "home"}
+                    size={16}
+                    color={value >= 80 ? Colors.accent : value >= 60 ? Colors.warning : Colors.error}
+                  />
+                  <ThemedText style={styles.breakdownName}>{key.charAt(0).toUpperCase() + key.slice(1)}</ThemedText>
+                </View>
+                <View style={styles.breakdownBar}>
+                  <View style={[styles.breakdownProgress, { width: `${value}%`, backgroundColor: value >= 80 ? Colors.accent : value >= 60 ? Colors.warning : Colors.error }]} />
+                </View>
+                <ThemedText style={[styles.breakdownValue, { color: value >= 80 ? Colors.accent : value >= 60 ? Colors.warning : Colors.error }]}>{value}</ThemedText>
+              </View>
+            ))}
+            <Pressable onPress={() => setShowScoringDrawer(true)} style={styles.howScoredButton}>
+              <Feather name="info" size={14} color={theme.textSecondary} />
+              <ThemedText style={[styles.howScoredText, { color: theme.textSecondary }]}>How we scored this</ThemedText>
+            </Pressable>
+          </GlassCard>
+        </Animated.View>
+      ) : null}
+    </ScrollView>
+  );
+
+  const renderWizard = () => {
+    const step = WIZARD_STEPS[wizardStep];
+    const currentSection = step.section;
+    const sectionSteps = WIZARD_STEPS.filter((s) => s.section === currentSection);
+    const sectionIndex = sectionSteps.findIndex((s) => s.id === step.id);
+
+    return (
+      <Modal visible={showWizard} animationType="slide" presentationStyle="pageSheet">
+        <ThemedView style={styles.wizardContainer}>
+          <View style={[styles.wizardHeader, { paddingTop: insets.top + Spacing.md }]}>
+            <Pressable onPress={handleWizardBack} style={styles.wizardBackButton}>
+              <Feather name="arrow-left" size={24} color={theme.text} />
+            </Pressable>
+            <View style={styles.wizardProgress}>
+              <View style={[styles.wizardProgressBar, { backgroundColor: theme.separator }]}>
+                <View style={[styles.wizardProgressFill, { width: `${((wizardStep + 1) / WIZARD_STEPS.length) * 100}%` }]} />
+              </View>
+              <ThemedText style={[styles.wizardProgressText, { color: theme.textSecondary }]}>
+                Question {wizardStep + 1} of {WIZARD_STEPS.length}
+              </ThemedText>
+            </View>
+            <Pressable onPress={() => setShowWizard(false)} style={styles.wizardCloseButton}>
+              <Feather name="x" size={24} color={theme.text} />
+            </Pressable>
+          </View>
+
+          <View style={styles.wizardContent}>
+            <ThemedText style={[styles.wizardSection, { color: Colors.accent }]}>{step.section}</ThemedText>
+            <ThemedText style={styles.wizardQuestion}>{step.question}</ThemedText>
+            {step.helperText ? (
+              <ThemedText style={[styles.wizardHelper, { color: theme.textSecondary }]}>{step.helperText}</ThemedText>
+            ) : null}
+            {prefilledKeys.has(step.id) ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  alignSelf: "flex-start",
+                  paddingHorizontal: Spacing.sm,
+                  paddingVertical: 4,
+                  borderRadius: BorderRadius.sm,
+                  backgroundColor: Colors.accentLight,
+                  marginTop: Spacing.xs,
+                }}
+              >
+                <Feather name="check-circle" size={12} color={Colors.accent} />
+                <ThemedText style={{ fontSize: 11, color: Colors.accent, fontWeight: "600" }}>
+                  From your home profile · tap to change
+                </ThemedText>
+              </View>
+            ) : null}
+
+            <View style={styles.wizardOptions}>
+              {step.type === "single" && step.options?.map((option) => (
+                <Pressable
+                  key={option}
+                  style={[styles.optionButton, { backgroundColor: theme.cardBackground, borderColor: answers[step.id] === option ? Colors.accent : theme.separator }]}
+                  onPress={() => handleAnswerSelect(step.id, option)}
+                >
+                  <ThemedText style={[styles.optionText, answers[step.id] === option && { color: Colors.accent }]}>{option}</ThemedText>
+                  {answers[step.id] === option ? <Feather name="check" size={20} color={Colors.accent} /> : null}
+                </Pressable>
+              ))}
+
+              {step.type === "multi" && step.options?.map((option) => {
+                const selected = Array.isArray(answers[step.id])
+                  ? (answers[step.id] as string[]).includes(option)
+                  : false;
+                return (
+                  <Pressable
+                    key={option}
+                    style={[styles.optionButton, { backgroundColor: theme.cardBackground, borderColor: selected ? Colors.accent : theme.separator }]}
+                    onPress={() => handleMultiSelect(step.id, option)}
+                  >
+                    <ThemedText style={[styles.optionText, selected && { color: Colors.accent }]}>{option}</ThemedText>
+                    <View style={[styles.checkbox, selected && { backgroundColor: Colors.accent, borderColor: Colors.accent }]}>
+                      {selected ? <Feather name="check" size={14} color="#FFF" /> : null}
+                    </View>
+                  </Pressable>
+                );
+              })}
+
+              {step.type === "toggle" && (
+                <View style={styles.toggleContainer}>
+                  <Pressable
+                    style={[styles.toggleOption, { backgroundColor: theme.cardBackground, borderColor: answers[step.id] === true ? Colors.accent : theme.separator }]}
+                    onPress={() => handleAnswerSelect(step.id, true)}
+                  >
+                    <Feather name="check-circle" size={24} color={answers[step.id] === true ? Colors.accent : theme.textTertiary} />
+                    <ThemedText style={[styles.toggleText, answers[step.id] === true && { color: Colors.accent }]}>Yes</ThemedText>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.toggleOption, { backgroundColor: theme.cardBackground, borderColor: answers[step.id] === false ? Colors.error : theme.separator }]}
+                    onPress={() => handleAnswerSelect(step.id, false)}
+                  >
+                    <Feather name="x-circle" size={24} color={answers[step.id] === false ? Colors.error : theme.textTertiary} />
+                    <ThemedText style={[styles.toggleText, answers[step.id] === false && { color: Colors.error }]}>No</ThemedText>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+          </View>
+
+          <View style={[styles.wizardFooter, { paddingBottom: insets.bottom + Spacing.lg }]}>
+            <PrimaryButton onPress={handleWizardNext} style={styles.wizardNextButton}>
+              {wizardStep < WIZARD_STEPS.length - 1 ? "Continue" : "Get My Score"}
+            </PrimaryButton>
+            <Pressable onPress={handleWizardNext} style={styles.skipButton}>
+              <ThemedText style={[styles.skipText, { color: theme.textSecondary }]}>I don't know — skip this question</ThemedText>
+            </Pressable>
+          </View>
+        </ThemedView>
+      </Modal>
+    );
+  };
+
+  const renderResults = () => {
+    if (!currentResult) return null;
+
+    const tabs = [
+      { id: "overview", label: "Overview", icon: "grid" },
+      { id: "risks", label: "Risks", icon: "alert-triangle" },
+      { id: "plan", label: "Action Plan", icon: "list" },
+      { id: "history", label: "History", icon: "clock" },
+    ] as const;
+
+    return (
+      <Modal visible={showResults} animationType="slide" presentationStyle="pageSheet">
+        <ThemedView style={styles.resultsContainer}>
+          <View style={[styles.resultsHeader, { paddingTop: insets.top + Spacing.md }]}>
+            <Pressable onPress={() => setShowResults(false)} style={styles.resultsBackButton}>
+              <Feather name="x" size={24} color={theme.text} />
+            </Pressable>
+            <ThemedText style={styles.resultsTitle}>Health Score Results</ThemedText>
+            <View style={{ width: 40 }} />
+          </View>
+
+          <ScrollView contentContainerStyle={[styles.resultsContent, { paddingHorizontal: horizontalPadding }]} showsVerticalScrollIndicator={false}>
+            <Animated.View entering={FadeIn.delay(200).duration(600)}>
+              <View style={styles.scoreSection}>
+                <ScoreRing score={currentResult.score} size={140} strokeWidth={12} animating />
+                <ThemedText style={styles.scoreSummary}>{getScoreLabel(currentResult.score)}</ThemedText>
+                <View style={styles.confidenceBadge}>
+                  <View style={[styles.confidenceDot, { backgroundColor: getConfidenceColor(currentResult.confidence) }]} />
+                  <ThemedText style={[styles.confidenceText, { color: theme.textSecondary }]}>
+                    {currentResult.confidence.charAt(0).toUpperCase() + currentResult.confidence.slice(1)} confidence
+                  </ThemedText>
+                </View>
+              </View>
+            </Animated.View>
+
+            <View style={styles.tabBar}>
+              {tabs.map((tab) => (
+                <Pressable key={tab.id} style={[styles.tab, activeTab === tab.id && styles.tabActive]} onPress={() => setActiveTab(tab.id)}>
+                  <Feather name={tab.icon as any} size={18} color={activeTab === tab.id ? Colors.accent : theme.textSecondary} />
+                  <ThemedText style={[styles.tabText, { color: activeTab === tab.id ? Colors.accent : theme.textSecondary }]}>{tab.label}</ThemedText>
+                </Pressable>
+              ))}
+            </View>
+
+            {activeTab === "overview" && (
+              <Animated.View entering={FadeIn.duration(300)}>
+                <ThemedText style={[styles.overviewSummary, { color: theme.textSecondary }]}>
+                  Your home is doing okay, but you have {currentResult.topRisks.length} priority risks that need attention.
+                </ThemedText>
+
+                <View style={styles.highlightCards}>
+                  <GlassCard style={styles.highlightCard}>
+                    <Feather name="alert-triangle" size={24} color={Colors.warning} />
+                    <ThemedText style={styles.highlightLabel}>Top Risk</ThemedText>
+                    <ThemedText style={styles.highlightValue} numberOfLines={2}>{currentResult.topRisks[0]}</ThemedText>
+                  </GlassCard>
+                  <GlassCard style={styles.highlightCard}>
+                    <Feather name="dollar-sign" size={24} color={Colors.error} />
+                    <ThemedText style={styles.highlightLabel}>Cost if Ignored</ThemedText>
+                    <ThemedText style={styles.highlightValue}>{estimateCostIfIgnored(currentResult.topRisks)}</ThemedText>
+                  </GlassCard>
+                  <GlassCard style={styles.highlightCard}>
+                    <Feather name="trending-up" size={24} color={Colors.accent} />
+                    <ThemedText style={styles.highlightLabel}>Quick Win Savings</ThemedText>
+                    <ThemedText style={styles.highlightValue}>{estimateQuickWinSavings(currentResult.breakdown)}</ThemedText>
+                  </GlassCard>
+                </View>
+
+                <ThemedText style={styles.resultSectionTitle}>Score Breakdown</ThemedText>
+                <GlassCard style={styles.breakdownCard}>
+                  {Object.entries(currentResult.breakdown).map(([key, value]) => (
+                    <View key={key} style={styles.breakdownRow}>
+                      <View style={styles.breakdownLabel}>
+                        <Feather
+                          name={key === "safety" ? "shield" : key === "water" ? "droplet" : key === "energy" ? "zap" : key === "comfort" ? "thermometer" : "home"}
+                          size={16}
+                          color={value >= 80 ? Colors.accent : value >= 60 ? Colors.warning : Colors.error}
+                        />
+                        <ThemedText style={styles.breakdownName}>{key.charAt(0).toUpperCase() + key.slice(1)}</ThemedText>
+                      </View>
+                      <View style={styles.breakdownBar}>
+                        <View style={[styles.breakdownProgress, { width: `${value}%`, backgroundColor: value >= 80 ? Colors.accent : value >= 60 ? Colors.warning : Colors.error }]} />
+                      </View>
+                      <ThemedText style={[styles.breakdownValue, { color: value >= 80 ? Colors.accent : value >= 60 ? Colors.warning : Colors.error }]}>{value}</ThemedText>
+                    </View>
+                  ))}
+                </GlassCard>
+              </Animated.View>
+            )}
+
+            {activeTab === "risks" && (
+              <Animated.View entering={FadeIn.duration(300)}>
+                <ThemedText style={styles.resultSectionTitle}>Priority Issues</ThemedText>
+                {currentResult.topRisks.map((risk, index) => (
+                  <GlassCard key={index} style={styles.riskDetailCard}>
+                    <View style={styles.riskDetailHeader}>
+                      <View style={[styles.severityBadge, { backgroundColor: index === 0 ? Colors.errorLight : Colors.warningLight }]}>
+                        <ThemedText style={[styles.severityText, { color: index === 0 ? Colors.error : Colors.warning }]}>
+                          {index === 0 ? "High" : "Medium"}
+                        </ThemedText>
+                      </View>
+                      <ThemedText style={styles.riskDetailTitle}>{risk}</ThemedText>
+                    </View>
+                    <ThemedText style={[styles.riskDetailWhy, { color: theme.textSecondary }]}>
+                      Why it matters: Ignoring this could lead to costly repairs or safety issues.
+                    </ThemedText>
+                    <View style={styles.riskDetailActions}>
+                      <Pressable style={[styles.riskActionButton, { backgroundColor: Colors.accent }]}>
+                        <ThemedText style={styles.riskActionText}>Book Now</ThemedText>
+                      </Pressable>
+                      <Pressable style={[styles.riskActionButton, { backgroundColor: theme.cardBackground, borderWidth: 1, borderColor: theme.separator }]}>
+                        <ThemedText style={[styles.riskActionText, { color: theme.text }]}>Get Quote</ThemedText>
+                      </Pressable>
+                    </View>
+                  </GlassCard>
+                ))}
+              </Animated.View>
+            )}
+
+            {activeTab === "plan" && (
+              <Animated.View entering={FadeIn.duration(300)}>
+                <ThemedText style={styles.resultSectionTitle}>Recommended Actions</ThemedText>
+                {buildActionPlan(currentResult.topRisks).map((task, index) => (
+                  <GlassCard key={index} style={styles.actionCard}>
+                    <View style={styles.actionHeader}>
+                      <ThemedText style={styles.actionTitle}>{task.title}</ThemedText>
+                      <View style={[styles.categoryChip, { backgroundColor: Colors.accentLight }]}>
+                        <ThemedText style={[styles.categoryChipText, { color: Colors.accent }]}>{task.category}</ThemedText>
+                      </View>
+                    </View>
+                    <View style={styles.actionMeta}>
+                      <View style={styles.actionMetaItem}>
+                        <Feather name="calendar" size={14} color={theme.textSecondary} />
+                        <ThemedText style={[styles.actionMetaText, { color: theme.textSecondary }]}>{task.due}</ThemedText>
+                      </View>
+                      <View style={styles.actionMetaItem}>
+                        <Feather name="dollar-sign" size={14} color={theme.textSecondary} />
+                        <ThemedText style={[styles.actionMetaText, { color: theme.textSecondary }]}>{task.cost}</ThemedText>
+                      </View>
+                    </View>
+                    <View style={styles.actionButtons}>
+                      <Pressable style={[styles.actionBtn, { backgroundColor: Colors.accent }]}>
+                        <ThemedText style={styles.actionBtnText}>Book Now</ThemedText>
+                      </Pressable>
+                      <Pressable style={[styles.actionBtn, { backgroundColor: theme.backgroundSecondary }]}>
+                        <ThemedText style={[styles.actionBtnText, { color: theme.text }]}>Add to Plan</ThemedText>
+                      </Pressable>
+                      <Pressable style={styles.actionIconBtn}>
+                        <Feather name="clock" size={18} color={theme.textSecondary} />
+                      </Pressable>
+                    </View>
+                  </GlassCard>
+                ))}
+              </Animated.View>
+            )}
+
+            {activeTab === "history" && (
+              <Animated.View entering={FadeIn.duration(300)}>
+                <ThemedText style={styles.resultSectionTitle}>Past Assessments</ThemedText>
+                {scoreRuns.map((run, index) => (
+                  <GlassCard key={run.id} style={styles.historyCard}>
+                    <View style={styles.historyHeader}>
+                      <ScoreRing score={run.score} size={60} strokeWidth={6} />
+                      <View style={styles.historyInfo}>
+                        <ThemedText style={styles.historyDate}>
+                          {new Date(run.date).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                        </ThemedText>
+                        <ThemedText style={[styles.historyLabel, { color: run.score >= 80 ? Colors.accent : run.score >= 60 ? Colors.warning : Colors.error }]}>
+                          {getScoreLabel(run.score)}
+                        </ThemedText>
+                        {index === 0 && previousRun ? (
+                          <ThemedText style={[styles.historyImprovement, { color: trendDiff >= 0 ? Colors.accent : Colors.error }]}>
+                            {trendDiff >= 0 ? "+" : ""}{trendDiff} from previous
+                          </ThemedText>
+                        ) : null}
+                      </View>
+                    </View>
+                  </GlassCard>
+                ))}
+                <Pressable style={styles.compareButton}>
+                  <ThemedText style={[styles.compareButtonText, { color: Colors.accent }]}>Compare Runs</ThemedText>
+                </Pressable>
+              </Animated.View>
+            )}
+          </ScrollView>
+
+          {activeTab === "risks" && currentResult.topRisks.length > 0 ? (
+            <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + Spacing.lg, paddingHorizontal: horizontalPadding }]}>
+              <PrimaryButton onPress={() => navigation.navigate("SmartIntake")}>
+                Fix Top Issue Now
+              </PrimaryButton>
+            </View>
+          ) : null}
+        </ThemedView>
+      </Modal>
+    );
+  };
+
+  const renderScoringDrawer = () => (
+    <Modal visible={showScoringDrawer} animationType="slide" presentationStyle="pageSheet" transparent>
+      <Pressable style={styles.drawerOverlay} onPress={() => setShowScoringDrawer(false)}>
+        <View style={[styles.drawerContent, { backgroundColor: theme.backgroundDefault, paddingBottom: insets.bottom + Spacing.lg }]}>
+          <View style={styles.drawerHandle} />
+          <ThemedText style={styles.drawerTitle}>How We Score Your Home</ThemedText>
+          <ThemedText style={[styles.drawerText, { color: theme.textSecondary }]}>
+            Your Home Health Score is calculated based on several factors weighted by their impact on safety, cost, and comfort:
+          </ThemedText>
+          {[
+            { name: "Safety Systems", weight: 25, desc: "Smoke detectors, CO monitors, electrical safety" },
+            { name: "Water Risk", weight: 20, desc: "Leaks, water heater age, drainage" },
+            { name: "Energy Efficiency", weight: 20, desc: "HVAC condition, insulation, filters" },
+            { name: "Comfort", weight: 15, desc: "Temperature consistency, air quality" },
+            { name: "Exterior", weight: 20, desc: "Roof, gutters, foundation, landscaping" },
+          ].map((item, index) => (
+            <View key={index} style={styles.weightRow}>
+              <View style={styles.weightInfo}>
+                <ThemedText style={styles.weightName}>{item.name}</ThemedText>
+                <ThemedText style={[styles.weightDesc, { color: theme.textSecondary }]}>{item.desc}</ThemedText>
+              </View>
+              <View style={[styles.weightBadge, { backgroundColor: Colors.accentLight }]}>
+                <ThemedText style={[styles.weightValue, { color: Colors.accent }]}>{item.weight}%</ThemedText>
+              </View>
+            </View>
+          ))}
+        </View>
+      </Pressable>
+    </Modal>
+  );
+
+  return (
+    <ThemedView style={styles.container}>
+      {renderEntryScreen()}
+      {renderWizard()}
+      {renderResults()}
+      {renderScoringDrawer()}
+    </ThemedView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  content: {},
+  homeSelector: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full, marginBottom: Spacing.lg, gap: Spacing.sm },
+  homeSelectorText: { ...Typography.subhead, fontWeight: "500" },
+  heroCard: { marginBottom: Spacing.sectionGap },
+  heroTitle: { ...Typography.title1, marginBottom: Spacing.xs },
+  heroSubtitle: { ...Typography.body, marginBottom: Spacing.lg },
+  lastScorePreview: { marginBottom: Spacing.lg },
+  lastScoreHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md },
+  lastScoreLabel: { ...Typography.caption1 },
+  trendBadge: { flexDirection: "row", alignItems: "center", gap: 4 },
+  trendText: { ...Typography.caption1, fontWeight: "600" },
+  lastScoreRow: { flexDirection: "row", alignItems: "center", gap: Spacing.lg },
+  lastScoreInfo: { flex: 1 },
+  lastScoreValue: { ...Typography.title3, marginBottom: 2 },
+  lastScoreDate: { ...Typography.caption1, marginBottom: Spacing.xs },
+  confidenceBadge: { flexDirection: "row", alignItems: "center", gap: 6 },
+  confidenceDot: { width: 8, height: 8, borderRadius: 4 },
+  confidenceText: { ...Typography.caption1 },
+  heroButton: { marginBottom: Spacing.sm },
+  secondaryButton: { alignItems: "center", paddingVertical: Spacing.sm },
+  secondaryButtonText: { ...Typography.subhead, fontWeight: "500" },
+  sectionTitle: { ...Typography.headline, marginBottom: Spacing.md },
+  riskCard: { flexDirection: "row", alignItems: "center", marginBottom: Spacing.sm, gap: Spacing.md },
+  riskIcon: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  riskContent: { flex: 1 },
+  riskTitle: { ...Typography.subhead, marginBottom: 2 },
+  riskAction: { ...Typography.caption1, fontWeight: "500" },
+  breakdownCard: { marginBottom: Spacing.lg },
+  breakdownRow: { flexDirection: "row", alignItems: "center", marginBottom: Spacing.md },
+  breakdownLabel: { flexDirection: "row", alignItems: "center", width: 100, gap: 8 },
+  breakdownName: { ...Typography.caption1 },
+  breakdownBar: { flex: 1, height: 8, backgroundColor: "rgba(0,0,0,0.05)", borderRadius: 4, marginHorizontal: Spacing.sm, overflow: "hidden" },
+  breakdownProgress: { height: "100%", borderRadius: 4 },
+  breakdownValue: { width: 30, textAlign: "right", ...Typography.caption1, fontWeight: "600" },
+  howScoredButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingTop: Spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "rgba(0,0,0,0.1)", marginTop: Spacing.sm },
+  howScoredText: { ...Typography.caption1 },
+  scoreValue: { fontSize: 36, fontWeight: "700" },
+  scoreLabel: { ...Typography.caption1, marginTop: -4 },
+
+  wizardContainer: { flex: 1 },
+  wizardHeader: { flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.md, paddingBottom: Spacing.md },
+  wizardBackButton: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
+  wizardProgress: { flex: 1, paddingHorizontal: Spacing.md },
+  wizardProgressBar: { height: 4, borderRadius: 2, overflow: "hidden" },
+  wizardProgressFill: { height: "100%", backgroundColor: Colors.accent, borderRadius: 2 },
+  wizardProgressText: { ...Typography.caption2, textAlign: "center", marginTop: 4 },
+  wizardCloseButton: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
+  wizardContent: { flex: 1, paddingHorizontal: Spacing.xl, paddingTop: Spacing["2xl"] },
+  wizardSection: { ...Typography.caption1, fontWeight: "600", textTransform: "uppercase", letterSpacing: 1, marginBottom: Spacing.sm },
+  wizardQuestion: { ...Typography.title2, marginBottom: Spacing.sm },
+  wizardHelper: { ...Typography.footnote, marginBottom: Spacing.xl },
+  wizardOptions: { gap: Spacing.sm },
+  optionButton: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: Spacing.lg, borderRadius: BorderRadius.md, borderWidth: 2 },
+  optionText: { ...Typography.body },
+  checkbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: "rgba(0,0,0,0.2)", alignItems: "center", justifyContent: "center" },
+  toggleContainer: { flexDirection: "row", gap: Spacing.md },
+  toggleOption: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: Spacing.xl, borderRadius: BorderRadius.lg, borderWidth: 2, gap: Spacing.sm },
+  toggleText: { ...Typography.headline },
+  wizardFooter: { paddingHorizontal: Spacing.xl, paddingTop: Spacing.lg },
+  wizardNextButton: {},
+  skipButton: { alignItems: "center", paddingVertical: Spacing.md },
+  skipText: { ...Typography.footnote },
+
+  resultsContainer: { flex: 1 },
+  resultsHeader: { flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.md, paddingBottom: Spacing.md },
+  resultsBackButton: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
+  resultsTitle: { ...Typography.headline, flex: 1, textAlign: "center" },
+  resultsContent: { paddingBottom: 120 },
+  scoreSection: { alignItems: "center", paddingVertical: Spacing.xl },
+  scoreSummary: { ...Typography.title2, marginTop: Spacing.md, marginBottom: Spacing.xs },
+  tabBar: { flexDirection: "row", marginBottom: Spacing.lg },
+  tab: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: Spacing.md, gap: 6 },
+  tabActive: { borderBottomWidth: 2, borderBottomColor: Colors.accent },
+  tabText: { ...Typography.caption1, fontWeight: "500" },
+  overviewSummary: { ...Typography.body, marginBottom: Spacing.lg, textAlign: "center" },
+  highlightCards: { flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.lg },
+  highlightCard: { flex: 1, alignItems: "center", paddingVertical: Spacing.lg },
+  highlightLabel: { ...Typography.caption2, marginTop: Spacing.sm, marginBottom: 4, textAlign: "center" },
+  highlightValue: { ...Typography.caption1, fontWeight: "600", textAlign: "center" },
+  resultSectionTitle: { ...Typography.headline, marginBottom: Spacing.md },
+  riskDetailCard: { marginBottom: Spacing.md },
+  riskDetailHeader: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.sm },
+  severityBadge: { paddingHorizontal: Spacing.sm, paddingVertical: 2, borderRadius: BorderRadius.xs },
+  severityText: { ...Typography.caption2, fontWeight: "600" },
+  riskDetailTitle: { ...Typography.headline, flex: 1 },
+  riskDetailWhy: { ...Typography.footnote, marginBottom: Spacing.md },
+  riskDetailActions: { flexDirection: "row", gap: Spacing.sm },
+  riskActionButton: { flex: 1, paddingVertical: Spacing.sm, borderRadius: BorderRadius.sm, alignItems: "center" },
+  riskActionText: { ...Typography.subhead, fontWeight: "600", color: "#FFF" },
+  actionCard: { marginBottom: Spacing.md },
+  actionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.sm },
+  actionTitle: { ...Typography.headline, flex: 1 },
+  categoryChip: { paddingHorizontal: Spacing.sm, paddingVertical: 2, borderRadius: BorderRadius.xs },
+  categoryChipText: { ...Typography.caption2, fontWeight: "500" },
+  actionMeta: { flexDirection: "row", gap: Spacing.lg, marginBottom: Spacing.md },
+  actionMetaItem: { flexDirection: "row", alignItems: "center", gap: 4 },
+  actionMetaText: { ...Typography.caption1 },
+  actionButtons: { flexDirection: "row", gap: Spacing.sm, alignItems: "center" },
+  actionBtn: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.sm },
+  actionBtnText: { ...Typography.caption1, fontWeight: "600", color: "#FFF" },
+  actionIconBtn: { padding: Spacing.sm },
+  historyCard: { marginBottom: Spacing.md },
+  historyHeader: { flexDirection: "row", alignItems: "center", gap: Spacing.lg },
+  historyInfo: { flex: 1 },
+  historyDate: { ...Typography.headline, marginBottom: 2 },
+  historyLabel: { ...Typography.subhead, fontWeight: "500", marginBottom: 2 },
+  historyImprovement: { ...Typography.caption1 },
+  compareButton: { alignItems: "center", paddingVertical: Spacing.md },
+  compareButtonText: { ...Typography.subhead, fontWeight: "500" },
+  stickyFooter: { position: "absolute", bottom: 0, left: 0, right: 0, paddingTop: Spacing.lg, backgroundColor: "rgba(255,255,255,0.95)" },
+
+  drawerOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.4)" },
+  drawerContent: { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: Spacing.xl, paddingTop: Spacing.sm },
+  drawerHandle: { width: 36, height: 4, backgroundColor: "rgba(0,0,0,0.2)", borderRadius: 2, alignSelf: "center", marginBottom: Spacing.lg },
+  drawerTitle: { ...Typography.title3, marginBottom: Spacing.md },
+  drawerText: { ...Typography.body, marginBottom: Spacing.lg },
+  weightRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: Spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(0,0,0,0.1)" },
+  weightInfo: { flex: 1 },
+  weightName: { ...Typography.headline, marginBottom: 2 },
+  weightDesc: { ...Typography.caption1 },
+  weightBadge: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs, borderRadius: BorderRadius.sm },
+  weightValue: { ...Typography.subhead, fontWeight: "600" },
+
+  modalOverlay: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.4)", padding: Spacing.xl },
+  modalContent: { width: "100%", borderRadius: BorderRadius.lg, padding: Spacing.lg },
+  modalTitle: { ...Typography.title3, marginBottom: Spacing.lg },
+  homeOption: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: Spacing.lg, borderRadius: BorderRadius.md, marginBottom: Spacing.sm },
+  homeOptionName: { ...Typography.headline, marginBottom: 2 },
+  homeOptionAddress: { ...Typography.caption1 },
+});

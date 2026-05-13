@@ -1,0 +1,2689 @@
+import React, { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import {
+  StyleSheet,
+  View,
+  FlatList,
+  ScrollView,
+  RefreshControl,
+  Pressable,
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Platform,
+  useWindowDimensions,
+} from "react-native";
+import { openExternalUrl } from "@/lib/openExternalUrl";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useHeaderHeight } from "@react-navigation/elements";
+import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
+import { useLayout } from "@/hooks/useLayout";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useNavigation, useFocusEffect, useRoute, type RouteProp } from "@react-navigation/native";
+import { Feather } from "@expo/vector-icons";
+import Animated, { FadeInDown, FadeIn, FadeOut } from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest, getAuthHeaders, getApiUrl } from "@/lib/query-client";
+
+import { ThemedText } from "@/components/ThemedText";
+import { ThemedView } from "@/components/ThemedView";
+import { GlassCard } from "@/components/GlassCard";
+import { StatusPill, StatusType } from "@/components/StatusPill";
+import { EmptyState } from "@/components/EmptyState";
+import { useTheme } from "@/hooks/useTheme";
+import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
+import { useAuthStore } from "@/state/authStore";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { estimateStatusLabel, estimateStatusTone } from "@/constants/estimateStatuses";
+import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
+import { SubscriptionGateModal } from "@/components/SubscriptionGateModal";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface ProviderStats {
+  revenueMTD: number;
+  jobsCompleted: number;
+  activeClients: number;
+  upcomingJobs: number;
+  averageJobValue: number;
+  revenueByPeriod: { label: string; value: number }[];
+}
+
+interface StripeStatus {
+  exists: boolean;
+  hasAccount: boolean;
+  onboardingStatus: "not_started" | "pending" | "complete";
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  detailsSubmitted: boolean;
+}
+
+interface StripePayout {
+  id: string;
+  amountCents: number;
+  currency: string;
+  status: string;
+  arrivalDate: string | null;
+  description: string | null;
+  createdAt: string;
+  bankLast4: string | null;
+}
+
+interface NextPayoutData {
+  status: "not_onboarded" | "onboarding_incomplete" | "ready";
+  subscriptionGated?: boolean;
+  nextPayout?: {
+    id: string;
+    amountCents: number;
+    currency: string;
+    arrivalDate: string | null;
+    bankName: string | null;
+    last4: string | null;
+    payoutStatus: string;
+  } | null;
+  pendingBalanceCents?: number;
+  bankName?: string | null;
+  last4?: string | null;
+}
+
+interface InvoiceRecord {
+  id: string;
+  invoiceNumber: string;
+  totalCents: number;
+  status: string;
+  dueDate: string | null;
+  sentAt: string | null;
+  paidAt: string | null;
+  createdAt: string;
+  clientId: string | null;
+  clientName?: string | null;
+  homeownerUserId?: string | null;
+}
+
+type SectionTab = "overview" | "transactions" | "more";
+type TransactionTab = "invoices" | "payouts";
+
+type UnifiedTxRow =
+  | { kind: "invoice"; date: string; data: InvoiceRecord }
+  | { kind: "estimate"; date: string; data: EstimateRecord };
+
+interface EstimateRecord {
+  id: string;
+  estimateNumber: string;
+  status: string;
+  totalCents: number;
+  clientId: string | null;
+  expiresAt?: string | null;
+  createdAt: string;
+}
+
+interface ManualPaymentRecord {
+  id: string;
+  invoiceId: string;
+  amountCents: number;
+  method: string;
+  status: string;
+  reference: string | null;
+  notes: string | null;
+  receivedAt: string | null;
+  voidedAt: string | null;
+  createdAt: string;
+  invoiceNumber: string | null;
+  clientId: string | null;
+}
+type DateRange = "week" | "month" | "quarter" | "year" | "custom";
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatCents(cents: number): string {
+  return (cents / 100).toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+  });
+}
+
+function formatDollars(amount: number | null | undefined): string {
+  const n = amount ?? 0;
+  return n.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function formatArrivalDate(iso: string | null): string {
+  if (!iso) return "Pending";
+  const d = new Date(iso);
+  const now = new Date();
+  const diffMs = d.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Tomorrow";
+  if (diffDays > 1 && diffDays <= 7) return `In ${diffDays} days`;
+  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+
+// Long-form weekday + month/day, e.g. "Friday, Nov 8" — used in the
+// next-payout summary line on the Financials overview.
+function formatPayoutLongDate(iso: string | null): string {
+  if (!iso) return "Soon";
+  return new Date(iso).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function formatBankLine(
+  bankName: string | null | undefined,
+  last4: string | null | undefined,
+): string | null {
+  if (!bankName && !last4) return null;
+  const name = bankName ?? "Bank";
+  if (!last4) return name;
+  return `${name} \u2022\u2022${last4}`;
+}
+
+function payoutStatusType(status: string): StatusType {
+  switch (status) {
+    case "paid": return "success";
+    case "in_transit": return "info";
+    case "pending": return "pending";
+    case "failed":
+    case "canceled":
+    case "cancelled": return "error";
+    default: return "neutral";
+  }
+}
+
+function payoutStatusLabel(status: string): string {
+  if (status === "in_transit") return "In Transit";
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function invoiceStatusType(status: string): StatusType {
+  switch (status) {
+    case "paid": return "success";
+    case "sent": return "info";
+    case "overdue": return "error";
+    case "partially_paid": return "pending";
+    case "draft": return "neutral";
+    case "cancelled":
+    case "canceled": return "neutral";
+    default: return "neutral";
+  }
+}
+
+function invoiceStatusLabel(status: string): string {
+  switch (status) {
+    case "partially_paid": return "Partial";
+    case "cancelled":
+    case "canceled": return "Cancelled";
+    default: return status.charAt(0).toUpperCase() + status.slice(1);
+  }
+}
+
+function getDateRange(
+  range: DateRange,
+  customStart?: Date,
+  customEnd?: Date
+): { start: Date; end: Date } {
+  if (range === "custom" && customStart && customEnd) {
+    const s = new Date(customStart);
+    s.setHours(0, 0, 0, 0);
+    const e = new Date(customEnd);
+    e.setHours(23, 59, 59, 999);
+    return { start: s, end: e };
+  }
+
+  const now = new Date();
+  const end = new Date(now);
+  end.setHours(23, 59, 59, 999);
+  const start = new Date(now);
+
+  switch (range) {
+    case "week":
+      start.setDate(now.getDate() - 6);
+      start.setHours(0, 0, 0, 0);
+      break;
+    case "month":
+      start.setDate(1);
+      start.setHours(0, 0, 0, 0);
+      break;
+    case "quarter":
+      start.setMonth(now.getMonth() - 2);
+      start.setDate(1);
+      start.setHours(0, 0, 0, 0);
+      break;
+    case "year":
+      start.setMonth(0);
+      start.setDate(1);
+      start.setHours(0, 0, 0, 0);
+      break;
+    default:
+      start.setDate(1);
+      start.setHours(0, 0, 0, 0);
+  }
+
+  return { start, end };
+}
+
+const DATE_RANGE_OPTIONS: { key: DateRange; label: string }[] = [
+  { key: "week", label: "Week" },
+  { key: "month", label: "Month" },
+  { key: "quarter", label: "Qtr" },
+  { key: "year", label: "Year" },
+  { key: "custom", label: "Custom" },
+];
+
+// ─── View-based Bar Chart ─────────────────────────────────────────────────────
+
+function BarChart({
+  data,
+  maxValue,
+  theme,
+}: {
+  data: { label: string; value: number }[];
+  maxValue: number;
+  theme: ReturnType<typeof useTheme>["theme"];
+}) {
+  const CHART_HEIGHT = 120;
+  const EMPTY_BAR_H = 6;
+  const n = data.length;
+  const maxIdx = data.reduce(
+    (best, item, i) => (item.value > data[best].value ? i : best),
+    0
+  );
+  const hasAnyValue = data.some((d) => d.value > 0);
+
+  return (
+    <View style={{ marginTop: Spacing.md }}>
+      {/* Chart area */}
+      <View
+        style={{
+          height: CHART_HEIGHT,
+          flexDirection: "row",
+          alignItems: "flex-end",
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: theme.separator,
+        }}
+      >
+        {data.map((item, i) => {
+          const hasValue = item.value > 0;
+          const barPct = maxValue > 0 && hasValue ? item.value / maxValue : 0;
+          const barH = hasValue
+            ? Math.max(EMPTY_BAR_H + 2, barPct * CHART_HEIGHT)
+            : EMPTY_BAR_H;
+          const isMax = i === maxIdx && hasValue;
+          const showLabel =
+            n <= 7 || i % Math.ceil(n / 6) === 0 || i === n - 1;
+
+          return (
+            <View
+              key={i}
+              style={{ flex: 1, alignItems: "center", justifyContent: "flex-end" }}
+            >
+              {/* Peak value label */}
+              {isMax ? (
+                <ThemedText
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "700",
+                    color: Colors.accent,
+                    marginBottom: 2,
+                  }}
+                  numberOfLines={1}
+                >
+                  {formatDollars(item.value)}
+                </ThemedText>
+              ) : null}
+
+              {/* Bar */}
+              <View
+                style={{
+                  width: "70%",
+                  height: barH,
+                  backgroundColor: hasValue ? Colors.accent : theme.separator,
+                  opacity: hasValue ? 1 : 0.4,
+                  borderRadius: 3,
+                }}
+              />
+            </View>
+          );
+        })}
+      </View>
+
+      {/* X-axis labels */}
+      <View style={{ flexDirection: "row", marginTop: 4 }}>
+        {data.map((item, i) => {
+          const showLabel =
+            n <= 7 || i % Math.ceil(n / 6) === 0 || i === n - 1;
+          return (
+            <View key={i} style={{ flex: 1, alignItems: "center" }}>
+              {showLabel ? (
+                <ThemedText
+                  style={{
+                    fontSize: 11,
+                    color: theme.textSecondary,
+                    textAlign: "center",
+                  }}
+                  numberOfLines={1}
+                >
+                  {item.label}
+                </ThemedText>
+              ) : null}
+            </View>
+          );
+        })}
+      </View>
+
+      {/* Empty state overlay */}
+      {!hasAnyValue ? (
+        <View style={{ alignItems: "center", marginTop: Spacing.sm }}>
+          <ThemedText style={{ fontSize: 11, color: theme.textSecondary }}>
+            No revenue data for this period
+          </ThemedText>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+// ─── Inline Date Range Picker ─────────────────────────────────────────────────
+
+const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+function isSameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function stripTime(d: Date): Date {
+  const c = new Date(d);
+  c.setHours(0, 0, 0, 0);
+  return c;
+}
+
+interface InlineDateRangePickerProps {
+  visible: boolean;
+  initialStart: Date;
+  initialEnd: Date;
+  maxDate?: Date;
+  onApply: (start: Date, end: Date) => void;
+  onClose: () => void;
+  theme: ReturnType<typeof useTheme>["theme"];
+}
+
+function InlineDateRangePicker({
+  visible,
+  initialStart,
+  initialEnd,
+  maxDate,
+  onApply,
+  onClose,
+  theme,
+}: InlineDateRangePickerProps) {
+  const { width: windowWidth } = useWindowDimensions();
+  const today = stripTime(maxDate ?? new Date());
+
+  const [displayMonth, setDisplayMonth] = useState<Date>(() => {
+    const d = new Date(initialStart);
+    d.setDate(1);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
+  const [rangeStart, setRangeStart] = useState<Date | null>(stripTime(initialStart));
+  const [rangeEnd, setRangeEnd] = useState<Date | null>(stripTime(initialEnd));
+
+  const year = displayMonth.getFullYear();
+  const month = displayMonth.getMonth();
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDayOfWeek = new Date(year, month, 1).getDay();
+
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < firstDayOfWeek; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  // Pad to full weeks
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const goToPrevMonth = () => {
+    const d = new Date(displayMonth);
+    d.setMonth(d.getMonth() - 1);
+    setDisplayMonth(d);
+  };
+
+  const goToNextMonth = () => {
+    const d = new Date(displayMonth);
+    d.setMonth(d.getMonth() + 1);
+    setDisplayMonth(d);
+  };
+
+  const canGoNext = () => {
+    const nextMonth = new Date(year, month + 1, 1);
+    return nextMonth <= today;
+  };
+
+  const handleDayPress = (day: number) => {
+    const tapped = new Date(year, month, day);
+    tapped.setHours(0, 0, 0, 0);
+
+    if (!rangeStart || (rangeStart && rangeEnd)) {
+      setRangeStart(tapped);
+      setRangeEnd(null);
+    } else {
+      if (tapped < rangeStart) {
+        setRangeStart(tapped);
+        setRangeEnd(rangeStart);
+      } else {
+        setRangeEnd(tapped);
+      }
+    }
+    Haptics.selectionAsync();
+  };
+
+  const getDayState = (day: number): "start" | "end" | "inRange" | "single" | "none" => {
+    const d = new Date(year, month, day);
+    d.setHours(0, 0, 0, 0);
+    if (!rangeStart) return "none";
+    const isStart = isSameDay(d, rangeStart);
+    const isEnd = rangeEnd ? isSameDay(d, rangeEnd) : false;
+    if (!rangeEnd) return isStart ? "single" : "none";
+    if (isStart && isEnd) return "single";
+    if (isStart) return "start";
+    if (isEnd) return "end";
+    if (d > rangeStart && d < rangeEnd) return "inRange";
+    return "none";
+  };
+
+  const isFuture = (day: number): boolean => {
+    const d = new Date(year, month, day);
+    d.setHours(0, 0, 0, 0);
+    return d > today;
+  };
+
+  const formattedStart = rangeStart
+    ? rangeStart.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : "Start date";
+  const formattedEnd = rangeEnd
+    ? rangeEnd.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : rangeStart
+    ? "End date"
+    : "End date";
+
+  const canApply = !!(rangeStart && rangeEnd);
+
+  const calendarWidth = Math.min(windowWidth, 680);
+  const CELL_SIZE = Math.floor((calendarWidth - Spacing.screenPadding * 2 - 24) / 7);
+
+  if (!visible) return null;
+
+  return (
+    <View
+      style={[
+        inlinePickerStyles.container,
+        { backgroundColor: theme.backgroundSecondary, borderColor: theme.separator },
+      ]}
+    >
+      {/* Header row: selected range + close */}
+      <View style={inlinePickerStyles.headerRow}>
+        <View style={inlinePickerStyles.rangeDisplay}>
+          <ThemedText
+            style={[
+              inlinePickerStyles.rangeValue,
+              { color: rangeStart ? Colors.accent : theme.textSecondary },
+            ]}
+          >
+            {formattedStart}
+          </ThemedText>
+          <Feather name="arrow-right" size={12} color={theme.textSecondary} style={{ marginHorizontal: 6 }} />
+          <ThemedText
+            style={[
+              inlinePickerStyles.rangeValue,
+              { color: rangeEnd ? Colors.accent : theme.textSecondary },
+            ]}
+          >
+            {formattedEnd}
+          </ThemedText>
+        </View>
+        <Pressable
+          onPress={onClose}
+          hitSlop={12}
+          style={[inlinePickerStyles.closeBtn, { backgroundColor: theme.separator }]}
+        >
+          <Feather name="x" size={14} color={theme.textSecondary} />
+        </Pressable>
+      </View>
+
+      {/* Month navigator */}
+      <View style={inlinePickerStyles.monthNav}>
+        <Pressable
+          style={[inlinePickerStyles.navBtn, { backgroundColor: theme.backgroundRoot }]}
+          onPress={goToPrevMonth}
+          hitSlop={10}
+        >
+          <Feather name="chevron-left" size={16} color={theme.text} />
+        </Pressable>
+        <ThemedText style={inlinePickerStyles.monthTitle}>
+          {MONTHS[month]} {year}
+        </ThemedText>
+        <Pressable
+          style={[
+            inlinePickerStyles.navBtn,
+            { backgroundColor: theme.backgroundRoot },
+            !canGoNext() && { opacity: 0.3 },
+          ]}
+          onPress={canGoNext() ? goToNextMonth : undefined}
+          hitSlop={10}
+          disabled={!canGoNext()}
+        >
+          <Feather name="chevron-right" size={16} color={theme.text} />
+        </Pressable>
+      </View>
+
+      {/* Day-of-week headers */}
+      <View style={inlinePickerStyles.dowRow}>
+        {DAYS_OF_WEEK.map((d) => (
+          <View key={d} style={{ width: CELL_SIZE, alignItems: "center" }}>
+            <ThemedText style={[inlinePickerStyles.dowLabel, { color: theme.textSecondary }]}>
+              {d[0]}
+            </ThemedText>
+          </View>
+        ))}
+      </View>
+
+      {/* Calendar grid */}
+      <View style={{ marginBottom: Spacing.sm }}>
+        {Array.from({ length: Math.ceil(cells.length / 7) }, (_, weekIdx) => (
+          <View key={weekIdx} style={{ flexDirection: "row" }}>
+            {cells.slice(weekIdx * 7, weekIdx * 7 + 7).map((day, dayIdx) => {
+              const cellKey = `w${weekIdx}-d${dayIdx}`;
+              if (!day) {
+                return <View key={cellKey} style={{ width: CELL_SIZE, height: CELL_SIZE }} />;
+              }
+              const state = getDayState(day);
+              const future = isFuture(day);
+              const isSelected = state === "start" || state === "end" || state === "single";
+              const inRange = state === "inRange";
+              const isFirstInWeek = dayIdx === 0;
+              const isLastInWeek = dayIdx === 6;
+              const isStartDay = state === "start";
+              const isEndDay = state === "end";
+              const showLeft = inRange || isEndDay;
+              const showRight = inRange || isStartDay;
+
+              return (
+                <Pressable
+                  key={cellKey}
+                  style={[
+                    inlinePickerStyles.dayCell,
+                    { width: CELL_SIZE, height: CELL_SIZE },
+                  ]}
+                  onPress={() => !future && handleDayPress(day)}
+                  disabled={future}
+                  testID={`calendar-day-${day}`}
+                >
+                  {showLeft ? (
+                    <View
+                      style={[
+                        inlinePickerStyles.rangeStrip,
+                        {
+                          left: 0,
+                          right: "50%",
+                          backgroundColor: Colors.accent + "22",
+                          borderTopLeftRadius: isFirstInWeek ? 6 : 0,
+                          borderBottomLeftRadius: isFirstInWeek ? 6 : 0,
+                        },
+                      ]}
+                    />
+                  ) : null}
+                  {showRight ? (
+                    <View
+                      style={[
+                        inlinePickerStyles.rangeStrip,
+                        {
+                          left: "50%",
+                          right: 0,
+                          backgroundColor: Colors.accent + "22",
+                          borderTopRightRadius: isLastInWeek ? 6 : 0,
+                          borderBottomRightRadius: isLastInWeek ? 6 : 0,
+                        },
+                      ]}
+                    />
+                  ) : null}
+                  <View
+                    style={[
+                      inlinePickerStyles.dayCircle,
+                      {
+                        width: Math.min(CELL_SIZE - 4, 32),
+                        height: Math.min(CELL_SIZE - 4, 32),
+                      },
+                      isSelected && { backgroundColor: Colors.accent },
+                    ]}
+                  >
+                    <ThemedText
+                      style={[
+                        inlinePickerStyles.dayText,
+                        isSelected && { color: "#FFFFFF", fontWeight: "700" },
+                        inRange && { color: Colors.accent, fontWeight: "600" },
+                        future && { opacity: 0.3 },
+                      ]}
+                    >
+                      {day}
+                    </ThemedText>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        ))}
+      </View>
+
+      {/* Hint */}
+      {rangeStart && !rangeEnd ? (
+        <ThemedText style={[inlinePickerStyles.hint, { color: theme.textSecondary }]}>
+          Tap another date to set the end
+        </ThemedText>
+      ) : null}
+
+      {/* Apply button */}
+      <Pressable
+        style={[
+          inlinePickerStyles.applyBtn,
+          { backgroundColor: canApply ? Colors.accent : Colors.accent + "40" },
+        ]}
+        onPress={() => {
+          if (rangeStart && rangeEnd) onApply(rangeStart, rangeEnd);
+        }}
+        disabled={!canApply}
+        testID="button-apply-date-range"
+      >
+        <ThemedText
+          style={[inlinePickerStyles.applyBtnText, { color: canApply ? "#FFFFFF" : "#FFFFFF80" }]}
+        >
+          Apply Range
+        </ThemedText>
+      </Pressable>
+    </View>
+  );
+}
+
+const inlinePickerStyles = StyleSheet.create({
+  container: {
+    borderRadius: BorderRadius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.sm,
+  },
+  rangeDisplay: { flexDirection: "row", alignItems: "center", flex: 1 },
+  rangeValue: { fontSize: 13, fontWeight: "600" },
+  closeBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  monthNav: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.sm,
+  },
+  navBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  monthTitle: { fontSize: 15, fontWeight: "700" },
+  dowRow: { flexDirection: "row", marginBottom: 4 },
+  dowLabel: { fontSize: 11, fontWeight: "600" },
+  dayCell: { alignItems: "center", justifyContent: "center", position: "relative" },
+  rangeStrip: { position: "absolute", top: 2, bottom: 2 },
+  dayCircle: {
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1,
+  },
+  dayText: { fontSize: 13, fontWeight: "500" },
+  hint: { textAlign: "center", fontSize: 11, marginBottom: Spacing.sm },
+  applyBtn: {
+    height: 42,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: Spacing.xs,
+  },
+  applyBtnText: { fontSize: 15, fontWeight: "700" },
+});
+
+// ─── Skeleton Row ─────────────────────────────────────────────────────────────
+
+function SkeletonRow({ theme }: { theme: ReturnType<typeof useTheme>["theme"] }) {
+  return (
+    <View style={[styles.row, { backgroundColor: theme.cardBackground }]}>
+      <View style={[styles.rowIcon, { backgroundColor: theme.separator }]} />
+      <View style={styles.rowInfo}>
+        <View style={[styles.skeletonLine, { backgroundColor: theme.separator, width: "50%" }]} />
+        <View style={[styles.skeletonLine, { backgroundColor: theme.separator, width: "35%", marginTop: 6 }]} />
+      </View>
+      <View style={styles.rowRight}>
+        <View style={[styles.skeletonLine, { backgroundColor: theme.separator, width: 64 }]} />
+        <View style={[styles.skeletonPill, { backgroundColor: theme.separator }]} />
+      </View>
+    </View>
+  );
+}
+
+const SKELETON_KEYS = ["sk1", "sk2", "sk3", "sk4", "sk5"];
+
+// ─── Next Payout Card ────────────────────────────────────────────────────────
+
+interface NextPayoutCardProps {
+  data: NextPayoutData | undefined;
+  isLoading: boolean;
+  isError: boolean;
+  theme: ReturnType<typeof useTheme>["theme"];
+  onPress: () => void;
+  onOnboard: () => void;
+  onHowItWorks: () => void;
+  onSubscribePress: () => void;
+  onInstantPayout: () => void;
+  instantPayoutPending: boolean;
+}
+
+function NextPayoutCard({
+  data,
+  isLoading,
+  isError,
+  theme,
+  onPress,
+  onOnboard,
+  onHowItWorks,
+  onSubscribePress,
+  onInstantPayout,
+  instantPayoutPending,
+}: NextPayoutCardProps) {
+  // ── Loading skeleton ────────────────────────────────────────────────────
+  if (isLoading) {
+    return (
+      <View
+        style={[nextPayoutStyles.card, { backgroundColor: theme.cardBackground }]}
+        testID="next-payout-card-loading"
+      >
+        <View style={[nextPayoutStyles.iconWrap, { backgroundColor: theme.separator }]} />
+        <View style={{ flex: 1 }}>
+          <View
+            style={[
+              nextPayoutStyles.skelLine,
+              { backgroundColor: theme.separator, width: "40%" },
+            ]}
+          />
+          <View
+            style={[
+              nextPayoutStyles.skelLine,
+              { backgroundColor: theme.separator, width: "75%", marginTop: 8, height: 16 },
+            ]}
+          />
+        </View>
+      </View>
+    );
+  }
+
+  // ── Error (muted, tappable to retry via parent) ─────────────────────────
+  if (isError || !data) {
+    return (
+      <View
+        style={[nextPayoutStyles.card, { backgroundColor: theme.cardBackground }]}
+        testID="next-payout-card-error"
+      >
+        <View style={[nextPayoutStyles.iconWrap, { backgroundColor: theme.separator }]}>
+          <Feather name="alert-circle" size={18} color={theme.textSecondary} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <ThemedText style={nextPayoutStyles.label}>Next Payout</ThemedText>
+          <ThemedText style={[nextPayoutStyles.subtle, { color: theme.textSecondary }]}>
+            Couldn't load payout info. Pull to refresh.
+          </ThemedText>
+        </View>
+      </View>
+    );
+  }
+
+  // ── Not onboarded — CTA to Stripe Connect ───────────────────────────────
+  if (data.status === "not_onboarded" || data.status === "onboarding_incomplete") {
+    const isPending = data.status === "onboarding_incomplete";
+    return (
+      <Pressable
+        style={[
+          nextPayoutStyles.card,
+          {
+            backgroundColor: theme.cardBackground,
+            borderColor: Colors.accent + "30",
+            borderWidth: 1,
+          },
+        ]}
+        onPress={onOnboard}
+        testID="next-payout-card-onboard"
+      >
+        <View style={[nextPayoutStyles.iconWrap, { backgroundColor: Colors.accentLight }]}>
+          <Feather name="credit-card" size={18} color={Colors.accent} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <ThemedText style={[nextPayoutStyles.label, { color: Colors.accent }]}>
+            {isPending ? "Finish Stripe Setup" : "Set Up Payouts"}
+          </ThemedText>
+          <ThemedText style={[nextPayoutStyles.subtle, { color: theme.textSecondary }]}>
+            {isPending
+              ? "Complete onboarding to start receiving payouts."
+              : "Connect your bank to get paid for completed jobs."}
+          </ThemedText>
+        </View>
+        <Feather name="chevron-right" size={16} color={theme.textSecondary} />
+      </Pressable>
+    );
+  }
+
+  // ── Subscription gated — show balance but prompt to subscribe ───────────
+  // Only show the locked card when there are actual funds waiting; if balance
+  // is zero fall through to the normal no-payout card state.
+  const _gatedPendingCents =
+    (data.pendingBalanceCents ?? 0) + (data.nextPayout?.amountCents ?? 0);
+  if (data.subscriptionGated && _gatedPendingCents > 0) {
+    // Sum pending balance and any already-scheduled payout — both are earned
+    // funds the provider can't receive until they subscribe.
+    const pendingCents = _gatedPendingCents;
+    return (
+      <Pressable
+        style={[
+          nextPayoutStyles.card,
+          {
+            backgroundColor: theme.cardBackground,
+            borderColor: Colors.accent + "40",
+            borderWidth: 1,
+            opacity: 0.92,
+          },
+        ]}
+        onPress={onSubscribePress}
+        testID="next-payout-card-gated"
+      >
+        <View style={[nextPayoutStyles.iconWrap, { backgroundColor: Colors.accentLight }]}>
+          <Feather name="lock" size={18} color={Colors.accent} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <ThemedText style={[nextPayoutStyles.label, { color: theme.textSecondary }]}>
+            Payouts Locked
+          </ThemedText>
+          <ThemedText style={[nextPayoutStyles.summaryLine, { opacity: 0.6 }]}>
+            {pendingCents > 0
+              ? `${formatCents(pendingCents)} ready`
+              : "Funds ready"}
+          </ThemedText>
+          <ThemedText style={[nextPayoutStyles.helpLink, { color: Colors.accent }]}>
+            Subscribe to unlock payouts
+          </ThemedText>
+        </View>
+        <Feather name="chevron-right" size={16} color={Colors.accent} />
+      </Pressable>
+    );
+  }
+
+  const next = data.nextPayout;
+  const bankLine = formatBankLine(
+    next?.bankName ?? data.bankName ?? null,
+    next?.last4 ?? data.last4 ?? null,
+  );
+
+  // ── No scheduled payout — show pending balance state ────────────────────
+  if (!next) {
+    const pendingCents = data.pendingBalanceCents ?? 0;
+    return (
+      <View
+        style={[nextPayoutStyles.card, { backgroundColor: theme.cardBackground }]}
+        testID="next-payout-card-no-payout"
+      >
+        <View style={[nextPayoutStyles.iconWrap, { backgroundColor: Colors.accentLight }]}>
+          <Feather name="clock" size={18} color={Colors.accent} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <ThemedText style={nextPayoutStyles.label}>No payout scheduled</ThemedText>
+          <ThemedText style={nextPayoutStyles.summaryLine}>
+            {pendingCents > 0
+              ? `New payments since your last payout: ${formatCents(pendingCents)}.`
+              : "Pending payments will appear here."}
+            {bankLine ? ` \u2192 ${bankLine}` : ""}
+          </ThemedText>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md, marginTop: 6 }}>
+            <Pressable onPress={onHowItWorks} hitSlop={8} testID="button-how-payouts-work">
+              <ThemedText style={[nextPayoutStyles.helpLink, { color: Colors.accent }]}>
+                How payouts work
+              </ThemedText>
+            </Pressable>
+            {pendingCents > 0 ? (
+              <Pressable
+                onPress={onInstantPayout}
+                disabled={instantPayoutPending}
+                hitSlop={8}
+                testID="button-instant-payout"
+              >
+                <ThemedText style={[nextPayoutStyles.helpLink, { color: Colors.accent }]}>
+                  {instantPayoutPending ? "Requesting..." : "Instant Payout"}
+                </ThemedText>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  // ── Scheduled payout — main happy-path ──────────────────────────────────
+  return (
+    <Pressable
+      style={[nextPayoutStyles.card, { backgroundColor: theme.cardBackground }]}
+      onPress={onPress}
+      testID="next-payout-card"
+    >
+      <View style={[nextPayoutStyles.iconWrap, { backgroundColor: Colors.accentLight }]}>
+        <Feather name="arrow-down-circle" size={18} color={Colors.accent} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <ThemedText style={nextPayoutStyles.label}>Next Payout</ThemedText>
+        <ThemedText style={nextPayoutStyles.summaryLine} testID="text-next-payout-summary">
+          {formatPayoutLongDate(next.arrivalDate)} \u2014 {formatCents(next.amountCents)}
+          {bankLine ? ` \u2192 ${bankLine}` : ""}
+        </ThemedText>
+        {/* Inner Pressable — RN's responder system grants the touch to the
+            deepest pressable, so tapping this opens the modal without also
+            firing the outer card's onPress. */}
+        <Pressable
+          onPress={(e) => {
+            e.stopPropagation?.();
+            onHowItWorks();
+          }}
+          hitSlop={8}
+          testID="button-how-payouts-work"
+        >
+          <ThemedText style={[nextPayoutStyles.helpLink, { color: Colors.accent }]}>
+            How payouts work
+          </ThemedText>
+        </Pressable>
+      </View>
+      <Feather name="chevron-right" size={16} color={theme.textSecondary} />
+    </Pressable>
+  );
+}
+
+const nextPayoutStyles = StyleSheet.create({
+  card: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.card,
+    marginBottom: Spacing.md,
+  },
+  iconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  label: {
+    ...Typography.footnote,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+    marginBottom: 4,
+  },
+  summaryLine: { ...Typography.callout, fontWeight: "600" },
+  subtle: { ...Typography.footnote, marginTop: 2, lineHeight: 18 },
+  helpLink: { ...Typography.caption1, fontWeight: "600", marginTop: 6 },
+  skelLine: { height: 12, borderRadius: 6 },
+});
+
+// ─── How Payouts Work modal ──────────────────────────────────────────────────
+
+function HowPayoutsModal({
+  visible,
+  onClose,
+  theme,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  theme: ReturnType<typeof useTheme>["theme"];
+}) {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <Pressable style={howModalStyles.backdrop} onPress={onClose}>
+        <Pressable
+          style={[howModalStyles.sheet, { backgroundColor: theme.cardBackground }]}
+          onPress={(e) => e.stopPropagation()}
+        >
+          <View style={howModalStyles.headerRow}>
+            <ThemedText style={howModalStyles.title}>How payouts work</ThemedText>
+            <Pressable onPress={onClose} hitSlop={10} testID="button-close-how-payouts">
+              <Feather name="x" size={20} color={theme.textSecondary} />
+            </Pressable>
+          </View>
+          <ThemedText style={[howModalStyles.body, { color: theme.text }]}>
+            When a client pays an invoice, the funds first sit in a pending balance
+            with Stripe.
+          </ThemedText>
+          <ThemedText style={[howModalStyles.body, { color: theme.text }]}>
+            On Stripe's standard schedule, those funds become available about 2
+            business days after the payment, then get bundled into a single
+            payout to your linked bank account.
+          </ThemedText>
+          <ThemedText style={[howModalStyles.body, { color: theme.text }]}>
+            Most payouts arrive 1–2 business days after they're sent. You'll see
+            the exact arrival date here as soon as Stripe schedules one.
+          </ThemedText>
+          <Pressable
+            style={[howModalStyles.doneBtn, { backgroundColor: Colors.accent }]}
+            onPress={onClose}
+            testID="button-done-how-payouts"
+          >
+            <ThemedText style={howModalStyles.doneText}>Got it</ThemedText>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+const howModalStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    padding: Spacing.lg,
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    paddingBottom: Spacing["2xl"],
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.md,
+  },
+  title: { ...Typography.title3, fontWeight: "700" },
+  body: { ...Typography.body, lineHeight: 22, marginBottom: Spacing.sm },
+  doneBtn: {
+    marginTop: Spacing.md,
+    height: 48,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  doneText: { ...Typography.callout, fontWeight: "700", color: "#FFFFFF" },
+});
+
+// ─── Main Screen ─────────────────────────────────────────────────────────────
+
+type FinancialsTabParams = {
+  initialSection?: "overview" | "transactions" | "more";
+  initialTransactionTab?: "invoices" | "payouts";
+  initialTransactionFilter?: "all" | "invoices" | "estimates";
+};
+type FinancialsRouteParamList = { FinancialsTab: FinancialsTabParams | undefined };
+
+export default function FinancialsScreen() {
+  const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
+  const tabBarHeight = useFloatingTabBarHeight();
+  const { horizontalPadding } = useLayout();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<FinancialsRouteParamList, "FinancialsTab">>();
+  const { theme } = useTheme();
+  const { providerProfile } = useAuthStore();
+  const queryClient = useQueryClient();
+
+  const providerId = providerProfile?.id ?? "";
+  const [sectionTab, setSectionTab] = useState<SectionTab>(route.params?.initialSection ?? "overview");
+  const [transactionTab, setTransactionTab] = useState<TransactionTab>(route.params?.initialTransactionTab ?? "invoices");
+  const [transactionFilter, setTransactionFilter] = useState<"all" | "invoices" | "estimates">(
+    route.params?.initialTransactionFilter ?? "all",
+  );
+
+  useEffect(() => {
+    const p = route.params;
+    if (!p) return;
+    if (p.initialSection) setSectionTab(p.initialSection);
+    if (p.initialTransactionTab) setTransactionTab(p.initialTransactionTab);
+    if (p.initialTransactionFilter) setTransactionFilter(p.initialTransactionFilter);
+    if (p.initialSection || p.initialTransactionTab || p.initialTransactionFilter) {
+      navigation.setParams({
+        initialSection: undefined,
+        initialTransactionTab: undefined,
+        initialTransactionFilter: undefined,
+      } as Partial<NonNullable<typeof p>>);
+    }
+  }, [route.params, navigation]);
+  const [dateRange, setDateRange] = useState<DateRange>("month");
+  const [refreshing, setRefreshing] = useState(false);
+  const [showInlinePicker, setShowInlinePicker] = useState(false);
+  const [howPayoutsOpen, setHowPayoutsOpen] = useState(false);
+  // When the user taps the NextPayoutCard we jump to the Payouts list and
+  // scroll to the corresponding row. This holds the target id until the
+  // FlatList ref is mounted with the right data, then it's cleared.
+  const [pendingScrollPayoutId, setPendingScrollPayoutId] = useState<string | null>(null);
+  const [showSubscriptionGate, setShowSubscriptionGate] = useState(false);
+  const [payoutBannerDismissed, setPayoutBannerDismissed] = useState(false);
+  const payoutsListRef = useRef<FlatList<StripePayout> | null>(null);
+
+  const { isGated } = useSubscriptionStatus();
+
+  const defaultCustomStart = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 29);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+  const [customStart, setCustomStart] = useState<Date>(defaultCustomStart);
+  const [customEnd, setCustomEnd] = useState<Date>(new Date());
+
+  const { start, end } = useMemo(
+    () => getDateRange(dateRange, customStart, customEnd),
+    [dateRange, customStart, customEnd]
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (providerId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "stats"] });
+        // Re-pull the payout summary so the card reflects any Stripe Connect
+        // state changes after returning from the StripeConnect screen.
+        queryClient.invalidateQueries({ queryKey: ["/api/providers", providerId, "next-payout"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/stripe/connect/status", providerId] });
+      }
+    }, [providerId, queryClient])
+  );
+
+  // ── Stats ──────────────────────────────────────────────────────────────────
+
+  const {
+    data: statsData,
+    isLoading: statsLoading,
+    refetch: refetchStats,
+  } = useQuery<{ stats: ProviderStats }>({
+    queryKey: ["/api/provider", providerId, "stats", dateRange, start.toISOString(), end.toISOString()],
+    queryFn: async () => {
+      const url = new URL(`/api/provider/${providerId}/stats`, getApiUrl());
+      url.searchParams.set("startDate", start.toISOString());
+      url.searchParams.set("endDate", end.toISOString());
+      const res = await fetch(url.toString(), { headers: getAuthHeaders() });
+      if (!res.ok) throw new Error("Failed to fetch stats");
+      return res.json();
+    },
+    enabled: !!providerId,
+    staleTime: 30_000,
+  });
+
+  // ── Stripe status ──────────────────────────────────────────────────────────
+
+  const {
+    data: stripeStatus,
+    isLoading: stripeStatusLoading,
+    refetch: refetchStripeStatus,
+  } = useQuery<StripeStatus>({
+    queryKey: ["/api/stripe/connect/status", providerId],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/stripe/connect/status/${providerId}`);
+      if (!response.ok) throw new Error("Failed to fetch Stripe status");
+      return response.json();
+    },
+    enabled: !!providerId,
+    retry: false,
+  });
+
+  const isConnected = !!(stripeStatus?.chargesEnabled && stripeStatus?.payoutsEnabled);
+
+  // ── Invoices ───────────────────────────────────────────────────────────────
+
+  const {
+    data: invoicesData,
+    isLoading: invoicesLoading,
+    refetch: refetchInvoices,
+  } = useQuery<{ invoices: InvoiceRecord[] }>({
+    queryKey: ["/api/provider", providerId, "invoices"],
+    queryFn: async () => {
+      const url = new URL(`/api/provider/${providerId}/invoices`, getApiUrl());
+      const res = await fetch(url.toString(), { headers: getAuthHeaders() });
+      if (res.status === 404) return { invoices: [] };
+      if (!res.ok) throw new Error("Failed to fetch invoices");
+      return res.json();
+    },
+    enabled: !!providerId,
+    staleTime: 30_000,
+  });
+
+  // Task #296 — Estimates list. Loaded alongside invoices so the Overview
+  // tile can show the count without an extra round trip.
+  const {
+    data: estimatesData,
+    isLoading: estimatesLoading,
+    refetch: refetchEstimates,
+  } = useQuery<{ estimates: EstimateRecord[] }>({
+    queryKey: ["/api/provider", providerId, "estimates"],
+    queryFn: async () => {
+      const url = new URL(`/api/provider/${providerId}/estimates`, getApiUrl());
+      const res = await fetch(url.toString(), { headers: getAuthHeaders() });
+      if (res.status === 404) return { estimates: [] };
+      if (!res.ok) throw new Error("Failed to fetch estimates");
+      return res.json();
+    },
+    enabled: !!providerId,
+    staleTime: 30_000,
+  });
+  const estimates = estimatesData?.estimates ?? [];
+  const estimatesOutstandingCents = estimates
+    .filter((e) => e.status === "sent" || e.status === "viewed")
+    .reduce((s, e) => s + (e.totalCents ?? 0), 0);
+
+  interface ClientRecord { id: string; firstName: string; lastName: string; }
+
+  const { data: clientsData } = useQuery<{ clients: ClientRecord[] }>({
+    queryKey: ["/api/provider", providerId, "clients"],
+    enabled: !!providerId,
+    staleTime: 60_000,
+  });
+
+  const clientMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of clientsData?.clients ?? []) {
+      map.set(c.id, [c.firstName, c.lastName].filter(Boolean).join(" "));
+    }
+    return map;
+  }, [clientsData]);
+
+  // ── Next Payout summary (top-of-screen card) ───────────────────────────────
+
+  const {
+    data: nextPayoutData,
+    isLoading: nextPayoutLoading,
+    isError: nextPayoutError,
+    refetch: refetchNextPayout,
+  } = useQuery<NextPayoutData>({
+    queryKey: ["/api/providers", providerId, "next-payout"],
+    queryFn: async () => {
+      const url = new URL(`/api/providers/${providerId}/next-payout`, getApiUrl());
+      const res = await fetch(url.toString(), { headers: getAuthHeaders() });
+      if (!res.ok) throw new Error("Failed to fetch next payout");
+      return res.json();
+    },
+    enabled: !!providerId,
+    staleTime: 60_000,
+    retry: 1,
+  });
+
+  // ── Stripe Payouts ─────────────────────────────────────────────────────────
+
+  const {
+    data: payoutsData,
+    isLoading: payoutsLoading,
+    refetch: refetchPayouts,
+  } = useQuery<{ payouts: StripePayout[] }>({
+    queryKey: ["/api/providers", providerId, "stripe-payouts"],
+    queryFn: async () => {
+      const url = new URL(`/api/providers/${providerId}/stripe-payouts`, getApiUrl());
+      const res = await fetch(url.toString(), { headers: getAuthHeaders() });
+      if (res.status === 404) return { payouts: [] };
+      if (!res.ok) throw new Error("Failed to fetch payouts");
+      return res.json();
+    },
+    enabled: !!providerId && isConnected,
+    staleTime: 60_000,
+  });
+
+  // ── Manual Payments (Task #295) ────────────────────────────────────────────
+
+  const {
+    data: manualPaymentsData,
+    isLoading: manualPaymentsLoading,
+    refetch: refetchManualPayments,
+  } = useQuery<{ payments: ManualPaymentRecord[] }>({
+    queryKey: ["/api/providers", providerId, "manual-payments"],
+    queryFn: async () => {
+      const url = new URL(
+        `/api/providers/${providerId}/manual-payments`,
+        getApiUrl(),
+      );
+      const res = await fetch(url.toString(), { headers: getAuthHeaders() });
+      if (res.status === 404) return { payments: [] };
+      if (!res.ok) throw new Error("Failed to fetch manual payments");
+      return res.json();
+    },
+    enabled: !!providerId,
+    staleTime: 30_000,
+  });
+
+  const manualPayments = manualPaymentsData?.payments ?? [];
+
+  // ── Stripe onboard mutation ────────────────────────────────────────────────
+
+  const onboardMutation = useMutation({
+    mutationFn: async () => {
+      await openExternalUrl(async () => {
+        const response = await apiRequest("POST", `/api/stripe/connect/onboard/${providerId}`);
+        const data: { onboardingUrl?: string } = await response.json();
+        if (!data.onboardingUrl) throw new Error("Missing onboarding URL");
+        return data.onboardingUrl;
+      });
+    },
+    onSuccess: () => {
+      refetchStripeStatus();
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : "Failed to start onboarding";
+      Alert.alert("Error", message);
+    },
+  });
+
+  // Instant payout mutation — uses fetch directly (not apiRequest) so we can
+  // inspect the response body on 403 SUBSCRIPTION_REQUIRED before throwing.
+  // apiRequest calls throwIfResNotOk which throws on any non-2xx before we can
+  // read the body, so we bypass it here for targeted 403 handling.
+  const instantPayoutMutation = useMutation({
+    mutationFn: async () => {
+      const url = new URL(
+        `/api/providers/${providerId}/stripe-instant-payout`,
+        getApiUrl(),
+      );
+      const response = await fetch(url.toString(), {
+        method: "POST",
+        headers: {
+          ...getAuthHeaders(),
+          "Content-Type": "application/json",
+          "X-Client-Platform": Platform.OS,
+        },
+        credentials: "include",
+      });
+      if (response.status === 403) {
+        const body = await response.json().catch(() => ({}));
+        if (body?.code === "SUBSCRIPTION_REQUIRED") {
+          throw Object.assign(new Error("SUBSCRIPTION_REQUIRED"), {
+            code: "SUBSCRIPTION_REQUIRED",
+          });
+        }
+      }
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body?.error || "Failed to initiate instant payout");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      refetchNextPayout();
+      refetchPayouts();
+    },
+    onError: (error: unknown) => {
+      if ((error as { code?: string })?.code === "SUBSCRIPTION_REQUIRED") {
+        setShowSubscriptionGate(true);
+        return;
+      }
+      const message =
+        error instanceof Error ? error.message : "Failed to initiate instant payout";
+      Alert.alert("Payout Failed", message);
+    },
+  });
+
+  // ── Derived data ───────────────────────────────────────────────────────────
+
+  const stats = statsData?.stats ?? {
+    revenueMTD: 0,
+    jobsCompleted: 0,
+    activeClients: 0,
+    upcomingJobs: 0,
+    averageJobValue: 0,
+    revenueByPeriod: [],
+  };
+  const invoices = invoicesData?.invoices ?? [];
+  const stripePayouts = payoutsData?.payouts ?? [];
+  const maxChartValue = Math.max(...(stats.revenueByPeriod?.map((p) => p.value) ?? [0]), 1);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([
+      refetchStats(),
+      refetchStripeStatus(),
+      refetchInvoices(),
+      refetchEstimates(),
+      refetchPayouts(),
+      refetchManualPayments(),
+      refetchNextPayout(),
+    ]);
+    setRefreshing(false);
+  }, [
+    refetchStats,
+    refetchStripeStatus,
+    refetchInvoices,
+    refetchEstimates,
+    refetchManualPayments,
+    refetchPayouts,
+    refetchNextPayout,
+  ]);
+
+  // ── NextPayoutCard interactions ────────────────────────────────────────────
+
+  const handleNextPayoutPress = useCallback(() => {
+    Haptics.selectionAsync();
+    const targetId = nextPayoutData?.nextPayout?.id ?? null;
+    setSectionTab("transactions");
+    setTransactionTab("payouts");
+    setPendingScrollPayoutId(targetId);
+  }, [nextPayoutData?.nextPayout?.id]);
+
+  const handleOnboardPress = useCallback(() => {
+    Haptics.selectionAsync();
+    navigation.navigate("StripeConnect");
+  }, [navigation]);
+
+  // After the user taps the card we land on the Payouts list. Once the data
+  // is loaded and the FlatList is mounted, scroll to the matching row. If
+  // the id isn't present (Stripe list-window mismatch) we fall back to the
+  // top of the list. We only clear the pending target on a definitive
+  // outcome (success scroll, fallback-to-top, or onScrollToIndexFailed
+  // recovery in the FlatList prop), so transient timing failures get retried.
+  const stripePayoutsLoaded = !payoutsLoading;
+  useEffect(() => {
+    if (!pendingScrollPayoutId) return;
+    if (sectionTab !== "transactions" || transactionTab !== "payouts") return;
+    if (!stripePayoutsLoaded) return;
+    const list = payoutsData?.payouts ?? [];
+    const idx = list.findIndex((p) => p.id === pendingScrollPayoutId);
+    const timer = setTimeout(() => {
+      if (idx >= 0) {
+        try {
+          payoutsListRef.current?.scrollToIndex({
+            index: idx,
+            animated: true,
+            viewPosition: 0.2,
+          });
+          setPendingScrollPayoutId(null);
+        } catch {
+          // Leave pendingScrollPayoutId set so onScrollToIndexFailed (or
+          // the next render) gets another shot.
+        }
+      } else {
+        // Id not in the current Stripe list window — show the top instead
+        // and stop trying.
+        payoutsListRef.current?.scrollToOffset({ offset: 0, animated: true });
+        setPendingScrollPayoutId(null);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [
+    pendingScrollPayoutId,
+    sectionTab,
+    transactionTab,
+    stripePayoutsLoaded,
+    payoutsData?.payouts,
+  ]);
+
+  const SECTION_TABS: { key: SectionTab; label: string }[] = [
+    { key: "overview", label: "Overview" },
+    { key: "transactions", label: "Transactions" },
+    { key: "more", label: "More" },
+  ];
+
+  const TRANS_TABS: { key: TransactionTab; label: string }[] = [
+    { key: "invoices", label: "Invoices" },
+    { key: "payouts", label: "Payouts" },
+  ];
+
+  const unifiedRows: UnifiedTxRow[] = useMemo(() => {
+    const inv: UnifiedTxRow[] = invoices.map((i) => ({
+      kind: "invoice",
+      date: i.sentAt || i.createdAt,
+      data: i,
+    }));
+    const est: UnifiedTxRow[] = estimates
+      .filter((e) => e.status !== "converted")
+      .map((e) => ({
+        kind: "estimate",
+        date: e.createdAt,
+        data: e,
+      }));
+    const merged = [...inv, ...est];
+    if (transactionFilter === "invoices") {
+      return merged.filter((r) => r.kind === "invoice").sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+      );
+    }
+    if (transactionFilter === "estimates") {
+      return merged.filter((r) => r.kind === "estimate").sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+      );
+    }
+    return merged.sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
+  }, [invoices, estimates, transactionFilter]);
+
+  const manualPaymentsThisMonth = useMemo(() => {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const monthly = manualPayments.filter((p) => {
+      if (p.voidedAt) return false;
+      const t = new Date(p.receivedAt || p.createdAt).getTime();
+      return t >= startOfMonth;
+    });
+    const totalCents = monthly.reduce((s, p) => s + (p.amountCents ?? 0), 0);
+    return { count: monthly.length, totalCents };
+  }, [manualPayments]);
+
+  // ── Row renderers ──────────────────────────────────────────────────────────
+
+  const estimateToneToStatus = (tone: ReturnType<typeof estimateStatusTone>): StatusType => {
+    switch (tone) {
+      case "success": return "success";
+      case "danger": return "error";
+      case "info": return "info";
+      case "warning": return "warning";
+      default: return "neutral";
+    }
+  };
+
+  const renderUnifiedRow = ({ item, index }: { item: UnifiedTxRow; index: number }) => {
+    if (item.kind === "invoice") {
+      return renderInvoice({ item: item.data, index });
+    }
+    const est = item.data;
+    const clientName = est.clientId ? clientMap.get(est.clientId) : null;
+    const tone = estimateStatusTone(est.status);
+    const label = `Estimate \u00b7 ${estimateStatusLabel(est.status)}`;
+    return (
+      <Animated.View entering={FadeInDown.delay(index * 40).duration(300)}>
+        <Pressable
+          style={[styles.row, { backgroundColor: theme.cardBackground }]}
+          onPress={() => navigation.navigate("EstimateDetail", { estimateId: est.id })}
+          testID={`estimate-row-${est.id}`}
+        >
+          <View style={[styles.rowIcon, { backgroundColor: Colors.accentLight }]}>
+            <Feather name="file" size={16} color={Colors.accent} />
+          </View>
+          <View style={styles.rowInfo}>
+            <ThemedText style={styles.rowTitle}>
+              {clientName ?? `Estimate ${est.estimateNumber}`}
+            </ThemedText>
+            <ThemedText style={[styles.rowSub, { color: theme.textSecondary }]}>
+              {est.estimateNumber}
+              {est.expiresAt ? ` \u00b7 Expires ${formatDate(est.expiresAt)}` : ""}
+            </ThemedText>
+          </View>
+          <View style={styles.rowRight}>
+            <ThemedText style={styles.rowAmount}>{formatCents(est.totalCents)}</ThemedText>
+            <StatusPill status={estimateToneToStatus(tone)} label={label} size="small" />
+          </View>
+        </Pressable>
+      </Animated.View>
+    );
+  };
+
+  const renderInvoice = ({ item, index }: { item: InvoiceRecord; index: number }) => {
+    const isOverdue =
+      item.status !== "paid" &&
+      item.status !== "draft" &&
+      item.dueDate &&
+      new Date(item.dueDate) < new Date();
+    const effectiveStatus = isOverdue ? "overdue" : item.status;
+    const clientName = item.clientId ? clientMap.get(item.clientId) : null;
+
+    return (
+      <Animated.View entering={FadeInDown.delay(index * 40).duration(300)}>
+        <Pressable
+          style={[styles.row, { backgroundColor: theme.cardBackground }]}
+          onPress={() => navigation.navigate("InvoiceDetail", { invoiceId: item.id })}
+          testID={`invoice-${item.id}`}
+        >
+          <View style={[styles.rowIcon, { backgroundColor: Colors.accentLight }]}>
+            <Feather name="file-text" size={16} color={Colors.accent} />
+          </View>
+          <View style={styles.rowInfo}>
+            <ThemedText style={styles.rowTitle}>
+              {clientName ?? `Invoice ${item.invoiceNumber}`}
+            </ThemedText>
+            <ThemedText style={[styles.rowSub, { color: theme.textSecondary }]}>
+              {item.invoiceNumber}{item.dueDate ? ` \u00b7 Due ${formatDate(item.dueDate)}` : ""}
+            </ThemedText>
+          </View>
+          <View style={styles.rowRight}>
+            <ThemedText style={styles.rowAmount}>{formatCents(item.totalCents)}</ThemedText>
+            <StatusPill
+              status={invoiceStatusType(effectiveStatus)}
+              label={invoiceStatusLabel(effectiveStatus)}
+              size="small"
+            />
+          </View>
+        </Pressable>
+      </Animated.View>
+    );
+  };
+
+  const renderManualPayment = ({ item, index }: { item: ManualPaymentRecord; index: number }) => {
+    const isVoided = !!item.voidedAt;
+    const clientName = item.clientId ? clientMap.get(item.clientId) : null;
+    const methodLabel =
+      item.method === "bank_transfer"
+        ? "Bank Transfer"
+        : item.method.charAt(0).toUpperCase() + item.method.slice(1);
+    const dt = item.receivedAt || item.createdAt;
+    const methodColor =
+      item.method === "cash"
+        ? "#34C759"
+        : item.method === "check"
+        ? "#5856D6"
+        : item.method === "card"
+        ? "#FF9F0A"
+        : item.method === "bank_transfer"
+        ? "#0A84FF"
+        : theme.textSecondary;
+    return (
+      <Animated.View entering={FadeInDown.delay(index * 40).duration(300)}>
+        <Pressable
+          style={[styles.row, { backgroundColor: theme.cardBackground }]}
+          onPress={() => navigation.navigate("InvoiceDetail", { invoiceId: item.invoiceId })}
+          testID={`manual-payment-${item.id}`}
+        >
+          <View style={[styles.rowIcon, { backgroundColor: `${methodColor}22` }]}>
+            <Feather name="dollar-sign" size={16} color={methodColor} />
+          </View>
+          <View style={styles.rowInfo}>
+            <ThemedText
+              style={[
+                styles.rowTitle,
+                isVoided ? { textDecorationLine: "line-through", color: theme.textTertiary } : undefined,
+              ]}
+            >
+              {clientName ?? `Invoice ${item.invoiceNumber ?? ""}`.trim()}
+            </ThemedText>
+            <ThemedText style={[styles.rowSub, { color: theme.textSecondary }]}>
+              {formatDate(dt)}
+              {item.reference ? ` \u00b7 Ref ${item.reference}` : ""}
+            </ThemedText>
+          </View>
+          <View style={styles.rowRight}>
+            <ThemedText
+              style={[
+                styles.rowAmount,
+                isVoided ? { textDecorationLine: "line-through", color: theme.textTertiary } : undefined,
+              ]}
+            >
+              {formatCents(item.amountCents)}
+            </ThemedText>
+            <View
+              style={{
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                borderRadius: 6,
+                backgroundColor: isVoided ? theme.backgroundSecondary : `${methodColor}22`,
+              }}
+            >
+              <ThemedText
+                style={{
+                  fontSize: 11,
+                  fontWeight: "700",
+                  color: isVoided ? theme.textSecondary : methodColor,
+                }}
+              >
+                {isVoided ? "VOIDED" : methodLabel.toUpperCase()}
+              </ThemedText>
+            </View>
+          </View>
+        </Pressable>
+      </Animated.View>
+    );
+  };
+
+  const renderPayout = ({ item, index }: { item: StripePayout; index: number }) => {
+    const isPending = item.status === "pending" || item.status === "in_transit";
+    return (
+      <Animated.View entering={FadeInDown.delay(index * 40).duration(300)}>
+        <View
+          style={[styles.row, { backgroundColor: theme.cardBackground }]}
+          testID={`payout-${item.id}`}
+        >
+          <View style={[styles.rowIcon, { backgroundColor: isPending ? "#FF9F0A14" : "#34C75914" }]}>
+            <Feather
+              name={isPending ? "clock" : "check-circle"}
+              size={16}
+              color={isPending ? "#FF9F0A" : "#34C759"}
+            />
+          </View>
+          <View style={styles.rowInfo}>
+            <ThemedText style={styles.rowTitle}>
+              {item.bankLast4
+                ? `Bank \u2022\u2022\u2022\u2022${item.bankLast4}`
+                : "Bank Account"}
+            </ThemedText>
+            <ThemedText style={[styles.rowSub, { color: isPending ? "#FF9F0A" : theme.textSecondary }]}>
+              {item.status === "in_transit" || item.status === "pending"
+                ? `Arrives ${formatArrivalDate(item.arrivalDate)}`
+                : item.arrivalDate
+                ? `Deposited ${formatDate(item.arrivalDate)}`
+                : formatDate(item.createdAt)}
+            </ThemedText>
+          </View>
+          <View style={styles.rowRight}>
+            <ThemedText style={styles.rowAmount}>{formatCents(item.amountCents)}</ThemedText>
+            <StatusPill
+              status={payoutStatusType(item.status)}
+              label={payoutStatusLabel(item.status)}
+              size="small"
+            />
+          </View>
+        </View>
+      </Animated.View>
+    );
+  };
+
+  // ── Section tab bar ────────────────────────────────────────────────────────
+
+  const SectionTabBar = () => (
+    <View style={[styles.sectionTabBar, { borderBottomColor: theme.separator }]}>
+      {SECTION_TABS.map((tab) => {
+        const isActive = sectionTab === tab.key;
+        return (
+          <Pressable
+            key={tab.key}
+            style={styles.sectionTabItem}
+            onPress={() => { Haptics.selectionAsync(); setSectionTab(tab.key); }}
+            testID={`section-tab-${tab.key}`}
+          >
+            <ThemedText
+              style={[
+                styles.sectionTabLabel,
+                isActive
+                  ? { color: Colors.accent, fontWeight: "700" }
+                  : { color: theme.textSecondary },
+              ]}
+            >
+              {tab.label}
+            </ThemedText>
+            {isActive ? (
+              <View style={[styles.sectionTabIndicator, { backgroundColor: Colors.accent }]} />
+            ) : null}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+
+  // ── Custom date range display chip ─────────────────────────────────────────
+
+  const customRangeSummary =
+    dateRange === "custom"
+      ? `${customStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${customEnd.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+      : null;
+
+  // ── Overview header content ────────────────────────────────────────────────
+
+  const subscriptionGated = nextPayoutData?.subscriptionGated ?? isGated;
+  // Available balance = pending balance (not yet in a payout) PLUS any
+  // already-scheduled payout amount. Both represent funds the provider has
+  // earned that are waiting to land in their bank.
+  const availableBalanceCents =
+    (nextPayoutData?.pendingBalanceCents ?? 0) +
+    (nextPayoutData?.nextPayout?.amountCents ?? 0);
+  const showPayoutBanner = subscriptionGated && availableBalanceCents > 0 && !payoutBannerDismissed;
+
+  const OverviewContent = () => (
+    <View>
+      {/* Subscription gate banner — shown when gated and there are funds waiting */}
+      {showPayoutBanner ? (
+        <Animated.View entering={FadeInDown.delay(20).duration(350)}>
+          <View
+            style={[
+              payoutBannerStyles.banner,
+              { backgroundColor: Colors.accentLight, borderColor: Colors.accent + "40" },
+            ]}
+            testID="banner-subscription-gate-payout"
+          >
+            <Feather name="alert-circle" size={15} color={Colors.accent} />
+            <Pressable
+              style={{ flex: 1 }}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowSubscriptionGate(true); }}
+            >
+              <ThemedText style={[payoutBannerStyles.text, { color: Colors.accent }]}>
+                Funds are ready — subscribe to receive payouts.
+              </ThemedText>
+            </Pressable>
+            <Pressable
+              onPress={() => { Haptics.selectionAsync(); setPayoutBannerDismissed(true); }}
+              hitSlop={10}
+              testID="button-dismiss-payout-banner"
+            >
+              <Feather name="x" size={15} color={Colors.accent} />
+            </Pressable>
+          </View>
+        </Animated.View>
+      ) : null}
+
+      {/* Next payout summary — plain-English line at the very top */}
+      <Animated.View entering={FadeInDown.delay(40).duration(400)}>
+        <NextPayoutCard
+          data={nextPayoutData}
+          isLoading={nextPayoutLoading}
+          isError={nextPayoutError}
+          theme={theme}
+          onPress={handleNextPayoutPress}
+          onOnboard={handleOnboardPress}
+          onHowItWorks={() => {
+            Haptics.selectionAsync();
+            setHowPayoutsOpen(true);
+          }}
+          onSubscribePress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setShowSubscriptionGate(true);
+          }}
+          onInstantPayout={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            instantPayoutMutation.mutate();
+          }}
+          instantPayoutPending={instantPayoutMutation.isPending}
+        />
+      </Animated.View>
+
+      {/* Date range toggler */}
+      <Animated.View entering={FadeInDown.delay(60).duration(400)}>
+        <View style={[styles.dateRangeBar, { backgroundColor: theme.backgroundSecondary }]}>
+          {DATE_RANGE_OPTIONS.map((opt) => {
+            const isActive = dateRange === opt.key;
+            return (
+              <Pressable
+                key={opt.key}
+                style={[
+                  styles.dateRangeItem,
+                  isActive && { backgroundColor: theme.cardBackground },
+                ]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setDateRange(opt.key);
+                  if (opt.key === "custom") setShowInlinePicker(true);
+                  else setShowInlinePicker(false);
+                }}
+                testID={`date-range-${opt.key}`}
+              >
+                <ThemedText
+                  style={[
+                    styles.dateRangeLabel,
+                    isActive
+                      ? { color: Colors.accent, fontWeight: "700" }
+                      : { color: theme.textSecondary },
+                  ]}
+                >
+                  {opt.label}
+                </ThemedText>
+              </Pressable>
+            );
+          })}
+        </View>
+      </Animated.View>
+
+      {/* Custom range chip — tap to re-open inline picker */}
+      {dateRange === "custom" ? (
+        <Animated.View entering={FadeInDown.delay(70).duration(300)}>
+          <Pressable
+            style={[styles.customChip, { backgroundColor: Colors.accentLight }]}
+            onPress={() => setShowInlinePicker((v) => !v)}
+            testID="button-open-date-picker"
+          >
+            <Feather name="calendar" size={13} color={Colors.accent} />
+            <ThemedText style={[styles.customChipText, { color: Colors.accent }]}>
+              {customRangeSummary ?? "Select range"}
+            </ThemedText>
+            <Feather
+              name={showInlinePicker ? "chevron-up" : "chevron-down"}
+              size={13}
+              color={Colors.accent}
+            />
+          </Pressable>
+        </Animated.View>
+      ) : null}
+
+      {/* Inline date range picker — fades in/out below chip when Custom is active */}
+      {dateRange === "custom" && showInlinePicker ? (
+        <Animated.View entering={FadeIn.duration(220)} exiting={FadeOut.duration(180)}>
+          <InlineDateRangePicker
+            visible={true}
+            initialStart={customStart}
+            initialEnd={customEnd}
+            maxDate={new Date()}
+            onApply={(s, e) => {
+              setCustomStart(s);
+              setCustomEnd(e);
+              setShowInlinePicker(false);
+            }}
+            onClose={() => setShowInlinePicker(false)}
+            theme={theme}
+          />
+        </Animated.View>
+      ) : null}
+
+      {/* Revenue + chart card */}
+      <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+        <GlassCard style={styles.revenueCard}>
+          <View style={styles.revenueHeader}>
+            <View style={{ flex: 1 }}>
+              <ThemedText style={[styles.revenueLabel, { color: theme.textSecondary }]}>
+                {dateRange === "week"
+                  ? "Revenue This Week"
+                  : dateRange === "month"
+                  ? "Revenue This Month"
+                  : dateRange === "quarter"
+                  ? "Revenue This Quarter"
+                  : dateRange === "year"
+                  ? "Revenue This Year"
+                  : customRangeSummary ?? "Custom Range"}
+              </ThemedText>
+              {statsLoading ? (
+                <View style={[styles.skeletonLine, { backgroundColor: theme.separator, width: 140, height: 36, marginTop: 4 }]} />
+              ) : (
+                <ThemedText style={styles.revenueValue}>
+                  {formatDollars(stats.revenueMTD ?? 0)}
+                </ThemedText>
+              )}
+            </View>
+            <Pressable
+              style={styles.newInvoiceBtn}
+              onPress={() => { Haptics.selectionAsync(); navigation.navigate("AddInvoice"); }}
+              testID="button-new-invoice"
+            >
+              <Feather name="plus" size={14} color={Colors.accent} />
+              <ThemedText style={[styles.newInvoiceBtnText, { color: Colors.accent }]}>
+                Invoice
+              </ThemedText>
+            </Pressable>
+          </View>
+
+          {statsLoading ? (
+            <View style={[styles.chartSkeleton, { backgroundColor: theme.separator }]} />
+          ) : (stats.revenueByPeriod ?? []).length > 0 ? (
+            <BarChart data={stats.revenueByPeriod} maxValue={maxChartValue} theme={theme} />
+          ) : (
+            <View style={{ paddingVertical: Spacing.lg, alignItems: "center" }}>
+              <ThemedText style={{ fontSize: 12, color: theme.textSecondary }}>
+                No revenue data for this period
+              </ThemedText>
+            </View>
+          )}
+        </GlassCard>
+      </Animated.View>
+
+      {/* Stat cards */}
+      <Animated.View entering={FadeInDown.delay(140).duration(400)}>
+        <View style={styles.statCardsRow}>
+          <View style={[styles.statCard, { backgroundColor: theme.cardBackground }]}>
+            <Feather name="check-circle" size={18} color={Colors.accent} />
+            <ThemedText style={styles.statCardValue}>
+              {statsLoading ? "-" : stats.jobsCompleted}
+            </ThemedText>
+            <ThemedText style={[styles.statCardLabel, { color: theme.textSecondary }]}>
+              Jobs Done
+            </ThemedText>
+          </View>
+          <View style={[styles.statCard, { backgroundColor: theme.cardBackground }]}>
+            <Feather name="trending-up" size={18} color={Colors.accent} />
+            <ThemedText style={styles.statCardValue}>
+              {statsLoading ? "-" : formatDollars(stats.averageJobValue ?? 0)}
+            </ThemedText>
+            <ThemedText style={[styles.statCardLabel, { color: theme.textSecondary }]}>
+              Avg Job
+            </ThemedText>
+          </View>
+          <View style={[styles.statCard, { backgroundColor: theme.cardBackground }]}>
+            <Feather name="users" size={18} color={Colors.accent} />
+            <ThemedText style={styles.statCardValue}>
+              {statsLoading ? "-" : stats.activeClients}
+            </ThemedText>
+            <ThemedText style={[styles.statCardLabel, { color: theme.textSecondary }]}>
+              Clients
+            </ThemedText>
+          </View>
+        </View>
+      </Animated.View>
+
+      {/* Task #296 — Estimates summary tile (taps into the unified Transactions list) */}
+      <Animated.View entering={FadeInDown.delay(160).duration(400)}>
+        <Pressable
+          onPress={() => {
+            Haptics.selectionAsync();
+            setSectionTab("transactions");
+            setTransactionTab("invoices");
+            setTransactionFilter("estimates");
+          }}
+          testID="tile-estimates-summary"
+        >
+          <GlassCard style={{ padding: Spacing.md, marginTop: Spacing.md, flexDirection: "row", alignItems: "center", gap: Spacing.md }}>
+            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.accentLight, alignItems: "center", justifyContent: "center" }}>
+              <Feather name="file-text" size={18} color={Colors.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <ThemedText style={{ fontWeight: "600" }}>Estimates</ThemedText>
+              <ThemedText style={{ color: theme.textSecondary, fontSize: 13 }}>
+                {estimates.filter((e) => e.status !== "converted").length} total · {estimatesOutstandingCents > 0
+                  ? `${formatCents(estimatesOutstandingCents)} pending`
+                  : "no pending"}
+              </ThemedText>
+            </View>
+            <Feather name="chevron-right" size={16} color={theme.textTertiary} />
+          </GlassCard>
+        </Pressable>
+      </Animated.View>
+
+      {/* Manual Payments summary tile (cash / check / etc.) */}
+      <Animated.View entering={FadeInDown.delay(180).duration(400)}>
+        <Pressable
+          onPress={() => {
+            Haptics.selectionAsync();
+            navigation.navigate("ManualPaymentsList");
+          }}
+          testID="tile-manual-payments-summary"
+        >
+          <GlassCard style={{ padding: Spacing.md, marginTop: Spacing.md, flexDirection: "row", alignItems: "center", gap: Spacing.md }}>
+            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: Colors.accentLight, alignItems: "center", justifyContent: "center" }}>
+              <Feather name="dollar-sign" size={18} color={Colors.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <ThemedText style={{ fontWeight: "600" }}>Manual Payments</ThemedText>
+              <ThemedText style={{ color: theme.textSecondary, fontSize: 13 }}>
+                {manualPaymentsThisMonth.count} total · {manualPaymentsThisMonth.totalCents > 0
+                  ? `${formatCents(manualPaymentsThisMonth.totalCents)} this month`
+                  : "none this month"}
+              </ThemedText>
+            </View>
+            <Feather name="chevron-right" size={16} color={theme.textTertiary} />
+          </GlassCard>
+        </Pressable>
+      </Animated.View>
+    </View>
+  );
+
+  // ── More tab content (Stripe settings) ─────────────────────────────────────
+
+  const MoreContent = () => (
+    <View>
+      <Animated.View entering={FadeInDown.delay(60).duration(400)}>
+        <ThemedText style={[styles.moreSectionTitle, { color: theme.textSecondary }]}>
+          Payments
+        </ThemedText>
+        <Pressable
+          style={[
+            styles.stripeSettingsRow,
+            {
+              backgroundColor: theme.cardBackground,
+              borderColor: isConnected ? "#34C75920" : Colors.accent + "25",
+            },
+          ]}
+          onPress={() => { Haptics.selectionAsync(); navigation.navigate("StripeConnect"); }}
+          testID="button-stripe-settings"
+        >
+          <View style={[styles.stripeSettingsIcon, { backgroundColor: isConnected ? "#34C75914" : Colors.accentLight }]}>
+            {stripeStatusLoading ? (
+              <ActivityIndicator size="small" color={Colors.accent} />
+            ) : (
+              <Feather
+                name={isConnected ? "check-circle" : "alert-circle"}
+                size={18}
+                color={isConnected ? "#34C759" : Colors.accent}
+              />
+            )}
+          </View>
+          <View style={{ flex: 1 }}>
+            <ThemedText style={[styles.stripeSettingsTitle, { color: isConnected ? "#34C759" : Colors.accent }]}>
+              {isConnected
+                ? "Payouts Enabled"
+                : stripeStatus?.onboardingStatus === "pending"
+                ? "Stripe Setup Pending"
+                : "Set Up Stripe Payouts"}
+            </ThemedText>
+            <ThemedText style={[styles.stripeSettingsSub, { color: theme.textSecondary }]}>
+              {isConnected
+                ? "Manage your Stripe account and payout settings"
+                : stripeStatus?.onboardingStatus === "pending"
+                ? "Complete onboarding to enable payouts"
+                : "Connect your bank account to get paid"}
+            </ThemedText>
+          </View>
+          <Feather name="chevron-right" size={16} color={theme.textSecondary} />
+        </Pressable>
+      </Animated.View>
+    </View>
+  );
+
+  // ── Transactions header content ─────────────────────────────────────────────
+
+  const TransactionsHeader = () => (
+    <View>
+      <Animated.View entering={FadeInDown.delay(60).duration(400)}>
+        <View style={styles.transHeaderRow}>
+          <View style={[styles.transTabBar, { borderColor: theme.separator }]}>
+            {TRANS_TABS.map((tab) => {
+              const isActive = transactionTab === tab.key;
+              return (
+                <Pressable
+                  key={tab.key}
+                  style={[
+                    styles.transTabItem,
+                    isActive && { backgroundColor: theme.cardBackground },
+                  ]}
+                  onPress={() => { Haptics.selectionAsync(); setTransactionTab(tab.key); }}
+                  testID={`trans-tab-${tab.key}`}
+                >
+                  <ThemedText
+                    style={[
+                      styles.transTabLabel,
+                      isActive
+                        ? { color: Colors.accent, fontWeight: "700" }
+                        : { color: theme.textSecondary },
+                    ]}
+                  >
+                    {tab.label}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {transactionTab === "invoices" ? (
+            <Pressable
+              style={[styles.addInvoiceBtn, { backgroundColor: Colors.accentLight }]}
+              onPress={() => { Haptics.selectionAsync(); navigation.navigate("AddInvoice"); }}
+              testID="button-add-invoice"
+            >
+              <Feather name="plus" size={15} color={Colors.accent} />
+            </Pressable>
+          ) : null}
+        </View>
+      </Animated.View>
+
+      {transactionTab === "invoices" ? (
+        <Animated.View entering={FadeInDown.delay(70).duration(400)}>
+          <View style={[styles.transTabBar, { borderColor: theme.separator, marginTop: Spacing.sm }]}>
+            {(["all", "invoices", "estimates"] as const).map((key) => {
+              const label = key === "all" ? "All" : key === "invoices" ? "Invoices" : "Estimates";
+              const isActive = transactionFilter === key;
+              return (
+                <Pressable
+                  key={key}
+                  style={[
+                    styles.transTabItem,
+                    isActive && { backgroundColor: theme.cardBackground },
+                  ]}
+                  onPress={() => { Haptics.selectionAsync(); setTransactionFilter(key); }}
+                  testID={`trans-filter-${key}`}
+                >
+                  <ThemedText
+                    style={[
+                      styles.transTabLabel,
+                      isActive
+                        ? { color: Colors.accent, fontWeight: "700" }
+                        : { color: theme.textSecondary },
+                    ]}
+                  >
+                    {label}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Animated.View>
+      ) : null}
+
+      {transactionTab === "payouts" && !isConnected ? (
+        <Animated.View entering={FadeInDown.delay(80).duration(400)}>
+          <Pressable
+            style={[styles.stripeNudge, { backgroundColor: theme.cardBackground, borderColor: Colors.accent + "30" }]}
+            onPress={() => { Haptics.selectionAsync(); navigation.navigate("StripeConnect"); }}
+          >
+            <View style={[styles.stripeNudgeIcon, { backgroundColor: Colors.accentLight }]}>
+              <Feather name="credit-card" size={16} color={Colors.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <ThemedText style={[styles.stripeNudgeTitle, { color: Colors.accent }]}>
+                Connect Stripe to see payouts
+              </ThemedText>
+              <ThemedText style={[styles.stripeNudgeSub, { color: theme.textSecondary }]}>
+                Set up your bank account to receive payments
+              </ThemedText>
+            </View>
+            <Feather name="chevron-right" size={14} color={theme.textSecondary} />
+          </Pressable>
+        </Animated.View>
+      ) : null}
+    </View>
+  );
+
+  // ── Shared list header ─────────────────────────────────────────────────────
+
+  const SharedHeader = () => (
+    <View style={styles.sharedHeaderWrapper}>
+      <SectionTabBar />
+      {sectionTab === "overview" ? (
+        <OverviewContent />
+      ) : sectionTab === "more" ? (
+        <MoreContent />
+      ) : (
+        <TransactionsHeader />
+      )}
+    </View>
+  );
+
+  // ── Overview / More rendering (ScrollView) ─────────────────────────────────
+
+  const howModal = (
+    <HowPayoutsModal
+      visible={howPayoutsOpen}
+      onClose={() => setHowPayoutsOpen(false)}
+      theme={theme}
+    />
+  );
+
+  const subGateModal = (
+    <SubscriptionGateModal
+      visible={showSubscriptionGate}
+      onClose={() => setShowSubscriptionGate(false)}
+      title="Subscribe to unlock payouts"
+      description="You have funds ready to be paid out. Subscribe to HomeBase Pro to start receiving payouts to your bank account."
+    />
+  );
+
+  if (sectionTab === "overview" || sectionTab === "more") {
+    return (
+      <ThemedView style={styles.container}>
+        {howModal}
+        {subGateModal}
+        <ScrollView
+          contentContainerStyle={{
+            paddingTop: headerHeight + Spacing.md,
+            paddingBottom: tabBarHeight + Spacing.xl,
+            paddingHorizontal: horizontalPadding,
+          }}
+          scrollIndicatorInsets={{ bottom: insets.bottom }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
+          }
+        >
+          <SharedHeader />
+        </ScrollView>
+      </ThemedView>
+    );
+  }
+
+  // Transactions — Invoices tab (unified: invoices + estimates)
+  if (transactionTab === "invoices") {
+    const IncomeEmpty = () => {
+      if (invoicesLoading || estimatesLoading) {
+        return <View>{SKELETON_KEYS.map((k) => <SkeletonRow key={k} theme={theme} />)}</View>;
+      }
+      return (
+        <View style={styles.emptyContainer}>
+          <EmptyState
+            image={require("../../../assets/images/empty-bookings.png")}
+            title="No invoices yet"
+            description="Create your first invoice or estimate to start tracking income."
+            primaryAction={{
+              label: "New Invoice",
+              onPress: () => navigation.navigate("AddInvoice"),
+            }}
+          />
+        </View>
+      );
+    };
+
+    return (
+      <ThemedView style={styles.container}>
+        {howModal}
+        {subGateModal}
+        <FlatList<UnifiedTxRow>
+          data={unifiedRows}
+          renderItem={renderUnifiedRow}
+          keyExtractor={(item) =>
+            item.kind === "invoice" ? `inv-${item.data.id}` : `est-${item.data.id}`
+          }
+          ListHeaderComponent={<SharedHeader />}
+          ListEmptyComponent={<IncomeEmpty />}
+          contentContainerStyle={{
+            paddingTop: headerHeight + Spacing.md,
+            paddingBottom: tabBarHeight + Spacing.xl,
+            paddingHorizontal: horizontalPadding,
+          }}
+          scrollIndicatorInsets={{ bottom: insets.bottom }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => { refetchEstimates(); onRefresh(); }}
+              tintColor={Colors.accent}
+            />
+          }
+        />
+      </ThemedView>
+    );
+  }
+
+  // Transactions — Payouts tab
+  const PayoutsEmpty = () => {
+    if (payoutsLoading) {
+      return <View>{SKELETON_KEYS.map((k) => <SkeletonRow key={k} theme={theme} />)}</View>;
+    }
+    if (!isConnected) return null;
+    return (
+      <View style={styles.emptyContainer}>
+        <EmptyState
+          image={require("../../../assets/images/empty-bookings.png")}
+          title="No payouts yet"
+          description="Completed payouts from HomeBase will show up here with expected deposit dates."
+        />
+      </View>
+    );
+  };
+
+  return (
+    <ThemedView style={styles.container}>
+      {howModal}
+      {subGateModal}
+      <FlatList<StripePayout>
+        ref={payoutsListRef}
+        data={stripePayouts}
+        renderItem={renderPayout}
+        keyExtractor={(item) => item.id}
+        ListHeaderComponent={<SharedHeader />}
+        ListEmptyComponent={<PayoutsEmpty />}
+        onScrollToIndexFailed={({ index, averageItemLength }) => {
+          // Items aren't measured yet — jump to the estimated offset, then
+          // re-attempt the precise scroll once the list has rendered there.
+          setTimeout(() => {
+            payoutsListRef.current?.scrollToOffset({
+              offset: Math.max(0, index * (averageItemLength || 80)),
+              animated: true,
+            });
+            setTimeout(() => {
+              try {
+                payoutsListRef.current?.scrollToIndex({
+                  index,
+                  animated: true,
+                  viewPosition: 0.2,
+                });
+              } catch {
+                // Still not measured — accept the estimated offset.
+              }
+              setPendingScrollPayoutId(null);
+            }, 200);
+          }, 80);
+        }}
+        contentContainerStyle={{
+          paddingTop: headerHeight + Spacing.md,
+          paddingBottom: tabBarHeight + Spacing.xl,
+          paddingHorizontal: horizontalPadding,
+        }}
+        scrollIndicatorInsets={{ bottom: insets.bottom }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
+        }
+      />
+    </ThemedView>
+  );
+}
+
+// ─── Styles ──────────────────────────────────────────────────────────────────
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+
+  sharedHeaderWrapper: { marginBottom: Spacing.sm },
+
+  // Section tab bar
+  sectionTabBar: {
+    flexDirection: "row",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginBottom: Spacing.md,
+  },
+  sectionTabItem: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: Spacing.sm,
+    position: "relative",
+  },
+  sectionTabLabel: { ...Typography.callout },
+  sectionTabIndicator: {
+    position: "absolute",
+    bottom: 0,
+    left: "15%",
+    right: "15%",
+    height: 2,
+    borderRadius: 1,
+  },
+
+  // Date range toggler
+  dateRangeBar: {
+    flexDirection: "row",
+    borderRadius: BorderRadius.md,
+    padding: 3,
+    marginBottom: Spacing.sm,
+  },
+  dateRangeItem: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 7,
+    borderRadius: BorderRadius.sm,
+  },
+  dateRangeLabel: { ...Typography.footnote, fontWeight: "500" },
+
+  // Custom date chip
+  customChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginBottom: Spacing.md,
+  },
+  customChipText: { ...Typography.footnote, fontWeight: "600" },
+
+  // Revenue card
+  revenueCard: { marginBottom: Spacing.md },
+  revenueHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: Spacing.xs,
+  },
+  revenueLabel: { ...Typography.subhead },
+  revenueValue: { ...Typography.largeTitle, fontWeight: "700", marginTop: 2 },
+  newInvoiceBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: Colors.accentLight,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.md,
+    marginTop: 4,
+  },
+  newInvoiceBtnText: { ...Typography.footnote, fontWeight: "600" },
+  chartSkeleton: { height: 144, borderRadius: BorderRadius.sm, marginTop: Spacing.sm },
+
+  // Stat cards
+  statCardsRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  statCard: {
+    flex: 1,
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.card,
+    gap: 4,
+  },
+  statCardValue: { ...Typography.headline, fontWeight: "700" },
+  statCardLabel: { ...Typography.caption1, textAlign: "center" },
+
+  // Stripe settings row
+  stripeSettingsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.card,
+    borderWidth: 1,
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  stripeSettingsIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stripeSettingsTitle: { ...Typography.callout, fontWeight: "600", marginBottom: 2 },
+  stripeSettingsSub: { ...Typography.caption1, lineHeight: 17 },
+
+  // Transactions tab bar
+  transHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  transTabBar: {
+    flex: 1,
+    flexDirection: "row",
+    borderRadius: BorderRadius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 3,
+    overflow: "hidden",
+  },
+  transTabItem: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 7,
+    borderRadius: BorderRadius.sm - 1,
+  },
+  transTabLabel: { ...Typography.footnote, fontWeight: "500" },
+
+  addInvoiceBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // Stripe nudge
+  stripeNudge: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.card,
+    borderWidth: 1,
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  stripeNudgeIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stripeNudgeTitle: { ...Typography.callout, fontWeight: "600", marginBottom: 2 },
+  stripeNudgeSub: { ...Typography.caption1, lineHeight: 17 },
+
+  // Transaction rows
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: BorderRadius.card,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+    gap: Spacing.md,
+  },
+  rowIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  rowInfo: { flex: 1 },
+  rowTitle: { ...Typography.callout, fontWeight: "600" },
+  rowSub: { ...Typography.caption1, marginTop: 2 },
+  rowRight: { alignItems: "flex-end", gap: 4 },
+  rowAmount: { ...Typography.callout, fontWeight: "700" },
+
+  // Skeleton
+  skeletonLine: { height: 12, borderRadius: 6 },
+  skeletonPill: { height: 20, width: 60, borderRadius: 10, marginTop: 4 },
+
+  // More tab
+  moreSectionTitle: {
+    ...Typography.footnote,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: Spacing.sm,
+    marginLeft: 2,
+  },
+
+  // Empty
+  emptyContainer: { paddingTop: Spacing["2xl"], alignItems: "center" },
+});
+
+const payoutBannerStyles = StyleSheet.create({
+  banner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.card,
+    borderWidth: 1,
+    marginBottom: Spacing.sm,
+  },
+  text: {
+    ...Typography.footnote,
+    fontWeight: "600",
+    flex: 1,
+  },
+});

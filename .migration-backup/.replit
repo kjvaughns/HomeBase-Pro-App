@@ -1,0 +1,119 @@
+entrypoint = "README.md"
+modules = ["nodejs-20", "nodejs-22", "python-3.11", "postgresql-16"]
+
+[nix]
+channel = "stable-24_05"
+packages = ["glib", "run"]
+
+[deployment]
+deploymentTarget = "autoscale"
+build = ["npm", "run", "server:build"]
+run = ["node", "server_dist/index.js"]
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[[ports]]
+localPort = 5173
+externalPort = 5173
+
+[[ports]]
+localPort = 8081
+externalPort = 8081
+
+[[ports]]
+localPort = 8082
+externalPort = 3000
+
+[env]
+PORT = "5000"
+
+[agent]
+stack = "EXPO"
+integrations = ["javascript_openai_ai_integrations:2.0.0", "stripe:2.0.0", "resend:1.0.0"]
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start App"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start Frontend"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Admin Portal"
+
+[[workflows.workflow]]
+name = "Start App"
+author = "agent"
+mode = "parallel"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start Backend"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start Frontend"
+
+[[workflows.workflow]]
+name = "Start Backend"
+author = "agent"
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run server:dev"
+waitForPort = 5000
+
+[[workflows.workflow]]
+name = "Start Frontend"
+author = "agent"
+mode = "sequential"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "EXPO_PUBLIC_DOMAIN=$REPLIT_DEV_DOMAIN REACT_NATIVE_DEBUGGER_OPEN=0 node expo-start.py"
+
+[[workflows.workflow]]
+name = "Admin Portal"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd admin-portal && node ../node_modules/.bin/vite"
+
+[userenv]
+
+[userenv.shared]
+EXPO_PUBLIC_REVENUECAT_API_KEY = "appl_HcDhjHlOJiZOORTKyGanfYjtpCX"
+EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY = "pk_test_51SGSjDIPJg4hfhnF7O1wPHht6zWQEHY9SVbaR89Bas9ID7BWzIvMpYukdTmwR0TW9fBdwiaU2wWdvyu5v2JEWkZD00pjoE91Ri"
+EXPO_PUBLIC_SUPABASE_URL = "https://yvedkmtjynhgsuxukxjj.supabase.co"
+EXPO_PUBLIC_SUPABASE_ANON_KEY = "sb_publishable_IZ9DbM1vrlxFIz8RpBjw0Q_Yjhb1PLJ"
+
+[userenv.production]
+NODE_ENV = "production"
+STRIPE_SUBSCRIPTION_PRICE_ID = "price_1TNF4RIZlahBsqwMUsFSUAmY"
+
+[userenv.development]
+STRIPE_SUBSCRIPTION_PRICE_ID = "price_1TNF4R93YcjhTtFQ9kTQ4LZZ"
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 120000

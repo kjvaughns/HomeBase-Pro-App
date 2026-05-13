@@ -1,0 +1,141 @@
+import React, { useState } from "react";
+import { StyleSheet, View, TextInput, TextInputProps, Pressable } from "react-native";
+import { Feather } from "@expo/vector-icons";
+
+import { ThemedText } from "@/components/ThemedText";
+import { useTheme } from "@/hooks/useTheme";
+import { Spacing, BorderRadius, Colors, Typography } from "@/constants/theme";
+
+interface TextFieldProps extends TextInputProps {
+  label?: string;
+  error?: string;
+  leftIcon?: keyof typeof Feather.glyphMap;
+  rightIcon?: keyof typeof Feather.glyphMap;
+  onRightIconPress?: () => void;
+}
+
+export function TextField({
+  label,
+  error,
+  leftIcon,
+  rightIcon,
+  onRightIconPress,
+  style,
+  multiline,
+  ...props
+}: TextFieldProps) {
+  const { theme } = useTheme();
+  const [isFocused, setIsFocused] = useState(false);
+
+  const borderColor = error
+    ? Colors.error
+    : isFocused
+    ? Colors.accent
+    : theme.border;
+
+  const backgroundColor = isFocused
+    ? theme.backgroundElevated
+    : theme.backgroundSecondary;
+
+  return (
+    <View style={styles.container}>
+      {label ? (
+        <ThemedText type="label" style={[styles.label, { color: theme.textSecondary }]}>
+          {label}
+        </ThemedText>
+      ) : null}
+
+      <View
+        style={[
+          styles.inputContainer,
+          multiline ? styles.inputContainerMultiline : null,
+          {
+            backgroundColor,
+            borderColor,
+            borderWidth: isFocused || error ? 1.5 : StyleSheet.hairlineWidth,
+          },
+        ]}
+      >
+        {leftIcon ? (
+          <Feather
+            name={leftIcon}
+            size={Spacing.iconSizeSmall}
+            color={isFocused ? Colors.accent : theme.textTertiary}
+            style={styles.leftIcon}
+          />
+        ) : null}
+
+        <TextInput
+          multiline={multiline}
+          style={[
+            styles.input,
+            multiline ? styles.inputMultiline : null,
+            { color: theme.text },
+            style,
+          ]}
+          placeholderTextColor={theme.textTertiary}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          selectionColor={Colors.accent}
+          {...props}
+        />
+
+        {rightIcon ? (
+          <Pressable onPress={onRightIconPress} hitSlop={8}>
+            <Feather
+              name={rightIcon}
+              size={Spacing.iconSizeSmall}
+              color={theme.textTertiary}
+            />
+          </Pressable>
+        ) : null}
+      </View>
+
+      {error ? (
+        <ThemedText type="caption" style={styles.error}>
+          {error}
+        </ThemedText>
+      ) : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    gap: Spacing.xs,
+  },
+  label: {
+    marginBottom: Spacing.xxs,
+    fontWeight: "500",
+  },
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    height: Spacing.inputHeight,
+    borderRadius: BorderRadius.input,
+    paddingHorizontal: Spacing.md,
+  },
+  inputContainerMultiline: {
+    alignItems: "flex-start",
+    height: undefined,
+    paddingVertical: Spacing.sm,
+  },
+  leftIcon: {
+    marginRight: Spacing.sm,
+  },
+  input: {
+    flex: 1,
+    ...Typography.body,
+    height: "100%",
+  },
+  inputMultiline: {
+    height: undefined,
+    minHeight: 96,
+    textAlignVertical: "top",
+    paddingTop: 0,
+  },
+  error: {
+    color: Colors.error,
+    marginTop: Spacing.xxs,
+  },
+});

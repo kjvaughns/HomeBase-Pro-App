@@ -1,0 +1,104 @@
+import jwt from "jsonwebtoken";
+import type { Request, Response, NextFunction, RequestHandler } from "express";
+import { db } from "./db";
+import { users } from "@workspace/db";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
+
+const IS_PROD = process.env.NODE_ENV === "production";
+
+if (!process.env.JWT_SECRET) {
+  if (IS_PROD) {
+    console.error(
+      "[auth] CRITICAL: JWT_SECRET is not set in the production environment. " +
+        "Refusing to start. Set JWT_SECRET in Replit Secrets and redeploy.",
+    );
+    process.exit(1);
+  } else {
+    console.warn("[auth] JWT_SECRET not set — using dev fallback. DO NOT use in production.");
+  }
+}
+
+export const JWT_SECRET =
+  process.env.JWT_SECRET || "homebase-jwt-secret-dev-only";
+
+export function generateToken(userId: string, role: string, tokenVersion: number): string {
+  return jwt.sign({ userId, role, tv: tokenVersion }, JWT_SECRET, { expiresIn: "7d" });
+}
+
+export function verifyToken(token: string): { userId: string; role: string; tv?: number } | null {
+  try {
+    const payload = jwt.verify(token, JWT_SECRET) as { userId: string; role: string; tv?: number };
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+export const authenticateJWT: RequestHandler = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const authHeader = req.headers["authorization"];
+  const raw = Array.isArray(authHeader) ? authHeader[0] : authHeader;
+  const headerToken = raw?.startsWith("Bearer ") ? raw.slice(7) : undefined;
+  const cookieToken = req.cookies?.token as string | undefined;
+  const token = headerToken || cookieToken;
+
+  if (!token) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const payload = verifyToken(token);
+  if (!payload) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  try {
+    const [user] = await db
+      .select({ tokenVersion: users.tokenVersion })
+      .from(users)
+      .where(eq(users.id, payload.userId));
+
+    if (!user) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const claimedVersion = payload.tv ?? 0;
+    if (user.tokenVersion !== claimedVersion) {
+      res.status(401).json({ error: "Token revoked" });
+      return;
+    }
+  } catch (err) {
+    console.error("[auth] Token version check failed:", err);
+    res.status(500).json({ error: "Authentication error" });
+    return;
+  }
+
+  req.authenticatedUserId = payload.userId;
+
+  // Debounced last_active_at update — fire-and-forget, only when null or >5 min stale
+  setImmediate(async () => {
+    try {
+      await db
+        .update(users)
+        .set({ lastActiveAt: new Date() })
+        .where(
+          and(
+            eq(users.id, payload.userId),
+            or(
+              isNull(users.lastActiveAt),
+              sql`${users.lastActiveAt} < NOW() - INTERVAL '5 minutes'`,
+            ),
+          ),
+        );
+    } catch {
+      // fire-and-forget: ignore errors
+    }
+  });
+
+  next();
+};

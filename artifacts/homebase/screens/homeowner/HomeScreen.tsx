@@ -1,0 +1,544 @@
+import React, { useMemo, useCallback, useEffect, useState } from "react";
+import { StyleSheet, View, ScrollView, Pressable, RefreshControl } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useHeaderHeight } from "@react-navigation/elements";
+import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
+import { useLayout } from "@/hooks/useLayout";
+import { useNavigation, useFocusEffect, CompositeNavigationProp } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
+import { HomeownerTabParamList } from "@/navigation/HomeownerTabNavigator";
+import { Feather } from "@expo/vector-icons";
+import Animated, { FadeInDown } from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
+
+import { ThemedText } from "@/components/ThemedText";
+import { ThemedView } from "@/components/ThemedView";
+import { GlassCard } from "@/components/GlassCard";
+import { StatCard } from "@/components/StatCard";
+import { Avatar } from "@/components/Avatar";
+import { StatusPill } from "@/components/StatusPill";
+import { CategoryCard } from "@/components/CategoryCard";
+import { useTheme } from "@/hooks/useTheme";
+import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
+import { useAuthStore } from "@/state/authStore";
+import { useHomeownerStore } from "@/state/homeownerStore";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { Job, JobStatus, ServiceCategory } from "@/state/types";
+import { useQuery } from "@tanstack/react-query";
+import { recordHappyMoment } from "@/state/appReviewStore";
+
+interface Appointment {
+  id: string;
+  serviceName: string;
+  scheduledDate: string;
+  scheduledTime: string;
+  status: string;
+  estimatedPrice?: string;
+  provider?: {
+    businessName: string;
+  };
+}
+
+type NavigationProp = CompositeNavigationProp<
+  BottomTabNavigationProp<HomeownerTabParamList>,
+  NativeStackNavigationProp<RootStackParamList>
+>;
+
+const STATUS_MAP: Record<JobStatus, { label: string; status: "success" | "info" | "warning" | "neutral" | "pending" | "scheduled" | "inProgress" | "completed" }> = {
+  requested: { label: "Requested", status: "info" },
+  scheduled: { label: "Scheduled", status: "scheduled" },
+  in_progress: { label: "In Progress", status: "inProgress" },
+  awaiting_payment: { label: "Payment Due", status: "warning" },
+  completed: { label: "Completed", status: "completed" },
+  paid: { label: "Paid", status: "success" },
+  closed: { label: "Closed", status: "neutral" },
+};
+
+export default function HomeScreen() {
+  const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
+  const tabBarHeight = useFloatingTabBarHeight();
+  const { horizontalPadding, isTablet } = useLayout();
+  const navigation = useNavigation<NavigationProp>();
+  const { theme } = useTheme();
+  const { user } = useAuthStore();
+  
+  const categories = useHomeownerStore((s) => s.categories);
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const {
+    data: appointmentsData,
+    refetch,
+    isLoading: isLoadingAppointments,
+    isError: appointmentsError,
+  } = useQuery<{ appointments: Appointment[] }>({
+    queryKey: ["/api/users", user?.id, "appointments"],
+    enabled: !!user?.id,
+  });
+  const appointments: Appointment[] = appointmentsData?.appointments ?? [];
+  const showAppointmentsLoader = !!user?.id && isLoadingAppointments && !appointmentsData;
+
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.id) refetch();
+      recordHappyMoment("homeowner_feature_used").catch(() => {});
+    }, [user?.id, refetch])
+  );
+
+  const onRefresh = async () => {
+    if (!user?.id) return;
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  };
+
+  const upcomingAppointments = useMemo(() => 
+    appointments.filter((a) => {
+      const date = new Date(a.scheduledDate);
+      return date >= new Date() && (a.status === "confirmed" || a.status === "pending");
+    }), 
+    [appointments]
+  );
+  
+  const activeAppointments = useMemo(() => 
+    appointments.filter((a) => a.status === "in_progress"), 
+    [appointments]
+  );
+  
+  const recentAppointments = useMemo(() => {
+    return [...appointments]
+      .sort((a, b) => new Date(b.scheduledDate).getTime() - new Date(a.scheduledDate).getTime())
+      .slice(0, 3);
+  }, [appointments]);
+
+  const handleAppointmentPress = (appointmentId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    navigation.navigate("AppointmentDetail", { appointmentId });
+  };
+
+  const handleViewAllJobs = () => {
+    navigation.getParent()?.navigate("ManageTab");
+  };
+
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      pending: "Pending",
+      confirmed: "Confirmed",
+      in_progress: "In Progress",
+      completed: "Completed",
+      cancelled: "Cancelled",
+    };
+    return labels[status] || status;
+  };
+
+  const getStatusStyle = (status: string): "success" | "info" | "warning" | "neutral" | "pending" | "scheduled" | "inProgress" | "completed" => {
+    const styles: Record<string, "success" | "info" | "warning" | "neutral" | "pending" | "scheduled" | "inProgress" | "completed"> = {
+      pending: "pending",
+      confirmed: "scheduled",
+      in_progress: "inProgress",
+      completed: "completed",
+      cancelled: "neutral",
+    };
+    return styles[status] || "neutral";
+  };
+
+  const handleAIPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    navigation.navigate("AIChat");
+  };
+
+  const handleCategoryPress = (category: ServiceCategory) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    navigation.navigate("ProviderList", {
+      categoryId: category.id,
+      categoryName: category.name,
+    });
+  };
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  };
+
+  return (
+    <ThemedView style={styles.container}>
+      <ScrollView
+        contentContainerStyle={{
+          paddingTop: headerHeight + Spacing.xl,
+          paddingBottom: tabBarHeight + Spacing.xl + 40,
+          paddingHorizontal: horizontalPadding,
+        }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
+        }
+      >
+        <Animated.View entering={FadeInDown.duration(400)}>
+          <View style={styles.greeting}>
+            <View>
+              <ThemedText style={styles.welcomeText}>Welcome back,</ThemedText>
+              <ThemedText style={styles.userName}>
+                {user?.name?.split(" ")[0] || "Homeowner"}
+              </ThemedText>
+            </View>
+            <Avatar name={user?.name || "User"} size="medium" />
+          </View>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+          <Pressable onPress={handleAIPress}>
+            <GlassCard style={styles.aiCard}>
+              <View style={styles.aiCardContent}>
+                <View style={[styles.aiIconContainer, { backgroundColor: Colors.accentLight }]}>
+                  <Feather name="message-circle" size={24} color={Colors.accent} />
+                </View>
+                <View style={styles.aiTextContainer}>
+                  <ThemedText style={styles.aiTitle}>Ask HomeBase AI</ThemedText>
+                  <ThemedText style={[styles.aiSubtitle, { color: theme.textSecondary }]}>
+                    Get instant help with any home question
+                  </ThemedText>
+                </View>
+                <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+              </View>
+            </GlassCard>
+          </Pressable>
+        </Animated.View>
+
+        {appointments.length > 0 ? (
+          <Animated.View entering={FadeInDown.delay(200).duration(400)}>
+            <View style={styles.statsRow}>
+              <View style={styles.statCard}>
+                <StatCard
+                  title="Upcoming"
+                  value={upcomingAppointments.length}
+                  icon="calendar"
+                />
+              </View>
+              <View style={styles.statCard}>
+                <StatCard
+                  title="In Progress"
+                  value={activeAppointments.length}
+                  icon="tool"
+                />
+              </View>
+            </View>
+          </Animated.View>
+        ) : null}
+
+        <Animated.View entering={FadeInDown.delay(300).duration(400)}>
+          {showAppointmentsLoader ? (
+            <GlassCard style={styles.firstBookingCard} testID="card-home-appointments-loading">
+              <View style={styles.firstBookingCardContent}>
+                <View style={[styles.firstBookingIconRing, { backgroundColor: Colors.accentLight }]}>
+                  <Feather name="loader" size={20} color={Colors.accent} />
+                </View>
+                <View style={styles.firstBookingContent}>
+                  <ThemedText style={styles.firstBookingTitle}>Loading your bookings…</ThemedText>
+                </View>
+              </View>
+            </GlassCard>
+          ) : appointmentsError ? (
+            <Pressable
+              onPress={() => {
+                if (user?.id) refetch();
+              }}
+              testID="card-home-appointments-retry"
+            >
+              <GlassCard style={styles.firstBookingCard}>
+                <View style={styles.firstBookingCardContent}>
+                  <View style={[styles.firstBookingIconRing, { backgroundColor: Colors.accentLight }]}>
+                    <Feather name="alert-circle" size={20} color={Colors.accent} />
+                  </View>
+                  <View style={styles.firstBookingContent}>
+                    <ThemedText style={styles.firstBookingTitle}>Couldn't load bookings</ThemedText>
+                    <ThemedText style={[styles.firstBookingSubtext, { color: theme.textSecondary }]}>
+                      Tap to retry
+                    </ThemedText>
+                  </View>
+                  <Feather name="refresh-cw" size={18} color={theme.textSecondary} />
+                </View>
+              </GlassCard>
+            </Pressable>
+          ) : recentAppointments.length > 0 ? (
+            <>
+              <View style={styles.sectionHeader}>
+                <ThemedText style={styles.sectionTitle}>Recent Bookings</ThemedText>
+                <Pressable onPress={handleViewAllJobs}>
+                  <ThemedText style={[styles.viewAll, { color: Colors.accent }]}>View All</ThemedText>
+                </Pressable>
+              </View>
+
+              {recentAppointments.map((appt) => (
+                <Pressable key={appt.id} onPress={() => handleAppointmentPress(appt.id)}>
+                  <GlassCard style={styles.jobCard}>
+                    <View style={styles.jobHeader}>
+                      <Avatar name={appt.provider?.businessName || "Provider"} size="small" />
+                      <View style={styles.jobInfo}>
+                        <ThemedText style={styles.jobService}>{appt.serviceName}</ThemedText>
+                        <ThemedText style={[styles.jobProvider, { color: theme.textSecondary }]}>
+                          {appt.provider?.businessName || "Service Provider"}
+                        </ThemedText>
+                      </View>
+                      <StatusPill
+                        label={getStatusLabel(appt.status)}
+                        status={getStatusStyle(appt.status)}
+                      />
+                    </View>
+                    {appt.scheduledDate ? (
+                      <View style={styles.jobFooter}>
+                        <Feather name="calendar" size={14} color={theme.textSecondary} />
+                        <ThemedText style={[styles.jobDate, { color: theme.textSecondary }]}>
+                          {formatDate(appt.scheduledDate)} at {appt.scheduledTime}
+                        </ThemedText>
+                      </View>
+                    ) : null}
+                  </GlassCard>
+                </Pressable>
+              ))}
+            </>
+          ) : (
+            <Pressable onPress={() => navigation.navigate("FindTab")}>
+              <GlassCard style={styles.firstBookingCard}>
+                <View style={styles.firstBookingCardContent}>
+                  <View style={[styles.firstBookingIconRing, { backgroundColor: Colors.accentLight }]}>
+                    <Feather name="search" size={24} color={Colors.accent} />
+                  </View>
+                  <View style={styles.firstBookingContent}>
+                    <ThemedText style={styles.firstBookingTitle}>Find your first pro</ThemedText>
+                    <ThemedText style={[styles.firstBookingSubtext, { color: theme.textSecondary }]}>
+                      Trusted professionals in your area
+                    </ThemedText>
+                  </View>
+                  <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+                </View>
+              </GlassCard>
+            </Pressable>
+          )}
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(400).duration(400)}>
+          <View style={styles.sectionHeader}>
+            <ThemedText style={styles.sectionTitle}>Quick Search</ThemedText>
+            <Pressable onPress={() => navigation.navigate("FindTab")}>
+              <ThemedText style={[styles.viewAll, { color: Colors.accent }]}>See All</ThemedText>
+            </Pressable>
+          </View>
+
+          <View style={styles.categoriesGrid}>
+            {categories.slice(0, isTablet ? 8 : 6).map((category) => (
+              <View key={category.id} style={[styles.categoryItem, isTablet && styles.categoryItemTablet]}>
+                <CategoryCard
+                  name={category.name}
+                  icon={category.icon as any}
+                  onPress={() => handleCategoryPress(category)}
+                  compact
+                />
+              </View>
+            ))}
+          </View>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(500).duration(400)}>
+          <View style={styles.sectionHeader}>
+            <ThemedText style={styles.sectionTitle}>Home Tools</ThemedText>
+          </View>
+
+          <View style={styles.quickActions}>
+            {(
+              [
+                { label: "Survival Kit", icon: "shield" as const, screen: "SurvivalKit" as const, testID: undefined as string | undefined },
+                { label: "Health Score", icon: "activity" as const, screen: "HealthScore" as const, testID: undefined as string | undefined },
+                { label: "Service History", icon: "clock" as const, screen: "ServiceHistory" as const, testID: "quick-action-service-history" as string | undefined },
+                { label: "HouseFax", icon: "file-text" as const, screen: "HouseFax" as const, testID: undefined as string | undefined },
+              ]
+            ).map((item) => (
+              <Pressable
+                key={item.label}
+                style={[styles.quickAction, isTablet && styles.quickActionTablet, { backgroundColor: theme.cardBackground }]}
+                onPress={() => navigation.navigate(item.screen)}
+                testID={item.testID}
+              >
+                <View style={[styles.quickActionIcon, { backgroundColor: Colors.accentLight }]}>
+                  <Feather name={item.icon} size={20} color={Colors.accent} />
+                </View>
+                <ThemedText style={styles.quickActionText}>{item.label}</ThemedText>
+              </Pressable>
+            ))}
+          </View>
+        </Animated.View>
+      </ScrollView>
+    </ThemedView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  greeting: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Spacing.lg,
+  },
+  welcomeText: {
+    ...Typography.subhead,
+    opacity: 0.7,
+  },
+  userName: {
+    ...Typography.largeTitle,
+  },
+  aiCard: {
+    marginBottom: Spacing.lg,
+  },
+  aiCardContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  aiIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: Spacing.md,
+  },
+  aiTextContainer: {
+    flex: 1,
+  },
+  aiTitle: {
+    ...Typography.headline,
+    marginBottom: 2,
+  },
+  aiSubtitle: {
+    ...Typography.subhead,
+  },
+  statsRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginBottom: Spacing.xl,
+  },
+  statCard: {
+    flex: 1,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Spacing.md,
+  },
+  sectionTitle: {
+    ...Typography.title3,
+  },
+  viewAll: {
+    ...Typography.subhead,
+  },
+  jobCard: {
+    marginBottom: Spacing.sm,
+  },
+  jobHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  jobInfo: {
+    flex: 1,
+  },
+  jobService: {
+    ...Typography.headline,
+  },
+  jobProvider: {
+    ...Typography.subhead,
+  },
+  jobFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    marginTop: Spacing.sm,
+    paddingTop: Spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(0,0,0,0.1)",
+  },
+  jobDate: {
+    ...Typography.caption1,
+  },
+  emptyCard: {
+    alignItems: "center",
+    paddingVertical: Spacing.xl,
+  },
+  emptyText: {
+    ...Typography.headline,
+    marginTop: Spacing.md,
+  },
+  emptySubtext: {
+    ...Typography.subhead,
+    marginTop: Spacing.xs,
+  },
+  firstBookingCard: {
+    marginBottom: Spacing.xl,
+  },
+  firstBookingCardContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  firstBookingIconRing: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: Spacing.md,
+  },
+  firstBookingContent: {
+    flex: 1,
+  },
+  firstBookingTitle: {
+    ...Typography.headline,
+    marginBottom: 2,
+  },
+  firstBookingSubtext: {
+    ...Typography.subhead,
+  },
+  categoriesGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+    marginBottom: Spacing.xl,
+  },
+  categoryItem: {
+    width: "31%",
+  },
+  categoryItemTablet: {
+    width: "22%",
+  },
+  quickActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+  },
+  quickAction: {
+    width: "48%",
+    flexShrink: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.sm,
+  },
+  quickActionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  quickActionTablet: {
+    width: "23%",
+  },
+  quickActionText: {
+    ...Typography.subhead,
+    flex: 1,
+  },
+});
