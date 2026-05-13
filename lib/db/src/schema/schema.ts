@@ -118,6 +118,7 @@ export const users = pgTable("users", {
   // middleware accepts either this column OR a match in ADMIN_EMAILS
   // env so existing deployments still work.
   isAdmin: boolean("is_admin").notNull().default(false),
+  isActive: boolean("is_active").notNull().default(true),
   stripeCustomerId: text("stripe_customer_id"),
   defaultPaymentMethodId: text("default_payment_method_id"),
   tokenVersion: integer("token_version").notNull().default(0),

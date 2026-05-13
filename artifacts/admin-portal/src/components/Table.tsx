@@ -104,11 +104,18 @@ export default function Table<T extends Record<string, unknown>>({
                   onClick={() => onRowClick?.(row)}
                 >
                   {selectable && (
-                    <td style={{ ...styles.td, textAlign: "center", width: 44 }} onClick={(e) => toggleRow(id, e)}>
+                    <td style={{ ...styles.td, textAlign: "center", width: 44 }} onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={isSelected}
-                        onChange={() => {}}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          if (!onSelectionChange) return;
+                          const next = new Set(selectedIds);
+                          if (isSelected) next.delete(id);
+                          else next.add(id);
+                          onSelectionChange(next);
+                        }}
                         onClick={(e) => e.stopPropagation()}
                       />
                     </td>

@@ -27,6 +27,7 @@ export default function AuditLogs() {
   const [since, setSince] = useState("");
   const [until, setUntil] = useState("");
   const [offset, setOffset] = useState(0);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   React.useEffect(() => {
     const t = setTimeout(() => { setDebouncedAdminId(adminUserIdFilter); setOffset(0); }, 500);
@@ -49,6 +50,50 @@ export default function AuditLogs() {
   });
 
   const logs: AdminAuditLogRow[] = data?.logs || [];
+  const allSelected = logs.length > 0 && logs.every((l) => selectedIds.has(l.id));
+  const someSelected = !allSelected && logs.some((l) => selectedIds.has(l.id));
+  const selectedCount = selectedIds.size;
+
+  const toggleAll = () => {
+    if (allSelected) {
+      const next = new Set(selectedIds);
+      logs.forEach((l) => next.delete(l.id));
+      setSelectedIds(next);
+    } else {
+      const next = new Set(selectedIds);
+      logs.forEach((l) => next.add(l.id));
+      setSelectedIds(next);
+    }
+  };
+
+  const toggleRow = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedIds(next);
+  };
+
+  const exportSelected = () => {
+    const selected = logs.filter((l) => selectedIds.has(l.id));
+    const rows = [
+      ["Admin", "Email", "Action", "Target Type", "Target ID", "Timestamp"].join(","),
+      ...selected.map((l) => [
+        ((l.adminName as string | null) || "").replace(/,/g, ";"),
+        ((l.adminEmail as string | null) || "").replace(/,/g, ";"),
+        (l.action || "").replace(/,/g, ";"),
+        ((l.targetType as string | null) || "").replace(/,/g, ";"),
+        (l.targetId ? String(l.targetId) : "").replace(/,/g, ";"),
+        l.createdAt ? format(new Date(l.createdAt as string), "yyyy-MM-dd HH:mm:ss") : "",
+      ].join(","))
+    ].join("\n");
+    const blob = new Blob([rows], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `audit-logs-export-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <Layout>
@@ -56,6 +101,14 @@ export default function AuditLogs() {
         title="Audit Logs"
         subtitle={data?.total != null ? `${data.total} entries` : "Immutable record of all admin actions"}
       />
+
+      {selectedCount > 0 && (
+        <div style={styles.bulkBar}>
+          <span style={styles.bulkCount}>{selectedCount} selected</span>
+          <button style={styles.bulkClear} onClick={() => setSelectedIds(new Set())}>Clear</button>
+          <button style={styles.bulkExport} onClick={exportSelected}>Export CSV</button>
+        </div>
+      )}
 
       <div style={styles.filters}>
         <select value={action} onChange={(e) => { setAction(e.target.value); setOffset(0); }} style={styles.select}>
@@ -85,6 +138,14 @@ export default function AuditLogs() {
         <table style={styles.table}>
           <thead>
             <tr>
+              <th style={{ ...styles.th, width: 44, textAlign: "center" }}>
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  ref={(el) => { if (el) el.indeterminate = someSelected; }}
+                  onChange={toggleAll}
+                />
+              </th>
               {["Admin", "Action", "Target Type", "Target ID", "Before", "After", "Timestamp"].map((h) => (
                 <th key={h} style={styles.th}>{h}</th>
               ))}
@@ -92,40 +153,53 @@ export default function AuditLogs() {
           </thead>
           <tbody>
             {isLoading ? (
-              Array.from({ length: 10 }).map((_, i) => <SkeletonRow key={i} cols={7} />)
+              Array.from({ length: 10 }).map((_, i) => <SkeletonRow key={i} cols={8} />)
             ) : logs.length === 0 ? (
-              <tr><td colSpan={7} style={styles.empty}>No audit log entries</td></tr>
+              <tr><td colSpan={8} style={styles.empty}>No audit log entries</td></tr>
             ) : (
-              logs.map((log) => (
-                <tr key={log.id}>
-                  <td style={styles.td}>
-                    <div style={{ fontWeight: 500 }}>{(log.adminName as string | null | undefined) || "—"}</div>
-                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{(log.adminEmail as string | null | undefined) || ""}</div>
-                  </td>
-                  <td style={styles.td}>
-                    <code style={styles.code}>{log.action}</code>
-                  </td>
-                  <td style={styles.td}>{(log.targetType as string | null) || "—"}</td>
-                  <td style={styles.td}>
-                    <span style={styles.targetId}>{log.targetId ? String(log.targetId).slice(0, 12) + "..." : "—"}</span>
-                  </td>
-                  <td style={styles.td}>
-                    {log.beforeValue ? (
-                      <code style={styles.jsonCode}>{JSON.stringify(log.beforeValue)}</code>
-                    ) : "—"}
-                  </td>
-                  <td style={styles.td}>
-                    {log.afterValue ? (
-                      <code style={styles.jsonCode}>{JSON.stringify(log.afterValue)}</code>
-                    ) : "—"}
-                  </td>
-                  <td style={styles.td}>
-                    <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                      {log.createdAt ? format(new Date(log.createdAt as string), "MMM d, yyyy h:mm a") : "—"}
-                    </span>
-                  </td>
-                </tr>
-              ))
+              logs.map((log) => {
+                const isSelected = selectedIds.has(log.id);
+                return (
+                  <tr
+                    key={log.id}
+                    style={{ background: isSelected ? "rgba(56,174,95,0.06)" : undefined, transition: "background 0.1s" }}
+                  >
+                    <td style={{ ...styles.td, textAlign: "center", width: 44 }}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleRow(log.id)}
+                      />
+                    </td>
+                    <td style={styles.td}>
+                      <div style={{ fontWeight: 500 }}>{(log.adminName as string | null | undefined) || "—"}</div>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{(log.adminEmail as string | null | undefined) || ""}</div>
+                    </td>
+                    <td style={styles.td}>
+                      <code style={styles.code}>{log.action}</code>
+                    </td>
+                    <td style={styles.td}>{(log.targetType as string | null) || "—"}</td>
+                    <td style={styles.td}>
+                      <span style={styles.targetId}>{log.targetId ? String(log.targetId).slice(0, 12) + "..." : "—"}</span>
+                    </td>
+                    <td style={styles.td}>
+                      {log.beforeValue ? (
+                        <code style={styles.jsonCode}>{JSON.stringify(log.beforeValue)}</code>
+                      ) : "—"}
+                    </td>
+                    <td style={styles.td}>
+                      {log.afterValue ? (
+                        <code style={styles.jsonCode}>{JSON.stringify(log.afterValue)}</code>
+                      ) : "—"}
+                    </td>
+                    <td style={styles.td}>
+                      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                        {log.createdAt ? format(new Date(log.createdAt as string), "MMM d, yyyy h:mm a") : "—"}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -142,6 +216,20 @@ export default function AuditLogs() {
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  bulkBar: {
+    display: "flex", alignItems: "center", gap: 10,
+    background: "rgba(56,174,95,0.08)", border: "1px solid rgba(56,174,95,0.2)",
+    borderRadius: 8, padding: "10px 16px", marginBottom: 12,
+  },
+  bulkCount: { fontWeight: 600, fontSize: 13, color: "#38AE5F", flex: 1 },
+  bulkClear: {
+    padding: "5px 12px", fontSize: 12, border: "1px solid var(--border)",
+    borderRadius: 6, background: "var(--surface)", color: "var(--text-secondary)", cursor: "pointer",
+  },
+  bulkExport: {
+    padding: "5px 12px", fontSize: 12, border: "1px solid rgba(56,174,95,0.3)",
+    borderRadius: 6, background: "rgba(56,174,95,0.08)", color: "#38AE5F", cursor: "pointer", fontWeight: 500,
+  },
   filters: { display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" },
   select: { padding: "8px 12px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--surface)", color: "var(--text-primary)", fontSize: 13 },
   textInput: { padding: "7px 12px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--surface)", color: "var(--text-primary)", fontSize: 13, outline: "none", width: 220 },
@@ -149,9 +237,9 @@ const styles: Record<string, React.CSSProperties> = {
   dateLabel: { fontSize: 12, color: "var(--text-muted)" },
   dateInput: { padding: "7px 10px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--surface)", color: "var(--text-primary)", fontSize: 13 },
   clearBtn: { padding: "6px 12px", background: "none", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-muted)", cursor: "pointer", fontSize: 12 },
-  tableWrap: { border: "1px solid var(--border)", borderRadius: 8, overflow: "auto", background: "var(--surface)" },
+  tableWrap: { border: "1px solid var(--border)", borderRadius: 10, overflow: "auto", background: "var(--surface)", boxShadow: "var(--shadow)", marginBottom: 16 },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
-  th: { padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "var(--text-secondary)", background: "var(--surface-2)", borderBottom: "1px solid var(--border)", textTransform: "uppercase", whiteSpace: "nowrap" },
+  th: { padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "var(--text-muted)", background: "var(--surface-2)", borderBottom: "1px solid var(--border)", textTransform: "uppercase", whiteSpace: "nowrap", letterSpacing: "0.04em" },
   td: { padding: "10px 14px", borderBottom: "1px solid var(--border-light)", color: "var(--text-primary)", verticalAlign: "middle", maxWidth: 220 },
   empty: { padding: "40px 14px", textAlign: "center", color: "var(--text-muted)", fontSize: 14 },
   code: { fontFamily: "monospace", fontSize: 12, background: "var(--accent-light)", color: "#38AE5F", padding: "2px 6px", borderRadius: 4 },

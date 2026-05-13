@@ -1293,7 +1293,7 @@ export class DatabaseStorage implements IStorage {
       user,
       homes: userHomes,
       appointments: userAppointments,
-      creditBalance: String(creditRow?.balanceCents ?? 0),
+      creditBalance: (Number(creditRow?.balanceCents ?? 0) / 100).toFixed(2),
       creditLedger: ledgerRows,
       supportTickets: userTickets,
     };
