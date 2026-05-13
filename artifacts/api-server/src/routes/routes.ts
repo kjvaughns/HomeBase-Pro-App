@@ -10,6 +10,7 @@ import {
 } from "../openai";
 import { storage } from "../storage";
 import { seedDatabase } from "../seed";
+import { runBootMigrations } from "../dbMigrations";
 import {
   formatJobSummary,
   parseIntakeAnswers,
@@ -1350,6 +1351,10 @@ async function autoLinkCrewByEmail(
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Run additive boot migrations on every startup (idempotent, IF NOT EXISTS).
+  // Must run before seedDatabase so tables like admin_broadcasts exist.
+  await runBootMigrations();
+
   // Only seed in development — never in production to prevent demo data leakage
   if (process.env.NODE_ENV !== "production") {
     await seedDatabase();
