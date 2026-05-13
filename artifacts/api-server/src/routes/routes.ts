@@ -17595,6 +17595,26 @@ Respond with JSON only:
     },
   );
 
+  // DELETE /api/admin/audit-logs — bulk delete by IDs
+  app.delete(
+    "/api/admin/audit-logs",
+    requireAuth,
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const ids = req.body?.ids;
+        if (!Array.isArray(ids) || ids.length === 0) {
+          return res.status(400).json({ error: "ids must be a non-empty array" });
+        }
+        const deleted = await storage.deleteAdminAuditLogs(ids as string[]);
+        res.json({ deleted });
+      } catch (err: any) {
+        console.error("[admin] delete audit logs error:", err);
+        res.status(500).json({ error: err.message || "Failed to delete audit logs" });
+      }
+    },
+  );
+
   const httpServer = createServer(app);
 
   return httpServer;

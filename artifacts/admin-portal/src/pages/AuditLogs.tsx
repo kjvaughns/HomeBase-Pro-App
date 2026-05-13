@@ -1,12 +1,14 @@
 import React, { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "../api/client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { api, getApiErrorMessage } from "../api/client";
 import Layout from "../components/Layout";
 import PageHeader from "../components/PageHeader";
 import Pagination from "../components/Pagination";
 import { SkeletonRow } from "../components/Skeleton";
+import ConfirmModal from "../components/ConfirmModal";
 import { AdminAuditLogRow } from "../types";
 import { format } from "date-fns";
+import { useToast } from "../contexts/ToastContext";
 
 const LIMIT = 50;
 
@@ -21,6 +23,8 @@ const ACTION_TYPES = [
 ];
 
 export default function AuditLogs() {
+  const qc = useQueryClient();
+  const { addToast } = useToast();
   const [action, setAction] = useState("");
   const [adminUserIdFilter, setAdminUserIdFilter] = useState("");
   const [debouncedAdminId, setDebouncedAdminId] = useState("");
@@ -28,6 +32,7 @@ export default function AuditLogs() {
   const [until, setUntil] = useState("");
   const [offset, setOffset] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   React.useEffect(() => {
     const t = setTimeout(() => { setDebouncedAdminId(adminUserIdFilter); setOffset(0); }, 500);
@@ -47,6 +52,18 @@ export default function AuditLogs() {
           offset,
         },
       }).then((r) => r.data),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (ids: string[]) =>
+      api.delete("/api/admin/audit-logs", { data: { ids } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/admin/audit-logs"] });
+      addToast(`${selectedIds.size} log${selectedIds.size !== 1 ? "s" : ""} deleted`, "success");
+      setSelectedIds(new Set());
+      setConfirmDelete(false);
+    },
+    onError: (err) => addToast(getApiErrorMessage(err), "error"),
   });
 
   const logs: AdminAuditLogRow[] = data?.logs || [];
@@ -73,28 +90,6 @@ export default function AuditLogs() {
     setSelectedIds(next);
   };
 
-  const exportSelected = () => {
-    const selected = logs.filter((l) => selectedIds.has(l.id));
-    const rows = [
-      ["Admin", "Email", "Action", "Target Type", "Target ID", "Timestamp"].join(","),
-      ...selected.map((l) => [
-        ((l.adminName as string | null) || "").replace(/,/g, ";"),
-        ((l.adminEmail as string | null) || "").replace(/,/g, ";"),
-        (l.action || "").replace(/,/g, ";"),
-        ((l.targetType as string | null) || "").replace(/,/g, ";"),
-        (l.targetId ? String(l.targetId) : "").replace(/,/g, ";"),
-        l.createdAt ? format(new Date(l.createdAt as string), "yyyy-MM-dd HH:mm:ss") : "",
-      ].join(","))
-    ].join("\n");
-    const blob = new Blob([rows], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `audit-logs-export-${format(new Date(), "yyyy-MM-dd")}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   return (
     <Layout>
       <PageHeader
@@ -106,7 +101,9 @@ export default function AuditLogs() {
         <div style={styles.bulkBar}>
           <span style={styles.bulkCount}>{selectedCount} selected</span>
           <button style={styles.bulkClear} onClick={() => setSelectedIds(new Set())}>Clear</button>
-          <button style={styles.bulkExport} onClick={exportSelected}>Export CSV</button>
+          <button style={styles.bulkDelete} onClick={() => setConfirmDelete(true)}>
+            Delete Selected
+          </button>
         </div>
       )}
 
@@ -204,12 +201,24 @@ export default function AuditLogs() {
           </tbody>
         </table>
       </div>
+
       <Pagination
         offset={offset}
         limit={LIMIT}
         total={data?.total}
         onPrev={() => setOffset((o) => Math.max(0, o - LIMIT))}
         onNext={() => setOffset((o) => o + LIMIT)}
+      />
+
+      <ConfirmModal
+        open={confirmDelete}
+        title={`Delete ${selectedCount} Log${selectedCount !== 1 ? "s" : ""}?`}
+        message="These audit log entries will be permanently deleted and cannot be recovered."
+        confirmLabel="Delete"
+        danger
+        loading={deleteMutation.isPending}
+        onConfirm={() => deleteMutation.mutate([...selectedIds])}
+        onCancel={() => setConfirmDelete(false)}
       />
     </Layout>
   );
@@ -226,9 +235,9 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "5px 12px", fontSize: 12, border: "1px solid var(--border)",
     borderRadius: 6, background: "var(--surface)", color: "var(--text-secondary)", cursor: "pointer",
   },
-  bulkExport: {
-    padding: "5px 12px", fontSize: 12, border: "1px solid rgba(56,174,95,0.3)",
-    borderRadius: 6, background: "rgba(56,174,95,0.08)", color: "#38AE5F", cursor: "pointer", fontWeight: 500,
+  bulkDelete: {
+    padding: "5px 12px", fontSize: 12, border: "1px solid rgba(239,68,68,0.3)",
+    borderRadius: 6, background: "rgba(239,68,68,0.06)", color: "#ef4444", cursor: "pointer", fontWeight: 500,
   },
   filters: { display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" },
   select: { padding: "8px 12px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--surface)", color: "var(--text-primary)", fontSize: 13 },

@@ -1720,6 +1720,14 @@ export class DatabaseStorage implements IStorage {
     return enriched.slice(0, params.limit);
   }
 
+  async deleteAdminAuditLogs(ids: string[]): Promise<number> {
+    if (ids.length === 0) return 0;
+    const result = await db
+      .delete(adminAuditLogs)
+      .where(inArray(adminAuditLogs.id, ids));
+    return ids.length;
+  }
+
   async listAdminAuditLogs(params: {
     adminUserId: string;
     action: string;
