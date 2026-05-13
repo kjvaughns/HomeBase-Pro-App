@@ -122,7 +122,7 @@ __export(schema_exports, {
   providerMessages: () => providerMessages,
   providerMessagesRelations: () => providerMessagesRelations,
   providerPlanTierEnum: () => providerPlanTierEnum,
-  providerPlans: () => providerPlans2,
+  providerPlans: () => providerPlans,
   providerPlansRelations: () => providerPlansRelations,
   providerServices: () => providerServices,
   providerServicesRelations: () => providerServicesRelations,
@@ -174,7 +174,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-var propertyTypeEnum, appointmentStatusEnum, urgencyEnum, jobSizeEnum, jobStatusEnum, invoiceStatusEnum, estimateStatusEnum, paymentMethodEnum, paymentStatusEnum, payoutStatusEnum, connectOnboardingStatusEnum, providerPlanTierEnum, users, usersRelations, homes, homesRelations, serviceCategories, serviceCategoriesRelations, services, servicesRelations, providers, providersRelations, crewMembers, crewMembersRelations, providerServices, providerServicesRelations, pricingTypeEnum, providerCustomServices, providerCustomServicesRelations, insertProviderCustomServiceSchema, appointments, appointmentsRelations, reviews, reviewsRelations, savedProviders, savedProvidersRelations, reviewReports, reviewReportsRelations, notifications, notificationsRelations, maintenanceReminderFrequencyEnum, maintenanceReminders, maintenanceRemindersRelations, providerPlans2, providerPlansRelations, stripeConnectAccounts, stripeConnectAccountsRelations, userCredits, userCreditsRelations, creditLedger, creditLedgerRelations, payouts, payoutsRelations, refundStatusEnum, refunds, refundsRelations, stripeWebhookEvents, invoiceLineItems, estimateLineItems, invoiceLineItemsRelations, clients, clientsRelations, jobs, jobsRelations, jobSeries, jobSeriesRelations, invoices, invoicesRelations, estimates, estimatesRelations, estimateLineItemsRelations, payments, paymentsRelations, bookingLinkStatusEnum, quoteModeEnum, intakeStatusEnum, bookingLinks, bookingLinksRelations, intakeSubmissions, intakeSubmissionsRelations, insertUserSchema, loginSchema, insertHomeSchema, homeProfileUpdateSchema, homeFieldChanges, homeFieldChangesRelations, insertAppointmentSchema, insertClientSchema, insertJobSchema, insertInvoiceSchema, insertPaymentSchema, insertProviderSchema, insertProviderPlanSchema, insertStripeConnectAccountSchema, insertInvoiceLineItemSchema, insertEstimateSchema, insertEstimateLineItemSchema, insertPayoutSchema, insertUserCreditsSchema, insertCreditLedgerSchema, insertCrewMemberSchema, insertBookingLinkSchema, insertIntakeSubmissionSchema, notificationChannelEnum, notificationDeliveryStatusEnum, pushTokens, notificationPreferences, notificationDeliveries, messageChannelEnum, messageStatusEnum, providerMessages, providerMessagesRelations, insertProviderMessageSchema, messageTemplates, messageTemplatesRelations, insertMessageTemplateSchema, leads, insertLeadSchema, insertNotificationPreferenceSchema, housefaxEntries, housefaxEntriesRelations, insertHousefaxEntrySchema, supportTickets, supportTicketsRelations, insertSupportTicketSchema, supportTicketMessages, supportTicketMessagesRelations, insertSupportTicketMessageSchema, adminBroadcasts, adminBroadcastsRelations, insertAdminBroadcastSchema, adminBroadcastRecipients, adminBroadcastRecipientsRelations, insertAdminBroadcastRecipientSchema, adminAuditLogs, adminAuditLogsRelations, insertAdminAuditLogSchema, quickQuotes, quickQuotesRelations, insertQuickQuoteSchema;
+var propertyTypeEnum, appointmentStatusEnum, urgencyEnum, jobSizeEnum, jobStatusEnum, invoiceStatusEnum, estimateStatusEnum, paymentMethodEnum, paymentStatusEnum, payoutStatusEnum, connectOnboardingStatusEnum, providerPlanTierEnum, users, usersRelations, homes, homesRelations, serviceCategories, serviceCategoriesRelations, services, servicesRelations, providers, providersRelations, crewMembers, crewMembersRelations, providerServices, providerServicesRelations, pricingTypeEnum, providerCustomServices, providerCustomServicesRelations, insertProviderCustomServiceSchema, appointments, appointmentsRelations, reviews, reviewsRelations, savedProviders, savedProvidersRelations, reviewReports, reviewReportsRelations, notifications, notificationsRelations, maintenanceReminderFrequencyEnum, maintenanceReminders, maintenanceRemindersRelations, providerPlans, providerPlansRelations, stripeConnectAccounts, stripeConnectAccountsRelations, userCredits, userCreditsRelations, creditLedger, creditLedgerRelations, payouts, payoutsRelations, refundStatusEnum, refunds, refundsRelations, stripeWebhookEvents, invoiceLineItems, estimateLineItems, invoiceLineItemsRelations, clients, clientsRelations, jobs, jobsRelations, jobSeries, jobSeriesRelations, invoices, invoicesRelations, estimates, estimatesRelations, estimateLineItemsRelations, payments, paymentsRelations, bookingLinkStatusEnum, quoteModeEnum, intakeStatusEnum, bookingLinks, bookingLinksRelations, intakeSubmissions, intakeSubmissionsRelations, insertUserSchema, loginSchema, insertHomeSchema, homeProfileUpdateSchema, homeFieldChanges, homeFieldChangesRelations, insertAppointmentSchema, insertClientSchema, insertJobSchema, insertInvoiceSchema, insertPaymentSchema, insertProviderSchema, insertProviderPlanSchema, insertStripeConnectAccountSchema, insertInvoiceLineItemSchema, insertEstimateSchema, insertEstimateLineItemSchema, insertPayoutSchema, insertUserCreditsSchema, insertCreditLedgerSchema, insertCrewMemberSchema, insertBookingLinkSchema, insertIntakeSubmissionSchema, notificationChannelEnum, notificationDeliveryStatusEnum, pushTokens, notificationPreferences, notificationDeliveries, messageChannelEnum, messageStatusEnum, providerMessages, providerMessagesRelations, insertProviderMessageSchema, messageTemplates, messageTemplatesRelations, insertMessageTemplateSchema, leads, insertLeadSchema, insertNotificationPreferenceSchema, housefaxEntries, housefaxEntriesRelations, insertHousefaxEntrySchema, supportTickets, supportTicketsRelations, insertSupportTicketSchema, supportTicketMessages, supportTicketMessagesRelations, insertSupportTicketMessageSchema, adminBroadcasts, adminBroadcastsRelations, insertAdminBroadcastSchema, adminBroadcastRecipients, adminBroadcastRecipientsRelations, insertAdminBroadcastRecipientSchema, adminAuditLogs, adminAuditLogsRelations, insertAdminAuditLogSchema, quickQuotes, quickQuotesRelations, insertQuickQuoteSchema;
 var init_schema = __esm({
   "shared/schema.ts"() {
     "use strict";
@@ -681,7 +681,7 @@ var init_schema = __esm({
         })
       })
     );
-    providerPlans2 = pgTable("provider_plans", {
+    providerPlans = pgTable("provider_plans", {
       id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
       providerId: varchar("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
       planTier: providerPlanTierEnum("plan_tier").default("free"),
@@ -716,9 +716,9 @@ var init_schema = __esm({
       createdAt: timestamp("created_at").defaultNow().notNull(),
       updatedAt: timestamp("updated_at").defaultNow().notNull()
     });
-    providerPlansRelations = relations(providerPlans2, ({ one }) => ({
+    providerPlansRelations = relations(providerPlans, ({ one }) => ({
       provider: one(providers, {
-        fields: [providerPlans2.providerId],
+        fields: [providerPlans.providerId],
         references: [providers.id]
       })
     }));
@@ -1433,7 +1433,7 @@ var init_schema = __esm({
       id: true,
       createdAt: true
     });
-    insertProviderPlanSchema = createInsertSchema(providerPlans2).omit({
+    insertProviderPlanSchema = createInsertSchema(providerPlans).omit({
       id: true,
       createdAt: true,
       updatedAt: true
@@ -1884,7 +1884,7 @@ var init_db = __esm({
 });
 
 // server/storage.ts
-import { eq, and, or, desc, sql as sql2, gte, lte } from "drizzle-orm";
+import { eq, and, or, desc, asc, sql as sql2, gte, lte, ilike, inArray, lt } from "drizzle-orm";
 import { hash, compare } from "bcryptjs";
 var SALT_ROUNDS, DatabaseStorage, storage;
 var init_storage = __esm({
@@ -2535,6 +2535,382 @@ var init_storage = __esm({
         const [created] = await db.insert(notificationPreferences).values({ userId, ...data }).returning();
         return created;
       }
+      // ─── Admin Storage Helpers ────────────────────────────────────────────────
+      async getAdminStats() {
+        const [counts] = await db.select({
+          totalUsers: sql2`(SELECT COUNT(*) FROM users)`,
+          totalProviders: sql2`(SELECT COUNT(*) FROM providers)`,
+          totalAppointments: sql2`(SELECT COUNT(*) FROM appointments)`,
+          totalJobs: sql2`(SELECT COUNT(*) FROM jobs)`,
+          totalRevenueCents: sql2`COALESCE((SELECT SUM(amount_cents) FROM payments WHERE status = 'succeeded'), 0)`,
+          openTickets: sql2`(SELECT COUNT(*) FROM support_tickets WHERE status = 'open')`
+        }).from(sql2`(SELECT 1) AS dual`);
+        return {
+          totalUsers: Number(counts.totalUsers),
+          totalProviders: Number(counts.totalProviders),
+          totalAppointments: Number(counts.totalAppointments),
+          totalJobs: Number(counts.totalJobs),
+          totalRevenueCents: Number(counts.totalRevenueCents),
+          openTickets: Number(counts.openTickets)
+        };
+      }
+      async getAdminUsers(params) {
+        const { search, role, limit, offset } = params;
+        const conditions = [];
+        if (search) {
+          conditions.push(
+            or(
+              ilike(users.email, `%${search}%`),
+              ilike(users.firstName, `%${search}%`),
+              ilike(users.lastName, `%${search}%`)
+            )
+          );
+        }
+        if (role === "admin") conditions.push(eq(users.isAdmin, true));
+        if (role === "provider") conditions.push(eq(users.isProvider, true));
+        if (role === "homeowner") conditions.push(eq(users.isProvider, false));
+        const query = db.select({
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          phone: users.phone,
+          isProvider: users.isProvider,
+          isAdmin: users.isAdmin,
+          lastActiveAt: users.lastActiveAt,
+          createdAt: users.createdAt
+        }).from(users);
+        return (conditions.length > 0 ? query.where(and(...conditions)) : query).orderBy(desc(users.createdAt)).limit(limit).offset(offset);
+      }
+      async getAdminUserDetail(id) {
+        const [user] = await db.select({
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          phone: users.phone,
+          avatarUrl: users.avatarUrl,
+          isProvider: users.isProvider,
+          isAdmin: users.isAdmin,
+          stripeCustomerId: users.stripeCustomerId,
+          lastActiveAt: users.lastActiveAt,
+          createdAt: users.createdAt,
+          updatedAt: users.updatedAt
+        }).from(users).where(eq(users.id, id));
+        if (!user) return { user: null, homes: [], appointments: [], creditBalance: "0", creditLedger: [], supportTickets: [] };
+        const [userHomes, userAppointments, userTickets] = await Promise.all([
+          db.select().from(homes).where(eq(homes.userId, id)).orderBy(desc(homes.createdAt)),
+          db.select().from(appointments).where(eq(appointments.userId, id)).orderBy(desc(appointments.scheduledDate)).limit(20),
+          db.select().from(supportTickets).where(eq(supportTickets.userId, id)).orderBy(desc(supportTickets.createdAt))
+        ]);
+        const [creditRow] = await db.select({ balance: userCredits.balance }).from(userCredits).where(eq(userCredits.userId, id));
+        const ledgerRows = await db.select().from(creditLedger).where(eq(creditLedger.userId, id)).orderBy(desc(creditLedger.createdAt)).limit(20);
+        return {
+          user,
+          homes: userHomes,
+          appointments: userAppointments,
+          creditBalance: creditRow?.balance ?? "0",
+          creditLedger: ledgerRows,
+          supportTickets: userTickets
+        };
+      }
+      async updateAdminUser(id, patch, adminUserId) {
+        const [before] = await db.select({ isAdmin: users.isAdmin }).from(users).where(eq(users.id, id));
+        if (!before) return { before: null, updated: null };
+        const [updated] = await db.update(users).set({ ...patch, updatedAt: /* @__PURE__ */ new Date() }).where(eq(users.id, id)).returning();
+        await db.insert(adminAuditLogs).values({
+          adminUserId,
+          action: "user.update",
+          targetType: "user",
+          targetId: id,
+          beforeValue: { isAdmin: before.isAdmin },
+          afterValue: patch
+        });
+        return { before, updated };
+      }
+      async getAdminProviderDetail(id) {
+        const [provider] = await db.select().from(providers).where(eq(providers.id, id));
+        if (!provider) {
+          return { provider: null, plan: null, connectAccount: null, jobs: [], invoices: [], reviews: [], crew: [], bookings: [], customServices: [], services: [], totalRevenueCents: 0 };
+        }
+        const [
+          plan,
+          connectAccount,
+          providerJobList,
+          providerInvoiceList,
+          providerReviews,
+          providerCrewList,
+          providerBookings,
+          customServiceList,
+          catalogServiceLinks,
+          revenueRow
+        ] = await Promise.all([
+          db.select().from(providerPlans).where(eq(providerPlans.providerId, id)).then((r) => r[0] ?? null),
+          db.select().from(stripeConnectAccounts).where(eq(stripeConnectAccounts.providerId, id)).then((r) => r[0] ?? null),
+          db.select().from(jobs).where(eq(jobs.providerId, id)).orderBy(desc(jobs.scheduledDate)).limit(20),
+          db.select().from(invoices).where(eq(invoices.providerId, id)).orderBy(desc(invoices.createdAt)).limit(20),
+          db.select().from(reviews).where(eq(reviews.providerId, id)).orderBy(desc(reviews.createdAt)).limit(20),
+          db.select().from(crewMembers).where(eq(crewMembers.providerId, id)).orderBy(desc(crewMembers.createdAt)),
+          db.select().from(appointments).where(eq(appointments.providerId, id)).orderBy(desc(appointments.scheduledDate)).limit(20),
+          db.select().from(providerCustomServices).where(eq(providerCustomServices.providerId, id)),
+          db.select({
+            id: providerServices.id,
+            serviceId: providerServices.serviceId,
+            categoryId: providerServices.categoryId,
+            price: providerServices.price,
+            serviceName: services.name,
+            categoryName: serviceCategories.name
+          }).from(providerServices).leftJoin(services, eq(services.id, providerServices.serviceId)).leftJoin(serviceCategories, eq(serviceCategories.id, providerServices.categoryId)).where(eq(providerServices.providerId, id)),
+          db.select({ totalRevenueCents: sql2`COALESCE(SUM(${payments.amountCents}), 0)` }).from(payments).where(and(eq(payments.providerId, id), eq(payments.status, "succeeded"))).then((r) => r[0])
+        ]);
+        return {
+          provider,
+          plan,
+          connectAccount,
+          jobs: providerJobList,
+          invoices: providerInvoiceList,
+          reviews: providerReviews,
+          crew: providerCrewList,
+          bookings: providerBookings,
+          customServices: customServiceList,
+          services: catalogServiceLinks,
+          totalRevenueCents: Number(revenueRow?.totalRevenueCents ?? 0)
+        };
+      }
+      async updateAdminProvider(id, patch, adminUserId, allowedFields) {
+        const [before] = await db.select().from(providers).where(eq(providers.id, id));
+        if (!before) return { before: null, updated: null };
+        const [updated] = await db.update(providers).set(patch).where(eq(providers.id, id)).returning();
+        const beforeSnapshot = {};
+        for (const k of allowedFields) {
+          if (k in patch) beforeSnapshot[k] = before[k];
+        }
+        await db.insert(adminAuditLogs).values({
+          adminUserId,
+          action: "provider.update",
+          targetType: "provider",
+          targetId: id,
+          beforeValue: beforeSnapshot,
+          afterValue: patch
+        });
+        return { before, updated };
+      }
+      async listSupportTickets(params) {
+        const { status, priority, userType, limit, offset } = params;
+        const conditions = [];
+        if (status) conditions.push(eq(supportTickets.status, status));
+        if (priority) conditions.push(eq(supportTickets.priority, priority));
+        if (userType) conditions.push(eq(supportTickets.userType, userType));
+        const query = db.select().from(supportTickets);
+        return (conditions.length > 0 ? query.where(and(...conditions)) : query).orderBy(desc(supportTickets.createdAt)).limit(limit).offset(offset);
+      }
+      async getSupportTicketWithMessages(id) {
+        const [ticket] = await db.select().from(supportTickets).where(eq(supportTickets.id, id));
+        if (!ticket) return { ticket: null, messages: [] };
+        const messages = await db.select().from(supportTicketMessages).where(eq(supportTicketMessages.ticketId, id)).orderBy(asc(supportTicketMessages.createdAt));
+        return { ticket, messages };
+      }
+      async updateSupportTicket(id, patch, adminUserId) {
+        const [before] = await db.select().from(supportTickets).where(eq(supportTickets.id, id));
+        if (!before) return { before: null, updated: null };
+        const fullPatch = { ...patch };
+        if (fullPatch.status === "resolved" || fullPatch.status === "closed") {
+          if (!before.resolvedAt) fullPatch.resolvedAt = /* @__PURE__ */ new Date();
+        } else if (fullPatch.status && fullPatch.status !== "resolved" && fullPatch.status !== "closed") {
+          fullPatch.resolvedAt = null;
+        }
+        const [updated] = await db.update(supportTickets).set({ ...fullPatch, updatedAt: /* @__PURE__ */ new Date() }).where(eq(supportTickets.id, id)).returning();
+        await db.insert(adminAuditLogs).values({
+          adminUserId,
+          action: "support_ticket.update",
+          targetType: "support_ticket",
+          targetId: id,
+          beforeValue: { status: before.status, priority: before.priority, assignedTo: before.assignedTo },
+          afterValue: patch
+        });
+        return { before, updated };
+      }
+      async addSupportTicketMessage(ticketId, adminUserId, messageBody) {
+        const [ticket] = await db.select().from(supportTickets).where(eq(supportTickets.id, ticketId));
+        if (!ticket) return { message: null, ticket: null };
+        const [message] = await db.insert(supportTicketMessages).values({ ticketId, senderId: adminUserId, senderType: "admin", body: messageBody }).returning();
+        if (ticket.status === "open") {
+          await db.update(supportTickets).set({ status: "in_progress", updatedAt: /* @__PURE__ */ new Date() }).where(eq(supportTickets.id, ticketId));
+        }
+        return { message, ticket };
+      }
+      async resolveBroadcastRecipientIds(audience) {
+        if (audience === "all") {
+          const rows = await db.select({ id: users.id }).from(users);
+          return rows.map((r) => r.id);
+        }
+        if (audience === "homeowners") {
+          const rows = await db.select({ id: users.id }).from(users).where(eq(users.isProvider, false));
+          return rows.map((r) => r.id);
+        }
+        if (audience === "providers") {
+          const rows = await db.select({ userId: providers.userId }).from(providers).where(and(eq(providers.isActive, true), sql2`${providers.userId} IS NOT NULL`));
+          return rows.map((r) => r.userId).filter(Boolean);
+        }
+        return [];
+      }
+      async createBroadcast(data) {
+        const [broadcast] = await db.insert(adminBroadcasts).values({ ...data, status: "sending", sentAt: /* @__PURE__ */ new Date() }).returning();
+        return broadcast;
+      }
+      async updateBroadcastStatus(id, status) {
+        await db.update(adminBroadcasts).set({ status }).where(eq(adminBroadcasts.id, id));
+      }
+      async fetchBroadcastEmailMap(recipientIds) {
+        const map = /* @__PURE__ */ new Map();
+        if (recipientIds.length === 0) return map;
+        const rows = await db.select({ id: users.id, email: users.email, firstName: users.firstName }).from(users).where(inArray(users.id, recipientIds));
+        for (const u of rows) map.set(u.id, { email: u.email, firstName: u.firstName });
+        return map;
+      }
+      async recordBroadcastRecipient(broadcastId, userId, channel, status, deliveredAt) {
+        await db.insert(adminBroadcastRecipients).values({
+          broadcastId,
+          userId,
+          channel,
+          status,
+          ...deliveredAt ? { deliveredAt } : {}
+        });
+      }
+      async listBroadcasts(params) {
+        return db.select().from(adminBroadcasts).orderBy(desc(adminBroadcasts.createdAt)).limit(params.limit).offset(params.offset);
+      }
+      async getAdminTopProviders(params) {
+        const since = new Date(Date.now() - params.days * 24 * 60 * 60 * 1e3);
+        const baseConditions = [
+          eq(providers.isActive, true),
+          sql2`${providers.userId} IS NOT NULL`
+        ];
+        if (params.city) baseConditions.push(ilike(providers.serviceArea, `%${params.city}%`));
+        const providerList = await db.select({
+          id: providers.id,
+          businessName: providers.businessName,
+          email: providers.email,
+          averageRating: providers.averageRating,
+          reviewCount: providers.reviewCount,
+          serviceArea: providers.serviceArea,
+          createdAt: providers.createdAt
+        }).from(providers).where(and(...baseConditions));
+        if (providerList.length === 0) return [];
+        const allIds = providerList.map((p) => p.id);
+        const [planRows, revenueRows, bookingRows] = await Promise.all([
+          db.select({
+            providerId: providerPlans.providerId,
+            isPartner: providerPlans.isPartner,
+            isSubscribed: providerPlans.isSubscribed,
+            subscriptionStatus: providerPlans.subscriptionStatus
+          }).from(providerPlans).where(inArray(providerPlans.providerId, allIds)),
+          db.select({
+            providerId: payments.providerId,
+            totalCents: sql2`COALESCE(SUM(${payments.amountCents}), 0)`
+          }).from(payments).where(
+            and(
+              inArray(payments.providerId, allIds),
+              eq(payments.status, "succeeded"),
+              gte(payments.createdAt, since)
+            )
+          ).groupBy(payments.providerId),
+          db.select({
+            providerId: appointments.providerId,
+            bookingCount: sql2`COUNT(*)`
+          }).from(appointments).where(and(inArray(appointments.providerId, allIds), gte(appointments.createdAt, since))).groupBy(appointments.providerId)
+        ]);
+        const planMap = new Map(planRows.map((r) => [r.providerId, r]));
+        const revenueMap = new Map(revenueRows.map((r) => [r.providerId, r]));
+        const bookingMap = new Map(bookingRows.map((r) => [r.providerId, r]));
+        let enriched = providerList.map((p) => ({
+          ...p,
+          isPartner: planMap.get(p.id)?.isPartner ?? false,
+          isSubscribed: planMap.get(p.id)?.isSubscribed ?? false,
+          subscriptionStatus: planMap.get(p.id)?.subscriptionStatus ?? null,
+          totalRevenueCents: Number(revenueMap.get(p.id)?.totalCents ?? 0),
+          bookingCount: Number(bookingMap.get(p.id)?.bookingCount ?? 0)
+        }));
+        if (params.partnerOnly) enriched = enriched.filter((p) => p.isPartner);
+        if (params.subscribedOnly) enriched = enriched.filter((p) => p.isSubscribed);
+        if (params.category) {
+          const catProviderRows = await db.select({ providerId: providerServices.providerId }).from(providerServices).innerJoin(services, eq(services.id, providerServices.serviceId)).innerJoin(serviceCategories, eq(serviceCategories.id, services.categoryId)).where(ilike(serviceCategories.name, `%${params.category}%`));
+          const catSet = new Set(catProviderRows.map((r) => r.providerId));
+          enriched = enriched.filter((p) => catSet.has(p.id));
+        }
+        enriched.sort((a, b) => b.totalRevenueCents - a.totalRevenueCents);
+        return enriched.slice(0, params.limit);
+      }
+      async listAdminAuditLogs(params) {
+        const { limit, offset } = params;
+        const conditions = [];
+        if (params.adminUserId) conditions.push(eq(adminAuditLogs.adminUserId, params.adminUserId));
+        if (params.action) conditions.push(ilike(adminAuditLogs.action, `%${params.action}%`));
+        if (params.since) conditions.push(gte(adminAuditLogs.createdAt, new Date(params.since)));
+        if (params.until) conditions.push(lt(adminAuditLogs.createdAt, new Date(params.until)));
+        const query = db.select().from(adminAuditLogs);
+        return (conditions.length > 0 ? query.where(and(...conditions)) : query).orderBy(desc(adminAuditLogs.createdAt)).limit(limit).offset(offset);
+      }
+      async getAdminProviders(params) {
+        const { search, subscriptionStatus, isPartner, limit, offset } = params;
+        const conditions = [];
+        if (search) {
+          conditions.push(
+            or(
+              ilike(providers.businessName, `%${search}%`),
+              ilike(providers.email, `%${search}%`)
+            )
+          );
+        }
+        let baseQuery = db.select({
+          id: providers.id,
+          userId: providers.userId,
+          businessName: providers.businessName,
+          email: providers.email,
+          phone: providers.phone,
+          description: providers.description,
+          isActive: providers.isActive,
+          isPublic: providers.isPublic,
+          isVerified: providers.isVerified,
+          averageRating: providers.averageRating,
+          reviewCount: providers.reviewCount,
+          serviceArea: providers.serviceArea,
+          logoUrl: providers.logoUrl,
+          website: providers.website,
+          createdAt: providers.createdAt,
+          updatedAt: providers.updatedAt,
+          stripeAccountId: providers.stripeAccountId,
+          stripeAccountStatus: providers.stripeAccountStatus,
+          subscriptionStatus: providerPlans.subscriptionStatus,
+          isSubscribed: providerPlans.isSubscribed,
+          isPartner: providerPlans.isPartner,
+          partnerSince: providerPlans.partnerSince
+        }).from(providers).leftJoin(providerPlans, eq(providerPlans.providerId, providers.id));
+        const query = conditions.length > 0 ? baseQuery.where(and(...conditions)) : baseQuery;
+        let rows = await query.orderBy(desc(providerPlans.partnerSince), providers.businessName).limit(limit).offset(offset);
+        if (isPartner !== null) {
+          rows = rows.filter((r) => (r.isPartner ?? false) === isPartner);
+        }
+        if (subscriptionStatus) {
+          rows = rows.filter((r) => r.subscriptionStatus === subscriptionStatus);
+        }
+        const providerIds = rows.map((r) => r.id);
+        if (providerIds.length === 0) return rows.map((r) => ({ ...r, bookingCount: 0, totalRevenueCents: 0, isSubscribed: r.isSubscribed ?? false, isPartner: r.isPartner ?? false, partnerSince: r.partnerSince ?? null }));
+        const [bookingCounts, revenueCounts] = await Promise.all([
+          db.select({ providerId: appointments.providerId, bookingCount: sql2`COUNT(*)` }).from(appointments).where(inArray(appointments.providerId, providerIds)).groupBy(appointments.providerId),
+          db.select({ providerId: payments.providerId, totalRevenueCents: sql2`COALESCE(SUM(${payments.amountCents}), 0)` }).from(payments).where(and(inArray(payments.providerId, providerIds), eq(payments.status, "succeeded"))).groupBy(payments.providerId)
+        ]);
+        const bookingMap = new Map(bookingCounts.map((r) => [r.providerId, Number(r.bookingCount)]));
+        const revenueMap = new Map(revenueCounts.map((r) => [r.providerId, Number(r.totalRevenueCents)]));
+        return rows.map((p) => ({
+          ...p,
+          isSubscribed: p.isSubscribed ?? false,
+          isPartner: p.isPartner ?? false,
+          partnerSince: p.partnerSince ?? null,
+          bookingCount: bookingMap.get(p.id) ?? 0,
+          totalRevenueCents: revenueMap.get(p.id) ?? 0
+        }));
+      }
     };
     storage = new DatabaseStorage();
   }
@@ -2543,6 +2919,8 @@ var init_storage = __esm({
 // server/emailService.ts
 var emailService_exports = {};
 __export(emailService_exports, {
+  sendAdminBroadcastEmail: () => sendAdminBroadcastEmail,
+  sendAdminSupportReplyEmail: () => sendAdminSupportReplyEmail,
   sendBookingCancelledEmail: () => sendBookingCancelledEmail,
   sendBookingConfirmationEmail: () => sendBookingConfirmationEmail,
   sendBookingReminderEmail: () => sendBookingReminderEmail,
@@ -3426,6 +3804,28 @@ async function sendProviderClientMessage(data) {
     console.error("Send provider client message error:", error);
     return { success: false, error: error.message || "Failed to send message" };
   }
+}
+async function sendAdminSupportReplyEmail(data) {
+  const body = greeting(data.recipientName) + paragraph(
+    `We have an update on your support ticket regarding: <strong>${escapeHtml(data.ticketSubject)}</strong>`
+  ) + `<div style="background:#f9fafb;border-radius:8px;padding:20px;margin-bottom:24px;border-left:4px solid #38AE5F;">
+      <p style="color:#374151;font-size:14px;line-height:1.6;margin:0;">${escapeHtml(data.replyBody).replace(/\n/g, "<br>")}</p>
+    </div>` + paragraph(
+    "If you have additional questions, please reply to this email or submit another support request through the HomeBase app."
+  ) + `<p style="color:#9ca3af;font-size:12px;margin:0;">Ticket ID: ${escapeHtml(data.ticketId)}</p>`;
+  return sendEmail(
+    data.to,
+    `Re: ${data.ticketSubject} \u2014 HomeBase Support`,
+    buildEmailBase("Support Update", body)
+  );
+}
+async function sendAdminBroadcastEmail(data) {
+  const emailBody = greeting(data.recipientName) + `<h2 style="color:#1a1a1a;font-size:20px;font-weight:600;margin:0 0 16px;">${escapeHtml(data.title)}</h2><div style="color:#374151;font-size:15px;line-height:1.7;margin-bottom:24px;">${escapeHtml(data.body).replace(/\n/g, "<br>")}</div>` + paragraph("This message was sent to you from HomeBase. If you have any questions, please contact our support team from within the app.");
+  return sendEmail(
+    data.to,
+    data.title,
+    buildEmailBase("HomeBase Announcement", emailBody)
+  );
 }
 async function sendCrewInviteEmail(to, crewName, providerName, acceptUrl) {
   const body = greeting(crewName) + paragraph(
@@ -4365,7 +4765,7 @@ function computeSubscriptionStatus(plan, now = /* @__PURE__ */ new Date()) {
   };
 }
 async function getProviderSubscriptionStatus(providerId) {
-  const [plan] = await db.select().from(providerPlans2).where(eq4(providerPlans2.providerId, providerId));
+  const [plan] = await db.select().from(providerPlans).where(eq4(providerPlans.providerId, providerId));
   return computeSubscriptionStatus(plan ?? null);
 }
 async function checkSubscriptionGate(providerId, res) {
@@ -4382,20 +4782,20 @@ async function checkSubscriptionGate(providerId, res) {
 }
 async function maybeStartGracePeriod(providerId) {
   try {
-    const [existing] = await db.select().from(providerPlans2).where(eq4(providerPlans2.providerId, providerId));
+    const [existing] = await db.select().from(providerPlans).where(eq4(providerPlans.providerId, providerId));
     if (existing?.firstPaidBookingAt || existing?.isSubscribed) return;
     const now = /* @__PURE__ */ new Date();
     const graceEnd = new Date(
       now.getTime() + GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1e3
     );
     if (existing) {
-      await db.update(providerPlans2).set({
+      await db.update(providerPlans).set({
         firstPaidBookingAt: now,
         gracePeriodEndsAt: graceEnd,
         updatedAt: now
-      }).where(eq4(providerPlans2.id, existing.id));
+      }).where(eq4(providerPlans.id, existing.id));
     } else {
-      await db.insert(providerPlans2).values({
+      await db.insert(providerPlans).values({
         providerId,
         firstPaidBookingAt: now,
         gracePeriodEndsAt: graceEnd
@@ -4760,7 +5160,7 @@ __export(stripeConnectService_exports, {
   sendStripeInvoiceEmail: () => sendStripeInvoiceEmail
 });
 import Stripe2 from "stripe";
-import { eq as eq6, and as and3, inArray } from "drizzle-orm";
+import { eq as eq6, and as and3, inArray as inArray2 } from "drizzle-orm";
 function getStripe() {
   if (!stripe) {
     const isProd = process.env.NODE_ENV === "production";
@@ -4788,7 +5188,7 @@ function isStripeLiveMode() {
   return !!apiKey && apiKey.startsWith("sk_live_");
 }
 async function getProviderPlan(providerId) {
-  const [plan] = await db.select().from(providerPlans2).where(eq6(providerPlans2.providerId, providerId));
+  const [plan] = await db.select().from(providerPlans).where(eq6(providerPlans.providerId, providerId));
   if (!plan) {
     return {
       id: null,
@@ -4824,7 +5224,7 @@ async function getProviderReadinessSet(providerIds) {
   if (providerIds.length === 0) return /* @__PURE__ */ new Set();
   const rows = await db.select({ providerId: stripeConnectAccounts.providerId }).from(stripeConnectAccounts).where(
     and3(
-      inArray(stripeConnectAccounts.providerId, providerIds),
+      inArray2(stripeConnectAccounts.providerId, providerIds),
       eq6(stripeConnectAccounts.chargesEnabled, true)
     )
   );
@@ -6366,15 +6766,15 @@ function planTierForStatus(status) {
   return status === "active" || status === "trialing" ? "professional" : "free";
 }
 async function upsertProviderPlanSubscription(providerId, patch) {
-  const existing = await db.select().from(providerPlans2).where(eq6(providerPlans2.providerId, providerId));
+  const existing = await db.select().from(providerPlans).where(eq6(providerPlans.providerId, providerId));
   if (existing.length === 0) {
-    await db.insert(providerPlans2).values({
+    await db.insert(providerPlans).values({
       providerId,
       planTier: patch.planTier ?? "free",
       ...patch
     });
   } else {
-    await db.update(providerPlans2).set({ ...patch, updatedAt: /* @__PURE__ */ new Date() }).where(eq6(providerPlans2.providerId, providerId));
+    await db.update(providerPlans).set({ ...patch, updatedAt: /* @__PURE__ */ new Date() }).where(eq6(providerPlans.providerId, providerId));
   }
 }
 async function notifyProviderUser(providerId, title, message, type) {
@@ -6459,7 +6859,7 @@ async function handleSubscriptionInvoicePaymentFailed(stripeInvoice) {
   if (!subscriptionId) return;
   let providerId = stripeInvoice.subscription_details?.metadata?.providerId;
   if (!providerId) {
-    const [plan] = await db.select().from(providerPlans2).where(eq6(providerPlans2.stripeSubscriptionId, subscriptionId));
+    const [plan] = await db.select().from(providerPlans).where(eq6(providerPlans.stripeSubscriptionId, subscriptionId));
     providerId = plan?.providerId;
   }
   if (!providerId) {
@@ -6506,7 +6906,7 @@ __export(recurringJobsService_exports, {
   jobSeriesTable: () => jobSeries,
   materializeOccurrences: () => materializeOccurrences
 });
-import { and as and4, eq as eq7, gte as gte2, inArray as inArray2, ne, sql as sql4 } from "drizzle-orm";
+import { and as and4, eq as eq7, gte as gte2, inArray as inArray3, ne, sql as sql4 } from "drizzle-orm";
 function isSupportedFrequency(value) {
   return typeof value === "string" && SUPPORTED_FREQUENCIES.includes(value);
 }
@@ -6926,7 +7326,7 @@ async function applyToFollowing(fromJobId, patch) {
         scheduledDate: sql4`${jobs.scheduledDate} - (${PARK_DAYS} || ' days')::interval`,
         updatedAt: now
       }).where(
-        inArray2(
+        inArray3(
           jobs.id,
           phase1.map((r) => r.id)
         )
@@ -7003,7 +7403,7 @@ __export(auth_exports, {
   verifyToken: () => verifyToken
 });
 import jwt from "jsonwebtoken";
-import { eq as eq8 } from "drizzle-orm";
+import { and as and5, eq as eq8, isNull, or as or3, sql as sql5 } from "drizzle-orm";
 function generateToken(userId, role, tokenVersion) {
   return jwt.sign({ userId, role, tv: tokenVersion }, JWT_SECRET, { expiresIn: "7d" });
 }
@@ -7065,6 +7465,20 @@ var init_auth = __esm({
         return;
       }
       req.authenticatedUserId = payload.userId;
+      setImmediate(async () => {
+        try {
+          await db.update(users).set({ lastActiveAt: /* @__PURE__ */ new Date() }).where(
+            and5(
+              eq8(users.id, payload.userId),
+              or3(
+                isNull(users.lastActiveAt),
+                sql5`${users.lastActiveAt} < NOW() - INTERVAL '5 minutes'`
+              )
+            )
+          );
+        } catch {
+        }
+      });
       next();
     };
   }
@@ -7304,14 +7718,14 @@ async function resolveProviderId(event) {
   return match?.id ?? null;
 }
 async function upsertPlan(providerId, patch) {
-  const [existing] = await db.select().from(providerPlans2).where(eq9(providerPlans2.providerId, providerId));
+  const [existing] = await db.select().from(providerPlans).where(eq9(providerPlans.providerId, providerId));
   const now = /* @__PURE__ */ new Date();
   const wasSubscribed = !!existing?.isSubscribed;
   const isSubscribed = patch.isSubscribed ?? wasSubscribed;
   if (existing) {
-    await db.update(providerPlans2).set({ ...patch, updatedAt: now }).where(eq9(providerPlans2.id, existing.id));
+    await db.update(providerPlans).set({ ...patch, updatedAt: now }).where(eq9(providerPlans.id, existing.id));
   } else {
-    await db.insert(providerPlans2).values({
+    await db.insert(providerPlans).values({
       providerId,
       planTier: "professional",
       ...patch
@@ -7721,7 +8135,7 @@ var bookingPage_exports = {};
 __export(bookingPage_exports, {
   renderBookingPage: () => renderBookingPage
 });
-import { eq as eq12, and as and6, desc as desc4 } from "drizzle-orm";
+import { eq as eq12, and as and7, desc as desc4 } from "drizzle-orm";
 function escapeHtml4(str) {
   if (!str) return "";
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -7815,13 +8229,13 @@ async function renderBookingPage(slug, db2) {
   }
   let isPartner = false;
   try {
-    const [planRow] = await db2.select({ isPartner: providerPlans2.isPartner }).from(providerPlans2).where(eq12(providerPlans2.providerId, provider.id)).limit(1);
+    const [planRow] = await db2.select({ isPartner: providerPlans.isPartner }).from(providerPlans).where(eq12(providerPlans.providerId, provider.id)).limit(1);
     isPartner = planRow?.isPartner === true;
   } catch (err) {
     console.error("[bookingPage] partner lookup failed:", err);
   }
   const customServices = await db2.select().from(providerCustomServices).where(
-    and6(
+    and7(
       eq12(providerCustomServices.providerId, provider.id),
       eq12(providerCustomServices.isPublished, true)
     )
@@ -7834,7 +8248,7 @@ async function renderBookingPage(slug, db2) {
     price: providerServices.price,
     providerServiceId: providerServices.id
   }).from(providerServices).innerJoin(services, eq12(providerServices.serviceId, services.id)).where(
-    and6(
+    and7(
       eq12(providerServices.providerId, provider.id),
       eq12(services.isPublic, true)
     )
@@ -9202,7 +9616,7 @@ var stripeService = new StripeService();
 init_db();
 init_emailService();
 init_notificationService();
-import { sql as sql5, eq as eq10, and as and5, or as or3, desc as desc3, inArray as inArray3, notInArray, gte as gte3, ilike, isNull } from "drizzle-orm";
+import { sql as sql6, eq as eq10, and as and6, desc as desc3, inArray as inArray4, notInArray, gte as gte3, isNull as isNull2 } from "drizzle-orm";
 
 // server/lib/distance.ts
 function haversineMiles(aLat, aLng, bLat, bLng) {
@@ -10026,7 +10440,7 @@ async function fireInsightNotifications(userId, insights) {
   if (topMilestone) {
     const milestoneType = `revenue_milestone_${topMilestone}`;
     const [existing] = await db.select({ id: notifications.id }).from(notifications).where(
-      and5(
+      and6(
         eq10(notifications.userId, userId),
         eq10(notifications.type, milestoneType),
         gte3(notifications.createdAt, thirtyDaysAgo)
@@ -10045,7 +10459,7 @@ async function fireInsightNotifications(userId, insights) {
   }
   if (insights.clientGrowthPct >= 10) {
     const [existing] = await db.select({ id: notifications.id }).from(notifications).where(
-      and5(
+      and6(
         eq10(notifications.userId, userId),
         eq10(notifications.type, "quarterly_client_growth"),
         gte3(notifications.createdAt, thirtyDaysAgo)
@@ -10064,7 +10478,7 @@ async function fireInsightNotifications(userId, insights) {
   }
   if (parseFloat(insights.rating) >= 4.8 && insights.reviewCount >= 10) {
     const [existing] = await db.select({ id: notifications.id }).from(notifications).where(
-      and5(
+      and6(
         eq10(notifications.userId, userId),
         eq10(notifications.type, "top_rated_achievement"),
         gte3(notifications.createdAt, thirtyDaysAgo)
@@ -10236,7 +10650,7 @@ async function convertIntakeToClientJob(tx, params) {
   const lastName = nameParts.slice(1).join(" ") || "";
   let clientId;
   if (clientEmail) {
-    const result = await tx.execute(sql5`
+    const result = await tx.execute(sql6`
       INSERT INTO clients (id, provider_id, first_name, last_name, email, phone, address, created_at, updated_at)
       VALUES (gen_random_uuid(), ${providerId}, ${firstName}, ${lastName || null}, ${clientEmail}, ${clientPhone || null}, ${address || null}, NOW(), NOW())
       ON CONFLICT (provider_id, email) WHERE email IS NOT NULL
@@ -10249,7 +10663,7 @@ async function convertIntakeToClientJob(tx, params) {
     clientId = result.rows[0].id;
   } else if (clientPhone) {
     const existing = await tx.select({ id: clients.id }).from(clients).where(
-      and5(eq10(clients.providerId, providerId), eq10(clients.phone, clientPhone))
+      and6(eq10(clients.providerId, providerId), eq10(clients.phone, clientPhone))
     ).limit(1);
     if (existing.length > 0) {
       clientId = existing[0].id;
@@ -10379,7 +10793,7 @@ async function handleMarketplaceBooking(params) {
     submission = sub;
     if (clientEmail) {
       const existing = await tx.select({ id: leads.id }).from(leads).where(
-        and5(
+        and6(
           eq10(leads.providerId, link.providerId),
           eq10(leads.email, clientEmail)
         )
@@ -10415,7 +10829,7 @@ async function handleMarketplaceBooking(params) {
       let appt;
       if (homeownerUserId) {
         const [pre] = await tx.select({ id: appointments.id }).from(appointments).where(
-          and5(
+          and6(
             eq10(appointments.userId, homeownerUserId),
             eq10(appointments.providerId, link.providerId),
             eq10(appointments.scheduledDate, apptDate)
@@ -10436,7 +10850,7 @@ async function handleMarketplaceBooking(params) {
           appt = inserted[0];
         } else if (homeownerUserId) {
           const [winner] = await tx.select({ id: appointments.id }).from(appointments).where(
-            and5(
+            and6(
               eq10(appointments.userId, homeownerUserId),
               eq10(appointments.providerId, link.providerId),
               eq10(appointments.scheduledDate, apptDate)
@@ -10596,7 +11010,7 @@ async function autoLogHouseFaxEntry(job) {
       const [inv] = await db.select({ homeownerUserId: invoices.homeownerUserId }).from(invoices).where(eq10(invoices.jobId, job.id));
       if (inv?.homeownerUserId) {
         const [defaultHome] = await db.select({ id: homes.id }).from(homes).where(
-          and5(
+          and6(
             eq10(homes.userId, inv.homeownerUserId),
             eq10(homes.isDefault, true)
           )
@@ -10711,7 +11125,7 @@ async function getCrewMembershipsForUser(userId) {
       providerId: crewMembers.providerId,
       providerName: providers.businessName
     }).from(crewMembers).innerJoin(providers, eq10(providers.id, crewMembers.providerId)).where(
-      and5(
+      and6(
         eq10(crewMembers.invitedUserId, userId),
         eq10(crewMembers.isActive, true)
       )
@@ -10730,9 +11144,9 @@ async function autoLinkCrewByEmail(userId, email) {
   if (!email) return;
   try {
     await db.update(crewMembers).set({ invitedUserId: userId }).where(
-      and5(
-        isNull(crewMembers.invitedUserId),
-        sql5`lower(${crewMembers.email}) = lower(${email})`
+      and6(
+        isNull2(crewMembers.invitedUserId),
+        sql6`lower(${crewMembers.email}) = lower(${email})`
       )
     );
   } catch (e) {
@@ -11028,7 +11442,7 @@ async function registerRoutes(app2) {
       let enrichedProfile = providerProfile;
       if (providerProfile) {
         try {
-          const [planRow] = await db.select({ isPartner: providerPlans2.isPartner }).from(providerPlans2).where(eq10(providerPlans2.providerId, providerProfile.id));
+          const [planRow] = await db.select({ isPartner: providerPlans.isPartner }).from(providerPlans).where(eq10(providerPlans.providerId, providerProfile.id));
           enrichedProfile = {
             ...providerProfile,
             isPartner: planRow?.isPartner ?? false
@@ -11060,7 +11474,7 @@ async function registerRoutes(app2) {
       const providerProfile = await storage.getProviderByUserId(userId);
       let enrichedProfile = null;
       if (providerProfile) {
-        const [planRow] = await db.select({ isPartner: providerPlans2.isPartner }).from(providerPlans2).where(eq10(providerPlans2.providerId, providerProfile.id));
+        const [planRow] = await db.select({ isPartner: providerPlans.isPartner }).from(providerPlans).where(eq10(providerPlans.providerId, providerProfile.id));
         enrichedProfile = {
           ...providerProfile,
           isPartner: planRow?.isPartner ?? false
@@ -11088,7 +11502,7 @@ async function registerRoutes(app2) {
     async (req, res) => {
       try {
         const userId = req.authenticatedUserId;
-        await db.update(users).set({ tokenVersion: sql5`token_version + 1` }).where(eq10(users.id, userId));
+        await db.update(users).set({ tokenVersion: sql6`token_version + 1` }).where(eq10(users.id, userId));
         res.clearCookie("token");
         res.json({ success: true });
       } catch (error) {
@@ -11197,10 +11611,10 @@ async function registerRoutes(app2) {
         // Bump tokenVersion to:
         //  (a) invalidate all outstanding session JWTs (revoke existing logins)
         //  (b) make every other copy of this reset link unusable immediately
-        tokenVersion: sql5`token_version + 1`,
+        tokenVersion: sql6`token_version + 1`,
         updatedAt: /* @__PURE__ */ new Date()
       }).where(
-        and5(
+        and6(
           eq10(users.id, decoded.userId),
           eq10(users.tokenVersion, claimedTv)
         )
@@ -11248,7 +11662,7 @@ async function registerRoutes(app2) {
         const hashed = await bcryptHash(newPassword, BCRYPT_SALT_ROUNDS);
         await db.update(users).set({
           password: hashed,
-          tokenVersion: sql5`token_version + 1`,
+          tokenVersion: sql6`token_version + 1`,
           updatedAt: /* @__PURE__ */ new Date()
         }).where(eq10(users.id, userId));
         const refreshed = await storage.getUser(userId);
@@ -11332,10 +11746,10 @@ async function registerRoutes(app2) {
           if (providerRow.length > 0) {
             const provId = providerRow[0].id;
             await tx.delete(invoiceLineItems).where(
-              sql5`invoice_id IN (SELECT id FROM invoices WHERE provider_id = ${provId})`
+              sql6`invoice_id IN (SELECT id FROM invoices WHERE provider_id = ${provId})`
             );
             await tx.delete(payments).where(
-              sql5`invoice_id IN (SELECT id FROM invoices WHERE provider_id = ${provId})`
+              sql6`invoice_id IN (SELECT id FROM invoices WHERE provider_id = ${provId})`
             );
             await tx.delete(invoices).where(eq10(invoices.providerId, provId));
             await tx.delete(jobs).where(eq10(jobs.providerId, provId));
@@ -11347,7 +11761,7 @@ async function registerRoutes(app2) {
             await tx.delete(messageTemplates).where(eq10(messageTemplates.providerId, provId));
             await tx.delete(providerCustomServices).where(eq10(providerCustomServices.providerId, provId));
             await tx.delete(providerServices).where(eq10(providerServices.providerId, provId));
-            await tx.delete(providerPlans2).where(eq10(providerPlans2.providerId, provId));
+            await tx.delete(providerPlans).where(eq10(providerPlans.providerId, provId));
             await tx.delete(stripeConnectAccounts).where(eq10(stripeConnectAccounts.providerId, provId));
             await tx.delete(payouts).where(eq10(payouts.providerId, provId));
             await tx.delete(reviews).where(eq10(reviews.providerId, provId));
@@ -11362,9 +11776,9 @@ async function registerRoutes(app2) {
           const userHomes = await tx.select({ id: homes.id }).from(homes).where(eq10(homes.userId, userId));
           if (userHomes.length > 0) {
             const homeIds = userHomes.map((h) => h.id);
-            await tx.delete(housefaxEntries).where(sql5`home_id = ANY(${homeIds})`);
-            await tx.delete(maintenanceReminders).where(sql5`home_id = ANY(${homeIds})`);
-            await tx.delete(appointments).where(sql5`home_id = ANY(${homeIds})`);
+            await tx.delete(housefaxEntries).where(sql6`home_id = ANY(${homeIds})`);
+            await tx.delete(maintenanceReminders).where(sql6`home_id = ANY(${homeIds})`);
+            await tx.delete(appointments).where(sql6`home_id = ANY(${homeIds})`);
           }
           await tx.delete(homes).where(eq10(homes.userId, userId));
           if (user.stripeCustomerId) {
@@ -11890,13 +12304,13 @@ async function registerRoutes(app2) {
           return res.status(403).json({ error: "Access denied" });
         }
         const [linkedJob] = await db.select({ id: jobs.id }).from(jobs).where(
-          and5(
+          and6(
             eq10(jobs.homeId, home.id),
             eq10(jobs.providerId, providerRecord.id)
           )
         ).limit(1);
         const [linkedAppt] = linkedJob ? [null] : await db.select({ id: appointments.id }).from(appointments).where(
-          and5(
+          and6(
             eq10(appointments.homeId, home.id),
             eq10(appointments.providerId, providerRecord.id)
           )
@@ -12019,9 +12433,9 @@ async function registerRoutes(app2) {
         const score = await calculateAndPersistHouseFaxScore(homeId);
         const jobIds = entries.map((e) => e.jobId).filter(Boolean);
         const allInvoices = jobIds.length > 0 ? await db.select().from(invoices).where(
-          and5(
-            inArray3(invoices.jobId, jobIds),
-            inArray3(invoices.status, ["paid", "partially_paid"])
+          and6(
+            inArray4(invoices.jobId, jobIds),
+            inArray4(invoices.status, ["paid", "partially_paid"])
           )
         ) : [];
         const invoiceJobIds = new Set(
@@ -12394,7 +12808,7 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
       const userLng = lngRaw !== void 0 ? parseFloat(lngRaw) : NaN;
       const hasUserCoords = Number.isFinite(userLat) && Number.isFinite(userLng);
       const providersList = await storage.getProviders(categoryId);
-      const planRows = providersList.length ? await db.select({ providerId: providerPlans2.providerId, isPartner: providerPlans2.isPartner }).from(providerPlans2).where(inArray3(providerPlans2.providerId, providersList.map((p) => p.id))) : [];
+      const planRows = providersList.length ? await db.select({ providerId: providerPlans.providerId, isPartner: providerPlans.isPartner }).from(providerPlans).where(inArray4(providerPlans.providerId, providersList.map((p) => p.id))) : [];
       const partnerSet = new Set(
         planRows.filter((r) => r.isPartner).map((r) => r.providerId)
       );
@@ -12445,7 +12859,7 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
             return provider.businessHours;
           }
         })() : provider.businessHours;
-        const [planRow] = await db.select({ isPartner: providerPlans2.isPartner }).from(providerPlans2).where(eq10(providerPlans2.providerId, req.params.id));
+        const [planRow] = await db.select({ isPartner: providerPlans.isPartner }).from(providerPlans).where(eq10(providerPlans.providerId, req.params.id));
         const latRaw = req.query.lat;
         const lngRaw = req.query.lng;
         const userLat = latRaw !== void 0 ? parseFloat(latRaw) : NaN;
@@ -12527,7 +12941,7 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
     async (req, res) => {
       try {
         const authUserId = req.authenticatedUserId;
-        await db.delete(savedProviders).where(and5(eq10(savedProviders.userId, authUserId), eq10(savedProviders.providerId, req.params.providerId)));
+        await db.delete(savedProviders).where(and6(eq10(savedProviders.userId, authUserId), eq10(savedProviders.providerId, req.params.providerId)));
         res.json({ ok: true });
       } catch (error) {
         console.error("Unsave provider error:", error);
@@ -12626,7 +13040,7 @@ Reason: ${reason}
         let [linkedJob] = await db.select().from(jobs).where(eq10(jobs.appointmentId, appointment.id)).orderBy(desc3(jobs.createdAt)).limit(1);
         if (!linkedJob && appointment.userId && appointment.scheduledDate) {
           const candidateClients = await db.select({ id: clients.id }).from(clients).where(
-            and5(
+            and6(
               eq10(clients.providerId, appointment.providerId),
               eq10(clients.homeownerUserId, appointment.userId)
             )
@@ -12634,10 +13048,10 @@ Reason: ${reason}
           if (candidateClients.length > 0) {
             const clientIds = candidateClients.map((c) => c.id);
             const [fallbackJob] = await db.select().from(jobs).where(
-              and5(
+              and6(
                 eq10(jobs.providerId, appointment.providerId),
                 eq10(jobs.scheduledDate, appointment.scheduledDate),
-                inArray3(jobs.clientId, clientIds)
+                inArray4(jobs.clientId, clientIds)
               )
             ).orderBy(desc3(jobs.createdAt)).limit(1);
             if (fallbackJob) linkedJob = fallbackJob;
@@ -12650,7 +13064,7 @@ Reason: ${reason}
         }
         if (!linkedInvoice && appointment.userId) {
           const candidateInvoices = await db.select().from(invoices).where(
-            and5(
+            and6(
               eq10(invoices.providerId, appointment.providerId),
               eq10(invoices.homeownerUserId, appointment.userId)
             )
@@ -12677,7 +13091,7 @@ Reason: ${reason}
         }
         if (!linkedInvoice && appointment.userId) {
           const matchingClients = await db.select({ id: clients.id }).from(clients).where(
-            and5(
+            and6(
               eq10(clients.providerId, appointment.providerId),
               eq10(clients.homeownerUserId, appointment.userId)
             )
@@ -12685,10 +13099,10 @@ Reason: ${reason}
           const clientIds = matchingClients.map((c) => c.id);
           if (clientIds.length > 0) {
             const legacyCandidates = await db.select().from(invoices).where(
-              and5(
+              and6(
                 eq10(invoices.providerId, appointment.providerId),
-                inArray3(invoices.clientId, clientIds),
-                isNull(invoices.homeownerUserId)
+                inArray4(invoices.clientId, clientIds),
+                isNull2(invoices.homeownerUserId)
               )
             ).orderBy(desc3(invoices.createdAt)).limit(10);
             const VISIBLE_STATUSES = /* @__PURE__ */ new Set([
@@ -12793,7 +13207,7 @@ Reason: ${reason}
         }
         if (parsed.data.userId && parsed.data.scheduledDate) {
           const [preExisting] = await db.select().from(appointments).where(
-            and5(
+            and6(
               eq10(appointments.userId, parsed.data.userId),
               eq10(appointments.providerId, parsed.data.providerId),
               eq10(
@@ -12897,7 +13311,7 @@ Reason: ${reason}
                 intakeQuestionsJson: providerCustomServices.intakeQuestionsJson,
                 checklistTemplateJson: providerCustomServices.checklistTemplateJson
               }).from(providerCustomServices).where(
-                and5(
+                and6(
                   eq10(providerCustomServices.id, rawCustomSvcId),
                   eq10(
                     providerCustomServices.providerId,
@@ -13011,9 +13425,9 @@ Reason: ${reason}
           const [matchedSvc] = await db.select({
             description: providerCustomServices.description
           }).from(providerCustomServices).where(
-            and5(
+            and6(
               eq10(providerCustomServices.providerId, bookedProvider.id),
-              bodyServiceId ? eq10(providerCustomServices.id, bodyServiceId) : and5(
+              bodyServiceId ? eq10(providerCustomServices.id, bodyServiceId) : and6(
                 eq10(providerCustomServices.name, baseServiceName),
                 eq10(providerCustomServices.isPublished, true)
               )
@@ -13440,7 +13854,7 @@ Reason: ${reason}
           return res.status(403).json({ error: "Access denied" });
         }
         await db.update(notifications).set({ isRead: true }).where(
-          and5(
+          and6(
             eq10(notifications.userId, authUserId),
             eq10(notifications.isRead, false)
           )
@@ -13461,8 +13875,8 @@ Reason: ${reason}
         if (req.params.userId !== authUserId) {
           return res.status(403).json({ error: "Access denied" });
         }
-        const result = await db.select({ count: sql5`count(*)::int` }).from(notifications).where(
-          and5(
+        const result = await db.select({ count: sql6`count(*)::int` }).from(notifications).where(
+          and6(
             eq10(notifications.userId, authUserId),
             eq10(notifications.isRead, false)
           )
@@ -13514,7 +13928,7 @@ Reason: ${reason}
         const { token } = req.body;
         if (token) {
           await db.update(pushTokens).set({ isActive: false, updatedAt: /* @__PURE__ */ new Date() }).where(
-            and5(eq10(pushTokens.userId, userId), eq10(pushTokens.token, token))
+            and6(eq10(pushTokens.userId, userId), eq10(pushTokens.token, token))
           );
         } else {
           await db.update(pushTokens).set({ isActive: false, updatedAt: /* @__PURE__ */ new Date() }).where(eq10(pushTokens.userId, userId));
@@ -14791,7 +15205,7 @@ Respond with JSON only:
           createdAt: appointments.createdAt,
           providerName: providers.businessName
         }).from(appointments).leftJoin(providers, eq10(appointments.providerId, providers.id)).where(eq10(appointments.homeId, homeId)).orderBy(
-          sql5`${appointments.completedAt} DESC NULLS LAST, ${appointments.scheduledDate} DESC`
+          sql6`${appointments.completedAt} DESC NULLS LAST, ${appointments.scheduledDate} DESC`
         );
         res.json({ serviceHistory });
       } catch (error) {
@@ -14940,7 +15354,7 @@ Respond with JSON only:
           if (!await assertProviderOwnership(req, req.params.providerId, res))
             return;
         }
-        const conditions = publishedOnly ? and5(
+        const conditions = publishedOnly ? and6(
           eq10(providerCustomServices.providerId, req.params.providerId),
           eq10(providerCustomServices.isPublished, true)
         ) : eq10(providerCustomServices.providerId, req.params.providerId);
@@ -15065,7 +15479,7 @@ Respond with JSON only:
           const todayStart = /* @__PURE__ */ new Date();
           todayStart.setHours(0, 0, 0, 0);
           const updated = await db.update(jobs).set({ checklist: templateItems }).where(
-            and5(
+            and6(
               eq10(jobs.customServiceId, req.params.id),
               eq10(jobs.providerId, req.params.providerId),
               notInArray(jobs.status, ["completed", "cancelled", "weather_held"]),
@@ -15445,7 +15859,7 @@ Respond with JSON only:
           providerReply: reviews.providerReply,
           providerReplyAt: reviews.providerReplyAt,
           providerReplyUpdatedAt: reviews.providerReplyUpdatedAt,
-          reviewerName: sql5`TRIM(CONCAT(COALESCE(${users.firstName}, ''), ' ', COALESCE(${users.lastName}, '')))`
+          reviewerName: sql6`TRIM(CONCAT(COALESCE(${users.firstName}, ''), ' ', COALESCE(${users.lastName}, '')))`
         }).from(reviews).innerJoin(users, eq10(reviews.userId, users.id)).where(eq10(reviews.providerId, req.params.id)).orderBy(desc3(reviews.createdAt));
         res.json({ reviews: reviewRows });
       } catch (error) {
@@ -15603,7 +16017,7 @@ Respond with JSON only:
             });
           }
           const [row] = await db.select().from(appointments).where(
-            and5(
+            and6(
               eq10(appointments.providerId, client.providerId),
               eq10(appointments.userId, client.homeownerUserId),
               eq10(appointments.status, "completed")
@@ -16032,7 +16446,7 @@ Respond with JSON only:
           return res.status(400).json({ error: "providerId is required" });
         }
         const [crew] = await db.select({ id: crewMembers.id }).from(crewMembers).where(
-          and5(
+          and6(
             eq10(crewMembers.providerId, providerId),
             eq10(crewMembers.invitedUserId, userId),
             eq10(crewMembers.isActive, true)
@@ -16042,7 +16456,7 @@ Respond with JSON only:
           return res.status(403).json({ error: "You are not on this provider's crew" });
         }
         const rows = await db.select().from(jobs).where(
-          and5(
+          and6(
             eq10(jobs.providerId, providerId),
             eq10(jobs.assignedCrewMemberId, crew.id)
           )
@@ -16105,9 +16519,9 @@ Respond with JSON only:
         if (invoices2.length > 0) {
           const invoiceIds = invoices2.map((i) => i.id);
           const collectedRows = await db.select({ amountCents: payments.amountCents }).from(payments).where(
-            and5(
-              inArray3(payments.invoiceId, invoiceIds),
-              sql5`${payments.voidedAt} IS NULL`
+            and6(
+              inArray4(payments.invoiceId, invoiceIds),
+              sql6`${payments.voidedAt} IS NULL`
             )
           );
           collectedTotal = collectedRows.reduce((s, r) => s + (r.amountCents ?? 0), 0) / 100;
@@ -16598,7 +17012,7 @@ Respond with JSON only:
             }).from(appointments).where(eq10(appointments.id, linkedJob.appointmentId)).limit(1);
             if (appt?.userId) {
               const candidates = await db.select().from(invoices).where(
-                and5(
+                and6(
                   eq10(invoices.providerId, appt.providerId),
                   eq10(invoices.homeownerUserId, appt.userId)
                 )
@@ -16625,7 +17039,7 @@ Respond with JSON only:
             }
             if (!invoice && appt?.userId) {
               const matchingClients = await db.select({ id: clients.id }).from(clients).where(
-                and5(
+                and6(
                   eq10(clients.providerId, appt.providerId),
                   eq10(clients.homeownerUserId, appt.userId)
                 )
@@ -16633,10 +17047,10 @@ Respond with JSON only:
               const clientIds = matchingClients.map((c) => c.id);
               if (clientIds.length > 0) {
                 const legacyCandidates = await db.select().from(invoices).where(
-                  and5(
+                  and6(
                     eq10(invoices.providerId, appt.providerId),
-                    inArray3(invoices.clientId, clientIds),
-                    isNull(invoices.homeownerUserId)
+                    inArray4(invoices.clientId, clientIds),
+                    isNull2(invoices.homeownerUserId)
                   )
                 ).orderBy(desc3(invoices.createdAt)).limit(10);
                 const VISIBLE_STATUSES = /* @__PURE__ */ new Set([
@@ -16786,7 +17200,7 @@ Respond with JSON only:
           recurringFrequency: providerCustomServices.recurringFrequency,
           recurringPrice: providerCustomServices.recurringPrice
         }).from(providerCustomServices).where(
-          and5(
+          and6(
             eq10(providerCustomServices.id, parsed.data.customServiceId),
             eq10(providerCustomServices.providerId, parsed.data.providerId)
           )
@@ -16821,7 +17235,7 @@ Respond with JSON only:
           homeId: clients.homeId,
           homeownerUserId: clients.homeownerUserId
         }).from(clients).where(
-          and5(
+          and6(
             eq10(clients.id, parsed.data.clientId),
             eq10(clients.providerId, callerProvider.id)
           )
@@ -17519,11 +17933,11 @@ Respond with JSON only:
           return res.status(400).json({ error: "customServiceId required" });
         }
         const [anchor] = await db.select().from(jobs).where(
-          and5(
+          and6(
             eq10(jobs.providerId, provider.id),
             eq10(jobs.customServiceId, customServiceId),
-            clientId ? eq10(jobs.clientId, clientId) : isNull(jobs.clientId),
-            isNull(jobs.seriesId)
+            clientId ? eq10(jobs.clientId, clientId) : isNull2(jobs.clientId),
+            isNull2(jobs.seriesId)
           )
         ).orderBy(desc3(jobs.scheduledDate)).limit(1);
         if (!anchor) {
@@ -18960,7 +19374,7 @@ Respond with JSON only:
   app2.get("/api/stripe/products", async (req, res) => {
     try {
       const result = await db.execute(
-        sql5`SELECT * FROM stripe.products WHERE active = true`
+        sql6`SELECT * FROM stripe.products WHERE active = true`
       );
       res.json({ products: result.rows });
     } catch (error) {
@@ -18973,7 +19387,7 @@ Respond with JSON only:
     async (req, res) => {
       try {
         const result = await db.execute(
-          sql5`
+          sql6`
           SELECT 
             p.id as product_id,
             p.name as product_name,
@@ -19688,15 +20102,15 @@ Respond with JSON only:
             error: "Platform fee rates are not provider-configurable"
           });
         }
-        const [existing] = await db.select().from(providerPlans2).where(eq10(providerPlans2.providerId, providerId));
+        const [existing] = await db.select().from(providerPlans).where(eq10(providerPlans.providerId, providerId));
         if (existing) {
-          const [updated] = await db.update(providerPlans2).set({
+          const [updated] = await db.update(providerPlans).set({
             planTier: planTier || existing.planTier,
             updatedAt: /* @__PURE__ */ new Date()
-          }).where(eq10(providerPlans2.id, existing.id)).returning();
+          }).where(eq10(providerPlans.id, existing.id)).returning();
           res.json({ plan: updated });
         } else {
-          const [created] = await db.insert(providerPlans2).values({
+          const [created] = await db.insert(providerPlans).values({
             providerId,
             planTier: planTier || "free"
           }).returning();
@@ -19716,16 +20130,16 @@ Respond with JSON only:
       try {
         const { providerId } = req.params;
         const { platformFeePercent, platformFeeFixedCents } = req.body;
-        const [existing] = await db.select().from(providerPlans2).where(eq10(providerPlans2.providerId, providerId));
+        const [existing] = await db.select().from(providerPlans).where(eq10(providerPlans.providerId, providerId));
         if (existing) {
-          const [updated] = await db.update(providerPlans2).set({
+          const [updated] = await db.update(providerPlans).set({
             platformFeePercent: platformFeePercent ?? existing.platformFeePercent,
             platformFeeFixedCents: platformFeeFixedCents ?? existing.platformFeeFixedCents,
             updatedAt: /* @__PURE__ */ new Date()
-          }).where(eq10(providerPlans2.id, existing.id)).returning();
+          }).where(eq10(providerPlans.id, existing.id)).returning();
           res.json({ plan: updated });
         } else {
-          const [created] = await db.insert(providerPlans2).values({
+          const [created] = await db.insert(providerPlans).values({
             providerId,
             platformFeePercent: platformFeePercent || "3.00",
             platformFeeFixedCents: platformFeeFixedCents || 0
@@ -19777,15 +20191,15 @@ Respond with JSON only:
     async (req, res) => {
       try {
         const { providerId } = req.params;
-        const [existing] = await db.select().from(providerPlans2).where(eq10(providerPlans2.providerId, providerId));
+        const [existing] = await db.select().from(providerPlans).where(eq10(providerPlans.providerId, providerId));
         if (existing) {
-          await db.update(providerPlans2).set({
+          await db.update(providerPlans).set({
             isSubscribed: true,
             planTier: "professional",
             updatedAt: /* @__PURE__ */ new Date()
-          }).where(eq10(providerPlans2.id, existing.id));
+          }).where(eq10(providerPlans.id, existing.id));
         } else {
-          await db.insert(providerPlans2).values({
+          await db.insert(providerPlans).values({
             providerId,
             planTier: "professional",
             isSubscribed: true
@@ -19806,25 +20220,13 @@ Respond with JSON only:
     async (req, res) => {
       try {
         const search = req.query.q?.trim() ?? "";
-        const limit = Math.min(
-          Math.max(parseInt(req.query.limit ?? "50", 10) || 50, 1),
-          200
-        );
+        const subscriptionStatus = req.query.subscriptionStatus?.trim() ?? "";
+        const isPartnerRaw = req.query.isPartner;
+        const isPartner = isPartnerRaw === "true" ? true : isPartnerRaw === "false" ? false : null;
+        const limit = Math.min(Math.max(parseInt(req.query.limit ?? "50", 10) || 50, 1), 200);
         const offset = Math.max(parseInt(req.query.offset ?? "0", 10) || 0, 0);
-        const baseQuery = db.select({
-          id: providers.id,
-          businessName: providers.businessName,
-          email: providers.email,
-          isPartner: providerPlans2.isPartner,
-          partnerSince: providerPlans2.partnerSince
-        }).from(providers).leftJoin(providerPlans2, eq10(providerPlans2.providerId, providers.id));
-        const rows = await (search ? baseQuery.where(
-          or3(
-            ilike(providers.businessName, `%${search}%`),
-            ilike(providers.email, `%${search}%`)
-          )
-        ) : baseQuery).orderBy(desc3(providerPlans2.partnerSince), providers.businessName).limit(limit).offset(offset);
-        res.json({ providers: rows, limit, offset });
+        const enriched = await storage.getAdminProviders({ search, subscriptionStatus, isPartner, limit, offset });
+        res.json({ providers: enriched, limit, offset });
       } catch (err) {
         console.error("[admin] list providers error:", err);
         res.status(500).json({ error: err.message || "Failed to list providers" });
@@ -19838,19 +20240,28 @@ Respond with JSON only:
     async (req, res) => {
       try {
         const { providerId } = req.params;
+        const adminUserId = req.authenticatedUserId;
         const [provider] = await db.select({ id: providers.id }).from(providers).where(eq10(providers.id, providerId));
         if (!provider) return res.status(404).json({ error: "Provider not found" });
         const now = /* @__PURE__ */ new Date();
-        const [existing] = await db.select().from(providerPlans2).where(eq10(providerPlans2.providerId, providerId));
+        const [existing] = await db.select().from(providerPlans).where(eq10(providerPlans.providerId, providerId));
         if (existing) {
-          await db.update(providerPlans2).set({ isPartner: true, partnerSince: now, updatedAt: now }).where(eq10(providerPlans2.id, existing.id));
+          await db.update(providerPlans).set({ isPartner: true, partnerSince: now, updatedAt: now }).where(eq10(providerPlans.id, existing.id));
         } else {
-          await db.insert(providerPlans2).values({
+          await db.insert(providerPlans).values({
             providerId,
             isPartner: true,
             partnerSince: now
           });
         }
+        await db.insert(adminAuditLogs).values({
+          adminUserId,
+          action: "partner.grant",
+          targetType: "provider",
+          targetId: providerId,
+          beforeValue: { isPartner: false },
+          afterValue: { isPartner: true, partnerSince: now.toISOString() }
+        });
         const status = await getProviderSubscriptionStatus(providerId);
         res.json({ success: true, providerId, isPartner: true, partnerSince: now.toISOString(), subscriptionStatus: status });
       } catch (err) {
@@ -19866,10 +20277,19 @@ Respond with JSON only:
     async (req, res) => {
       try {
         const { providerId } = req.params;
-        const [existing] = await db.select().from(providerPlans2).where(eq10(providerPlans2.providerId, providerId));
+        const adminUserId = req.authenticatedUserId;
+        const [existing] = await db.select().from(providerPlans).where(eq10(providerPlans.providerId, providerId));
         if (existing) {
-          await db.update(providerPlans2).set({ isPartner: false, partnerSince: null, updatedAt: /* @__PURE__ */ new Date() }).where(eq10(providerPlans2.id, existing.id));
+          await db.update(providerPlans).set({ isPartner: false, partnerSince: null, updatedAt: /* @__PURE__ */ new Date() }).where(eq10(providerPlans.id, existing.id));
         }
+        await db.insert(adminAuditLogs).values({
+          adminUserId,
+          action: "partner.revoke",
+          targetType: "provider",
+          targetId: providerId,
+          beforeValue: { isPartner: true },
+          afterValue: { isPartner: false }
+        });
         const status = await getProviderSubscriptionStatus(providerId);
         res.json({ success: true, providerId, isPartner: false, subscriptionStatus: status });
       } catch (err) {
@@ -20887,7 +21307,7 @@ Respond with JSON only:
           return res.status(404).json({ error: "Booking page not found" });
         }
         const customServices = await db.select().from(providerCustomServices).where(
-          and5(
+          and6(
             eq10(providerCustomServices.providerId, provider.id),
             eq10(providerCustomServices.isPublished, true)
           )
@@ -20901,7 +21321,7 @@ Respond with JSON only:
           price: providerServices.price,
           providerServiceId: providerServices.id
         }).from(providerServices).innerJoin(services, eq10(providerServices.serviceId, services.id)).where(
-          and5(
+          and6(
             eq10(providerServices.providerId, provider.id),
             eq10(services.isPublic, true)
           )
@@ -21101,7 +21521,7 @@ Respond with JSON only:
         }
         let alreadyAccepted = false;
         const result = await db.transaction(async (tx) => {
-          const locked = await tx.execute(sql5`
+          const locked = await tx.execute(sql6`
           SELECT status FROM intake_submissions WHERE id = ${id} FOR UPDATE
         `);
           const lockedStatus = locked.rows[0]?.status;
@@ -21128,7 +21548,7 @@ Respond with JSON only:
           if (submission.clientEmail) {
             const now = /* @__PURE__ */ new Date();
             await tx.update(leads).set({ status: "won", updatedAt: now }).where(
-              and5(
+              and6(
                 eq10(leads.providerId, submission.providerId),
                 eq10(leads.email, submission.clientEmail)
               )
@@ -21302,7 +21722,7 @@ Respond with JSON only:
           let clientId;
           if (lead.email) {
             const [found] = await tx.select({ id: clients.id }).from(clients).where(
-              and5(
+              and6(
                 eq10(clients.providerId, lead.providerId),
                 eq10(clients.email, lead.email)
               )
@@ -21405,7 +21825,7 @@ Respond with JSON only:
           return res.status(400).json({ error: "clientId and body are required" });
         }
         const [client] = await db.select().from(clients).where(
-          and5(eq10(clients.id, clientId), eq10(clients.providerId, providerId))
+          and6(eq10(clients.id, clientId), eq10(clients.providerId, providerId))
         );
         if (!client) {
           return res.status(403).json({ error: "Client does not belong to this provider" });
@@ -21506,7 +21926,7 @@ Respond with JSON only:
         for (const clientId of clientIds) {
           try {
             const [client] = await db.select().from(clients).where(
-              and5(
+              and6(
                 eq10(clients.id, clientId),
                 eq10(clients.providerId, providerId)
               )
@@ -21594,7 +22014,7 @@ Respond with JSON only:
         const { providerId, clientId } = req.params;
         if (!await assertProviderOwnership(req, providerId, res)) return;
         const messages = await db.select().from(providerMessages).where(
-          and5(
+          and6(
             eq10(providerMessages.providerId, providerId),
             eq10(providerMessages.clientId, clientId)
           )
@@ -21660,7 +22080,7 @@ Respond with JSON only:
         if (subject !== void 0) updates.subject = subject;
         if (body !== void 0) updates.body = body;
         const [template] = await db.update(messageTemplates).set(updates).where(
-          and5(
+          and6(
             eq10(messageTemplates.id, templateId),
             eq10(messageTemplates.providerId, providerId)
           )
@@ -21682,7 +22102,7 @@ Respond with JSON only:
         const { providerId, templateId } = req.params;
         if (!await assertProviderOwnership(req, providerId, res)) return;
         const [deleted] = await db.delete(messageTemplates).where(
-          and5(
+          and6(
             eq10(messageTemplates.id, templateId),
             eq10(messageTemplates.providerId, providerId)
           )
@@ -21703,7 +22123,7 @@ Respond with JSON only:
       try {
         const { providerId } = req.params;
         if (!await assertProviderOwnership(req, providerId, res)) return;
-        const lastMessages = await db.execute(sql5`
+        const lastMessages = await db.execute(sql6`
         SELECT DISTINCT ON (client_id) 
           client_id as "clientId",
           body,
@@ -21743,7 +22163,7 @@ Respond with JSON only:
           });
         }
         const [client] = await db.select().from(clients).where(
-          and5(eq10(clients.id, clientId), eq10(clients.providerId, providerId))
+          and6(eq10(clients.id, clientId), eq10(clients.providerId, providerId))
         );
         if (!client) {
           return res.status(404).json({ error: "Client not found" });
@@ -21769,7 +22189,7 @@ Respond with JSON only:
           if (client.email) {
             const [verifiedUser] = await db.select({ id: users.id }).from(users).innerJoin(
               appointments,
-              and5(
+              and6(
                 eq10(appointments.userId, users.id),
                 eq10(appointments.providerId, providerId)
               )
@@ -21848,7 +22268,7 @@ Respond with JSON only:
           if (validatedChannels.includes("push") && client.email) {
             const [verifiedUser] = await db.select({ id: users.id }).from(users).innerJoin(
               appointments,
-              and5(
+              and6(
                 eq10(appointments.userId, users.id),
                 eq10(appointments.providerId, providerId)
               )
@@ -22115,6 +22535,405 @@ Respond with JSON only:
       }
     }
   );
+  app2.get(
+    "/api/admin/stats",
+    requireAuth,
+    requireAdmin,
+    async (_req, res) => {
+      try {
+        const stats = await storage.getAdminStats();
+        res.json(stats);
+      } catch (err) {
+        console.error("[admin] stats error:", err);
+        res.status(500).json({ error: err.message || "Failed to fetch stats" });
+      }
+    }
+  );
+  app2.get(
+    "/api/admin/users",
+    requireAuth,
+    requireAdmin,
+    async (req, res) => {
+      try {
+        const search = req.query.q?.trim() ?? "";
+        const role = req.query.role?.trim() ?? "";
+        const limit = Math.min(Math.max(parseInt(req.query.limit ?? "50", 10) || 50, 1), 200);
+        const offset = Math.max(parseInt(req.query.offset ?? "0", 10) || 0, 0);
+        const VALID_ROLES = ["admin", "provider", "homeowner", ""];
+        if (!VALID_ROLES.includes(role)) {
+          return res.status(400).json({ error: "role must be one of: admin, provider, homeowner" });
+        }
+        const rows = await storage.getAdminUsers({ search, role, limit, offset });
+        res.json({ users: rows, limit, offset });
+      } catch (err) {
+        console.error("[admin] list users error:", err);
+        res.status(500).json({ error: err.message || "Failed to list users" });
+      }
+    }
+  );
+  app2.get(
+    "/api/admin/users/:id",
+    requireAuth,
+    requireAdmin,
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const detail = await storage.getAdminUserDetail(id);
+        if (!detail.user) return res.status(404).json({ error: "User not found" });
+        res.json(detail);
+      } catch (err) {
+        console.error("[admin] get user error:", err);
+        res.status(500).json({ error: err.message || "Failed to fetch user" });
+      }
+    }
+  );
+  app2.patch(
+    "/api/admin/users/:id",
+    requireAuth,
+    requireAdmin,
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const adminUserId = req.authenticatedUserId;
+        if (req.body.isAdmin === false && id === adminUserId) {
+          return res.status(400).json({ error: "You cannot remove your own admin access" });
+        }
+        if (req.body.isAdmin !== void 0 && typeof req.body.isAdmin !== "boolean") {
+          return res.status(400).json({ error: "isAdmin must be a boolean" });
+        }
+        const allowed = ["isAdmin"];
+        const patch = {};
+        for (const key of allowed) {
+          if (req.body[key] !== void 0) patch[key] = req.body[key];
+        }
+        if (Object.keys(patch).length === 0) {
+          return res.status(400).json({ error: "No valid fields to update" });
+        }
+        const { before, updated } = await storage.updateAdminUser(id, patch, adminUserId);
+        if (!before) return res.status(404).json({ error: "User not found" });
+        res.json({ user: updated });
+      } catch (err) {
+        console.error("[admin] patch user error:", err);
+        res.status(500).json({ error: err.message || "Failed to update user" });
+      }
+    }
+  );
+  app2.get(
+    "/api/admin/providers/:id",
+    requireAuth,
+    requireAdmin,
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const detail = await storage.getAdminProviderDetail(id);
+        if (!detail.provider) return res.status(404).json({ error: "Provider not found" });
+        res.json({ ...detail, provider: normalizeProviderForResponse(detail.provider) });
+      } catch (err) {
+        console.error("[admin] get provider error:", err);
+        res.status(500).json({ error: err.message || "Failed to fetch provider" });
+      }
+    }
+  );
+  app2.patch(
+    "/api/admin/providers/:id",
+    requireAuth,
+    requireAdmin,
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const adminUserId = req.authenticatedUserId;
+        const ALLOWED_FIELDS = ["isActive", "isPublic", "businessName", "description", "phone", "email", "isVerified"];
+        const BOOL_FIELDS = /* @__PURE__ */ new Set(["isActive", "isPublic", "isVerified"]);
+        const STRING_FIELDS = /* @__PURE__ */ new Set(["businessName", "description", "phone", "email"]);
+        const patch = {};
+        for (const key of ALLOWED_FIELDS) {
+          if (req.body[key] !== void 0) patch[key] = req.body[key];
+        }
+        if (Object.keys(patch).length === 0) {
+          return res.status(400).json({ error: "No valid fields to update" });
+        }
+        for (const [k, v] of Object.entries(patch)) {
+          if (BOOL_FIELDS.has(k) && typeof v !== "boolean") {
+            return res.status(400).json({ error: `${k} must be a boolean` });
+          }
+          if (STRING_FIELDS.has(k) && typeof v !== "string") {
+            return res.status(400).json({ error: `${k} must be a string` });
+          }
+        }
+        const { before, updated } = await storage.updateAdminProvider(id, patch, adminUserId, ALLOWED_FIELDS);
+        if (!before) return res.status(404).json({ error: "Provider not found" });
+        res.json({ provider: normalizeProviderForResponse(updated) });
+      } catch (err) {
+        console.error("[admin] patch provider error:", err);
+        res.status(500).json({ error: err.message || "Failed to update provider" });
+      }
+    }
+  );
+  app2.get(
+    "/api/admin/support-tickets",
+    requireAuth,
+    requireAdmin,
+    async (req, res) => {
+      try {
+        const status = req.query.status?.trim() ?? "";
+        const priority = req.query.priority?.trim() ?? "";
+        const userType = req.query.userType?.trim() ?? "";
+        const limit = Math.min(Math.max(parseInt(req.query.limit ?? "50", 10) || 50, 1), 200);
+        const offset = Math.max(parseInt(req.query.offset ?? "0", 10) || 0, 0);
+        const TICKET_STATUSES = ["open", "in_progress", "resolved", "closed"];
+        const TICKET_PRIORITIES = ["low", "medium", "high", "urgent"];
+        const TICKET_USER_TYPES = ["homeowner", "provider"];
+        if (status && !TICKET_STATUSES.includes(status)) {
+          return res.status(400).json({ error: `status must be one of: ${TICKET_STATUSES.join(", ")}` });
+        }
+        if (priority && !TICKET_PRIORITIES.includes(priority)) {
+          return res.status(400).json({ error: `priority must be one of: ${TICKET_PRIORITIES.join(", ")}` });
+        }
+        if (userType && !TICKET_USER_TYPES.includes(userType)) {
+          return res.status(400).json({ error: `userType must be one of: ${TICKET_USER_TYPES.join(", ")}` });
+        }
+        const rows = await storage.listSupportTickets({ status, priority, userType, limit, offset });
+        res.json({ tickets: rows, limit, offset });
+      } catch (err) {
+        console.error("[admin] list support tickets error:", err);
+        res.status(500).json({ error: err.message || "Failed to list tickets" });
+      }
+    }
+  );
+  app2.get(
+    "/api/admin/support-tickets/:id",
+    requireAuth,
+    requireAdmin,
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { ticket, messages } = await storage.getSupportTicketWithMessages(id);
+        if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+        res.json({ ticket, messages });
+      } catch (err) {
+        console.error("[admin] get support ticket error:", err);
+        res.status(500).json({ error: err.message || "Failed to fetch ticket" });
+      }
+    }
+  );
+  app2.patch(
+    "/api/admin/support-tickets/:id",
+    requireAuth,
+    requireAdmin,
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const adminUserId = req.authenticatedUserId;
+        const VALID_STATUSES = ["open", "in_progress", "resolved", "closed"];
+        const VALID_PRIORITIES = ["low", "medium", "high", "urgent"];
+        const ALLOWED = ["status", "priority", "assignedTo"];
+        const patch = {};
+        for (const key of ALLOWED) {
+          if (req.body[key] !== void 0) patch[key] = req.body[key];
+        }
+        if (Object.keys(patch).length === 0) {
+          return res.status(400).json({ error: "No valid fields to update" });
+        }
+        if (patch.status !== void 0 && !VALID_STATUSES.includes(patch.status)) {
+          return res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(", ")}` });
+        }
+        if (patch.priority !== void 0 && !VALID_PRIORITIES.includes(patch.priority)) {
+          return res.status(400).json({ error: `priority must be one of: ${VALID_PRIORITIES.join(", ")}` });
+        }
+        if (patch.assignedTo !== void 0 && patch.assignedTo !== null && typeof patch.assignedTo !== "string") {
+          return res.status(400).json({ error: "assignedTo must be a string or null" });
+        }
+        const { before, updated } = await storage.updateSupportTicket(id, patch, adminUserId);
+        if (!before) return res.status(404).json({ error: "Ticket not found" });
+        res.json({ ticket: updated });
+      } catch (err) {
+        console.error("[admin] patch support ticket error:", err);
+        res.status(500).json({ error: err.message || "Failed to update ticket" });
+      }
+    }
+  );
+  app2.post(
+    "/api/admin/support-tickets/:id/messages",
+    requireAuth,
+    requireAdmin,
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const adminUserId = req.authenticatedUserId;
+        const { body: messageBody } = req.body;
+        if (!messageBody?.trim()) {
+          return res.status(400).json({ error: "Message body is required" });
+        }
+        const { message, ticket } = await storage.addSupportTicketMessage(id, adminUserId, messageBody.trim());
+        if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+        setImmediate(async () => {
+          try {
+            await sendAdminSupportReplyEmail({
+              to: ticket.email,
+              recipientName: ticket.name,
+              ticketSubject: ticket.subject,
+              ticketId: id,
+              replyBody: messageBody.trim()
+            });
+          } catch (emailErr) {
+            console.error("[admin] support reply email error:", emailErr);
+          }
+        });
+        res.status(201).json({ message });
+      } catch (err) {
+        console.error("[admin] post support ticket message error:", err);
+        res.status(500).json({ error: err.message || "Failed to send reply" });
+      }
+    }
+  );
+  app2.post(
+    "/api/admin/broadcasts",
+    requireAuth,
+    requireAdmin,
+    async (req, res) => {
+      try {
+        const { title, body: broadcastBody, audience, channel } = req.body;
+        const adminUserId = req.authenticatedUserId;
+        const VALID_AUDIENCES = ["all", "homeowners", "providers"];
+        const VALID_CHANNELS = ["push", "in_app", "email"];
+        if (!title?.trim() || !broadcastBody?.trim()) {
+          return res.status(400).json({ error: "title and body are required" });
+        }
+        if (!VALID_AUDIENCES.includes(audience)) {
+          return res.status(400).json({ error: `audience must be one of: ${VALID_AUDIENCES.join(", ")}` });
+        }
+        if (!VALID_CHANNELS.includes(channel)) {
+          return res.status(400).json({ error: `channel must be one of: ${VALID_CHANNELS.join(", ")}` });
+        }
+        const recipientIds = await storage.resolveBroadcastRecipientIds(audience);
+        const broadcast = await storage.createBroadcast({
+          sentByUserId: adminUserId,
+          title: title.trim(),
+          body: broadcastBody.trim(),
+          audience,
+          channel,
+          recipientCount: recipientIds.length
+        });
+        res.status(202).json({ broadcast, recipientCount: recipientIds.length });
+        const capturedTitle = title.trim();
+        const capturedBody = broadcastBody.trim();
+        const capturedChannel = channel;
+        const capturedRecipientIds = recipientIds.slice();
+        setImmediate(async () => {
+          try {
+            if (capturedRecipientIds.length === 0) {
+              await storage.updateBroadcastStatus(broadcast.id, "sent");
+              return;
+            }
+            const userEmailMap = capturedChannel === "email" ? await storage.fetchBroadcastEmailMap(capturedRecipientIds) : /* @__PURE__ */ new Map();
+            const batchSize = 50;
+            for (let i = 0; i < capturedRecipientIds.length; i += batchSize) {
+              const batch = capturedRecipientIds.slice(i, i + batchSize);
+              for (const userId of batch) {
+                try {
+                  if (capturedChannel === "push" || capturedChannel === "in_app") {
+                    await dispatchNotification(
+                      userId,
+                      capturedTitle,
+                      capturedBody,
+                      "admin.broadcast",
+                      { broadcastId: broadcast.id },
+                      "reminders"
+                    );
+                  } else if (capturedChannel === "email") {
+                    const userInfo = userEmailMap.get(userId);
+                    if (!userInfo?.email) throw new Error("No email for user");
+                    await sendAdminBroadcastEmail({
+                      to: userInfo.email,
+                      recipientName: userInfo.firstName ?? "there",
+                      title: capturedTitle,
+                      body: capturedBody
+                    });
+                  }
+                  await storage.recordBroadcastRecipient(broadcast.id, userId, capturedChannel, "delivered", /* @__PURE__ */ new Date());
+                } catch {
+                  await storage.recordBroadcastRecipient(broadcast.id, userId, capturedChannel, "failed");
+                }
+              }
+            }
+            await storage.updateBroadcastStatus(broadcast.id, "sent");
+          } catch (fanoutErr) {
+            console.error("[admin] broadcast fan-out error:", fanoutErr);
+            await storage.updateBroadcastStatus(broadcast.id, "failed");
+          }
+        });
+      } catch (err) {
+        console.error("[admin] broadcast error:", err);
+        res.status(500).json({ error: err.message || "Failed to send broadcast" });
+      }
+    }
+  );
+  app2.get(
+    "/api/admin/broadcasts",
+    requireAuth,
+    requireAdmin,
+    async (req, res) => {
+      try {
+        const limit = Math.min(Math.max(parseInt(req.query.limit ?? "50", 10) || 50, 1), 200);
+        const offset = Math.max(parseInt(req.query.offset ?? "0", 10) || 0, 0);
+        const rows = await storage.listBroadcasts({ limit, offset });
+        res.json({ broadcasts: rows, limit, offset });
+      } catch (err) {
+        console.error("[admin] list broadcasts error:", err);
+        res.status(500).json({ error: err.message || "Failed to list broadcasts" });
+      }
+    }
+  );
+  app2.get(
+    "/api/admin/analytics/top-providers",
+    requireAuth,
+    requireAdmin,
+    async (req, res) => {
+      try {
+        const VALID_PERIODS = ["7d", "30d", "90d", "365d"];
+        const periodRaw = req.query.period?.trim() ?? "30d";
+        const period = VALID_PERIODS.includes(periodRaw) ? periodRaw : "30d";
+        const category = req.query.category?.trim() ?? "";
+        const city = req.query.city?.trim() ?? "";
+        const partnerOnly = req.query.partner === "true";
+        const subscribedOnly = req.query.subscribed === "true";
+        const limitN = Math.min(Math.max(parseInt(req.query.limit ?? "20", 10) || 20, 1), 100);
+        const periodDays = { "7d": 7, "30d": 30, "90d": 90, "365d": 365 };
+        const days = periodDays[period] ?? 30;
+        const result = await storage.getAdminTopProviders({ days, category, city, partnerOnly, subscribedOnly, limit: limitN });
+        res.json({ providers: result, period, days });
+      } catch (err) {
+        console.error("[admin] top-providers analytics error:", err);
+        res.status(500).json({ error: err.message || "Failed to fetch analytics" });
+      }
+    }
+  );
+  app2.get(
+    "/api/admin/audit-logs",
+    requireAuth,
+    requireAdmin,
+    async (req, res) => {
+      try {
+        const adminUserId = req.query.adminUserId?.trim() ?? "";
+        const action = req.query.action?.trim() ?? "";
+        const since = req.query.since?.trim() ?? "";
+        const until = req.query.until?.trim() ?? "";
+        const limit = Math.min(Math.max(parseInt(req.query.limit ?? "50", 10) || 50, 1), 200);
+        const offset = Math.max(parseInt(req.query.offset ?? "0", 10) || 0, 0);
+        if (since && isNaN(new Date(since).getTime())) {
+          return res.status(400).json({ error: "since must be a valid ISO 8601 date string" });
+        }
+        if (until && isNaN(new Date(until).getTime())) {
+          return res.status(400).json({ error: "until must be a valid ISO 8601 date string" });
+        }
+        const rows = await storage.listAdminAuditLogs({ adminUserId, action, since, until, limit, offset });
+        res.json({ logs: rows, limit, offset });
+      } catch (err) {
+        console.error("[admin] audit logs error:", err);
+        res.status(500).json({ error: err.message || "Failed to fetch audit logs" });
+      }
+    }
+  );
   const httpServer = createServer(app2);
   return httpServer;
 }
@@ -22131,9 +22950,9 @@ var IS_DEV = process.env.NODE_ENV !== "production";
 async function runBootMigrations() {
   const client = await pool.connect();
   const errors = [];
-  async function runSql(label, sql6) {
+  async function runSql(label, sql7) {
     try {
-      await client.query(sql6);
+      await client.query(sql7);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       errors.push(`[${label}] ${msg}`);
@@ -22161,8 +22980,8 @@ async function runBootMigrations() {
       ["invoices.paid_at", `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP`],
       ["invoices.updated_at", `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW() NOT NULL`]
     ];
-    for (const [label, sql6] of invoiceAlters) {
-      await runSql(label, sql6);
+    for (const [label, sql7] of invoiceAlters) {
+      await runSql(label, sql7);
     }
     await runSql("clients.stripe_connect_customer_id", `ALTER TABLE clients ADD COLUMN IF NOT EXISTS stripe_connect_customer_id TEXT`);
     await runSql("payments.stripe_charge_id", `ALTER TABLE payments ADD COLUMN IF NOT EXISTS stripe_charge_id TEXT`);
@@ -22217,8 +23036,8 @@ async function runBootMigrations() {
       ["provider_plans.is_partner", `ALTER TABLE provider_plans ADD COLUMN IF NOT EXISTS is_partner BOOLEAN NOT NULL DEFAULT FALSE`],
       ["provider_plans.partner_since", `ALTER TABLE provider_plans ADD COLUMN IF NOT EXISTS partner_since TIMESTAMP`]
     ];
-    for (const [label, sql6] of providerPlanAlters) {
-      await runSql(label, sql6);
+    for (const [label, sql7] of providerPlanAlters) {
+      await runSql(label, sql7);
     }
     await runSql("services.is_public", `ALTER TABLE services ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT TRUE`);
     const enumDefs = [
@@ -22228,8 +23047,8 @@ async function runBootMigrations() {
       ["enum.message_channel", `DO $$ BEGIN CREATE TYPE message_channel AS ENUM ('email','sms'); EXCEPTION WHEN duplicate_object THEN null; END $$`],
       ["enum.message_status", `DO $$ BEGIN CREATE TYPE message_status AS ENUM ('sent','failed','pending_sms'); EXCEPTION WHEN duplicate_object THEN null; END $$`]
     ];
-    for (const [label, sql6] of enumDefs) {
-      await runSql(label, sql6);
+    for (const [label, sql7] of enumDefs) {
+      await runSql(label, sql7);
     }
     await runSql("table.push_tokens", `
       CREATE TABLE IF NOT EXISTS push_tokens (
@@ -22381,8 +23200,8 @@ async function runBootMigrations() {
       ["users.default_payment_method_id", `ALTER TABLE users ADD COLUMN IF NOT EXISTS default_payment_method_id TEXT`],
       ["users.token_version", `ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0`]
     ];
-    for (const [label, sql6] of userAlters) {
-      await runSql(label, sql6);
+    for (const [label, sql7] of userAlters) {
+      await runSql(label, sql7);
     }
     await runSql("clients.unique_provider_email", `
       DO $$ BEGIN
@@ -22431,16 +23250,16 @@ async function runBootMigrations() {
       ["provider_custom_services.ai_pricing_insight", `ALTER TABLE provider_custom_services ADD COLUMN IF NOT EXISTS ai_pricing_insight TEXT`],
       ["provider_custom_services.checklist_template_json", `ALTER TABLE provider_custom_services ADD COLUMN IF NOT EXISTS checklist_template_json JSONB`]
     ];
-    for (const [label, sql6] of customServiceAlters) {
-      await runSql(label, sql6);
+    for (const [label, sql7] of customServiceAlters) {
+      await runSql(label, sql7);
     }
     const reviewAlters = [
       ["reviews.provider_reply", `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS provider_reply TEXT`],
       ["reviews.provider_reply_at", `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS provider_reply_at TIMESTAMP`],
       ["reviews.provider_reply_updated_at", `ALTER TABLE reviews ADD COLUMN IF NOT EXISTS provider_reply_updated_at TIMESTAMP`]
     ];
-    for (const [label, sql6] of reviewAlters) {
-      await runSql(label, sql6);
+    for (const [label, sql7] of reviewAlters) {
+      await runSql(label, sql7);
     }
     await runSql("table.housefax_entries", `
       CREATE TABLE IF NOT EXISTS housefax_entries (
@@ -22479,8 +23298,8 @@ async function runBootMigrations() {
       ["homes.housefax_score", `ALTER TABLE homes ADD COLUMN IF NOT EXISTS housefax_score INTEGER`],
       ["homes.housefax_enriched_at", `ALTER TABLE homes ADD COLUMN IF NOT EXISTS housefax_enriched_at TIMESTAMP`]
     ];
-    for (const [label, sql6] of homeAlters) {
-      await runSql(label, sql6);
+    for (const [label, sql7] of homeAlters) {
+      await runSql(label, sql7);
     }
     try {
       const backfill = await client.query(`
@@ -22700,8 +23519,8 @@ async function runBootMigrations() {
       ["appointments.cancellation_fee_checkout_session_id", `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS cancellation_fee_checkout_session_id TEXT`],
       ["appointments.reschedule_count", `ALTER TABLE appointments ADD COLUMN IF NOT EXISTS reschedule_count INTEGER NOT NULL DEFAULT 0`]
     ];
-    for (const [label, sql6] of apptPolicyAlters) {
-      await runSql(label, sql6);
+    for (const [label, sql7] of apptPolicyAlters) {
+      await runSql(label, sql7);
     }
     await runSql("appointments.user_provider_slot_unique", `
       CREATE UNIQUE INDEX IF NOT EXISTS appointments_user_provider_slot_unique
@@ -22997,8 +23816,8 @@ async function runBootMigrations() {
       ["support_tickets.updated_at", `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT now()`],
       ["support_tickets.resolved_at", `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP`]
     ];
-    for (const [label, sql6] of supportTicketAlters) {
-      await runSql(label, sql6);
+    for (const [label, sql7] of supportTicketAlters) {
+      await runSql(label, sql7);
     }
     await runSql("users.last_active_at", `ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP`);
     await runSql("table.support_ticket_messages", `
@@ -23069,8 +23888,8 @@ async function runBootMigrations() {
         `CREATE INDEX IF NOT EXISTS idx_users_last_active ON users(last_active_at DESC)`
       ]
     ];
-    for (const [label, sql6] of adminIndexes) {
-      await runSql(label, sql6);
+    for (const [label, sql7] of adminIndexes) {
+      await runSql(label, sql7);
     }
     verifications.push(
       ["provider_route_orders", `SELECT provider_id FROM provider_route_orders LIMIT 0`],
@@ -23092,9 +23911,9 @@ async function runBootMigrations() {
       ["admin_audit_logs table", `SELECT id FROM admin_audit_logs LIMIT 0`]
     );
     const verificationErrors = [];
-    for (const [label, sql6] of verifications) {
+    for (const [label, sql7] of verifications) {
       try {
-        await client.query(sql6);
+        await client.query(sql7);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         verificationErrors.push(`MISSING ${label}: ${msg}`);
@@ -23134,7 +23953,7 @@ init_db();
 init_schema();
 init_notificationService();
 import cron from "node-cron";
-import { eq as eq13, and as and7, gte as gte4, lte as lte2, lt } from "drizzle-orm";
+import { eq as eq13, and as and8, gte as gte4, lte as lte2, lt as lt3 } from "drizzle-orm";
 
 // server/redirectPages.ts
 init_db();
@@ -24199,7 +25018,7 @@ async function runBookingReminder24h() {
     const broadFrom = new Date(now.getTime() + 22 * 60 * 60 * 1e3);
     const broadTo = new Date(now.getTime() + 26 * 60 * 60 * 1e3);
     const upcoming = await db.select().from(appointments).where(
-      and7(gte4(appointments.scheduledDate, broadFrom), lte2(appointments.scheduledDate, broadTo), eq13(appointments.status, "confirmed"))
+      and8(gte4(appointments.scheduledDate, broadFrom), lte2(appointments.scheduledDate, broadTo), eq13(appointments.status, "confirmed"))
     );
     const windowFrom = new Date(now.getTime() + 23 * 60 * 60 * 1e3);
     const windowTo = new Date(now.getTime() + 25 * 60 * 60 * 1e3);
@@ -24237,7 +25056,7 @@ async function runBookingReminder2h() {
     const broadFrom = new Date(now.getTime() + 60 * 60 * 1e3);
     const broadTo = new Date(now.getTime() + 3 * 60 * 60 * 1e3);
     const upcoming = await db.select().from(appointments).where(
-      and7(gte4(appointments.scheduledDate, broadFrom), lte2(appointments.scheduledDate, broadTo), eq13(appointments.status, "confirmed"))
+      and8(gte4(appointments.scheduledDate, broadFrom), lte2(appointments.scheduledDate, broadTo), eq13(appointments.status, "confirmed"))
     );
     const windowFrom = new Date(now.getTime() + 90 * 60 * 1e3);
     const windowTo = new Date(now.getTime() + 150 * 60 * 1e3);
@@ -24275,7 +25094,7 @@ async function runInvoiceDueReminder() {
     const from = new Date(now.getTime() + 2.5 * 24 * 60 * 60 * 1e3);
     const to = new Date(now.getTime() + 3.5 * 24 * 60 * 60 * 1e3);
     const dueInvoices = await db.select().from(invoices).where(
-      and7(
+      and8(
         gte4(invoices.dueDate, from),
         lte2(invoices.dueDate, to),
         eq13(invoices.status, "sent")
@@ -24328,9 +25147,9 @@ async function runInvoiceOverdueReminder() {
     const from = new Date(now.getTime() - 1.5 * 24 * 60 * 60 * 1e3);
     const to = new Date(now.getTime() - 0.5 * 24 * 60 * 60 * 1e3);
     const overdueInvoices = await db.select().from(invoices).where(
-      and7(
+      and8(
         gte4(invoices.dueDate, from),
-        lt(invoices.dueDate, to),
+        lt3(invoices.dueDate, to),
         eq13(invoices.status, "sent")
       )
     );

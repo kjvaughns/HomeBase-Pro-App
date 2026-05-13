@@ -39,13 +39,15 @@ import {
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
 import { db, pool } from "./db";
-import { sql, eq, and, or, desc, inArray, notInArray, gte, ilike, isNull } from "drizzle-orm";
+import { sql, eq, and, or, desc, asc, inArray, notInArray, gte, lte as lteOp, lt, ilike, isNull } from "drizzle-orm";
 import {
   sendInvoiceEmail,
   sendProviderClientMessage,
   sendSupportTicketEmail,
   sendInvoiceReminderEmail,
   sendProviderScheduledJobEmail,
+  sendAdminSupportReplyEmail,
+  sendAdminBroadcastEmail,
 } from "./emailService";
 import {
   dispatch,
@@ -134,6 +136,10 @@ import {
   housefaxEntries,
   quickQuotes,
   supportTickets,
+  supportTicketMessages,
+  adminAuditLogs,
+  adminBroadcasts,
+  adminBroadcastRecipients,
   savedProviders,
   reviewReports,
   homeProfileUpdateSchema,
@@ -13783,39 +13789,14 @@ Respond with JSON only:
     async (req: Request, res: Response) => {
       try {
         const search = (req.query.q as string | undefined)?.trim() ?? "";
-        const limit = Math.min(
-          Math.max(parseInt((req.query.limit as string) ?? "50", 10) || 50, 1),
-          200,
-        );
+        const subscriptionStatus = (req.query.subscriptionStatus as string | undefined)?.trim() ?? "";
+        const isPartnerRaw = req.query.isPartner as string | undefined;
+        const isPartner = isPartnerRaw === "true" ? true : isPartnerRaw === "false" ? false : null;
+        const limit = Math.min(Math.max(parseInt((req.query.limit as string) ?? "50", 10) || 50, 1), 200);
         const offset = Math.max(parseInt((req.query.offset as string) ?? "0", 10) || 0, 0);
 
-        // Search is performed in SQL with case-insensitive LIKE so admins
-        // can find ANY provider, not just those in the first page of rows.
-        const baseQuery = db
-          .select({
-            id: providers.id,
-            businessName: providers.businessName,
-            email: providers.email,
-            isPartner: providerPlans.isPartner,
-            partnerSince: providerPlans.partnerSince,
-          })
-          .from(providers)
-          .leftJoin(providerPlans, eq(providerPlans.providerId, providers.id));
-
-        const rows = await (search
-          ? baseQuery.where(
-              or(
-                ilike(providers.businessName, `%${search}%`),
-                ilike(providers.email, `%${search}%`),
-              ),
-            )
-          : baseQuery
-        )
-          .orderBy(desc(providerPlans.partnerSince), providers.businessName)
-          .limit(limit)
-          .offset(offset);
-
-        res.json({ providers: rows, limit, offset });
+        const enriched = await storage.getAdminProviders({ search, subscriptionStatus, isPartner, limit, offset });
+        res.json({ providers: enriched, limit, offset });
       } catch (err: any) {
         console.error("[admin] list providers error:", err);
         res.status(500).json({ error: err.message || "Failed to list providers" });
@@ -13830,6 +13811,7 @@ Respond with JSON only:
     async (req: Request<{ providerId: string }>, res: Response) => {
       try {
         const { providerId } = req.params;
+        const adminUserId = req.authenticatedUserId!;
         const [provider] = await db
           .select({ id: providers.id })
           .from(providers)
@@ -13853,6 +13835,15 @@ Respond with JSON only:
             partnerSince: now,
           });
         }
+        // Audit log
+        await db.insert(adminAuditLogs).values({
+          adminUserId,
+          action: "partner.grant",
+          targetType: "provider",
+          targetId: providerId,
+          beforeValue: { isPartner: false },
+          afterValue: { isPartner: true, partnerSince: now.toISOString() },
+        });
         const status = await getProviderSubscriptionStatus(providerId);
         res.json({ success: true, providerId, isPartner: true, partnerSince: now.toISOString(), subscriptionStatus: status });
       } catch (err: any) {
@@ -13869,6 +13860,7 @@ Respond with JSON only:
     async (req: Request<{ providerId: string }>, res: Response) => {
       try {
         const { providerId } = req.params;
+        const adminUserId = req.authenticatedUserId!;
         const [existing] = await db
           .select()
           .from(providerPlans)
@@ -13879,6 +13871,15 @@ Respond with JSON only:
             .set({ isPartner: false, partnerSince: null, updatedAt: new Date() })
             .where(eq(providerPlans.id, existing.id));
         }
+        // Audit log
+        await db.insert(adminAuditLogs).values({
+          adminUserId,
+          action: "partner.revoke",
+          targetType: "provider",
+          targetId: providerId,
+          beforeValue: { isPartner: true },
+          afterValue: { isPartner: false },
+        });
         const status = await getProviderSubscriptionStatus(providerId);
         res.json({ success: true, providerId, isPartner: false, subscriptionStatus: status });
       } catch (err: any) {
@@ -17079,6 +17080,469 @@ Respond with JSON only:
       } catch (error) {
         console.error("Delete quick quote error:", error);
         res.status(500).json({ error: "Failed to delete quote" });
+      }
+    },
+  );
+
+  // ─── Admin Portal Endpoints ──────────────────────────────────────────────
+
+  // GET /api/admin/stats — aggregate dashboard counts
+  app.get(
+    "/api/admin/stats",
+    requireAuth,
+    requireAdmin,
+    async (_req: Request, res: Response) => {
+      try {
+        const stats = await storage.getAdminStats();
+        res.json(stats);
+      } catch (err: any) {
+        console.error("[admin] stats error:", err);
+        res.status(500).json({ error: err.message || "Failed to fetch stats" });
+      }
+    },
+  );
+
+  // GET /api/admin/users — paginated user list, filterable by role, searchable
+  app.get(
+    "/api/admin/users",
+    requireAuth,
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const search = (req.query.q as string | undefined)?.trim() ?? "";
+        const role = (req.query.role as string | undefined)?.trim() ?? "";
+        const limit = Math.min(Math.max(parseInt((req.query.limit as string) ?? "50", 10) || 50, 1), 200);
+        const offset = Math.max(parseInt((req.query.offset as string) ?? "0", 10) || 0, 0);
+
+        const VALID_ROLES = ["admin", "provider", "homeowner", ""] as const;
+        if (!VALID_ROLES.includes(role as typeof VALID_ROLES[number])) {
+          return res.status(400).json({ error: "role must be one of: admin, provider, homeowner" });
+        }
+
+        const rows = await storage.getAdminUsers({ search, role, limit, offset });
+        res.json({ users: rows, limit, offset });
+      } catch (err: any) {
+        console.error("[admin] list users error:", err);
+        res.status(500).json({ error: err.message || "Failed to list users" });
+      }
+    },
+  );
+
+  // GET /api/admin/users/:id — full user detail
+  app.get(
+    "/api/admin/users/:id",
+    requireAuth,
+    requireAdmin,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const { id } = req.params;
+        const detail = await storage.getAdminUserDetail(id);
+        if (!detail.user) return res.status(404).json({ error: "User not found" });
+        res.json(detail);
+      } catch (err: any) {
+        console.error("[admin] get user error:", err);
+        res.status(500).json({ error: err.message || "Failed to fetch user" });
+      }
+    },
+  );
+
+  // PATCH /api/admin/users/:id — lightweight edits (isAdmin toggle) with self-demotion guard
+  app.patch(
+    "/api/admin/users/:id",
+    requireAuth,
+    requireAdmin,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const { id } = req.params;
+        const adminUserId = req.authenticatedUserId!;
+
+        if (req.body.isAdmin === false && id === adminUserId) {
+          return res.status(400).json({ error: "You cannot remove your own admin access" });
+        }
+        if (req.body.isAdmin !== undefined && typeof req.body.isAdmin !== "boolean") {
+          return res.status(400).json({ error: "isAdmin must be a boolean" });
+        }
+
+        const allowed: Array<keyof typeof users.$inferSelect> = ["isAdmin"];
+        const patch: Record<string, unknown> = {};
+        for (const key of allowed) {
+          if (req.body[key] !== undefined) patch[key] = req.body[key];
+        }
+        if (Object.keys(patch).length === 0) {
+          return res.status(400).json({ error: "No valid fields to update" });
+        }
+
+        const { before, updated } = await storage.updateAdminUser(id, patch, adminUserId);
+        if (!before) return res.status(404).json({ error: "User not found" });
+        res.json({ user: updated });
+      } catch (err: any) {
+        console.error("[admin] patch user error:", err);
+        res.status(500).json({ error: err.message || "Failed to update user" });
+      }
+    },
+  );
+
+  // GET /api/admin/providers/:id — full provider detail
+  app.get(
+    "/api/admin/providers/:id",
+    requireAuth,
+    requireAdmin,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const { id } = req.params;
+        const detail = await storage.getAdminProviderDetail(id);
+        if (!detail.provider) return res.status(404).json({ error: "Provider not found" });
+        res.json({ ...detail, provider: normalizeProviderForResponse(detail.provider) });
+      } catch (err: any) {
+        console.error("[admin] get provider error:", err);
+        res.status(500).json({ error: err.message || "Failed to fetch provider" });
+      }
+    },
+  );
+
+  // PATCH /api/admin/providers/:id — edit isActive, isPublic, basic profile fields
+  app.patch(
+    "/api/admin/providers/:id",
+    requireAuth,
+    requireAdmin,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const { id } = req.params;
+        const adminUserId = req.authenticatedUserId!;
+
+        const ALLOWED_FIELDS = ["isActive", "isPublic", "businessName", "description", "phone", "email", "isVerified"] as const;
+        const BOOL_FIELDS = new Set(["isActive", "isPublic", "isVerified"]);
+        const STRING_FIELDS = new Set(["businessName", "description", "phone", "email"]);
+        const patch: Record<string, unknown> = {};
+        for (const key of ALLOWED_FIELDS) {
+          if (req.body[key] !== undefined) patch[key] = req.body[key];
+        }
+        if (Object.keys(patch).length === 0) {
+          return res.status(400).json({ error: "No valid fields to update" });
+        }
+        for (const [k, v] of Object.entries(patch)) {
+          if (BOOL_FIELDS.has(k) && typeof v !== "boolean") {
+            return res.status(400).json({ error: `${k} must be a boolean` });
+          }
+          if (STRING_FIELDS.has(k) && typeof v !== "string") {
+            return res.status(400).json({ error: `${k} must be a string` });
+          }
+        }
+
+        const { before, updated } = await storage.updateAdminProvider(id, patch, adminUserId, ALLOWED_FIELDS);
+        if (!before) return res.status(404).json({ error: "Provider not found" });
+        res.json({ provider: normalizeProviderForResponse(updated!) });
+      } catch (err: any) {
+        console.error("[admin] patch provider error:", err);
+        res.status(500).json({ error: err.message || "Failed to update provider" });
+      }
+    },
+  );
+
+  // GET /api/admin/support-tickets — paginated list with filters
+  app.get(
+    "/api/admin/support-tickets",
+    requireAuth,
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const status = (req.query.status as string | undefined)?.trim() ?? "";
+        const priority = (req.query.priority as string | undefined)?.trim() ?? "";
+        const userType = (req.query.userType as string | undefined)?.trim() ?? "";
+        const limit = Math.min(Math.max(parseInt((req.query.limit as string) ?? "50", 10) || 50, 1), 200);
+        const offset = Math.max(parseInt((req.query.offset as string) ?? "0", 10) || 0, 0);
+
+        const TICKET_STATUSES = ["open", "in_progress", "resolved", "closed"];
+        const TICKET_PRIORITIES = ["low", "medium", "high", "urgent"];
+        const TICKET_USER_TYPES = ["homeowner", "provider"];
+        if (status && !TICKET_STATUSES.includes(status)) {
+          return res.status(400).json({ error: `status must be one of: ${TICKET_STATUSES.join(", ")}` });
+        }
+        if (priority && !TICKET_PRIORITIES.includes(priority)) {
+          return res.status(400).json({ error: `priority must be one of: ${TICKET_PRIORITIES.join(", ")}` });
+        }
+        if (userType && !TICKET_USER_TYPES.includes(userType)) {
+          return res.status(400).json({ error: `userType must be one of: ${TICKET_USER_TYPES.join(", ")}` });
+        }
+
+        const rows = await storage.listSupportTickets({ status, priority, userType, limit, offset });
+        res.json({ tickets: rows, limit, offset });
+      } catch (err: any) {
+        console.error("[admin] list support tickets error:", err);
+        res.status(500).json({ error: err.message || "Failed to list tickets" });
+      }
+    },
+  );
+
+  // GET /api/admin/support-tickets/:id — full ticket with message thread
+  app.get(
+    "/api/admin/support-tickets/:id",
+    requireAuth,
+    requireAdmin,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const { id } = req.params;
+        const { ticket, messages } = await storage.getSupportTicketWithMessages(id);
+        if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+        res.json({ ticket, messages });
+      } catch (err: any) {
+        console.error("[admin] get support ticket error:", err);
+        res.status(500).json({ error: err.message || "Failed to fetch ticket" });
+      }
+    },
+  );
+
+  // PATCH /api/admin/support-tickets/:id — update status/priority/assignedTo
+  app.patch(
+    "/api/admin/support-tickets/:id",
+    requireAuth,
+    requireAdmin,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const { id } = req.params;
+        const adminUserId = req.authenticatedUserId!;
+
+        const VALID_STATUSES = ["open", "in_progress", "resolved", "closed"];
+        const VALID_PRIORITIES = ["low", "medium", "high", "urgent"];
+        const ALLOWED = ["status", "priority", "assignedTo"] as const;
+        const patch: Record<string, unknown> = {};
+        for (const key of ALLOWED) {
+          if (req.body[key] !== undefined) patch[key] = req.body[key];
+        }
+        if (Object.keys(patch).length === 0) {
+          return res.status(400).json({ error: "No valid fields to update" });
+        }
+        if (patch.status !== undefined && !VALID_STATUSES.includes(patch.status as string)) {
+          return res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(", ")}` });
+        }
+        if (patch.priority !== undefined && !VALID_PRIORITIES.includes(patch.priority as string)) {
+          return res.status(400).json({ error: `priority must be one of: ${VALID_PRIORITIES.join(", ")}` });
+        }
+        if (patch.assignedTo !== undefined && patch.assignedTo !== null && typeof patch.assignedTo !== "string") {
+          return res.status(400).json({ error: "assignedTo must be a string or null" });
+        }
+
+        const { before, updated } = await storage.updateSupportTicket(id, patch, adminUserId);
+        if (!before) return res.status(404).json({ error: "Ticket not found" });
+        res.json({ ticket: updated });
+      } catch (err: any) {
+        console.error("[admin] patch support ticket error:", err);
+        res.status(500).json({ error: err.message || "Failed to update ticket" });
+      }
+    },
+  );
+
+  // POST /api/admin/support-tickets/:id/messages — save admin reply and send email
+  app.post(
+    "/api/admin/support-tickets/:id/messages",
+    requireAuth,
+    requireAdmin,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const { id } = req.params;
+        const adminUserId = req.authenticatedUserId!;
+        const { body: messageBody } = req.body;
+
+        if (!messageBody?.trim()) {
+          return res.status(400).json({ error: "Message body is required" });
+        }
+
+        const { message, ticket } = await storage.addSupportTicketMessage(id, adminUserId, messageBody.trim());
+        if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+
+        // Send reply email fire-and-forget
+        setImmediate(async () => {
+          try {
+            await sendAdminSupportReplyEmail({
+              to: ticket.email,
+              recipientName: ticket.name,
+              ticketSubject: ticket.subject,
+              ticketId: id,
+              replyBody: messageBody.trim(),
+            });
+          } catch (emailErr) {
+            console.error("[admin] support reply email error:", emailErr);
+          }
+        });
+
+        res.status(201).json({ message });
+      } catch (err: any) {
+        console.error("[admin] post support ticket message error:", err);
+        res.status(500).json({ error: err.message || "Failed to send reply" });
+      }
+    },
+  );
+
+  // POST /api/admin/broadcasts — fan out message to users by audience
+  app.post(
+    "/api/admin/broadcasts",
+    requireAuth,
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const { title, body: broadcastBody, audience, channel } = req.body;
+        const adminUserId = req.authenticatedUserId!;
+
+        const VALID_AUDIENCES = ["all", "homeowners", "providers"] as const;
+        const VALID_CHANNELS = ["push", "in_app", "email"] as const;
+
+        if (!title?.trim() || !broadcastBody?.trim()) {
+          return res.status(400).json({ error: "title and body are required" });
+        }
+        if (!VALID_AUDIENCES.includes(audience)) {
+          return res.status(400).json({ error: `audience must be one of: ${VALID_AUDIENCES.join(", ")}` });
+        }
+        if (!VALID_CHANNELS.includes(channel)) {
+          return res.status(400).json({ error: `channel must be one of: ${VALID_CHANNELS.join(", ")}` });
+        }
+
+        const recipientIds = await storage.resolveBroadcastRecipientIds(audience);
+        const broadcast = await storage.createBroadcast({
+          sentByUserId: adminUserId,
+          title: title.trim(),
+          body: broadcastBody.trim(),
+          audience,
+          channel,
+          recipientCount: recipientIds.length,
+        });
+
+        // Return 202 immediately; all remaining work runs in background
+        res.status(202).json({ broadcast, recipientCount: recipientIds.length });
+
+        // Background fan-out — nothing awaited after res.json() to avoid double-response risk
+        const capturedTitle = title.trim();
+        const capturedBody = broadcastBody.trim();
+        const capturedChannel = channel as string;
+        const capturedRecipientIds = recipientIds.slice();
+
+        setImmediate(async () => {
+          try {
+            if (capturedRecipientIds.length === 0) {
+              await storage.updateBroadcastStatus(broadcast.id, "sent");
+              return;
+            }
+
+            // Pre-fetch email/name data inside the background task so DB errors
+            // cannot interfere with the already-sent 202 response
+            const userEmailMap = capturedChannel === "email"
+              ? await storage.fetchBroadcastEmailMap(capturedRecipientIds)
+              : new Map<string, { email: string; firstName: string | null }>();
+
+            const batchSize = 50;
+            for (let i = 0; i < capturedRecipientIds.length; i += batchSize) {
+              const batch = capturedRecipientIds.slice(i, i + batchSize);
+              for (const userId of batch) {
+                try {
+                  if (capturedChannel === "push" || capturedChannel === "in_app") {
+                    await dispatchNotification(
+                      userId,
+                      capturedTitle,
+                      capturedBody,
+                      "admin.broadcast",
+                      { broadcastId: broadcast.id },
+                      "reminders",
+                    );
+                  } else if (capturedChannel === "email") {
+                    const userInfo = userEmailMap.get(userId);
+                    if (!userInfo?.email) throw new Error("No email for user");
+                    await sendAdminBroadcastEmail({
+                      to: userInfo.email,
+                      recipientName: userInfo.firstName ?? "there",
+                      title: capturedTitle,
+                      body: capturedBody,
+                    });
+                  }
+                  await storage.recordBroadcastRecipient(broadcast.id, userId, capturedChannel, "delivered", new Date());
+                } catch {
+                  await storage.recordBroadcastRecipient(broadcast.id, userId, capturedChannel, "failed");
+                }
+              }
+            }
+            await storage.updateBroadcastStatus(broadcast.id, "sent");
+          } catch (fanoutErr) {
+            console.error("[admin] broadcast fan-out error:", fanoutErr);
+            await storage.updateBroadcastStatus(broadcast.id, "failed");
+          }
+        });
+      } catch (err: any) {
+        console.error("[admin] broadcast error:", err);
+        res.status(500).json({ error: err.message || "Failed to send broadcast" });
+      }
+    },
+  );
+
+  // GET /api/admin/broadcasts — broadcast history
+  app.get(
+    "/api/admin/broadcasts",
+    requireAuth,
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const limit = Math.min(Math.max(parseInt((req.query.limit as string) ?? "50", 10) || 50, 1), 200);
+        const offset = Math.max(parseInt((req.query.offset as string) ?? "0", 10) || 0, 0);
+        const rows = await storage.listBroadcasts({ limit, offset });
+        res.json({ broadcasts: rows, limit, offset });
+      } catch (err: any) {
+        console.error("[admin] list broadcasts error:", err);
+        res.status(500).json({ error: err.message || "Failed to list broadcasts" });
+      }
+    },
+  );
+
+  // GET /api/admin/analytics/top-providers — ranked provider data with filters
+  app.get(
+    "/api/admin/analytics/top-providers",
+    requireAuth,
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const VALID_PERIODS = ["7d", "30d", "90d", "365d"] as const;
+        const periodRaw = (req.query.period as string | undefined)?.trim() ?? "30d";
+        const period = VALID_PERIODS.includes(periodRaw as typeof VALID_PERIODS[number]) ? periodRaw : "30d";
+        const category = (req.query.category as string | undefined)?.trim() ?? "";
+        const city = (req.query.city as string | undefined)?.trim() ?? "";
+        const partnerOnly = req.query.partner === "true";
+        const subscribedOnly = req.query.subscribed === "true";
+        const limitN = Math.min(Math.max(parseInt((req.query.limit as string) ?? "20", 10) || 20, 1), 100);
+
+        const periodDays: Record<string, number> = { "7d": 7, "30d": 30, "90d": 90, "365d": 365 };
+        const days = periodDays[period] ?? 30;
+
+        const result = await storage.getAdminTopProviders({ days, category, city, partnerOnly, subscribedOnly, limit: limitN });
+        res.json({ providers: result, period, days });
+      } catch (err: any) {
+        console.error("[admin] top-providers analytics error:", err);
+        res.status(500).json({ error: err.message || "Failed to fetch analytics" });
+      }
+    },
+  );
+
+  // GET /api/admin/audit-logs — paginated, filterable
+  app.get(
+    "/api/admin/audit-logs",
+    requireAuth,
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const adminUserId = (req.query.adminUserId as string | undefined)?.trim() ?? "";
+        const action = (req.query.action as string | undefined)?.trim() ?? "";
+        const since = (req.query.since as string | undefined)?.trim() ?? "";
+        const until = (req.query.until as string | undefined)?.trim() ?? "";
+        const limit = Math.min(Math.max(parseInt((req.query.limit as string) ?? "50", 10) || 50, 1), 200);
+        const offset = Math.max(parseInt((req.query.offset as string) ?? "0", 10) || 0, 0);
+
+        if (since && isNaN(new Date(since).getTime())) {
+          return res.status(400).json({ error: "since must be a valid ISO 8601 date string" });
+        }
+        if (until && isNaN(new Date(until).getTime())) {
+          return res.status(400).json({ error: "until must be a valid ISO 8601 date string" });
+        }
+
+        const rows = await storage.listAdminAuditLogs({ adminUserId, action, since, until, limit, offset });
+        res.json({ logs: rows, limit, offset });
+      } catch (err: any) {
+        console.error("[admin] audit logs error:", err);
+        res.status(500).json({ error: err.message || "Failed to fetch audit logs" });
       }
     },
   );

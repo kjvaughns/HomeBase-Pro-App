@@ -1504,6 +1504,50 @@ export async function sendProviderClientMessage(
   }
 }
 
+export async function sendAdminSupportReplyEmail(data: {
+  to: string;
+  recipientName: string;
+  ticketSubject: string;
+  ticketId: string;
+  replyBody: string;
+}): Promise<SendResult> {
+  const body =
+    greeting(data.recipientName) +
+    paragraph(
+      `We have an update on your support ticket regarding: <strong>${escapeHtml(data.ticketSubject)}</strong>`,
+    ) +
+    `<div style="background:#f9fafb;border-radius:8px;padding:20px;margin-bottom:24px;border-left:4px solid #38AE5F;">
+      <p style="color:#374151;font-size:14px;line-height:1.6;margin:0;">${escapeHtml(data.replyBody).replace(/\n/g, "<br>")}</p>
+    </div>` +
+    paragraph(
+      "If you have additional questions, please reply to this email or submit another support request through the HomeBase app.",
+    ) +
+    `<p style="color:#9ca3af;font-size:12px;margin:0;">Ticket ID: ${escapeHtml(data.ticketId)}</p>`;
+  return sendEmail(
+    data.to,
+    `Re: ${data.ticketSubject} — HomeBase Support`,
+    buildEmailBase("Support Update", body),
+  );
+}
+
+export async function sendAdminBroadcastEmail(data: {
+  to: string;
+  recipientName: string;
+  title: string;
+  body: string;
+}): Promise<SendResult> {
+  const emailBody =
+    greeting(data.recipientName) +
+    `<h2 style="color:#1a1a1a;font-size:20px;font-weight:600;margin:0 0 16px;">${escapeHtml(data.title)}</h2>` +
+    `<div style="color:#374151;font-size:15px;line-height:1.7;margin-bottom:24px;">${escapeHtml(data.body).replace(/\n/g, "<br>")}</div>` +
+    paragraph("This message was sent to you from HomeBase. If you have any questions, please contact our support team from within the app.");
+  return sendEmail(
+    data.to,
+    data.title,
+    buildEmailBase("HomeBase Announcement", emailBody),
+  );
+}
+
 export async function sendCrewInviteEmail(
   to: string,
   crewName: string,

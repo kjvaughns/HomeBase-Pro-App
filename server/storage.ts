@@ -19,6 +19,15 @@ import {
   intakeSubmissions,
   notificationPreferences,
   crewMembers,
+  supportTickets,
+  supportTicketMessages,
+  adminBroadcasts,
+  adminBroadcastRecipients,
+  adminAuditLogs,
+  providerPlans,
+  stripeConnectAccounts,
+  userCredits,
+  creditLedger,
   type User,
   type InsertUser,
   type Home,
@@ -49,9 +58,12 @@ import {
   type NotificationPreference,
   type CrewMember,
   type InsertCrewMember,
+  type SupportTicket,
+  type SupportTicketMessage,
+  type AdminBroadcast,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, or, desc, sql, gte, lte } from "drizzle-orm";
+import { eq, and, or, desc, asc, sql, gte, lte, ilike, inArray, lt } from "drizzle-orm";
 import { getProviderReadinessSet } from "./stripeConnectService";
 import { hash, compare } from "bcryptjs";
 
@@ -1109,6 +1121,665 @@ export class DatabaseStorage implements IStorage {
       .values({ userId, ...data })
       .returning();
     return created;
+  }
+
+  // ─── Admin Storage Helpers ────────────────────────────────────────────────
+
+  async getAdminStats(): Promise<{
+    totalUsers: number;
+    totalProviders: number;
+    totalAppointments: number;
+    totalJobs: number;
+    totalRevenueCents: number;
+    openTickets: number;
+  }> {
+    const [counts] = await db
+      .select({
+        totalUsers: sql<number>`(SELECT COUNT(*) FROM users)`,
+        totalProviders: sql<number>`(SELECT COUNT(*) FROM providers)`,
+        totalAppointments: sql<number>`(SELECT COUNT(*) FROM appointments)`,
+        totalJobs: sql<number>`(SELECT COUNT(*) FROM jobs)`,
+        totalRevenueCents: sql<number>`COALESCE((SELECT SUM(amount_cents) FROM payments WHERE status = 'succeeded'), 0)`,
+        openTickets: sql<number>`(SELECT COUNT(*) FROM support_tickets WHERE status = 'open')`,
+      })
+      .from(sql`(SELECT 1) AS dual`);
+    return {
+      totalUsers: Number(counts.totalUsers),
+      totalProviders: Number(counts.totalProviders),
+      totalAppointments: Number(counts.totalAppointments),
+      totalJobs: Number(counts.totalJobs),
+      totalRevenueCents: Number(counts.totalRevenueCents),
+      openTickets: Number(counts.openTickets),
+    };
+  }
+
+  async getAdminUsers(params: {
+    search: string;
+    role: string;
+    limit: number;
+    offset: number;
+  }): Promise<Array<{
+    id: string; email: string; firstName: string | null; lastName: string | null;
+    phone: string | null; isProvider: boolean; isAdmin: boolean;
+    lastActiveAt: Date | null; createdAt: Date;
+  }>> {
+    const { search, role, limit, offset } = params;
+    type Condition = ReturnType<typeof eq>;
+    const conditions: Condition[] = [];
+    if (search) {
+      conditions.push(
+        or(
+          ilike(users.email, `%${search}%`),
+          ilike(users.firstName, `%${search}%`),
+          ilike(users.lastName, `%${search}%`),
+        ) as Condition,
+      );
+    }
+    if (role === "admin") conditions.push(eq(users.isAdmin, true));
+    if (role === "provider") conditions.push(eq(users.isProvider, true));
+    if (role === "homeowner") conditions.push(eq(users.isProvider, false));
+
+    const query = db
+      .select({
+        id: users.id,
+        email: users.email,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        phone: users.phone,
+        isProvider: users.isProvider,
+        isAdmin: users.isAdmin,
+        lastActiveAt: users.lastActiveAt,
+        createdAt: users.createdAt,
+      })
+      .from(users);
+
+    return (conditions.length > 0 ? query.where(and(...conditions)) : query)
+      .orderBy(desc(users.createdAt))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async getAdminUserDetail(id: string): Promise<{
+    user: {
+      id: string; email: string; firstName: string | null; lastName: string | null;
+      phone: string | null; avatarUrl: string | null; isProvider: boolean; isAdmin: boolean;
+      stripeCustomerId: string | null; lastActiveAt: Date | null; createdAt: Date; updatedAt: Date;
+    } | null;
+    homes: typeof homes.$inferSelect[];
+    appointments: typeof appointments.$inferSelect[];
+    creditBalance: string;
+    creditLedger: typeof creditLedger.$inferSelect[];
+    supportTickets: typeof supportTickets.$inferSelect[];
+  }> {
+    const [user] = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        phone: users.phone,
+        avatarUrl: users.avatarUrl,
+        isProvider: users.isProvider,
+        isAdmin: users.isAdmin,
+        stripeCustomerId: users.stripeCustomerId,
+        lastActiveAt: users.lastActiveAt,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+      })
+      .from(users)
+      .where(eq(users.id, id));
+
+    if (!user) return { user: null, homes: [], appointments: [], creditBalance: "0", creditLedger: [], supportTickets: [] };
+
+    const [userHomes, userAppointments, userTickets] = await Promise.all([
+      db.select().from(homes).where(eq(homes.userId, id)).orderBy(desc(homes.createdAt)),
+      db.select().from(appointments).where(eq(appointments.userId, id)).orderBy(desc(appointments.scheduledDate)).limit(20),
+      db.select().from(supportTickets).where(eq(supportTickets.userId, id)).orderBy(desc(supportTickets.createdAt)),
+    ]);
+
+    const [creditRow] = await db
+      .select({ balance: userCredits.balance })
+      .from(userCredits)
+      .where(eq(userCredits.userId, id));
+
+    const ledgerRows = await db
+      .select()
+      .from(creditLedger)
+      .where(eq(creditLedger.userId, id))
+      .orderBy(desc(creditLedger.createdAt))
+      .limit(20);
+
+    return {
+      user,
+      homes: userHomes,
+      appointments: userAppointments,
+      creditBalance: creditRow?.balance ?? "0",
+      creditLedger: ledgerRows,
+      supportTickets: userTickets,
+    };
+  }
+
+  async updateAdminUser(
+    id: string,
+    patch: Record<string, unknown>,
+    adminUserId: string,
+  ): Promise<{ before: { isAdmin: boolean } | null; updated: User | null }> {
+    const [before] = await db
+      .select({ isAdmin: users.isAdmin })
+      .from(users)
+      .where(eq(users.id, id));
+    if (!before) return { before: null, updated: null };
+
+    const [updated] = await db
+      .update(users)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+
+    await db.insert(adminAuditLogs).values({
+      adminUserId,
+      action: "user.update",
+      targetType: "user",
+      targetId: id,
+      beforeValue: { isAdmin: before.isAdmin } as Record<string, unknown>,
+      afterValue: patch as Record<string, unknown>,
+    });
+
+    return { before, updated };
+  }
+
+  async getAdminProviderDetail(id: string): Promise<{
+    provider: Provider | null;
+    plan: typeof providerPlans.$inferSelect | null;
+    connectAccount: typeof stripeConnectAccounts.$inferSelect | null;
+    jobs: typeof jobs.$inferSelect[];
+    invoices: typeof invoices.$inferSelect[];
+    reviews: typeof reviews.$inferSelect[];
+    crew: typeof crewMembers.$inferSelect[];
+    bookings: typeof appointments.$inferSelect[];
+    customServices: typeof providerCustomServices.$inferSelect[];
+    services: Array<{ id: string; serviceId: string | null; categoryId: string | null; price: string | null; serviceName: string | null; categoryName: string | null }>;
+    totalRevenueCents: number;
+  }> {
+    const [provider] = await db.select().from(providers).where(eq(providers.id, id));
+    if (!provider) {
+      return { provider: null, plan: null, connectAccount: null, jobs: [], invoices: [], reviews: [], crew: [], bookings: [], customServices: [], services: [], totalRevenueCents: 0 };
+    }
+
+    const [
+      plan,
+      connectAccount,
+      providerJobList,
+      providerInvoiceList,
+      providerReviews,
+      providerCrewList,
+      providerBookings,
+      customServiceList,
+      catalogServiceLinks,
+      revenueRow,
+    ] = await Promise.all([
+      db.select().from(providerPlans).where(eq(providerPlans.providerId, id)).then(r => r[0] ?? null),
+      db.select().from(stripeConnectAccounts).where(eq(stripeConnectAccounts.providerId, id)).then(r => r[0] ?? null),
+      db.select().from(jobs).where(eq(jobs.providerId, id)).orderBy(desc(jobs.scheduledDate)).limit(20),
+      db.select().from(invoices).where(eq(invoices.providerId, id)).orderBy(desc(invoices.createdAt)).limit(20),
+      db.select().from(reviews).where(eq(reviews.providerId, id)).orderBy(desc(reviews.createdAt)).limit(20),
+      db.select().from(crewMembers).where(eq(crewMembers.providerId, id)).orderBy(desc(crewMembers.createdAt)),
+      db.select().from(appointments).where(eq(appointments.providerId, id)).orderBy(desc(appointments.scheduledDate)).limit(20),
+      db.select().from(providerCustomServices).where(eq(providerCustomServices.providerId, id)),
+      db
+        .select({
+          id: providerServices.id,
+          serviceId: providerServices.serviceId,
+          categoryId: providerServices.categoryId,
+          price: providerServices.price,
+          serviceName: services.name,
+          categoryName: serviceCategories.name,
+        })
+        .from(providerServices)
+        .leftJoin(services, eq(services.id, providerServices.serviceId))
+        .leftJoin(serviceCategories, eq(serviceCategories.id, providerServices.categoryId))
+        .where(eq(providerServices.providerId, id)),
+      db
+        .select({ totalRevenueCents: sql<number>`COALESCE(SUM(${payments.amountCents}), 0)` })
+        .from(payments)
+        .where(and(eq(payments.providerId, id), eq(payments.status, "succeeded")))
+        .then(r => r[0]),
+    ]);
+
+    return {
+      provider,
+      plan,
+      connectAccount,
+      jobs: providerJobList,
+      invoices: providerInvoiceList,
+      reviews: providerReviews,
+      crew: providerCrewList,
+      bookings: providerBookings,
+      customServices: customServiceList,
+      services: catalogServiceLinks,
+      totalRevenueCents: Number(revenueRow?.totalRevenueCents ?? 0),
+    };
+  }
+
+  async updateAdminProvider(
+    id: string,
+    patch: Record<string, unknown>,
+    adminUserId: string,
+    allowedFields: readonly string[],
+  ): Promise<{ before: Provider | null; updated: Provider | null }> {
+    const [before] = await db.select().from(providers).where(eq(providers.id, id));
+    if (!before) return { before: null, updated: null };
+
+    const [updated] = await db.update(providers).set(patch).where(eq(providers.id, id)).returning();
+
+    const beforeSnapshot: Record<string, unknown> = {};
+    for (const k of allowedFields) {
+      if (k in patch) beforeSnapshot[k] = before[k as keyof typeof before];
+    }
+    await db.insert(adminAuditLogs).values({
+      adminUserId,
+      action: "provider.update",
+      targetType: "provider",
+      targetId: id,
+      beforeValue: beforeSnapshot as Record<string, unknown>,
+      afterValue: patch as Record<string, unknown>,
+    });
+
+    return { before, updated };
+  }
+
+  async listSupportTickets(params: {
+    status: string;
+    priority: string;
+    userType: string;
+    limit: number;
+    offset: number;
+  }): Promise<SupportTicket[]> {
+    const { status, priority, userType, limit, offset } = params;
+    type Condition = ReturnType<typeof eq>;
+    const conditions: Condition[] = [];
+    if (status) conditions.push(eq(supportTickets.status, status));
+    if (priority) conditions.push(eq(supportTickets.priority, priority));
+    if (userType) conditions.push(eq(supportTickets.userType, userType));
+
+    const query = db.select().from(supportTickets);
+    return (conditions.length > 0 ? query.where(and(...conditions)) : query)
+      .orderBy(desc(supportTickets.createdAt))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async getSupportTicketWithMessages(
+    id: string,
+  ): Promise<{ ticket: SupportTicket | null; messages: SupportTicketMessage[] }> {
+    const [ticket] = await db.select().from(supportTickets).where(eq(supportTickets.id, id));
+    if (!ticket) return { ticket: null, messages: [] };
+
+    const messages = await db
+      .select()
+      .from(supportTicketMessages)
+      .where(eq(supportTicketMessages.ticketId, id))
+      .orderBy(asc(supportTicketMessages.createdAt));
+
+    return { ticket, messages };
+  }
+
+  async updateSupportTicket(
+    id: string,
+    patch: Record<string, unknown>,
+    adminUserId: string,
+  ): Promise<{ before: SupportTicket | null; updated: SupportTicket | null }> {
+    const [before] = await db.select().from(supportTickets).where(eq(supportTickets.id, id));
+    if (!before) return { before: null, updated: null };
+
+    // Auto-manage resolvedAt based on status transition
+    const fullPatch = { ...patch };
+    if (fullPatch.status === "resolved" || fullPatch.status === "closed") {
+      if (!before.resolvedAt) fullPatch.resolvedAt = new Date();
+    } else if (fullPatch.status && fullPatch.status !== "resolved" && fullPatch.status !== "closed") {
+      fullPatch.resolvedAt = null;
+    }
+
+    const [updated] = await db
+      .update(supportTickets)
+      .set({ ...fullPatch, updatedAt: new Date() })
+      .where(eq(supportTickets.id, id))
+      .returning();
+
+    await db.insert(adminAuditLogs).values({
+      adminUserId,
+      action: "support_ticket.update",
+      targetType: "support_ticket",
+      targetId: id,
+      beforeValue: { status: before.status, priority: before.priority, assignedTo: before.assignedTo } as Record<string, unknown>,
+      afterValue: patch as Record<string, unknown>,
+    });
+
+    return { before, updated };
+  }
+
+  async addSupportTicketMessage(
+    ticketId: string,
+    adminUserId: string,
+    messageBody: string,
+  ): Promise<{ message: SupportTicketMessage; ticket: SupportTicket | null }> {
+    const [ticket] = await db.select().from(supportTickets).where(eq(supportTickets.id, ticketId));
+    if (!ticket) return { message: null as unknown as SupportTicketMessage, ticket: null };
+
+    const [message] = await db
+      .insert(supportTicketMessages)
+      .values({ ticketId, senderId: adminUserId, senderType: "admin", body: messageBody })
+      .returning();
+
+    if (ticket.status === "open") {
+      await db
+        .update(supportTickets)
+        .set({ status: "in_progress", updatedAt: new Date() })
+        .where(eq(supportTickets.id, ticketId));
+    }
+
+    return { message, ticket };
+  }
+
+  async resolveBroadcastRecipientIds(audience: string): Promise<string[]> {
+    if (audience === "all") {
+      const rows = await db.select({ id: users.id }).from(users);
+      return rows.map(r => r.id);
+    }
+    if (audience === "homeowners") {
+      const rows = await db.select({ id: users.id }).from(users).where(eq(users.isProvider, false));
+      return rows.map(r => r.id);
+    }
+    if (audience === "providers") {
+      const rows = await db
+        .select({ userId: providers.userId })
+        .from(providers)
+        .where(and(eq(providers.isActive, true), sql`${providers.userId} IS NOT NULL`));
+      return rows.map(r => r.userId).filter(Boolean) as string[];
+    }
+    return [];
+  }
+
+  async createBroadcast(data: {
+    sentByUserId: string;
+    title: string;
+    body: string;
+    audience: string;
+    channel: string;
+    recipientCount: number;
+  }): Promise<AdminBroadcast> {
+    const [broadcast] = await db
+      .insert(adminBroadcasts)
+      .values({ ...data, status: "sending", sentAt: new Date() })
+      .returning();
+    return broadcast;
+  }
+
+  async updateBroadcastStatus(id: string, status: string): Promise<void> {
+    await db.update(adminBroadcasts).set({ status }).where(eq(adminBroadcasts.id, id));
+  }
+
+  async fetchBroadcastEmailMap(
+    recipientIds: string[],
+  ): Promise<Map<string, { email: string; firstName: string | null }>> {
+    const map = new Map<string, { email: string; firstName: string | null }>();
+    if (recipientIds.length === 0) return map;
+    const rows = await db
+      .select({ id: users.id, email: users.email, firstName: users.firstName })
+      .from(users)
+      .where(inArray(users.id, recipientIds));
+    for (const u of rows) map.set(u.id, { email: u.email, firstName: u.firstName });
+    return map;
+  }
+
+  async recordBroadcastRecipient(
+    broadcastId: string,
+    userId: string,
+    channel: string,
+    status: "delivered" | "failed",
+    deliveredAt?: Date,
+  ): Promise<void> {
+    await db.insert(adminBroadcastRecipients).values({
+      broadcastId,
+      userId,
+      channel,
+      status,
+      ...(deliveredAt ? { deliveredAt } : {}),
+    });
+  }
+
+  async listBroadcasts(params: { limit: number; offset: number }): Promise<AdminBroadcast[]> {
+    return db
+      .select()
+      .from(adminBroadcasts)
+      .orderBy(desc(adminBroadcasts.createdAt))
+      .limit(params.limit)
+      .offset(params.offset);
+  }
+
+  async getAdminTopProviders(params: {
+    days: number;
+    category: string;
+    city: string;
+    partnerOnly: boolean;
+    subscribedOnly: boolean;
+    limit: number;
+  }): Promise<Array<{
+    id: string; businessName: string | null; email: string | null;
+    averageRating: string | null; reviewCount: number | null;
+    serviceArea: string | null; createdAt: Date;
+    isPartner: boolean; isSubscribed: boolean; subscriptionStatus: string | null;
+    totalRevenueCents: number; bookingCount: number;
+  }>> {
+    const since = new Date(Date.now() - params.days * 24 * 60 * 60 * 1000);
+
+    type Condition = ReturnType<typeof eq>;
+    const baseConditions: Condition[] = [
+      eq(providers.isActive, true),
+      sql`${providers.userId} IS NOT NULL` as unknown as Condition,
+    ];
+    if (params.city) baseConditions.push(ilike(providers.serviceArea, `%${params.city}%`) as unknown as Condition);
+
+    const providerList = await db
+      .select({
+        id: providers.id,
+        businessName: providers.businessName,
+        email: providers.email,
+        averageRating: providers.averageRating,
+        reviewCount: providers.reviewCount,
+        serviceArea: providers.serviceArea,
+        createdAt: providers.createdAt,
+      })
+      .from(providers)
+      .where(and(...baseConditions));
+
+    if (providerList.length === 0) return [];
+
+    const allIds = providerList.map(p => p.id);
+
+    const [planRows, revenueRows, bookingRows] = await Promise.all([
+      db
+        .select({
+          providerId: providerPlans.providerId,
+          isPartner: providerPlans.isPartner,
+          isSubscribed: providerPlans.isSubscribed,
+          subscriptionStatus: providerPlans.subscriptionStatus,
+        })
+        .from(providerPlans)
+        .where(inArray(providerPlans.providerId, allIds)),
+      db
+        .select({
+          providerId: payments.providerId,
+          totalCents: sql<number>`COALESCE(SUM(${payments.amountCents}), 0)`,
+        })
+        .from(payments)
+        .where(
+          and(
+            inArray(payments.providerId, allIds),
+            eq(payments.status, "succeeded"),
+            gte(payments.createdAt, since),
+          ),
+        )
+        .groupBy(payments.providerId),
+      db
+        .select({
+          providerId: appointments.providerId,
+          bookingCount: sql<number>`COUNT(*)`,
+        })
+        .from(appointments)
+        .where(and(inArray(appointments.providerId, allIds), gte(appointments.createdAt, since)))
+        .groupBy(appointments.providerId),
+    ]);
+
+    const planMap = new Map(planRows.map(r => [r.providerId, r]));
+    const revenueMap = new Map(revenueRows.map(r => [r.providerId, r]));
+    const bookingMap = new Map(bookingRows.map(r => [r.providerId, r]));
+
+    let enriched = providerList.map(p => ({
+      ...p,
+      isPartner: planMap.get(p.id)?.isPartner ?? false,
+      isSubscribed: planMap.get(p.id)?.isSubscribed ?? false,
+      subscriptionStatus: planMap.get(p.id)?.subscriptionStatus ?? null,
+      totalRevenueCents: Number(revenueMap.get(p.id)?.totalCents ?? 0),
+      bookingCount: Number(bookingMap.get(p.id)?.bookingCount ?? 0),
+    }));
+
+    if (params.partnerOnly) enriched = enriched.filter(p => p.isPartner);
+    if (params.subscribedOnly) enriched = enriched.filter(p => p.isSubscribed);
+
+    if (params.category) {
+      const catProviderRows = await db
+        .select({ providerId: providerServices.providerId })
+        .from(providerServices)
+        .innerJoin(services, eq(services.id, providerServices.serviceId))
+        .innerJoin(serviceCategories, eq(serviceCategories.id, services.categoryId))
+        .where(ilike(serviceCategories.name, `%${params.category}%`));
+      const catSet = new Set(catProviderRows.map(r => r.providerId));
+      enriched = enriched.filter(p => catSet.has(p.id));
+    }
+
+    enriched.sort((a, b) => b.totalRevenueCents - a.totalRevenueCents);
+    return enriched.slice(0, params.limit);
+  }
+
+  async listAdminAuditLogs(params: {
+    adminUserId: string;
+    action: string;
+    since: string;
+    until: string;
+    limit: number;
+    offset: number;
+  }): Promise<typeof adminAuditLogs.$inferSelect[]> {
+    const { limit, offset } = params;
+    type Condition = ReturnType<typeof eq>;
+    const conditions: Condition[] = [];
+    if (params.adminUserId) conditions.push(eq(adminAuditLogs.adminUserId, params.adminUserId));
+    if (params.action) conditions.push(ilike(adminAuditLogs.action, `%${params.action}%`) as unknown as Condition);
+    if (params.since) conditions.push(gte(adminAuditLogs.createdAt, new Date(params.since)) as unknown as Condition);
+    if (params.until) conditions.push(lt(adminAuditLogs.createdAt, new Date(params.until)) as unknown as Condition);
+
+    const query = db.select().from(adminAuditLogs);
+    return (conditions.length > 0 ? query.where(and(...conditions)) : query)
+      .orderBy(desc(adminAuditLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async getAdminProviders(params: {
+    search: string;
+    subscriptionStatus: string;
+    isPartner: boolean | null;
+    limit: number;
+    offset: number;
+  }): Promise<Array<typeof providers.$inferSelect & {
+    subscriptionStatus: string | null;
+    isSubscribed: boolean;
+    isPartner: boolean;
+    partnerSince: Date | null;
+    bookingCount: number;
+    totalRevenueCents: number;
+  }>> {
+    const { search, subscriptionStatus, isPartner, limit, offset } = params;
+    type Condition = ReturnType<typeof eq>;
+    const conditions: Condition[] = [];
+    if (search) {
+      conditions.push(
+        or(
+          ilike(providers.businessName, `%${search}%`),
+          ilike(providers.email, `%${search}%`),
+        ) as unknown as Condition,
+      );
+    }
+
+    let baseQuery = db
+      .select({
+        id: providers.id,
+        userId: providers.userId,
+        businessName: providers.businessName,
+        email: providers.email,
+        phone: providers.phone,
+        description: providers.description,
+        isActive: providers.isActive,
+        isPublic: providers.isPublic,
+        isVerified: providers.isVerified,
+        averageRating: providers.averageRating,
+        reviewCount: providers.reviewCount,
+        serviceArea: providers.serviceArea,
+        logoUrl: providers.logoUrl,
+        website: providers.website,
+        createdAt: providers.createdAt,
+        updatedAt: providers.updatedAt,
+        stripeAccountId: providers.stripeAccountId,
+        stripeAccountStatus: providers.stripeAccountStatus,
+        subscriptionStatus: providerPlans.subscriptionStatus,
+        isSubscribed: providerPlans.isSubscribed,
+        isPartner: providerPlans.isPartner,
+        partnerSince: providerPlans.partnerSince,
+      })
+      .from(providers)
+      .leftJoin(providerPlans, eq(providerPlans.providerId, providers.id));
+
+    const query = conditions.length > 0 ? baseQuery.where(and(...conditions)) : baseQuery;
+
+    let rows = await query
+      .orderBy(desc(providerPlans.partnerSince), providers.businessName)
+      .limit(limit)
+      .offset(offset);
+
+    if (isPartner !== null) {
+      rows = rows.filter(r => (r.isPartner ?? false) === isPartner);
+    }
+    if (subscriptionStatus) {
+      rows = rows.filter(r => r.subscriptionStatus === subscriptionStatus);
+    }
+
+    const providerIds = rows.map(r => r.id);
+    if (providerIds.length === 0) return rows.map(r => ({ ...r, bookingCount: 0, totalRevenueCents: 0, isSubscribed: r.isSubscribed ?? false, isPartner: r.isPartner ?? false, partnerSince: r.partnerSince ?? null }));
+
+    const [bookingCounts, revenueCounts] = await Promise.all([
+      db
+        .select({ providerId: appointments.providerId, bookingCount: sql<number>`COUNT(*)` })
+        .from(appointments)
+        .where(inArray(appointments.providerId, providerIds))
+        .groupBy(appointments.providerId),
+      db
+        .select({ providerId: payments.providerId, totalRevenueCents: sql<number>`COALESCE(SUM(${payments.amountCents}), 0)` })
+        .from(payments)
+        .where(and(inArray(payments.providerId, providerIds), eq(payments.status, "succeeded")))
+        .groupBy(payments.providerId),
+    ]);
+
+    const bookingMap = new Map(bookingCounts.map(r => [r.providerId, Number(r.bookingCount)]));
+    const revenueMap = new Map(revenueCounts.map(r => [r.providerId, Number(r.totalRevenueCents)]));
+
+    return rows.map(p => ({
+      ...p,
+      isSubscribed: p.isSubscribed ?? false,
+      isPartner: p.isPartner ?? false,
+      partnerSince: p.partnerSince ?? null,
+      bookingCount: bookingMap.get(p.id) ?? 0,
+      totalRevenueCents: revenueMap.get(p.id) ?? 0,
+    }));
   }
 }
 

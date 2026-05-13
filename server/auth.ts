@@ -2,7 +2,7 @@ import jwt from "jsonwebtoken";
 import type { Request, Response, NextFunction, RequestHandler } from "express";
 import { db } from "./db";
 import { users } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 
 const IS_PROD = process.env.NODE_ENV === "production";
 
@@ -79,5 +79,26 @@ export const authenticateJWT: RequestHandler = async (
   }
 
   req.authenticatedUserId = payload.userId;
+
+  // Debounced last_active_at update — fire-and-forget, only when null or >5 min stale
+  setImmediate(async () => {
+    try {
+      await db
+        .update(users)
+        .set({ lastActiveAt: new Date() })
+        .where(
+          and(
+            eq(users.id, payload.userId),
+            or(
+              isNull(users.lastActiveAt),
+              sql`${users.lastActiveAt} < NOW() - INTERVAL '5 minutes'`,
+            ),
+          ),
+        );
+    } catch {
+      // fire-and-forget: ignore errors
+    }
+  });
+
   next();
 };
