@@ -25,7 +25,17 @@ export default function Login() {
     <div style={styles.page}>
       <div style={styles.card}>
         <div style={styles.logoRow}>
-          <div style={styles.logo}>HB</div>
+          <img
+            src={`${import.meta.env.BASE_URL}homebase-logo.png`}
+            alt="HomeBase"
+            style={styles.logoImg}
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = "none";
+              const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+              if (fallback) fallback.style.display = "flex";
+            }}
+          />
+          <div style={{ ...styles.logoFallback, display: "none" }}>HB</div>
           <div>
             <div style={styles.brandName}>HomeBase</div>
             <div style={styles.brandSub}>Admin Portal</div>
@@ -79,11 +89,11 @@ const styles: Record<string, React.CSSProperties> = {
   card: {
     background: "var(--surface)",
     border: "1px solid var(--border)",
-    borderRadius: 14,
+    borderRadius: 16,
     padding: "40px 44px",
     width: 420,
     maxWidth: "100%",
-    boxShadow: "0 8px 30px rgba(0,0,0,0.08)",
+    boxShadow: "0 8px 40px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.06)",
   },
   logoRow: {
     display: "flex",
@@ -91,19 +101,25 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 12,
     marginBottom: 32,
   },
-  logo: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
+  logoImg: {
+    height: 48,
+    width: "auto",
+    objectFit: "contain",
+    flexShrink: 0,
+  },
+  logoFallback: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
     background: "#38AE5F",
     color: "#fff",
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 700,
-    display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
-  brandName: { fontWeight: 700, fontSize: 16, color: "var(--text-primary)" },
+  brandName: { fontWeight: 700, fontSize: 17, color: "var(--text-primary)" },
   brandSub: { fontSize: 12, color: "var(--text-muted)", marginTop: 1 },
   heading: { margin: "0 0 4px", fontSize: 22, fontWeight: 700, color: "var(--text-primary)" },
   sub: { margin: "0 0 28px", fontSize: 14, color: "var(--text-muted)" },
@@ -111,7 +127,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: "var(--danger-light)",
     color: "var(--danger)",
     border: "1px solid rgba(239,68,68,0.2)",
-    borderRadius: 6,
+    borderRadius: 8,
     padding: "10px 14px",
     fontSize: 13,
     marginBottom: 20,
@@ -120,23 +136,25 @@ const styles: Record<string, React.CSSProperties> = {
   field: { display: "flex", flexDirection: "column", gap: 6 },
   label: { fontSize: 13, fontWeight: 500, color: "var(--text-secondary)" },
   input: {
-    padding: "10px 14px",
+    padding: "11px 14px",
     border: "1px solid var(--border)",
-    borderRadius: 6,
+    borderRadius: 8,
     fontSize: 14,
     background: "var(--surface)",
     color: "var(--text-primary)",
     outline: "none",
+    transition: "border-color 0.15s",
   },
   btn: {
     background: "#38AE5F",
     color: "#fff",
     border: "none",
-    borderRadius: 8,
-    padding: "11px 20px",
-    fontSize: 14,
+    borderRadius: 10,
+    padding: "12px 20px",
+    fontSize: 15,
     fontWeight: 600,
     cursor: "pointer",
     marginTop: 8,
+    transition: "background 0.15s",
   },
 };

@@ -1278,7 +1278,7 @@ export class DatabaseStorage implements IStorage {
     ]);
 
     const [creditRow] = await db
-      .select({ balance: userCredits.balance })
+      .select({ balanceCents: userCredits.balanceCents })
       .from(userCredits)
       .where(eq(userCredits.userId, id));
 
@@ -1293,7 +1293,7 @@ export class DatabaseStorage implements IStorage {
       user,
       homes: userHomes,
       appointments: userAppointments,
-      creditBalance: creditRow?.balance ?? "0",
+      creditBalance: String(creditRow?.balanceCents ?? 0),
       creditLedger: ledgerRows,
       supportTickets: userTickets,
     };
