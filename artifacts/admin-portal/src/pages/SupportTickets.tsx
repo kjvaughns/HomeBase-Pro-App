@@ -177,7 +177,7 @@ export default function SupportTickets() {
       <ConfirmModal
         open={confirmBulkClose}
         title={`Close ${selectedCount} Ticket${selectedCount !== 1 ? "s" : ""}?`}
-        message="These tickets will be marked as closed. Users will be notified."
+        message="These tickets will be marked as closed."
         confirmLabel="Close Tickets"
         danger
         loading={closeMutation.isPending}
@@ -188,7 +188,7 @@ export default function SupportTickets() {
       <ConfirmModal
         open={confirmSingleClose !== null}
         title="Close Ticket?"
-        message="This ticket will be marked as closed. The user will be notified."
+        message="This ticket will be marked as closed."
         confirmLabel="Close Ticket"
         danger
         loading={closeMutation.isPending}
