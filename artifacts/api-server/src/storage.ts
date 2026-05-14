@@ -1834,9 +1834,6 @@ export class DatabaseStorage implements IStorage {
     if (isPartner !== null) {
       queryValues.push(isPartner);
       whereParts.push(`COALESCE(pp.is_partner, FALSE) = $${queryValues.length}`);
-      if (isPartner === true) {
-        whereParts.push(`p.is_verified = TRUE`);
-      }
     }
     if (subscriptionStatus) {
       queryValues.push(subscriptionStatus);

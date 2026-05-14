@@ -594,6 +594,12 @@ export async function runBootMigrations(): Promise<void> {
           } else {
             console.log(`[boot-migration] Task #398: ensured is_partner=true for provider ${providerId} (${email})`);
           }
+          // Partners are implicitly verified — set is_verified=true so they
+          // are not hidden by any is_verified gate (e.g. public provider list).
+          await client.query(
+            `UPDATE providers SET is_verified = TRUE WHERE id = $1 AND is_verified = FALSE`,
+            [providerId]
+          );
         }
       }
     } catch (err: unknown) {
