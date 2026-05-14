@@ -11,9 +11,9 @@ import { stripeWebhookEvents, stripeConnectAccounts } from "@workspace/db";
 //   - /api/stripe/webhook/platform   → endpoint = "platform"
 //   - /api/stripe/webhook/connect    → endpoint = "connect"
 //
-// (Legacy paths /api/stripe/webhook and /api/webhooks/stripe-connect are also
-// mounted on the same handlers during the Dashboard cutover — see
-// setupStripeWebhook / setupStripeConnectWebhook in server/index.ts.)
+// Both are registered as Express POST routes in app.ts BEFORE the global
+// express.json() middleware, using express.raw({ type: "application/json" })
+// so req.body is the raw Buffer required for Stripe signature verification.
 //
 // The dispatcher enforces:
 //

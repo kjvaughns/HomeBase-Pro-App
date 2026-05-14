@@ -14559,8 +14559,6 @@ Respond with JSON only:
     },
   );
 
-  // NOTE: /api/webhooks/stripe-connect is registered in server/index.ts BEFORE
-  // express.json() middleware so req.body is the raw Buffer needed for signature verification.
 
   // Get payouts for provider
   app.get(
