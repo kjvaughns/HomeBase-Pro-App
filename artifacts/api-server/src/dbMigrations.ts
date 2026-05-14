@@ -1260,6 +1260,17 @@ export async function runBootMigrations(): Promise<void> {
       )
     `);
 
+    // ── Task #398: admin_broadcasts schema drift ──────────────────────────────
+    // Table existed in Supabase with an older schema (created_by, no recipient_count,
+    // no sent_by_user_id). CREATE TABLE IF NOT EXISTS was a no-op. Add missing columns.
+    await runSql("admin_broadcasts.sent_by_user_id",
+      `ALTER TABLE admin_broadcasts ADD COLUMN IF NOT EXISTS sent_by_user_id VARCHAR REFERENCES users(id)`);
+    // Backfill from created_by (old column name) where present
+    await runSql("admin_broadcasts.sent_by_user_id.backfill",
+      `UPDATE admin_broadcasts SET sent_by_user_id = created_by WHERE sent_by_user_id IS NULL AND created_by IS NOT NULL`);
+    await runSql("admin_broadcasts.recipient_count",
+      `ALTER TABLE admin_broadcasts ADD COLUMN IF NOT EXISTS recipient_count INTEGER NOT NULL DEFAULT 0`);
+
     // ── Task #376 Migration 5: admin_broadcast_recipients ─────────────────────
     await runSql("table.admin_broadcast_recipients", `
       CREATE TABLE IF NOT EXISTS admin_broadcast_recipients (
@@ -1271,6 +1282,9 @@ export async function runBootMigrations(): Promise<void> {
         delivered_at TIMESTAMP
       )
     `);
+    // ── Task #398: admin_broadcast_recipients schema drift ────────────────────
+    await runSql("admin_broadcast_recipients.channel",
+      `ALTER TABLE admin_broadcast_recipients ADD COLUMN IF NOT EXISTS channel TEXT NOT NULL DEFAULT 'push'`);
 
     // ── Task #376 Migration 6: admin_audit_logs (immutable audit log) ─────────
     await runSql("table.admin_audit_logs", `
