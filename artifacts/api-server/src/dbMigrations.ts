@@ -484,20 +484,111 @@ export async function runBootMigrations(): Promise<void> {
     }
 
     // ── Post-migration verification ───────────────────────────────────────
-    // ── Orphan-provider cleanup ────────────────────────────────────────────────
-    // When a user account is deleted, providers.user_id is set to NULL by FK
-    // onDelete: "set null". These orphaned rows can never be accessed or owned by
-    // any user — delete them to maintain referential integrity.
+    // ── Orphan-provider audit (SAFE — log only, no deletes) ───────────────────
+    // Task #398: The previous DELETE FROM providers WHERE user_id IS NULL silently
+    // destroyed provider rows when auth accounts were temporarily unlinked (e.g.
+    // during migrations). Changed to log-only so ops can investigate and repair
+    // manually. Deletion requires explicit review — not an automated boot action.
     try {
-      const orphanResult = await client.query(`
-        DELETE FROM providers WHERE user_id IS NULL
+      const orphanResult = await client.query<{ id: string; business_name: string; email: string }>(`
+        SELECT id, business_name, email FROM providers WHERE user_id IS NULL
       `);
       if (orphanResult.rowCount && orphanResult.rowCount > 0) {
-        console.log(`[boot-migration] Removed ${orphanResult.rowCount} orphaned provider record(s) (user_id IS NULL)`);
+        console.warn(
+          `[boot-migration] WARNING: ${orphanResult.rowCount} provider record(s) have NULL user_id ` +
+          `(not deleted — manual review required): ` +
+          orphanResult.rows.map(r => `"${r.business_name}" <${r.email}> (${r.id})`).join(", ")
+        );
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn("[boot-migration] Orphan-provider cleanup skipped:", msg);
+      console.warn("[boot-migration] Orphan-provider audit skipped:", msg);
+    }
+
+    // ── Task #398: Restore known-missing provider accounts ────────────────────
+    // Users johndoe@homebaseproapp.com and johnnydoe@gmail.com exist in Supabase
+    // but their provider rows may have been silently deleted by the orphan cleanup
+    // that ran on previous boots. We look up each user, link any orphaned provider
+    // row that matches their email, or re-create the row if truly gone.
+    // Heritage Home Cleaners is also ensured to have is_partner=true.
+    try {
+      const knownProviderEmails = [
+        'johndoe@homebaseproapp.com',
+        'johnnydoe@gmail.com',
+      ];
+
+      for (const email of knownProviderEmails) {
+        const userRes = await client.query<{ id: string; first_name: string; last_name: string; email: string }>(
+          `SELECT id, first_name, last_name, email FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`,
+          [email]
+        );
+        if (!userRes.rowCount || userRes.rowCount === 0) {
+          console.log(`[boot-migration] Task #398 restore: user ${email} not found, skipping`);
+          continue;
+        }
+        const user = userRes.rows[0];
+
+        // Check if a provider row already exists for this user_id
+        const byUserRes = await client.query<{ id: string; business_name: string }>(
+          `SELECT id, business_name FROM providers WHERE user_id = $1 LIMIT 1`,
+          [user.id]
+        );
+        if (byUserRes.rowCount && byUserRes.rowCount > 0) {
+          console.log(`[boot-migration] Task #398 restore: provider for ${email} already linked (${byUserRes.rows[0].business_name}), skipping`);
+          continue;
+        }
+
+        // Check for an orphan row (user_id IS NULL) with matching email — link it
+        const orphanRes = await client.query<{ id: string; business_name: string }>(
+          `SELECT id, business_name FROM providers WHERE user_id IS NULL AND LOWER(email) = LOWER($1) LIMIT 1`,
+          [email]
+        );
+        if (orphanRes.rowCount && orphanRes.rowCount > 0) {
+          await client.query(
+            `UPDATE providers SET user_id = $1 WHERE id = $2`,
+            [user.id, orphanRes.rows[0].id]
+          );
+          console.log(`[boot-migration] Task #398 restore: linked orphan provider "${orphanRes.rows[0].business_name}" to user ${email}`);
+          continue;
+        }
+
+        // Provider row is gone — re-create from user data
+        const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ').trim();
+        const businessName = fullName || email;
+        const insertRes = await client.query<{ id: string }>(
+          `INSERT INTO providers (id, user_id, business_name, email, is_active, is_public, created_at)
+           VALUES (gen_random_uuid()::TEXT, $1, $2, $3, TRUE, TRUE, NOW())
+           RETURNING id`,
+          [user.id, businessName, email]
+        );
+        console.log(`[boot-migration] Task #398 restore: re-created provider "${businessName}" for ${email} (id=${insertRes.rows[0].id})`);
+      }
+
+      // Ensure Heritage Home Cleaners has is_partner=true regardless of which row owns it
+      const heritageRes = await client.query<{ id: string }>(
+        `SELECT p.id FROM providers p
+         LEFT JOIN provider_plans pp ON pp.provider_id = p.id
+         WHERE LOWER(p.business_name) = 'heritage home cleaners'
+           AND (pp.is_partner IS NULL OR pp.is_partner = FALSE)
+         LIMIT 10`
+      );
+      for (const row of heritageRes.rows) {
+        await client.query(
+          `INSERT INTO provider_plans (id, provider_id, is_partner, partner_since, is_subscribed, created_at, updated_at)
+           VALUES (gen_random_uuid()::TEXT, $1, TRUE, NOW(), FALSE, NOW(), NOW())
+           ON CONFLICT DO NOTHING`,
+          [row.id]
+        );
+        await client.query(
+          `UPDATE provider_plans SET is_partner = TRUE, partner_since = COALESCE(partner_since, NOW()), updated_at = NOW()
+           WHERE provider_id = $1`,
+          [row.id]
+        );
+        console.log(`[boot-migration] Task #398: set is_partner=true for Heritage Home Cleaners (provider ${row.id})`);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn("[boot-migration] Task #398 provider restore skipped:", msg);
     }
 
     // Verify that the critical tables and columns required for app functionality exist.
@@ -1129,6 +1220,13 @@ export async function runBootMigrations(): Promise<void> {
         created_at  TIMESTAMP NOT NULL DEFAULT now()
       )
     `);
+    // ── Task #398: support_ticket_messages.sender_type ────────────────────────
+    // CREATE TABLE IF NOT EXISTS is a no-op when the table already exists, so
+    // sender_type was never added to tables created before Task #376. Add it
+    // idempotently with the same safe default used in the original schema.
+    await runSql("support_ticket_messages.sender_type",
+      `ALTER TABLE support_ticket_messages ADD COLUMN IF NOT EXISTS sender_type TEXT NOT NULL DEFAULT 'admin'`
+    );
 
     // ── Task #376 Migration 4: admin_broadcasts (broadcast campaigns) ─────────
     await runSql("table.admin_broadcasts", `
@@ -1212,6 +1310,7 @@ export async function runBootMigrations(): Promise<void> {
       ["support_tickets.updated_at column",        `SELECT updated_at FROM support_tickets LIMIT 0`],
       ["users.last_active_at column",              `SELECT last_active_at FROM users LIMIT 0`],
       ["support_ticket_messages table",            `SELECT id FROM support_ticket_messages LIMIT 0`],
+      ["support_ticket_messages.sender_type",      `SELECT sender_type FROM support_ticket_messages LIMIT 0`],
       ["admin_broadcasts table",                   `SELECT id FROM admin_broadcasts LIMIT 0`],
       ["admin_broadcast_recipients table",         `SELECT id FROM admin_broadcast_recipients LIMIT 0`],
       ["admin_audit_logs table",                   `SELECT id FROM admin_audit_logs LIMIT 0`],
