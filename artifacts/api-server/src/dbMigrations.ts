@@ -510,14 +510,16 @@ export async function runBootMigrations(): Promise<void> {
     // but their provider rows may have been silently deleted by the orphan cleanup
     // that ran on previous boots. We look up each user, link any orphaned provider
     // row that matches their email, or re-create the row if truly gone.
-    // Heritage Home Cleaners is also ensured to have is_partner=true.
+    // For providers flagged isPartner=true, we also ensure is_partner is set in
+    // provider_plans using a safe UPDATE-then-INSERT pattern (no ON CONFLICT target
+    // because provider_plans has no unique constraint on provider_id).
     try {
-      const knownProviderEmails = [
-        'johndoe@homebaseproapp.com',
-        'johnnydoe@gmail.com',
+      const knownProviders: Array<{ email: string; businessName: string; isPartner: boolean }> = [
+        { email: 'johndoe@homebaseproapp.com', businessName: 'Heritage Home Cleaners', isPartner: true },
+        { email: 'johnnydoe@gmail.com',        businessName: '',                        isPartner: false },
       ];
 
-      for (const email of knownProviderEmails) {
+      for (const { email, businessName: knownBusinessName, isPartner } of knownProviders) {
         const userRes = await client.query<{ id: string; first_name: string; last_name: string; email: string }>(
           `SELECT id, first_name, last_name, email FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`,
           [email]
@@ -528,63 +530,71 @@ export async function runBootMigrations(): Promise<void> {
         }
         const user = userRes.rows[0];
 
+        let providerId: string | null = null;
+
         // Check if a provider row already exists for this user_id
         const byUserRes = await client.query<{ id: string; business_name: string }>(
           `SELECT id, business_name FROM providers WHERE user_id = $1 LIMIT 1`,
           [user.id]
         );
         if (byUserRes.rowCount && byUserRes.rowCount > 0) {
-          console.log(`[boot-migration] Task #398 restore: provider for ${email} already linked (${byUserRes.rows[0].business_name}), skipping`);
-          continue;
+          console.log(`[boot-migration] Task #398 restore: provider for ${email} already linked (${byUserRes.rows[0].business_name})`);
+          providerId = byUserRes.rows[0].id;
         }
 
-        // Check for an orphan row (user_id IS NULL) with matching email — link it
-        const orphanRes = await client.query<{ id: string; business_name: string }>(
-          `SELECT id, business_name FROM providers WHERE user_id IS NULL AND LOWER(email) = LOWER($1) LIMIT 1`,
-          [email]
-        );
-        if (orphanRes.rowCount && orphanRes.rowCount > 0) {
-          await client.query(
-            `UPDATE providers SET user_id = $1 WHERE id = $2`,
-            [user.id, orphanRes.rows[0].id]
+        if (!providerId) {
+          // Check for an orphan row (user_id IS NULL) with matching email — link it
+          const orphanRes = await client.query<{ id: string; business_name: string }>(
+            `SELECT id, business_name FROM providers WHERE user_id IS NULL AND LOWER(email) = LOWER($1) LIMIT 1`,
+            [email]
           );
-          console.log(`[boot-migration] Task #398 restore: linked orphan provider "${orphanRes.rows[0].business_name}" to user ${email}`);
-          continue;
+          if (orphanRes.rowCount && orphanRes.rowCount > 0) {
+            await client.query(
+              `UPDATE providers SET user_id = $1 WHERE id = $2`,
+              [user.id, orphanRes.rows[0].id]
+            );
+            console.log(`[boot-migration] Task #398 restore: linked orphan provider "${orphanRes.rows[0].business_name}" to user ${email}`);
+            providerId = orphanRes.rows[0].id;
+          }
         }
 
-        // Provider row is gone — re-create from user data
-        const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ').trim();
-        const businessName = fullName || email;
-        const insertRes = await client.query<{ id: string }>(
-          `INSERT INTO providers (id, user_id, business_name, email, is_active, is_public, created_at)
-           VALUES (gen_random_uuid()::TEXT, $1, $2, $3, TRUE, TRUE, NOW())
-           RETURNING id`,
-          [user.id, businessName, email]
-        );
-        console.log(`[boot-migration] Task #398 restore: re-created provider "${businessName}" for ${email} (id=${insertRes.rows[0].id})`);
-      }
+        if (!providerId) {
+          // Provider row is truly gone — re-create it
+          const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ').trim();
+          const businessName = knownBusinessName || fullName || email;
+          const insertRes = await client.query<{ id: string }>(
+            `INSERT INTO providers (id, user_id, business_name, email, is_active, is_public, created_at)
+             VALUES (gen_random_uuid()::TEXT, $1, $2, $3, TRUE, TRUE, NOW())
+             RETURNING id`,
+            [user.id, businessName, email]
+          );
+          providerId = insertRes.rows[0].id;
+          console.log(`[boot-migration] Task #398 restore: re-created provider "${businessName}" for ${email} (id=${providerId})`);
+        }
 
-      // Ensure Heritage Home Cleaners has is_partner=true regardless of which row owns it
-      const heritageRes = await client.query<{ id: string }>(
-        `SELECT p.id FROM providers p
-         LEFT JOIN provider_plans pp ON pp.provider_id = p.id
-         WHERE LOWER(p.business_name) = 'heritage home cleaners'
-           AND (pp.is_partner IS NULL OR pp.is_partner = FALSE)
-         LIMIT 10`
-      );
-      for (const row of heritageRes.rows) {
-        await client.query(
-          `INSERT INTO provider_plans (id, provider_id, is_partner, partner_since, is_subscribed, created_at, updated_at)
-           VALUES (gen_random_uuid()::TEXT, $1, TRUE, NOW(), FALSE, NOW(), NOW())
-           ON CONFLICT DO NOTHING`,
-          [row.id]
-        );
-        await client.query(
-          `UPDATE provider_plans SET is_partner = TRUE, partner_since = COALESCE(partner_since, NOW()), updated_at = NOW()
-           WHERE provider_id = $1`,
-          [row.id]
-        );
-        console.log(`[boot-migration] Task #398: set is_partner=true for Heritage Home Cleaners (provider ${row.id})`);
+        // Ensure is_partner is set for providers that require it.
+        // Safe idempotent pattern: UPDATE existing row; if none found, INSERT only
+        // if no row exists (WHERE NOT EXISTS avoids duplicates — provider_plans has
+        // no unique constraint on provider_id so ON CONFLICT cannot be used).
+        if (isPartner && providerId) {
+          const updRes = await client.query(
+            `UPDATE provider_plans
+             SET is_partner = TRUE, partner_since = COALESCE(partner_since, NOW()), updated_at = NOW()
+             WHERE provider_id = $1`,
+            [providerId]
+          );
+          if (!updRes.rowCount || updRes.rowCount === 0) {
+            await client.query(
+              `INSERT INTO provider_plans (id, provider_id, is_partner, partner_since, is_subscribed, created_at, updated_at)
+               SELECT gen_random_uuid()::TEXT, $1, TRUE, NOW(), FALSE, NOW(), NOW()
+               WHERE NOT EXISTS (SELECT 1 FROM provider_plans WHERE provider_id = $1)`,
+              [providerId]
+            );
+            console.log(`[boot-migration] Task #398: created partner plan for provider ${providerId}`);
+          } else {
+            console.log(`[boot-migration] Task #398: ensured is_partner=true for provider ${providerId} (${email})`);
+          }
+        }
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
