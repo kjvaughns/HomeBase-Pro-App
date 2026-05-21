@@ -24,7 +24,7 @@ export default function Dashboard() {
   const recentBookings = data?.recentBookings || [];
 
   const cards = [
-    { label: "Total Homeowners", value: stats.totalUsers ?? "-" },
+    { label: "Total Homeowners", value: stats.totalHomeowners ?? "-" },
     { label: "Total Providers", value: stats.totalProviders ?? "-" },
     { label: "Active Providers", value: stats.activeProviders ?? "-", accent: true },
     { label: "Inactive Providers", value: stats.inactiveProviders ?? "-" },

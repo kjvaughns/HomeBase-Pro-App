@@ -1127,6 +1127,7 @@ export class DatabaseStorage implements IStorage {
 
   async getAdminStats(): Promise<{
     totalUsers: number;
+    totalHomeowners: number;
     totalProviders: number;
     activeProviders: number;
     inactiveProviders: number;
@@ -1140,6 +1141,7 @@ export class DatabaseStorage implements IStorage {
     const [counts] = await db
       .select({
         totalUsers: sql<number>`(SELECT COUNT(*) FROM users)`,
+        totalHomeowners: sql<number>`(SELECT COUNT(*) FROM users WHERE is_provider = false AND is_admin = false)`,
         totalProviders: sql<number>`(SELECT COUNT(*) FROM providers)`,
         activeProviders: sql<number>`(SELECT COUNT(*) FROM providers WHERE is_active = true)`,
         inactiveProviders: sql<number>`(SELECT COUNT(*) FROM providers WHERE is_active = false)`,
@@ -1153,6 +1155,7 @@ export class DatabaseStorage implements IStorage {
       .from(sql`(SELECT 1) AS dual`);
     return {
       totalUsers: Number(counts.totalUsers),
+      totalHomeowners: Number(counts.totalHomeowners),
       totalProviders: Number(counts.totalProviders),
       activeProviders: Number(counts.activeProviders),
       inactiveProviders: Number(counts.inactiveProviders),
@@ -1193,7 +1196,10 @@ export class DatabaseStorage implements IStorage {
     }
     if (role === "admin") conditions.push(eq(users.isAdmin, true));
     if (role === "provider") conditions.push(eq(users.isProvider, true));
-    if (role === "homeowner") conditions.push(eq(users.isProvider, false));
+    if (role === "homeowner") {
+      conditions.push(eq(users.isProvider, false));
+      conditions.push(eq(users.isAdmin, false));
+    }
 
     const orderClause =
       sortBy === "name_asc" ? asc(users.firstName) :
