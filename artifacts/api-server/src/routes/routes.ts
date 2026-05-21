@@ -48,8 +48,10 @@ import {
   sendInvoiceReminderEmail,
   sendProviderScheduledJobEmail,
   sendAdminSupportReplyEmail,
+  sendAiSupportReplyEmail,
   sendAdminBroadcastEmail,
 } from "../emailService";
+import { openai, SUPPORT_AI_SYSTEM_PROMPT } from "../openai";
 import {
   dispatch,
   dispatchWithResult,
@@ -16818,7 +16820,7 @@ Respond with JSON only:
         })
         .returning();
 
-      // Send email non-fatally
+      // Send admin inbox notification non-fatally
       sendSupportTicketEmail({
         ticketId: ticket.id,
         name: ticket.name,
@@ -16831,6 +16833,36 @@ Respond with JSON only:
           "[SUPPORT_EMAIL] Failed to send support ticket email:",
           err,
         );
+      });
+
+      // AI auto-response: generate and email within seconds, fire-and-forget
+      setImmediate(async () => {
+        try {
+          const completion = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            max_tokens: 350,
+            messages: [
+              { role: "system", content: SUPPORT_AI_SYSTEM_PROMPT },
+              {
+                role: "user",
+                content: `Category: ${ticket.category}\nSubject: ${ticket.subject}\n\n${ticket.message}`,
+              },
+            ],
+          });
+          const aiReply = completion.choices[0]?.message?.content?.trim();
+          if (aiReply) {
+            await storage.addAiSupportTicketMessage(ticket.id, aiReply);
+            await sendAiSupportReplyEmail({
+              to: ticket.email,
+              recipientName: ticket.name,
+              ticketSubject: ticket.subject,
+              ticketId: ticket.id,
+              replyBody: aiReply,
+            });
+          }
+        } catch (aiErr) {
+          console.error("[SUPPORT_AI] Failed to generate AI auto-response:", aiErr);
+        }
       });
 
       res.status(201).json({ success: true, ticketId: ticket.id });
@@ -17389,7 +17421,7 @@ Respond with JSON only:
         const { message, ticket } = await storage.addSupportTicketMessage(id, adminUserId, messageBody.trim());
         if (!ticket) return res.status(404).json({ error: "Ticket not found" });
 
-        // Send reply email fire-and-forget
+        // Send reply email fire-and-forget, threaded after AI first response
         setImmediate(async () => {
           try {
             await sendAdminSupportReplyEmail({
@@ -17398,6 +17430,7 @@ Respond with JSON only:
               ticketSubject: ticket.subject,
               ticketId: id,
               replyBody: messageBody.trim(),
+              inReplyTo: `<ticket-${id}@homebaseproapp.com>`,
             });
           } catch (emailErr) {
             console.error("[admin] support reply email error:", emailErr);

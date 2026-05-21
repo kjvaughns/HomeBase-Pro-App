@@ -178,15 +178,27 @@ export default function SupportTicketDetail() {
               <p style={s.msgBody}>{ticket.message}</p>
             </div>
 
-            {messages.map((msg: { id: string; senderType: string; senderName?: string | null; body: string; createdAt: string | null }) => (
-              <div key={msg.id} style={{ ...s.message, ...(msg.senderType === "admin" ? s.adminMessage : s.userMessage) }}>
-                <div style={s.msgHeader}>
-                  <span style={s.msgAuthor}>{msg.senderType === "admin" ? "Admin" : (msg.senderName || "User")}</span>
-                  <span style={s.msgTime}>{msg.createdAt ? format(new Date(msg.createdAt), "MMM d, yyyy h:mm a") : ""}</span>
+            {messages.map((msg: { id: string; senderType: string; senderName?: string | null; body: string; createdAt: string | null }) => {
+              const isAi = msg.senderType === "ai";
+              const isAdmin = msg.senderType === "admin";
+              const bubbleStyle = isAi ? s.aiMessage : isAdmin ? s.adminMessage : s.userMessage;
+              return (
+                <div key={msg.id} style={{ ...s.message, ...bubbleStyle }}>
+                  <div style={s.msgHeader}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={s.msgAuthor}>
+                        {isAi ? "HomeBase AI" : isAdmin ? "Support Team" : (msg.senderName || "User")}
+                      </span>
+                      {isAi && (
+                        <span style={s.aiBadge}>AI</span>
+                      )}
+                    </div>
+                    <span style={s.msgTime}>{msg.createdAt ? format(new Date(msg.createdAt), "MMM d, yyyy h:mm a") : ""}</span>
+                  </div>
+                  <p style={s.msgBody}>{msg.body}</p>
                 </div>
-                <p style={s.msgBody}>{msg.body}</p>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div style={s.replyBox}>
@@ -246,6 +258,8 @@ const s: Record<string, React.CSSProperties> = {
   message: { borderRadius: 8, padding: "12px 16px" },
   userMessage: { background: "var(--surface-2)", border: "1px solid var(--border)" },
   adminMessage: { background: "rgba(56,174,95,0.08)", border: "1px solid rgba(56,174,95,0.2)" },
+  aiMessage: { background: "rgba(124,58,237,0.06)", border: "1px solid rgba(124,58,237,0.18)" },
+  aiBadge: { fontSize: 10, fontWeight: 700, color: "#7c3aed", background: "rgba(124,58,237,0.12)", padding: "1px 7px", borderRadius: 99, letterSpacing: "0.04em" },
   msgHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 },
   msgAuthor: { fontSize: 13, fontWeight: 600, color: "var(--text-primary)" },
   msgTime: { fontSize: 11, color: "var(--text-muted)" },

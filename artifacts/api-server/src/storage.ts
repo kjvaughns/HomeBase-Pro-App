@@ -1545,6 +1545,23 @@ export class DatabaseStorage implements IStorage {
     return { message, ticket };
   }
 
+  async addAiSupportTicketMessage(
+    ticketId: string,
+    body: string,
+  ): Promise<SupportTicketMessage> {
+    const [message] = await db
+      .insert(supportTicketMessages)
+      .values({ ticketId, senderId: null, senderType: "ai", body })
+      .returning();
+
+    await db
+      .update(supportTickets)
+      .set({ status: "in_progress", updatedAt: new Date() })
+      .where(eq(supportTickets.id, ticketId));
+
+    return message;
+  }
+
   async resolveBroadcastRecipientIds(audience: string): Promise<string[]> {
     if (audience === "all") {
       const rows = await db.select({ id: users.id }).from(users);

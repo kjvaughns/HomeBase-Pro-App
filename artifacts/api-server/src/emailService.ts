@@ -1510,6 +1510,7 @@ export async function sendAdminSupportReplyEmail(data: {
   ticketSubject: string;
   ticketId: string;
   replyBody: string;
+  inReplyTo?: string;
 }): Promise<SendResult> {
   const body =
     greeting(data.recipientName) +
@@ -1523,11 +1524,76 @@ export async function sendAdminSupportReplyEmail(data: {
       "If you have additional questions, please reply to this email or submit another support request through the HomeBase app.",
     ) +
     `<p style="color:#9ca3af;font-size:12px;margin:0;">Ticket ID: ${escapeHtml(data.ticketId)}</p>`;
-  return sendEmail(
-    data.to,
-    `Re: ${data.ticketSubject} — HomeBase Support`,
-    buildEmailBase("Support Update", body),
-  );
+
+  try {
+    const { client, fromEmail } = await getResendClient();
+    const extraHeaders: Record<string, string> = {};
+    if (data.inReplyTo) {
+      extraHeaders["In-Reply-To"] = data.inReplyTo;
+      extraHeaders["References"] = data.inReplyTo;
+    }
+    const result = await client.emails.send({
+      from: fromEmail || "HomeBase Support <noreply@resend.dev>",
+      to: data.to,
+      subject: `Re: ${data.ticketSubject} — HomeBase Support`,
+      html: buildEmailBase("Support Update", body),
+      headers: extraHeaders,
+    });
+    if (result.error) {
+      console.error("Resend error:", result.error);
+      return { success: false, error: result.error.message };
+    }
+    return { success: true, messageId: result.data?.id };
+  } catch (err: any) {
+    console.error("sendAdminSupportReplyEmail error:", err);
+    return { success: false, error: err.message || "Failed to send reply email" };
+  }
+}
+
+export async function sendAiSupportReplyEmail(data: {
+  to: string;
+  recipientName: string;
+  ticketSubject: string;
+  ticketId: string;
+  replyBody: string;
+}): Promise<SendResult> {
+  const threadMessageId = `<ticket-${data.ticketId}@homebaseproapp.com>`;
+  const body =
+    greeting(data.recipientName) +
+    paragraph(
+      `Thanks for reaching out! Here's an initial response from HomeBase AI regarding: <strong>${escapeHtml(data.ticketSubject)}</strong>`,
+    ) +
+    `<div style="background:#f5f3ff;border-radius:8px;padding:20px;margin-bottom:24px;border-left:4px solid #7c3aed;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <span style="background:#7c3aed;color:#fff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;letter-spacing:0.3px;">HomeBase AI</span>
+      </div>
+      <p style="color:#374151;font-size:14px;line-height:1.7;margin:0;">${escapeHtml(data.replyBody).replace(/\n/g, "<br>")}</p>
+    </div>` +
+    paragraph(
+      "A member of our support team monitors all tickets and will follow up personally if you need additional help.",
+    ) +
+    `<p style="color:#9ca3af;font-size:12px;margin:0;">Ticket ID: ${escapeHtml(data.ticketId.slice(0, 8).toUpperCase())}</p>`;
+
+  try {
+    const { client, fromEmail } = await getResendClient();
+    const result = await client.emails.send({
+      from: fromEmail || "HomeBase Support <noreply@resend.dev>",
+      to: data.to,
+      subject: `Re: ${data.ticketSubject} — HomeBase Support`,
+      html: buildEmailBase("HomeBase AI Support", body),
+      headers: {
+        "Message-ID": threadMessageId,
+      },
+    });
+    if (result.error) {
+      console.error("Resend error:", result.error);
+      return { success: false, error: result.error.message };
+    }
+    return { success: true, messageId: result.data?.id };
+  } catch (err: any) {
+    console.error("sendAiSupportReplyEmail error:", err);
+    return { success: false, error: err.message || "Failed to send AI reply email" };
+  }
 }
 
 export async function sendAdminBroadcastEmail(data: {
