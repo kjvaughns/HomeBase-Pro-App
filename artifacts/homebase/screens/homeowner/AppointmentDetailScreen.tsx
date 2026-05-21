@@ -23,6 +23,7 @@ import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest, getApiUrl, getAuthHeaders } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { recordHappyMoment } from "@/state/appReviewStore";
 
 // Task #236: small helper to call POST endpoints that may legitimately
 // return a non-2xx (e.g. 409) without throwing — `apiRequest`
@@ -234,6 +235,16 @@ export default function AppointmentDetailScreen() {
       queryClient.invalidateQueries({ queryKey: ["/api/appointment", appointmentId] });
     }, [queryClient, appointmentId])
   );
+
+  // Fire once when the homeowner views a confirmed/scheduled booking.
+  // Deduped per appointment ID so it only counts the first time they see it.
+  React.useEffect(() => {
+    if (appointment && appointment.status === "confirmed") {
+      recordHappyMoment("homeowner_booking_confirmed", {
+        payload: { bookingId: appointment.id },
+      }).catch(() => {});
+    }
+  }, [appointment?.id, appointment?.status]);
 
   const generateDates = useMemo(() => {
     const dates: Date[] = [];

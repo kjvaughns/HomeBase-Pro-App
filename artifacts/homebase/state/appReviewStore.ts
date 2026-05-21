@@ -1,9 +1,8 @@
 import { Platform, Linking } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as StoreReview from "expo-store-review";
-import Constants from "expo-constants";
 
-const STORAGE_KEY = "app-review-tracker.v1";
+const STORAGE_KEY = "app-review-tracker.v2";
 // Direct links to the live App Store / Play Store listings. Used as the
 // fallback when the native in-app review sheet isn't available (e.g. web,
 // or when the OS-level throttle is exhausted). Keep these in sync with
@@ -20,38 +19,52 @@ function storeFallbackUrl(): string {
   return WEB_FALLBACK_URL;
 }
 
-const FIRST_SESSION_DELAY_MS = 24 * 60 * 60 * 1000;
-const PROMPT_THROTTLE_MS = 90 * 24 * 60 * 60 * 1000;
+// Wait 48h after first install before ever prompting — prevents the "right
+// after signup" prompt the user would otherwise see on their first return session.
+const FIRST_SESSION_DELAY_MS = 48 * 60 * 60 * 1000;
+// Once prompted, wait 30 days before prompting again (was 90 days).
+const PROMPT_THROTTLE_MS = 30 * 24 * 60 * 60 * 1000;
+// homeowner_feature_used counts at most once per 30-day window.
+const FEATURE_USED_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
 export type HappyMomentKey =
   | "homeowner_onboarding_complete"
   | "homeowner_feature_used"
   | "homeowner_high_review_submitted"
+  | "homeowner_booking_confirmed"
+  | "homeowner_job_completed"
   | "provider_five_star_received"
-  | "provider_invoice_paid";
+  | "provider_invoice_paid"
+  | "provider_job_completed";
 
 interface TrackerData {
   firstSeenAt: number | null;
   lastPromptedAt: number | null;
-  lastPromptedVersion: string | null;
   happyMomentCount: number;
   recordedKeys: string[];
   acknowledgedReviewIds: string[];
   paidInvoiceIds: string[];
   homeownerOnboardedAt: number | null;
   hasUsedFeatureSinceOnboarding: boolean;
+  lastFeatureUsedAt: number | null;
+  confirmedBookingIds: string[];
+  completedHomeownerJobIds: string[];
+  providerCompletedJobIds: string[];
 }
 
 const DEFAULT: TrackerData = {
   firstSeenAt: null,
   lastPromptedAt: null,
-  lastPromptedVersion: null,
   happyMomentCount: 0,
   recordedKeys: [],
   acknowledgedReviewIds: [],
   paidInvoiceIds: [],
   homeownerOnboardedAt: null,
   hasUsedFeatureSinceOnboarding: false,
+  lastFeatureUsedAt: null,
+  confirmedBookingIds: [],
+  completedHomeownerJobIds: [],
+  providerCompletedJobIds: [],
 };
 
 let cache: TrackerData | null = null;
@@ -91,10 +104,6 @@ async function persist(next: TrackerData): Promise<void> {
   }
 }
 
-function currentVersion(): string {
-  return Constants.expoConfig?.version ?? "1.0.0";
-}
-
 function isSupportedPlatform(): boolean {
   return Platform.OS === "ios" || Platform.OS === "android";
 }
@@ -106,9 +115,6 @@ async function shouldPrompt(state: TrackerData): Promise<boolean> {
     return false;
   }
   if (state.lastPromptedAt && Date.now() - state.lastPromptedAt < PROMPT_THROTTLE_MS) {
-    return false;
-  }
-  if (state.lastPromptedVersion === currentVersion()) {
     return false;
   }
   try {
@@ -128,7 +134,6 @@ async function requestNativeReview(state: TrackerData): Promise<boolean> {
     const next: TrackerData = {
       ...state,
       lastPromptedAt: Date.now(),
-      lastPromptedVersion: currentVersion(),
     };
     await persist(next);
     return true;
@@ -185,29 +190,28 @@ async function recordHappyMomentInternal(
       next.hasUsedFeatureSinceOnboarding = false;
       next.recordedKeys = [...state.recordedKeys, key];
       await persist(next);
-      // Don't prompt at onboarding — wait for a feature-use moment 24h later.
+      // Don't prompt at onboarding — wait for a feature-use moment 48h later.
       return;
 
     case "homeowner_feature_used": {
-      // Mark the feature-use flag so we know the user has actually engaged
-      // with the app at some point after onboarding.
       next.hasUsedFeatureSinceOnboarding = true;
       const onboardedAt = state.homeownerOnboardedAt;
       const elapsed =
         onboardedAt !== null && Date.now() - onboardedAt >= FIRST_SESSION_DELAY_MS;
-      // Only count the happy moment once the *combined* condition is true:
-      // (a) at least 24h has elapsed since onboarding, and (b) they've used
-      // a feature at any point after onboarding (current call satisfies b).
-      // We dedup so multiple feature-use events don't inflate the counter.
+      // Require 48h since onboarding before counting feature use.
       if (!elapsed) {
         await persist(next);
         return;
       }
-      if (state.recordedKeys.includes("homeowner_feature_used")) {
+      // Allow once per 30-day window (replaces the old lifetime dedup).
+      if (
+        state.lastFeatureUsedAt &&
+        Date.now() - state.lastFeatureUsedAt < FEATURE_USED_WINDOW_MS
+      ) {
         await persist(next);
         return;
       }
-      next.recordedKeys = [...state.recordedKeys, "homeowner_feature_used"];
+      next.lastFeatureUsedAt = Date.now();
       next.happyMomentCount = state.happyMomentCount + 1;
       break;
     }
@@ -216,6 +220,31 @@ async function recordHappyMomentInternal(
       next.happyMomentCount = state.happyMomentCount + 1;
       next.recordedKeys = [...state.recordedKeys, key];
       break;
+
+    case "homeowner_booking_confirmed": {
+      const bookingId = options?.payload?.bookingId;
+      if (!bookingId) return;
+      if (state.confirmedBookingIds.includes(bookingId)) return;
+      next.confirmedBookingIds = [...state.confirmedBookingIds, bookingId].slice(-50);
+      next.happyMomentCount = state.happyMomentCount + 1;
+      break;
+    }
+
+    case "homeowner_job_completed": {
+      const jobId = options?.payload?.jobId;
+      if (!jobId) return;
+      if (state.completedHomeownerJobIds.includes(jobId)) return;
+      const nextIds = [...state.completedHomeownerJobIds, jobId];
+      next.completedHomeownerJobIds = nextIds.slice(-50);
+      // Count from the 2nd completed job onward — the first is still
+      // "honeymoon" territory and the user hasn't formed a real opinion yet.
+      if (nextIds.length < 2) {
+        await persist(next);
+        return;
+      }
+      next.happyMomentCount = state.happyMomentCount + 1;
+      break;
+    }
 
     case "provider_five_star_received": {
       const reviewId = options?.payload?.reviewId;
@@ -232,8 +261,23 @@ async function recordHappyMomentInternal(
       if (state.paidInvoiceIds.includes(invoiceId)) return;
       const nextIds = [...state.paidInvoiceIds, invoiceId];
       next.paidInvoiceIds = nextIds.slice(-25);
-      // Only count the third (and later) successfully paid invoice as the
-      // happy moment, per spec.
+      // Only count from the third paid invoice onward.
+      if (nextIds.length < 3) {
+        await persist(next);
+        return;
+      }
+      next.happyMomentCount = state.happyMomentCount + 1;
+      break;
+    }
+
+    case "provider_job_completed": {
+      const jobId = options?.payload?.jobId;
+      if (!jobId) return;
+      if (state.providerCompletedJobIds.includes(jobId)) return;
+      const nextIds = [...state.providerCompletedJobIds, jobId];
+      next.providerCompletedJobIds = nextIds.slice(-50);
+      // Count from the 3rd completed job onward — by then the provider
+      // has earned real value from the platform.
       if (nextIds.length < 3) {
         await persist(next);
         return;
@@ -265,7 +309,6 @@ export async function openAppReviewFromSettings(): Promise<void> {
         await persist({
           ...state,
           lastPromptedAt: Date.now(),
-          lastPromptedVersion: currentVersion(),
         });
         return;
       }

@@ -21,6 +21,7 @@ import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { getApiUrl, getAuthHeaders } from "@/lib/query-client";
 import { useAuthStore } from "@/state/authStore";
+import { recordHappyMoment } from "@/state/appReviewStore";
 
 type ScreenRouteProp = RouteProp<RootStackParamList, "JobDetail">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -174,6 +175,14 @@ export default function JobDetailScreen() {
   const provider = aptData?.provider;
   const review = aptData?.review ?? null;
   const isHomeowner = !!appointment && !!user && appointment.userId === user.id;
+
+  // Fire once when the homeowner views a completed/paid appointment.
+  // Deduped per appointment ID; counts from the 2nd completed job onward.
+  React.useEffect(() => {
+    if (appointment && (appointment.status === "completed" || appointment.status === "paid")) {
+      recordHappyMoment("homeowner_job_completed", { payload: { jobId: appointment.id } }).catch(() => {});
+    }
+  }, [appointment?.id, appointment?.status]);
   const canReview =
     !!appointment &&
     isHomeowner &&

@@ -23,6 +23,7 @@ import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { RecordPaymentSheet } from "@/components/RecordPaymentSheet";
 import { useNetworkStore } from "@/state/networkStore";
 import { loadScheduleSnapshot } from "@/lib/offline-cache";
+import { recordHappyMoment } from "@/state/appReviewStore";
 
 type JobStatus = "scheduled" | "confirmed" | "on_my_way" | "arrived" | "in_progress" | "completed" | "cancelled" | "weather_held";
 
@@ -598,6 +599,7 @@ export default function ProviderJobDetailScreen() {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "jobs"] });
       setDisplayStatus("completed");
+      recordHappyMoment("provider_job_completed", { payload: { jobId } }).catch(() => {});
     },
     onError: () => {
       Alert.alert("Error", "Failed to complete job");
