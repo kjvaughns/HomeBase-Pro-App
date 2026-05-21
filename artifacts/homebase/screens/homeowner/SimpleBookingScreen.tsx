@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { recordHappyMoment } from "@/state/appReviewStore";
 import { StyleSheet, View, ScrollView, Pressable, Alert, ActivityIndicator, Switch, TextInput, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -415,6 +416,11 @@ export default function SimpleBookingScreen() {
         requiresDeposit: !!data?.requiresDeposit,
         depositAmountCents: data?.depositAmountCents ?? null,
       });
+      if (data?.appointment?.id) {
+        recordHappyMoment("homeowner_booking_confirmed", {
+          payload: { bookingId: data.appointment.id },
+        }).catch(() => {});
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       // Task #236: provider requires a deposit — open the Stripe Checkout
       // page externally so the homeowner can pay before the booking is

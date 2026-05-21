@@ -179,7 +179,7 @@ export default function JobDetailScreen() {
   // Fire once when the homeowner views a completed/paid appointment.
   // Deduped per appointment ID; counts from the 2nd completed job onward.
   React.useEffect(() => {
-    if (appointment && (appointment.status === "completed" || appointment.status === "paid")) {
+    if (appointment && appointment.status === "completed") {
       recordHappyMoment("homeowner_job_completed", { payload: { jobId: appointment.id } }).catch(() => {});
     }
   }, [appointment?.id, appointment?.status]);
