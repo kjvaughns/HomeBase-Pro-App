@@ -161,6 +161,29 @@ app.post(
   },
 );
 
+// ─── Resend inbound email webhook ────────────────────────────────────────────
+// Must be registered BEFORE express.json() so req.body is a raw Buffer for
+// Svix signature verification (same constraint as Stripe webhooks above).
+// Setup: in Resend dashboard, set the inbound webhook URL to:
+//   https://api.homebaseproapp.com/api/webhooks/resend/inbound
+// and set RESEND_WEBHOOK_SECRET to the signing secret from Resend's dashboard.
+// ─────────────────────────────────────────────────────────────────────────────
+
+app.post(
+  "/api/webhooks/resend/inbound",
+  express.raw({ type: "*/*" }),
+  (req: Request, res: Response) => {
+    import("./inboundEmailHandler")
+      .then(({ handleResendInboundEmail }) =>
+        handleResendInboundEmail(req, res),
+      )
+      .catch((err) => {
+        logger.error({ err }, "[inbound-email] unexpected error");
+        if (!res.headersSent) res.status(500).json({ error: "internal_error" });
+      });
+  },
+);
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 app.use(express.json({ limit: "10mb" }));

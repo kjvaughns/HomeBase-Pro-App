@@ -24,6 +24,8 @@ export default function SupportTicketDetail() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["/api/admin/support-tickets", id],
     queryFn: () => api.get(`/api/admin/support-tickets/${id}`).then((r) => r.data),
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
   });
 
   useEffect(() => {

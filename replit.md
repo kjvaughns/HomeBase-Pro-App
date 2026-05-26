@@ -54,6 +54,19 @@ HomeBase connects homeowners with verified service providers. Homeowners can bro
 
 _Populate as you build — explicit user instructions worth remembering across sessions._
 
+## Support ticket inbound email threading
+
+User email replies feed back into the ticket thread automatically via a Resend inbound webhook.
+
+**Setup required (one-time, production):**
+1. In the Resend dashboard → Domains → your domain → Inbound, point the inbound address to:
+   `https://api.homebaseproapp.com/api/webhooks/resend/inbound`
+2. Copy the Svix signing secret Resend provides and add it as `RESEND_WEBHOOK_SECRET` in Replit Secrets.
+3. The route is registered in `artifacts/api-server/src/app.ts` before `express.json()` so the raw Buffer is available for Svix HMAC verification.
+4. If `RESEND_WEBHOOK_SECRET` is absent the webhook is still accepted (with a logged warning) so dev testing works without a secret.
+
+**Handler:** `artifacts/api-server/src/inboundEmailHandler.ts`
+
 ## Gotchas
 
 - **Never run `pnpm dev` at workspace root** — individual workflows handle env vars (PORT, BASE_PATH).
