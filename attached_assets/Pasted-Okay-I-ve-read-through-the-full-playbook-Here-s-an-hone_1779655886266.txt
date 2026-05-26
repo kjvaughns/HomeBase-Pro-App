@@ -1,0 +1,109 @@
+Okay I’ve read through the full playbook. Here’s an honest breakdown of what’s most relevant to HomeBase specifically:
+
+The Plays That Matter Most For HomeBase Right Now
+
+1 — Time To Value (Most Critical)
+
+The playbook defines this as the gap between signup and experiencing real benefit. For HomeBase this is everything.
+
+Right now your Time To Value sequence is:
+
+	•	Provider signs up
+	•	Sets up profile
+	•	Creates booking link
+	•	Sends link to first client
+	•	Client books and pays
+	•	Provider gets paid
+	•	THAT is your Time to Value moment
+
+The faster you compress that sequence the higher your activation rate. The playbook recommends targeting under 5 minutes from signup to first core action.
+
+What to do: Redesign your onboarding as a guided checklist that walks providers through those exact steps immediately after signup. Don’t let them explore the app freely — guide them directly to their first booking link creation. Every extra step before that moment loses providers.
+
+2 — Success Moments
+
+The playbook defines these as rewards immediately after completing a key action. This is where HomeBase has a massive untapped opportunity.
+
+When a provider gets their first payment through HomeBase — what happens? Just a notification? That’s not enough.
+
+What to do: Build a dedicated success screen that triggers the first time a provider receives a payment through HomeBase. Full screen moment. Confetti animation. Their earnings displayed prominently. A message like “Your first HomeBase payment. This is just the beginning.”
+
+That moment needs to feel like a milestone — because it is. It’s the exact moment your free trial converts to a paying subscriber. Make it unforgettable and they’ll tell other providers about it.
+
+3 — Commitment
+
+The playbook says users who declare intent stick around longer. Duolingo does this by asking “what’s your daily learning goal?” before you start.
+
+What to do: During provider onboarding ask one question: “How much do you want to earn through HomeBase this month?” Let them set a goal. Then show a progress bar toward that goal on their dashboard. Send a push notification when they hit 50% and 100%.
+
+A provider who has set a $5,000 monthly goal and is at $3,200 is not cancelling their subscription. They’re too close to their own target.
+
+4 — Effort Moat
+
+The playbook defines this as turning invested effort into loyalty. The more a provider builds inside HomeBase the harder it is to leave.
+
+HomeBase already has this built in — client list, recurring jobs, booking links, service history. But you need to make providers aware of what they’ve built.
+
+What to do: Show providers a monthly summary — “This month you managed 47 jobs, served 12 clients, and processed $4,200 through HomeBase.” That summary makes the effort visible. Leaving now means losing all of that context.
+
+5 — Variable Reward
+
+The playbook describes this as unpredictability that drives return behavior. It’s why slot machines are addictive.
+
+What to do: Show providers something slightly different every time they open the app. Rotate between:
+
+	•	A new homeowner in their area searching for their service type
+	•	A tip about optimizing their most popular service
+	•	A milestone they’re close to hitting
+	•	A stat about how their profile is performing
+
+That unpredictability makes providers open the app daily to see what’s new — even on days they have no scheduled jobs.
+
+6 — The Paywall Play
+
+The playbook has a specific framework for turning conversion friction into product desire. Your current paywall is already strong — free until first job is exactly right. But the paywall moment itself could be enhanced.
+
+When the subscription trigger hits — the first completed job — instead of just showing a payment prompt, show:
+
+“You just earned [X] through HomeBase. Subscribe to keep your business running on autopilot.”
+
+Connect the subscription moment directly to the value they just experienced. That framing converts at a fundamentally different rate than a generic “start your subscription” prompt.
+
+7 — Gamified Progress
+
+Streak mechanics, progress bars, milestone badges. The playbook shows these drive habit formation more than almost anything else.
+
+What to do for providers:
+
+	•	Jobs completed this month vs last month
+	•	Days with at least one booking — create a streak
+	•	Milestone badges — “First $1,000”, “10 Clients”, “First Recurring Job”
+	•	A leaderboard showing top providers in their city or category (opt-in)
+
+What to do for homeowners:
+
+	•	Maintenance completion percentage for their home
+	•	Streak of services kept up to date
+	•	Home Health Score improving over time as they complete maintenance tasks
+
+8 — Referral (Designed Into The Product)
+
+The playbook’s referral framework is clear — referral should be triggered at success moments not randomly. The right time to ask a provider to refer someone is immediately after they receive their first payment or hit a revenue milestone.
+
+“You just hit $1,000 through HomeBase. Know another service pro who’d love this? Give them a month free.”
+
+That’s the exact moment they’re feeling the value most acutely. That’s when they share.
+
+The Three You Should Build First
+
+If I had to prioritize based on your current stage:
+
+1 — Time to Value optimization — redesign onboarding as a guided 5-step checklist. This directly impacts activation rate which is your most important metric right now.
+
+2 — Success Moments on first payment — build the full-screen celebration moment for first payment received. This is your paywall conversion trigger and your most powerful word-of-mouth generator simultaneously.
+
+3 — Commitment goal setting — add the monthly earnings goal question to onboarding. One question. One number. Dramatically reduces churn.
+
+Those three changes alone could move your activation rate from whatever it is now to significantly higher — which at scale means thousands of dollars more in monthly revenue from the same number of signups.
+
+Want me to write out the exact copy and flow for any of these?

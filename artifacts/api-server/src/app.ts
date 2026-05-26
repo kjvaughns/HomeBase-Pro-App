@@ -9,6 +9,26 @@ const app: Express = express();
 
 app.set("trust proxy", 1);
 
+// ─── Admin-subdomain redirect ─────────────────────────────────────────────────
+// When ADMIN_DOMAIN is set (e.g. "admin.yourdomain.com"), any request that
+// arrives on that host at / or /admin-portal (no trailing slash) is redirected
+// to /admin-portal/ so the admin portal loads without a 404.
+// All other paths on that host are passed through unchanged (assets, API calls).
+const adminDomain = process.env["ADMIN_DOMAIN"]?.toLowerCase().trim();
+if (adminDomain) {
+  app.use((req: Request, res: Response, next) => {
+    const host = (req.headers["host"] ?? "").toLowerCase().split(":")[0];
+    if (host === adminDomain) {
+      if (req.path === "/" || req.path === "/admin-portal") {
+        res.redirect(301, "/admin-portal/");
+        return;
+      }
+    }
+    next();
+  });
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 app.use(
   pinoHttp({
     logger,
