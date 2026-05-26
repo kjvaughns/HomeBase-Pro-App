@@ -357,6 +357,11 @@ export default function ProviderMoreScreen() {
               onPress={() => navigation.navigate("HelpCenter")}
             />
             <ListRow
+              title="My Tickets"
+              leftIcon="inbox"
+              onPress={() => navigation.navigate("MyTickets")}
+            />
+            <ListRow
               title="Contact Support"
               leftIcon="message-circle"
               onPress={() => navigation.navigate("ContactUs")}
