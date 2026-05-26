@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 // @ts-ignore
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, NavigationIndependentTree } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 // @ts-ignore
 import * as Updates from "expo-updates";
@@ -39,9 +39,11 @@ function AppContent() {
   const { isDark } = useTheme();
   return (
     <>
-      <NavigationContainer linking={linking}>
-        <RootStackNavigator />
-      </NavigationContainer>
+      <NavigationIndependentTree>
+        <NavigationContainer linking={linking}>
+          <RootStackNavigator />
+        </NavigationContainer>
+      </NavigationIndependentTree>
       <StatusBar style={isDark ? "light" : "dark"} />
     </>
   );
