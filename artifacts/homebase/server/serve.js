@@ -107,7 +107,21 @@ function serveStaticFile(urlPath, res) {
 const landingPageTemplate = fs.readFileSync(TEMPLATE_PATH, "utf-8");
 const appName = getAppName();
 
+const adminDomain = (process.env.ADMIN_DOMAIN || "").toLowerCase().trim();
+
 const server = http.createServer((req, res) => {
+  // Redirect admin subdomain to the admin portal before any other routing.
+  if (adminDomain) {
+    const host = (req.headers["x-forwarded-host"] || req.headers["host"] || "")
+      .split(":")[0]
+      .toLowerCase();
+    if (host === adminDomain) {
+      res.writeHead(301, { location: "/admin-portal/" });
+      res.end();
+      return;
+    }
+  }
+
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
   let pathname = url.pathname;
 
