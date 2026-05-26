@@ -140,6 +140,10 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
     ...process.env,
     EXPO_PUBLIC_DOMAIN: expoPublicDomain,
     EXPO_PUBLIC_REPL_ID: expoPublicReplId,
+    // Disable Metro's file watcher (same as the dev workflow).  Without this,
+    // Metro tries to watch node_modules/.pnpm (100k+ files) and hits Replit's
+    // inotify limit.  CI=true keeps Metro in poll-free, serve-only mode.
+    CI: "true",
   };
 
   if (expoPublicReplId) {

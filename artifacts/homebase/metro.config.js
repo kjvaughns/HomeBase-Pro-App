@@ -6,8 +6,13 @@ const workspaceRoot = path.resolve(projectRoot, "../..");
 
 const config = getDefaultConfig(projectRoot);
 
-// Only watch specific source dirs, NOT all node_modules (pnpm store has 100k+ files)
+// Watch the workspace node_modules so Metro can follow pnpm symlinks into the
+// .pnpm store (e.g. expo-router/entry).  In CI=true mode (dev workflow and
+// production build) Metro disables the file watcher entirely, so listing this
+// directory here has zero inotify cost — it only affects what Metro is allowed
+// to serve over HTTP.
 config.watchFolders = [
+  path.resolve(workspaceRoot, "node_modules"),
   path.resolve(workspaceRoot, "lib"),
   path.resolve(workspaceRoot, "scripts"),
 ];
