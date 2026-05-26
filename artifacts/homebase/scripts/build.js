@@ -227,15 +227,29 @@ async function downloadFile(url, outputPath) {
   }
 }
 
-async function downloadBundle(platform, timestamp) {
-  const entryPath = path.resolve(projectRoot, "node_modules", "expo-router", "entry");
-  const bundlePath = path.relative(projectRoot, entryPath);
-  const url = new URL(`http://localhost:8081/${bundlePath}.bundle`);
-  url.searchParams.set("platform", platform);
-  url.searchParams.set("dev", "false");
-  url.searchParams.set("hot", "false");
-  url.searchParams.set("lazy", "false");
-  url.searchParams.set("minify", "true");
+// Normalise any URL to localhost:8081 so we always pull from the local Metro
+// server, even if the manifest contains a public production URL.
+function toLocalhostBundleUrl(url) {
+  try {
+    const parsed = new URL(url);
+    parsed.protocol = "http:";
+    parsed.host = "localhost:8081";
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+async function downloadBundleForPlatform(manifest, platform, timestamp) {
+  const manifestUrl = manifest?.launchAsset?.url;
+  if (!manifestUrl) {
+    throw new Error(`Manifest for ${platform} is missing launchAsset.url`);
+  }
+
+  // Use the URL Metro itself generated in the manifest — it is guaranteed to
+  // resolve correctly regardless of pnpm symlink depth.  Normalise to
+  // localhost in case the manifest contains a public-facing domain.
+  const localUrl = toLocalhostBundleUrl(manifestUrl);
 
   const output = path.join(
     "static-build",
@@ -248,7 +262,9 @@ async function downloadBundle(platform, timestamp) {
   );
 
   console.log(`Fetching ${platform} bundle...`);
-  await downloadFile(url.toString(), output);
+  console.log(`  manifest URL : ${manifestUrl}`);
+  console.log(`  downloading  : ${localUrl}`);
+  await downloadFile(localUrl, output);
   console.log(`${platform} bundle ready`);
 }
 
@@ -287,15 +303,17 @@ async function downloadBundlesAndManifests(timestamp) {
   console.log("This may take several minutes for production builds...");
 
   try {
-    // Bundles are sequential — Metro can't handle both platforms simultaneously
-    // without stalling. Manifests are cheap and run in parallel after.
-    await downloadBundle("ios", timestamp);
-    await downloadBundle("android", timestamp);
-
+    // Fetch manifests first (in parallel — cheap) so we get the authoritative
+    // bundle URLs that Metro generated, rather than guessing the entry path.
     const [iosManifest, androidManifest] = await Promise.all([
       downloadManifest("ios"),
       downloadManifest("android"),
     ]);
+
+    // Bundles are sequential — Metro can't handle both platforms simultaneously
+    // without stalling.
+    await downloadBundleForPlatform(iosManifest, "ios", timestamp);
+    await downloadBundleForPlatform(androidManifest, "android", timestamp);
 
     console.log("All downloads completed successfully");
     return { ios: iosManifest, android: androidManifest };
