@@ -372,6 +372,11 @@ export default function MoreScreen() {
               isFirst
             />
             <ListRow
+              title="My Tickets"
+              leftIcon="inbox"
+              onPress={() => navigation.navigate("MyTickets")}
+            />
+            <ListRow
               title="Contact Us"
               leftIcon="message-circle"
               onPress={() => navigation.navigate("ContactUs")}
