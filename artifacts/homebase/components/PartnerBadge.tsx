@@ -7,7 +7,7 @@ import { BorderRadius, Colors, Spacing } from "@/constants/theme";
 // HomeBase mark on a transparent background — the Android adaptive-icon
 // foreground asset has no built-in padding, so it reads cleanly at 12–14px
 // inside the badge pill (unlike the full app icon which is mostly margin).
-const markImage = require("../../assets/images/android-icon-foreground.png");
+const markImage = require("../assets/images/android-icon-foreground.png");
 
 interface PartnerBadgeProps {
   size?: "small" | "default";

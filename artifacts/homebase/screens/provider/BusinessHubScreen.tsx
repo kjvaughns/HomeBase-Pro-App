@@ -1152,7 +1152,7 @@ export default function BusinessHubScreen() {
         }
         ListEmptyComponent={
           <EmptyState
-            image={require("../../../assets/images/empty-bookings.png")}
+            image={require("../../assets/images/empty-bookings.png")}
             title="No services yet"
             description="Create your first service listing to attract clients."
           />
@@ -1219,7 +1219,7 @@ export default function BusinessHubScreen() {
 
           {bookingLinks.length === 0 ? (
             <EmptyState
-              image={require("../../../assets/images/empty-bookings.png")}
+              image={require("../../assets/images/empty-bookings.png")}
               title="No booking links yet"
               description="Create a public booking link to let clients book you directly."
             />

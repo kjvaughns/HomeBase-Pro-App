@@ -15,7 +15,7 @@ import { useOnboardingStore } from "@/state/onboardingStore";
 import { recordHappyMoment } from "@/state/appReviewStore";
 import { trackEvent, AnalyticsEvents } from "@/lib/analytics";
 
-const AppLogo = require("../../../assets/images/icon.png");
+const AppLogo = require("../../assets/images/icon.png");
 
 type Props = NativeStackScreenProps<RootStackParamList, "AccountTypeSelection">;
 

@@ -197,7 +197,7 @@ export default function ManualPaymentsListScreen() {
           isLoading ? null : (
             <View style={{ paddingTop: Spacing.xl }}>
               <EmptyState
-                image={require("../../../assets/images/empty-bookings.png")}
+                image={require("../../assets/images/empty-bookings.png")}
                 title="No payments recorded"
                 description="Cash, check, and other manual payments you record will show up here."
               />

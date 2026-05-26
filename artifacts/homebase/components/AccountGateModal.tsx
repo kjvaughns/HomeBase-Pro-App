@@ -88,7 +88,7 @@ export function AccountGateModal({
             <View style={styles.handle} />
 
             <Image
-              source={require("../../assets/images/account-gate.png")}
+              source={require("../assets/images/account-gate.png")}
               style={styles.image}
               resizeMode="contain"
             />

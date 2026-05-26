@@ -256,7 +256,7 @@ export default function ManageScreen() {
     if (!isAuthenticated) {
       return (
         <EmptyState
-          image={require("../../../assets/images/empty-bookings.png")}
+          image={require("../../assets/images/empty-bookings.png")}
           title="Sign in to manage appointments"
           description="Create an account to book services, track your projects, and manage your home."
           primaryAction={{
@@ -270,7 +270,7 @@ export default function ManageScreen() {
     if (loadError) {
       return (
         <EmptyState
-          image={require("../../../assets/images/empty-bookings.png")}
+          image={require("../../assets/images/empty-bookings.png")}
           title="Couldn't load appointments"
           description="Something went wrong loading your appointments. Please try again."
           primaryAction={{
@@ -285,7 +285,7 @@ export default function ManageScreen() {
 
     return (
       <EmptyState
-        image={require("../../../assets/images/empty-bookings.png")}
+        image={require("../../assets/images/empty-bookings.png")}
         title="No appointments yet"
         description="You don't have any appointments yet. Book a provider to get started."
         primaryAction={{

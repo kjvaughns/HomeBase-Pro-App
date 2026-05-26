@@ -424,7 +424,7 @@ export default function LeadsScreen() {
 
   const renderEmpty = () => (
     <EmptyState
-      image={require("../../../assets/images/empty-leads.png")}
+      image={require("../../assets/images/empty-leads.png")}
       title={filter === "all" ? "No leads yet" : `No ${filter} leads`}
       description={
         filter === "all"

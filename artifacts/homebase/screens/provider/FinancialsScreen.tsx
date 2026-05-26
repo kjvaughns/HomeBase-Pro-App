@@ -2356,7 +2356,7 @@ export default function FinancialsScreen() {
       return (
         <View style={styles.emptyContainer}>
           <EmptyState
-            image={require("../../../assets/images/empty-bookings.png")}
+            image={require("../../assets/images/empty-bookings.png")}
             title="No invoices yet"
             description="Create your first invoice or estimate to start tracking income."
             primaryAction={{
@@ -2408,7 +2408,7 @@ export default function FinancialsScreen() {
     return (
       <View style={styles.emptyContainer}>
         <EmptyState
-          image={require("../../../assets/images/empty-bookings.png")}
+          image={require("../../assets/images/empty-bookings.png")}
           title="No payouts yet"
           description="Completed payouts from HomeBase will show up here with expected deposit dates."
         />

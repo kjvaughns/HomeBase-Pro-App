@@ -280,7 +280,7 @@ export default function NotificationsScreen() {
           }}
         >
           <EmptyState
-            image={require("../../../assets/images/empty-bookings.png")}
+            image={require("../../assets/images/empty-bookings.png")}
             title="No notifications"
             description="You're all caught up! Notifications about your bookings, messages, and updates will appear here."
           />

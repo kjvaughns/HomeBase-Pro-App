@@ -1,0 +1,168 @@
+2026-05-26T14:17:36Z info: Deployment: 17794a93-7c4f-45a1-a1c1-cf4b286e955f
+2026-05-26T14:17:36Z info: Build: 46bcd160-d203-407c-ac76-70a72a4a49eb
+2026-05-26T14:17:37Z info: Running Security Scan
+2026-05-26T14:18:46Z info: Security Scan Complete
+2026-05-26T14:18:49Z info: Installing packages
+--> pnpm install
+
+--> pnpm install
+
+Scope: all 10 workspace projects
+
+Scope: all 10 workspace projects
+
+
+   ╭─────────────────────────────────────────╮
+   │                                         │
+   │   Update available! 10.26.1 → 11.3.0.   │
+   │   Changelog: https://pnpm.io/v/11.3.0   │
+   │    To update, run: pnpm add -g pnpm     │
+   │                                         │
+   ╰─────────────────────────────────────────╯
+
+
+
+   ╭─────────────────────────────────────────╮
+   │                                         │
+   │   Update available! 10.26.1 → 11.3.0.   │
+   │   Changelog: https://pnpm.io/v/11.3.0   │
+   │    To update, run: pnpm add -g pnpm     │
+   │                                         │
+   ╰─────────────────────────────────────────╯
+
+
+Lockfile is up to date, resolution step is skipped
+
+Lockfile is up to date, resolution step is skipped
+
+Already up to date
+
+Already up to date
+
+. preinstall$ sh -c 'rm -f package-lock.json yarn.lock; case "$npm_config_user_agent" in pnpm/*) ;; *) echo "Use pnpm instead" >&2; exit 1 ;; esac'
+
+. preinstall: Done
+
+Done in 5.9s using pnpm v10.26.1
+
+2026-05-26T14:18:56Z info: Starting Build
+
+> @workspace/api-server@0.0.0 build /home/runner/workspace/artifacts/api-server
+> node ./build.mjs
+
+
+
+  dist/index.mjs                       5.8mb ⚠️
+  dist/pino-worker.mjs               153.4kb
+  dist/pino-file.mjs                 142.1kb
+  dist/pino-pretty.mjs               114.6kb
+  dist/thread-stream-worker.mjs        7.3kb
+  dist/index.mjs.map                  10.2mb
+  dist/pino-worker.mjs.map           256.9kb
+  dist/pino-file.mjs.map             229.0kb
+  dist/pino-pretty.mjs.map           203.9kb
+  dist/thread-stream-worker.mjs.map   12.0kb
+
+⚡ Done in 659ms
+
+
+> @workspace/admin-portal@0.0.0 build /home/runner/workspace/artifacts/admin-portal
+> vite build --config vite.config.ts
+
+
+vite v7.3.2 building client environment for production...
+
+transforming...
+
+✓ 459 modules transformed.
+
+computing gzip size...
+
+dist/public/index.html                   1.44 kB │ gzip:   0.55 kB
+
+dist/public/assets/index-Dw2e7XP6.css    2.27 kB │ gzip:   1.02 kB
+dist/public/assets/index-DSOFpnFK.js   401.24 kB │ gzip: 119.23 kB
+✓ built in 1.41s
+
+
+> @workspace/homebase@0.0.0 build /home/runner/workspace/artifacts/homebase
+> node scripts/build.js
+
+
+Building static Expo Go deployment...
+
+Clearing Metro cache...
+Cache cleared
+
+Starting Metro...
+
+Setting EXPO_PUBLIC_DOMAIN=home-base-pro-app.replit.app
+
+Setting EXPO_PUBLIC_REPL_ID=46bcd160-d203-407c-ac76-70a72a4a49eb
+
+[Metro] Starting project at /home/runner/workspace/artifacts/homebase
+
+[Metro] React Compiler enabled
+
+[Metro] Expo Autolinking module resolution enabled
+
+[Metro] Metro is running in CI mode, reloads are disabled. Remove CI=true to enable watch mode.
+
+[Metro] Starting Metro Bundler
+
+[Metro] ERROR  An unknown error occurred while installing React Native DevTools. Details:
+
+/home/runner/workspace/node_modules/.pnpm/@react-native+debugger-shell@0.83.6/node_modules/@react-native/debugger-shell/bin/react-native-devtools: error while loading shared libraries: libglib-2.0.so.0: cannot open shared object file: No such file or directory
+
+Downloading bundles and manifests...
+This may take several minutes for production builds...
+Fetching ios manifest...
+
+Fetching android manifest...
+
+[Metro] Waiting on http://localhost:8081
+Logs for your project will appear below.
+
+android manifest ready
+
+ios manifest ready
+
+[Metro] iOS node_modules/.pnpm/expo-router@55.0.14_fca2f46d347267294e00b56c3072124d/node_modules/expo-router/entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+
+[Metro] iOS node_modules/.pnpm/expo-router@55.0.14_fca2f46d347267294e00b56c3072124d/node_modules/expo-router/entry.js ▓▓░░░░░░░░░░░░░░ 16.8% (154/390)
+
+[Metro] iOS node_modules/.pnpm/expo-router@55.0.14_fca2f46d347267294e00b56c3072124d/node_modules/expo-router/entry.js ▓▓▓▓░░░░░░░░░░░░ 30.0% (497/950)
+
+[Metro] iOS node_modules/.pnpm/expo-router@55.0.14_fca2f46d347267294e00b56c3072124d/node_modules/expo-router/entry.js ▓▓▓▓▓▓░░░░░░░░░░ 41.7% ( 759/1194)
+
+[Metro] iOS node_modules/.pnpm/expo-router@55.0.14_fca2f46d347267294e00b56c3072124d/node_modules/expo-router/entry.js ▓▓▓▓▓▓░░░░░░░░░░ 41.7% ( 780/1215)
+
+[Metro] iOS node_modules/.pnpm/expo-router@55.0.14_fca2f46d347267294e00b56c3072124d/node_modules/expo-router/entry.js ▓▓▓▓▓▓░░░░░░░░░░ 42.0% ( 795/1227)
+
+[Metro] iOS node_modules/.pnpm/expo-router@55.0.14_fca2f46d347267294e00b56c3072124d/node_modules/expo-router/entry.js ▓▓▓▓▓▓░░░░░░░░░░ 42.9% ( 806/1231)
+
+[Metro] iOS node_modules/.pnpm/expo-router@55.0.14_fca2f46d347267294e00b56c3072124d/node_modules/expo-router/entry.js ▓▓▓▓▓▓▓░░░░░░░░░ 44.6% ( 829/1242)
+
+[Metro] iOS node_modules/.pnpm/expo-router@55.0.14_fca2f46d347267294e00b56c3072124d/node_modules/expo-router/entry.js ▓▓▓▓▓▓▓▓▓░░░░░░░ 57.4% (1046/1381)
+
+[Metro] iOS node_modules/.pnpm/expo-router@55.0.14_fca2f46d347267294e00b56c3072124d/node_modules/expo-router/entry.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 64.2% (1155/1488)
+
+[Metro] iOS node_modules/.pnpm/expo-router@55.0.14_fca2f46d347267294e00b56c3072124d/node_modules/expo-router/entry.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 64.2% (1202/1537)
+
+[Metro] iOS node_modules/.pnpm/expo-router@55.0.14_fca2f46d347267294e00b56c3072124d/node_modules/expo-router/entry.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 64.2% (1463/1990)
+
+[Metro] iOS node_modules/.pnpm/expo-router@55.0.14_fca2f46d347267294e00b56c3072124d/node_modules/expo-router/entry.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 64.2% (1656/2121)
+
+[Metro] iOS node_modules/.pnpm/expo-router@55.0.14_fca2f46d347267294e00b56c3072124d/node_modules/expo-router/entry.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 77.4% (1999/2357)
+
+[Metro] iOS node_modules/.pnpm/expo-router@55.0.14_fca2f46d347267294e00b56c3072124d/node_modules/expo-router/entry.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 80.2% (2198/2461)
+
+[Metro] iOS node_modules/.pnpm/expo-router@55.0.14_fca2f46d347267294e00b56c3072124d/node_modules/expo-router/entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 94.7% (2558/2628)
+
+[Metro] iOS Bundling failed 55439ms node_modules/.pnpm/expo-router@55.0.14_fca2f46d347267294e00b56c3072124d/node_modules/expo-router/entry.js (2698 modules)
+
+Download failed: HTTP 500
+
+/home/runner/workspace/artifacts/homebase:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/homebase@0.0.0 build: `node scripts/build.js`
+Exit status 1

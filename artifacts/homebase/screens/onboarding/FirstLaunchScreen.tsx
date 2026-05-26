@@ -12,7 +12,7 @@ import { Colors, BorderRadius, Spacing } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useOnboardingStore } from "@/state/onboardingStore";
 
-const AppLogo = require("../../../assets/images/icon.png");
+const AppLogo = require("../../assets/images/icon.png");
 
 type Props = NativeStackScreenProps<RootStackParamList, "FirstLaunch">;
 

@@ -477,7 +477,7 @@ export default function ClientsScreen() {
   const renderEmpty = useCallback(
     () => (
       <EmptyState
-        image={require("../../../assets/images/empty-leads.png")}
+        image={require("../../assets/images/empty-leads.png")}
         title={statusFilter !== "all" ? "No clients match filters" : "No clients yet"}
         description={
           statusFilter !== "all"

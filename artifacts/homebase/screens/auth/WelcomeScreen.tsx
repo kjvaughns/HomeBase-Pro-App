@@ -11,7 +11,7 @@ import { useLayout } from "@/hooks/useLayout";
 import { Spacing, BorderRadius, Colors, Typography } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
-const AppLogo = require("../../../assets/images/icon.png");
+const AppLogo = require("../../assets/images/icon.png");
 
 type Props = NativeStackScreenProps<RootStackParamList, "Welcome">;
 
