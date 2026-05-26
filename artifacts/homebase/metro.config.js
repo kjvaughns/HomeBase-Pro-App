@@ -22,8 +22,6 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, "node_modules"),
 ];
 
-config.resolver.disableHierarchicalLookup = true;
-
 // Use exactly 1 worker: Metro then requires('./Worker') inline (no fork), eliminating
 // child process spawning which hangs in Replit's constrained environment.
 config.maxWorkers = 1;
