@@ -245,6 +245,23 @@ export default function HelpCenterScreen() {
         ))}
 
         <View style={styles.contactSection}>
+          <Pressable
+            testID="button-my-tickets"
+            style={[styles.myTicketsButton, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}
+            onPress={() => navigation.navigate("MyTickets")}
+          >
+            <View style={[styles.myTicketsIcon, { backgroundColor: Colors.accent + "15" }]}>
+              <Feather name="inbox" size={18} color={Colors.accent} />
+            </View>
+            <View style={styles.myTicketsText}>
+              <ThemedText style={styles.myTicketsTitle}>My Tickets</ThemedText>
+              <ThemedText style={[styles.myTicketsSubtitle, { color: theme.textSecondary }]}>
+                View and reply to your support requests
+              </ThemedText>
+            </View>
+            <Feather name="chevron-right" size={18} color={theme.textTertiary} />
+          </Pressable>
+
           <ThemedText style={[styles.contactText, { color: theme.textSecondary }]}>
             Can't find what you're looking for?
           </ThemedText>
@@ -325,10 +342,39 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: Spacing.xl,
     paddingTop: Spacing.xl,
+    gap: Spacing.md,
+  },
+  myTicketsButton: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: Spacing.sm,
+  },
+  myTicketsIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  myTicketsText: {
+    flex: 1,
+    gap: 2,
+  },
+  myTicketsTitle: {
+    ...Typography.callout,
+    fontWeight: "600",
+  },
+  myTicketsSubtitle: {
+    ...Typography.footnote,
   },
   contactText: {
     ...Typography.body,
-    marginBottom: Spacing.md,
   },
   contactButton: {
     flexDirection: "row",

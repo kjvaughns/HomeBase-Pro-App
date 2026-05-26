@@ -67,7 +67,8 @@ function SuccessState({ ticketId, onDone }: { ticketId: string; onDone: () => vo
           style={[styles.doneButton, { backgroundColor: Colors.accent }]}
           onPress={onDone}
         >
-          <ThemedText style={styles.doneButtonText}>Done</ThemedText>
+          <Feather name="inbox" size={16} color="#FFF" style={{ marginRight: 6 }} />
+          <ThemedText style={styles.doneButtonText}>View My Ticket</ThemedText>
         </Pressable>
       </View>
     </ThemedView>
@@ -124,7 +125,9 @@ export default function ContactUsScreen() {
     return (
       <SuccessState
         ticketId={ticketId}
-        onDone={() => navigation.goBack()}
+        onDone={() => {
+          navigation.navigate("MyTickets" as never);
+        }}
       />
     );
   }

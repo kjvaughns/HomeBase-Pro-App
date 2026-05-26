@@ -72,6 +72,8 @@ import CommunicationsScreen from "@/screens/provider/CommunicationsScreen";
 import SavedProvidersScreen from "@/screens/homeowner/SavedProvidersScreen";
 import HelpCenterScreen from "@/screens/homeowner/HelpCenterScreen";
 import ContactUsScreen from "@/screens/homeowner/ContactUsScreen";
+import MyTicketsScreen from "@/screens/homeowner/MyTicketsScreen";
+import TicketDetailScreen from "@/screens/homeowner/TicketDetailScreen";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuthStore, UserRole } from "@/state/authStore";
@@ -173,6 +175,8 @@ export type RootStackParamList = {
   SavedProviders: undefined;
   HelpCenter: undefined;
   ContactUs: undefined;
+  MyTickets: undefined;
+  TicketDetail: { ticketId: string };
   ProviderJobDetail: { jobId: string };
   SeriesDetail: { seriesId: string };
   Leads: undefined;
@@ -602,6 +606,20 @@ export default function RootStackNavigator() {
         component={ContactUsScreen}
         options={{
           headerTitle: "Contact Us",
+        }}
+      />
+      <Stack.Screen
+        name="MyTickets"
+        component={MyTicketsScreen}
+        options={{
+          headerTitle: "My Tickets",
+        }}
+      />
+      <Stack.Screen
+        name="TicketDetail"
+        component={TicketDetailScreen}
+        options={{
+          headerTitle: "Ticket",
         }}
       />
       <Stack.Screen

@@ -16872,6 +16872,110 @@ Respond with JSON only:
     }
   });
 
+  // GET /api/support/tickets — authenticated user's own tickets (newest first)
+  app.get(
+    "/api/support/tickets",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const userId = req.authenticatedUserId!;
+        const rows = await db
+          .select()
+          .from(supportTickets)
+          .where(eq(supportTickets.userId, userId))
+          .orderBy(desc(supportTickets.updatedAt));
+        res.json({ tickets: rows });
+      } catch (err: any) {
+        console.error("[support] list user tickets error:", err);
+        res.status(500).json({ error: "Failed to fetch tickets" });
+      }
+    },
+  );
+
+  // GET /api/support/tickets/:id — full ticket + thread for the owning user
+  app.get(
+    "/api/support/tickets/:id",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const userId = req.authenticatedUserId!;
+        const { id } = req.params;
+        const [ticket] = await db
+          .select()
+          .from(supportTickets)
+          .where(and(eq(supportTickets.id, id), eq(supportTickets.userId, userId)))
+          .limit(1);
+        if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+        const messages = await db
+          .select()
+          .from(supportTicketMessages)
+          .where(eq(supportTicketMessages.ticketId, id))
+          .orderBy(asc(supportTicketMessages.createdAt));
+        res.json({ ticket, messages });
+      } catch (err: any) {
+        console.error("[support] get user ticket error:", err);
+        res.status(500).json({ error: "Failed to fetch ticket" });
+      }
+    },
+  );
+
+  // POST /api/support/tickets/:id/messages — user sends a follow-up reply
+  app.post(
+    "/api/support/tickets/:id/messages",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const userId = req.authenticatedUserId!;
+        const { id } = req.params;
+        const { body: messageBody } = req.body;
+
+        if (!messageBody?.trim()) {
+          return res.status(400).json({ error: "Message body is required" });
+        }
+        if (String(messageBody).length > 5000) {
+          return res.status(400).json({ error: "Message exceeds maximum length" });
+        }
+
+        // Verify ownership
+        const [ticket] = await db
+          .select()
+          .from(supportTickets)
+          .where(and(eq(supportTickets.id, id), eq(supportTickets.userId, userId)))
+          .limit(1);
+        if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+
+        // Insert the user message
+        const [newMsg] = await db
+          .insert(supportTicketMessages)
+          .values({
+            ticketId: id,
+            senderId: userId,
+            senderType: "user",
+            body: messageBody.trim(),
+          })
+          .returning();
+
+        // Re-open resolved/closed tickets so the admin sees the new reply
+        if (ticket.status === "resolved" || ticket.status === "closed") {
+          await db
+            .update(supportTickets)
+            .set({ status: "open", updatedAt: new Date() })
+            .where(eq(supportTickets.id, id));
+        } else {
+          await db
+            .update(supportTickets)
+            .set({ updatedAt: new Date() })
+            .where(eq(supportTickets.id, id));
+        }
+
+        res.status(201).json({ message: newMsg });
+      } catch (err: any) {
+        console.error("[support] post user ticket message error:", err);
+        res.status(500).json({ error: "Failed to send reply" });
+      }
+    },
+  );
+
   // ============ QUICK QUOTES (Task #300) ============
   // Provider-initiated quote generator. Given an address + a custom service,
   // compute a low/mid/high price range from the service's pricing rules and
