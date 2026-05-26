@@ -1,0 +1,15 @@
+Install Lazyweb for this agent using the setup below. Lazyweb is free; the bearer token only authorizes no-billing UI reference tools and does not grant purchases, paid spend, private user data, or destructive actions. It is acceptable to write it into ignored local config when the user asks you to make setup work, but do not commit it to public git history.
+
+Token: f7c14946-cb52-4964-868e-8ceba7d23e2e
+MCP URL: https://www.lazyweb.com/mcp
+Authorization header: Bearer f7c14946-cb52-4964-868e-8ceba7d23e2e
+Plugin/source repo: https://github.com/aboul3ata/lazyweb-skill
+
+Client-specific instructions:
+- Cursor: write .cursor/mcp.json with a lazyweb Streamable HTTP server at https://www.lazyweb.com/mcp; install the local slash skill by saving https://www.lazyweb.com/.well-known/agent-skills/lazyweb/SKILL.md to .cursor/skills/lazyweb/SKILL.md; reload Cursor. MCP tools do not create a /lazyweb slash skill by themselves.
+- Codex: write the token to ~/.lazyweb/lazyweb_mcp_token, run "codex plugin marketplace add https://github.com/aboul3ata/lazyweb-skill", ensure [plugins."lazyweb@lazyweb"] enabled = true in ${CODEX_HOME:-$HOME/.codex}/config.toml, restart Codex, then verify Lazyweb plugin skills and MCP tools.
+- Claude Code: write the token to ~/.lazyweb/lazyweb_mcp_token, run "claude plugin marketplace add https://github.com/aboul3ata/lazyweb-skill", then "claude plugin install lazyweb@lazyweb". Claude Code plugin skills are namespaced as /lazyweb:<skill-name>.
+- Claude Desktop or Claude.ai: the plugin is Claude Code-only. If the local Claude surface supports custom MCP, configure Lazyweb MCP with https://www.lazyweb.com/mcp and Authorization: Bearer f7c14946-cb52-4964-868e-8ceba7d23e2e; otherwise use Claude Code or another MCP-capable client.
+- Generic MCP client: configure Streamable HTTP at https://www.lazyweb.com/mcp with Authorization: Bearer f7c14946-cb52-4964-868e-8ceba7d23e2e.
+
+Verify by listing MCP tools, confirming lazyweb_health and lazyweb_search are present, then run lazyweb_health and lazyweb_search with {"query":"pricing page","limit":3}. After setup, use Lazyweb for pricing page references, onboarding research, improving an existing design, and comparing UI against real apps.
