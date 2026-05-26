@@ -1413,9 +1413,12 @@ export async function sendSupportTicketEmail(data: {
     // Send only to the support inbox — do NOT CC the user-supplied email
     // address, as doing so would allow unauthenticated callers to relay
     // HomeBase-branded email to arbitrary recipients (phishing/spam vector).
+    // Reply-To is set to the ticket submitter so the support team can reply
+    // directly from their inbox and the reply reaches the user.
     const result = await client.emails.send({
       from: fromEmail || "HomeBase <noreply@resend.dev>",
       to: "support@homebaseproapp.com",
+      reply_to: data.email,
       subject: `[Support #${data.ticketId.slice(0, 8).toUpperCase()}] ${data.category}: ${data.subject}`,
       html,
     });
@@ -1535,6 +1538,7 @@ export async function sendAdminSupportReplyEmail(data: {
     const result = await client.emails.send({
       from: fromEmail || "HomeBase Support <noreply@resend.dev>",
       to: data.to,
+      reply_to: "support@homebaseproapp.com",
       subject: `Re: ${data.ticketSubject} — HomeBase Support`,
       html: buildEmailBase("Support Update", body),
       headers: extraHeaders,
@@ -1579,6 +1583,7 @@ export async function sendAiSupportReplyEmail(data: {
     const result = await client.emails.send({
       from: fromEmail || "HomeBase Support <noreply@resend.dev>",
       to: data.to,
+      reply_to: "support@homebaseproapp.com",
       subject: `Re: ${data.ticketSubject} — HomeBase Support`,
       html: buildEmailBase("HomeBase AI Support", body),
       headers: {

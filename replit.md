@@ -63,7 +63,7 @@ User email replies feed back into the ticket thread automatically via a Resend i
    `https://api.homebaseproapp.com/api/webhooks/resend/inbound`
 2. Copy the Svix signing secret Resend provides and add it as `RESEND_WEBHOOK_SECRET` in Replit Secrets.
 3. The route is registered in `artifacts/api-server/src/app.ts` before `express.json()` so the raw Buffer is available for Svix HMAC verification.
-4. If `RESEND_WEBHOOK_SECRET` is absent the webhook is still accepted (with a logged warning) so dev testing works without a secret.
+4. If `RESEND_WEBHOOK_SECRET` is absent the webhook returns `500 webhook_not_configured` and does not process the payload. Set the secret before enabling inbound routing.
 
 **Handler:** `artifacts/api-server/src/inboundEmailHandler.ts`
 
