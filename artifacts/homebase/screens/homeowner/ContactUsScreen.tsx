@@ -31,50 +31,6 @@ const CATEGORIES = [
   "Other",
 ];
 
-function SuccessState({ ticketId, onDone }: { ticketId: string; onDone: () => void }) {
-  const { theme } = useTheme();
-  const { horizontalPadding } = useLayout();
-  const headerHeight = useHeaderHeight();
-  const insets = useSafeAreaInsets();
-
-  return (
-    <ThemedView style={styles.container}>
-      <View
-        style={[
-          styles.successContent,
-          { paddingTop: headerHeight + Spacing.xl, paddingBottom: insets.bottom + Spacing.xl, paddingHorizontal: horizontalPadding },
-        ]}
-      >
-        <View style={[styles.successIcon, { backgroundColor: Colors.accent + "15" }]}>
-          <Feather name="check-circle" size={40} color={Colors.accent} />
-        </View>
-        <ThemedText style={styles.successTitle}>Message Sent</ThemedText>
-        <ThemedText style={[styles.successSubtitle, { color: theme.textSecondary }]}>
-          Your support request has been received. We'll reply to your email within 24 hours.
-        </ThemedText>
-        <View style={[styles.ticketBox, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border }]}>
-          <ThemedText style={[styles.ticketLabel, { color: theme.textSecondary }]}>Ticket reference</ThemedText>
-          <ThemedText style={styles.ticketId}>#{ticketId.slice(0, 8).toUpperCase()}</ThemedText>
-        </View>
-        <ThemedText style={[styles.successNote, { color: theme.textSecondary }]}>
-          Check your email for a copy of your request. If you need immediate help, email{" "}
-          <ThemedText style={[styles.emailAccent, { color: Colors.accent }]}>
-            support@homebaseproapp.com
-          </ThemedText>
-        </ThemedText>
-        <Pressable
-          testID="button-done"
-          style={[styles.doneButton, { backgroundColor: Colors.accent }]}
-          onPress={onDone}
-        >
-          <Feather name="inbox" size={16} color="#FFF" style={{ marginRight: 6 }} />
-          <ThemedText style={styles.doneButtonText}>View My Ticket</ThemedText>
-        </Pressable>
-      </View>
-    </ThemedView>
-  );
-}
-
 export default function ContactUsScreen() {
   const { theme, isDark } = useTheme();
   const { horizontalPadding } = useLayout();
@@ -89,7 +45,6 @@ export default function ContactUsScreen() {
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [ticketId, setTicketId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async () => {
@@ -112,25 +67,14 @@ export default function ContactUsScreen() {
         subject: subject.trim(),
         message: message.trim(),
       });
-      const data = await res.json();
-      setTicketId(data.ticketId);
+      if (!res.ok) throw new Error("Server error");
+      navigation.navigate("MyTickets" as never);
     } catch (err: any) {
       setError("Failed to send your message. Please try again or email support@homebaseproapp.com.");
     } finally {
       setIsSubmitting(false);
     }
   };
-
-  if (ticketId) {
-    return (
-      <SuccessState
-        ticketId={ticketId}
-        onDone={() => {
-          navigation.navigate("MyTickets" as never);
-        }}
-      />
-    );
-  }
 
   return (
     <ThemedView style={styles.container}>
@@ -385,71 +329,5 @@ const styles = StyleSheet.create({
     ...Typography.footnote,
     textAlign: "center",
     marginTop: Spacing.sm,
-  },
-  successContent: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  successIcon: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: Spacing.xl,
-  },
-  successTitle: {
-    ...Typography.title2,
-    fontWeight: "700",
-    marginBottom: Spacing.sm,
-    textAlign: "center",
-  },
-  successSubtitle: {
-    ...Typography.body,
-    textAlign: "center",
-    lineHeight: 24,
-    marginBottom: Spacing.xl,
-  },
-  ticketBox: {
-    borderWidth: 1,
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg,
-    alignItems: "center",
-    marginBottom: Spacing.xl,
-    width: "100%",
-  },
-  ticketLabel: {
-    ...Typography.footnote,
-    fontWeight: "500",
-    marginBottom: Spacing.xs,
-  },
-  ticketId: {
-    ...Typography.title3,
-    fontWeight: "700",
-    letterSpacing: 1,
-  },
-  successNote: {
-    ...Typography.subhead,
-    textAlign: "center",
-    lineHeight: 22,
-    marginBottom: Spacing.xl,
-    paddingHorizontal: Spacing.md,
-  },
-  emailAccent: {
-    fontWeight: "600",
-  },
-  doneButton: {
-    paddingHorizontal: Spacing["2xl"],
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.md,
-    minWidth: 160,
-    alignItems: "center",
-  },
-  doneButtonText: {
-    ...Typography.callout,
-    fontWeight: "700",
-    color: "#FFFFFF",
   },
 });
