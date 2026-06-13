@@ -31,6 +31,7 @@ interface ProviderCardProps {
   isPartner?: boolean;
   distance?: number | null;
   badges?: Array<{ badgeType: BadgeType }>;
+  neighborCount?: number;
   onPress: () => void;
   testID?: string;
 }
@@ -49,6 +50,7 @@ export function ProviderCard({
   isPartner,
   distance,
   badges,
+  neighborCount,
   onPress,
   testID,
 }: ProviderCardProps) {
@@ -157,6 +159,14 @@ export function ProviderCard({
           {services.slice(0, 2).map((service, index) => (
             <StatusPill key={index} status="neutral" label={service} size="small" />
           ))}
+          {neighborCount != null && neighborCount > 0 ? (
+            <View style={[styles.neighborBadge, { backgroundColor: Colors.accentLight }]}>
+              <Feather name="users" size={11} color={Colors.accent} />
+              <ThemedText style={[styles.neighborBadgeText, { color: Colors.accent }]}>
+                {neighborCount} {neighborCount === 1 ? "neighbor" : "neighbors"}
+              </ThemedText>
+            </View>
+          ) : null}
         </View>
       </View>
     </AnimatedPressable>
@@ -214,5 +224,17 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: Spacing.sm,
     marginTop: Spacing.md,
+  },
+  neighborBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+  },
+  neighborBadgeText: {
+    fontSize: 11,
+    fontWeight: "600",
   },
 });

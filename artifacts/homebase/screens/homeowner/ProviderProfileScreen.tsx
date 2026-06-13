@@ -110,7 +110,7 @@ export default function ProviderProfileScreen() {
   const { providerId, intakeData, provider: passedProvider } = route.params;
 
   const allReviews = useHomeownerStore((s) => s.reviews);
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
 
   const { data: savedProvidersData } = useQuery<{ providers: { id: string }[] }>({
     queryKey: ["/api/saved-providers"],
@@ -160,6 +160,51 @@ export default function ProviderProfileScreen() {
     if (passedProvider) return passedProvider;
     return null;
   }, [passedProvider, apiData]);
+
+  // Fetch homeowner's homes to determine zip for neighborhood stats
+  const { data: homesData } = useQuery<{ homes: Array<{ id: string; zip: string; isDefault?: boolean }> }>({
+    queryKey: ["/api/homes", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return { homes: [] };
+      const url = new URL(`/api/homes/${user.id}`, getApiUrl());
+      const res = await fetch(url.toString(), {
+        headers: getAuthHeaders(),
+        credentials: "include",
+      });
+      if (!res.ok) return { homes: [] };
+      return res.json();
+    },
+    enabled: isAuthenticated && !!user?.id,
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const homeownerZip = useMemo(() => {
+    if (!homesData?.homes?.length) return null;
+    const defaultHome = homesData.homes.find((h) => h.isDefault) ?? homesData.homes[0];
+    return defaultHome?.zip ?? null;
+  }, [homesData]);
+
+  const { data: neighborhoodStats } = useQuery<{
+    areaBookingCount: number;
+    providerCounts: Record<string, number>;
+  }>({
+    queryKey: ["/api/neighborhood-stats", homeownerZip],
+    queryFn: async () => {
+      if (!homeownerZip) return { areaBookingCount: 0, providerCounts: {} };
+      const url = new URL("/api/neighborhood-stats", getApiUrl());
+      url.searchParams.set("zip", homeownerZip);
+      const res = await fetch(url.toString(), {
+        headers: getAuthHeaders(),
+        credentials: "include",
+      });
+      if (!res.ok) return { areaBookingCount: 0, providerCounts: {} };
+      return res.json();
+    },
+    enabled: isAuthenticated && !!homeownerZip,
+    staleTime: 2 * 60 * 60 * 1000,
+  });
+
+  const neighborCount = neighborhoodStats?.providerCounts?.[providerId] ?? 0;
 
   const { data: customServicesData } = useQuery<CustomServicesResponse>({
     queryKey: ["/api/provider", providerId, "custom-services", "published"],
@@ -679,6 +724,16 @@ export default function ProviderProfileScreen() {
                     {safeRating.toFixed(1)} ({provider.reviewCount ?? 0})
                   </ThemedText>
                 </View>
+                {neighborCount > 0 ? (
+                  <View style={[styles.neighborRow, { backgroundColor: Colors.accentLight }]}>
+                    <Feather name="users" size={13} color={Colors.accent} />
+                    <ThemedText style={[styles.neighborText, { color: Colors.accent }]}>
+                      {neighborCount === 1
+                        ? "1 of your neighbors uses this provider"
+                        : `${neighborCount} of your neighbors use this provider`}
+                    </ThemedText>
+                  </View>
+                ) : null}
               </View>
             </View>
             <View style={styles.profileActions}>
@@ -859,6 +914,20 @@ const styles = StyleSheet.create({
     ...Typography.caption1,
     marginLeft: Spacing.xs,
     color: Colors.accent,
+    fontWeight: "600",
+  },
+  neighborRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.md,
+    marginTop: Spacing.xs,
+    alignSelf: "flex-start",
+  },
+  neighborText: {
+    ...Typography.caption1,
     fontWeight: "600",
   },
   tabRow: {

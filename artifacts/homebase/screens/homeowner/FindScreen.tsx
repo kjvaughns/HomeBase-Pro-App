@@ -38,7 +38,7 @@ import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useHomeownerStore } from "@/state/homeownerStore";
 import { Provider, ServiceCategory } from "@/state/types";
-import { getApiUrl } from "@/lib/query-client";
+import { getApiUrl, getAuthHeaders } from "@/lib/query-client";
 import { useLocationStore } from "@/state/locationStore";
 import {
   useDetectUserLocation,
@@ -128,7 +128,7 @@ export default function FindScreen() {
   const { horizontalPadding, isTablet } = useLayout();
   const navigation = useNavigation<NavigationProp>();
   const { theme, isDark } = useTheme();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
 
   const categories = useHomeownerStore((s) => s.categories);
   const getSavedProviders = useHomeownerStore((s) => s.getSavedProviders);
@@ -141,6 +141,51 @@ export default function FindScreen() {
   useDetectUserLocation();
   const userCoords = useLocationStore((s) => s.coords);
   const userLocationLabel = useLocationStore((s) => s.label);
+
+  // Fetch homeowner's homes to determine their zip code for neighborhood stats
+  const { data: homesData } = useQuery<{ homes: Array<{ id: string; zip: string; isDefault?: boolean }> }>({
+    queryKey: ["/api/homes", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return { homes: [] };
+      const url = new URL(`/api/homes/${user.id}`, getApiUrl());
+      const res = await fetch(url.toString(), {
+        headers: getAuthHeaders(),
+        credentials: "include",
+      });
+      if (!res.ok) return { homes: [] };
+      return res.json();
+    },
+    enabled: isAuthenticated && !!user?.id,
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const homeownerZip = useMemo(() => {
+    if (!homesData?.homes?.length) return null;
+    const defaultHome = homesData.homes.find((h) => h.isDefault) ?? homesData.homes[0];
+    return defaultHome?.zip ?? null;
+  }, [homesData]);
+
+  interface NeighborhoodStats {
+    areaBookingCount: number;
+    providerCounts: Record<string, number>;
+  }
+
+  const { data: neighborhoodStats } = useQuery<NeighborhoodStats>({
+    queryKey: ["/api/neighborhood-stats", homeownerZip],
+    queryFn: async () => {
+      if (!homeownerZip) return { areaBookingCount: 0, providerCounts: {} };
+      const url = new URL("/api/neighborhood-stats", getApiUrl());
+      url.searchParams.set("zip", homeownerZip);
+      const res = await fetch(url.toString(), {
+        headers: getAuthHeaders(),
+        credentials: "include",
+      });
+      if (!res.ok) return { areaBookingCount: 0, providerCounts: {} };
+      return res.json();
+    },
+    enabled: isAuthenticated && !!homeownerZip,
+    staleTime: 2 * 60 * 60 * 1000,
+  });
 
   const {
     data: apiData,
@@ -408,6 +453,24 @@ export default function FindScreen() {
               />
             </Pressable>
           </Animated.View>
+
+          {neighborhoodStats && neighborhoodStats.areaBookingCount > 0 ? (
+            <Animated.View entering={FadeInDown.delay(178).duration(400)}>
+              <View
+                style={[
+                  styles.neighborhoodBanner,
+                  { backgroundColor: Colors.accentLight },
+                ]}
+              >
+                <Feather name="users" size={14} color={Colors.accent} />
+                <ThemedText style={[styles.neighborhoodBannerText, { color: Colors.accent }]}>
+                  {neighborhoodStats.areaBookingCount === 1
+                    ? "1 homeowner in your area booked this month"
+                    : `${neighborhoodStats.areaBookingCount} homeowners in your area booked this month`}
+                </ThemedText>
+              </View>
+            </Animated.View>
+          ) : null}
 
           {isAuthenticated && savedProviders.length > 0 ? (
             <Animated.View entering={FadeInDown.delay(180).duration(400)}>
@@ -959,6 +1022,7 @@ export default function FindScreen() {
         isPartner={item.isPartner}
         distance={item.distance ?? null}
         badges={item.badges ?? []}
+        neighborCount={neighborhoodStats?.providerCounts?.[item.id] ?? 0}
         onPress={() => handleProviderCardPress(item.id)}
         testID={`provider-${item.id}`}
       />
@@ -1313,6 +1377,20 @@ const styles = StyleSheet.create({
   },
   savedProviderRatingText: {
     ...Typography.caption2,
+  },
+  neighborhoodBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.md,
+  },
+  neighborhoodBannerText: {
+    ...Typography.caption1,
+    fontWeight: "600",
+    flex: 1,
   },
   locationOption: {
     flexDirection: "row",

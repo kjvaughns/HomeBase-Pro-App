@@ -3807,6 +3807,92 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
     },
   );
 
+  // ─── Neighborhood Social Proof ─────────────────────────────────────────
+  // Returns aggregate booking counts filtered to a homeowner's zip code so
+  // the discovery screen and provider profiles can show localized social proof.
+  // Results are cached in-process for 2 hours to avoid repeated heavy joins.
+  const neighborhoodStatsCache = new Map<
+    string,
+    { data: { areaBookingCount: number; providerCounts: Record<string, number> }; expiresAt: number }
+  >();
+
+  app.get("/api/neighborhood-stats", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const zip = (req.query.zip as string | undefined)?.trim();
+      if (!zip) {
+        return res.status(400).json({ error: "zip is required" });
+      }
+
+      // Validate that the requesting homeowner actually has a home in the
+      // supplied zip code. This prevents unauthenticated or cross-zip probing
+      // of aggregate booking activity.
+      const authUserId = req.authenticatedUserId!;
+      const callerHomes = await db
+        .select({ zip: homes.zip })
+        .from(homes)
+        .where(eq(homes.userId, authUserId));
+      const callerZips = new Set(callerHomes.map((h) => h.zip));
+      if (!callerZips.has(zip)) {
+        // Return empty rather than 403 — caller may not have homes yet
+        return res.json({ areaBookingCount: 0, providerCounts: {} });
+      }
+
+      const now = Date.now();
+      const cached = neighborhoodStatsCache.get(zip);
+      if (cached && cached.expiresAt > now) {
+        return res.json(cached.data);
+      }
+
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
+
+      const whereClause = and(
+        eq(homes.zip, zip),
+        gte(appointments.createdAt, monthStart),
+        sql`${appointments.status} != 'cancelled'`,
+        sql`${appointments.homeId} IS NOT NULL`,
+      );
+
+      // Count distinct homes (unique neighbor households) per provider and
+      // area-wide. Using COUNT(DISTINCT homeId) ensures a homeowner who books
+      // the same provider twice still counts as one neighbor.
+      const [perProviderRows, areaRow] = await Promise.all([
+        db
+          .select({
+            providerId: appointments.providerId,
+            count: sql<number>`count(distinct ${appointments.homeId})::int`,
+          })
+          .from(appointments)
+          .innerJoin(homes, eq(appointments.homeId, homes.id))
+          .where(whereClause)
+          .groupBy(appointments.providerId),
+        db
+          .select({
+            count: sql<number>`count(distinct ${appointments.homeId})::int`,
+          })
+          .from(appointments)
+          .innerJoin(homes, eq(appointments.homeId, homes.id))
+          .where(whereClause),
+      ]);
+
+      const providerCounts: Record<string, number> = {};
+      for (const row of perProviderRows) {
+        providerCounts[row.providerId] = row.count;
+      }
+      const areaBookingCount = areaRow[0]?.count ?? 0;
+
+      const data = { areaBookingCount, providerCounts };
+      // Cache for 2 hours
+      neighborhoodStatsCache.set(zip, { data, expiresAt: now + 2 * 60 * 60 * 1000 });
+
+      res.json(data);
+    } catch (error) {
+      req.log?.error({ err: error }, "neighborhood-stats error");
+      res.status(500).json({ error: "Failed to get neighborhood stats" });
+    }
+  });
+
   // ─── Provider Achievements (Task #354) ────────────────────────────────
   // Returns earned badges, stats, and progress toward next milestones for
   // the authenticated provider's own achievements screen.
