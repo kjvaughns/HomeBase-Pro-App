@@ -27,6 +27,7 @@ import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { Job, JobStatus, ServiceCategory } from "@/state/types";
 import { useQuery } from "@tanstack/react-query";
 import { recordHappyMoment } from "@/state/appReviewStore";
+import { getApiUrl, getAuthHeaders } from "@/lib/query-client";
 
 interface Appointment {
   id: string;
@@ -80,11 +81,23 @@ export default function HomeScreen() {
   const appointments: Appointment[] = appointmentsData?.appointments ?? [];
   const showAppointmentsLoader = !!user?.id && isLoadingAppointments && !appointmentsData;
 
+  const { data: creditsData, refetch: refetchCredits } = useQuery<{ balanceCents: number; balance: string }>({
+    queryKey: ["/api/users/me/credits/history"],
+    queryFn: async () => {
+      const url = new URL("/api/users/me/credits/history", getApiUrl());
+      const res = await fetch(url.toString(), { headers: getAuthHeaders(), credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch credits");
+      return res.json();
+    },
+    enabled: !!user?.id,
+  });
+  const creditBalanceCents = creditsData?.balanceCents ?? 0;
+
   useFocusEffect(
     useCallback(() => {
-      if (user?.id) refetch();
+      if (user?.id) { refetch(); refetchCredits(); }
       recordHappyMoment("homeowner_feature_used").catch(() => {});
-    }, [user?.id, refetch])
+    }, [user?.id, refetch, refetchCredits])
   );
 
   const onRefresh = async () => {
@@ -186,6 +199,20 @@ export default function HomeScreen() {
             <Avatar name={user?.name || "User"} size="medium" />
           </View>
         </Animated.View>
+
+        {creditBalanceCents > 0 ? (
+          <Animated.View entering={FadeInDown.delay(50).duration(400)}>
+            <Pressable onPress={() => navigation.navigate("CreditHistory")} testID="banner-credit-balance">
+              <View style={[styles.creditBanner, { backgroundColor: Colors.accentLight }]}>
+                <Feather name="dollar-sign" size={16} color={Colors.accent} />
+                <ThemedText style={[styles.creditBannerText, { color: Colors.accent }]}>
+                  You have ${(creditBalanceCents / 100).toFixed(2)} in HomeBase credits
+                </ThemedText>
+                <Feather name="chevron-right" size={14} color={Colors.accent} />
+              </View>
+            </Pressable>
+          </Animated.View>
+        ) : null}
 
         <Animated.View entering={FadeInDown.delay(100).duration(400)}>
           <Pressable onPress={handleAIPress}>
@@ -389,6 +416,20 @@ const styles = StyleSheet.create({
   },
   userName: {
     ...Typography.largeTitle,
+  },
+  creditBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.md,
+  },
+  creditBannerText: {
+    ...Typography.subhead,
+    fontWeight: "600",
+    flex: 1,
   },
   aiCard: {
     marginBottom: Spacing.lg,

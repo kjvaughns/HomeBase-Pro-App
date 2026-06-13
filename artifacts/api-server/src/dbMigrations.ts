@@ -1535,6 +1535,8 @@ export async function runBootMigrations(): Promise<void> {
       // Task #355: homeowner referral codes and tracking
       ["users.referral_code column",               `SELECT referral_code FROM users LIMIT 0`],
       ["homeowner_referrals table",                `SELECT id FROM homeowner_referrals LIMIT 0`],
+      // Task #356: loyalty credits — idempotency keys for credit_ledger grants
+      ["credit_ledger.idempotency_key column",     `SELECT idempotency_key FROM credit_ledger LIMIT 0`],
     );
 
     const verificationErrors: string[] = [];

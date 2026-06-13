@@ -73,6 +73,7 @@ import SendMessageScreen from "@/screens/provider/SendMessageScreen";
 import CommunicationsScreen from "@/screens/provider/CommunicationsScreen";
 import SavedProvidersScreen from "@/screens/homeowner/SavedProvidersScreen";
 import ReferralsScreen from "@/screens/homeowner/ReferralsScreen";
+import CreditHistoryScreen from "@/screens/homeowner/CreditHistoryScreen";
 import HelpCenterScreen from "@/screens/homeowner/HelpCenterScreen";
 import ContactUsScreen from "@/screens/homeowner/ContactUsScreen";
 import MyTicketsScreen from "@/screens/homeowner/MyTicketsScreen";
@@ -177,6 +178,7 @@ export type RootStackParamList = {
   PreviewBookingPage: { providerId?: string };
   SavedProviders: undefined;
   Referrals: undefined;
+  CreditHistory: undefined;
   HelpCenter: undefined;
   ContactUs: undefined;
   MyTickets: undefined;
@@ -752,6 +754,13 @@ export default function RootStackNavigator() {
         component={ReferralsScreen}
         options={{
           headerTitle: "Referrals",
+        }}
+      />
+      <Stack.Screen
+        name="CreditHistory"
+        component={CreditHistoryScreen}
+        options={{
+          headerTitle: "Credits & Rewards",
         }}
       />
     </Stack.Navigator>

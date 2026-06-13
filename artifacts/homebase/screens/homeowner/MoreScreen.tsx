@@ -275,8 +275,15 @@ export default function MoreScreen() {
                   leftIcon="gift"
                   subtitle="Earn $10 for every friend you invite"
                   onPress={() => navigation.navigate("Referrals")}
-                  isLast
                   testID="row-referrals"
+                />
+                <ListRow
+                  title="Credits & Rewards"
+                  leftIcon="dollar-sign"
+                  subtitle="View your balance and earning history"
+                  onPress={() => navigation.navigate("CreditHistory")}
+                  isLast
+                  testID="row-credit-history"
                 />
               </View>
             </Animated.View>

@@ -6,6 +6,7 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, useNavigation, useFocusEffect, RouteProp, CommonActions } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuthStore } from "@/state/authStore";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 
@@ -46,6 +47,7 @@ export default function PaymentScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
   // Task #289: deep-link safety — `route.params` is undefined when this
   // screen is opened via a bare `/payment-result` URL with no query
   // parameters. Destructuring directly threw and tripped the global
@@ -68,6 +70,18 @@ export default function PaymentScreen() {
       ? "Payment received. Updating your invoice…"
       : null,
   );
+
+  const { data: creditsData } = useQuery<{ balanceCents: number; balance: string }>({
+    queryKey: ["/api/users/me/credits/history"],
+    queryFn: async () => {
+      const url = new URL("/api/users/me/credits/history", getApiUrl());
+      const res = await fetch(url.toString(), { headers: getAuthHeaders(), credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch credits");
+      return res.json();
+    },
+    enabled: !!user?.id,
+  });
+  const creditBalanceCents = creditsData?.balanceCents ?? 0;
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery<{ invoice: InvoiceRecord; payments: unknown[] }>({
     queryKey: ["/api/invoices", invoiceId],
@@ -142,6 +156,12 @@ export default function PaymentScreen() {
     lastInvoiceStatusRef.current = status;
   }, [data?.invoice?.status, data?.invoice?.id]);
 
+  // Sentinel thrown from inside the openExternalUrl callback when credits
+  // fully cover the invoice. openExternalUrl propagates it as a normal
+  // rejection (closing any blank web tab it pre-opened), and the outer
+  // catch handles it as a success case rather than an error.
+  const CREDITS_PAID = "__credits_paid__";
+
   const handlePayInvoice = async () => {
     setIsProcessing(true);
     setPaymentError(null);
@@ -171,12 +191,26 @@ export default function PaymentScreen() {
           }
           throw new Error(errBody.error || "Failed to start payment");
         }
-        const body: { url?: string } = await res.json();
+        const body: { url?: string; status?: string } = await res.json();
+        if (body.status === "paid") {
+          // Credits fully covered the invoice — no Stripe redirect needed.
+          // Throw a sentinel so openExternalUrl closes any blank web tab and
+          // the outer catch can handle this as a success.
+          throw new Error(CREDITS_PAID);
+        }
         if (!body.url) throw new Error("No checkout URL received");
         return body.url;
       });
       setOpenedExternal(true);
     } catch (err) {
+      if (err instanceof Error && err.message === CREDITS_PAID) {
+        // Invoice fully paid by credits — show success and refresh data.
+        await queryClient.invalidateQueries({ queryKey: ["/api/invoices", invoiceId] });
+        await queryClient.invalidateQueries({ queryKey: ["/api/users/me/credits/history"] });
+        setReturnNotice("Your invoice was paid in full using your HomeBase credits! 🎉");
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        return;
+      }
       const message = err instanceof Error ? err.message : "Payment failed";
       setPaymentError(message);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -358,6 +392,17 @@ export default function PaymentScreen() {
             </View>
             <ThemedText style={[styles.feeBreakdownValue, { color: theme.textSecondary }]}>${processingFeeAmount}</ThemedText>
           </View>
+          {creditBalanceCents > 0 ? (
+            <>
+              <View style={[styles.divider, { backgroundColor: theme.borderLight }]} />
+              <View style={[styles.creditRow, { backgroundColor: Colors.accentLight }]}>
+                <Feather name="dollar-sign" size={14} color={Colors.accent} />
+                <ThemedText style={[styles.creditRowText, { color: Colors.accent }]}>
+                  ${(Math.min(creditBalanceCents, homeownerTotalCents) / 100).toFixed(2)} in credits will be applied automatically
+                </ThemedText>
+              </View>
+            </>
+          ) : null}
           <View style={[styles.divider, { backgroundColor: theme.borderLight }]} />
           <View style={styles.totalRow}>
             <ThemedText style={styles.totalLabel}>Total Due</ThemedText>
@@ -502,4 +547,13 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   returnNoticeText: { ...Typography.subhead, flex: 1, lineHeight: 20 },
+  creditRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    marginTop: Spacing.xs,
+  },
+  creditRowText: { ...Typography.caption1, fontWeight: "600", flex: 1 },
 });

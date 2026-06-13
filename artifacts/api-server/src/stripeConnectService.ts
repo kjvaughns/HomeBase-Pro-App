@@ -768,7 +768,10 @@ export async function createStripeInvoice(
   return { stripeInvoiceId: finalized.id, hostedInvoiceUrl };
 }
 
-export async function createStripeCheckoutSession(invoiceId: string) {
+export async function createStripeCheckoutSession(
+  invoiceId: string,
+  chargeAmountCents?: number,
+) {
   const [invoice] = await db
     .select()
     .from(invoices)
@@ -796,40 +799,74 @@ export async function createStripeCheckoutSession(invoiceId: string) {
     .from(providers)
     .where(eq(providers.id, invoice.providerId));
 
-  const lineItemsData = await db
-    .select()
-    .from(invoiceLineItems)
-    .where(eq(invoiceLineItems.invoiceId, invoiceId));
+  // When a partial credit has been applied, chargeAmountCents is the remaining
+  // balance after credits. Use a single line item for that amount so Stripe
+  // only charges the net amount due.
+  const effectiveAmount = chargeAmountCents ?? invoice.totalCents;
+  const isPartialCharge =
+    chargeAmountCents !== undefined && chargeAmountCents < invoice.totalCents;
 
-  const stripeLineItems = lineItemsData.map((item) => ({
+  let stripeLineItems: {
     price_data: {
-      currency: invoice.currency || "usd",
-      product_data: {
-        name: item.name,
-        description: item.description || undefined,
-      },
-      unit_amount: item.unitPriceCents,
-    },
-    quantity: Math.round(parseFloat(item.quantity?.toString() || "1")),
-  }));
+      currency: string;
+      product_data: { name: string; description?: string };
+      unit_amount: number;
+    };
+    quantity: number;
+  }[];
 
-  if (stripeLineItems.length === 0) {
-    stripeLineItems.push({
+  if (isPartialCharge) {
+    // Credits already applied — single item for the net remaining amount.
+    stripeLineItems = [
+      {
+        price_data: {
+          currency: invoice.currency || "usd",
+          product_data: {
+            name: `Invoice ${invoice.invoiceNumber} (after credits)`,
+            description: invoice.notes || undefined,
+          },
+          unit_amount: effectiveAmount,
+        },
+        quantity: 1,
+      },
+    ];
+  } else {
+    const lineItemsData = await db
+      .select()
+      .from(invoiceLineItems)
+      .where(eq(invoiceLineItems.invoiceId, invoiceId));
+
+    stripeLineItems = lineItemsData.map((item) => ({
       price_data: {
         currency: invoice.currency || "usd",
         product_data: {
-          name: `Invoice ${invoice.invoiceNumber}`,
-          description: invoice.notes || undefined,
+          name: item.name,
+          description: item.description || undefined,
         },
-        unit_amount: invoice.totalCents,
+        unit_amount: item.unitPriceCents,
       },
-      quantity: 1,
-    });
+      quantity: Math.round(parseFloat(item.quantity?.toString() || "1")),
+    }));
+
+    if (stripeLineItems.length === 0) {
+      stripeLineItems.push({
+        price_data: {
+          currency: invoice.currency || "usd",
+          product_data: {
+            name: `Invoice ${invoice.invoiceNumber}`,
+            description: invoice.notes || undefined,
+          },
+          unit_amount: invoice.totalCents,
+        },
+        quantity: 1,
+      });
+    }
   }
 
   // Pass Stripe processing fee through to the homeowner as a visible line item
   // so the provider receives their full quoted amount untouched.
-  const checkoutStripeFeeCents = calculateStripePassthroughFee(invoice.totalCents);
+  // Fee is calculated on the effective charge amount (after any credit reduction).
+  const checkoutStripeFeeCents = calculateStripePassthroughFee(effectiveAmount);
   stripeLineItems.push({
     price_data: {
       currency: invoice.currency || "usd",
@@ -841,7 +878,11 @@ export async function createStripeCheckoutSession(invoiceId: string) {
 
   // Destination-charge model: application_fee_amount = platformFee + processingFee
   // so the transfer to the connected account = jobAmount - platformFee (e.g. $97).
-  const checkoutAppFee = (invoice.platformFeeCents || 0) + checkoutStripeFeeCents;
+  // Scale platform fee proportionally when credits reduced the charge amount.
+  const scaledPlatformFee = isPartialCharge
+    ? Math.round((invoice.platformFeeCents || 0) * (effectiveAmount / invoice.totalCents))
+    : (invoice.platformFeeCents || 0);
+  const checkoutAppFee = scaledPlatformFee + checkoutStripeFeeCents;
 
   const session = await getStripe().checkout.sessions.create({
     mode: "payment",
@@ -904,77 +945,89 @@ export async function applyCreditsToInvoice(
   userId: string,
   amountCents: number,
 ) {
-  const [invoice] = await db
-    .select()
-    .from(invoices)
-    .where(eq(invoices.id, invoiceId));
+  // Wrap all reads + writes in a single transaction so no partial state is
+  // committed if any step fails. This prevents balance deductions without
+  // matching ledger/payment records.
+  return await db.transaction(async (tx) => {
+    const [invoice] = await tx
+      .select()
+      .from(invoices)
+      .where(eq(invoices.id, invoiceId));
 
-  if (!invoice) {
-    throw new Error("Invoice not found");
-  }
+    if (!invoice) {
+      throw new Error("Invoice not found");
+    }
 
-  const allowedMethods = invoice.paymentMethodsAllowed || "stripe,credits";
-  if (!allowedMethods.includes("credits")) {
-    throw new Error("This invoice does not accept credit payments");
-  }
+    const allowedMethods = invoice.paymentMethodsAllowed || "stripe,credits";
+    if (!allowedMethods.includes("credits")) {
+      throw new Error("This invoice does not accept credit payments");
+    }
 
-  const [userCredit] = await db
-    .select()
-    .from(userCredits)
-    .where(eq(userCredits.userId, userId));
+    const [userCredit] = await tx
+      .select()
+      .from(userCredits)
+      .where(eq(userCredits.userId, userId));
 
-  if (!userCredit || (userCredit.balanceCents || 0) < amountCents) {
-    throw new Error("Insufficient credits");
-  }
+    if (!userCredit || (userCredit.balanceCents || 0) < amountCents) {
+      throw new Error("Insufficient credits");
+    }
 
-  const maxPayable = invoice.totalCents - (await getPaidAmount(invoiceId));
-  const actualAmount = Math.min(amountCents, maxPayable);
+    // Compute outstanding balance within the transaction for consistent reads.
+    const succeededPayments = await tx
+      .select({ amountCents: payments.amountCents })
+      .from(payments)
+      .where(and(eq(payments.invoiceId, invoiceId), eq(payments.status, "succeeded")));
+    const alreadyPaid = succeededPayments.reduce((s, p) => s + (p.amountCents || 0), 0);
 
-  if (actualAmount <= 0) {
-    throw new Error("Invoice is already paid or no amount due");
-  }
+    const maxPayable = invoice.totalCents - alreadyPaid;
+    const actualAmount = Math.min(amountCents, maxPayable);
 
-  await db
-    .update(userCredits)
-    .set({
-      balanceCents: (userCredit.balanceCents || 0) - actualAmount,
-      updatedAt: new Date(),
-    })
-    .where(eq(userCredits.userId, userId));
+    if (actualAmount <= 0) {
+      throw new Error("Invoice is already paid or no amount due");
+    }
 
-  await db.insert(creditLedger).values({
-    userId,
-    deltaCents: -actualAmount,
-    reason: "invoice_payment",
-    invoiceId,
+    await tx
+      .update(userCredits)
+      .set({
+        balanceCents: (userCredit.balanceCents || 0) - actualAmount,
+        updatedAt: new Date(),
+      })
+      .where(eq(userCredits.userId, userId));
+
+    await tx.insert(creditLedger).values({
+      userId,
+      deltaCents: -actualAmount,
+      reason: "invoice_payment",
+      invoiceId,
+    });
+
+    await tx.insert(payments).values({
+      invoiceId,
+      providerId: invoice.providerId,
+      amountCents: actualAmount,
+      amount: (actualAmount / 100).toFixed(2),
+      method: "credits",
+      status: "succeeded",
+    });
+
+    const newPaidTotal = alreadyPaid + actualAmount;
+    const isFullyPaid = newPaidTotal >= invoice.totalCents;
+
+    await tx
+      .update(invoices)
+      .set({
+        status: isFullyPaid ? "paid" : "partially_paid",
+        paidAt: isFullyPaid ? new Date() : undefined,
+        updatedAt: new Date(),
+      })
+      .where(eq(invoices.id, invoiceId));
+
+    return {
+      applied: actualAmount,
+      remainingBalance: (userCredit.balanceCents || 0) - actualAmount,
+      invoiceStatus: isFullyPaid ? "paid" : "partially_paid",
+    };
   });
-
-  await db.insert(payments).values({
-    invoiceId,
-    providerId: invoice.providerId,
-    amountCents: actualAmount,
-    amount: (actualAmount / 100).toFixed(2),
-    method: "credits",
-    status: "succeeded",
-  });
-
-  const newPaidAmount = await getPaidAmount(invoiceId);
-  const isFullyPaid = newPaidAmount >= invoice.totalCents;
-
-  await db
-    .update(invoices)
-    .set({
-      status: isFullyPaid ? "paid" : "partially_paid",
-      paidAt: isFullyPaid ? new Date() : undefined,
-      updatedAt: new Date(),
-    })
-    .where(eq(invoices.id, invoiceId));
-
-  return {
-    applied: actualAmount,
-    remainingBalance: (userCredit.balanceCents || 0) - actualAmount,
-    invoiceStatus: isFullyPaid ? "paid" : "partially_paid",
-  };
 }
 
 async function getPaidAmount(invoiceId: string): Promise<number> {

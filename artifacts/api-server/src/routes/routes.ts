@@ -67,6 +67,12 @@ import {
   grantReferralCreditsIfFirstBooking,
 } from "../referralService";
 import {
+  grantFirstBookingCredit,
+  grantReviewCredit,
+  checkAndGrantServiceCategoryMilestone,
+  formatLedgerEntry,
+} from "../loyaltyService";
+import {
   searchPlaces,
   getPlaceDetails,
   geocodeAddress,
@@ -3566,6 +3572,17 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
         sendReviewNudge(req.params.id).catch((e: unknown) =>
           console.error("review nudge dispatch error:", e),
         );
+
+        // Loyalty credits — fire-and-forget, idempotent
+        if (updatedAppointment.userId) {
+          const homeownerUserId = updatedAppointment.userId;
+          grantFirstBookingCredit(homeownerUserId).catch((e: unknown) =>
+            console.error("loyalty first_booking credit error:", e),
+          );
+          checkAndGrantServiceCategoryMilestone(homeownerUserId).catch((e: unknown) =>
+            console.error("loyalty category milestone error:", e),
+          );
+        }
 
         res.json({ appointment: updatedAppointment });
       } catch (error) {
@@ -8475,6 +8492,11 @@ Respond with JSON only:
             console.error("milestone check (review) error:", e),
           );
         }
+
+        // Loyalty: $3 credit for leaving a review (idempotent per appointment)
+        grantReviewCredit(authUserId, appointmentId).catch((e: unknown) =>
+          console.error("loyalty review credit error:", e),
+        );
 
         res.status(201).json({ review });
       } catch (error) {
@@ -14871,9 +14893,77 @@ Respond with JSON only:
         const { invoiceId } = req.params;
         if (!(await assertInvoiceAccess(req, invoiceId, res))) return;
 
+        const userId = req.authenticatedUserId!;
+
+        // Auto-apply any available HomeBase credits before creating a Stripe
+        // session, so the homeowner is only charged the net balance due.
+        // Always base amounts on outstanding balance (totalCents minus already-
+        // paid), never raw totalCents, to prevent overcharging on invoices that
+        // have prior partial payments.
+        let remainingCents: number | undefined;
+        try {
+          const [inv] = await db
+            .select({ totalCents: invoices.totalCents })
+            .from(invoices)
+            .where(eq(invoices.id, invoiceId));
+
+          if (!inv) throw new Error("Invoice not found");
+
+          // Compute outstanding balance from succeeded payment records.
+          const succeededPayments = await db
+            .select({ amountCents: payments.amountCents })
+            .from(payments)
+            .where(and(eq(payments.invoiceId, invoiceId), eq(payments.status, "succeeded")));
+          const alreadyPaid = succeededPayments.reduce((s, p) => s + (p.amountCents || 0), 0);
+          const outstandingCents = inv.totalCents - alreadyPaid;
+
+          if (outstandingCents <= 0) {
+            // Invoice already fully paid (e.g. prior credits-only payment).
+            return res.json({ status: "paid", appliedCreditsCents: 0 });
+          }
+
+          const [creditRow] = await db
+            .select({ balanceCents: userCredits.balanceCents })
+            .from(userCredits)
+            .where(eq(userCredits.userId, userId));
+
+          const availableCents = creditRow?.balanceCents ?? 0;
+
+          if (availableCents > 0) {
+            const creditResult = await applyCreditsToInvoice(
+              invoiceId,
+              userId,
+              Math.min(availableCents, outstandingCents),
+            );
+
+            if (creditResult.invoiceStatus === "paid") {
+              // Credits covered the full invoice — no Stripe charge needed.
+              return res.json({
+                status: "paid",
+                appliedCreditsCents: creditResult.applied,
+              });
+            }
+
+            // Partially covered — pass the actual remaining amount to Stripe.
+            remainingCents = outstandingCents - creditResult.applied;
+          }
+        } catch (creditErr: any) {
+          // Only swallow expected "credits not applicable" errors — re-throw
+          // anything unexpected so it surfaces via the outer error handler.
+          const msg: string = creditErr?.message ?? "";
+          const isExpected =
+            msg.includes("does not accept credit payments") ||
+            msg.includes("Insufficient credits") ||
+            msg.includes("already paid");
+          if (!isExpected) throw creditErr;
+          // Expected: invoice disallows credits or user has none — proceed
+          // with full Stripe checkout for the outstanding amount.
+          remainingCents = undefined;
+        }
+
         // Try Connect-backed Checkout Session first (proper deep-link return).
         try {
-          const session = await createStripeCheckoutSession(invoiceId);
+          const session = await createStripeCheckoutSession(invoiceId, remainingCents);
           return res.json({
             url: session.checkoutUrl,
             sessionId: session.sessionId,
@@ -14972,6 +15062,36 @@ Respond with JSON only:
         res
           .status(500)
           .json({ error: error.message || "Failed to get user credits" });
+      }
+    },
+  );
+
+  // Credit history — returns balance + chronological ledger for the authenticated user
+  app.get(
+    "/api/users/me/credits/history",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const userId = req.authenticatedUserId!;
+        const [credits] = await db
+          .select()
+          .from(userCredits)
+          .where(eq(userCredits.userId, userId));
+
+        const ledgerEntries = await db
+          .select()
+          .from(creditLedger)
+          .where(eq(creditLedger.userId, userId))
+          .orderBy(desc(creditLedger.createdAt));
+
+        res.json({
+          balanceCents: credits?.balanceCents ?? 0,
+          balance: ((credits?.balanceCents ?? 0) / 100).toFixed(2),
+          history: ledgerEntries.map(formatLedgerEntry),
+        });
+      } catch (error: any) {
+        console.error("Get credits history error:", error);
+        res.status(500).json({ error: error.message || "Failed to get credits history" });
       }
     },
   );
