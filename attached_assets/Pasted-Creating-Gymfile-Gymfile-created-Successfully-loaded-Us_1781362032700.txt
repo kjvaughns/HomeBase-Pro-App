@@ -1,0 +1,1361 @@
+Creating Gymfile
+Gymfile created
+Successfully loaded '/Users/expo/workingdir/build/artifacts/homebase/ios/Gymfile' 📄
++---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|                                                                  Detected Values from './Gymfile'                                                                   |
++-----------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+| suppress_xcode_output | true                                                                                                                                        |
+| clean                 | false                                                                                                                                       |
+| scheme                | HomeBase                                                                                                                                    |
+| configuration         | Release                                                                                                                                     |
+| export_options        |                                                                                                                                             |
+| export_xcargs         | OTHER_CODE_SIGN_FLAGS="--keychain /var/folders/51/y6phq4kx54bdjkgn5fc44z3m0000gn/T/eas-build-f032dd23-ddc8-4f86-8cac-5343e409a1a1.keychain" |
+| disable_xcpretty      | true                                                                                                                                        |
+| buildlog_path         | /Users/expo/workingdir/logs                                                                                                                 |
+| derived_data_path     | ./build                                                                                                                                     |
+| result_bundle         | true                                                                                                                                        |
+| result_bundle_path    | /var/folders/51/y6phq4kx54bdjkgn5fc44z3m0000gn/T/result-bundle-1781361645797.xcresult                                                       |
+| output_directory      | ./build                                                                                                                                     |
++-----------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+Resolving Swift Package Manager dependencies...
+$ xcodebuild -resolvePackageDependencies -workspace ./HomeBase.xcworkspace -scheme HomeBase -configuration Release -derivedDataPath ./build
+▸ Command line invocation:
+▸     /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -resolvePackageDependencies -workspace ./HomeBase.xcworkspace -scheme HomeBase -configuration Release -derivedDataPath ./build
+▸ resolved source packages:
+$ xcodebuild -showBuildSettings -workspace ./HomeBase.xcworkspace -scheme HomeBase -configuration Release -derivedDataPath ./build 2>&1
+Detected provisioning profile mapping: {:"com.homebasepro.app"=>"cf709ed0-9ab3-4ba1-a0cb-7a9d52ed1f15"}
+
++-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|                                                                                        Summary for gym 2.231.1                                                                                        |
++---------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+| workspace                                               | ./HomeBase.xcworkspace                                                                                                                      |
+| scheme                                                  | HomeBase                                                                                                                                    |
+| clean                                                   | false                                                                                                                                       |
+| output_directory                                        | ./build                                                                                                                                     |
+| output_name                                             | HomeBase                                                                                                                                    |
+| configuration                                           | Release                                                                                                                                     |
+| silent                                                  | false                                                                                                                                       |
+| skip_package_ipa                                        | false                                                                                                                                       |
+| skip_package_pkg                                        | false                                                                                                                                       |
+| export_options.method                                   | app-store                                                                                                                                   |
+| export_options.provisioningProfiles.com.homebasepro.app | cf709ed0-9ab3-4ba1-a0cb-7a9d52ed1f15                                                                                                        |
+| export_xcargs                                           | OTHER_CODE_SIGN_FLAGS="--keychain /var/folders/51/y6phq4kx54bdjkgn5fc44z3m0000gn/T/eas-build-f032dd23-ddc8-4f86-8cac-5343e409a1a1.keychain" |
+| build_path                                              | /Users/expo/Library/Developer/Xcode/Archives/2026-06-13                                                                                     |
+| derived_data_path                                       | ./build                                                                                                                                     |
+| result_bundle                                           | true                                                                                                                                        |
+| result_bundle_path                                      | /var/folders/51/y6phq4kx54bdjkgn5fc44z3m0000gn/T/result-bundle-1781361645797.xcresult                                                       |
+| buildlog_path                                           | /Users/expo/workingdir/logs                                                                                                                 |
+| destination                                             | generic/platform=iOS                                                                                                                        |
+| suppress_xcode_output                                   | true                                                                                                                                        |
+| xcodebuild_formatter                                    | xcpretty                                                                                                                                    |
+| build_timing_summary                                    | false                                                                                                                                       |
+| disable_xcpretty                                        | true                                                                                                                                        |
+| skip_profile_detection                                  | false                                                                                                                                       |
+| xcodebuild_command                                      | xcodebuild                                                                                                                                  |
+| skip_package_dependencies_resolution                    | false                                                                                                                                       |
+| disable_package_automatic_updates                       | false                                                                                                                                       |
+| use_system_scm                                          | false                                                                                                                                       |
+| generate_appstore_info                                  | false                                                                                                                                       |
+| xcode_path                                              | /Applications/Xcode.app                                                                                                                     |
++---------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+$ set -o pipefail && xcodebuild -workspace ./HomeBase.xcworkspace -scheme HomeBase -configuration Release -derivedDataPath ./build -destination 'generic/platform=iOS' -archivePath /Users/expo/Library/Developer/Xcode/Archives/2026-06-13/HomeBase\ 2026-06-13\ 07.40.50.xcarchive -resultBundlePath '/var/folders/51/y6phq4kx54bdjkgn5fc44z3m0000gn/T/result-bundle-1781361645797.xcresult' archive | tee /Users/expo/workingdir/logs/HomeBase-HomeBase.log > /dev/null
+› Executing react-native-safe-area-context Pods/react-native-safe-area-context » [CP-User] [Expo] Resolve react-native-safe-area-context dSYM source maps
+› Executing react-native Pods/hermes-engine » [CP-User] [Hermes] Replace Hermes for the right configuration, if needed
+› Executing react-native Pods/ReactNativeDependencies » [CP-User] [RNDeps] Replace React Native Dependencies for the right configuration, if needed
+› Executing react-native-worklets Pods/RNWorklets » [CP-User] [Expo] Resolve RNWorklets dSYM source maps
+› Executing react-native-reanimated Pods/RNReanimated » [CP-User] [Expo] Resolve RNReanimated dSYM source maps
+› Executing react-native-safe-area-context Pods/react-native-safe-area-context » [CP-User] [Expo] Switch react-native-safe-area-context XCFramework for build configuration
+› Executing react-native Pods/hermes-engine » [CP] Copy XCFrameworks
+› Executing react-native-worklets Pods/RNWorklets » [CP-User] [Expo] Switch RNWorklets XCFramework for build configuration
+› Executing react-native-reanimated Pods/RNReanimated » [CP-User] [Expo] Switch RNReanimated XCFramework for build configuration
+› Executing react-native-safe-area-context Pods/react-native-safe-area-context » [CP] Copy XCFrameworks
+› Executing react-native-worklets Pods/RNWorklets » [CP] Copy XCFrameworks
+› Executing react-native Pods/ReactNativeDependencies » [CP] Copy XCFrameworks
+› Executing react-native-reanimated Pods/RNReanimated » [CP] Copy XCFrameworks
+› Executing react-native Pods/React-Core-prebuilt » [CP-User] [RNDeps] Replace React Native Core for the right configuration, if needed
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/zh-Hant.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/zh-Hant.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/zh-Hans.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/zh-Hans.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/zh-HK.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/zh-HK.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/vi.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/vi.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/tr.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/tr.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/th.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/th.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/sv.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/sv.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/sl-SI.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/sl-SI.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/sk-SK.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/sk-SK.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/ru.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/ru.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/ro-RO.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/ro-RO.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/pt-PT.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/pt-PT.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/pt-BR.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/pt-BR.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/pl-PL.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/pl-PL.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/nl.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/nl.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/nb.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/nb.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/mt.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/mt.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/ms-MY.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/ms-MY.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/lv-LV.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/lv-LV.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/lt-LT.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/lt-LT.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/localized_address_data.json ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/JSON/localized_address_data.json
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/ko.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/ko.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/ja.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/ja.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/it.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/it.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/id.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/id.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/hu.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/hu.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/hr.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/hr.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/fr.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/fr.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/fr-CA.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/fr-CA.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/fil.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/fil.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/fi.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/fi.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/et-EE.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/et-EE.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/es.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/es.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/es-419.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/es-419.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/en.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/en.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/en-GB.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/en-GB.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/el-GR.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/el-GR.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/de.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/de.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/cs-CZ.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/cs-CZ.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/ca-ES.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/ca-ES.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/bg-BG.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/Localizations/bg-BG.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeUICoreBundle.bundle/au_becs_bsb.json ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeUICore/StripeUICore/StripeUICore/Resources/JSON/au_becs_bsb.json
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/zh-Hant.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/zh-Hant.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/zh-Hans.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/zh-Hans.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/zh-HK.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/zh-HK.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/vi.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/vi.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/tr.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/tr.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/tk.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/tk.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/th.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/th.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/sv.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/sv.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/sl-SI.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/sl-SI.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/ru.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/ru.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/ro-RO.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/ro-RO.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/pt-PT.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/pt-PT.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/pt-BR.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/pt-BR.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/pl-PL.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/pl-PL.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/nl.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/nl.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/nb.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/nb.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/mt.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/mt.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/ms-MY.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/ms-MY.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/lv-LV.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/lv-LV.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/lt-LT.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/lt-LT.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/ko.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/ko.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/ja.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/ja.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/it.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/it.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/id.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/id.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/hu.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/hu.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/fr.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/fr.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/fr-CA.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/fr-CA.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/fil.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/fil.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/fi.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/fi.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/et-EE.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/et-EE.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/es.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/es.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/es-419.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/es-419.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/en.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/en.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/en-GB.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/en-GB.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/el-GR.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/el-GR.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/de.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/de.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/da.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/da.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/cs-CZ.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/cs-CZ.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/ca-ES.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/ca-ES.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/bg-BG.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/Localizations/bg-BG.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsUIBundle.bundle/au_becs_bsb.json ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentsUI/StripePaymentsUI/StripePaymentsUI/Resources/JSON/au_becs_bsb.json
+› Preparing Pods/expo-dev-menu-EXDevMenu » ResourceBundle-EXDevMenu-expo-dev-menu-Info.plist
+› Preparing Pods/StripeUICore-StripeUICoreBundle » ResourceBundle-StripeUICoreBundle-StripeUICore-Info.plist
+› Preparing Pods/StripePayments-StripePaymentsBundle » ResourceBundle-StripePaymentsBundle-StripePayments-Info.plist
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/zh-Hant.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/zh-Hant.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/zh-Hans.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/zh-Hans.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/zh-HK.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/zh-HK.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/vi.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/vi.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/tr.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/tr.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/tk.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/tk.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/th.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/th.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/sv.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/sv.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/sl-SI.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/sl-SI.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/sk-SK.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/sk-SK.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/ru.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/ru.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/ro-RO.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/ro-RO.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/pt-PT.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/pt-PT.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/pt-BR.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/pt-BR.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/pl-PL.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/pl-PL.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/nl.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/nl.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/nb.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/nb.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/mt.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/mt.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/ms-MY.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/ms-MY.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/lv-LV.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/lv-LV.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/lt-LT.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/lt-LT.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/ko.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/ko.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/ja.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/ja.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/it.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/it.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/id.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/id.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/hu.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/hu.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/hr.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/hr.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/fr.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/fr.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/fr-CA.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/fr-CA.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/fil.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/fil.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/fi.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/fi.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/et-EE.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/et-EE.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/es.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/es.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/es-419.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/es-419.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/en.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/en.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/en-GB.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/en-GB.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/de.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/de.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/da.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/da.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/cs-CZ.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/cs-CZ.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/ca-ES.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/ca-ES.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentsBundle.bundle/bg-BG.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/StripePayments/StripePayments/Resources/Localizations/bg-BG.lproj
+› Creating  Pods/expo-dev-menu-EXDevMenu » EXDevMenu.bundle
+› Creating  Pods/StripeUICore-StripeUICoreBundle » StripeUICoreBundle.bundle
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/zh-Hant.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/zh-Hant.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/zh-Hans.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/zh-Hans.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/zh-HK.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/zh-HK.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/vi.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/vi.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/tr.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/tr.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/sv.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/sv.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/sk-SK.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/sk-SK.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/ru.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/ru.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/ro-RO.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/ro-RO.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/pt-PT.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/pt-PT.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/pt-BR.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/pt-BR.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/pl-PL.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/pl-PL.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/nl.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/nl.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/nb.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/nb.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/mt.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/mt.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/ms-MY.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/ms-MY.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/lv-LV.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/lv-LV.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/lt-LT.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/lt-LT.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/ko.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/ko.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/ja.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/ja.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/it.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/it.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/id.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/id.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/hu.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/hu.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/hr.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/hr.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/fr.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/fr.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/fr-CA.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/fr-CA.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/fil.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/fil.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/fi.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/fi.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/et-EE.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/et-EE.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/es.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/es.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/es-419.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/es-419.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/en.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/en.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/en-GB.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/en-GB.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/el-GR.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/el-GR.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/de.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/de.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/da.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/da.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/cs-CZ.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/cs-CZ.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/ca-ES.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/ca-ES.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/bg-BG.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/Resources/bg-BG.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Stripe3DS2.bundle/PrivacyInfo.xcprivacy ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePayments/Stripe3DS2/Stripe3DS2/PrivacyInfo.xcprivacy
+› Creating  Pods/StripePayments-StripePaymentsBundle » StripePaymentsBundle.bundle
+› Executing react-native Pods/React-Core-prebuilt » [CP] Copy XCFrameworks
+› Preparing Pods/expo-dev-launcher-EXDevLauncher » ResourceBundle-EXDevLauncher-expo-dev-launcher-Info.plist
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/zh-Hant.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/zh-Hant.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/zh-Hans.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/zh-Hans.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/zh-HK.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/zh-HK.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/vi.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/vi.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/tr.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/tr.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/tk.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/tk.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/th.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/th.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/sl-SI.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/sl-SI.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/sk-SK.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/sk-SK.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/ru.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/ru.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/ro-RO.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/ro-RO.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/pt-PT.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/pt-PT.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/pt-BR.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/pt-BR.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/pl-PL.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/pl-PL.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/nl.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/nl.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/nb.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/nb.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/mt.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/mt.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/ms-MY.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/ms-MY.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/lv-LV.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/lv-LV.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/lt-LT.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/lt-LT.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/ko.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/ko.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/ja.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/ja.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/it.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/it.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/id.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/id.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/hu.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/hu.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/hr.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/hr.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/fr.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/fr.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/fr-CA.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/fr-CA.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/form_specs.json ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/JSON/form_specs.json
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/fil.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/fil.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/fi.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/fi.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/es.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/es.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/es-419.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/es-419.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/en.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/en.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/en-GB.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/en-GB.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/el-GR.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/el-GR.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/de.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/de.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/da.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/da.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/cs-CZ.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/cs-CZ.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/ca-ES.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/ca-ES.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/bg-BG.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/Resources/Localizations/bg-BG.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripePaymentSheetBundle.bundle/PrivacyInfo.xcprivacy ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripePaymentSheet/StripePaymentSheet/StripePaymentSheet/PrivacyInfo.xcprivacy
+› Preparing Pods/StripePaymentsUI-StripePaymentsUIBundle » ResourceBundle-StripePaymentsUIBundle-StripePaymentsUI-Info.plist
+› Creating  Pods/expo-dev-launcher-EXDevLauncher » EXDevLauncher.bundle
+› Creating  Pods/StripePaymentsUI-StripePaymentsUIBundle » StripePaymentsUIBundle.bundle
+› Preparing Pods/StripeFinancialConnections-StripeFinancialConnectionsBundle » ResourceBundle-StripeFinancialConnectionsBundle-StripeFinancialConnections-Info.plist
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/zh-Hant.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/zh-Hant.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/zh-Hans.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/zh-Hans.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/zh-HK.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/zh-HK.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/vi.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/vi.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/tr.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/tr.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/th.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/th.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/sv.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/sv.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/sl-SI.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/sl-SI.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/sk-SK.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/sk-SK.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/ru.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/ru.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/ro-RO.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/ro-RO.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/pt-PT.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/pt-PT.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/pt-BR.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/pt-BR.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/nn-NO.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/nn-NO.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/nl.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/nl.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/nb.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/nb.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/mt.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/mt.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/ms-MY.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/ms-MY.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/lv-LV.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/lv-LV.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/lt-LT.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/lt-LT.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/ko.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/ko.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/ja.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/ja.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/it.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/it.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/id.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/id.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/hu.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/hu.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/hr.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/hr.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/fr.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/fr.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/fr-CA.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/fr-CA.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/fil.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/fil.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/fi.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/fi.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/et-EE.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/et-EE.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/es.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/es.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/es-419.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/es-419.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/en.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/en.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/en-GB.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/en-GB.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/de.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/de.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/da.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/da.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/cs-CZ.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/cs-CZ.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/ca-ES.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/ca-ES.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/bg-BG.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/Resources/Localizations/bg-BG.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeFinancialConnectionsBundle.bundle/PrivacyInfo.xcprivacy ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeFinancialConnections/StripeFinancialConnections/StripeFinancialConnections/PrivacyInfo.xcprivacy
+› Preparing Pods/StripePayments-Stripe3DS2 » ResourceBundle-Stripe3DS2-StripePayments-Info.plist
+› Preparing Pods/StripeCore-StripeCoreBundle » ResourceBundle-StripeCoreBundle-StripeCore-Info.plist
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/zh-Hant.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/zh-Hant.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/zh-Hans.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/zh-Hans.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/vi.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/vi.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/tr.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/tr.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/th.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/th.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/sv.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/sv.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/sl-SI.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/sl-SI.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/sk-SK.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/sk-SK.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/ru.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/ru.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/ro-RO.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/ro-RO.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/pt-BR.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/pt-BR.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/pl-PL.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/pl-PL.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/nl.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/nl.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/nb.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/nb.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/mt.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/mt.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/ms-MY.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/ms-MY.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/lv-LV.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/lv-LV.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/lt-LT.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/lt-LT.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/ja.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/ja.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/it.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/it.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/id.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/id.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/hu.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/hu.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/hr.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/hr.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/fr.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/fr.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/fr-CA.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/fr-CA.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/fil.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/fil.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/et-EE.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/et-EE.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/es.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/es.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/es-419.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/es-419.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/en.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/en.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/en-GB.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/en-GB.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/el-GR.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/el-GR.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/de.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/de.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/da.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/da.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/cs-CZ.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/cs-CZ.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/ca-ES.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/ca-ES.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/bg-BG.lproj ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/Resources/Localizations/bg-BG.lproj
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeCoreBundle.bundle/PrivacyInfo.xcprivacy ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/StripeCore/StripeCore/StripeCore/PrivacyInfo.xcprivacy
+› Creating  Pods/StripePayments-Stripe3DS2 » Stripe3DS2.bundle
+› Creating  Pods/StripeFinancialConnections-StripeFinancialConnectionsBundle » StripeFinancialConnectionsBundle.bundle
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/StripeBundle.bundle/PrivacyInfo.xcprivacy ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/Stripe/Stripe/StripeiOS/PrivacyInfo.xcprivacy
+› Creating  Pods/StripeCore-StripeCoreBundle » StripeCoreBundle.bundle
+› Preparing Pods/Stripe-StripeBundle » ResourceBundle-StripeBundle-Stripe-Info.plist
+› Preparing Pods/Sentry-Sentry » ResourceBundle-Sentry-Sentry-Info.plist
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/Sentry.bundle/PrivacyInfo.xcprivacy ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/Sentry/Sources/Resources/PrivacyInfo.xcprivacy
+› Creating  Pods/Stripe-StripeBundle » StripeBundle.bundle
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/background.jpg ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/RevenueCatUI/RevenueCatUI/Resources/background.jpg
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/zh_Hant.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/zh_Hant.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/zh_Hans.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/zh_Hans.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/vi.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/vi.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/tr.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/tr.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/th.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/th.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/sv.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/sv.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/sr_Latn.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/sr_Latn.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/sr.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/sr.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/sk.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/sk.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/ru.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/ru.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/ro.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/ro.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/pt_PT.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/pt_PT.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/pt_BR.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/pt_BR.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/pl.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/pl.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/no.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/no.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/nl.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/nl.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/ms.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/ms.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/ko.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/ko.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/kk.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/kk.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/ja.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/ja.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/it.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/it.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/id.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/id.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/hu.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/hu.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/hr.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/hr.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/hi.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/hi.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/he.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/he.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/fr_FR.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/fr_FR.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/fr_CA.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/fr_CA.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/fi.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/fi.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/eu.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/eu.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/es_ES.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/es_ES.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/es_419.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/es_419.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/en_US.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/en_US.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/en_GB.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/en_GB.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/en_CA.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/en_CA.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/en_AU.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/en_AU.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/en.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/en.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/el.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/el.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/de.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/de.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/da.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/da.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/cs.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/cs.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/ca.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/ca.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/bg.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/bg.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/az.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/az.lproj/Localizable.strings
+› Copying   ios/Pods/RevenueCatUI/RevenueCatUI/Resources/ar.lproj/Localizable.strings ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat_RevenueCatUI.bundle/ar.lproj/Localizable.strings
+› Creating  Pods/Sentry-Sentry » Sentry.bundle
+› Preparing react-native-purchases-ui Pods/RevenueCat-RevenueCat » ResourceBundle-RevenueCat-RevenueCat-Info.plist
+› Preparing Pods/StripePaymentSheet-StripePaymentSheetBundle » ResourceBundle-StripePaymentSheetBundle-StripePaymentSheet-Info.plist
+› Copying   react-native-purchases-ui ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/RevenueCat.bundle/PrivacyInfo.xcprivacy ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/RevenueCat/Sources/PrivacyInfo.xcprivacy
+› Compiling expo-dev-menu-interface Pods/expo-dev-menu-interface » expo-dev-menu-interface-dummy.m
+› Creating  Pods/StripePaymentSheet-StripePaymentSheetBundle » StripePaymentSheetBundle.bundle
+› Packaging expo-dev-menu-interface Pods/expo-dev-menu-interface » libexpo-dev-menu-interface.a
+› Executing expo-dev-menu-interface Pods/expo-dev-menu-interface » Copy generated compatibility header
+› Preparing Pods/RevenueCatUI-RevenueCat_RevenueCatUI » ResourceBundle-RevenueCat_RevenueCatUI-RevenueCatUI-Info.plist
+› Creating  react-native-purchases-ui Pods/RevenueCat-RevenueCat » RevenueCat.bundle
+› Creating  Pods/RevenueCatUI-RevenueCat_RevenueCatUI » RevenueCat_RevenueCatUI.bundle
+› Preparing Pods/React-cxxreact-React-cxxreact_privacy » ResourceBundle-React-cxxreact_privacy-React-cxxreact-Info.plist
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/React-cxxreact_privacy.bundle/PrivacyInfo.xcprivacy ➜ ../../../Users/expo/workingdir/build/node_modules/.pnpm/react-native@0.83.6_@babel+core@7.29.0_@types+react@19.2.14_react@19.2.0/node_modules/react-native/ReactCommon/cxxreact/PrivacyInfo.xcprivacy
+› Creating  Pods/React-cxxreact-React-cxxreact_privacy » React-cxxreact_privacy.bundle
+› Preparing Pods/React-Core-React-Core_privacy » ResourceBundle-React-Core_privacy-React-Core-Info.plist
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/React-Core_privacy.bundle/PrivacyInfo.xcprivacy ➜ ../../../Users/expo/workingdir/build/node_modules/.pnpm/react-native@0.83.6_@babel+core@7.29.0_@types+react@19.2.14_react@19.2.0/node_modules/react-native/React/Resources/PrivacyInfo.xcprivacy
+› Preparing expo-updates Pods/ReachabilitySwift-ReachabilitySwift » ResourceBundle-ReachabilitySwift-ReachabilitySwift-Info.plist
+› Copying   expo-updates ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/ReachabilitySwift.bundle/PrivacyInfo.xcprivacy ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/ReachabilitySwift/Sources/PrivacyInfo.xcprivacy
+› Creating  Pods/React-Core-React-Core_privacy » React-Core_privacy.bundle
+› Executing [CP-User] [RN]Check FBReactNativeSpec
+› Creating  expo-updates Pods/ReachabilitySwift-ReachabilitySwift » ReachabilitySwift.bundle
+› Preparing Pods/RNSVG-RNSVGFilters » ResourceBundle-RNSVGFilters-RNSVG-Info.plist
+› Preparing Pods/RNCAsyncStorage-RNCAsyncStorage_resources » ResourceBundle-RNCAsyncStorage_resources-RNCAsyncStorage-Info.plist
+› Creating  Pods/RNSVG-RNSVGFilters » RNSVGFilters.bundle
+› Executing react-native-svg Pods/RNSVG » [CP-User] [Expo] Resolve RNSVG dSYM source maps
+› Executing react-native-svg Pods/RNSVG » [CP-User] [Expo] Switch RNSVG XCFramework for build configuration
+› Executing react-native-svg Pods/RNSVG » [CP] Copy XCFrameworks
+› Compiling expo-updates Pods/ReachabilitySwift » ReachabilitySwift-dummy.m
+› Packaging expo-updates Pods/ReachabilitySwift » libReachabilitySwift.a
+› Executing expo-updates Pods/ReachabilitySwift » Copy generated compatibility header
+› Creating  Pods/RNCAsyncStorage-RNCAsyncStorage_resources » RNCAsyncStorage_resources.bundle
+› Executing @react-native-async-storage/async-storage Pods/RNCAsyncStorage » [CP-User] [Expo] Resolve RNCAsyncStorage dSYM source maps
+› Executing @react-native-async-storage/async-storage Pods/RNCAsyncStorage » [CP-User] [Expo] Switch RNCAsyncStorage XCFramework for build configuration
+› Executing @react-native-async-storage/async-storage Pods/RNCAsyncStorage » [CP] Copy XCFrameworks
+› Compiling react-native Pods/RCTSwiftUI » RCTSwiftUI-dummy.m
+› Executing react-native Pods/RCTSwiftUI » Copy generated compatibility header
+› Preparing react-native-purchases-ui Pods/PurchasesHybridCommon-PurchasesHybridCommon » ResourceBundle-PurchasesHybridCommon-PurchasesHybridCommon-Info.plist
+› Copying   react-native-purchases-ui ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/PurchasesHybridCommon.bundle/PrivacyInfo.xcprivacy ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/Pods/PurchasesHybridCommon/ios/PurchasesHybridCommon/PurchasesHybridCommon/PrivacyInfo.xcprivacy
+› Compiling react-native Pods/RCTSwiftUIWrapper » RCTSwiftUIWrapper-dummy.m
+› Compiling react-native Pods/RCTSwiftUIWrapper » RCTSwiftUIContainerViewWrapper.m
+› Preparing Pods/ExpoSystemUI-ExpoSystemUI_privacy » ResourceBundle-ExpoSystemUI_privacy-ExpoSystemUI-Info.plist
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/ExpoSystemUI_privacy.bundle/PrivacyInfo.xcprivacy ➜ ../../../Users/expo/workingdir/build/node_modules/.pnpm/expo-system-ui@55.0.18_expo@55.0.26_react-native-web@0.21.2_react-dom@19.2.0_react@19.2_04e166713652d0f38aed88af0e133ae2/node_modules/expo-system-ui/ios/PrivacyInfo.xcprivacy
+› Creating  react-native-purchases-ui Pods/PurchasesHybridCommon-PurchasesHybridCommon » PurchasesHybridCommon.bundle
+› Packaging react-native Pods/RCTSwiftUIWrapper » libRCTSwiftUIWrapper.a
+› Creating  Pods/ExpoSystemUI-ExpoSystemUI_privacy » ExpoSystemUI_privacy.bundle
+› Preparing Pods/ExpoNotifications-ExpoNotifications_privacy » ResourceBundle-ExpoNotifications_privacy-ExpoNotifications-Info.plist
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/ExpoNotifications_privacy.bundle/PrivacyInfo.xcprivacy ➜ ../../../Users/expo/workingdir/build/node_modules/.pnpm/expo-notifications@55.0.23_expo@55.0.26_react-native@0.83.6_@babel+core@7.29.0_@types+r_57452bd86ed49e87a962e46a7d6a4f2f/node_modules/expo-notifications/ios/PrivacyInfo.xcprivacy
+› Executing @workspace/homebase Pods/ReactCodegen » [CP-User] Generate Specs
+› Creating  Pods/ExpoNotifications-ExpoNotifications_privacy » ExpoNotifications_privacy.bundle
+› Compiling @expo/log-box Pods/ExpoLogBox » ExpoRedBoxSwap.mm
+› Compiling @expo/log-box Pods/ExpoLogBox » ExpoLogBox-dummy.m
+› Executing @workspace/homebase Pods/ReactCodegen » [Expo Autolinking] Run Codegen with autolinking
+› Packaging @expo/log-box Pods/ExpoLogBox » libExpoLogBox.a
+› Executing @expo/log-box Pods/ExpoLogBox » Copy generated compatibility header
+› Preparing Pods/ExpoFileSystem-ExpoFileSystem_privacy » ResourceBundle-ExpoFileSystem_privacy-ExpoFileSystem-Info.plist
+› Preparing Pods/ExpoDevice-ExpoDevice_privacy » ResourceBundle-ExpoDevice_privacy-ExpoDevice-Info.plist
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/ExpoDevice_privacy.bundle/PrivacyInfo.xcprivacy ➜ ../../../Users/expo/workingdir/build/node_modules/.pnpm/expo-device@55.0.17_expo@55.0.26/node_modules/expo-device/ios/PrivacyInfo.xcprivacy
+› Creating  Pods/ExpoFileSystem-ExpoFileSystem_privacy » ExpoFileSystem_privacy.bundle
+› Executing @workspace/homebase Pods/ReactCodegen » [Expo] Remove duplicate codegen output
+› Creating  Pods/ExpoDevice-ExpoDevice_privacy » ExpoDevice_privacy.bundle
+› Preparing expo-updates Pods/EXUpdates-EXUpdates » ResourceBundle-EXUpdates-EXUpdates-Info.plist
+› Compiling expo-structured-headers Pods/EXStructuredHeaders » EXStructuredHeadersParser.m
+› Compiling expo-structured-headers Pods/EXStructuredHeaders » EXStructuredHeaders-dummy.m
+› Compiling @react-native-community/netinfo Pods/react-native-netinfo » RNCNetInfo.mm
+› Packaging expo-structured-headers Pods/EXStructuredHeaders » libEXStructuredHeaders.a
+› Compiling @react-native-community/netinfo Pods/react-native-netinfo » react-native-netinfo-dummy.m
+› Compiling @workspace/homebase Pods/ReactCodegen » rnstripe-generated.mm
+› Compiling @workspace/homebase Pods/ReactCodegen » rnscreens-generated.mm
+› Compiling @workspace/homebase Pods/ReactCodegen » rngesturehandler_codegen-generated.mm
+› Compiling @workspace/homebase Pods/ReactCodegen » States.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » States.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » States.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » States.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » States.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » States.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » ShadowNodes.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » ShadowNodes.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » ShadowNodes.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » ShadowNodes.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » ShadowNodes.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » ShadowNodes.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » RNSentrySpec-generated.mm
+› Compiling @workspace/homebase Pods/ReactCodegen » RNKC-generated.mm
+› Compiling @workspace/homebase Pods/ReactCodegen » RNDateTimePickerCGen-generated.mm
+› Compiling @workspace/homebase Pods/ReactCodegen » RNCNetInfoSpec-generated.mm
+› Compiling @workspace/homebase Pods/ReactCodegen » RCTUnstableModulesRequiringMainQueueSetupProvider.mm
+› Compiling @workspace/homebase Pods/ReactCodegen » RCTThirdPartyComponentsProvider.mm
+› Compiling @workspace/homebase Pods/ReactCodegen » RCTModulesConformingToProtocolsProvider.mm
+› Compiling @workspace/homebase Pods/ReactCodegen » RCTModuleProviders.mm
+› Compiling @workspace/homebase Pods/ReactCodegen » Props.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » Props.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » Props.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » Props.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » Props.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » Props.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » EventEmitters.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » EventEmitters.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » EventEmitters.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » EventEmitters.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » EventEmitters.cpp
+› Compiling EventEmitters.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » ComponentDescriptors.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » ComponentDescriptors.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » ComponentDescriptors.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » ComponentDescriptors.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » ComponentDescriptors.cpp
+› Compiling @workspace/homebase Pods/ReactCodegen » ReactCodegen-dummy.m
+› Compiling @react-native-community/netinfo Pods/react-native-netinfo » RNCConnectionStateWatcher.m
+› Compiling @react-native-community/netinfo Pods/react-native-netinfo » RNCConnectionState.m
+› Compiling Pods/Sentry » SentryTraceProfiler.mm
+› Compiling Pods/Sentry » SentryTime.mm
+› Compiling @stripe/stripe-react-native Pods/StripeCore » StripeCore-dummy.m
+› Compiling Pods/Sentry » SentryThreadMetadataCache.cpp
+› Compiling Pods/Sentry » SentryThreadHandle.cpp
+› Packaging @stripe/stripe-react-native Pods/StripeCore » libStripeCore.a
+› Compiling Pods/Sentry » SentryThread.mm
+› Compiling Pods/Sentry » SentrySystemWrapper.mm
+› Packaging @workspace/homebase Pods/ReactCodegen » libReactCodegen.a
+› Compiling Pods/Sentry » SentrySamplingProfiler.cpp
+› Compiling Pods/Sentry » SentryProfilerState.mm
+› Compiling Pods/Sentry » SentryProfiler.mm
+› Compiling Pods/Sentry » SentryProfiledTracerConcurrency.mm
+› Compiling Pods/Sentry » SentryProfileCollector.mm
+› Compiling Pods/Sentry » SentryMachLogging.cpp
+› Compiling Pods/Sentry » SentryError.mm
+› Compiling Pods/Sentry » SentryCrashMonitor_CPPException.cpp
+› Compiling Pods/Sentry » SentryContinuousProfiler.mm
+› Compiling Pods/Sentry » SentryBacktrace.cpp
+› Compiling Pods/Sentry » _SentryDispatchQueueWrapperInternal.m
+› Compiling Pods/Sentry » UIViewController+Sentry.m
+› Compiling Pods/Sentry » SentryWeakMap.m
+› Compiling Pods/Sentry » SentyOptionsInternal.m
+› Compiling Pods/Sentry » SentryWatchdogTerminationTrackingIntegration.m
+› Compiling Pods/Sentry » SentryWatchdogTerminationTracker.m
+› Compiling Pods/Sentry » SentryWatchdogTerminationScopeObserver.m
+› Compiling Pods/Sentry » SentryWatchdogTerminationLogic.m
+› Compiling Pods/Sentry » SentryWatchdogTerminationBreadcrumbProcessor.m
+› Compiling Pods/Sentry » SentryViewHierarchyProviderHelper.m
+› Compiling Pods/Sentry » SentryViewHierarchyIntegration.m
+› Compiling Pods/Sentry » SentryUserFeedbackIntegration.m
+› Compiling Pods/Sentry » SentryUserAccess.m
+› Compiling Pods/Sentry » SentryUser.m
+› Compiling Pods/Sentry » SentryUncaughtNSExceptions.m
+› Compiling Pods/Sentry » SentryUseNSExceptionCallstackWrapper.m
+› Compiling Pods/Sentry » SentryUIViewControllerSwizzling.m
+› Compiling Pods/Sentry » SentryUIViewControllerPerformanceTracker.m
+› Compiling Pods/Sentry » SentryUIEventTrackingIntegration.m
+› Compiling Pods/Sentry » SentryUIEventTrackerTransactionMode.m
+› Compiling Pods/Sentry » SentryUIEventTracker.m
+› Compiling Pods/Sentry » SentryTransportFactory.m
+› Compiling Pods/Sentry » SentryTransportAdapter.m
+› Compiling Pods/Sentry » SentryTransactionContext.m
+› Compiling Pods/Sentry » SentryTransaction.m
+› Compiling Pods/Sentry » SentryTracerConfiguration.m
+› Compiling Pods/Sentry » SentryTraceOrigin.m
+› Compiling Pods/Sentry » SentryTracer.m
+› Compiling Pods/Sentry » SentryTraceHeader.m
+› Compiling Pods/Sentry » SentryTraceContext.m
+› Compiling Pods/Sentry » SentryTimeToDisplayTracker.m
+› Compiling Pods/Sentry » SentryThreadInspector.m
+› Compiling Pods/Sentry » SentrySystemEventBreadcrumbs.m
+› Compiling Pods/Sentry » SentrySysctlObjC.m
+› Compiling Pods/Sentry » SentrySwizzleWrapper.m
+› Compiling Pods/Sentry » SentryStacktrace.m
+› Compiling Pods/Sentry » SentrySubClassFinder.m
+› Compiling Pods/Sentry » SentryStacktraceBuilder.m
+› Compiling Pods/Sentry » SentrySpotlightTransport.m
+› Compiling Pods/Sentry » SentrySpanStatus.m
+› Compiling Pods/Sentry » SentrySpanOperation.m
+› Compiling Pods/Sentry » SentrySpanId.m
+› Compiling Pods/Sentry » SentrySpanDataKey.m
+› Compiling Pods/Sentry » SentrySpanContext.m
+› Compiling Pods/Sentry » SentrySpan.m
+› Compiling Pods/Sentry » SentrySessionTracker.m
+› Compiling Pods/Sentry » SentrySessionReplayIntegration.m
+› Compiling Pods/Sentry » SentrySessionInternal.m
+› Compiling Pods/Sentry » SentrySerialization.m
+› Compiling Pods/Sentry » SentryScreenshotIntegration.m
+› Compiling Pods/Sentry » SentryScreenFrames.m
+› Compiling Pods/Sentry » SentryScope.m
+› Compiling Pods/Sentry » SentrySamplingContext.m
+› Compiling Pods/Sentry » SentrySampling.m
+› Compiling Pods/Sentry » SentryScopeSyncC.c
+› Compiling Pods/Sentry » SentrySamplerDecision.m
+› Compiling Pods/Sentry » SentrySampleDecision.m
+› Compiling Pods/Sentry » SentrySample.m
+› Compiling Pods/Sentry » SentrySDKInternal.m
+› Compiling Pods/Sentry » SentryRetryAfterHeaderParser.m
+› Compiling Pods/Sentry » SentrySessionReplaySyncC.c
+› Compiling Pods/Sentry » SentryRequestOperation.m
+› Compiling Pods/Sentry » SentryRequest.m
+› Compiling SentryReplayApi.m
+› Compiling Pods/Sentry » SentryReachability.m
+› Compiling Pods/Sentry » SentryRateLimitParser.m
+› Compiling Pods/Sentry » SentryQueueableRequestManager.m
+› Compiling Pods/Sentry » SentryPropagationContext.m
+› Compiling Pods/Sentry » SentryProfilingSwiftHelpers.m
+› Compiling Pods/Sentry » SentryProfilerTestHelpers.m
+› Compiling Pods/Sentry » SentryProfilerSerialization.m
+› Compiling Pods/Sentry » SentryProfileTimeseries.m
+› Compiling Pods/Sentry » SentryProfileConfiguration.m
+› Compiling Pods/Sentry » SentryPredicateDescriptor.m
+› Compiling Pods/Sentry » SentryPerformanceTrackingIntegration.m
+› Compiling Pods/Sentry » SentryPerformanceTracker.m
+› Compiling Pods/Sentry » SentryOptions.m
+› Compiling Pods/Sentry » SentryNoOpSpan.m
+› Compiling Pods/Sentry » SentryNetworkTrackingIntegration.m
+› Compiling Pods/Sentry » SentryNetworkTracker.m
+› Compiling Pods/Sentry » SentryNSURLSessionTaskSearch.m
+› Compiling Pods/Sentry » SentryNSURLRequestBuilder.m
+› Compiling Pods/Sentry » SentryNSFileManagerSwizzling.m
+› Compiling Pods/Sentry » SentryNSError.m
+› Compiling Pods/Sentry » SentryNSDictionarySanitize.m
+› Compiling Pods/Sentry » SentryMsgPackSerializer.m
+› Compiling Pods/Sentry » SentryNSDataSwizzling.m
+› Compiling Pods/Sentry » SentryMetricProfiler.m
+› Compiling Pods/Sentry » SentryMetricKitIntegration.m
+› Compiling Pods/Sentry » SentryNSDataUtils.m
+› Compiling Pods/Sentry » SentryMeta.m
+› Compiling Pods/Sentry » SentryMessage.m
+› Compiling Pods/Sentry » SentryMechanismMeta.m
+› Compiling Pods/Sentry » SentryMechanism.m
+› Compiling Pods/Sentry » SentryMeasurementUnit.m
+› Compiling SentryLevelMapper.m
+› Compiling Pods/Sentry » SentryLevelHelper.m
+› Compiling Pods/Sentry » SentryLaunchProfiling.m
+› Compiling Pods/Sentry » SentryInstallation.m
+› Compiling Pods/Sentry » SentryHub.m
+› Compiling Pods/Sentry » SentryHttpTransport.m
+› Compiling Pods/Sentry » SentryHttpStatusCodeRange.m
+› Compiling Pods/Sentry » SentryHttpDateParser.m
+› Compiling Pods/Sentry » SentryGeo.m
+› Compiling Pods/Sentry » SentryFramesTrackingIntegration.m
+› Compiling Pods/Sentry » SentryFramesTracker.m
+› Compiling Pods/Sentry » SentryFrame.m
+› Compiling Pods/Sentry » SentryFileManager.m
+› Compiling Pods/Sentry » SentryFileIOTrackingIntegration.m
+› Compiling Pods/Sentry » SentryFileIOTracker.m
+› Compiling Pods/Sentry » SentryFeedbackAPI.m
+› Compiling Pods/Sentry » SentryExtraContextProvider.m
+› Compiling Pods/Sentry » SentryException.m
+› Compiling Pods/Sentry » SentryEventSwiftHelper.m
+› Compiling Pods/Sentry » SentryEvent.m
+› Compiling Pods/Sentry » SentryEnvelopeRateLimit.m
+› Compiling Pods/Sentry » SentryEnvelopeItemHeader.m
+› Compiling Pods/Sentry » SentryEnvelopeAttachmentHeader.m
+› Compiling Pods/Sentry » SentryDummyPublicEmptyClass.m
+› Compiling Pods/Sentry » SentryDummyPrivateEmptyClass.m
+› Compiling Pods/Sentry » SentryDisplayLinkWrapper.m
+› Compiling Pods/Sentry » SentryDispatchFactory.m
+› Compiling Pods/Sentry » SentryDsn.m
+› Compiling Pods/Sentry » SentryDictionaryDeepSearch.m
+› Compiling Pods/Sentry » SentryDevice.m
+› Compiling Pods/Sentry » SentryDependencyContainerSwiftHelper.m
+› Compiling Pods/Sentry » SentryDependencyContainer.m
+› Compiling Pods/Sentry » SentryDelayedFramesTracker.m
+› Compiling Pods/Sentry » SentryDelayedFrame.m
+› Compiling Pods/Sentry » SentryDefaultRateLimits.m
+› Compiling Pods/Sentry » SentryDebugMeta.m
+› Compiling Pods/Sentry » SentryDebugImageProvider.m
+› Compiling Pods/Sentry » SentryDateUtils.m
+› Compiling Pods/Sentry » SentryDateUtil.m
+› Compiling Pods/Sentry » SentryDataCategoryMapper.m
+› Compiling Pods/Sentry » SentryCrashUUIDConversion.c
+› Compiling Pods/Sentry » SentryCrashSysCtl.c
+› Compiling Pods/Sentry » SentryCrashSymbolicator.c
+› Compiling Pods/Sentry » SentryCrashString.c
+› Compiling Pods/Sentry » SentryCrashStackEntryMapper.m
+› Compiling Pods/Sentry » SentryCrashStackCursor_SelfThread.m
+› Compiling Pods/Sentry » SentryCrashThread.c
+› Compiling Pods/Sentry » SentryCrashStackCursor_MachineContext.c
+› Compiling Pods/Sentry » SentryCrashStackCursor_Backtrace.c
+› Compiling Pods/Sentry » SentryCrashStackCursor.c
+› Compiling Pods/Sentry » SentryCrashSignalInfo.c
+› Compiling Pods/Sentry » SentryCrashReportStore.c
+› Compiling Pods/Sentry » SentryCrashScopeObserver.m
+› Compiling Pods/Sentry » SentryCrashReportSink.m
+› Compiling Pods/Sentry » SentryCrashReportFixer.c
+› Compiling Pods/Sentry » SentryCrashReportFilterBasic.m
+› Compiling Pods/Sentry » SentryCrashReportConverter.m
+› Compiling Pods/Sentry » SentryCrashReport.c
+› Compiling Pods/Sentry » SentryCrashNSErrorUtil.m
+› Compiling Pods/Sentry » SentryCrashMonitor_System.m
+› Compiling Pods/Sentry » SentryCrashMonitor_Signal.c
+› Compiling Pods/Sentry » SentryCrashMonitor_NSException.m
+› Compiling Pods/Sentry » SentryCrashObjC.c
+› Compiling Pods/Sentry » SentryCrashMonitor_MachException.c
+› Compiling Pods/Sentry » SentryCrashMonitor_AppState.c
+› Compiling SentryCrashMonitorType.c
+› Compiling Pods/Sentry » SentryCrashMonitor.c
+› Compiling Pods/Sentry » SentryCrashMemory.c
+› Compiling Pods/Sentry » SentryCrashMachineContext.c
+› Compiling Pods/Sentry » SentryCrashMach.c
+› Compiling Pods/Sentry » SentryCrashJSONCodecObjC.m
+› Compiling Pods/Sentry » SentryCrashJSONCodec.c
+› Compiling Pods/Sentry » SentryCrashMach-O.c
+› Compiling Pods/Sentry » SentryCrashIntegrationSessionHandler.m
+› Compiling Pods/Sentry » SentryCrashIntegration.m
+› Compiling Pods/Sentry » SentryCrashInstallationReporter.m
+› Compiling Pods/Sentry » SentryCrashInstallation.m
+› Compiling Pods/Sentry » SentryCrashFileUtils.c
+› Compiling Pods/Sentry » SentryCrashDynamicLinker.c
+› Compiling Pods/Sentry » SentryCrashExceptionApplication.m
+› Compiling Pods/Sentry » SentryCrashExceptionApplicationHelper.m
+› Compiling Pods/Sentry » SentryCrashDoctor.m
+› Compiling Pods/Sentry » SentryCrashDefaultMachineContextWrapper.m
+› Compiling Pods/Sentry » SentryCrashDefaultBinaryImageProvider.m
+› Compiling Pods/Sentry » SentryCrashDebug.c
+› Compiling Pods/Sentry » SentryCrashDate.c
+› Compiling Pods/Sentry » SentryCrashCPU_x86_64.c
+› Compiling Pods/Sentry » SentryCrashCPU_x86_32.c
+› Compiling Pods/Sentry » SentryCrashCxaThrowSwapper.c
+› Compiling Pods/Sentry » SentryCrashCachedData.c
+› Compiling Pods/Sentry » SentryCrashCPU_arm64.c
+› Compiling Pods/Sentry » SentryCrashCPU_arm.c
+› Compiling Pods/Sentry » SentryCrashCPU.c
+› Compiling Pods/Sentry » SentryCrashC.c
+› Compiling Pods/Sentry » SentryCrashBinaryImageCache.c
+› Compiling Pods/Sentry » SentryCrash.m
+› Compiling Pods/Sentry » SentryConcurrentRateLimitsDictionary.m
+› Compiling Pods/Sentry » SentryClient.m
+› Compiling Pods/Sentry » SentryByteCountFormatter.m
+› Compiling Pods/Sentry » SentryBuildAppStartSpans.m
+› Compiling Pods/Sentry » SentryBreadcrumb.m
+› Compiling Pods/Sentry » SentryBreadcrumbTracker.m
+› Compiling Pods/Sentry » SentryCoreDataTrackingIntegration.m
+› Compiling Pods/Sentry » SentryCoreDataTracker.m
+› Compiling Pods/Sentry » SentryCoreDataSwizzling.m
+› Compiling Pods/Sentry » SentryBinaryImageCacheCallbacks.m
+› Compiling Pods/Sentry » SentryBaseIntegration.m
+› Compiling Pods/Sentry » SentryBaggage.m
+› Compiling Pods/Sentry » SentryAutoSessionTrackingIntegration.m
+› Compiling Pods/Sentry » SentryAutoBreadcrumbTrackingIntegration.m
+› Compiling Pods/Sentry » SentryAttachment.m
+› Compiling SentryAsynchronousOperation.m
+› Compiling Pods/Sentry » SentryAsyncSafeLog.c
+› Compiling Pods/Sentry » SentryArray.m
+› Compiling Pods/Sentry » SentryAsyncLog.m
+› Compiling Pods/Sentry » SentryAppStateManager.m
+› Compiling Pods/Sentry » SentryAppStartTrackingIntegration.m
+› Compiling Pods/Sentry » SentryAppStartTracker.m
+› Compiling Pods/Sentry » SentryAppStartMeasurement.m
+› Compiling Pods/Sentry » SentryANRTrackingIntegration.m
+› Compiling Pods/Sentry » SentryANRTrackerV2.m
+› Compiling Pods/Sentry » SentryANRTrackerV1.m
+› Compiling Pods/Sentry » Sentry-dummy.m
+› Compiling Pods/Sentry » PrivateSentrySDKOnly.m
+› Compiling Pods/Sentry » NSMutableDictionary+Sentry.m
+› Executing @stripe/stripe-react-native Pods/StripeCore » Copy generated compatibility header
+› Compiling Pods/Sentry » NSLocale+Sentry.m
+› Packaging Pods/Sentry » libSentry.a
+› Compiling @workspace/homebase Pods/ReactAppDependencyProvider » RCTAppDependencyProvider.mm
+› Compiling @workspace/homebase Pods/ReactAppDependencyProvider » ReactAppDependencyProvider-dummy.m
+› Compiling react-native-keyboard-controller Pods/react-native-keyboard-controller » RNKCOverKeyboardViewState.cpp
+› Compiling react-native-keyboard-controller Pods/react-native-keyboard-controller » RNKCKeyboardGestureAreaShadowNode.cpp
+› Compiling react-native-keyboard-controller Pods/react-native-keyboard-controller » RNKCKeyboardExtenderShadowNode.cpp
+› Compiling react-native-keyboard-controller Pods/react-native-keyboard-controller » RNKCKeyboardControllerViewShadowNode.cpp
+› Compiling react-native-keyboard-controller Pods/react-native-keyboard-controller » RNKCKeyboardBackgroundViewShadowNode.cpp
+› Compiling react-native-keyboard-controller Pods/react-native-keyboard-controller » OverKeyboardViewManager.mm
+› Compiling react-native-keyboard-controller Pods/react-native-keyboard-controller » KeyboardGestureAreaManager.mm
+› Compiling react-native-keyboard-controller Pods/react-native-keyboard-controller » KeyboardExtenderManager.mm
+› Compiling react-native-keyboard-controller Pods/react-native-keyboard-controller » KeyboardControllerViewManager.mm
+› Compiling react-native-keyboard-controller Pods/react-native-keyboard-controller » KeyboardControllerView.mm
+› Compiling react-native-keyboard-controller Pods/react-native-keyboard-controller » KeyboardBackgroundViewManager.mm
+› Compiling react-native-keyboard-controller Pods/react-native-keyboard-controller » react-native-keyboard-controller-dummy.m
+› Compiling react-native-keyboard-controller Pods/react-native-keyboard-controller » UITextView+DelegateManager.m
+› Compiling react-native-keyboard-controller Pods/react-native-keyboard-controller » RCTUIManager+LayoutAnimationManager.m
+› Compiling react-native-keyboard-controller Pods/react-native-keyboard-controller » NSObject+SafeKVC.m
+› Compiling react-native-keyboard-controller Pods/react-native-keyboard-controller » KeyboardMoveEvent.m
+› Compiling react-native-keyboard-controller Pods/react-native-keyboard-controller » FocusedInputTextChangedEvent.m
+› Compiling react-native-keyboard-controller Pods/react-native-keyboard-controller » FocusedInputSelectionChangedEvent.m
+› Compiling react-native-keyboard-controller Pods/react-native-keyboard-controller » FocusedInputLayoutChangedEvent.m
+› Compiling @stripe/stripe-react-native Pods/StripeUICore » StripeUICore-dummy.m
+› Compiling @stripe/stripe-react-native Pods/StripeApplePay » StripeApplePay-dummy.m
+› Packaging @stripe/stripe-react-native Pods/StripeUICore » libStripeUICore.a
+› Packaging @stripe/stripe-react-native Pods/StripeApplePay » libStripeApplePay.a
+› Executing @stripe/stripe-react-native Pods/StripeApplePay » Copy generated compatibility header
+› Executing Pods/Sentry » Copy generated compatibility header
+› Executing @stripe/stripe-react-native Pods/StripeUICore » Copy generated compatibility header
+› Packaging @react-native-community/netinfo Pods/react-native-netinfo » libreact-native-netinfo.a
+› Executing react-native-maps Pods/react-native-maps » [CP-User] react-native-maps patches
+› Packaging @workspace/homebase Pods/ReactAppDependencyProvider » libReactAppDependencyProvider.a
+› Executing expo-modules-core Pods/ExpoModulesCore » [CP-User] [Expo] Resolve ExpoModulesCore dSYM source maps
+› Packaging react-native-keyboard-controller Pods/react-native-keyboard-controller » libreact-native-keyboard-controller.a
+› Compiling react-native-maps Pods/react-native-maps » States.cpp
+› Compiling react-native-maps Pods/react-native-maps » ShadowNodes.cpp
+› Compiling react-native-maps Pods/react-native-maps » RNMapsSpecsJSI-generated.cpp
+› Compiling react-native-maps Pods/react-native-maps » RNMapsSpecs-generated.mm
+› Compiling react-native-maps Pods/react-native-maps » RNMapsMarkerViewManager.mm
+› Compiling react-native-maps Pods/react-native-maps » RNMapsMarkerView.mm
+› Compiling react-native-maps Pods/react-native-maps » RNMapsMapViewManager.mm
+› Compiling react-native-maps Pods/react-native-maps » RNMapsMapView.mm
+› Compiling react-native-maps Pods/react-native-maps » RNMapsAirModule.mm
+› Compiling react-native-maps Pods/react-native-maps » Props.cpp
+› Compiling react-native-maps Pods/react-native-maps » PlaceHolderPolygonView.mm
+› Compiling react-native-maps Pods/react-native-maps » PlaceHolderGoogleMapView.mm
+› Compiling react-native-maps Pods/react-native-maps » EventEmitters.cpp
+› Compiling react-native-maps Pods/react-native-maps » ComponentDescriptors.cpp
+› Compiling react-native-maps Pods/react-native-maps » AIRMap.mm
+› Compiling react-native-maps Pods/react-native-maps » react-native-maps-dummy.m
+› Executing react-native-keyboard-controller Pods/react-native-keyboard-controller » Copy generated compatibility header
+› Compiling @stripe/stripe-react-native Pods/StripePayments » UIViewController+Stripe3DS2.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » UIView+LayoutSupport.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » UIFont+DefaultFonts.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » UIColor+ThirteenSupport.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » UIColor+DefaultColors.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » UIButton+CustomInitialization.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » StripePayments-dummy.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSWhitelistView.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSWarning.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSUICustomization.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSTransaction.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSThreeDSProtocolVersion.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSThreeDS2Service.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSTextFieldCustomization.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSWebView.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSTextChallengeView.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSSynchronousLocationManager.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSSwiftTryCatch.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSStripe3DS2Error.m
+› Compiling react-native-maps Pods/react-native-maps » UIView+AirMap.m
+› Compiling react-native-maps Pods/react-native-maps » SMCalloutView.m
+› Compiling react-native-maps Pods/react-native-maps » RCTComponentData+Maps.m
+› Compiling react-native-maps Pods/react-native-maps » AIRWeakTimerReference.m
+› Compiling react-native-maps Pods/react-native-maps » AIRMapCalloutSubviewManager.m
+› Compiling react-native-maps Pods/react-native-maps » AIRMapCalloutSubview.m
+› Compiling react-native-maps Pods/react-native-maps » AIRMapCallout.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSStackView.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSSpacerView.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSSimulatorChecker.m
+› Compiling react-native-maps Pods/react-native-maps » RCTConvert+AirMap.m
+› Compiling react-native-maps Pods/react-native-maps » AIRWeakMapReference.m
+› Compiling react-native-maps Pods/react-native-maps » AIRMapWMSTileManager.m
+› Compiling react-native-maps Pods/react-native-maps » AIRMapWMSTile.m
+› Compiling react-native-maps Pods/react-native-maps » AIRMapUrlTileCachedOverlay.m
+› Compiling react-native-maps Pods/react-native-maps » AIRMapUrlTile.m
+› Compiling react-native-maps Pods/react-native-maps » AIRMapPolylineRenderer.m
+› Compiling react-native-maps Pods/react-native-maps » AIRMapPolylineManager.m
+› Compiling react-native-maps Pods/react-native-maps » AIRMapPolyline.m
+› Compiling react-native-maps Pods/react-native-maps » AIRMapPolygonManager.m
+› Compiling react-native-maps Pods/react-native-maps » AIRMapPolygon.m
+› Compiling react-native-maps Pods/react-native-maps » AIRMapOverlayRenderer.m
+› Compiling react-native-maps Pods/react-native-maps » AIRMapOverlayManager.m
+› Compiling react-native-maps Pods/react-native-maps » AIRMapOverlay.m
+› Compiling react-native-maps Pods/react-native-maps » AIRMapMarkerManager.m
+› Compiling react-native-maps Pods/react-native-maps » AIRMapMarker.m
+› Compiling react-native-maps Pods/react-native-maps » AIRMapManager.m
+› Compiling react-native-maps Pods/react-native-maps » AIRMapLocalTileOverlay.m
+› Compiling react-native-maps Pods/react-native-maps » AIRMapLocalTileManager.m
+› Compiling react-native-maps Pods/react-native-maps » AIRMapLocalTile.m
+› Compiling react-native-maps Pods/react-native-maps » AIRMapCoordinate.m
+› Compiling react-native-maps Pods/react-native-maps » AIRMapCircleManager.m
+› Compiling react-native-maps Pods/react-native-maps » AIRMapCircle.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSSelectionCustomization.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSSelectionButton.m
+› Packaging react-native-maps Pods/react-native-maps » libreact-native-maps.a
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSSecTypeUtilities.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSRuntimeException.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSRuntimeErrorEvent.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSProtocolErrorEvent.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSProgressViewController.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSProcessingView.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSOSVersionChecker.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSNotInitializedException.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSNavigationBarCustomization.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSLabelCustomization.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSJailbreakChecker.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSJSONWebSignature.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSJSONWebEncryption.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSJSONEncoder.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSInvalidInputException.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSIntegrityChecker.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSImageLoader.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSIPAddress.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSFooterCustomization.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSExpandableInformationView.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSException.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSErrorMessage.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSErrorMessage+Internal.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSEphemeralKeyPair.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSEllipticCurvePoint.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSDeviceInformationManager.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSDeviceInformation.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSDebuggerChecker.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSCustomization.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSConfigParameters.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSCompletionEvent.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSChallengeSelectionView.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSChallengeResponseSelectionInfoObject.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSChallengeResponseViewController.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSChallengeResponseObject.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSChallengeResponseMessageExtensionObject.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSChallengeResponseImageObject.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSChallengeRequestParameters.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSChallengeParameters.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSChallengeInformationView.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSButtonCustomization.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSBundleLocator.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSBrandingView.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSAuthenticationResponseObject.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSAuthenticationRequestParameters.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSAlreadyInitializedException.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » STDSACSNetworkingManager.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » NSString+JWEHelpers.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » NSString+EmptyChecking.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » NSError+Stripe3DS2.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » NSLayoutConstraint+LayoutSupport.m
+› Compiling @stripe/stripe-react-native Pods/StripePayments » NSData+JWEHelpers.m
+› Packaging @stripe/stripe-react-native Pods/StripePayments » libStripePayments.a
+› Compiling @sentry/react-native Pods/RNSentry » RNSentryReplayUnmask.mm
+› Compiling @sentry/react-native Pods/RNSentry » RNSentryReplayMask.mm
+› Compiling @sentry/react-native Pods/RNSentry » RNSentryReplay.mm
+› Packaging react-native-purchases-ui Pods/RevenueCat » libRevenueCat.a
+› Compiling @sentry/react-native Pods/RNSentry » RNSentry-dummy.m
+› Executing @stripe/stripe-react-native Pods/StripePayments » Copy generated compatibility header
+› Executing Copy generated compatibility header
+› Compiling @stripe/stripe-react-native Pods/StripeFinancialConnections » StripeFinancialConnections-dummy.m
+› Packaging @stripe/stripe-react-native Pods/StripeFinancialConnections » libStripeFinancialConnections.a
+› Executing expo-modules-core Pods/ExpoModulesCore » [CP-User] [Expo] Switch ExpoModulesCore XCFramework for build configuration
+› Creating  expo-updates Pods/EXUpdates-EXUpdates » EXUpdates.bundle
+› Compiling @sentry/react-native Pods/RNSentry » RNSentryVersion.m
+› Compiling @sentry/react-native Pods/RNSentry » RNSentryTimeToDisplay.m
+› Compiling @sentry/react-native Pods/RNSentry » RNSentryRNSScreen.m
+› Compiling @sentry/react-native Pods/RNSentry » RNSentryFramesTrackerListener.m
+› Compiling @sentry/react-native Pods/RNSentry » RNSentryEvents.m
+› Compiling @sentry/react-native Pods/RNSentry » SentrySDKWrapper.m
+› Compiling @sentry/react-native Pods/RNSentry » RNSentryReplayQuality.m
+› Compiling @sentry/react-native RNSentryReplayBreadcrumbConverterHelper.m
+› Compiling @sentry/react-native Pods/RNSentry » RNSentryReplayBreadcrumbConverter.m
+› Compiling @sentry/react-native Pods/RNSentry » RNSentryId.m
+› Compiling @sentry/react-native Pods/RNSentry » RNSentryExperimentalOptions.m
+› Compiling @sentry/react-native Pods/RNSentry » RNSentryDependencyContainer.m
+› Compiling @sentry/react-native Pods/RNSentry » RNSentryBreadcrumb.m
+› Compiling @sentry/react-native Pods/RNSentry » RNSentry+fetchNativeStack.m
+› Executing @stripe/stripe-react-native Pods/StripeFinancialConnections » Copy generated compatibility header
+› Packaging @sentry/react-native Pods/RNSentry » libRNSentry.a
+› Compiling react-native-gesture-handler Pods/RNGestureHandler » RNNativeViewHandler.mm
+› Compiling react-native-gesture-handler Pods/RNGestureHandler » RNGestureHandlerRootViewComponentView.mm
+› Compiling react-native-gesture-handler Pods/RNGestureHandler » RNGestureHandlerModule.mm
+› Compiling react-native-gesture-handler Pods/RNGestureHandler » RNGestureHandlerManager.mm
+› Compiling react-native-gesture-handler Pods/RNGestureHandler » RNGestureHandlerButtonManager.mm
+› Compiling react-native-gesture-handler Pods/RNGestureHandler » RNGestureHandlerButtonComponentView.mm
+› Compiling react-native-gesture-handler Pods/RNGestureHandler » RNGestureHandlerButton.mm
+› Compiling react-native-gesture-handler Pods/RNGestureHandler » RNGestureHandler.mm
+› Compiling react-native-screens Pods/RNScreens » UIWindow+RNScreens.mm
+› Compiling react-native-screens Pods/RNScreens » UIViewController+RNScreens.mm
+› Compiling react-native-screens Pods/RNScreens » UIView+RNSUtility.mm
+› Compiling react-native-screens UIScrollView+RNScreens.mm
+› Compiling react-native-screens Pods/RNScreens » UINavigationBar+RNSUtility.mm
+› Compiling react-native-screens Pods/RNScreens » RNSViewInteractionManager.mm
+› Compiling react-native-screens Pods/RNScreens » RNSTabsScreenViewController.mm
+› Compiling react-native-screens Pods/RNScreens » RNSTabsScreenEventEmitter.mm
+› Compiling react-native-screens Pods/RNScreens » RNSTabsScreenComponentViewManager.mm
+› Compiling react-native-screens Pods/RNScreens » RNSTabsScreenComponentView.mm
+› Compiling react-native-screens Pods/RNScreens » RNSTabsNavigationStateObserverRegistry.mm
+› Compiling react-native-screens Pods/RNScreens » RNSTabsNavigationState.mm
+› Compiling react-native-screens Pods/RNScreens » RNSTabsHostShadowNode.cpp
+› Compiling react-native-screens Pods/RNScreens » RNSTabsHostComponentViewManager.mm
+› Compiling react-native-screens Pods/RNScreens » RNSTabsHostComponentView.mm
+› Compiling react-native-screens Pods/RNScreens » RNSTabsHostComponentView+RNSImageLoader.mm
+› Compiling react-native-screens Pods/RNScreens » RNSTabsBottomAccessoryShadowStateProxy.mm
+› Compiling react-native-screens Pods/RNScreens » RNSTabsBottomAccessoryHelper.mm
+› Compiling react-native-screens Pods/RNScreens » RNSTabsBottomAccessoryEventEmitter.mm
+› Compiling react-native-screens Pods/RNScreens » RNSTabsBottomAccessoryContentComponentView.mm
+› Compiling react-native-screens Pods/RNScreens » RNSTabsBottomAccessoryComponentViewManager.mm
+› Compiling react-native-screens Pods/RNScreens » RNSTabsBottomAccessoryComponentView.mm
+› Compiling react-native-screens Pods/RNScreens » RNSTabBarController.mm
+› Compiling react-native-screens Pods/RNScreens » RNSTabBarAppearanceCoordinator.mm
+› Compiling react-native-screens Pods/RNScreens » RNSStackScreenState.cpp
+› Compiling react-native-screens Pods/RNScreens » RNSStackScreenShadowNode.cpp
+› Compiling react-native-screens Pods/RNScreens » RNSStackScreenController.mm
+› Compiling react-native-screens Pods/RNScreens » RNSStackScreenComponentViewManager.mm
+› Compiling react-native-screens Pods/RNScreens » RNSStackScreenComponentView.mm
+› Compiling react-native-screens Pods/RNScreens » RNSStackScreenComponentEventEmitter.mm
+› Compiling react-native-screens Pods/RNScreens » RNSStackOperationCoordinator.mm
+› Compiling react-native-screens Pods/RNScreens » RNSStackOperation.mm
+› Compiling react-native-screens Pods/RNScreens » RNSStackNavigationController.mm
+› Compiling react-native-screens Pods/RNScreens » RNSStackHostComponentViewManager.mm
+› Compiling react-native-screens Pods/RNScreens » RNSStackHostComponentView.mm
+› Compiling react-native-screens Pods/RNScreens » RNSStackHeaderSubviewState.cpp
+› Compiling react-native-screens Pods/RNScreens » RNSStackHeaderSubviewShadowNode.cpp
+› Compiling react-native-screens Pods/RNScreens » RNSStackHeaderConfigState.cpp
+› Compiling react-native-screens Pods/RNScreens » RNSStackHeaderConfigShadowNode.cpp
+› Compiling react-native-screens Pods/RNScreens » RNSSplitScreenShadowStateProxy.mm
+› Compiling react-native-screens Pods/RNScreens » RNSSplitScreenShadowNode.cpp
+› Compiling react-native-screens Pods/RNScreens » RNSSplitScreenComponentViewManager.mm
+› Compiling react-native-screens Pods/RNScreens » RNSSplitScreenComponentView.mm
+› Compiling react-native-screens Pods/RNScreens » RNSSplitScreenComponentEventEmitter.mm
+› Compiling react-native-screens Pods/RNScreens » RNSSplitHostComponentViewManager.mm
+› Compiling react-native-screens Pods/RNScreens » RNSSplitHostComponentView.mm
+› Compiling react-native-screens Pods/RNScreens » RNSSplitHostComponentEventEmitter.mm
+› Compiling react-native-screens Pods/RNScreens » RNSSearchBar.mm
+› Compiling react-native-screens Pods/RNScreens » RNSScrollViewMarkerComponentView.mm
+› Compiling react-native-screens Pods/RNScreens » RNSScrollViewHelper.mm
+› Compiling react-native-screens Pods/RNScreens » RNSScrollViewFinder.mm
+› Compiling react-native-screens Pods/RNScreens » RNSScrollEdgeEffectApplicator.mm
+› Compiling react-native-screens Pods/RNScreens » RNSScreenWindowTraits.mm
+› Compiling react-native-screens Pods/RNScreens » RNSScreenViewEvent.mm
+› Compiling react-native-screens Pods/RNScreens » RNSScreenState.cpp
+› Compiling react-native-screens Pods/RNScreens » RNSScreenStackHeaderSubviewState.cpp
+› Compiling react-native-screens Pods/RNScreens » RNSScreenStackHeaderSubviewShadowNode.cpp
+› Compiling react-native-screens Pods/RNScreens » RNSScreenStackHeaderSubview.mm
+› Compiling react-native-screens Pods/RNScreens » RNSScreenStackHeaderConfigState.cpp
+› Compiling react-native-screens Pods/RNScreens » RNSScreenStackHeaderConfigShadowNode.cpp
+› Compiling react-native-screens Pods/RNScreens » RNSScreenStackHeaderConfig.mm
+› Compiling react-native-screens Pods/RNScreens » RNSScreenStackAnimator.mm
+› Compiling react-native-screens Pods/RNScreens » RNSScreenStack.mm
+› Compiling react-native-screens Pods/RNScreens » RNSScreenShadowNodeCommitHook.cpp
+› Compiling react-native-screens Pods/RNScreens » RNSScreenShadowNode.cpp
+› Compiling react-native-screens Pods/RNScreens » RNSScreenRemovalListener.cpp
+› Compiling react-native-screens Pods/RNScreens » RNSScreenNavigationContainer.mm
+› Compiling react-native-screens Pods/RNScreens » RNSScreenFooter.mm
+› Compiling react-native-screens Pods/RNScreens » RNSScreenContentWrapper.mm
+› Compiling react-native-screens Pods/RNScreens » RNSScreenContainer.mm
+› Compiling react-native-screens Pods/RNScreens » RNSSafeAreaViewState.cpp
+› Compiling react-native-screens Pods/RNScreens » RNSSafeAreaViewShadowNode.cpp
+› Compiling react-native-screens Pods/RNScreens » RNSSafeAreaViewComponentView.mm
+› Compiling react-native-screens Pods/RNScreens » RNSReactBaseView.mm
+› Compiling react-native-screens Pods/RNScreens » RNSPercentDrivenInteractiveTransition.mm
+› Compiling react-native-screens Pods/RNScreens » RNSModule.mm
+› Compiling react-native-screens Pods/RNScreens » RNSModalScreenShadowNode.cpp
+› Compiling react-native-screens Pods/RNScreens » RNSModalScreen.mm
+› Compiling react-native-screens Pods/RNScreens » RNSImageLoadingHelper.mm
+› Compiling react-native-screens Pods/RNScreens » RNSHeaderHeightChangeEvent.mm
+› Compiling react-native-screens Pods/RNScreens » RNSFullWindowOverlayShadowNode.cpp
+› Compiling react-native-screens Pods/RNScreens » RNSFullWindowOverlay.mm
+› Compiling react-native-screens Pods/RNScreens » RNSConvert.mm
+› Compiling react-native-screens Pods/RNScreens » RNSConversions.mm
+› Compiling react-native-screens Pods/RNScreens » RNSConversions-Tabs.mm
+› Compiling react-native-screens Pods/RNScreens » RNSConversions-Stack.mm
+› Compiling react-native-screens Pods/RNScreens » RNSConversions-SplitView.mm
+› Compiling react-native-screens Pods/RNScreens » RNSConversions-ScrollViewMarker.mm
+› Compiling react-native-screens Pods/RNScreens » RNSConversions-Fabric.mm
+› Compiling react-native-screens Pods/RNScreens » RNSBarButtonItem.mm
+› Compiling react-native-screens Pods/RNScreens » RNSBackBarButtonItem.mm
+› Compiling react-native-screens Pods/RNScreens » RCTTouchHandler+RNSUtility.mm
+› Compiling react-native-screens Pods/RNScreens » RCTSurfaceTouchHandler+RNSUtility.mm
+› Compiling react-native-screens Pods/RNScreens » RCTImageComponentView+RNSScreenStackHeaderConfig.mm
+› Compiling react-native-screens Pods/RNScreens » RCTConvert+RNScreens.mm
+› Compiling react-native-screens Pods/RNScreens » RCTConvert+RNSTabs.mm
+› Compiling react-native-screens Pods/RNScreens » NSString+RNSUtility.mm
+› Compiling react-native-gesture-handler Pods/RNGestureHandler » RNTapHandler.m
+› Compiling react-native-gesture-handler Pods/RNGestureHandler » RNRotationHandler.m
+› Compiling react-native-gesture-handler Pods/RNGestureHandler » RNRootViewGestureRecognizer.m
+› Compiling @stripe/stripe-react-native Pods/StripePaymentsUI » StripePaymentsUI-dummy.m
+› Compiling react-native-gesture-handler Pods/RNGestureHandler » RNPinchHandler.m
+› Compiling react-native-purchases-ui Pods/RevenueCatUI » RevenueCatUI-dummy.m
+› Packaging react-native-purchases-ui Pods/RevenueCatUI » libRevenueCatUI.a
+› Compiling react-native-gesture-handler Pods/RNGestureHandler » RNPanHandler.m
+› Compiling react-native-gesture-handler Pods/RNGestureHandler » RNManualActivationRecognizer.m
+› Compiling react-native-screens Pods/RNScreens » RNScreens-dummy.m
+› Compiling react-native-gesture-handler Pods/RNGestureHandler » RNLongPressHandler.m
+› Compiling react-native-gesture-handler Pods/RNGestureHandler » RNHoverHandler.m
+› Compiling react-native-gesture-handler Pods/RNGestureHandler » RNGestureHandlerRegistry.m
+› Compiling react-native-gesture-handler RNGestureHandlerPointerTracker.m
+› Compiling react-native-gesture-handler Pods/RNGestureHandler » RNGestureHandlerEvents.m
+› Compiling react-native-gesture-handler Pods/RNGestureHandler » RNGHVector.m
+› Compiling react-native-gesture-handler Pods/RNGestureHandler » RNGHStylusData.m
+› Compiling react-native-gesture-handler Pods/RNGestureHandler » RNForceTouchHandler.m
+› Compiling react-native-gesture-handler Pods/RNGestureHandler » RNFlingHandler.m
+› Executing @stripe/stripe-react-native Pods/StripePaymentsUI » Copy generated compatibility header
+› Executing react-native-purchases-ui Pods/RevenueCatUI » Copy generated compatibility header
+› Executing expo-modules-core Pods/ExpoModulesCore » [CP] Copy XCFrameworks
+› Packaging react-native-screens Pods/RNScreens » libRNScreens.a
+› Executing react-native-screens Pods/RNScreens » Copy generated compatibility header
+› Packaging react-native-gesture-handler Pods/RNGestureHandler » libRNGestureHandler.a
+› Compiling @react-native-community/datetimepicker ShadowNodes.cpp
+› Compiling @react-native-community/datetimepicker Pods/RNDateTimePicker » RNDateTimePickerState.cpp
+› Compiling @react-native-community/datetimepicker Pods/RNDateTimePicker » RNDateTimePickerComponentView.mm
+› Compiling @react-native-community/datetimepicker Pods/RNDateTimePicker » RNDateTimePickerShadowView.m
+› Compiling @react-native-community/datetimepicker Pods/RNDateTimePicker » RNDateTimePickerManager.m
+› Compiling @react-native-community/datetimepicker Pods/RNDateTimePicker » RNDateTimePicker.m
+› Compiling @react-native-community/datetimepicker Pods/RNDateTimePicker » RNDateTimePicker-dummy.m
+› Compiling @stripe/stripe-react-native Pods/StripeIssuing » StripeIssuing-dummy.m
+› Packaging @stripe/stripe-react-native Pods/StripeIssuing » libStripeIssuing.a
+› Executing @stripe/stripe-react-native Pods/StripeIssuing » Copy generated compatibility header
+› Packaging @react-native-community/datetimepicker Pods/RNDateTimePicker » libRNDateTimePicker.a
+› Compiling @stripe/stripe-react-native Pods/Stripe » Stripe-dummy.m
+› Packaging @stripe/stripe-react-native Pods/Stripe » libStripe.a
+› Executing @stripe/stripe-react-native Pods/Stripe » Copy generated compatibility header
+› Executing expo-location Pods/ExpoLocation » [CP-User] [Expo] Resolve ExpoLocation dSYM source maps
+› Executing expo-image Pods/ExpoImage » [CP-User] [Expo] Resolve ExpoImage dSYM source maps
+› Executing expo-font Pods/ExpoFont » [CP-User] [Expo] Resolve ExpoFont dSYM source maps
+› Executing expo-file-system Pods/ExpoFileSystem » [CP-User] [Expo] Resolve ExpoFileSystem dSYM source maps
+› Compiling react-native-purchases-ui Pods/PurchasesHybridCommon » PurchasesHybridCommon-dummy.m
+› Executing expo-location Pods/ExpoLocation » [CP-User] [Expo] Switch ExpoLocation XCFramework for build configuration
+› Packaging react-native-purchases-ui Pods/PurchasesHybridCommon » libPurchasesHybridCommon.a
+› Executing expo-image Pods/ExpoImage » [CP-User] [Expo] Switch ExpoImage XCFramework for build configuration
+› Executing expo-font Pods/ExpoFont » [CP-User] [Expo] Switch ExpoFont XCFramework for build configuration
+› Executing expo-file-system Pods/ExpoFileSystem » [CP-User] [Expo] Switch ExpoFileSystem XCFramework for build configuration
+› Executing react-native-purchases-ui Pods/PurchasesHybridCommon » Copy generated compatibility header
+› Executing expo-location Pods/ExpoLocation » [CP] Copy XCFrameworks
+› Executing expo-image Pods/ExpoImage » [CP] Copy XCFrameworks
+› Executing expo-font Pods/ExpoFont » [CP] Copy XCFrameworks
+› Executing expo-file-system Pods/ExpoFileSystem » [CP] Copy XCFrameworks
+› Compiling expo-web-browser Pods/ExpoWebBrowser » ExpoWebBrowser-dummy.m
+› Packaging expo-web-browser Pods/ExpoWebBrowser » libExpoWebBrowser.a
+› Compiling expo-system-ui Pods/ExpoSystemUI » ExpoSystemUI-dummy.m
+› Packaging expo-system-ui Pods/ExpoSystemUI » libExpoSystemUI.a
+› Compiling expo-symbols Pods/ExpoSymbols » ExpoSymbols-dummy.m
+› Executing Copy generated compatibility header
+› Executing expo-system-ui Pods/ExpoSystemUI » Copy generated compatibility header
+› Packaging expo-symbols Pods/ExpoSymbols » libExpoSymbols.a
+› Executing expo-symbols Pods/ExpoSymbols » Copy generated compatibility header
+› Compiling react-native-purchases Pods/RNPurchases » RNPurchases-dummy.m
+› Compiling react-native-purchases Pods/RNPurchases » RNPurchases.m
+› Compiling expo-store-review Pods/ExpoStoreReview » ExpoStoreReview-dummy.m
+› Packaging expo-store-review Pods/ExpoStoreReview » libExpoStoreReview.a
+› Executing expo-store-review Pods/ExpoStoreReview » Copy generated compatibility header
+› Packaging react-native-purchases Pods/RNPurchases » libRNPurchases.a
+› Executing react-native-purchases Pods/RNPurchases » Copy generated compatibility header
+› Compiling expo-splash-screen Pods/ExpoSplashScreen » ExpoSplashScreen-dummy.m
+› Packaging expo-splash-screen Pods/ExpoSplashScreen » libExpoSplashScreen.a
+› Executing expo-splash-screen Pods/ExpoSplashScreen » Copy generated compatibility header
+› Compiling expo-speech Pods/ExpoSpeech » ExpoSpeech-dummy.m
+› Packaging expo-speech Pods/ExpoSpeech » libExpoSpeech.a
+› Compiling expo-secure-store Pods/ExpoSecureStore » ExpoSecureStore-dummy.m
+› Packaging expo-secure-store Pods/ExpoSecureStore » libExpoSecureStore.a
+› Executing expo-speech Pods/ExpoSpeech » Copy generated compatibility header
+› Compiling react-native-purchases-ui Pods/PurchasesHybridCommonUI » PurchasesHybridCommonUI-dummy.m
+› Packaging react-native-purchases-ui Pods/PurchasesHybridCommonUI » libPurchasesHybridCommonUI.a
+› Executing react-native-purchases-ui Pods/PurchasesHybridCommonUI » Copy generated compatibility header
+› Executing expo-secure-store Pods/ExpoSecureStore » Copy generated compatibility header
+› Compiling react-native-purchases-ui Pods/RNPaywalls » UIView+Extensions.m
+› Compiling react-native-purchases-ui Pods/RNPaywalls » RNPaywalls-dummy.m
+› Compiling react-native-purchases-ui Pods/RNPaywalls » RNPaywalls.m
+› Compiling react-native-purchases-ui Pods/RNPaywalls » RNCustomerCenter.m
+› Compiling react-native-purchases-ui Pods/RNPaywalls » RCPaywallFooterViewManager.m
+› Compiling react-native-purchases-ui Pods/RNPaywalls » PaywallViewWrapper.m
+› Compiling react-native-purchases-ui Pods/RNPaywalls » PaywallViewManager.m
+› Compiling react-native-purchases-ui Pods/RNPaywalls » CustomerCenterViewWrapper.m
+› Compiling react-native-purchases-ui Pods/RNPaywalls » CustomerCenterViewManager.m
+› Packaging react-native-purchases-ui Pods/RNPaywalls » libRNPaywalls.a
+› Executing react-native-purchases-ui Pods/RNPaywalls » Copy generated compatibility header
+› Compiling expo-linking Pods/ExpoLinking » ExpoLinking-dummy.m
+› Packaging expo-linking Pods/ExpoLinking » libExpoLinking.a
+› Compiling expo-notifications Pods/ExpoNotifications » ExpoNotifications-dummy.m
+› Packaging expo-notifications Pods/ExpoNotifications » libExpoNotifications.a
+› Compiling expo-linear-gradient Pods/ExpoLinearGradient » ExpoLinearGradient-dummy.m
+› Packaging expo-linear-gradient Pods/ExpoLinearGradient » libExpoLinearGradient.a
+› Executing expo-notifications Pods/ExpoNotifications » Copy generated compatibility header
+› Executing expo-linking Pods/ExpoLinking » Copy generated compatibility header
+› Packaging expo-keep-awake Pods/ExpoKeepAwake » libExpoKeepAwake.a
+› Compiling expo-router Pods/ExpoRouter » ExpoRouter-dummy.m
+› Packaging expo-router Pods/ExpoRouter » libExpoRouter.a
+› Executing expo-router Pods/ExpoRouter » Copy generated compatibility header
+› Executing expo-linear-gradient Pods/ExpoLinearGradient » Copy generated compatibility header
+› Executing expo-keep-awake Pods/ExpoKeepAwake » Copy generated compatibility header
+› Compiling expo-haptics Pods/ExpoHaptics » ExpoHaptics-dummy.m
+› Packaging expo-haptics Pods/ExpoHaptics » libExpoHaptics.a
+› Executing expo-haptics Pods/ExpoHaptics » Copy generated compatibility header
+› Compiling expo-image-picker Pods/ExpoImagePicker » ExpoImagePicker-dummy.m
+› Packaging expo-image-picker Pods/ExpoImagePicker » libExpoImagePicker.a
+› Executing expo-image-picker Pods/ExpoImagePicker » Copy generated compatibility header
+› Compiling expo-glass-effect Pods/ExpoGlassEffect » ExpoGlassEffect-dummy.m
+› Compiling @expo/dom-webview Pods/ExpoDomWebView » ExpoDomWebView-dummy.m
+› Packaging expo-glass-effect Pods/ExpoGlassEffect » libExpoGlassEffect.a
+› Packaging @expo/dom-webview Pods/ExpoDomWebView » libExpoDomWebView.a
+› Executing expo-glass-effect Pods/ExpoGlassEffect » Copy generated compatibility header
+› Executing @expo/dom-webview Pods/ExpoDomWebView » Copy generated compatibility header
+› Compiling expo-device Pods/ExpoDevice » ExpoDevice-dummy.m
+› Packaging expo-device Pods/ExpoDevice » libExpoDevice.a
+› Executing expo-device Pods/ExpoDevice » Copy generated compatibility header
+› Compiling expo-blur Pods/ExpoBlur » ExpoBlur-dummy.m
+› Packaging expo-blur Pods/ExpoBlur » libExpoBlur.a
+› Executing expo-blur Pods/ExpoBlur » Copy generated compatibility header
+› Compiling expo-asset Pods/ExpoAsset » ExpoAsset-dummy.m
+› Packaging expo-asset Pods/ExpoAsset » libExpoAsset.a
+› Executing expo-asset Pods/ExpoAsset » Copy generated compatibility header
+› Compiling expo-clipboard Pods/ExpoClipboard » ExpoClipboard-dummy.m
+› Compiling expo-updates-interface Pods/EXUpdatesInterface » noop-file.m
+› Compiling expo-updates-interface Pods/EXUpdatesInterface » EXUpdatesInterface-dummy.m
+› Packaging expo-clipboard Pods/ExpoClipboard » libExpoClipboard.a
+› Executing Copy generated compatibility header
+› Packaging expo-updates-interface Pods/EXUpdatesInterface » libEXUpdatesInterface.a
+› Compiling expo-json-utils Pods/EXJSONUtils » NSDictionary+EXJSONUtils.m
+› Compiling expo-json-utils Pods/EXJSONUtils » EXJSONUtils-dummy.m
+› Executing expo-updates-interface Pods/EXUpdatesInterface » Copy generated compatibility header
+› Packaging expo-json-utils Pods/EXJSONUtils » libEXJSONUtils.a
+› Preparing Pods/EXConstants-ExpoConstants_privacy » ResourceBundle-ExpoConstants_privacy-EXConstants-Info.plist
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/ExpoConstants_privacy.bundle/PrivacyInfo.xcprivacy ➜ ../../../Users/expo/workingdir/build/node_modules/.pnpm/expo-constants@55.0.16_expo@55.0.26_react-native@0.83.6_@babel+core@7.29.0_@types+react@19.2.14_react@19.2.0_/node_modules/expo-constants/ios/PrivacyInfo.xcprivacy
+› Preparing expo-constants Pods/EXConstants-EXConstants » ResourceBundle-EXConstants-EXConstants-Info.plist
+› Creating  Intermediate
+› Preparing Pods/EXApplication-ExpoApplication_privacy » ResourceBundle-ExpoApplication_privacy-EXApplication-Info.plist
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/UninstalledProducts/iphoneos/ExpoApplication_privacy.bundle/PrivacyInfo.xcprivacy ➜ ../../../Users/expo/workingdir/build/node_modules/.pnpm/expo-application@55.0.15_expo@55.0.26/node_modules/expo-application/ios/PrivacyInfo.xcprivacy
+› Creating  expo-constants Pods/EXConstants-EXConstants » EXConstants.bundle
+› Executing expo-constants Pods/EXConstants » [CP-User] Generate app.config for prebuilt Constants.manifest
+› Creating  Pods/EXApplication-ExpoApplication_privacy » ExpoApplication_privacy.bundle
+› Compiling expo-manifests Pods/EXManifests » EXManifests-dummy.m
+› Packaging expo-manifests Pods/EXManifests » libEXManifests.a
+› Executing expo-manifests Pods/EXManifests » Copy generated compatibility header
+› Compiling expo-application Pods/EXApplication » EXProvisioningProfile.m
+› Compiling expo-application Pods/EXApplication » EXApplication-dummy.m
+› Packaging expo-application Pods/EXApplication » libEXApplication.a
+› Executing expo-application Pods/EXApplication » Copy generated compatibility header
+› Compiling expo-constants Pods/EXConstants » EXConstantsInstallationIdProvider.m
+› Compiling expo-constants Pods/EXConstants » EXConstants-dummy.m
+› Compiling expo-eas-client Pods/EASClient » EASClient-dummy.m
+› Packaging expo-eas-client Pods/EASClient » libEASClient.a
+› Executing expo-eas-client Pods/EASClient » Copy generated compatibility header
+› Executing expo-updates Pods/EXUpdates » [CP-User] Generate updates resources for expo-updates
+› Compiling expo-constants Pods/EXConstants » EXConstantsService.m
+› Packaging expo-constants Pods/EXConstants » libEXConstants.a
+› Executing expo-constants Pods/EXConstants » Copy generated compatibility header
+› Compiling expo Pods/Expo » ExpoReactNativeFactory.mm
+› Compiling expo Pods/Expo » EXReactRootViewFactory.mm
+› Compiling expo Pods/Expo » Expo-dummy.m
+› Compiling expo Pods/Expo » EXLegacyAppDelegateWrapper.m
+› Compiling expo Pods/Expo » EXAppDelegatesLoader.m
+› Compiling expo Pods/Expo » EXAppDefinesLoader.m
+› Packaging expo Pods/Expo » libExpo.a
+› Executing expo Pods/Expo » Copy generated compatibility header
+› Compiling expo-dev-menu Pods/expo-dev-menu » expo-dev-menu-dummy.m
+› Compiling expo-dev-menu Pods/expo-dev-menu » RCTKeyCommands.m
+› Compiling expo-dev-menu Pods/expo-dev-menu » EXDevMenuAppInfo.m
+› Packaging expo-dev-menu Pods/expo-dev-menu » libexpo-dev-menu.a
+› Executing expo-dev-menu Pods/expo-dev-menu » Copy generated compatibility header
+› Compiling expo-updates Pods/EXUpdates » EXUpdates-dummy.m
+› Compiling expo-updates Pods/EXUpdates » EXUpdatesBSPatch.m
+› Compiling expo-updates Pods/EXUpdates » bspatch.c
+› Compiling expo-updates Pods/EXUpdates » EXDeferredRCTRootView.m
+› Packaging expo-updates Pods/EXUpdates » libEXUpdates.a
+› Executing expo-updates Pods/EXUpdates » Copy generated compatibility header
+› Compiling expo-dev-launcher Pods/expo-dev-launcher » RCTPackagerConnection+EXDevLauncherPackagerConnectionInterceptor.m
+› Compiling expo-dev-launcher Pods/expo-dev-launcher » expo-dev-launcher-dummy.m
+› Compiling expo-dev-launcher Pods/expo-dev-launcher » EXDevLauncherRCTDevSettings.m
+› Compiling expo-dev-launcher Pods/expo-dev-launcher » EXDevLauncherRedBox.m
+› Compiling expo-dev-launcher Pods/expo-dev-launcher » EXDevLauncher.m
+› Compiling expo-dev-launcher Pods/expo-dev-launcher » EXDevLauncherManifestParser.m
+› Compiling expo-dev-launcher Pods/expo-dev-launcher » EXDevLauncherController.m
+› Packaging expo-dev-launcher Pods/expo-dev-launcher » libexpo-dev-launcher.a
+› Executing expo-dev-launcher Pods/expo-dev-launcher » Copy generated compatibility header
+› Compiling @stripe/stripe-react-native Pods/StripePaymentSheet » StripePaymentSheet-dummy.m
+› Packaging @stripe/stripe-react-native Pods/StripePaymentSheet » libStripePaymentSheet.a
+› Executing @stripe/stripe-react-native Pods/StripePaymentSheet » Copy generated compatibility header
+› Compiling @stripe/stripe-react-native Pods/stripe-react-native » StripeSdk.mm
+› Compiling @stripe/stripe-react-native Pods/stripe-react-native » StripeOnrampSdk.mm
+› Compiling @stripe/stripe-react-native Pods/stripe-react-native » StripeNewArchConversions.mm
+› Compiling @stripe/stripe-react-native Pods/stripe-react-native » StripeContainerComponentView.mm
+› Compiling @stripe/stripe-react-native Pods/stripe-react-native » NavigationBarComponentView.mm
+› Compiling @stripe/stripe-react-native Pods/stripe-react-native » GooglePayButtonComponentView.mm
+› Compiling @stripe/stripe-react-native Pods/stripe-react-native » EmbeddedPaymentElementViewComponentView.mm
+› Compiling @stripe/stripe-react-native Pods/stripe-react-native » CardFormComponentView.mm
+› Compiling @stripe/stripe-react-native Pods/stripe-react-native » CardFieldComponentView.mm
+
+⚠️  (../../../../../../DerivedSources/stripe_react_native-Swift.h:591:66)
+
+@interface StripeSdkImpl (SWIFT_EXTENSION(stripe_react_native)) <STPAuthenticationContext>
+                                                                 ^ cannot find protocol definition for 'STPAuthenticationContext'
+
+› Compiling @stripe/stripe-react-native Pods/stripe-react-native » AuBECSDebitFormComponentView.mm
+› Compiling @stripe/stripe-react-native Pods/stripe-react-native » ApplePayButtonComponentView.mm
+› Compiling @stripe/stripe-react-native Pods/stripe-react-native » AddressSheetViewComponentView.mm
+› Compiling @stripe/stripe-react-native Pods/stripe-react-native » AddToWalletButtonComponentView.mm
+› Compiling @stripe/stripe-react-native Pods/stripe-react-native » stripe-react-native-dummy.m
+› Compiling @stripe/stripe-react-native Pods/stripe-react-native » StripeSdkEventEmitterCompat.m
+› Compiling @stripe/stripe-react-native Pods/stripe-react-native » StripeContainerManager.m
+› Compiling @stripe/stripe-react-native Pods/stripe-react-native » PaymentMethodMessagingElementHandler.m
+› Compiling @stripe/stripe-react-native Pods/stripe-react-native » EmbeddedPaymentElementManager.m
+› Compiling @stripe/stripe-react-native Pods/stripe-react-native » ConnectAccountOnboardingViewManager.m
+› Compiling @stripe/stripe-react-native Pods/stripe-react-native » CardFormManager.m
+› Compiling @stripe/stripe-react-native Pods/stripe-react-native » CardFieldManager.m
+› Compiling @stripe/stripe-react-native Pods/stripe-react-native » AuBECSDebitFormManager.m
+› Compiling @stripe/stripe-react-native Pods/stripe-react-native » ApplePayButtonManager.m
+› Compiling @stripe/stripe-react-native Pods/stripe-react-native » AddressSheetViewManager.m
+› Compiling @stripe/stripe-react-native Pods/stripe-react-native » AddToWalletButtonManager.m
+› Packaging @stripe/stripe-react-native Pods/stripe-react-native » libstripe-react-native.a
+› Executing @stripe/stripe-react-native Pods/stripe-react-native » Copy generated compatibility header
+› Compiling Pods/Pods-HomeBase » Pods-HomeBase-dummy.m
+› Packaging Pods/Pods-HomeBase » libPods-HomeBase.a
+› Executing HomeBase » [CP] Check Pods Manifest.lock
+› Executing HomeBase » [Expo] Configure project
+› Copying   ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/InstallationBuildProductsLocation/Applications/HomeBase.app/PrivacyInfo.xcprivacy ➜ ../../../Users/expo/workingdir/build/artifacts/homebase/ios/HomeBase/PrivacyInfo.xcprivacy
+› Copying   ios/HomeBase/Supporting/Expo.plist ➜ ./Expo.plist
+› Compiling HomeBase » SplashScreen.storyboard
+› Preparing HomeBase » Info.plist
+› Compiling HomeBase » HomeBase_vers.c
+› Linking   HomeBase » HomeBase
+⚠️  ld: search path '/var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v17.3.48.0.JbEdLa/Metal.xctoolchain/usr/lib/swift/iphoneos' not found
+› Executing HomeBase » Bundle React Native code and images
+› Generating debug HomeBase » HomeBase.app.dSYM
+› Executing HomeBase » [CP] Copy Pods Resources
+› Executing HomeBase » [Expo Dev Launcher] Strip Local Network Keys for Release
+› Executing HomeBase » Upload Debug Symbols to Sentry
+
+❌  Script 'Upload Debug Symbols to Sentry' failed
+   └─HomeBase
+node:internal/modules/cjs/loader:1215
+throw err;
+Error: Cannot find module '@sentry/cli/package.json'
+Require stack:
+- /Users/expo/workingdir/build/artifacts/homebase/ios/[eval]
+code: 'MODULE_NOT_FOUND',
+requireStack: [ '/Users/expo/workingdir/build/artifacts/homebase/ios/[eval]' ]
+}
+Node.js v20.19.4
++ SENTRY_CLI_PACKAGE_PATH=
+
+⚠️  Script has ambiguous dependencies causing it to run on every build.
+   To fix, go to: Xcode » HomeBase/HomeBase » Build Phases » '[Expo Dev Launcher] Strip Local Network Keys for Release'
+   Either: Uncheck "Based on dependency analysis", or select output files to trigger the script
+
+⚠️  Script has ambiguous dependencies causing it to run on every build.
+   To fix, go to: Xcode » HomeBase/HomeBase » Build Phases » 'Upload Debug Symbols to Sentry'
+   Either: Uncheck "Based on dependency analysis", or select output files to trigger the script
+
+⚠️  Pods/Sentry-Sentry: iOS@11.0 deployment version mismatch, expected >= 2.0 <= 26.2.99
+⚠️  Pods/RNCAsyncStorage-RNCAsyncStorage_resources: iOS@9.0 deployment version mismatch, expected >= 2.0 <= 26.2.99
+▸ ** ARCHIVE FAILED **
+▸ The following build commands failed:
+▸ 	PhaseScriptExecution Upload\ Debug\ Symbols\ to\ Sentry /Users/expo/workingdir/build/artifacts/homebase/ios/build/Build/Intermediates.noindex/ArchiveIntermediates/HomeBase/IntermediateBuildFilesPath/HomeBase.build/Release-iphoneos/HomeBase.build/Script-747E91C18CD240E99A2A3A93.sh (in target 'HomeBase' from project 'HomeBase')
+▸ 	Archiving workspace HomeBase with scheme HomeBase
+▸ (2 failures)
+Exit status: 65
+
++---------------------------------------+
+|           Build environment           |
++-------------+-------------------------+
+| xcode_path  | /Applications/Xcode.app |
+| gym_version | 2.231.1                 |
+| sdk         | iPhoneOS26.2.sdk        |
++-------------+-------------------------+
+
+Looks like fastlane ran into a build/archive error with your project
+It's hard to tell what's causing the error, so we wrote some guides on how
+to troubleshoot build and signing issues: https://docs.fastlane.tools/codesigning/getting-started/
+Before submitting an issue on GitHub, please follow the guide above and make
+sure your project is set up correctly.
+fastlane uses `xcodebuild` commands to generate your binary, you can see the
+the full commands printed out in yellow in the above log.
+Make sure to inspect the output above, as usually you'll find more error information there
+[!] Error building the application - see the log above
+Error: The "Run fastlane" step failed with an unknown error. Refer to "Xcode Logs" below for additional, more detailed logs.
