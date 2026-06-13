@@ -780,17 +780,39 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
 
     .footer {
       text-align: center;
-      padding: 32px 0 0;
-      font-size: 0.8rem;
-      color: var(--text-dim);
+      padding: 32px 0 16px;
     }
 
-    .footer a {
-      color: var(--accent);
+    .powered-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 14px;
+      background: var(--glass);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 20px;
       text-decoration: none;
+      color: var(--text-dim);
+      font-size: 0.78rem;
+      font-weight: 500;
+      transition: background 0.15s, color 0.15s;
     }
 
-    .footer a:hover { text-decoration: underline; }
+    .powered-badge:hover {
+      background: rgba(255,255,255,0.08);
+      color: var(--accent);
+    }
+
+    .powered-badge-icon {
+      width: 16px;
+      height: 16px;
+      background: var(--accent);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
 
     .service-area {
       display: inline-flex;
@@ -906,7 +928,14 @@ export async function renderBookingPage(slug: string, db: DrizzleClient): Promis
     </div>` : ""}
 
     <div class="footer">
-      Powered by <a href="https://homebaseproapp.com" target="_blank" rel="noopener">HomeBase Pro</a>
+      <a class="powered-badge" href="https://homebaseproapp.com/?ref=booking_page" target="_blank" rel="noopener">
+        <span class="powered-badge-icon">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M3 10.5L12 3.5L21 10.5V20.5H14.5V14.5H9.5V20.5H3V10.5Z" fill="white"/>
+          </svg>
+        </span>
+        Powered by HomeBase
+      </a>
     </div>
   </div>
 

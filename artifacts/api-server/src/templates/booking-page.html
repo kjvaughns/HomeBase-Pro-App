@@ -282,11 +282,39 @@
     /* Footer */
     .footer {
       text-align: center;
-      padding: 24px 0;
-      font-size: 13px;
-      color: var(--text-tertiary);
+      padding: 28px 0 20px;
     }
-    .footer a { color: var(--accent); text-decoration: none; }
+
+    .powered-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 14px;
+      background: rgba(0,0,0,0.04);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      text-decoration: none;
+      color: var(--text-tertiary);
+      font-size: 12px;
+      font-weight: 500;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .powered-badge:hover {
+      background: rgba(56, 174, 95, 0.07);
+      color: var(--accent);
+    }
+
+    .powered-badge-icon {
+      width: 16px;
+      height: 16px;
+      background: var(--accent);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
 
     /* Hidden */
     .hidden { display: none !important; }
@@ -394,8 +422,15 @@
   </div>
 </div>
 
-<div class="footer" id="footer" style="display:none">
-  Powered by <a href="https://homebaseproapp.com">HomeBase</a>
+<div class="footer" id="footer">
+  <a class="powered-badge" href="https://homebaseproapp.com/?ref=booking_page" target="_blank" rel="noopener">
+    <span class="powered-badge-icon">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M3 10.5L12 3.5L21 10.5V20.5H14.5V14.5H9.5V20.5H3V10.5Z" fill="white"/>
+      </svg>
+    </span>
+    Powered by HomeBase
+  </a>
 </div>
 
 <script>
@@ -531,7 +566,6 @@
       // Show content
       $('loading').classList.add('hidden');
       $('content').classList.remove('hidden');
-      $('footer').style.display = '';
 
       // Submit
       $('btn-submit').addEventListener('click', async () => {
