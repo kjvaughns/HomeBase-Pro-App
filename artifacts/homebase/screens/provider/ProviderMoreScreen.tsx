@@ -228,6 +228,13 @@ export default function ProviderMoreScreen() {
               testID="button-manage-crew"
             />
             <ListRow
+              title="Refer a Pro"
+              subtitle="Share your code and earn 1 free month"
+              leftIcon="gift"
+              onPress={() => navigation.navigate("ReferAPro")}
+              testID="row-refer-a-pro"
+            />
+            <ListRow
               title="Communications"
               subtitle="Send messages and push notifications to clients"
               leftIcon="send"

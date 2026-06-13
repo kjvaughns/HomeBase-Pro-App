@@ -294,6 +294,8 @@ export const providers = pgTable("providers", {
   serviceCities: text("service_cities").array(),
   isPublic: boolean("is_public").default(false),
   slug: text("slug").unique(),
+  // Task #352: unique shareable referral code generated on provider creation
+  referralCode: text("referral_code").unique(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -673,6 +675,8 @@ export const providerPlans = pgTable("provider_plans", {
   // subscription paywall, but standard platform transaction fees still apply.
   isPartner: boolean("is_partner").default(false).notNull(),
   partnerSince: timestamp("partner_since"),
+  // Task #352: accumulated bonus days from provider referral rewards
+  referralBonusDays: integer("referral_bonus_days").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -2180,3 +2184,59 @@ export const insertQuickQuoteSchema = createInsertSchema(quickQuotes).omit({
 
 export type QuickQuote = typeof quickQuotes.$inferSelect;
 export type InsertQuickQuote = z.infer<typeof insertQuickQuoteSchema>;
+
+// ─── Provider Referrals (Task #352) ───────────────────────────────────────────
+// Every provider gets a unique referral_code on account creation.
+// The provider_referrals table records who referred whom and tracks
+// the reward lifecycle: signup → first job → reward granted.
+
+export const providerReferrals = pgTable(
+  "provider_referrals",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    referrerProviderId: varchar("referrer_provider_id")
+      .notNull()
+      .references(() => providers.id, { onDelete: "cascade" }),
+    referredProviderId: varchar("referred_provider_id")
+      .notNull()
+      .references(() => providers.id, { onDelete: "cascade" }),
+    // The code that was used at signup (snapshot for audit)
+    referralCode: text("referral_code").notNull(),
+    signedUpAt: timestamp("signed_up_at").defaultNow().notNull(),
+    firstJobCompletedAt: timestamp("first_job_completed_at"),
+    rewardGrantedAt: timestamp("reward_granted_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    referredUnique: uniqueIndex("provider_referrals_referred_unique").on(
+      t.referredProviderId,
+    ),
+  }),
+);
+
+export const providerReferralsRelations = relations(
+  providerReferrals,
+  ({ one }) => ({
+    referrer: one(providers, {
+      fields: [providerReferrals.referrerProviderId],
+      references: [providers.id],
+      relationName: "referrerProvider",
+    }),
+    referred: one(providers, {
+      fields: [providerReferrals.referredProviderId],
+      references: [providers.id],
+      relationName: "referredProvider",
+    }),
+  }),
+);
+
+export const insertProviderReferralSchema = createInsertSchema(
+  providerReferrals,
+).omit({ id: true, createdAt: true });
+
+export type ProviderReferral = typeof providerReferrals.$inferSelect;
+export type InsertProviderReferral = z.infer<
+  typeof insertProviderReferralSchema
+>;

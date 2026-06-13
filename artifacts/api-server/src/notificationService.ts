@@ -56,7 +56,8 @@ export type NotificationEvent =
   | 'estimate.sent'
   | 'estimate.accepted'
   | 'estimate.declined'
-  | 'estimate.expired';
+  | 'estimate.expired'
+  | 'referral.reward_earned';
 
 export interface DispatchPayload {
   recipientUserId?: string;

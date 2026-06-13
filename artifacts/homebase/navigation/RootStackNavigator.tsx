@@ -64,6 +64,7 @@ import ProviderAIAssistantScreen from "@/screens/provider/ProviderAIAssistantScr
 import StripeConnectScreen from "@/screens/provider/StripeConnectScreen";
 import SubscriptionScreen from "@/screens/provider/SubscriptionScreen";
 import AdminPartnersScreen from "@/screens/provider/AdminPartnersScreen";
+import ReferAProScreen from "@/screens/provider/ReferAProScreen";
 import BusinessHubScreen from "@/screens/provider/BusinessHubScreen";
 import CrewScreen from "@/screens/provider/CrewScreen";
 import BookingLinkScreen from "@/screens/provider/BookingLinkScreen";
@@ -198,6 +199,7 @@ export type RootStackParamList = {
   Communications: undefined;
   Subscription: undefined;
   AdminPartners: undefined;
+  ReferAPro: undefined;
   Crew: undefined;
   CrewJobDetail: { jobId: string };
 };
@@ -711,6 +713,13 @@ export default function RootStackNavigator() {
         component={AdminPartnersScreen}
         options={{
           headerTitle: "HomeBase Partners",
+        }}
+      />
+      <Stack.Screen
+        name="ReferAPro"
+        component={ReferAProScreen}
+        options={{
+          headerTitle: "Refer a Pro",
         }}
       />
       <Stack.Screen

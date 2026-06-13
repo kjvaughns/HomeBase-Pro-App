@@ -1325,7 +1325,63 @@ export async function runBootMigrations(): Promise<void> {
       await runSql(label, sql);
     }
 
+    // ── Task #352: Provider referral codes ────────────────────────────────────
+    // Add referral_code column to providers (unique, nullable for existing rows)
+    await runSql(
+      "providers.referral_code",
+      `ALTER TABLE providers ADD COLUMN IF NOT EXISTS referral_code TEXT UNIQUE`,
+    );
+    // Backfill referral codes for existing providers that don't have one yet.
+    // Use 12 uppercase hex chars from the UUID (48-bit space) for near-zero
+    // collision probability. Since UUIDs are unique, their 12-char hex prefixes
+    // are practically guaranteed distinct at any real-world provider count.
+    await runSql(
+      "providers.referral_code.backfill",
+      `UPDATE providers
+         SET referral_code = UPPER(SUBSTRING(REPLACE(id::text, '-', ''), 1, 12))
+         WHERE referral_code IS NULL`,
+    );
+    // Unique index (the UNIQUE constraint above creates one, but ensure it's named)
+    await runSql(
+      "providers.referral_code.unique_idx",
+      `CREATE UNIQUE INDEX IF NOT EXISTS providers_referral_code_unique
+         ON providers (referral_code)`,
+    );
+    // provider_referrals table: tracks referrer → referred + reward lifecycle
+    await runSql(
+      "table.provider_referrals",
+      `CREATE TABLE IF NOT EXISTS provider_referrals (
+        id                   VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        referrer_provider_id VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+        referred_provider_id VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+        referral_code        TEXT NOT NULL,
+        signed_up_at         TIMESTAMP NOT NULL DEFAULT NOW(),
+        first_job_completed_at TIMESTAMP,
+        reward_granted_at    TIMESTAMP,
+        created_at           TIMESTAMP NOT NULL DEFAULT NOW()
+      )`,
+    );
+    // Each referred provider can only appear once
+    await runSql(
+      "provider_referrals.referred_unique",
+      `CREATE UNIQUE INDEX IF NOT EXISTS provider_referrals_referred_unique
+         ON provider_referrals (referred_provider_id)`,
+    );
+    await runSql(
+      "provider_referrals.referrer_idx",
+      `CREATE INDEX IF NOT EXISTS provider_referrals_referrer_idx
+         ON provider_referrals (referrer_provider_id)`,
+    );
+    // provider_plans: bonus days column for referral subscription extensions
+    await runSql(
+      "provider_plans.referral_bonus_days",
+      `ALTER TABLE provider_plans ADD COLUMN IF NOT EXISTS referral_bonus_days INTEGER NOT NULL DEFAULT 0`,
+    );
+
     verifications.push(
+      ["providers.referral_code column",         `SELECT referral_code FROM providers LIMIT 0`],
+      ["provider_referrals table",               `SELECT id FROM provider_referrals LIMIT 0`],
+      ["provider_plans.referral_bonus_days",     `SELECT referral_bonus_days FROM provider_plans LIMIT 0`],
       ["provider_route_orders", `SELECT provider_id FROM provider_route_orders LIMIT 0`],
       ["job_series table",      `SELECT id FROM job_series LIMIT 0`],
       ["jobs.series_id column", `SELECT series_id FROM jobs LIMIT 0`],

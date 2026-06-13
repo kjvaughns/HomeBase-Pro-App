@@ -1,7 +1,7 @@
 import type { Response } from "express";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
-import { providerPlans, providers, users } from "@workspace/db";
+import { providerPlans, providerReferrals, providers, users } from "@workspace/db";
 import type { ProviderPlan } from "@workspace/db";
 import {
   dispatch,
@@ -296,6 +296,124 @@ export async function sendGraceReminderNotification(
       relatedRecordId: dedupKey,
     });
   }
+}
+
+/**
+ * Task #352 — Extend a provider's active subscription window by N days as a
+ * referral reward. Covers all subscription states:
+ *   - Partner → no-op (already unlimited)
+ *   - Subscribed via Stripe/RevenueCat → extend currentPeriodEnd
+ *   - In grace period → extend gracePeriodEndsAt
+ *   - Free (no trial) → bootstrap a grace period starting now
+ *
+ * Also increments referralBonusDays for audit/display purposes.
+ */
+export async function extendSubscriptionByDays(
+  providerId: string,
+  days: number,
+): Promise<void> {
+  const [plan] = await db
+    .select()
+    .from(providerPlans)
+    .where(eq(providerPlans.providerId, providerId));
+
+  if (plan?.isPartner) return;
+
+  const now = new Date();
+  const msExtension = days * 24 * 60 * 60 * 1000;
+
+  if (!plan) {
+    // No plan row yet → create one with a fresh grace window
+    const graceEnd = new Date(now.getTime() + msExtension);
+    await db.insert(providerPlans).values({
+      providerId,
+      firstPaidBookingAt: now,
+      gracePeriodEndsAt: graceEnd,
+      referralBonusDays: days,
+    });
+    return;
+  }
+
+  if (plan.isSubscribed && plan.currentPeriodEnd) {
+    // Extend the billing period locally
+    const current = new Date(plan.currentPeriodEnd);
+    const extended = new Date(current.getTime() + msExtension);
+    await db
+      .update(providerPlans)
+      .set({
+        currentPeriodEnd: extended,
+        referralBonusDays: (plan.referralBonusDays ?? 0) + days,
+        updatedAt: now,
+      })
+      .where(eq(providerPlans.id, plan.id));
+    return;
+  }
+
+  if (plan.gracePeriodEndsAt) {
+    // Extend existing grace window (even if already expired → gives a new lease)
+    const current = new Date(plan.gracePeriodEndsAt);
+    const baseline = current > now ? current : now;
+    const extended = new Date(baseline.getTime() + msExtension);
+    const updates: Partial<typeof providerPlans.$inferInsert> = {
+      gracePeriodEndsAt: extended,
+      referralBonusDays: (plan.referralBonusDays ?? 0) + days,
+      updatedAt: now,
+    };
+    if (!plan.firstPaidBookingAt) {
+      updates.firstPaidBookingAt = now;
+    }
+    await db
+      .update(providerPlans)
+      .set(updates)
+      .where(eq(providerPlans.id, plan.id));
+    return;
+  }
+
+  // Free provider with no grace period → bootstrap one
+  const graceEnd = new Date(now.getTime() + msExtension);
+  await db
+    .update(providerPlans)
+    .set({
+      firstPaidBookingAt: now,
+      gracePeriodEndsAt: graceEnd,
+      referralBonusDays: (plan.referralBonusDays ?? 0) + days,
+      updatedAt: now,
+    })
+    .where(eq(providerPlans.id, plan.id));
+}
+
+/**
+ * Task #352 — Send the referral reward notification to a provider.
+ * Deduped per referral row so multiple concurrent job completions can't
+ * double-dispatch the same reward message.
+ */
+export async function sendReferralRewardNotification(
+  providerId: string,
+  referralId: string,
+): Promise<void> {
+  const ctx = await getProviderUser(providerId);
+  if (!ctx) return;
+  const { user } = ctx;
+  const dedupKey = `referral_reward:${referralId}`;
+  const already = await hasDeliveryForRecord(
+    "referral.reward_earned",
+    dedupKey,
+    "push",
+  );
+  if (already) return;
+
+  const title = "You've earned 1 free month! 🎉";
+  const body =
+    "A provider you referred just completed their first job. Enjoy 30 days free on your HomeBase subscription.";
+
+  await dispatchNotification(
+    user.id,
+    title,
+    body,
+    "referral.reward_earned",
+    { providerId, referralId },
+    "reminders",
+  );
 }
 
 export async function sendGraceExpiredNotification(

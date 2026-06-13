@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { StyleSheet, View, Alert, ActivityIndicator } from "react-native";
+import { StyleSheet, View, Alert, ActivityIndicator, Linking } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation } from "@react-navigation/native";
@@ -80,9 +80,25 @@ export default function BecomeProviderScreen() {
   const [businessName, setBusinessName] = useState("");
   const [phone, setPhone] = useState("");
   const [serviceArea, setServiceArea] = useState("");
+  const [referralCode, setReferralCode] = useState("");
+
+  // Task #352: auto-populate referral code from the share deep link.
+  // Share links have the form: https://homebaseproapp.com/join?ref=ABCD1234
+  useEffect(() => {
+    Linking.getInitialURL().then((url) => {
+      if (!url) return;
+      try {
+        const parsed = new URL(url);
+        const ref = parsed.searchParams.get("ref");
+        if (ref) setReferralCode(ref.toUpperCase().trim());
+      } catch {
+        // non-parseable URL — ignore
+      }
+    });
+  }, []);
 
   const registerMutation = useMutation({
-    mutationFn: async (data: { userId: string; businessName: string; phone?: string; email?: string; serviceArea?: string }) => {
+    mutationFn: async (data: { userId: string; businessName: string; phone?: string; email?: string; serviceArea?: string; referralCode?: string }) => {
       const response = await apiRequest("POST", "/api/provider/register", data);
       return response.json();
     },
@@ -178,6 +194,7 @@ export default function BecomeProviderScreen() {
       phone: phone.trim() || undefined,
       email: user.email,
       serviceArea: serviceArea.trim() || undefined,
+      referralCode: referralCode.trim() || undefined,
     });
   };
 
@@ -285,6 +302,15 @@ export default function BecomeProviderScreen() {
             >
               This is how customers will find you. You can change this later.
             </ThemedText>
+
+            <TextField
+              label="Referral Code (optional)"
+              placeholder="Enter a friend's referral code"
+              value={referralCode}
+              onChangeText={(t) => setReferralCode(t.toUpperCase())}
+              leftIcon="gift"
+              autoCapitalize="characters"
+            />
           </GlassCard>
         </Animated.View>
 

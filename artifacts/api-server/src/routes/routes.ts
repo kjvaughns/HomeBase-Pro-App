@@ -109,6 +109,8 @@ import {
   checkSubscriptionGate,
   getProviderSubscriptionStatus,
   maybeStartGracePeriod,
+  extendSubscriptionByDays,
+  sendReferralRewardNotification,
 } from "../subscriptionService";
 import {
   invoices,
@@ -147,6 +149,7 @@ import {
   reviewReports,
   homeProfileUpdateSchema,
   jobSeries,
+  providerReferrals,
 } from "@workspace/db";
 import {
   createSeriesForJob,
@@ -223,6 +226,36 @@ const requireAdmin: RequestHandler = async (req, res, next) => {
 };
 
 const aiRateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+/**
+ * Task #352 — Generate a collision-safe referral code.
+ * Format: 8 chars from [A-Z0-9] (36^8 ≈ 2.8 trillion combinations).
+ * Callers should verify uniqueness in the DB and retry on collision.
+ */
+function generateReferralCode(): string {
+  const CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 32 chars (no 0/O/I/1 ambiguity)
+  const bytes = require("crypto").randomBytes(8) as Buffer;
+  return Array.from(bytes)
+    .map((b: number) => CHARS[b % CHARS.length])
+    .join("");
+}
+
+/**
+ * Task #352 — Generate a unique referral code with DB collision retry.
+ * Tries up to `maxAttempts` times before throwing.
+ */
+async function generateUniqueReferralCode(maxAttempts = 5): Promise<string> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const code = generateReferralCode();
+    const [existing] = await db
+      .select({ id: providers.id })
+      .from(providers)
+      .where(eq(providers.referralCode, code))
+      .limit(1);
+    if (!existing) return code;
+  }
+  throw new Error("generateUniqueReferralCode: max attempts exceeded");
+}
 
 const REVENUE_MILESTONES = [
   10000, 25000, 50000, 100000, 150000, 200000, 300000, 500000,
@@ -7286,8 +7319,19 @@ Respond with JSON only:
           });
         }
 
+        // Task #352: strip the inviter's referral code from the provider insert data
+        // so it never collides with the new provider's own referral_code column.
+        // The field is intentionally named to match what BecomeProviderScreen sends;
+        // it is handled separately below.
+        const { referralCode: submittedInviterCode, ...providerFields } = parsed.data;
+
+        // Task #352: generate a unique referral code BEFORE creating the provider so
+        // it is included in the INSERT — avoiding a separate UPDATE step and the
+        // partial-state window if that UPDATE failed.
+        const referralCode = await generateUniqueReferralCode();
+
         // Ensure userId is always the authenticated user (even if not in body)
-        const providerData = { ...parsed.data, userId: authUserId };
+        const providerData = { ...providerFields, userId: authUserId, referralCode };
 
         // Check if user already has a provider profile
         const existing = await storage.getProviderByUserId(authUserId);
@@ -7299,13 +7343,104 @@ Respond with JSON only:
 
         const provider = await storage.createProvider(providerData);
 
+        // Task #352: if the registering provider used a referral code, record it
+        const incomingCode = (submittedInviterCode as string | undefined)?.trim().toUpperCase();
+        if (incomingCode) {
+          try {
+            const [referrerProvider] = await db
+              .select({ id: providers.id })
+              .from(providers)
+              .where(eq(providers.referralCode, incomingCode))
+              .limit(1);
+            if (referrerProvider && referrerProvider.id !== provider.id) {
+              await db.insert(providerReferrals).values({
+                referrerProviderId: referrerProvider.id,
+                referredProviderId: provider.id,
+                referralCode: incomingCode,
+              });
+            }
+          } catch (refErr) {
+            // Non-fatal — log and continue
+            console.error("[referral] Failed to record referral at signup:", refErr);
+          }
+        }
+
         // Mark user as provider
         await storage.updateUser(authUserId, { isProvider: true });
 
-        res.status(201).json({ provider });
+        res.status(201).json({ provider: { ...provider, referralCode } });
       } catch (error) {
         console.error("Provider registration error:", error);
         res.status(500).json({ error: "Failed to register provider" });
+      }
+    },
+  );
+
+  // Task #352: Referral info — GET /api/providers/me/referral
+  // Returns the authenticated provider's referral code, shareable link,
+  // and a list of referred providers with their conversion status.
+  app.get(
+    "/api/providers/me/referral",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const authUserId = req.authenticatedUserId!;
+        const [provider] = await db
+          .select({ id: providers.id, referralCode: providers.referralCode })
+          .from(providers)
+          .where(eq(providers.userId, authUserId))
+          .limit(1);
+        if (!provider) {
+          return res.status(404).json({ error: "Provider not found" });
+        }
+
+        // Ensure referral code exists (lazy backfill for providers created before Task #352)
+        let code = provider.referralCode;
+        if (!code) {
+          code = await generateUniqueReferralCode();
+          await db
+            .update(providers)
+            .set({ referralCode: code })
+            .where(eq(providers.id, provider.id));
+        }
+
+        const shareLink = `https://homebaseproapp.com/join?ref=${code}`;
+
+        // Fetch referrals where this provider is the referrer
+        const referrals = await db
+          .select({
+            id: providerReferrals.id,
+            referredProviderId: providerReferrals.referredProviderId,
+            signedUpAt: providerReferrals.signedUpAt,
+            firstJobCompletedAt: providerReferrals.firstJobCompletedAt,
+            rewardGrantedAt: providerReferrals.rewardGrantedAt,
+            businessName: providers.businessName,
+          })
+          .from(providerReferrals)
+          .leftJoin(providers, eq(providerReferrals.referredProviderId, providers.id))
+          .where(eq(providerReferrals.referrerProviderId, provider.id))
+          .orderBy(desc(providerReferrals.signedUpAt));
+
+        res.json({
+          referralCode: code,
+          shareLink,
+          referrals: referrals.map((r) => ({
+            id: r.id,
+            referredProviderId: r.referredProviderId,
+            businessName: r.businessName ?? "Unknown",
+            signedUpAt: r.signedUpAt,
+            firstJobCompletedAt: r.firstJobCompletedAt,
+            rewardGrantedAt: r.rewardGrantedAt,
+            status: r.rewardGrantedAt
+              ? "rewarded"
+              : r.firstJobCompletedAt
+                ? "converted"
+                : "signed_up",
+          })),
+        });
+      } catch (error) {
+        console.error("Referral info error:", error);
+        res.status(500).json({ error: "Failed to fetch referral info" });
       }
     },
   );
@@ -10511,6 +10646,72 @@ Respond with JSON only:
         autoLogHouseFaxEntry(job).catch((e: unknown) =>
           console.error("housefax auto-log error:", e),
         );
+
+        // Task #352: referral reward — when the referred provider completes their
+        // first job, extend the referrer's subscription by 30 days.
+        //
+        // Three-step protocol:
+        // 1. CAS claim: UPDATE SET first_job_completed_at WHERE BOTH timestamps null.
+        //    PostgreSQL row lock + WHERE re-evaluation ensures only one concurrent
+        //    caller wins (second caller finds first_job_completed_at already set → 0
+        //    rows returned → bails out).
+        // 2. Extend referrer's subscription (may throw).
+        // 3. Set reward_granted_at ONLY after successful extension.
+        //
+        // If extension fails: first_job_completed_at is set but reward_granted_at is
+        // null, leaving a recoverable signal in the DB. The error is logged with full
+        // context (referralId + referrerProviderId) so ops can manually complete the
+        // credit. This is intentionally NOT silently swallowed.
+        if (job.providerId) {
+          (async () => {
+            const now = new Date();
+            let referralId: string | undefined;
+            let referrerProviderId: string | undefined;
+            try {
+              // Step 1: Atomic CAS claim — sets firstJobCompletedAt only if both
+              // timestamps are null. Concurrent callers get 0 rows and bail.
+              const claimed = await db
+                .update(providerReferrals)
+                .set({ firstJobCompletedAt: now })
+                .where(
+                  and(
+                    eq(providerReferrals.referredProviderId, job.providerId!),
+                    isNull(providerReferrals.firstJobCompletedAt),
+                    isNull(providerReferrals.rewardGrantedAt),
+                  ),
+                )
+                .returning({
+                  id: providerReferrals.id,
+                  referrerProviderId: providerReferrals.referrerProviderId,
+                });
+
+              if (!claimed.length) return; // already rewarded or no referral record
+
+              referralId = claimed[0].id;
+              referrerProviderId = claimed[0].referrerProviderId;
+
+              // Step 2: Extend referrer's subscription. If this throws, rewardGrantedAt
+              // stays null — the row is detectable via first_job_completed_at IS NOT
+              // NULL AND reward_granted_at IS NULL for manual ops recovery.
+              await extendSubscriptionByDays(referrerProviderId, 30);
+
+              // Step 3: Mark reward as granted only after successful extension.
+              await db
+                .update(providerReferrals)
+                .set({ rewardGrantedAt: now })
+                .where(eq(providerReferrals.id, referralId));
+
+              // Notify the referrer.
+              await sendReferralRewardNotification(referrerProviderId, referralId);
+            } catch (e) {
+              // Log with enough context for manual recovery.
+              console.error(
+                "[referral] REWARD GRANT FAILED — manual recovery needed",
+                { referralId, referrerProviderId, jobId: job.id, error: String(e) },
+              );
+            }
+          })();
+        }
 
         // Provider-side completion does not currently flip the linked
         // appointment to "completed" automatically — but as soon as the job is
