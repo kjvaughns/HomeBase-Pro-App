@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { StyleSheet, View, ScrollView, ActivityIndicator, Pressable, Platform } from "react-native";
 import { openExternalUrl } from "@/lib/openExternalUrl";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -13,6 +13,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { ReferralPromptModal } from "@/components/ReferralPromptModal";
 import { useTheme } from "@/hooks/useTheme";
 import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
@@ -58,6 +59,8 @@ export default function PaymentScreen() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [openedExternal, setOpenedExternal] = useState(false);
+  const [showReferralPrompt, setShowReferralPrompt] = useState(false);
+  const referralPromptShownRef = useRef(false);
   const [returnNotice, setReturnNotice] = useState<string | null>(
     status === "cancelled"
       ? "Payment cancelled — no charge was made. You can try again below."
@@ -115,7 +118,7 @@ export default function PaymentScreen() {
   // Track invoice-paid event only on an actual unpaid → paid transition
   // observed during this mount. We snapshot the prior status and only fire
   // when it transitions, so opening an already-paid invoice does NOT
-  // re-emit the analytics event.
+  // re-emit the analytics event. Also show referral prompt once per invoice.
   const lastInvoiceStatusRef = React.useRef<string | null>(null);
   useEffect(() => {
     const inv = data?.invoice;
@@ -131,6 +134,10 @@ export default function PaymentScreen() {
         invoiceId: inv.id,
         amountCents: (inv as { totalCents?: number }).totalCents ?? null,
       });
+      if (!referralPromptShownRef.current) {
+        referralPromptShownRef.current = true;
+        setTimeout(() => setShowReferralPrompt(true), 800);
+      }
     }
     lastInvoiceStatusRef.current = status;
   }, [data?.invoice?.status, data?.invoice?.id]);
@@ -412,6 +419,11 @@ export default function PaymentScreen() {
           </ThemedText>
         </Pressable>
       </View>
+
+      <ReferralPromptModal
+        visible={showReferralPrompt}
+        onDismiss={() => setShowReferralPrompt(false)}
+      />
     </ThemedView>
   );
 }

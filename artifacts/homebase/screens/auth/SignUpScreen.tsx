@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { StyleSheet, View, Pressable, Alert, Linking } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -34,6 +34,26 @@ export default function SignUpScreen({ navigation }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // Capture referral code from deep-link URL at signup time (e.g. ?ref=ABCD1234)
+  const [referralCode, setReferralCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    const extractRef = (url: string | null) => {
+      if (!url) return;
+      try {
+        const parsed = new URL(url);
+        const ref = parsed.searchParams.get("ref");
+        if (ref) setReferralCode(ref.trim().toUpperCase());
+      } catch {
+        // URL parse failed — no ref param
+      }
+    };
+    // Check the initial URL that launched the app
+    Linking.getInitialURL().then(extractRef).catch(() => {});
+    // Also subscribe to foreground URL events (e.g. switching back from browser)
+    const sub = Linking.addEventListener("url", ({ url }) => extractRef(url));
+    return () => sub.remove();
+  }, []);
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
@@ -76,6 +96,7 @@ export default function SignUpScreen({ navigation }: Props) {
         email: email.trim().toLowerCase(),
         phone: phone.trim() || undefined,
         password,
+        ...(referralCode ? { referralCode } : {}),
       });
       
       const data = await response.json();

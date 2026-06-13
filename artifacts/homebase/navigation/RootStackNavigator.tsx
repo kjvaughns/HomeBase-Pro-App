@@ -72,6 +72,7 @@ import BookingLinkScreen from "@/screens/provider/BookingLinkScreen";
 import SendMessageScreen from "@/screens/provider/SendMessageScreen";
 import CommunicationsScreen from "@/screens/provider/CommunicationsScreen";
 import SavedProvidersScreen from "@/screens/homeowner/SavedProvidersScreen";
+import ReferralsScreen from "@/screens/homeowner/ReferralsScreen";
 import HelpCenterScreen from "@/screens/homeowner/HelpCenterScreen";
 import ContactUsScreen from "@/screens/homeowner/ContactUsScreen";
 import MyTicketsScreen from "@/screens/homeowner/MyTicketsScreen";
@@ -175,6 +176,7 @@ export type RootStackParamList = {
   BusinessProfile: undefined;
   PreviewBookingPage: { providerId?: string };
   SavedProviders: undefined;
+  Referrals: undefined;
   HelpCenter: undefined;
   ContactUs: undefined;
   MyTickets: undefined;
@@ -743,6 +745,13 @@ export default function RootStackNavigator() {
         component={CrewJobDetailScreen}
         options={{
           headerTitle: "Job",
+        }}
+      />
+      <Stack.Screen
+        name="Referrals"
+        component={ReferralsScreen}
+        options={{
+          headerTitle: "Referrals",
         }}
       />
     </Stack.Navigator>

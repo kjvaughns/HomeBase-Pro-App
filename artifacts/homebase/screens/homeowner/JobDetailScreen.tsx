@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { StyleSheet, View, ScrollView, Pressable, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -15,6 +15,7 @@ import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { StatusPill } from "@/components/StatusPill";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { ShareProviderModal } from "@/components/ShareProviderModal";
 import { useTheme } from "@/hooks/useTheme";
 import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
@@ -22,6 +23,7 @@ import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { getApiUrl, getAuthHeaders } from "@/lib/query-client";
 import { useAuthStore } from "@/state/authStore";
 import { recordHappyMoment } from "@/state/appReviewStore";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type ScreenRouteProp = RouteProp<RootStackParamList, "JobDetail">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -59,6 +61,7 @@ interface ProviderInfo {
   businessName: string;
   phone?: string | null;
   email?: string | null;
+  slug?: string | null;
 }
 
 interface JobRecord {
@@ -169,6 +172,9 @@ export default function JobDetailScreen() {
 
   const [invoiceError, setInvoiceError] = React.useState<string | null>(null);
   const [isOpeningInvoice, setIsOpeningInvoice] = React.useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  // Guard against double-trigger in the same React tree lifecycle
+  const shareCheckInFlightRef = useRef(false);
 
   const invoice = invoiceData?.invoice;
   const appointment = aptData?.appointment;
@@ -178,11 +184,25 @@ export default function JobDetailScreen() {
 
   // Fire once when the homeowner views a completed/paid appointment.
   // Deduped per appointment ID; counts from the 2nd completed job onward.
-  React.useEffect(() => {
-    if (appointment && appointment.status === "completed") {
-      recordHappyMoment("homeowner_job_completed", { payload: { jobId: appointment.id } }).catch(() => {});
-    }
-  }, [appointment?.id, appointment?.status]);
+  // Also show share-provider prompt on first view of a just-completed job.
+  // Persisted via AsyncStorage so remounting the screen never re-shows the modal.
+  useEffect(() => {
+    if (!appointment || appointment.status !== "completed" || !isHomeowner || !provider) return;
+
+    recordHappyMoment("homeowner_job_completed", { payload: { jobId: appointment.id } }).catch(() => {});
+
+    if (shareCheckInFlightRef.current) return;
+    shareCheckInFlightRef.current = true;
+
+    const storageKey = `share_provider_shown_${appointment.id}`;
+    AsyncStorage.getItem(storageKey).then((val) => {
+      if (val === "1") return; // already shown for this job
+      AsyncStorage.setItem(storageKey, "1").catch(() => {});
+      setTimeout(() => setShowShareModal(true), 1200);
+    }).catch(() => {
+      shareCheckInFlightRef.current = false;
+    });
+  }, [appointment?.id, appointment?.status, isHomeowner, !!provider]);
   const canReview =
     !!appointment &&
     isHomeowner &&
@@ -499,6 +519,19 @@ export default function JobDetailScreen() {
           </Animated.View>
         ) : null}
       </ScrollView>
+
+      {provider && (
+        <ShareProviderModal
+          visible={showShareModal}
+          providerName={provider.businessName}
+          providerBookingLink={
+            provider.slug
+              ? `https://homebaseproapp.com/providers/${provider.slug}`
+              : "https://homebaseproapp.com"
+          }
+          onDismiss={() => setShowShareModal(false)}
+        />
+      )}
     </ThemedView>
   );
 }

@@ -7,6 +7,7 @@ import {
   openai,
   HOMEBASE_SYSTEM_PROMPT,
   PROVIDER_ASSISTANT_PROMPT,
+  SUPPORT_AI_SYSTEM_PROMPT,
 } from "../openai";
 import { storage } from "../storage";
 import { seedDatabase } from "../seed";
@@ -51,7 +52,6 @@ import {
   sendAiSupportReplyEmail,
   sendAdminBroadcastEmail,
 } from "../emailService";
-import { openai, SUPPORT_AI_SYSTEM_PROMPT } from "../openai";
 import {
   dispatch,
   dispatchWithResult,
@@ -60,6 +60,12 @@ import {
   sendReviewNudge,
 } from "../notificationService";
 import { haversineMiles } from "../lib/distance";
+import {
+  generateUniqueReferralCode,
+  linkReferral,
+  getReferralStats,
+  grantReferralCreditsIfFirstBooking,
+} from "../referralService";
 import {
   searchPlaces,
   getPlaceDetails,
@@ -244,10 +250,11 @@ function generateReferralCode(): string {
 }
 
 /**
- * Task #352 — Generate a unique referral code with DB collision retry.
+ * Task #352 — Generate a unique PROVIDER referral code with DB collision retry.
+ * Checks uniqueness against the providers table.
  * Tries up to `maxAttempts` times before throwing.
  */
-async function generateUniqueReferralCode(maxAttempts = 5): Promise<string> {
+async function generateUniqueProviderReferralCode(maxAttempts = 5): Promise<string> {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const code = generateReferralCode();
     const [existing] = await db
@@ -257,7 +264,7 @@ async function generateUniqueReferralCode(maxAttempts = 5): Promise<string> {
       .limit(1);
     if (!existing) return code;
   }
-  throw new Error("generateUniqueReferralCode: max attempts exceeded");
+  throw new Error("generateUniqueProviderReferralCode: max attempts exceeded");
 }
 
 const REVENUE_MILESTONES = [
@@ -1405,7 +1412,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/auth/signup", async (req: Request, res: Response) => {
     try {
-      const { name, ...restBody } = req.body;
+      const { name, referralCode: incomingReferralCode, ...restBody } = req.body;
       const nameFields = parseUserName(name);
       const userData = { ...restBody, ...nameFields };
 
@@ -1421,7 +1428,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(409).json({ error: "Email already registered" });
       }
 
-      const user = await storage.createUser(parsed.data);
+      // Generate a unique referral code for this new homeowner
+      const referralCode = await generateUniqueReferralCode();
+      const user = await storage.createUser({ ...parsed.data, referralCode });
       const token = generateToken(
         user.id,
         user.isProvider ? "provider" : "homeowner",
@@ -1433,6 +1442,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         maxAge: 7 * 24 * 60 * 60 * 1000,
       });
       res.status(201).json({ user: formatUserResponse(user), token });
+
+      // Link referrer if a referral code was supplied at signup
+      if (incomingReferralCode && typeof incomingReferralCode === "string") {
+        linkReferral(user.id, incomingReferralCode).catch((err: unknown) =>
+          console.error("[SIGNUP] linkReferral failed:", err),
+        );
+      }
 
       // Welcome email — awaited with explicit failure logging (no silent discard)
       const fullName =
@@ -4313,6 +4329,7 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
                   phone: provider.phone,
                   email: provider.email,
                   avatarUrl: provider.avatarUrl,
+                  slug: provider.slug ?? null,
                 }
               : null,
             job: linkedJob
@@ -7518,7 +7535,7 @@ Respond with JSON only:
         // Task #352: generate a unique referral code BEFORE creating the provider so
         // it is included in the INSERT — avoiding a separate UPDATE step and the
         // partial-state window if that UPDATE failed.
-        const referralCode = await generateUniqueReferralCode();
+        const referralCode = await generateUniqueProviderReferralCode();
 
         // Ensure userId is always the authenticated user (even if not in body)
         const providerData = { ...providerFields, userId: authUserId, referralCode };
@@ -7611,7 +7628,7 @@ Respond with JSON only:
         // Ensure referral code exists (lazy backfill for providers created before Task #352)
         let code = provider.referralCode;
         if (!code) {
-          code = await generateUniqueReferralCode();
+          code = await generateUniqueProviderReferralCode();
           await db
             .update(providers)
             .set({ referralCode: code })
@@ -12020,6 +12037,13 @@ Respond with JSON only:
           );
         }
 
+        // Referral credits — same idempotent call as the Stripe webhook path
+        if (invoice?.homeownerUserId) {
+          grantReferralCreditsIfFirstBooking(invoice.homeownerUserId).catch(
+            (e) => console.error("[referral] mark-paid credits failed:", e),
+          );
+        }
+
         // Dispatch paid notification (fire-and-forget)
         if (invoice && invoice.clientId) {
           try {
@@ -12185,6 +12209,14 @@ Respond with JSON only:
 
         const updatedInvoice = await storage.getInvoice(invoice.id);
         res.status(201).json({ payment, invoice: updatedInvoice });
+
+        // Referral credits — fire if recording this payment caused the invoice
+        // to flip to "paid" (storage may auto-mark it based on total collected).
+        if (updatedInvoice?.status === "paid" && updatedInvoice.homeownerUserId) {
+          grantReferralCreditsIfFirstBooking(updatedInvoice.homeownerUserId).catch(
+            (e) => console.error("[referral] manual-payment credits failed:", e),
+          );
+        }
       } catch (error) {
         console.error("Record manual payment error:", error);
         res.status(500).json({ error: "Failed to record payment" });
@@ -14940,6 +14972,22 @@ Respond with JSON only:
         res
           .status(500)
           .json({ error: error.message || "Failed to get user credits" });
+      }
+    },
+  );
+
+  // Homeowner referral stats — returns referral code, link, count, credits earned
+  app.get(
+    "/api/users/me/referrals",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const userId = req.authenticatedUserId!;
+        const stats = await getReferralStats(userId);
+        res.json(stats);
+      } catch (error: any) {
+        console.error("Get referral stats error:", error);
+        res.status(500).json({ error: error.message || "Failed to get referral stats" });
       }
     },
   );

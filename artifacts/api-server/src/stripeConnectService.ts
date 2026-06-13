@@ -21,6 +21,7 @@ import {
   appointments,
 } from "@workspace/db";
 import { dispatch, dispatchNotification, claimNotificationDelivery, logDelivery } from "./notificationService";
+import { grantReferralCreditsIfFirstBooking } from "./referralService";
 
 let stripe: Stripe | null = null;
 
@@ -1652,6 +1653,15 @@ export async function handleStripeInvoicePaid(stripeInvoice: Stripe.Invoice) {
           ),
         );
       }
+    }
+
+    // Referral credit check — if this homeowner was referred, credit both parties
+    // on their first paid invoice (fire-and-forget, idempotent)
+    if (updatedInvoice.homeownerUserId) {
+      grantReferralCreditsIfFirstBooking(updatedInvoice.homeownerUserId).catch(
+        (e: unknown) =>
+          console.error("[invoice.paid] referral credit check failed:", e),
+      );
     }
 
     // Homeowner push: atomic claim on PaymentIntent id (Task #246).

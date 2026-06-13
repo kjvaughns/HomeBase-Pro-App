@@ -269,7 +269,14 @@ export default function MoreScreen() {
                   title="Saved Providers"
                   leftIcon="heart"
                   onPress={() => navigation.navigate("SavedProviders")}
+                />
+                <ListRow
+                  title="Referrals"
+                  leftIcon="gift"
+                  subtitle="Earn $10 for every friend you invite"
+                  onPress={() => navigation.navigate("Referrals")}
                   isLast
+                  testID="row-referrals"
                 />
               </View>
             </Animated.View>

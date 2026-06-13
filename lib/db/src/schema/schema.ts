@@ -111,6 +111,7 @@ export const users = pgTable("users", {
   lastName: text("last_name"),
   phone: text("phone"),
   avatarUrl: text("avatar_url"),
+  referralCode: text("referral_code").unique(),
   isProvider: boolean("is_provider").default(false),
   // Admin flag (Task #220) — DB-backed replacement for the previous
   // ADMIN_EMAILS env-only gate so admin access can be granted in-app
@@ -769,18 +770,25 @@ export const userCreditsRelations = relations(userCredits, ({ one, many }) => ({
 }));
 
 // Credit ledger for tracking credit transactions
-export const creditLedger = pgTable("credit_ledger", {
-  id: varchar("id")
-    .primaryKey()
-    .default(sql`gen_random_uuid()`),
-  userId: varchar("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  deltaCents: integer("delta_cents").notNull(), // positive for credit, negative for debit
-  reason: text("reason").notNull(), // e.g., "revenuecat_purchase", "invoice_payment", "refund"
-  invoiceId: varchar("invoice_id"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+export const creditLedger = pgTable(
+  "credit_ledger",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    deltaCents: integer("delta_cents").notNull(), // positive for credit, negative for debit
+    reason: text("reason").notNull(), // e.g., "revenuecat_purchase", "invoice_payment", "refund"
+    invoiceId: varchar("invoice_id"),
+    // Idempotency key: when set, duplicate inserts with same key are silently
+    // discarded via ON CONFLICT DO NOTHING — prevents double-credits on retries.
+    idempotencyKey: varchar("idempotency_key"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("credit_ledger_idempotency_key_unique").on(t.idempotencyKey)],
+);
 
 export const creditLedgerRelations = relations(creditLedger, ({ one }) => ({
   user: one(users, { fields: [creditLedger.userId], references: [users.id] }),
@@ -1452,6 +1460,7 @@ export const insertUserSchema = createInsertSchema(users).pick({
   firstName: true,
   lastName: true,
   phone: true,
+  referralCode: true,
 });
 
 export const loginSchema = z.object({
@@ -2214,6 +2223,59 @@ export const insertQuickQuoteSchema = createInsertSchema(quickQuotes).omit({
 
 export type QuickQuote = typeof quickQuotes.$inferSelect;
 export type InsertQuickQuote = z.infer<typeof insertQuickQuoteSchema>;
+
+// ─── Homeowner Referrals (Task #355) ──────────────────────────────────────────
+// Every homeowner gets a unique referral_code on account creation.
+// homeowner_referrals tracks who referred whom and the reward lifecycle.
+
+export const homeownerReferrals = pgTable(
+  "homeowner_referrals",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    referrerUserId: varchar("referrer_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    referredUserId: varchar("referred_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    referralCode: text("referral_code").notNull(),
+    signedUpAt: timestamp("signed_up_at").defaultNow().notNull(),
+    firstBookingAt: timestamp("first_booking_at"),
+    referrerCreditedAt: timestamp("referrer_credited_at"),
+    refereeCreditedAt: timestamp("referee_credited_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    referredUnique: uniqueIndex("homeowner_referrals_referred_user_unique").on(
+      t.referredUserId,
+    ),
+  }),
+);
+
+export const homeownerReferralsRelations = relations(
+  homeownerReferrals,
+  ({ one }) => ({
+    referrer: one(users, {
+      fields: [homeownerReferrals.referrerUserId],
+      references: [users.id],
+      relationName: "referrerHomeowner",
+    }),
+    referred: one(users, {
+      fields: [homeownerReferrals.referredUserId],
+      references: [users.id],
+      relationName: "referredHomeowner",
+    }),
+  }),
+);
+
+export const insertHomeownerReferralSchema = createInsertSchema(
+  homeownerReferrals,
+).omit({ id: true, createdAt: true });
+
+export type HomeownerReferral = typeof homeownerReferrals.$inferSelect;
+export type InsertHomeownerReferral = z.infer<typeof insertHomeownerReferralSchema>;
 
 // ─── Provider Referrals (Task #352) ───────────────────────────────────────────
 // Every provider gets a unique referral_code on account creation.

@@ -497,7 +497,7 @@ export async function runBootMigrations(): Promise<void> {
         console.warn(
           `[boot-migration] WARNING: ${orphanResult.rowCount} provider record(s) have NULL user_id ` +
           `(not deleted — manual review required): ` +
-          orphanResult.rows.map(r => `"${r.business_name}" <${r.email}> (${r.id})`).join(", ")
+          orphanResult.rows.map((r: { business_name: string; email: string; id: string }) => `"${r.business_name}" <${r.email}> (${r.id})`).join(", ")
         );
       }
     } catch (err: unknown) {
@@ -1430,6 +1430,76 @@ export async function runBootMigrations(): Promise<void> {
       )`,
     );
 
+    // ── Task #355: Homeowner referral codes and tracking ──────────────────────
+    await runSql(
+      "users.referral_code",
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code TEXT`,
+    );
+    await runSql(
+      "users.referral_code.unique_idx",
+      `CREATE UNIQUE INDEX IF NOT EXISTS users_referral_code_unique ON users (referral_code) WHERE referral_code IS NOT NULL`,
+    );
+    // Backfill referral codes for existing homeowners who don't have one yet.
+    // Uses a PL/pgSQL retry loop to avoid unique-constraint collisions that
+    // the MD5-truncation approach could produce at scale.
+    await runSql(
+      "users.referral_code.backfill",
+      `DO $$
+       DECLARE
+         u RECORD;
+         candidate TEXT;
+         chars TEXT := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+         i INT;
+         attempts INT;
+       BEGIN
+         FOR u IN SELECT id FROM users WHERE referral_code IS NULL AND is_provider = FALSE LOOP
+           attempts := 0;
+           LOOP
+             attempts := attempts + 1;
+             candidate := '';
+             FOR i IN 1..8 LOOP
+               candidate := candidate || SUBSTR(chars, FLOOR(RANDOM() * LENGTH(chars) + 1)::INT, 1);
+             END LOOP;
+             BEGIN
+               UPDATE users SET referral_code = candidate WHERE id = u.id;
+               EXIT; -- success, move to next user
+             EXCEPTION WHEN unique_violation THEN
+               IF attempts >= 20 THEN
+                 RAISE EXCEPTION 'Could not find unique referral code for user % after 20 attempts', u.id;
+               END IF;
+             END;
+           END LOOP;
+         END LOOP;
+       END
+       $$`,
+    );
+    await runSql(
+      "homeowner_referrals.table",
+      `CREATE TABLE IF NOT EXISTS homeowner_referrals (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        referrer_user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        referred_user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        referral_code TEXT NOT NULL,
+        signed_up_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        first_booking_at TIMESTAMP,
+        referrer_credited_at TIMESTAMP,
+        referee_credited_at TIMESTAMP,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        CONSTRAINT homeowner_referrals_referred_user_unique UNIQUE (referred_user_id)
+      )`,
+    );
+    // Idempotency key on credit_ledger — prevents duplicate credit grants on
+    // concurrent or retry invocations of grantReferralCreditsIfFirstBooking.
+    await runSql(
+      "credit_ledger.idempotency_key",
+      `ALTER TABLE credit_ledger ADD COLUMN IF NOT EXISTS idempotency_key TEXT`,
+    );
+    await runSql(
+      "credit_ledger.idempotency_key.unique_idx",
+      `CREATE UNIQUE INDEX IF NOT EXISTS credit_ledger_idempotency_key_unique
+       ON credit_ledger (idempotency_key) WHERE idempotency_key IS NOT NULL`,
+    );
+
     verifications.push(
       ["providers.referral_code column",         `SELECT referral_code FROM providers LIMIT 0`],
       ["provider_referrals table",               `SELECT id FROM provider_referrals LIMIT 0`],
@@ -1462,6 +1532,9 @@ export async function runBootMigrations(): Promise<void> {
       ["provider_plans.has_featured_placement",    `SELECT has_featured_placement FROM provider_plans LIMIT 0`],
       ["provider_plans.permanent_discount_percent",`SELECT permanent_discount_percent FROM provider_plans LIMIT 0`],
       ["provider_milestone_grants table",          `SELECT id FROM provider_milestone_grants LIMIT 0`],
+      // Task #355: homeowner referral codes and tracking
+      ["users.referral_code column",               `SELECT referral_code FROM users LIMIT 0`],
+      ["homeowner_referrals table",                `SELECT id FROM homeowner_referrals LIMIT 0`],
     );
 
     const verificationErrors: string[] = [];
