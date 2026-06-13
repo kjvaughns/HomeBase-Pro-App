@@ -2437,6 +2437,63 @@ async function getOrCreateUserStripeCustomer(userId: string): Promise<string> {
  * Create a Stripe Checkout Session for a HomeBase Pro provider subscription.
  * Returns the hosted Checkout URL the app opens via Linking.
  */
+// ── Task #354: Permanent 10% discount coupon (referral milestone) ────────────
+//
+// Stripe coupon ID is deterministic so the call is idempotent — if it already
+// exists we just retrieve it; if it doesn't we create it.
+const PERMANENT_DISCOUNT_COUPON_ID = "homebase_pro_permanent_10pct";
+
+async function getOrCreatePermanentDiscountCoupon(): Promise<string> {
+  const stripe = getStripe();
+  try {
+    const existing = await stripe.coupons.retrieve(PERMANENT_DISCOUNT_COUPON_ID);
+    return existing.id;
+  } catch (_notFound) {
+    // 404 → create it
+  }
+  const coupon = await stripe.coupons.create({
+    id: PERMANENT_DISCOUNT_COUPON_ID,
+    percent_off: 10,
+    duration: "forever",
+    name: "HomeBase Referral Reward — 10% forever",
+  });
+  return coupon.id;
+}
+
+/**
+ * Apply the permanent 10% referral discount to a provider's EXISTING Stripe
+ * subscription (called when the provider crosses the 3-referral milestone after
+ * they are already subscribed). No-op if the provider has no Stripe subscription
+ * stored or if Stripe is not configured.
+ */
+export async function applyPermanentDiscountToExistingSubscription(
+  providerId: string,
+): Promise<void> {
+  try {
+    if (!process.env.STRIPE_SECRET_KEY && !process.env.STRIPE_TEST_SECRET_KEY) return;
+
+    const [plan] = await db
+      .select({ stripeSubscriptionId: providerPlans.stripeSubscriptionId })
+      .from(providerPlans)
+      .where(eq(providerPlans.providerId, providerId));
+
+    const subId = plan?.stripeSubscriptionId;
+    if (!subId) return; // not yet on a Stripe subscription
+
+    const couponId = await getOrCreatePermanentDiscountCoupon();
+    await getStripe().subscriptions.update(subId, {
+      discounts: [{ coupon: couponId }],
+    });
+  } catch (err) {
+    // Non-fatal — the discount will be applied the next time the provider
+    // creates a new checkout session.
+    console.error("[stripeConnectService] applyPermanentDiscountToExistingSubscription error:", {
+      providerId,
+      err: String(err),
+    });
+  }
+}
+
 export async function createSubscriptionCheckoutSession(opts: {
   userId: string;
   providerId: string;
@@ -2458,13 +2515,31 @@ export async function createSubscriptionCheckoutSession(opts: {
     throw err;
   }
 
+  // Task #354: apply permanent 10% discount coupon if the provider has earned
+  // the 3-referral milestone reward.
+  const [plan] = await db
+    .select({ permanentDiscountPercent: providerPlans.permanentDiscountPercent })
+    .from(providerPlans)
+    .where(eq(providerPlans.providerId, opts.providerId));
+
+  let discountCouponId: string | null = null;
+  if ((plan?.permanentDiscountPercent ?? 0) >= 10) {
+    try {
+      discountCouponId = await getOrCreatePermanentDiscountCoupon();
+    } catch (couponErr) {
+      // Non-fatal — proceed without discount rather than blocking checkout.
+      console.error("[stripeConnectService] failed to load discount coupon:", couponErr);
+    }
+  }
+
   const customerId = await getOrCreateUserStripeCustomer(opts.userId);
 
-  const session = await getStripe().checkout.sessions.create({
+  // Stripe rejects sessions that have both allow_promotion_codes and explicit
+  // discounts — when we apply the earned coupon, disable promo code entry.
+  const sessionParams: Stripe.Checkout.SessionCreateParams = {
     mode: "subscription",
     customer: customerId,
     line_items: [{ price: priceId, quantity: 1 }],
-    allow_promotion_codes: true,
     success_url: `${PUBLIC_REDIRECT_BASE}/payment-success?subscription=success`,
     cancel_url: `${PUBLIC_REDIRECT_BASE}/payment-cancelled?subscription=cancelled`,
     metadata: {
@@ -2479,7 +2554,15 @@ export async function createSubscriptionCheckoutSession(opts: {
         providerId: opts.providerId,
       },
     },
-  });
+  };
+
+  if (discountCouponId) {
+    sessionParams.discounts = [{ coupon: discountCouponId }];
+  } else {
+    sessionParams.allow_promotion_codes = true;
+  }
+
+  const session = await getStripe().checkout.sessions.create(sessionParams);
 
   if (!session.url) throw new Error("Stripe did not return a Checkout URL");
   return { url: session.url, sessionId: session.id };

@@ -101,6 +101,7 @@ export default function ProviderListScreen() {
       gallery: Array.isArray(p.gallery) ? p.gallery : [],
       phone: p.phone ?? undefined,
       isPartner: p.isPartner ?? false,
+      badges: Array.isArray(p.badges) ? p.badges : [],
     }));
   }, [apiData, categoryId]);
 
@@ -460,6 +461,7 @@ export default function ProviderListScreen() {
         verified={item.verified}
         isPartner={item.isPartner}
         distance={item.distance ?? null}
+        badges={item.badges ?? []}
         onPress={() => handleProviderPress(item)}
         testID={`provider-${item.id}`}
       />

@@ -16,6 +16,7 @@ import { Avatar } from "@/components/Avatar";
 import { SkeletonCard, SkeletonLoader } from "@/components/SkeletonLoader";
 import { StatusPill } from "@/components/StatusPill";
 import { PartnerBadge } from "@/components/PartnerBadge";
+import { MilestoneBadge, type BadgeType } from "@/components/MilestoneBadge";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { useLayout } from "@/hooks/useLayout";
@@ -77,6 +78,8 @@ interface ApiProviderResponse {
     serviceZipCodes?: string[] | null;
     serviceCities?: string[] | null;
     serviceRadius?: number | null;
+    badges?: Array<{ badgeType: BadgeType; earnedAt: string }> | null;
+    hasFeaturedPlacement?: boolean | null;
   };
   services: ApiServiceItem[];
 }
@@ -683,6 +686,9 @@ export default function ProviderProfileScreen() {
                 <StatusPill label="Verified Pro" status="success" />
               ) : null}
               {provider.isPartner ? <PartnerBadge /> : null}
+              {(rawProvider?.badges as Array<{ badgeType: BadgeType }> | undefined)?.map((b) => (
+                <MilestoneBadge key={b.badgeType} badgeType={b.badgeType} />
+              ))}
             </View>
           </GlassCard>
         </Animated.View>

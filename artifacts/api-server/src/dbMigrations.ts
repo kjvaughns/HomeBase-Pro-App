@@ -1391,6 +1391,45 @@ export async function runBootMigrations(): Promise<void> {
       `CREATE INDEX IF NOT EXISTS providers_crew_origin_provider_id_idx ON providers (crew_origin_provider_id)`,
     );
 
+    // ── Task #354: Provider milestone badges ──────────────────────────────────
+    await runSql(
+      "badge_type.enum",
+      `DO $$ BEGIN
+         CREATE TYPE badge_type AS ENUM ('verified_pro', 'top_provider');
+       EXCEPTION WHEN duplicate_object THEN null;
+       END $$`,
+    );
+    await runSql(
+      "provider_badges.table",
+      `CREATE TABLE IF NOT EXISTS provider_badges (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        provider_id VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+        badge_type badge_type NOT NULL,
+        earned_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        CONSTRAINT provider_badges_provider_badge_unique UNIQUE (provider_id, badge_type)
+      )`,
+    );
+    await runSql(
+      "provider_plans.has_featured_placement",
+      `ALTER TABLE provider_plans ADD COLUMN IF NOT EXISTS has_featured_placement BOOLEAN NOT NULL DEFAULT FALSE`,
+    );
+    await runSql(
+      "provider_plans.permanent_discount_percent",
+      `ALTER TABLE provider_plans ADD COLUMN IF NOT EXISTS permanent_discount_percent INTEGER NOT NULL DEFAULT 0`,
+    );
+    await runSql(
+      "provider_milestone_grants.table",
+      `CREATE TABLE IF NOT EXISTS provider_milestone_grants (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        provider_id VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+        milestone_key VARCHAR(64) NOT NULL,
+        granted_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        CONSTRAINT provider_milestone_grants_unique UNIQUE (provider_id, milestone_key)
+      )`,
+    );
+
     verifications.push(
       ["providers.referral_code column",         `SELECT referral_code FROM providers LIMIT 0`],
       ["provider_referrals table",               `SELECT id FROM provider_referrals LIMIT 0`],
@@ -1418,6 +1457,11 @@ export async function runBootMigrations(): Promise<void> {
       ["admin_audit_logs.after_value column",      `SELECT after_value FROM admin_audit_logs LIMIT 0`],
       // Task #353: crew-to-provider upgrade referral
       ["providers.crew_origin_provider_id column", `SELECT crew_origin_provider_id FROM providers LIMIT 0`],
+      // Task #354: provider milestone badges
+      ["provider_badges table",                    `SELECT id FROM provider_badges LIMIT 0`],
+      ["provider_plans.has_featured_placement",    `SELECT has_featured_placement FROM provider_plans LIMIT 0`],
+      ["provider_plans.permanent_discount_percent",`SELECT permanent_discount_percent FROM provider_plans LIMIT 0`],
+      ["provider_milestone_grants table",          `SELECT id FROM provider_milestone_grants LIMIT 0`],
     );
 
     const verificationErrors: string[] = [];

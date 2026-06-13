@@ -14,6 +14,8 @@ import { Avatar } from "@/components/Avatar";
 import { ThemedText } from "@/components/ThemedText";
 import { StatusPill } from "@/components/StatusPill";
 import { PartnerBadge } from "@/components/PartnerBadge";
+import { MilestoneBadge } from "@/components/MilestoneBadge";
+import { type BadgeType } from "@/state/types";
 import { useTheme } from "@/hooks/useTheme";
 import { BorderRadius, Spacing, Colors, Animation, GlassEffect } from "@/constants/theme";
 
@@ -28,6 +30,7 @@ interface ProviderCardProps {
   verified: boolean;
   isPartner?: boolean;
   distance?: number | null;
+  badges?: Array<{ badgeType: BadgeType }>;
   onPress: () => void;
   testID?: string;
 }
@@ -45,6 +48,7 @@ export function ProviderCard({
   verified,
   isPartner,
   distance,
+  badges,
   onPress,
   testID,
 }: ProviderCardProps) {
@@ -103,6 +107,9 @@ export function ProviderCard({
                 <Feather name="check-circle" size={16} color={Colors.accent} />
               ) : null}
               {isPartner ? <PartnerBadge size="small" /> : null}
+            {badges?.map((b) => (
+              <MilestoneBadge key={b.badgeType} badgeType={b.badgeType} size="small" />
+            ))}
             </View>
             <ThemedText
               type="small"

@@ -151,6 +151,7 @@ import {
   homeProfileUpdateSchema,
   jobSeries,
   providerReferrals,
+  providerBadges,
 } from "@workspace/db";
 import {
   createSeriesForJob,
@@ -158,6 +159,7 @@ import {
   applyToFollowing as applyToFollowingService,
   isSupportedFrequency,
 } from "../recurringJobsService";
+import { checkAndAwardMilestones } from "../milestoneService";
 import {
   buildRoute,
   geocodeJobs,
@@ -3604,27 +3606,63 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
 
       const providersList = await storage.getProviders(categoryId);
 
-      // Augment each provider with their HomeBase Partner flag (Task #211) so
-      // the marketplace can render the Partner badge in a single round-trip.
-      const planRows = providersList.length
-        ? await db
-            .select({ providerId: providerPlans.providerId, isPartner: providerPlans.isPartner })
-            .from(providerPlans)
-            .where(inArray(providerPlans.providerId, providersList.map((p: any) => p.id)))
-        : [];
-      const partnerSet = new Set(
-        planRows.filter((r) => r.isPartner).map((r) => r.providerId),
-      );
-      const withPartner = providersList.map((p: any) => ({
-        ...p,
-        isPartner: partnerSet.has(p.id),
-      }));
-
-      if (!hasUserCoords) {
-        return res.json({ providers: withPartner });
+      if (!providersList.length) {
+        return res.json({ providers: [] });
       }
 
-      const enriched = withPartner.map((p: any) => {
+      const providerIds = providersList.map((p: any) => p.id);
+
+      // Augment each provider with plan flags and badges (Task #211, #354)
+      const [planRows, badgeRows] = await Promise.all([
+        db
+          .select({
+            providerId: providerPlans.providerId,
+            isPartner: providerPlans.isPartner,
+            hasFeaturedPlacement: providerPlans.hasFeaturedPlacement,
+          })
+          .from(providerPlans)
+          .where(inArray(providerPlans.providerId, providerIds)),
+        db
+          .select({ providerId: providerBadges.providerId, badgeType: providerBadges.badgeType })
+          .from(providerBadges)
+          .where(inArray(providerBadges.providerId, providerIds)),
+      ]);
+
+      const planMap = new Map(planRows.map((r) => [r.providerId, r]));
+      const badgeMap = new Map<string, string[]>();
+      for (const { providerId, badgeType } of badgeRows) {
+        if (!badgeMap.has(providerId)) badgeMap.set(providerId, []);
+        badgeMap.get(providerId)!.push(badgeType);
+      }
+
+      // Badge tier score for search ordering (Task #354):
+      // top_provider = 3, featured+verified_pro = 2, verified_pro only = 1, none = 0
+      function badgeTier(pid: string): number {
+        const plan = planMap.get(pid);
+        const badges = badgeMap.get(pid) ?? [];
+        if (badges.includes("top_provider")) return 3;
+        if (plan?.hasFeaturedPlacement && badges.includes("verified_pro")) return 2;
+        if (plan?.hasFeaturedPlacement || badges.includes("verified_pro")) return 1;
+        return 0;
+      }
+
+      const withPlanAndBadges = providersList
+        .map((p: any) => {
+          const plan = planMap.get(p.id);
+          return {
+            ...p,
+            isPartner: plan?.isPartner ?? false,
+            hasFeaturedPlacement: plan?.hasFeaturedPlacement ?? false,
+            badges: (badgeMap.get(p.id) ?? []).map((b) => ({ badgeType: b })),
+          };
+        })
+        .sort((a: any, b: any) => badgeTier(b.id) - badgeTier(a.id));
+
+      if (!hasUserCoords) {
+        return res.json({ providers: withPlanAndBadges });
+      }
+
+      const enriched = withPlanAndBadges.map((p: any) => {
         const pLat =
           p.latitude !== null && p.latitude !== undefined
             ? parseFloat(p.latitude)
@@ -3682,7 +3720,10 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
         // Surface HomeBase Partner status (Task #211) so the homeowner-
         // facing profile screen can render the Partner badge.
         const [planRow] = await db
-          .select({ isPartner: providerPlans.isPartner })
+          .select({
+            isPartner: providerPlans.isPartner,
+            hasFeaturedPlacement: providerPlans.hasFeaturedPlacement,
+          })
           .from(providerPlans)
           .where(eq(providerPlans.providerId, req.params.id));
 
@@ -3709,12 +3750,19 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
             ? Math.round(haversineMiles(userLat, userLng, pLat, pLng) * 10) / 10
             : null;
 
+        const providerBadgeRows = await db
+          .select({ badgeType: providerBadges.badgeType, earnedAt: providerBadges.earnedAt })
+          .from(providerBadges)
+          .where(eq(providerBadges.providerId, req.params.id));
+
         res.json({
           provider: {
             ...provider,
             bookingPolicies,
             businessHours,
             isPartner: planRow?.isPartner ?? false,
+            hasFeaturedPlacement: planRow?.hasFeaturedPlacement ?? false,
+            badges: providerBadgeRows.map((r) => ({ badgeType: r.badgeType, earnedAt: r.earnedAt })),
             distance,
           },
           services: providerServices,
@@ -3722,6 +3770,147 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
       } catch (error) {
         console.error("Get provider error:", error);
         res.status(500).json({ error: "Failed to get provider" });
+      }
+    },
+  );
+
+  // ─── Provider Achievements (Task #354) ────────────────────────────────
+  // Returns earned badges, stats, and progress toward next milestones for
+  // the authenticated provider's own achievements screen.
+  app.get(
+    "/api/provider/:id/achievements",
+    requireAuth,
+    async (req: Request<{ id: string }>, res: Response) => {
+      try {
+        const authUserId = req.authenticatedUserId!;
+        const provider = await storage.getProvider(req.params.id);
+        if (!provider || provider.userId !== authUserId) {
+          return res.status(403).json({ error: "Forbidden" });
+        }
+        const providerId = req.params.id;
+
+        const [badgeRows, plan, completedJobsRes, revenueRes, referralRes, fiveStarRes] =
+          await Promise.all([
+            db
+              .select({ badgeType: providerBadges.badgeType, earnedAt: providerBadges.earnedAt })
+              .from(providerBadges)
+              .where(eq(providerBadges.providerId, providerId)),
+            db
+              .select({
+                hasFeaturedPlacement: providerPlans.hasFeaturedPlacement,
+                permanentDiscountPercent: providerPlans.permanentDiscountPercent,
+              })
+              .from(providerPlans)
+              .where(eq(providerPlans.providerId, providerId))
+              .limit(1)
+              .then((r) => r[0] ?? null),
+            db
+              .select({ cnt: sql<number>`count(*)::int` })
+              .from(jobs)
+              .where(and(eq(jobs.providerId, providerId), eq(jobs.status, "completed")))
+              .then((r) => r[0]?.cnt ?? 0),
+            db
+              .select({ total: sql<string>`coalesce(sum(final_price), 0)` })
+              .from(jobs)
+              .where(and(eq(jobs.providerId, providerId), eq(jobs.status, "completed")))
+              .then((r) => r[0]?.total ?? "0"),
+            db
+              .select({ cnt: sql<number>`count(*)::int` })
+              .from(providerReferrals)
+              .where(
+                and(
+                  eq(providerReferrals.referrerProviderId, providerId),
+                  sql`${providerReferrals.rewardGrantedAt} IS NOT NULL`,
+                ),
+              )
+              .then((r) => r[0]?.cnt ?? 0),
+            db
+              .select({ id: reviews.id })
+              .from(reviews)
+              .where(and(eq(reviews.providerId, providerId), eq(reviews.rating, 5)))
+              .limit(1)
+              .then((r) => r.length > 0),
+          ]);
+
+        const completedJobs = completedJobsRes;
+        const totalRevenueDollars = parseFloat(String(revenueRes));
+        const totalRevenueCents = isNaN(totalRevenueDollars) ? 0 : Math.round(totalRevenueDollars * 100);
+        const referralCount = referralRes;
+        const hasFiveStar = fiveStarRes;
+
+        const earnedBadgeTypes = new Set(badgeRows.map((b) => b.badgeType));
+
+        const nextMilestones: Array<{
+          key: string;
+          label: string;
+          description: string;
+          progress: number;
+          target: number;
+          rewardLabel: string;
+          earned: boolean;
+        }> = [
+          {
+            key: "10_jobs",
+            label: "Verified Pro",
+            description: "Complete 10 jobs",
+            progress: Math.min(completedJobs, 10),
+            target: 10,
+            rewardLabel: "Verified Pro badge on your profile",
+            earned: earnedBadgeTypes.has("verified_pro"),
+          },
+          {
+            key: "first_5star",
+            label: "Featured Placement",
+            description: "Earn your first 5-star review",
+            progress: hasFiveStar ? 1 : 0,
+            target: 1,
+            rewardLabel: "Featured placement in homeowner search results",
+            earned: !!(plan?.hasFeaturedPlacement),
+          },
+          {
+            key: "25_jobs",
+            label: "1 Free Month",
+            description: "Complete 25 jobs",
+            progress: Math.min(completedJobs, 25),
+            target: 25,
+            rewardLabel: "1 free month added to your subscription",
+            earned: completedJobs >= 25,
+          },
+          {
+            key: "3_referrals",
+            label: "Permanent 10% Discount",
+            description: "Refer 3 providers who complete their first job",
+            progress: Math.min(referralCount, 3),
+            target: 3,
+            rewardLabel: "Permanent 10% discount on your subscription",
+            earned: (plan?.permanentDiscountPercent ?? 0) >= 10,
+          },
+          {
+            key: "10k_revenue",
+            label: "Top Provider",
+            description: "Process $10,000 through HomeBase",
+            progress: Math.min(totalRevenueCents, 10000 * 100),
+            target: 10000 * 100,
+            rewardLabel: "Top Provider badge + priority search listing",
+            earned: earnedBadgeTypes.has("top_provider"),
+          },
+        ];
+
+        res.json({
+          badges: badgeRows.map((b) => ({ badgeType: b.badgeType, earnedAt: b.earnedAt })),
+          stats: {
+            completedJobs,
+            totalRevenueCents,
+            referralCount,
+            hasFiveStar,
+            hasFeaturedPlacement: plan?.hasFeaturedPlacement ?? false,
+            permanentDiscountPercent: plan?.permanentDiscountPercent ?? 0,
+          },
+          nextMilestones,
+        });
+      } catch (error) {
+        console.error("Get achievements error:", error);
+        res.status(500).json({ error: "Failed to get achievements" });
       }
     },
   );
@@ -8262,6 +8451,14 @@ Respond with JSON only:
           })
           .where(eq(providers.id, appointment.providerId));
 
+        // Fire-and-forget milestone check (Task #354): first 5-star review
+        // may unlock featured placement for the provider.
+        if (appointment.providerId) {
+          checkAndAwardMilestones(appointment.providerId).catch((e: unknown) =>
+            console.error("milestone check (review) error:", e),
+          );
+        }
+
         res.status(201).json({ review });
       } catch (error) {
         console.error("Submit review error:", error);
@@ -10417,6 +10614,13 @@ Respond with JSON only:
             }
           })();
         }
+        // Milestone check for the provider when a job is marked complete via
+        // generic PATCH (defense-in-depth path, Task #354).
+        if (status === "completed" && existing.status !== "completed" && job.providerId) {
+          checkAndAwardMilestones(job.providerId).catch((e: unknown) =>
+            console.error("milestone check (job update) error:", e),
+          );
+        }
         res.json({ job });
       } catch (error) {
         console.error("Update job error:", error);
@@ -10728,6 +10932,10 @@ Respond with JSON only:
 
               // Notify the referrer.
               await sendReferralRewardNotification(referrerProviderId, referralId);
+
+              // Check milestones for the referrer: the new reward may push them
+              // past the 3-referral discount threshold (Task #354).
+              await checkAndAwardMilestones(referrerProviderId);
             } catch (e) {
               // Log with enough context for manual recovery.
               console.error(
@@ -10736,6 +10944,14 @@ Respond with JSON only:
               );
             }
           })();
+        }
+
+        // Milestone check for the provider completing the job (Task #354):
+        // job count milestones (10 jobs / 25 jobs) and revenue milestone ($10K).
+        if (job.providerId) {
+          checkAndAwardMilestones(job.providerId).catch((e: unknown) =>
+            console.error("milestone check (job complete) error:", e),
+          );
         }
 
         // Provider-side completion does not currently flip the linked

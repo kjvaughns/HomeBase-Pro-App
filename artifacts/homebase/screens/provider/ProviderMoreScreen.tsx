@@ -228,6 +228,13 @@ export default function ProviderMoreScreen() {
               testID="button-manage-crew"
             />
             <ListRow
+              title="Achievements"
+              subtitle="Badges, milestones, and rewards"
+              leftIcon="award"
+              onPress={() => navigation.navigate("Achievements")}
+              testID="row-achievements"
+            />
+            <ListRow
               title="Refer a Pro"
               subtitle="Share your code and earn 1 free month"
               leftIcon="gift"

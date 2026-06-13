@@ -186,6 +186,7 @@ export default function FindScreen() {
         gallery: Array.isArray(p.gallery) ? p.gallery : [],
         phone: p.phone ?? undefined,
         isPartner: p.isPartner ?? false,
+        badges: Array.isArray(p.badges) ? p.badges : [],
       }),
     );
   }, [apiData]);
@@ -957,6 +958,7 @@ export default function FindScreen() {
         verified={item.verified}
         isPartner={item.isPartner}
         distance={item.distance ?? null}
+        badges={item.badges ?? []}
         onPress={() => handleProviderCardPress(item.id)}
         testID={`provider-${item.id}`}
       />

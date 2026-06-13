@@ -23,6 +23,7 @@ import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { Avatar } from "@/components/Avatar";
 import { StatusPill } from "@/components/StatusPill";
+import { MilestoneBadge, type BadgeType } from "@/components/MilestoneBadge";
 import { useTheme } from "@/hooks/useTheme";
 import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
@@ -71,6 +72,8 @@ interface OwnerProviderResponse {
   serviceCities: string[] | null;
   businessHours: Record<DayKey, BusinessHoursDay> | null;
   distance?: number | null;
+  badges?: Array<{ badgeType: BadgeType; earnedAt: string }> | null;
+  hasFeaturedPlacement?: boolean | null;
 }
 
 interface CustomService {
@@ -672,6 +675,9 @@ export default function PublicProfileScreen() {
               {provider?.verified ? (
                 <StatusPill label="Verified Pro" status="success" />
               ) : null}
+              {(rawProvider?.badges as Array<{ badgeType: BadgeType }> | undefined)?.map((b) => (
+                <MilestoneBadge key={b.badgeType} badgeType={b.badgeType} />
+              ))}
             </View>
           </GlassCard>
         </Animated.View>

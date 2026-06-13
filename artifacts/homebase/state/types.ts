@@ -71,6 +71,8 @@ export interface Review {
   providerReplyUpdatedAt?: string | null;
 }
 
+export type BadgeType = "verified_pro" | "top_provider";
+
 export interface Provider {
   id: string;
   name: string;
@@ -90,6 +92,7 @@ export interface Provider {
   gallery: string[];
   phone?: string;
   isPartner?: boolean;
+  badges?: Array<{ badgeType: BadgeType }>;
 }
 
 export interface TimelineEvent {

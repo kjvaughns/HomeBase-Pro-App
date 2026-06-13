@@ -684,6 +684,9 @@ export const providerPlans = pgTable("provider_plans", {
   partnerSince: timestamp("partner_since"),
   // Task #352: accumulated bonus days from provider referral rewards
   referralBonusDays: integer("referral_bonus_days").notNull().default(0),
+  // Task #354: milestone reward flags
+  hasFeaturedPlacement: boolean("has_featured_placement").notNull().default(false),
+  permanentDiscountPercent: integer("permanent_discount_percent").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -694,6 +697,26 @@ export const providerPlansRelations = relations(providerPlans, ({ one }) => ({
     references: [providers.id],
   }),
 }));
+
+// Task #354: Durable, atomic record of one-time milestone reward grants.
+// The unique index on (provider_id, milestone_key) makes ON CONFLICT DO NOTHING
+// a safe CAS-style idempotency guard — no matter how many concurrent milestone
+// checks run, each reward is issued at most once.
+export const providerMilestoneGrants = pgTable(
+  "provider_milestone_grants",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    providerId: varchar("provider_id")
+      .notNull()
+      .references(() => providers.id, { onDelete: "cascade" }),
+    milestoneKey: varchar("milestone_key", { length: 64 }).notNull(),
+    grantedAt: timestamp("granted_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("provider_milestone_grants_unique").on(t.providerId, t.milestoneKey)],
+);
 
 // Stripe Connect accounts for providers
 export const stripeConnectAccounts = pgTable("stripe_connect_accounts", {
@@ -2247,3 +2270,48 @@ export type ProviderReferral = typeof providerReferrals.$inferSelect;
 export type InsertProviderReferral = z.infer<
   typeof insertProviderReferralSchema
 >;
+
+// ─── Provider Badges (Task #354) ──────────────────────────────────────────────
+// Auto-granted when milestone conditions are met. Badges are never revoked.
+
+export const badgeTypeEnum = pgEnum("badge_type", [
+  "verified_pro",
+  "top_provider",
+]);
+
+export const providerBadges = pgTable(
+  "provider_badges",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    providerId: varchar("provider_id")
+      .notNull()
+      .references(() => providers.id, { onDelete: "cascade" }),
+    badgeType: badgeTypeEnum("badge_type").notNull(),
+    earnedAt: timestamp("earned_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    providerBadgeUnique: uniqueIndex("provider_badges_provider_badge_unique").on(
+      t.providerId,
+      t.badgeType,
+    ),
+  }),
+);
+
+export const providerBadgesRelations = relations(providerBadges, ({ one }) => ({
+  provider: one(providers, {
+    fields: [providerBadges.providerId],
+    references: [providers.id],
+  }),
+}));
+
+export const insertProviderBadgeSchema = createInsertSchema(providerBadges).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProviderBadge = typeof providerBadges.$inferSelect;
+export type BadgeType = typeof badgeTypeEnum.enumValues[number];
+export type InsertProviderBadge = z.infer<typeof insertProviderBadgeSchema>;

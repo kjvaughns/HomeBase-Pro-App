@@ -1,4 +1,4 @@
-import { Provider } from "@/state/types";
+import { Provider, type BadgeType } from "@/state/types";
 
 export interface ApiProviderBase {
   id: string;
@@ -16,6 +16,7 @@ export interface ApiProviderBase {
   responseTime?: string | null;
   distance?: number | null;
   phone?: string | null;
+  badges?: Array<{ badgeType: BadgeType }> | null;
 }
 
 export interface ApiServiceItem {
@@ -43,5 +44,6 @@ export function mapApiProvider(p: ApiProviderBase, serviceList: ApiServiceItem[]
     gallery: [],
     phone: p.phone ?? undefined,
     isPartner: p.isPartner ?? false,
+    badges: p.badges ?? [],
   };
 }
