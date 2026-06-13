@@ -1,4 +1,5 @@
 #!/bin/bash
 set -e
 pnpm install --no-frozen-lockfile
-pnpm --filter db push
+pnpm run typecheck:libs
+echo "y" | pnpm --filter db push
