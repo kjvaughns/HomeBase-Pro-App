@@ -1,0 +1,61 @@
+First let me check your current SDK and setup so the prompt is accurate:Perfect. Now I have everything I need. Here's the prompt:
+
+---
+
+**Paste this directly into Replit:**
+
+---
+
+I want to implement true iOS 26 Liquid Glass navigation in HomeBase. Before making any changes, read this context and choose the best implementation path.
+
+**Current setup:**
+- Expo SDK 55
+- `expo-glass-effect` is already installed (~55.0.8)
+- `expo-blur` is already installed (~55.0.10)
+- `expo-symbols` is already installed (~55.0.5)
+- `@react-navigation/bottom-tabs` ^7.4.0 (custom JS tab bar)
+- `react-native-screens` ~4.23.0 (needs 4.25.0+ for native tabs)
+- NOT using expo-router — using React Navigation with `createBottomTabNavigator`
+- Two custom tab bar files: `client/navigation/ProviderTabNavigator.tsx` and `client/navigation/HomeownerTabNavigator.tsx`
+- Also `client/navigation/CrewTabNavigator.tsx`
+
+**The goal:** True iOS 26 Liquid Glass tab bar — the real native effect with the floating pill that minimizes on scroll, not a JS blur simulation.
+
+**Choose one of these two paths and implement it:**
+
+---
+
+**PATH A — `createNativeBottomTabNavigator` (less migration, stays on React Navigation)**
+
+Swap the custom JS `CustomTabBar` component in all three tab navigators for `createNativeBottomTabNavigator` from `@react-navigation/bottom-tabs/unstable`. This uses `UITabBarController` natively and gets liquid glass on iOS 26 automatically.
+
+Requirements:
+- Upgrade `react-native-screens` from ~4.23.0 to 4.25.0+
+- Replace `createBottomTabNavigator` with `createNativeBottomTabNavigator` in all three navigators
+- Remove the custom `CustomTabBar` render prop entirely
+- Use SF Symbols via `expo-symbols` for tab icons (already installed) instead of Feather icons — liquid glass requires SF Symbols to render correctly
+- Preserve all existing tab structure, badge logic (leads badge), and screen options
+- Keep the floating pill aesthetic by setting `tabBarStyle` position appropriately
+- Add graceful fallback for iOS below 26 (classic tab bar style)
+- Must still work with the existing `RootStackNavigator` which switches between `ProviderTabNavigator`, `HomeownerTabNavigator`, and `CrewTabNavigator`
+
+---
+
+**PATH B — Add `expo-glass-effect` GlassView to the existing custom tab bar (no migration, immediate improvement)**
+
+Since `expo-glass-effect` is already installed, replace the `BlurView` in the existing `CustomTabBar` with `GlassView` from `expo-glass-effect`. This gives real UIGlassEffect compositing on iOS 26 devices.
+
+Requirements:
+- In `ProviderTabNavigator.tsx`, `HomeownerTabNavigator.tsx`, and `CrewTabNavigator.tsx`, replace `BlurView` with `GlassView` from `expo-glass-effect`
+- Remove `overflow: "hidden"` from `tabBarContainer` and the blur wrapper — this is currently killing the glass effect
+- Remove the semi-opaque overlay that's covering the blur (the `rgba(255,255,255,0.55)` layer in light mode is too heavy)
+- Set `glassEffectStyle={{ mode: "regular", colorScheme: "system" }}` on GlassView
+- Check `isLiquidGlassSupported` before using GlassView and fall back to the existing BlurView on iOS below 26
+- Add spring-physics drag using `react-native-reanimated` (already in the project) and `react-native-gesture-handler` so the tab bar can be dragged/repositioned like the iOS 26 native pill
+- Preserve all existing badge logic, haptics, and offline pill
+
+---
+
+**Decision criteria:** Choose PATH A if you can confirm `react-native-screens` can be upgraded to 4.25.0 without breaking other dependencies. Otherwise choose PATH B.
+
+After choosing, implement the full solution. Do not mix both paths. Rebuild `server_dist/index.js` after any server changes. Do not touch any screen files — only the three navigator files and any new components you create.
