@@ -35,7 +35,10 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.homebase.app",
       "versionCode": 2,
-      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "output": "single",
@@ -84,7 +87,9 @@
         {
           "merchantIdentifier": "merchant.com.homebasepro.app"
         }
-      ]
+      ],
+      "@sentry/react-native",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,
