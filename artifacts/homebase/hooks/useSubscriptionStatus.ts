@@ -17,6 +17,9 @@ export interface SubscriptionStatusInfo {
   isSubscribed: boolean;
   subscriptionSource: string | null;
   currentPeriodEnd: string | null;
+  // Task #353: true when this provider previously worked as a crew member and
+  // received the 90-day crew-graduate trial upon launching their own account.
+  isCrewGraduate?: boolean;
 }
 
 export function useSubscriptionStatus() {

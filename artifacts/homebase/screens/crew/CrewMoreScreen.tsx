@@ -145,6 +145,26 @@ export default function CrewMoreScreen() {
           <ThemedText
             style={[styles.sectionTitle, { color: theme.textSecondary }]}
           >
+            Grow Your Career
+          </ThemedText>
+          <View
+            style={[styles.section, { backgroundColor: theme.cardBackground }]}
+          >
+            <ListRow
+              title="Start Your Own Business"
+              subtitle="Launch your HomeBase provider account"
+              leftIcon="briefcase"
+              onPress={() => navigation.navigate("BecomeProvider")}
+              isFirst
+              isLast
+            />
+          </View>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(80).duration(220)}>
+          <ThemedText
+            style={[styles.sectionTitle, { color: theme.textSecondary }]}
+          >
             Account
           </ThemedText>
           <View
@@ -160,7 +180,7 @@ export default function CrewMoreScreen() {
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(80).duration(220)}>
+        <Animated.View entering={FadeInDown.delay(100).duration(220)}>
           <ThemedText
             style={[styles.sectionTitle, { color: theme.textSecondary }]}
           >
@@ -192,7 +212,7 @@ export default function CrewMoreScreen() {
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(100).duration(220)}>
+        <Animated.View entering={FadeInDown.delay(120).duration(220)}>
           <View
             style={[
               styles.section,

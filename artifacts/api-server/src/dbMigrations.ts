@@ -1378,6 +1378,19 @@ export async function runBootMigrations(): Promise<void> {
       `ALTER TABLE provider_plans ADD COLUMN IF NOT EXISTS referral_bonus_days INTEGER NOT NULL DEFAULT 0`,
     );
 
+    // ── Task #353: Crew-to-provider upgrade referral ──────────────────────────
+    // crew_origin_provider_id records which provider a new provider was previously
+    // a crew member under, enabling the 90-day crew-graduate trial and the
+    // "crew launched" notification to the original provider.
+    await runSql(
+      "providers.crew_origin_provider_id",
+      `ALTER TABLE providers ADD COLUMN IF NOT EXISTS crew_origin_provider_id VARCHAR REFERENCES providers(id) ON DELETE SET NULL`,
+    );
+    await runSql(
+      "providers.crew_origin_provider_id.idx",
+      `CREATE INDEX IF NOT EXISTS providers_crew_origin_provider_id_idx ON providers (crew_origin_provider_id)`,
+    );
+
     verifications.push(
       ["providers.referral_code column",         `SELECT referral_code FROM providers LIMIT 0`],
       ["provider_referrals table",               `SELECT id FROM provider_referrals LIMIT 0`],
@@ -1403,6 +1416,8 @@ export async function runBootMigrations(): Promise<void> {
       ["users.is_active column",                   `SELECT is_active FROM users LIMIT 0`],
       ["admin_audit_logs.before_value column",     `SELECT before_value FROM admin_audit_logs LIMIT 0`],
       ["admin_audit_logs.after_value column",      `SELECT after_value FROM admin_audit_logs LIMIT 0`],
+      // Task #353: crew-to-provider upgrade referral
+      ["providers.crew_origin_provider_id column", `SELECT crew_origin_provider_id FROM providers LIMIT 0`],
     );
 
     const verificationErrors: string[] = [];

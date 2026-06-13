@@ -19,6 +19,7 @@ import { JobCard } from "@/components/JobCard";
 import { SectionHeader } from "@/components/SectionHeader";
 import { StatCard } from "@/components/StatCard";
 import { GracePeriodBanner } from "@/components/GracePeriodBanner";
+import { CrewWelcomeBanner } from "@/components/CrewWelcomeBanner";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
@@ -574,6 +575,7 @@ export default function ProviderHomeScreen() {
       >
         <View style={{ marginHorizontal: -horizontalPadding }}>
           <GracePeriodBanner />
+          <CrewWelcomeBanner />
         </View>
 
         {showPublishPrompt ? (

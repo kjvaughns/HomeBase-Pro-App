@@ -296,6 +296,13 @@ export const providers = pgTable("providers", {
   slug: text("slug").unique(),
   // Task #352: unique shareable referral code generated on provider creation
   referralCode: text("referral_code").unique(),
+  // Task #353: if this provider was previously a crew member, stores the
+  // provider ID they were invited under so we can grant the 90-day crew trial
+  // and notify the original provider when they launch their own business.
+  crewOriginProviderId: varchar("crew_origin_provider_id").references(
+    (): any => providers.id,
+    { onDelete: "set null" },
+  ),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

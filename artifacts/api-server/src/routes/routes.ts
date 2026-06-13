@@ -111,6 +111,7 @@ import {
   maybeStartGracePeriod,
   extendSubscriptionByDays,
   sendReferralRewardNotification,
+  sendCrewLaunchedNotification,
 } from "../subscriptionService";
 import {
   invoices,
@@ -7342,6 +7343,30 @@ Respond with JSON only:
         }
 
         const provider = await storage.createProvider(providerData);
+
+        // Task #353: if the registering user was previously a crew member,
+        // grant them a 90-day extended trial and notify the original provider.
+        try {
+          const [crewRecord] = await db
+            .select({ providerId: crewMembers.providerId })
+            .from(crewMembers)
+            .where(eq(crewMembers.invitedUserId, authUserId))
+            .limit(1);
+
+          if (crewRecord) {
+            await db
+              .update(providers)
+              .set({ crewOriginProviderId: crewRecord.providerId })
+              .where(eq(providers.id, provider.id));
+            await extendSubscriptionByDays(provider.id, 90);
+            await sendCrewLaunchedNotification(
+              provider.businessName,
+              crewRecord.providerId,
+            );
+          }
+        } catch (crewErr) {
+          console.error("[crew-upgrade] Failed to process crew origin:", crewErr);
+        }
 
         // Task #352: if the registering provider used a referral code, record it
         const incomingCode = (submittedInviterCode as string | undefined)?.trim().toUpperCase();

@@ -25,6 +25,9 @@ export interface SubscriptionStatusInfo {
   isSubscribed: boolean;
   subscriptionSource: string | null;
   currentPeriodEnd: string | null;
+  // Task #353: true if this provider was previously a crew member on another
+  // provider's team and received the 90-day crew-graduate trial.
+  isCrewGraduate: boolean;
 }
 
 type PlanLike =
@@ -72,6 +75,7 @@ export function computeSubscriptionStatus(
       isSubscribed: true,
       subscriptionSource: "partner",
       currentPeriodEnd: null,
+      isCrewGraduate: false,
     };
   }
 
@@ -84,6 +88,7 @@ export function computeSubscriptionStatus(
       isSubscribed: true,
       subscriptionSource,
       currentPeriodEnd,
+      isCrewGraduate: false,
     };
   }
 
@@ -96,6 +101,7 @@ export function computeSubscriptionStatus(
       isSubscribed: false,
       subscriptionSource,
       currentPeriodEnd,
+      isCrewGraduate: false,
     };
   }
 
@@ -109,6 +115,7 @@ export function computeSubscriptionStatus(
       isSubscribed: false,
       subscriptionSource,
       currentPeriodEnd,
+      isCrewGraduate: false,
     };
   }
 
@@ -124,17 +131,22 @@ export function computeSubscriptionStatus(
     isSubscribed: false,
     subscriptionSource,
     currentPeriodEnd,
+    isCrewGraduate: false,
   };
 }
 
 export async function getProviderSubscriptionStatus(
   providerId: string,
 ): Promise<SubscriptionStatusInfo> {
-  const [plan] = await db
-    .select()
-    .from(providerPlans)
-    .where(eq(providerPlans.providerId, providerId));
-  return computeSubscriptionStatus(plan ?? null);
+  const [[plan], [provider]] = await Promise.all([
+    db.select().from(providerPlans).where(eq(providerPlans.providerId, providerId)),
+    db
+      .select({ crewOriginProviderId: providers.crewOriginProviderId })
+      .from(providers)
+      .where(eq(providers.id, providerId)),
+  ]);
+  const base = computeSubscriptionStatus(plan ?? null);
+  return { ...base, isCrewGraduate: !!provider?.crewOriginProviderId };
 }
 
 /**
@@ -412,6 +424,41 @@ export async function sendReferralRewardNotification(
     body,
     "referral.reward_earned",
     { providerId, referralId },
+    "reminders",
+  );
+}
+
+/**
+ * Task #353 — Notify the original provider when a former crew member launches
+ * their own HomeBase provider account. Deduped per pair so the notification
+ * fires at most once per crew-to-provider upgrade.
+ */
+export async function sendCrewLaunchedNotification(
+  newProviderName: string,
+  originalProviderId: string,
+): Promise<void> {
+  const ctx = await getProviderUser(originalProviderId);
+  if (!ctx) return;
+  const { user } = ctx;
+
+  const dedupKey = `crew_launched:${newProviderName}:${originalProviderId}`;
+  const already = await hasDeliveryForRecord(
+    "crew.launched_own_business",
+    dedupKey,
+    "push",
+  );
+  if (already) return;
+
+  const title = `${newProviderName} just launched their own business!`;
+  const body =
+    "A crew member you invited just started their own HomeBase provider account. Great job building your team!";
+
+  await dispatchNotification(
+    user.id,
+    title,
+    body,
+    "crew.launched_own_business",
+    { originalProviderId, newProviderName },
     "reminders",
   );
 }
