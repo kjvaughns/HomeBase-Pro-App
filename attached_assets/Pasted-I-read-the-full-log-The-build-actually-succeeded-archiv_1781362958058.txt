@@ -1,0 +1,95 @@
+I read the full log. The build actually **succeeded** — archive compiled clean. It failed on the very last step. Here's exactly what happened:
+
+---
+
+## The Real Error
+
+```
+Error: Cannot find module '@sentry/cli/package.json'
+Script 'Upload Debug Symbols to Sentry' failed
+```
+
+The Sentry debug symbol upload script runs after the archive is built, can't find `@sentry/cli` in the EAS build environment, and crashes — which kills the entire build with exit code 65.
+
+That's it. One missing package at the end of an otherwise successful build.
+
+---
+
+## Why It's Happening
+
+EAS Build installs your `dependencies` and `devDependencies` from `package.json`, but `@sentry/cli` is likely either missing from your `package.json` entirely, or it's there but not resolving correctly in the EAS cloud environment because the Sentry Xcode build phase script is looking for it in a path that doesn't exist on the build machine.
+
+---
+
+## The Fix — Paste This in Replit
+
+```
+Fix an EAS iOS build failure caused by a missing @sentry/cli package.
+
+The build succeeds but fails on the "Upload Debug Symbols to Sentry" 
+Xcode build phase with:
+  "Cannot find module '@sentry/cli/package.json'"
+
+Do the following in this exact order:
+
+1. Check if @sentry/cli exists in package.json (dependencies OR 
+   devDependencies). Tell me what version is listed if any.
+
+2. Check if @sentry/react-native is in package.json and what 
+   version it is.
+
+3. Run this command and tell me the output:
+   cat ios/HomeBase.xcodeproj/project.pbxproj | grep -A 5 "Upload Debug Symbols"
+
+4. Apply ALL of these fixes:
+
+   FIX A — Ensure @sentry/cli is explicitly installed:
+   Run: npm install --save-dev @sentry/cli
+   
+   FIX B — Make the Sentry upload script non-fatal:
+   In ios/HomeBase.xcodeproj/project.pbxproj, find the 
+   "Upload Debug Symbols to Sentry" build phase script block.
+   The shellScript line will start with something like:
+   ../node_modules/@sentry/cli/...
+   
+   Wrap the entire script command so it exits 0 on failure:
+   Change the script to add || true at the end, OR change the 
+   shell to use set +e at the top so failures don't abort the build.
+   
+   The safest fix: find the build phase entry and add
+   "showEnvVarsInLog" = 0 and make sure the script starts with:
+   
+   #!/bin/sh
+   set +e
+   [existing script content]
+   
+   FIX C — Add @sentry/cli to eas.json so EAS installs it:
+   Check if eas.json has a "build" > "production" > "env" section.
+   If not, do NOT create one. Instead add this to the 
+   "production" build profile in eas.json:
+   
+   "node_modules_cache_key": "v1"
+   
+   This forces EAS to do a clean node_modules install.
+
+5. After making changes, run:
+   npm install
+   
+   Do NOT run the EAS build. Do NOT touch server files, 
+   Stripe logic, or navigation files.
+   
+   Tell me exactly what files you changed so I can commit 
+   and push before the next build.
+```
+
+---
+
+## Two Other Warnings to Note (Non-Fatal But Worth Knowing)
+
+From the log — these didn't cause the failure but will eventually need fixing:
+
+**Warning 1:** `Pods/Sentry-Sentry: iOS@11.0 deployment version mismatch` — your iOS deployment target in the Podfile is set lower than what Sentry expects. Set it to iOS 14+ in your `app.json` under `ios.deploymentTarget`.
+
+**Warning 2:** `ld: search path not found` for Metal toolchain — harmless on EAS, ignore it.
+
+The Sentry symbol upload is the only actual blocker. Fix that and this build ships.
