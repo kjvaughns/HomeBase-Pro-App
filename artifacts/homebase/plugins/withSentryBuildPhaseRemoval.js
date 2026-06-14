@@ -1,10 +1,10 @@
-const { withXcodeProject } = require('@expo/config-plugins');
+const { withXcodeProject } = require('expo/config-plugins');
 
 module.exports = function withSentryBuildPhaseRemoval(config) {
   return withXcodeProject(config, (config) => {
     const xcodeProject = config.modResults;
     const targets = xcodeProject.hash.project.objects.PBXNativeTarget || {};
-    
+
     Object.values(targets).forEach((target) => {
       if (!target.buildPhases) return;
       target.buildPhases = target.buildPhases.filter((phaseRef) => {
