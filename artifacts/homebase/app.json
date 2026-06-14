@@ -89,6 +89,7 @@
         }
       ],
       ["@sentry/react-native", {"uploadSourceMaps": false, "uploadNativeSymbols": false}],
+      "./plugins/withSentryBuildPhaseRemoval.js",
       "expo-secure-store"
     ],
     "experiments": {
