@@ -12,7 +12,6 @@ import { useOnboardingStore } from "@/state/onboardingStore";
 import { initAppReviewTracker } from "@/state/appReviewStore";
 import { useAuthStore } from "@/state/authStore";
 import { initNetworkStore } from "@/state/networkStore";
-import { initSentry, setSentryUser } from "@/lib/sentry";
 import { initAnalytics, identifyUser, resetAnalytics } from "@/lib/analytics";
 import { useTheme } from "@/hooks/useTheme";
 import {
@@ -58,14 +57,11 @@ export default function AppIndex() {
   const userId = useAuthStore((s) => s.user?.id ?? null);
 
   useEffect(() => {
-    initSentry();
     initNetworkStore();
     void initAnalytics().then(() => {
       if (isAuthenticated && userId) {
-        setSentryUser({ id: userId });
         identifyUser(userId);
       } else {
-        setSentryUser(null);
         resetAnalytics();
       }
     });
@@ -84,7 +80,6 @@ export default function AppIndex() {
   }, [isAuthenticated, providerId]);
 
   useEffect(() => {
-    initSentry();
     void initAnalytics();
     hydrateTheme();
     hydrateOnboarding();

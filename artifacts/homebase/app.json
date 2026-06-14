@@ -88,16 +88,7 @@
           "merchantIdentifier": "merchant.com.homebasepro.app"
         }
       ],
-      [
-        "@sentry/react-native",
-        {
-          "uploadSourceMaps": false,
-          "uploadNativeSymbols": false
-        }
-      ],
-      "./plugins/withSentryBuildPhaseRemoval.js",
-      "expo-secure-store",
-      "./plugins/withSentryBuildPhaseRemoval.js"
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,
