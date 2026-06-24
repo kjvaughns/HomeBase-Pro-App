@@ -172,6 +172,8 @@ import {
   isSupportedFrequency,
 } from "../recurringJobsService";
 import { checkAndAwardMilestones } from "../milestoneService";
+import { updateProviderStreak, effectiveStreak } from "../streakService";
+import { computeHomeHealth } from "../homeHealthService";
 import {
   buildRoute,
   geocodeJobs,
@@ -3994,6 +3996,33 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
 
         const earnedBadgeTypes = new Set(badgeRows.map((b) => b.badgeType));
 
+        // Also fetch unique client count and recurring job presence for new badge milestones
+        const [uniqueClientsRes, hasRecurringRes, providerRow] = await Promise.all([
+          db
+            .select({ cnt: sql<number>`count(distinct client_id)::int` })
+            .from(jobs)
+            .where(and(eq(jobs.providerId, providerId), eq(jobs.status, "completed")))
+            .then((r) => r[0]?.cnt ?? 0),
+          db
+            .select({ id: jobs.id })
+            .from(jobs)
+            .where(and(eq(jobs.providerId, providerId), sql`${jobs.seriesId} IS NOT NULL`))
+            .limit(1)
+            .then((r) => r.length > 0),
+          db
+            .select({ currentBookingStreak: providers.currentBookingStreak, lastStreakDate: providers.lastStreakDate })
+            .from(providers)
+            .where(eq(providers.id, providerId))
+            .limit(1)
+            .then((r) => r[0] ?? null),
+        ]);
+
+        const uniqueClients = uniqueClientsRes;
+        const hasRecurring = hasRecurringRes;
+        const displayStreak = providerRow
+          ? effectiveStreak(providerRow.currentBookingStreak ?? 0, providerRow.lastStreakDate ?? null)
+          : 0;
+
         const nextMilestones: Array<{
           key: string;
           label: string;
@@ -4002,7 +4031,58 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
           target: number;
           rewardLabel: string;
           earned: boolean;
+          badgeType?: string;
         }> = [
+          {
+            key: "first_job",
+            label: "First Job",
+            description: "Complete your first job",
+            progress: Math.min(completedJobs, 1),
+            target: 1,
+            rewardLabel: "First Job badge on your profile",
+            earned: earnedBadgeTypes.has("first_job"),
+            badgeType: "first_job",
+          },
+          {
+            key: "first_thousand",
+            label: "First $1K",
+            description: "Earn your first $1,000",
+            progress: Math.min(totalRevenueCents, 1000 * 100),
+            target: 1000 * 100,
+            rewardLabel: "First $1K badge on your profile",
+            earned: earnedBadgeTypes.has("first_thousand"),
+            badgeType: "first_thousand",
+          },
+          {
+            key: "ten_clients",
+            label: "10 Clients",
+            description: "Complete jobs for 10 different clients",
+            progress: Math.min(uniqueClients, 10),
+            target: 10,
+            rewardLabel: "10 Clients badge on your profile",
+            earned: earnedBadgeTypes.has("ten_clients"),
+            badgeType: "ten_clients",
+          },
+          {
+            key: "first_recurring",
+            label: "Recurring Pro",
+            description: "Land your first recurring job",
+            progress: hasRecurring ? 1 : 0,
+            target: 1,
+            rewardLabel: "Recurring Pro badge on your profile",
+            earned: earnedBadgeTypes.has("first_recurring"),
+            badgeType: "first_recurring",
+          },
+          {
+            key: "first_five_star",
+            label: "5-Star",
+            description: "Earn your first 5-star review",
+            progress: hasFiveStar ? 1 : 0,
+            target: 1,
+            rewardLabel: "5-Star badge + featured placement in search",
+            earned: earnedBadgeTypes.has("first_five_star"),
+            badgeType: "first_five_star",
+          },
           {
             key: "10_jobs",
             label: "Verified Pro",
@@ -4011,15 +4091,7 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
             target: 10,
             rewardLabel: "Verified Pro badge on your profile",
             earned: earnedBadgeTypes.has("verified_pro"),
-          },
-          {
-            key: "first_5star",
-            label: "Featured Placement",
-            description: "Earn your first 5-star review",
-            progress: hasFiveStar ? 1 : 0,
-            target: 1,
-            rewardLabel: "Featured placement in homeowner search results",
-            earned: !!(plan?.hasFeaturedPlacement),
+            badgeType: "verified_pro",
           },
           {
             key: "25_jobs",
@@ -4029,6 +4101,7 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
             target: 25,
             rewardLabel: "1 free month added to your subscription",
             earned: completedJobs >= 25,
+            badgeType: "twenty_five_jobs",
           },
           {
             key: "3_referrals",
@@ -4047,6 +4120,7 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
             target: 10000 * 100,
             rewardLabel: "Top Provider badge + priority search listing",
             earned: earnedBadgeTypes.has("top_provider"),
+            badgeType: "top_provider",
           },
         ];
 
@@ -4059,12 +4133,32 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
             hasFiveStar,
             hasFeaturedPlacement: plan?.hasFeaturedPlacement ?? false,
             permanentDiscountPercent: plan?.permanentDiscountPercent ?? 0,
+            uniqueClients,
+            displayStreak,
           },
           nextMilestones,
         });
       } catch (error) {
         console.error("Get achievements error:", error);
         res.status(500).json({ error: "Failed to get achievements" });
+      }
+    },
+  );
+
+  // ─── Home Health Score ─────────────────────────────────────────────────
+  // Computes a 0–100 score for the authenticated homeowner based on how
+  // recently each tracked service category was last serviced.
+  app.get(
+    "/api/homeowner/home-health",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const userId = req.authenticatedUserId!;
+        const result = await computeHomeHealth(userId);
+        res.json(result);
+      } catch (error) {
+        console.error("Home health score error:", error);
+        res.status(500).json({ error: "Failed to compute home health score" });
       }
     },
   );
@@ -4819,6 +4913,12 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
               notes: `Booked via homeowner portal.`,
               checklist: apptInitialChecklist,
             });
+            // Advance streak for the provider on a new scheduled booking day.
+            if (parsed.data.providerId) {
+              updateProviderStreak(parsed.data.providerId).catch((e: unknown) =>
+                console.error("streak update (booking scheduled) error:", e),
+              );
+            }
           } catch (jobErr) {
             console.error("Job creation error (non-fatal):", jobErr);
           }
@@ -10807,6 +10907,9 @@ Respond with JSON only:
           checkAndAwardMilestones(job.providerId).catch((e: unknown) =>
             console.error("milestone check (job update) error:", e),
           );
+          updateProviderStreak(job.providerId).catch((e: unknown) =>
+            console.error("streak update (job update) error:", e),
+          );
         }
         res.json({ job });
       } catch (error) {
@@ -10979,6 +11082,12 @@ Respond with JSON only:
           console.error("restore dispatch error:", e),
         );
 
+        if (job.providerId) {
+          updateProviderStreak(job.providerId).catch((e: unknown) =>
+            console.error("streak update (job restore) error:", e),
+          );
+        }
+
         res.json({ job });
       } catch (error) {
         console.error("Restore job error:", error);
@@ -11138,6 +11247,9 @@ Respond with JSON only:
         if (job.providerId) {
           checkAndAwardMilestones(job.providerId).catch((e: unknown) =>
             console.error("milestone check (job complete) error:", e),
+          );
+          updateProviderStreak(job.providerId).catch((e: unknown) =>
+            console.error("streak update (job complete) error:", e),
           );
         }
 

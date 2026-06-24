@@ -1,5 +1,5 @@
 import { db } from './db';
-import { eq, and, sql, count, sum } from 'drizzle-orm';
+import { eq, and, sql, count, sum, countDistinct } from 'drizzle-orm';
 import {
   providers,
   providerBadges,
@@ -17,6 +17,12 @@ import { applyPermanentDiscountToExistingSubscription } from './stripeConnectSer
 const BADGE_LABELS: Record<BadgeType, string> = {
   verified_pro: 'Verified Pro',
   top_provider: 'Top Provider',
+  first_job: 'First Job',
+  first_thousand: 'First $1K',
+  ten_clients: '10 Clients',
+  twenty_five_jobs: '25 Jobs',
+  first_recurring: 'First Recurring',
+  first_five_star: 'First 5-Star',
 };
 
 async function awardBadge(
@@ -33,7 +39,7 @@ async function awardBadge(
   await dispatchNotification(
     providerUserId,
     `You've earned the ${label} badge! 🏆`,
-    `Your ${label} badge is now visible on your public profile. Keep up the great work!`,
+    `Your ${label} badge is now visible on your profile. Keep up the great work!`,
     `milestone.badge.${badgeType}`,
     { badgeType },
     'updates' as any,
@@ -76,11 +82,33 @@ async function getTotalRevenueDollars(providerId: string): Promise<number> {
   return isNaN(v) ? 0 : v;
 }
 
+async function getUniqueClientCount(providerId: string): Promise<number> {
+  const [row] = await db
+    .select({ cnt: countDistinct(jobs.clientId) })
+    .from(jobs)
+    .where(and(eq(jobs.providerId, providerId), eq(jobs.status, 'completed')));
+  return row?.cnt ?? 0;
+}
+
 async function hasFiveStarReview(providerId: string): Promise<boolean> {
   const [row] = await db
     .select({ id: reviews.id })
     .from(reviews)
     .where(and(eq(reviews.providerId, providerId), eq(reviews.rating, 5)))
+    .limit(1);
+  return !!row;
+}
+
+async function hasRecurringJob(providerId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: jobs.id })
+    .from(jobs)
+    .where(
+      and(
+        eq(jobs.providerId, providerId),
+        sql`${jobs.seriesId} IS NOT NULL`,
+      ),
+    )
     .limit(1);
   return !!row;
 }
@@ -144,7 +172,7 @@ export async function checkAndAwardMilestones(providerId: string): Promise<void>
     const userId = await getProviderUserId(providerId);
     if (!userId) return;
 
-    const [earnedBadges, jobCount, revenueDollars, fiveStar, referralCount, plan] =
+    const [earnedBadges, jobCount, revenueDollars, fiveStar, referralCount, plan, uniqueClients, hasRecurring] =
       await Promise.all([
         getEarnedBadgeSet(providerId),
         getCompletedJobCount(providerId),
@@ -152,7 +180,39 @@ export async function checkAndAwardMilestones(providerId: string): Promise<void>
         hasFiveStarReview(providerId),
         getRewardedReferralCount(providerId),
         getPlan(providerId),
+        getUniqueClientCount(providerId),
+        hasRecurringJob(providerId),
       ]);
+
+    // ── Milestone: first completed job badge ───────────────────────────────
+    if (jobCount >= 1 && !earnedBadges.has('first_job')) {
+      await awardBadge(providerId, userId, 'first_job');
+    }
+
+    // ── Milestone: first $1,000 earned badge ───────────────────────────────
+    if (revenueDollars >= 1000 && !earnedBadges.has('first_thousand')) {
+      await awardBadge(providerId, userId, 'first_thousand');
+    }
+
+    // ── Milestone: 10 unique clients badge ────────────────────────────────
+    if (uniqueClients >= 10 && !earnedBadges.has('ten_clients')) {
+      await awardBadge(providerId, userId, 'ten_clients');
+    }
+
+    // ── Milestone: 25 completed jobs badge ────────────────────────────────
+    if (jobCount >= 25 && !earnedBadges.has('twenty_five_jobs')) {
+      await awardBadge(providerId, userId, 'twenty_five_jobs');
+    }
+
+    // ── Milestone: first recurring job badge ──────────────────────────────
+    if (hasRecurring && !earnedBadges.has('first_recurring')) {
+      await awardBadge(providerId, userId, 'first_recurring');
+    }
+
+    // ── Milestone: first 5-star review badge ──────────────────────────────
+    if (fiveStar && !earnedBadges.has('first_five_star')) {
+      await awardBadge(providerId, userId, 'first_five_star');
+    }
 
     // ── Milestone: 10 completed jobs → Verified Pro badge ─────────────────
     if (jobCount >= 10 && !earnedBadges.has('verified_pro')) {

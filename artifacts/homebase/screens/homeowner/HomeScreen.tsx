@@ -81,6 +81,13 @@ export default function HomeScreen() {
   const appointments: Appointment[] = appointmentsData?.appointments ?? [];
   const showAppointmentsLoader = !!user?.id && isLoadingAppointments && !appointmentsData;
 
+  const { data: homeHealthData } = useQuery<{ score: number; categories: Array<{ key: string; label: string; status: 'good' | 'due_soon' | 'overdue' | 'never'; lastServicedAt: string | null; daysSinceService: number | null; score: number }> }>({
+    queryKey: ["/api/homeowner/home-health"],
+    enabled: !!user?.id,
+    staleTime: 1000 * 60 * 10,
+  });
+  const healthScore = homeHealthData?.score ?? null;
+
   const { data: creditsData, refetch: refetchCredits } = useQuery<{ balanceCents: number; balance: string }>({
     queryKey: ["/api/users/me/credits/history"],
     queryFn: async () => {
@@ -238,6 +245,65 @@ export default function HomeScreen() {
             </GlassCard>
           </Pressable>
         </Animated.View>
+
+        {healthScore !== null && homeHealthData ? (
+          <Animated.View entering={FadeInDown.delay(125).duration(400)}>
+            <Pressable onPress={() => navigation.navigate("HealthScore")}>
+              <GlassCard style={styles.healthCard}>
+                <View style={styles.healthCardContent}>
+                  <View style={[styles.healthScoreRing, {
+                    borderColor: healthScore >= 70 ? "#16A34A" : healthScore >= 40 ? "#CA8A04" : "#DC2626",
+                  }]}>
+                    <ThemedText style={[styles.healthScoreValue, {
+                      color: healthScore >= 70 ? "#16A34A" : healthScore >= 40 ? "#CA8A04" : "#DC2626",
+                    }]}>{healthScore}</ThemedText>
+                  </View>
+                  <View style={styles.healthTextContainer}>
+                    <ThemedText style={styles.healthTitle}>Home Health Score</ThemedText>
+                    <ThemedText style={[styles.healthSubtitle, { color: theme.textSecondary }]}>
+                      {healthScore >= 70
+                        ? "Your home is in great shape!"
+                        : healthScore >= 40
+                        ? "A few services are due soon"
+                        : "Some areas need attention"}
+                    </ThemedText>
+                    <View style={styles.healthStatusDots}>
+                      {(() => {
+                        const cats = homeHealthData.categories;
+                        const good = cats.filter((c) => c.status === "good").length;
+                        const dueSoon = cats.filter((c) => c.status === "due_soon").length;
+                        const overdue = cats.filter((c) => c.status === "overdue" || c.status === "never").length;
+                        return (
+                          <>
+                            {good > 0 && (
+                              <View style={styles.healthStatusChip}>
+                                <View style={[styles.healthDot, { backgroundColor: "#16A34A" }]} />
+                                <ThemedText style={[styles.healthDotLabel, { color: theme.textSecondary }]}>{good} Good</ThemedText>
+                              </View>
+                            )}
+                            {dueSoon > 0 && (
+                              <View style={styles.healthStatusChip}>
+                                <View style={[styles.healthDot, { backgroundColor: "#CA8A04" }]} />
+                                <ThemedText style={[styles.healthDotLabel, { color: theme.textSecondary }]}>{dueSoon} Due</ThemedText>
+                              </View>
+                            )}
+                            {overdue > 0 && (
+                              <View style={styles.healthStatusChip}>
+                                <View style={[styles.healthDot, { backgroundColor: "#DC2626" }]} />
+                                <ThemedText style={[styles.healthDotLabel, { color: theme.textSecondary }]}>{overdue} Overdue</ThemedText>
+                              </View>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </View>
+                  </View>
+                  <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+                </View>
+              </GlassCard>
+            </Pressable>
+          </Animated.View>
+        ) : null}
 
         {appointments.length > 0 ? (
           <Animated.View entering={FadeInDown.delay(200).duration(400)}>
@@ -439,6 +505,56 @@ const styles = StyleSheet.create({
   },
   aiCard: {
     marginBottom: Spacing.lg,
+  },
+  healthCard: {
+    marginBottom: Spacing.lg,
+  },
+  healthCardContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  healthScoreRing: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 3,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  healthScoreValue: {
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  healthTextContainer: {
+    flex: 1,
+  },
+  healthTitle: {
+    ...Typography.headline,
+    marginBottom: 2,
+  },
+  healthSubtitle: {
+    ...Typography.subhead,
+    marginBottom: 4,
+  },
+  healthStatusDots: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.xs,
+  },
+  healthStatusChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  healthDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  healthDotLabel: {
+    fontSize: 11,
+    fontWeight: "600",
   },
   aiCardContent: {
     flexDirection: "row",

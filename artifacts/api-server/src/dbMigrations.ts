@@ -112,6 +112,14 @@ export async function runBootMigrations(): Promise<void> {
       `ALTER TYPE payment_method ADD VALUE IF NOT EXISTS 'credits'`,
     );
 
+    // ── badge_type enum: new milestone badge types (Task #409) ─────────────
+    await runSql("badge_type.add_first_job",        `ALTER TYPE badge_type ADD VALUE IF NOT EXISTS 'first_job'`);
+    await runSql("badge_type.add_first_thousand",   `ALTER TYPE badge_type ADD VALUE IF NOT EXISTS 'first_thousand'`);
+    await runSql("badge_type.add_ten_clients",      `ALTER TYPE badge_type ADD VALUE IF NOT EXISTS 'ten_clients'`);
+    await runSql("badge_type.add_twenty_five_jobs", `ALTER TYPE badge_type ADD VALUE IF NOT EXISTS 'twenty_five_jobs'`);
+    await runSql("badge_type.add_first_recurring",  `ALTER TYPE badge_type ADD VALUE IF NOT EXISTS 'first_recurring'`);
+    await runSql("badge_type.add_first_five_star",  `ALTER TYPE badge_type ADD VALUE IF NOT EXISTS 'first_five_star'`);
+
     // ── payments.stripe_payment_intent_id unique index (Task #245). Required
     // for ON CONFLICT (stripe_payment_intent_id) DO UPDATE in
     // handleStripeInvoicePaid / handlePaymentIntentSucceeded. Without this
@@ -135,6 +143,10 @@ export async function runBootMigrations(): Promise<void> {
     await runSql("providers.monthly_goal_cents",       `ALTER TABLE providers ADD COLUMN IF NOT EXISTS monthly_goal_cents INTEGER`);
     await runSql("providers.goal_notified_50_month",   `ALTER TABLE providers ADD COLUMN IF NOT EXISTS goal_notified_50_month TEXT`);
     await runSql("providers.goal_notified_100_month",  `ALTER TABLE providers ADD COLUMN IF NOT EXISTS goal_notified_100_month TEXT`);
+
+    // ── providers: booking streak columns (Task #409) ──────────────────────
+    await runSql("providers.current_booking_streak",   `ALTER TABLE providers ADD COLUMN IF NOT EXISTS current_booking_streak INTEGER NOT NULL DEFAULT 0`);
+    await runSql("providers.last_streak_date",         `ALTER TABLE providers ADD COLUMN IF NOT EXISTS last_streak_date TIMESTAMP`);
 
     // ── provider_plans: HomeBase subscription billing fields (Task #124) ──
     const providerPlanAlters: Array<[string, string]> = [

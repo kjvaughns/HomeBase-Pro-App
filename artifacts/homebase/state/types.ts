@@ -71,7 +71,15 @@ export interface Review {
   providerReplyUpdatedAt?: string | null;
 }
 
-export type BadgeType = "verified_pro" | "top_provider";
+export type BadgeType =
+  | "verified_pro"
+  | "top_provider"
+  | "first_job"
+  | "first_thousand"
+  | "ten_clients"
+  | "twenty_five_jobs"
+  | "first_recurring"
+  | "first_five_star";
 
 export interface Provider {
   id: string;

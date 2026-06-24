@@ -312,6 +312,9 @@ export const providers = pgTable("providers", {
   monthlyGoalCents: integer("monthly_goal_cents"),
   goalNotified50Month: text("goal_notified_50_month"),
   goalNotified100Month: text("goal_notified_100_month"),
+  // Booking streak (Task #409)
+  currentBookingStreak: integer("current_booking_streak").notNull().default(0),
+  lastStreakDate: timestamp("last_streak_date"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -2347,6 +2350,12 @@ export type InsertProviderReferral = z.infer<
 export const badgeTypeEnum = pgEnum("badge_type", [
   "verified_pro",
   "top_provider",
+  "first_job",
+  "first_thousand",
+  "ten_clients",
+  "twenty_five_jobs",
+  "first_recurring",
+  "first_five_star",
 ]);
 
 export const providerBadges = pgTable(

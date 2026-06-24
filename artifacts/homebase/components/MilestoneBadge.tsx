@@ -24,6 +24,42 @@ const BADGE_CONFIG: Record<
     color: "#FFFFFF",
     bg: "#C07A00",
   },
+  first_job: {
+    label: "First Job",
+    icon: "briefcase",
+    color: "#FFFFFF",
+    bg: "#2563EB",
+  },
+  first_thousand: {
+    label: "First $1K",
+    icon: "cash",
+    color: "#FFFFFF",
+    bg: "#16A34A",
+  },
+  ten_clients: {
+    label: "10 Clients",
+    icon: "people",
+    color: "#FFFFFF",
+    bg: "#7C3AED",
+  },
+  twenty_five_jobs: {
+    label: "25 Jobs",
+    icon: "checkmark-done-circle",
+    color: "#FFFFFF",
+    bg: "#0891B2",
+  },
+  first_recurring: {
+    label: "Recurring Pro",
+    icon: "repeat",
+    color: "#FFFFFF",
+    bg: "#EA580C",
+  },
+  first_five_star: {
+    label: "5-Star",
+    icon: "star",
+    color: "#FFFFFF",
+    bg: "#CA8A04",
+  },
 };
 
 interface MilestoneBadgeProps {

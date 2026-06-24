@@ -6,7 +6,7 @@ import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import { useLayout } from "@/hooks/useLayout";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withSpring, withSequence } from "react-native-reanimated";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/query-client";
 import * as Haptics from "expo-haptics";
@@ -574,6 +574,31 @@ export default function ProviderHomeScreen() {
   const jobs = jobsData?.jobs || [];
   const clients = clientsData?.clients || [];
 
+  // ── Booking streak ──────────────────────────────────────────────────────
+  const displayStreak = useMemo(() => {
+    const rawStreak: number = (freshProviderData?.provider as any)?.currentBookingStreak ?? 0;
+    const rawLastDate: string | null = (freshProviderData?.provider as any)?.lastStreakDate ?? null;
+    if (!rawLastDate || rawStreak <= 0) return 0;
+    const todayStr = new Date().toISOString().split("T")[0];
+    const yest = new Date(); yest.setUTCDate(yest.getUTCDate() - 1);
+    const yestStr = yest.toISOString().split("T")[0];
+    const lastStr = new Date(rawLastDate).toISOString().split("T")[0];
+    return (lastStr === todayStr || lastStr === yestStr) ? rawStreak : 0;
+  }, [freshProviderData?.provider]);
+
+  const prevStreakRef = useRef(0);
+  const flameScale = useSharedValue(1);
+  const flameStyle = useAnimatedStyle(() => ({ transform: [{ scale: flameScale.value }] }));
+  useEffect(() => {
+    if (displayStreak > prevStreakRef.current && displayStreak > 0) {
+      flameScale.value = withSequence(
+        withSpring(1.5, { damping: 4, stiffness: 300 }),
+        withSpring(1.0, { damping: 8, stiffness: 200 }),
+      );
+    }
+    prevStreakRef.current = displayStreak;
+  }, [displayStreak]);
+
   const upcomingJobsAll = useMemo(() => {
     const now = new Date();
     return jobs
@@ -943,6 +968,14 @@ export default function ProviderHomeScreen() {
                 <Feather name="bell" size={24} color={theme.text} />
               </Pressable>
             </View>
+            {displayStreak > 0 ? (
+              <View style={styles.streakRow}>
+                <Animated.Text style={[styles.streakEmoji, flameStyle]}>🔥</Animated.Text>
+                <ThemedText style={[styles.streakText, { color: theme.textSecondary }]}>
+                  {displayStreak}-day booking streak — keep it going!
+                </ThemedText>
+              </View>
+            ) : null}
           </GlassCard>
         </Animated.View>
 
@@ -1555,6 +1588,22 @@ const styles = StyleSheet.create({
   notificationIcon: {
     position: "relative",
     padding: Spacing.xs,
+  },
+  streakRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    marginTop: Spacing.sm,
+    paddingTop: Spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(128,128,128,0.2)",
+  },
+  streakEmoji: {
+    fontSize: 15,
+  },
+  streakText: {
+    ...Typography.subhead,
+    flex: 1,
   },
   todaySummary: {
     marginBottom: Spacing.lg,
