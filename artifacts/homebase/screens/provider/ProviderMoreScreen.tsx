@@ -139,6 +139,10 @@ export default function ProviderMoreScreen() {
 
   return (
     <ThemedView style={styles.container}>
+      {/* Layout audit ✓: paddingTop: headerHeight (transparent header includes
+          status-bar inset, no additional insets.top needed) + Spacing.lg.
+          paddingBottom: tabBarHeight (useFloatingTabBarHeight = pill height +
+          insets.bottom) + Spacing.xl clears floating tab pill. */}
       <ScrollView
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,

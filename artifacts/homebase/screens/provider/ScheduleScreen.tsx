@@ -1432,6 +1432,10 @@ export default function ScheduleScreen() {
   return (
     <ThemedView style={styles.container}>
       {/* ── Fixed Header ── */}
+      {/* Layout audit ✓: paddingTop: headerHeight (transparent header, already
+          includes status-bar inset) + Spacing.md — no SafeAreaView double-count.
+          Content bottom padding: tabBarHeight (useFloatingTabBarHeight = pill +
+          insets.bottom). Both applied in the content/route View below. */}
       <View style={[styles.header, { paddingTop: headerHeight + Spacing.md, paddingHorizontal: horizontalPadding }]}>
         {/* Title Row */}
         <View style={styles.headerRow}>

@@ -557,6 +557,12 @@ export default function ProviderHomeScreen() {
 
   return (
     <ThemedView style={styles.container}>
+      {/* Layout audit ✓
+          paddingTop: headerHeight (useHeaderHeight with headerTransparent:true
+          includes the status-bar inset — no additional insets.top double-count)
+          + Spacing.lg visual breathing room.
+          paddingBottom: tabBarHeight (useFloatingTabBarHeight = pill height +
+          insets.bottom) + Spacing.xl clears the floating tab pill. */}
       <ScrollView
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,

@@ -4,12 +4,12 @@ import {
   View,
   Pressable,
   Modal,
+  Platform,
 } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withTiming,
   interpolate,
   Extrapolation,
   SharedValue,
@@ -169,6 +169,9 @@ export default function ProviderFAB() {
         </Modal>
       )}
       
+      {/* Main FAB — Liquid Glass on iOS 18+ (systemThinMaterial + accent
+          tinted overlay), solid accent fallback on Android.
+          Audit: FAB converted to glass surface to match tab bar pill style. */}
       <View
         style={[
           styles.fabContainer,
@@ -182,10 +185,31 @@ export default function ProviderFAB() {
           onPress={toggleFAB}
           style={({ pressed }) => [
             styles.fab,
+            Platform.OS !== "ios" && { backgroundColor: Colors.accent },
             pressed && styles.fabPressed,
           ]}
           testID="provider-fab"
         >
+          {Platform.OS === "ios" ? (
+            <>
+              <BlurView
+                intensity={60}
+                tint="systemThinMaterial"
+                style={[StyleSheet.absoluteFill, { borderRadius: 28 }]}
+                pointerEvents="none"
+              />
+              <View
+                pointerEvents="none"
+                style={[
+                  StyleSheet.absoluteFill,
+                  {
+                    borderRadius: 28,
+                    backgroundColor: Colors.accent + "CC",
+                  },
+                ]}
+              />
+            </>
+          ) : null}
           <Animated.View style={mainButtonStyle}>
             <Feather
               name={isOpen ? "x" : "plus"}
@@ -244,33 +268,48 @@ function FABActionItem({
 
   return (
     <Animated.View style={[styles.actionRow, animatedStyle]}>
-      <View
-        style={[
-          styles.actionLabel,
-          {
-            backgroundColor: isDark
-              ? "rgba(28, 28, 30, 0.95)"
-              : "rgba(255, 255, 255, 0.95)",
-          },
-        ]}
-      >
+      {/* Action label pill — glass on iOS, solid on Android */}
+      <View style={[styles.actionLabel, Platform.OS !== "ios" && {
+        backgroundColor: isDark ? "rgba(28, 28, 30, 0.95)" : "rgba(255, 255, 255, 0.95)",
+      }]}>
+        {Platform.OS === "ios" ? (
+          <BlurView
+            intensity={60}
+            tint="systemMaterial"
+            style={[StyleSheet.absoluteFill, { borderRadius: BorderRadius.sm }]}
+            pointerEvents="none"
+          />
+        ) : null}
         <ThemedText
-          style={[
-            styles.actionLabelText,
-            { color: theme.text },
-          ]}
+          style={[styles.actionLabelText, { color: theme.text }]}
         >
           {action.label}
         </ThemedText>
       </View>
+      {/* Action button circle — glass on iOS, solid accent on Android */}
       <Pressable
         onPress={action.onPress}
         style={({ pressed }) => [
           styles.actionButton,
+          Platform.OS !== "ios" && { backgroundColor: Colors.accent },
           pressed && styles.actionButtonPressed,
         ]}
         testID={`fab-action-${action.id}`}
       >
+        {Platform.OS === "ios" ? (
+          <>
+            <BlurView
+              intensity={60}
+              tint="systemThinMaterial"
+              style={[StyleSheet.absoluteFill, { borderRadius: 24 }]}
+              pointerEvents="none"
+            />
+            <View
+              pointerEvents="none"
+              style={[StyleSheet.absoluteFill, { borderRadius: 24, backgroundColor: Colors.accent + "CC" }]}
+            />
+          </>
+        ) : null}
         <Feather name={action.icon} size={22} color="#FFFFFF" />
       </Pressable>
     </Animated.View>
@@ -286,14 +325,14 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: Colors.accent,
+    overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
     ...Shadows.lg,
   },
   fabPressed: {
-    backgroundColor: Colors.accentPressed,
     transform: [{ scale: 0.95 }],
+    opacity: 0.9,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
@@ -318,6 +357,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.sm,
     marginRight: Spacing.md,
+    overflow: "hidden",
     ...Shadows.sm,
   },
   actionLabelText: {
@@ -328,7 +368,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: Colors.accent,
+    overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
     ...Shadows.md,

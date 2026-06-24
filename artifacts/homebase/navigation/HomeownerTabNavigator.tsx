@@ -73,9 +73,13 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
     >
       {Platform.OS === "ios" ? (
         <>
+          {/* Use "systemMaterial" so UIKit adapts to light/dark in the same
+              render frame as the system color scheme change — eliminates the
+              one-frame tint lag that occurs when switching between
+              "systemMaterialDark" and "systemUltraThinMaterialLight". */}
           <BlurView
-            intensity={isDark ? 80 : 60}
-            tint={isDark ? "systemMaterialDark" : "systemUltraThinMaterialLight"}
+            intensity={70}
+            tint="systemMaterial"
             style={[StyleSheet.absoluteFill, styles.blurView]} pointerEvents="none"
           />
           <View
@@ -83,7 +87,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
             style={[
               StyleSheet.absoluteFill,
               {
-                backgroundColor: isDark ? "rgba(28,28,30,0.25)" : "rgba(255,255,255,0.55)",
+                backgroundColor: isDark ? "rgba(28,28,30,0.18)" : "rgba(255,255,255,0.45)",
                 borderRadius: 24,
               },
             ]}

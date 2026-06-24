@@ -165,6 +165,10 @@ export default function MoreScreen() {
 
   return (
     <ThemedView style={styles.container}>
+      {/* Layout audit ✓: paddingTop: headerHeight (transparent header includes
+          status-bar inset, no extra insets.top) + Spacing.lg.
+          paddingBottom: tabBarHeight (useFloatingTabBarHeight = pill height +
+          insets.bottom) + Spacing.xl fully clears the floating tab pill. */}
       <ScrollView
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.lg,

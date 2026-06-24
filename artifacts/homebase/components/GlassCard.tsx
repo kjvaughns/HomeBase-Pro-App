@@ -73,9 +73,11 @@ export function GlassCard({
     <>
       {Platform.OS === "ios" ? (
         <View style={[StyleSheet.absoluteFill, { pointerEvents: "none" }]}>
+          {/* "systemMaterial" adapts to light/dark at the UIKit level in the
+              same frame as a color scheme change — no one-frame lag. */}
           <BlurView
             intensity={blurIntensity}
-            tint={isDark ? "dark" : "light"}
+            tint="systemMaterial"
             style={StyleSheet.absoluteFill}
           />
         </View>

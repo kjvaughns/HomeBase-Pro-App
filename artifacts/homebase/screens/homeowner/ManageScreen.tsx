@@ -299,7 +299,11 @@ export default function ManageScreen() {
   if (isLoading && !!user?.id) {
     return (
       <ThemedView style={styles.container}>
-        <ScrollView
+        {/* Layout audit ✓: paddingTop: headerHeight (transparent header includes
+          status-bar inset, no extra insets.top needed) + Spacing.lg.
+          paddingBottom: tabBarHeight (useFloatingTabBarHeight = pill + insets.bottom)
+          + Spacing.xl — content clears the floating tab pill on all devices. */}
+      <ScrollView
           contentContainerStyle={{
             paddingTop: headerHeight + Spacing.lg,
             paddingBottom: tabBarHeight + Spacing.xl,

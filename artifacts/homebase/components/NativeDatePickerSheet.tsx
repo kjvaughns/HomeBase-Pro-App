@@ -6,6 +6,7 @@ import {
   Platform,
   StyleSheet,
 } from "react-native";
+import { BlurView } from "expo-blur";
 import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ThemedText } from "@/components/ThemedText";
@@ -77,7 +78,18 @@ export function NativeDatePickerSheet({
       animationType="slide"
       onRequestClose={onCancel}
     >
+      {/* Audit: glass backdrop on iOS, solid fallback on other platforms */}
       <View style={[sheet.overlay, isTablet && sheet.overlayTablet]}>
+        {Platform.OS === "ios" ? (
+          <BlurView
+            intensity={40}
+            tint="systemMaterial"
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.35)" }]} pointerEvents="none" />
+        )}
         <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} />
         <View
           style={[
@@ -133,7 +145,6 @@ const sheet = StyleSheet.create({
   overlay: {
     flex: 1,
     justifyContent: "flex-end",
-    backgroundColor: "rgba(0,0,0,0.35)",
   },
   overlayTablet: {
     alignItems: "center",

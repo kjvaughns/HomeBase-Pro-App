@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   StyleSheet,
   View,
@@ -77,7 +77,13 @@ export default function SubscriptionScreen() {
     isPartner,
   } = useSubscriptionStatus();
   const [busy, setBusy] = useState(false);
+  // Synchronous guard ref to prevent the double-tap race condition:
+  // setBusy(true) is async (takes effect next render), so rapid taps can both
+  // pass the `if (busy) return` check before the first render cycle completes.
+  // busyRef is updated synchronously so the second tap is blocked immediately.
+  const busyRef = useRef(false);
   const [restoring, setRestoring] = useState(false);
+  const restoringRef = useRef(false);
 
   // Dev-mode diagnostics — fetched once on mount on iOS in __DEV__
   const [diagnostics, setDiagnostics] =
@@ -192,7 +198,12 @@ export default function SubscriptionScreen() {
   // Present RevenueCat's native paywall UI. The SDK reads offerings and handles
   // the purchase internally — no manual offering fetch or purchasePackage call needed.
   const handleNativeSubscribe = useCallback(async () => {
-    if (busy) return;
+    // busyRef is the primary synchronous guard. The `busy` state guard alone
+    // has a race: setBusy(true) is async and takes effect in the next render,
+    // so rapid double-taps can both pass `if (busy) return` before the first
+    // re-render, queuing two concurrent presentPaywall() calls (crash source).
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     // Clear any previous failure state when the user retries.
     setPaywallFailure(null);
@@ -260,12 +271,16 @@ export default function SubscriptionScreen() {
           : err?.message ?? "Please try again or contact support.";
       setPaywallFailure({ code, message: msg });
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
-  }, [busy, refreshEntitlement]);
+  }, [refreshEntitlement]);
 
   const handleRestore = useCallback(async () => {
-    if (restoring) return;
+    // Same synchronous ref guard as handleNativeSubscribe — prevents rapid
+    // double-taps from queuing two concurrent restorePurchases() calls.
+    if (restoringRef.current) return;
+    restoringRef.current = true;
     setRestoring(true);
     let entitled = false;
     try {
@@ -287,10 +302,11 @@ export default function SubscriptionScreen() {
         );
       }
     } finally {
+      restoringRef.current = false;
       setRestoring(false);
       if (!entitled) void refreshEntitlement(false);
     }
-  }, [restoring, refreshEntitlement]);
+  }, [refreshEntitlement]);
 
   const handleManageNative = useCallback(async () => {
     try {

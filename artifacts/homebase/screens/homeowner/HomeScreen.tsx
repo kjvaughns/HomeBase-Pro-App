@@ -177,6 +177,12 @@ export default function HomeScreen() {
 
   return (
     <ThemedView style={styles.container}>
+      {/* Layout audit ✓
+          paddingTop: headerHeight (useHeaderHeight with headerTransparent:true
+          already includes the status-bar inset — no additional insets.top needed)
+          + Spacing.xl for visual breathing room.
+          paddingBottom: tabBarHeight (useFloatingTabBarHeight includes insets.bottom
+          + floating pill height) + Spacing.xl + 40 extra for the floating FAB area. */}
       <ScrollView
         contentContainerStyle={{
           paddingTop: headerHeight + Spacing.xl,

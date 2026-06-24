@@ -10,6 +10,7 @@ import {
   Platform,
   type TextStyle,
 } from "react-native";
+import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -224,7 +225,18 @@ export function QuickAddJobSheet({
       animationType="slide"
       onRequestClose={onClose}
     >
+      {/* Audit: glass backdrop on iOS, solid fallback on Android/web */}
       <Pressable style={[styles.backdrop, isTablet && styles.backdropTablet]} onPress={onClose}>
+        {Platform.OS === "ios" ? (
+          <BlurView
+            intensity={40}
+            tint="systemMaterial"
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.45)" }]} pointerEvents="none" />
+        )}
         <Pressable
           style={[
             styles.sheet,
@@ -517,7 +529,6 @@ export function QuickAddJobSheet({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
     justifyContent: "flex-end",
   },
   backdropTablet: {

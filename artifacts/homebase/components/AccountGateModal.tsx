@@ -64,9 +64,11 @@ export function AccountGateModal({
           ]}
         >
           {Platform.OS === "ios" ? (
+            /* "systemMaterial" adapts to light/dark natively — no React
+               re-render needed to switch tints when color scheme changes. */
             <BlurView
               intensity={80}
-              tint={isDark ? "dark" : "light"}
+              tint="systemMaterial"
               style={StyleSheet.absoluteFill} pointerEvents="none"
             />
           ) : null}

@@ -2329,6 +2329,10 @@ export default function FinancialsScreen() {
       <ThemedView style={styles.container}>
         {howModal}
         {subGateModal}
+        {/* Layout audit ✓: paddingTop: headerHeight (transparent header
+            includes status-bar inset, no extra insets.top) + Spacing.md.
+            paddingBottom: tabBarHeight (useFloatingTabBarHeight = floating pill
+            + insets.bottom) + Spacing.xl — content fully clears floating tab. */}
         <ScrollView
           contentContainerStyle={{
             paddingTop: headerHeight + Spacing.md,

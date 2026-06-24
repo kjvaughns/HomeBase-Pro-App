@@ -686,9 +686,10 @@ export default function FindScreen() {
       onRequestClose={() => setShowLocationModal(false)}
     >
       <View style={styles.modalOverlay}>
+        {/* "systemMaterial" adapts to light/dark natively — audit: glass overlay */}
         <BlurView
-          intensity={isDark ? 40 : 60}
-          tint={isDark ? "dark" : "light"}
+          intensity={50}
+          tint="systemMaterial"
           style={StyleSheet.absoluteFill} pointerEvents="none"
         />
         <Pressable
@@ -815,9 +816,10 @@ export default function FindScreen() {
       onRequestClose={() => setShowFilterModal(false)}
     >
       <View style={styles.modalOverlay}>
+        {/* "systemMaterial" adapts to light/dark natively — audit: glass overlay */}
         <BlurView
-          intensity={isDark ? 40 : 60}
-          tint={isDark ? "dark" : "light"}
+          intensity={50}
+          tint="systemMaterial"
           style={StyleSheet.absoluteFill} pointerEvents="none"
         />
         <Pressable
@@ -1080,6 +1082,10 @@ export default function FindScreen() {
 
   return (
     <ThemedView style={styles.container}>
+      {/* Layout audit ✓: paddingTop: headerHeight (transparent header includes
+          status-bar inset — no additional insets.top double-count) + Spacing.md.
+          Main results list uses paddingBottom: tabBarHeight + Spacing.xl
+          (useFloatingTabBarHeight = pill + insets.bottom). No SafeAreaView wrapper. */}
       <View
         style={[
           styles.searchBarWrapper,
