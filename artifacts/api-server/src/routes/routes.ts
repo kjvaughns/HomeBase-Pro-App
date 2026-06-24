@@ -1499,6 +1499,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           capabilityTags,
           businessHours,
           initialService,
+          monthlyGoalCents,
         } = req.body;
 
         if (!email || !password || !businessName) {
@@ -1577,6 +1578,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               isPublic: true, // make discoverable immediately post-onboarding
               email: email.trim().toLowerCase(),
               phone: phone?.trim() || null,
+              monthlyGoalCents: typeof monthlyGoalCents === "number" && monthlyGoalCents > 0
+                ? monthlyGoalCents
+                : null,
             })
             .returning();
 
@@ -1698,6 +1702,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Provider onboard-complete error:", error);
         res.status(500).json({ error: "Failed to create provider account" });
+      }
+    },
+  );
+
+  // PATCH /api/provider/goal — set or update the authenticated provider's monthly earnings goal
+  app.patch(
+    "/api/provider/goal",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const providerRow = await storage.getProviderByUserId(req.authenticatedUserId!);
+        if (!providerRow) {
+          res.status(404).json({ error: "Provider not found" });
+          return;
+        }
+        const { monthlyGoalCents } = req.body;
+        if (
+          monthlyGoalCents !== null &&
+          (typeof monthlyGoalCents !== "number" || !Number.isInteger(monthlyGoalCents) || monthlyGoalCents < 0)
+        ) {
+          res.status(400).json({ error: "monthlyGoalCents must be a non-negative integer or null" });
+          return;
+        }
+        await db
+          .update(providers)
+          .set({ monthlyGoalCents: monthlyGoalCents ?? null })
+          .where(eq(providers.id, providerRow.id));
+        res.json({ success: true, monthlyGoalCents: monthlyGoalCents ?? null });
+      } catch (error) {
+        req.log.error({ error }, "PATCH /api/provider/goal error");
+        res.status(500).json({ error: "Failed to update monthly goal" });
       }
     },
   );

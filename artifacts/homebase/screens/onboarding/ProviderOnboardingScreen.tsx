@@ -36,9 +36,9 @@ import { apiRequest, getApiUrl } from "@/lib/query-client";
 type Props = NativeStackScreenProps<RootStackParamList, "ProviderOnboarding">;
 
 // Step 0 = emotional hook (no progress dot)
-// Steps 1-7 = setup steps (7 progress dots)
-const TOTAL_STEPS = 8; // 0..7
-const SETUP_STEPS = 7; // 1..7 (shown in progress dots)
+// Steps 1-8 = setup steps (8 progress dots)
+const TOTAL_STEPS = 9; // 0..8
+const SETUP_STEPS = 8; // 1..8 (shown in progress dots)
 
 const SERVICE_CATEGORIES = [
   { id: "plumbing", label: "Plumbing", icon: "droplet" as const },
@@ -105,7 +105,10 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
   // Step 5: Bio
   const [bio, setBio] = useState("");
 
-  // Step 6: Create Account
+  // Step 7: Monthly Goal
+  const [monthlyGoalCents, setMonthlyGoalCents] = useState<number | null>(null);
+
+  // Step 8: Create Account
   const [accountName, setAccountName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -165,7 +168,8 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
       case 4: return activeDays.length > 0;
       case 5: return true;
       case 6: return true; // Pricing — read-only
-      case 7: {
+      case 7: return true; // Monthly Goal — skip is always available
+      case 8: {
         return (
           accountName.trim().length > 0 &&
           email.trim().length > 0 &&
@@ -226,6 +230,7 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
         serviceZipCodes: parsedServiceZipCodes?.length ? parsedServiceZipCodes : undefined,
         serviceCities: parsedServiceCities?.length ? parsedServiceCities : undefined,
         capabilityTags: category ? [category] : [],
+        monthlyGoalCents: monthlyGoalCents ?? undefined,
         businessHours: Object.fromEntries(
           ["mon","tue","wed","thu","fri","sat","sun"].map((day) => [
             day,
@@ -423,6 +428,13 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
         )}
         {step === 6 && <PricingStep theme={theme} />}
         {step === 7 && (
+          <MonthlyGoalStep
+            theme={theme}
+            selectedGoalCents={monthlyGoalCents}
+            onSelectGoal={setMonthlyGoalCents}
+          />
+        )}
+        {step === 8 && (
           <CreateAccountStep
             theme={theme}
             accountName={accountName}
@@ -1147,7 +1159,164 @@ function PricingStep({ theme }: { theme: ReturnType<typeof useTheme>["theme"] })
   );
 }
 
-// ─── Step 7: Create Account ───────────────────────────────────────────────────
+// ─── Step 7: Monthly Goal ─────────────────────────────────────────────────────
+
+const GOAL_PRESETS = [
+  { label: "$1,000", cents: 100_000 },
+  { label: "$3,000", cents: 300_000 },
+  { label: "$5,000", cents: 500_000 },
+  { label: "$10,000", cents: 1_000_000 },
+];
+
+function MonthlyGoalStep({
+  theme,
+  selectedGoalCents,
+  onSelectGoal,
+}: {
+  theme: ReturnType<typeof useTheme>["theme"];
+  selectedGoalCents: number | null;
+  onSelectGoal: (cents: number | null) => void;
+}) {
+  const { horizontalPadding } = useLayout();
+  const [customMode, setCustomMode] = useState(false);
+  const [customValue, setCustomValue] = useState("");
+
+  const handleCustomConfirm = () => {
+    const dollars = parseFloat(customValue.replace(/[^0-9.]/g, ""));
+    if (!isNaN(dollars) && dollars > 0) {
+      onSelectGoal(Math.round(dollars * 100));
+      setCustomMode(false);
+    }
+  };
+
+  const isPresetSelected = (cents: number) =>
+    !customMode && selectedGoalCents === cents;
+
+  return (
+    <ScrollView
+      style={styles.scrollView}
+      contentContainerStyle={[styles.stepScrollContent, { paddingHorizontal: horizontalPadding }]}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+    >
+      <View style={styles.stepHeader}>
+        <ThemedText style={styles.stepTitle}>Set a monthly goal</ThemedText>
+        <ThemedText style={[styles.stepSubtitle, { color: theme.textSecondary }]}>
+          How much do you want to earn through HomeBase this month? Providers with a goal earn more.
+        </ThemedText>
+      </View>
+
+      <View style={styles.goalPresetsGrid}>
+        {GOAL_PRESETS.map((preset) => {
+          const selected = isPresetSelected(preset.cents);
+          return (
+            <Pressable
+              key={preset.cents}
+              testID={`goal-preset-${preset.cents}`}
+              onPress={() => {
+                Haptics.selectionAsync();
+                onSelectGoal(preset.cents);
+                setCustomMode(false);
+                setCustomValue("");
+              }}
+              style={[
+                styles.goalPresetCard,
+                {
+                  backgroundColor: selected ? Colors.accent + "14" : theme.backgroundSecondary,
+                  borderColor: selected ? Colors.accent : theme.border,
+                  borderWidth: selected ? 2 : 1,
+                },
+              ]}
+            >
+              <ThemedText
+                style={[
+                  styles.goalPresetLabel,
+                  { color: selected ? Colors.accent : theme.text, fontWeight: selected ? "700" : "600" },
+                ]}
+              >
+                {preset.label}
+              </ThemedText>
+              <ThemedText style={[styles.captionText, { color: theme.textSecondary }]}>/ month</ThemedText>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {customMode ? (
+        <View style={[styles.inputWrapper, { backgroundColor: theme.backgroundSecondary, borderColor: Colors.accent, marginBottom: Spacing.sm }]}>
+          <ThemedText style={{ color: theme.textSecondary, fontSize: 17, marginRight: 4 }}>$</ThemedText>
+          <TextInput
+            style={[styles.textInput, { color: theme.text }]}
+            placeholder="Enter amount"
+            placeholderTextColor={theme.textTertiary}
+            value={customValue}
+            onChangeText={setCustomValue}
+            keyboardType="numeric"
+            autoFocus
+            returnKeyType="done"
+            onSubmitEditing={handleCustomConfirm}
+            testID="input-custom-goal"
+          />
+          <Pressable onPress={handleCustomConfirm} hitSlop={12}>
+            <Feather name="check" size={18} color={Colors.accent} />
+          </Pressable>
+        </View>
+      ) : (
+        <Pressable
+          testID="goal-custom"
+          onPress={() => {
+            Haptics.selectionAsync();
+            setCustomMode(true);
+            onSelectGoal(null);
+          }}
+          style={[
+            styles.goalPresetCard,
+            {
+              width: "100%",
+              backgroundColor: theme.backgroundSecondary,
+              borderColor: theme.border,
+              borderWidth: 1,
+              flexDirection: "row",
+              justifyContent: "center",
+              gap: Spacing.sm,
+            },
+          ]}
+        >
+          <Feather name="edit-2" size={15} color={theme.textSecondary} />
+          <ThemedText style={[styles.goalPresetLabel, { color: theme.textSecondary, fontWeight: "500" }]}>
+            Custom amount
+          </ThemedText>
+        </Pressable>
+      )}
+
+      {selectedGoalCents !== null ? (
+        <View style={[styles.goalSelectedBadge, { backgroundColor: Colors.accent + "12", borderColor: Colors.accent + "30" }]}>
+          <Feather name="target" size={14} color={Colors.accent} />
+          <ThemedText style={[styles.captionText, { color: Colors.accent, fontWeight: "600" }]}>
+            Goal set: ${(selectedGoalCents / 100).toLocaleString()} / month
+          </ThemedText>
+        </View>
+      ) : null}
+
+      <Pressable
+        testID="goal-skip"
+        onPress={() => {
+          Haptics.selectionAsync();
+          onSelectGoal(null);
+          setCustomMode(false);
+          setCustomValue("");
+        }}
+        style={{ alignItems: "center", marginTop: Spacing.lg }}
+      >
+        <ThemedText style={[styles.captionText, { color: theme.textTertiary }]}>
+          Skip for now — you can set this later
+        </ThemedText>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+// ─── Step 8: Create Account ───────────────────────────────────────────────────
 
 function CreateAccountStep({
   theme,
@@ -1416,6 +1585,37 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "500",
     flex: 1,
+  },
+
+  // Monthly Goal step
+  goalPresetsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  goalPresetCard: {
+    width: "47%",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: Spacing.lg,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+    gap: 2,
+  },
+  goalPresetLabel: {
+    fontSize: 18,
+    letterSpacing: -0.3,
+  },
+  goalSelectedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    marginTop: Spacing.md,
   },
 
   // Steps

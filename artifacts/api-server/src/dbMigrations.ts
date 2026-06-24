@@ -131,6 +131,11 @@ export async function runBootMigrations(): Promise<void> {
     // ── providers: is_public (public profile visibility flag) ─────────────
     await runSql("providers.is_public", `ALTER TABLE providers ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE`);
 
+    // ── providers: monthly earnings goal columns ───────────────────────────
+    await runSql("providers.monthly_goal_cents",       `ALTER TABLE providers ADD COLUMN IF NOT EXISTS monthly_goal_cents INTEGER`);
+    await runSql("providers.goal_notified_50_month",   `ALTER TABLE providers ADD COLUMN IF NOT EXISTS goal_notified_50_month TEXT`);
+    await runSql("providers.goal_notified_100_month",  `ALTER TABLE providers ADD COLUMN IF NOT EXISTS goal_notified_100_month TEXT`);
+
     // ── provider_plans: HomeBase subscription billing fields (Task #124) ──
     const providerPlanAlters: Array<[string, string]> = [
       ["provider_plans.is_subscribed",          `ALTER TABLE provider_plans ADD COLUMN IF NOT EXISTS is_subscribed BOOLEAN NOT NULL DEFAULT FALSE`],

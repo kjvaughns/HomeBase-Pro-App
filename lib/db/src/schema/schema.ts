@@ -308,6 +308,10 @@ export const providers = pgTable("providers", {
   firstPaymentReceived: boolean("first_payment_received").default(false).notNull(),
   firstPaymentCelebrated: boolean("first_payment_celebrated").default(false).notNull(),
   firstPaymentAmountCents: integer("first_payment_amount_cents"),
+  // Monthly earnings goal (Task #408)
+  monthlyGoalCents: integer("monthly_goal_cents"),
+  goalNotified50Month: text("goal_notified_50_month"),
+  goalNotified100Month: text("goal_notified_100_month"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

@@ -1,6 +1,6 @@
 import Stripe from "stripe";
 import { db } from "./db";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, gte, lte } from "drizzle-orm";
 import {
   stripeConnectAccounts,
   providerPlans,
@@ -1459,6 +1459,100 @@ export async function handlePaymentIntentSucceeded(
           console.error("[HouseFax] Payment webhook cost update error:", e);
         }
       })();
+
+      // Monthly goal milestone notifications (Task #408)
+      // Check if the provider has crossed 50% or 100% of their monthly goal
+      // after this payment. Uses per-month flags to fire each milestone once.
+      if (updatedInvoice) {
+        (async () => {
+          try {
+            const [providerGoalRow] = await db
+              .select({
+                userId: providers.userId,
+                businessName: providers.businessName,
+                monthlyGoalCents: providers.monthlyGoalCents,
+                goalNotified50Month: providers.goalNotified50Month,
+                goalNotified100Month: providers.goalNotified100Month,
+              })
+              .from(providers)
+              .where(eq(providers.id, updatedInvoice.providerId));
+
+            if (!providerGoalRow?.monthlyGoalCents || !providerGoalRow.userId) return;
+
+            const goalCents = providerGoalRow.monthlyGoalCents;
+
+            // MTD revenue: sum paid invoices from the 1st of the current month
+            const now = new Date();
+            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+            const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+            const mtdRows = await db
+              .select({ total: invoices.total })
+              .from(invoices)
+              .where(
+                and(
+                  eq(invoices.providerId, updatedInvoice.providerId),
+                  eq(invoices.status, "paid"),
+                  gte(invoices.paidAt, monthStart),
+                  lte(invoices.paidAt, now),
+                ),
+              );
+
+            const mtdCents = Math.round(
+              mtdRows.reduce((sum, r) => sum + parseFloat(r.total || "0"), 0) * 100,
+            );
+
+            const pct = mtdCents / goalCents;
+            const goalDollars = Math.round(goalCents / 100).toLocaleString();
+            const mtdDollars = Math.round(mtdCents / 100).toLocaleString();
+
+            // 50% milestone
+            if (
+              pct >= 0.5 &&
+              pct < 1.0 &&
+              providerGoalRow.goalNotified50Month !== monthKey
+            ) {
+              await db
+                .update(providers)
+                .set({ goalNotified50Month: monthKey })
+                .where(eq(providers.id, updatedInvoice.providerId));
+              dispatchNotification(
+                providerGoalRow.userId,
+                "Halfway there! 🎯",
+                `You've earned $${mtdDollars} of your $${goalDollars} goal this month — keep it up!`,
+                "goal_milestone_50",
+                { type: "goal_milestone", milestone: "50", screen: "HomeTab" },
+                "earnings",
+              ).catch((e: unknown) =>
+                console.error("[goal-milestone] 50% push error:", e),
+              );
+            }
+
+            // 100% milestone
+            if (
+              pct >= 1.0 &&
+              providerGoalRow.goalNotified100Month !== monthKey
+            ) {
+              await db
+                .update(providers)
+                .set({ goalNotified100Month: monthKey })
+                .where(eq(providers.id, updatedInvoice.providerId));
+              dispatchNotification(
+                providerGoalRow.userId,
+                "Goal reached! 🎉",
+                `You hit your $${goalDollars} goal this month! Amazing work.`,
+                "goal_milestone_100",
+                { type: "goal_milestone", milestone: "100", screen: "HomeTab" },
+                "earnings",
+              ).catch((e: unknown) =>
+                console.error("[goal-milestone] 100% push error:", e),
+              );
+            }
+          } catch (e) {
+            console.error("[goal-milestone] Monthly goal notification error:", e);
+          }
+        })();
+      }
     } catch (err) {
       console.error("Failed to dispatch invoice.paid from webhook:", err);
     }

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { StyleSheet, View, ScrollView, RefreshControl, Pressable, ActivityIndicator, AppState } from "react-native";
+import { StyleSheet, View, ScrollView, RefreshControl, Pressable, ActivityIndicator, AppState, TextInput, Modal } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
@@ -150,6 +150,255 @@ interface Client {
   lastName: string;
   email?: string;
   phone?: string;
+}
+
+const GOAL_PRESETS_DASHBOARD = [
+  { label: "$1K", cents: 100_000 },
+  { label: "$3K", cents: 300_000 },
+  { label: "$5K", cents: 500_000 },
+  { label: "$10K", cents: 1_000_000 },
+];
+
+function MonthlyGoalCard({
+  providerId,
+  revenueMTDDollars,
+  monthlyGoalCents,
+  theme,
+  queryClient,
+}: {
+  providerId: string | undefined;
+  revenueMTDDollars: number;
+  monthlyGoalCents: number | null;
+  theme: ReturnType<typeof useTheme>["theme"];
+  queryClient: ReturnType<typeof import("@tanstack/react-query").useQueryClient>;
+}) {
+  const [editVisible, setEditVisible] = useState(false);
+  const [customMode, setCustomMode] = useState(false);
+  const [customValue, setCustomValue] = useState("");
+
+  const goalMutation = useMutation({
+    mutationFn: async (cents: number | null) => {
+      const res = await apiRequest("PATCH", "/api/provider/goal", { monthlyGoalCents: cents });
+      if (!res.ok) throw new Error("Failed to update goal");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId] });
+      setEditVisible(false);
+      setCustomMode(false);
+      setCustomValue("");
+    },
+  });
+
+  const revenueMTDCents = Math.round(revenueMTDDollars * 100);
+  const progress = monthlyGoalCents && monthlyGoalCents > 0
+    ? Math.min(revenueMTDCents / monthlyGoalCents, 1)
+    : 0;
+  const goalDollars = monthlyGoalCents ? Math.round(monthlyGoalCents / 100) : 0;
+
+  const handlePresetSelect = (cents: number) => {
+    goalMutation.mutate(cents);
+  };
+
+  const handleCustomConfirm = () => {
+    const dollars = parseFloat(customValue.replace(/[^0-9.]/g, ""));
+    if (!isNaN(dollars) && dollars > 0) {
+      goalMutation.mutate(Math.round(dollars * 100));
+    }
+  };
+
+  if (!monthlyGoalCents) {
+    return (
+      <Animated.View entering={FadeInDown.delay(180).duration(400)}>
+        <Pressable onPress={() => setEditVisible(true)} testID="card-set-monthly-goal">
+          <GlassCard
+            style={[styles.goalCard, { borderColor: Colors.accent + "40", borderWidth: 1, borderStyle: "dashed" }]}
+          >
+            <View style={styles.goalCardRow}>
+              <View style={[styles.goalIcon, { backgroundColor: Colors.accentLight }]}>
+                <Feather name="target" size={18} color={Colors.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <ThemedText style={[styles.goalTitle, { color: Colors.accent }]}>Set a monthly goal</ThemedText>
+                <ThemedText style={[styles.goalSubtitle, { color: theme.textSecondary }]}>
+                  Track your progress toward a revenue target
+                </ThemedText>
+              </View>
+              <Feather name="chevron-right" size={18} color={Colors.accent} />
+            </View>
+          </GlassCard>
+        </Pressable>
+        <GoalEditModal
+          visible={editVisible}
+          onClose={() => { setEditVisible(false); setCustomMode(false); setCustomValue(""); }}
+          theme={theme}
+          customMode={customMode}
+          setCustomMode={setCustomMode}
+          customValue={customValue}
+          setCustomValue={setCustomValue}
+          onPresetSelect={handlePresetSelect}
+          onCustomConfirm={handleCustomConfirm}
+          loading={goalMutation.isPending}
+        />
+      </Animated.View>
+    );
+  }
+
+  return (
+    <Animated.View entering={FadeInDown.delay(180).duration(400)}>
+      <GlassCard style={styles.goalCard} testID="card-monthly-goal">
+        <View style={styles.goalCardRow}>
+          <View style={[styles.goalIcon, { backgroundColor: Colors.accentLight }]}>
+            <Feather name="target" size={18} color={Colors.accent} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <ThemedText style={styles.goalTitle}>Monthly Goal</ThemedText>
+            <ThemedText style={[styles.goalSubtitle, { color: theme.textSecondary }]}>
+              ${revenueMTDDollars.toLocaleString()} of ${goalDollars.toLocaleString()} goal
+            </ThemedText>
+          </View>
+          <Pressable
+            onPress={() => setEditVisible(true)}
+            hitSlop={12}
+            testID="button-update-goal"
+          >
+            <ThemedText style={[styles.goalEditLink, { color: Colors.accent }]}>Edit</ThemedText>
+          </Pressable>
+        </View>
+
+        <View style={[styles.goalProgressTrack, { backgroundColor: theme.separator }]}>
+          <View
+            style={[
+              styles.goalProgressFill,
+              {
+                backgroundColor: progress >= 1 ? Colors.accent : Colors.accent,
+                width: `${Math.round(progress * 100)}%` as any,
+              },
+            ]}
+          />
+        </View>
+
+        <View style={styles.goalProgressLabels}>
+          <ThemedText style={[styles.goalProgressPct, { color: Colors.accent }]}>
+            {Math.round(progress * 100)}%
+          </ThemedText>
+          {progress >= 1 ? (
+            <ThemedText style={[styles.goalCelebration, { color: Colors.accent }]}>
+              🎉 Goal reached!
+            </ThemedText>
+          ) : (
+            <ThemedText style={[styles.goalProgressPct, { color: theme.textSecondary }]}>
+              ${Math.max(0, goalDollars - Math.round(revenueMTDDollars)).toLocaleString()} to go
+            </ThemedText>
+          )}
+        </View>
+      </GlassCard>
+
+      <GoalEditModal
+        visible={editVisible}
+        onClose={() => { setEditVisible(false); setCustomMode(false); setCustomValue(""); }}
+        theme={theme}
+        customMode={customMode}
+        setCustomMode={setCustomMode}
+        customValue={customValue}
+        setCustomValue={setCustomValue}
+        onPresetSelect={handlePresetSelect}
+        onCustomConfirm={handleCustomConfirm}
+        loading={goalMutation.isPending}
+      />
+    </Animated.View>
+  );
+}
+
+function GoalEditModal({
+  visible,
+  onClose,
+  theme,
+  customMode,
+  setCustomMode,
+  customValue,
+  setCustomValue,
+  onPresetSelect,
+  onCustomConfirm,
+  loading,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  theme: ReturnType<typeof useTheme>["theme"];
+  customMode: boolean;
+  setCustomMode: (v: boolean) => void;
+  customValue: string;
+  setCustomValue: (v: string) => void;
+  onPresetSelect: (cents: number) => void;
+  onCustomConfirm: () => void;
+  loading: boolean;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.goalModalOverlay} onPress={onClose}>
+        <Pressable
+          style={[styles.goalModalSheet, { backgroundColor: theme.backgroundRoot }]}
+          onPress={(e) => e.stopPropagation()}
+        >
+          <View style={styles.goalModalHandle} />
+          <ThemedText style={styles.goalModalTitle}>Set monthly goal</ThemedText>
+          <ThemedText style={[styles.goalModalSubtitle, { color: theme.textSecondary }]}>
+            How much do you want to earn this month?
+          </ThemedText>
+
+          <View style={styles.goalModalGrid}>
+            {GOAL_PRESETS_DASHBOARD.map((p) => (
+              <Pressable
+                key={p.cents}
+                onPress={() => { Haptics.selectionAsync(); onPresetSelect(p.cents); }}
+                disabled={loading}
+                style={[
+                  styles.goalModalPreset,
+                  { backgroundColor: theme.backgroundSecondary, borderColor: theme.border },
+                ]}
+                testID={`modal-goal-preset-${p.cents}`}
+              >
+                <ThemedText style={[styles.goalModalPresetLabel, { color: theme.text }]}>{p.label}</ThemedText>
+                <ThemedText style={[{ fontSize: 11, color: theme.textSecondary }]}>/ mo</ThemedText>
+              </Pressable>
+            ))}
+          </View>
+
+          {customMode ? (
+            <View style={[styles.goalModalCustomInput, { backgroundColor: theme.backgroundSecondary, borderColor: Colors.accent }]}>
+              <ThemedText style={{ color: theme.textSecondary, fontSize: 17 }}>$</ThemedText>
+              <TextInput
+                style={[{ flex: 1, fontSize: 17, color: theme.text, marginHorizontal: 6 }]}
+                placeholder="Custom amount"
+                placeholderTextColor={theme.textTertiary}
+                value={customValue}
+                onChangeText={setCustomValue}
+                keyboardType="numeric"
+                autoFocus
+                returnKeyType="done"
+                onSubmitEditing={onCustomConfirm}
+              />
+              <Pressable onPress={onCustomConfirm} disabled={loading} hitSlop={12}>
+                <Feather name="check" size={20} color={Colors.accent} />
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable
+              onPress={() => setCustomMode(true)}
+              style={[styles.goalModalCustomBtn, { borderColor: theme.border }]}
+            >
+              <Feather name="edit-2" size={14} color={theme.textSecondary} />
+              <ThemedText style={[{ color: theme.textSecondary, fontSize: 14 }]}>Custom amount</ThemedText>
+            </Pressable>
+          )}
+
+          {loading ? (
+            <ActivityIndicator size="small" color={Colors.accent} style={{ marginTop: Spacing.md }} />
+          ) : null}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
 }
 
 function ProfileMissingCTA({ navigation }: { navigation: any }) {
@@ -697,6 +946,14 @@ export default function ProviderHomeScreen() {
           </GlassCard>
         </Animated.View>
 
+        <MonthlyGoalCard
+          providerId={providerId}
+          revenueMTDDollars={stats.revenueMTD}
+          monthlyGoalCents={(freshProviderData?.provider as any)?.monthlyGoalCents ?? null}
+          theme={theme}
+          queryClient={queryClient}
+        />
+
         <Animated.View entering={FadeInDown.delay(200).duration(400)}>
           {isLoading ? (
             <GlassCard style={styles.todaySummary}>
@@ -1104,6 +1361,121 @@ export default function ProviderHomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  // Monthly Goal card
+  goalCard: {
+    marginBottom: Spacing.lg,
+  },
+  goalCardRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  goalIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  goalTitle: {
+    ...Typography.callout,
+    fontWeight: "600",
+  },
+  goalSubtitle: {
+    ...Typography.caption1,
+    marginTop: 2,
+  },
+  goalEditLink: {
+    ...Typography.callout,
+    fontWeight: "600",
+  },
+  goalProgressTrack: {
+    height: 8,
+    borderRadius: 4,
+    marginTop: Spacing.md,
+    overflow: "hidden",
+  },
+  goalProgressFill: {
+    height: 8,
+    borderRadius: 4,
+  },
+  goalProgressLabels: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: Spacing.xs,
+  },
+  goalProgressPct: {
+    ...Typography.caption1,
+    fontWeight: "600",
+  },
+  goalCelebration: {
+    ...Typography.caption1,
+    fontWeight: "700",
+  },
+  goalModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  goalModalSheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: Spacing.xl,
+    paddingBottom: Spacing["2xl"],
+  },
+  goalModalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#ccc",
+    alignSelf: "center",
+    marginBottom: Spacing.lg,
+  },
+  goalModalTitle: {
+    ...Typography.title2,
+    marginBottom: Spacing.xs,
+  },
+  goalModalSubtitle: {
+    ...Typography.body,
+    marginBottom: Spacing.lg,
+  },
+  goalModalGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  goalModalPreset: {
+    width: "47%",
+    alignItems: "center",
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    gap: 2,
+  },
+  goalModalPresetLabel: {
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  goalModalCustomBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+  },
+  goalModalCustomInput: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+
   quickQuoteCta: {
     flexDirection: "row",
     alignItems: "center",
