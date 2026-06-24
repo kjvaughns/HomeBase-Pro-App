@@ -9,7 +9,13 @@ import { BorderRadius, Spacing, Typography } from "@/constants/theme";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
-export function GracePeriodBanner() {
+interface GracePeriodBannerProps {
+  /** If provided and the provider just received their first payment, the banner
+   *  shows value-framed copy: "You just earned [X] — subscribe to keep going." */
+  firstPaymentAmountCents?: number | null;
+}
+
+export function GracePeriodBanner({ firstPaymentAmountCents }: GracePeriodBannerProps = {}) {
   const { isInGrace, daysRemainingInGrace } = useSubscriptionStatus();
   const { isDark } = useTheme();
   const navigation =
@@ -32,7 +38,15 @@ export function GracePeriodBanner() {
 
   const title =
     days === 1 ? "1 day left in your trial" : `${days} days left in your trial`;
-  const subtitle = "Tap to subscribe and keep going.";
+
+  // When we know the first-payment amount, use value-framed subscription copy.
+  const firstPaymentFormatted =
+    firstPaymentAmountCents && firstPaymentAmountCents > 0
+      ? `$${(firstPaymentAmountCents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : null;
+  const subtitle = firstPaymentFormatted
+    ? `You just earned ${firstPaymentFormatted} through HomeBase. Subscribe to keep your business running on autopilot.`
+    : "Tap to subscribe and keep going.";
 
   const handlePress = () => {
     try {

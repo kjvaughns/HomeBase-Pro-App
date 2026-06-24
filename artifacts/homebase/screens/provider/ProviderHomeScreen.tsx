@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useEffect } from "react";
-import { StyleSheet, View, ScrollView, RefreshControl, Pressable, ActivityIndicator } from "react-native";
+import React, { useState, useMemo, useEffect, useRef } from "react";
+import { StyleSheet, View, ScrollView, RefreshControl, Pressable, ActivityIndicator, AppState } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
@@ -395,6 +395,43 @@ export default function ProviderHomeScreen() {
   // finished but the toggle is still off.
   const showPublishPrompt = stripeReady && profileIsPublic === false;
 
+  // First payment celebration trigger (Task #407).
+  // Only fires once: when the provider has received their first payment but
+  // hasn't yet seen the celebration screen. A local ref prevents re-triggering
+  // during the same app session (the server flag handles future sessions).
+  const celebrationShownRef = useRef(false);
+  useEffect(() => {
+    const p = freshProviderData?.provider as
+      | { firstPaymentReceived?: boolean; firstPaymentCelebrated?: boolean; firstPaymentAmountCents?: number | null }
+      | undefined;
+    if (
+      p?.firstPaymentReceived === true &&
+      p?.firstPaymentCelebrated === false &&
+      !celebrationShownRef.current
+    ) {
+      celebrationShownRef.current = true;
+      setTimeout(() => {
+        navigation.navigate("FirstPaymentCelebration", {
+          amountCents: p.firstPaymentAmountCents ?? 0,
+        });
+      }, 600);
+    }
+  }, [freshProviderData?.provider, navigation]);
+
+  // Refetch provider data on foreground so celebration trigger fires immediately
+  // when provider returns to the app after receiving their first payment (Task #407).
+  useEffect(() => {
+    if (!providerId) return;
+    let lastState = AppState.currentState;
+    const sub = AppState.addEventListener("change", (next) => {
+      if (lastState.match(/inactive|background/) && next === "active") {
+        queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId] });
+      }
+      lastState = next;
+    });
+    return () => sub.remove();
+  }, [providerId, queryClient]);
+
   const publishMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest("PATCH", `/api/provider/${providerId}`, {
@@ -580,7 +617,11 @@ export default function ProviderHomeScreen() {
         }
       >
         <View style={{ marginHorizontal: -horizontalPadding }}>
-          <GracePeriodBanner />
+          <GracePeriodBanner
+            firstPaymentAmountCents={
+              (freshProviderData?.provider as any)?.firstPaymentAmountCents ?? null
+            }
+          />
           <CrewWelcomeBanner />
         </View>
 

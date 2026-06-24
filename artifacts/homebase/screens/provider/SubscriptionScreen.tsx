@@ -19,7 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import Constants from "expo-constants";
 
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { useTheme } from "@/hooks/useTheme";
@@ -356,6 +356,18 @@ export default function SubscriptionScreen() {
     [busy, refetch],
   );
 
+  // Fetch provider record to get firstPaymentAmountCents for value-framed copy (Task #407).
+  const { data: providerData } = useQuery<{ provider: { firstPaymentAmountCents?: number | null } }>({
+    queryKey: ["/api/provider", providerId],
+    enabled: !!providerId,
+    staleTime: 30_000,
+  });
+  const firstPaymentAmountCents = providerData?.provider?.firstPaymentAmountCents ?? null;
+  const firstPaymentFormatted =
+    firstPaymentAmountCents && firstPaymentAmountCents > 0
+      ? `$${(firstPaymentAmountCents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : null;
+
   const stateKey: StateKey = (status as StateKey) ?? "free";
   const copy: CopyForState = (() => {
     if (isPartner) {
@@ -392,7 +404,9 @@ export default function SubscriptionScreen() {
             days === 1
               ? "1 day left in your trial"
               : `${days} days left in your trial`,
-          body: "Subscribe to keep creating jobs and sending invoices after your trial ends.",
+          body: firstPaymentFormatted
+            ? `You just earned ${firstPaymentFormatted} through HomeBase. Subscribe to keep your business running on autopilot.`
+            : "Subscribe to keep creating jobs and sending invoices after your trial ends.",
           caption: "Your trial started with your first paid booking.",
         };
       }

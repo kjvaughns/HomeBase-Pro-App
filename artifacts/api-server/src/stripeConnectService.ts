@@ -1174,6 +1174,28 @@ export async function handlePaymentIntentSucceeded(
     }
   }
 
+  // First payment celebration flag — set once per provider (Task #407).
+  // Only fires on the very first payment; all subsequent payments skip this.
+  if (updatedInvoice) {
+    try {
+      const [currentProvider] = await db
+        .select({ firstPaymentReceived: providers.firstPaymentReceived })
+        .from(providers)
+        .where(eq(providers.id, updatedInvoice.providerId));
+      if (currentProvider && !currentProvider.firstPaymentReceived) {
+        await db
+          .update(providers)
+          .set({
+            firstPaymentReceived: true,
+            firstPaymentAmountCents: amountCents,
+          })
+          .where(eq(providers.id, updatedInvoice.providerId));
+      }
+    } catch (e) {
+      console.error("[first-payment] celebration flag failed (webhook):", e);
+    }
+  }
+
   // Dispatch invoice.paid notification via webhook
   if (updatedInvoice) {
     try {

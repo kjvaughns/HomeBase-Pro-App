@@ -66,6 +66,7 @@ import SubscriptionScreen from "@/screens/provider/SubscriptionScreen";
 import AdminPartnersScreen from "@/screens/provider/AdminPartnersScreen";
 import ReferAProScreen from "@/screens/provider/ReferAProScreen";
 import AchievementsScreen from "@/screens/provider/AchievementsScreen";
+import FirstPaymentCelebrationScreen from "@/screens/provider/FirstPaymentCelebrationScreen";
 import BusinessHubScreen from "@/screens/provider/BusinessHubScreen";
 import CrewScreen from "@/screens/provider/CrewScreen";
 import BookingLinkScreen from "@/screens/provider/BookingLinkScreen";
@@ -208,6 +209,7 @@ export type RootStackParamList = {
   Achievements: undefined;
   Crew: undefined;
   CrewJobDetail: { jobId: string };
+  FirstPaymentCelebration: { amountCents: number };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -733,6 +735,15 @@ export default function RootStackNavigator() {
         component={AchievementsScreen}
         options={{
           headerTitle: "Achievements",
+        }}
+      />
+      <Stack.Screen
+        name="FirstPaymentCelebration"
+        component={FirstPaymentCelebrationScreen}
+        options={{
+          headerShown: false,
+          presentation: "fullScreenModal",
+          gestureEnabled: false,
         }}
       />
       <Stack.Screen

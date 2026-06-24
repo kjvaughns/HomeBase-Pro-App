@@ -1391,6 +1391,20 @@ export async function runBootMigrations(): Promise<void> {
       `CREATE INDEX IF NOT EXISTS providers_crew_origin_provider_id_idx ON providers (crew_origin_provider_id)`,
     );
 
+    // ── Task #407: First payment celebration flags ─────────────────────────────
+    await runSql(
+      "providers.first_payment_received",
+      `ALTER TABLE providers ADD COLUMN IF NOT EXISTS first_payment_received BOOLEAN NOT NULL DEFAULT FALSE`,
+    );
+    await runSql(
+      "providers.first_payment_celebrated",
+      `ALTER TABLE providers ADD COLUMN IF NOT EXISTS first_payment_celebrated BOOLEAN NOT NULL DEFAULT FALSE`,
+    );
+    await runSql(
+      "providers.first_payment_amount_cents",
+      `ALTER TABLE providers ADD COLUMN IF NOT EXISTS first_payment_amount_cents INTEGER`,
+    );
+
     // ── Task #354: Provider milestone badges ──────────────────────────────────
     await runSql(
       "badge_type.enum",
@@ -1537,6 +1551,10 @@ export async function runBootMigrations(): Promise<void> {
       ["homeowner_referrals table",                `SELECT id FROM homeowner_referrals LIMIT 0`],
       // Task #356: loyalty credits — idempotency keys for credit_ledger grants
       ["credit_ledger.idempotency_key column",     `SELECT idempotency_key FROM credit_ledger LIMIT 0`],
+      // Task #407: first payment celebration flags
+      ["providers.first_payment_received column",  `SELECT first_payment_received FROM providers LIMIT 0`],
+      ["providers.first_payment_celebrated column",`SELECT first_payment_celebrated FROM providers LIMIT 0`],
+      ["providers.first_payment_amount_cents column", `SELECT first_payment_amount_cents FROM providers LIMIT 0`],
     );
 
     const verificationErrors: string[] = [];

@@ -304,6 +304,10 @@ export const providers = pgTable("providers", {
     (): any => providers.id,
     { onDelete: "set null" },
   ),
+  // First payment celebration flags (Task #407)
+  firstPaymentReceived: boolean("first_payment_received").default(false).notNull(),
+  firstPaymentCelebrated: boolean("first_payment_celebrated").default(false).notNull(),
+  firstPaymentAmountCents: integer("first_payment_amount_cents"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

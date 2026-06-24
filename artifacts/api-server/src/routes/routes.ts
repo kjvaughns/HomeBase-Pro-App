@@ -7779,6 +7779,33 @@ Respond with JSON only:
     },
   );
 
+  // POST /api/provider/me/first-payment-celebrated — mark the first-payment
+  // celebration as shown so it never fires again (Task #407).
+  app.post(
+    "/api/provider/me/first-payment-celebrated",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const authUserId = req.authenticatedUserId!;
+        const [provider] = await db
+          .select({ id: providers.id })
+          .from(providers)
+          .where(eq(providers.userId, authUserId));
+        if (!provider) {
+          return res.status(404).json({ error: "Provider not found" });
+        }
+        await db
+          .update(providers)
+          .set({ firstPaymentCelebrated: true })
+          .where(eq(providers.id, provider.id));
+        res.json({ ok: true });
+      } catch (error) {
+        req.log.error(error, "first-payment-celebrated error");
+        res.status(500).json({ error: "Failed to mark celebration" });
+      }
+    },
+  );
+
   // Get provider by user ID
   app.get(
     "/api/provider/user/:userId",
