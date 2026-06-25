@@ -2394,3 +2394,46 @@ export const insertProviderBadgeSchema = createInsertSchema(providerBadges).omit
 export type ProviderBadge = typeof providerBadges.$inferSelect;
 export type BadgeType = typeof badgeTypeEnum.enumValues[number];
 export type InsertProviderBadge = z.infer<typeof insertProviderBadgeSchema>;
+
+// ── Variable reward home feed (Task #410) ─────────────────────────────────────
+// Tracks what card types were last shown to each provider so we can rotate
+// through the 5 card types without repeating the same type consecutively.
+// dismissedCards stores short-lived dismissals as {cardId, dismissedAt} pairs.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const feedCardTypeEnum = pgEnum("feed_card_type", [
+  "nearby_demand",
+  "profile_insight",
+  "milestone_approaching",
+  "optimization_tip",
+  "recent_activity",
+]);
+
+export const providerFeedState = pgTable(
+  "provider_feed_state",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    providerId: varchar("provider_id")
+      .notNull()
+      .unique()
+      .references(() => providers.id, { onDelete: "cascade" }),
+    lastShownTypes: jsonb("last_shown_types")
+      .$type<string[]>()
+      .default(sql`'[]'::jsonb`),
+    dismissedCards: jsonb("dismissed_cards")
+      .$type<Array<{ cardId: string; dismissedAt: string }>>()
+      .default(sql`'[]'::jsonb`),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+);
+
+export const providerFeedStateRelations = relations(providerFeedState, ({ one }) => ({
+  provider: one(providers, {
+    fields: [providerFeedState.providerId],
+    references: [providers.id],
+  }),
+}));
+
+export type ProviderFeedState = typeof providerFeedState.$inferSelect;

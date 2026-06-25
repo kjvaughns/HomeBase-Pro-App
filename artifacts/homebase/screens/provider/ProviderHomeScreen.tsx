@@ -27,6 +27,7 @@ import { useAuthStore } from "@/state/authStore";
 import { useProviderStore } from "@/state/providerStore";
 import { useOnboardingStore } from "@/state/onboardingStore";
 import { isUpcomingJob } from "@/lib/jobUtils";
+import { ProviderFeed, type FeedCardData } from "@/components/FeedCard";
 
 type BusinessHourEntry = { enabled?: boolean; open?: string; close?: string };
 type BusinessHoursMap = Record<string, BusinessHourEntry | undefined>;
@@ -562,6 +563,29 @@ export default function ProviderHomeScreen() {
     retry: false,
   });
 
+  const { data: feedData, refetch: refetchFeed } = useQuery<{ cards: FeedCardData[] }>({
+    queryKey: ["/api/provider", providerId, "feed"],
+    enabled: !!providerId,
+    staleTime: 0,
+  });
+
+  const [dismissedFeedCards, setDismissedFeedCards] = useState<Set<string>>(new Set());
+
+  const dismissFeedMutation = useMutation({
+    mutationFn: async (cardId: string) => {
+      await apiRequest("POST", `/api/provider/${providerId}/feed/dismiss`, { cardId });
+    },
+  });
+
+  const handleDismissFeedCard = (cardId: string) => {
+    setDismissedFeedCards((prev) => new Set(prev).add(cardId));
+    dismissFeedMutation.mutate(cardId);
+  };
+
+  const visibleFeedCards = (feedData?.cards ?? []).filter(
+    (c) => !dismissedFeedCards.has(c.id),
+  );
+
   const [refreshing, setRefreshing] = useState(false);
 
   const stats = statsData?.stats || {
@@ -623,7 +647,7 @@ export default function ProviderHomeScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([refetchStats(), refetchJobs()]);
+    await Promise.all([refetchStats(), refetchJobs(), refetchFeed()]);
     setRefreshing(false);
   };
 
@@ -1039,6 +1063,15 @@ export default function ProviderHomeScreen() {
             </View>
           )}
         </Animated.View>
+
+        {visibleFeedCards.length > 0 ? (
+          <Animated.View entering={FadeInDown.delay(220).duration(400)}>
+            <ProviderFeed
+              cards={visibleFeedCards}
+              onDismiss={handleDismissFeedCard}
+            />
+          </Animated.View>
+        ) : null}
 
         {newLeadCount > 0 ? (
           <Animated.View entering={FadeInDown.delay(250).duration(400)}>

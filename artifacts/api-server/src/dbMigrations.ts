@@ -1531,6 +1531,21 @@ export async function runBootMigrations(): Promise<void> {
        ON credit_ledger (idempotency_key) WHERE idempotency_key IS NOT NULL`,
     );
 
+    // Task #410: Variable reward home feed — provider_feed_state tracks
+    // rotation state (last shown card types) and 24-hour dismiss records.
+    // The feed_card_type enum exists in the Drizzle schema but is not used
+    // directly as a column type; all card-type data is stored as JSONB.
+    await runSql(
+      "provider_feed_state.table",
+      `CREATE TABLE IF NOT EXISTS provider_feed_state (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        provider_id VARCHAR NOT NULL UNIQUE REFERENCES providers(id) ON DELETE CASCADE,
+        last_shown_types JSONB NOT NULL DEFAULT '[]'::jsonb,
+        dismissed_cards JSONB NOT NULL DEFAULT '[]'::jsonb,
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )`,
+    );
+
     verifications.push(
       ["providers.referral_code column",         `SELECT referral_code FROM providers LIMIT 0`],
       ["provider_referrals table",               `SELECT id FROM provider_referrals LIMIT 0`],
@@ -1572,6 +1587,8 @@ export async function runBootMigrations(): Promise<void> {
       ["providers.first_payment_received column",  `SELECT first_payment_received FROM providers LIMIT 0`],
       ["providers.first_payment_celebrated column",`SELECT first_payment_celebrated FROM providers LIMIT 0`],
       ["providers.first_payment_amount_cents column", `SELECT first_payment_amount_cents FROM providers LIMIT 0`],
+      // Task #410: variable reward home feed
+      ["provider_feed_state table",                `SELECT id FROM provider_feed_state LIMIT 0`],
     );
 
     const verificationErrors: string[] = [];

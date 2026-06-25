@@ -173,6 +173,7 @@ import {
 } from "../recurringJobsService";
 import { checkAndAwardMilestones } from "../milestoneService";
 import { updateProviderStreak, effectiveStreak } from "../streakService";
+import { getProviderFeed, dismissFeedCard } from "../feedService";
 import { computeHomeHealth } from "../homeHealthService";
 import {
   buildRoute,
@@ -8335,6 +8336,57 @@ Respond with JSON only:
       } catch (error) {
         console.error("Get provider insights error:", error);
         res.status(500).json({ error: "Failed to get provider insights" });
+      }
+    },
+  );
+
+  // Provider variable-reward home feed (Task #410)
+  // Returns 1–3 rotating highlight cards for the provider's home screen.
+  // Card types rotate so no two consecutive visits show the same type.
+  app.get(
+    "/api/provider/:id/feed",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const providerRow = await storage.getProviderByUserId(
+          req.authenticatedUserId!,
+        );
+        if (!providerRow || providerRow.id !== req.params.id) {
+          res.status(403).json({ error: "Forbidden" });
+          return;
+        }
+        const cards = await getProviderFeed(req.params.id);
+        res.json({ cards });
+      } catch (error) {
+        req.log.error({ error }, "Get provider feed error");
+        res.status(500).json({ error: "Failed to get provider feed" });
+      }
+    },
+  );
+
+  // Dismiss a feed card so it doesn't appear for the next 24 hours
+  app.post(
+    "/api/provider/:id/feed/dismiss",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const providerRow = await storage.getProviderByUserId(
+          req.authenticatedUserId!,
+        );
+        if (!providerRow || providerRow.id !== req.params.id) {
+          res.status(403).json({ error: "Forbidden" });
+          return;
+        }
+        const { cardId } = req.body;
+        if (!cardId || typeof cardId !== "string") {
+          res.status(400).json({ error: "cardId is required" });
+          return;
+        }
+        await dismissFeedCard(req.params.id, cardId);
+        res.json({ ok: true });
+      } catch (error) {
+        req.log.error({ error }, "Dismiss feed card error");
+        res.status(500).json({ error: "Failed to dismiss feed card" });
       }
     },
   );
