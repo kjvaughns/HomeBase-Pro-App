@@ -1120,6 +1120,18 @@ export default function BusinessHubScreen() {
           <Feather name="chevron-right" size={16} color={theme.textTertiary} />
         </Pressable>
 
+        <Pressable
+          style={[styles.previewBtn, { borderColor: Colors.accent + "55" }]}
+          onPress={() => navigation.navigate("ReferAPro")}
+          testID="button-refer-a-pro"
+        >
+          <Feather name="gift" size={16} color={Colors.accent} />
+          <ThemedText style={[styles.previewBtnText, { color: Colors.accent }]}>
+            Refer a Pro, Earn a Free Month
+          </ThemedText>
+          <Feather name="chevron-right" size={16} color={Colors.accent + "99"} />
+        </Pressable>
+
       </Animated.View>
     </KeyboardAwareScrollViewCompat>
   );

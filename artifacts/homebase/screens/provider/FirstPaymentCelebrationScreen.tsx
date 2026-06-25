@@ -4,6 +4,8 @@ import {
   View,
   Dimensions,
   Pressable,
+  Modal,
+  Share,
 } from "react-native";
 import Animated, {
   useSharedValue,
@@ -21,6 +23,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import * as Haptics from "expo-haptics";
+import { Feather } from "@expo/vector-icons";
 
 import { ThemedText } from "@/components/ThemedText";
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -135,6 +138,8 @@ export default function FirstPaymentCelebrationScreen() {
 
   const [particles] = useState(() => generateParticles(40));
   const [isMarking, setIsMarking] = useState(false);
+  const [showReferralPrompt, setShowReferralPrompt] = useState(false);
+  const [referralLink, setReferralLink] = useState<string | null>(null);
 
   // Trigger haptics on mount
   useEffect(() => {
@@ -169,6 +174,35 @@ export default function FirstPaymentCelebrationScreen() {
       // but the user won't see the screen again this session.
     }
 
+    // Show referral prompt before navigating away — fetch link in background
+    try {
+      const res = await apiRequest("GET", "/api/providers/me/referral");
+      if (res.ok) {
+        const data = await res.json();
+        setReferralLink(data.shareLink ?? null);
+      }
+    } catch {
+      // Non-fatal — show prompt without pre-fetched link; screen will fetch it
+    }
+    setIsMarking(false);
+    setShowReferralPrompt(true);
+  };
+
+  const handleShareReferral = async () => {
+    const link = referralLink ?? "https://homebaseproapp.com/signup";
+    try {
+      await Share.share({
+        message: `Join me on HomeBase — the app for managing your home services business. Sign up and we both get a month free!\n\n${link}`,
+        url: link,
+        title: "Refer a Pro to HomeBase",
+      });
+    } catch {
+      // user dismissed share sheet
+    }
+  };
+
+  const handleDismissReferral = () => {
+    setShowReferralPrompt(false);
     navigation.goBack();
   };
 
@@ -223,6 +257,53 @@ export default function FirstPaymentCelebrationScreen() {
           </PrimaryButton>
         </Animated.View>
       </View>
+
+      {/* Referral Prompt Bottom Sheet */}
+      <Modal
+        visible={showReferralPrompt}
+        transparent
+        animationType="slide"
+        onRequestClose={handleDismissReferral}
+      >
+        <Pressable style={styles.referralOverlay} onPress={handleDismissReferral}>
+          <Pressable
+            style={[styles.referralSheet, { backgroundColor: theme.backgroundRoot }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.referralHandle} />
+
+            <View style={[styles.referralIconCircle, { backgroundColor: Colors.accentLight }]}>
+              <ThemedText style={styles.referralIconEmoji}>🎁</ThemedText>
+            </View>
+
+            <ThemedText style={styles.referralTitle}>
+              Know another service pro?
+            </ThemedText>
+            <ThemedText style={[styles.referralBody, { color: theme.textSecondary }]}>
+              Give them a month free — and earn one for yourself when they complete their first job.
+            </ThemedText>
+
+            <Pressable
+              style={[styles.referralShareBtn, { backgroundColor: Colors.accent }]}
+              onPress={handleShareReferral}
+              testID="button-referral-prompt-share"
+            >
+              <Feather name="share-2" size={16} color="#fff" />
+              <ThemedText style={styles.referralShareBtnText}>Share my link</ThemedText>
+            </Pressable>
+
+            <Pressable
+              style={styles.referralDismissBtn}
+              onPress={handleDismissReferral}
+              testID="button-referral-prompt-dismiss"
+            >
+              <ThemedText style={[styles.referralDismissText, { color: theme.textSecondary }]}>
+                Not now
+              </ThemedText>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -286,5 +367,71 @@ const styles = StyleSheet.create({
   },
   ctaButton: {
     width: "100%",
+  },
+  referralOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  referralSheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: Spacing.xl,
+    paddingBottom: Spacing["2xl"],
+    paddingTop: Spacing.md,
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  referralHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(0,0,0,0.15)",
+    marginBottom: Spacing.sm,
+  },
+  referralIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  referralIconEmoji: {
+    fontSize: 36,
+    lineHeight: 42,
+  },
+  referralTitle: {
+    ...Typography.title3,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  referralBody: {
+    ...Typography.body,
+    textAlign: "center",
+    lineHeight: 22,
+    maxWidth: 300,
+  },
+  referralShareBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    borderRadius: BorderRadius.button,
+    paddingVertical: 14,
+    width: "100%",
+    marginTop: Spacing.xs,
+  },
+  referralShareBtnText: {
+    ...Typography.callout,
+    fontWeight: "700",
+    color: "#fff",
+  },
+  referralDismissBtn: {
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.xl,
+  },
+  referralDismissText: {
+    ...Typography.callout,
+    textAlign: "center",
   },
 });

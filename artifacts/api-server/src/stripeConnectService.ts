@@ -1553,6 +1553,66 @@ export async function handlePaymentIntentSucceeded(
           }
         })();
       }
+
+      // $1,000 lifetime earnings referral milestone
+      // Each time a provider crosses a new $1,000 threshold in lifetime paid
+      // revenue, send a push nudging them to refer another pro. Fire-and-forget.
+      if (updatedInvoice) {
+        (async () => {
+          try {
+            const [providerInfo] = await db
+              .select({ userId: providers.userId, businessName: providers.businessName })
+              .from(providers)
+              .where(eq(providers.id, updatedInvoice.providerId));
+
+            if (!providerInfo?.userId) return;
+
+            // Sum all paid invoices for this provider (includes the just-paid one)
+            const lifetimeRows = await db
+              .select({ total: invoices.total })
+              .from(invoices)
+              .where(
+                and(
+                  eq(invoices.providerId, updatedInvoice.providerId),
+                  eq(invoices.status, "paid"),
+                ),
+              );
+
+            const lifetimeDollars = lifetimeRows.reduce(
+              (sum, r) => sum + parseFloat(r.total || "0"),
+              0,
+            );
+
+            // Amount of this specific invoice (what was just paid)
+            const thisInvoiceDollars = parseFloat(updatedInvoice.total || "0");
+            const previousDollars = lifetimeDollars - thisInvoiceDollars;
+
+            // Check if we crossed a $1,000 boundary
+            const prevThreshold = Math.floor(previousDollars / 1000);
+            const newThreshold = Math.floor(lifetimeDollars / 1000);
+
+            if (newThreshold > prevThreshold && newThreshold >= 1) {
+              const milestoneAmount = newThreshold * 1000;
+              dispatchNotification(
+                providerInfo.userId,
+                `You just hit $${milestoneAmount.toLocaleString()} through HomeBase 🎉`,
+                "Know another pro who'd love this? Give them a month free.",
+                "referral_revenue_milestone",
+                {
+                  type: "referral_revenue_milestone",
+                  screen: "ReferAPro",
+                  milestoneAmount,
+                },
+                "earnings",
+              ).catch((e: unknown) =>
+                console.error("[referral-milestone] push error:", e),
+              );
+            }
+          } catch (e) {
+            console.error("[referral-milestone] Lifetime earnings milestone error:", e);
+          }
+        })();
+      }
     } catch (err) {
       console.error("Failed to dispatch invoice.paid from webhook:", err);
     }
