@@ -1546,6 +1546,22 @@ export async function runBootMigrations(): Promise<void> {
       )`,
     );
 
+    // Task #411: Monthly recap — per-provider timezone for local-time push
+    // delivery, and a durable idempotency table to prevent duplicate blasts.
+    await runSql(
+      "providers.timezone",
+      `ALTER TABLE providers ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT 'America/New_York'`,
+    );
+    await runSql(
+      "recap_notifications_sent.table",
+      `CREATE TABLE IF NOT EXISTS recap_notifications_sent (
+        provider_id VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+        month VARCHAR(7) NOT NULL,
+        sent_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (provider_id, month)
+      )`,
+    );
+
     verifications.push(
       ["providers.referral_code column",         `SELECT referral_code FROM providers LIMIT 0`],
       ["provider_referrals table",               `SELECT id FROM provider_referrals LIMIT 0`],
@@ -1589,6 +1605,9 @@ export async function runBootMigrations(): Promise<void> {
       ["providers.first_payment_amount_cents column", `SELECT first_payment_amount_cents FROM providers LIMIT 0`],
       // Task #410: variable reward home feed
       ["provider_feed_state table",                `SELECT id FROM provider_feed_state LIMIT 0`],
+      // Task #411: monthly recap — timezone bucket + idempotency table
+      ["providers.timezone column",                `SELECT timezone FROM providers LIMIT 0`],
+      ["recap_notifications_sent table",           `SELECT provider_id FROM recap_notifications_sent LIMIT 0`],
     );
 
     const verificationErrors: string[] = [];

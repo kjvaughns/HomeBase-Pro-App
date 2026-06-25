@@ -11,6 +11,7 @@ import {
   json,
   jsonb,
   uniqueIndex,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -315,6 +316,8 @@ export const providers = pgTable("providers", {
   // Booking streak (Task #409)
   currentBookingStreak: integer("current_booking_streak").notNull().default(0),
   lastStreakDate: timestamp("last_streak_date"),
+  // IANA timezone for local-time push scheduling (defaults to Eastern)
+  timezone: text("timezone").notNull().default("America/New_York"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -2437,3 +2440,20 @@ export const providerFeedStateRelations = relations(providerFeedState, ({ one })
 }));
 
 export type ProviderFeedState = typeof providerFeedState.$inferSelect;
+
+// Durable idempotency record for monthly recap push notifications.
+// One row per (provider, month) — insert-on-send prevents duplicate blasts
+// across restarts, scale-out, and timezone-bucket crons.
+export const recapNotificationsSent = pgTable(
+  "recap_notifications_sent",
+  {
+    providerId: varchar("provider_id")
+      .notNull()
+      .references(() => providers.id, { onDelete: "cascade" }),
+    month: varchar("month", { length: 7 }).notNull(), // 'YYYY-MM'
+    sentAt: timestamp("sent_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.providerId, t.month] }),
+  }),
+);

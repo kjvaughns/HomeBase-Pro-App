@@ -886,13 +886,16 @@ async function sendExpoPushNotifications(messages: PushMessage[]): Promise<void>
 
 type NotificationCategory = 'bookings' | 'invoices' | 'messages' | 'reminders';
 
+// Returns true if the push was dispatched (token found + prefs allow),
+// false if silently skipped (no tokens, push disabled, or send error).
+// Callers that only care about fire-and-forget can ignore the return value.
 export async function sendPush(
   userId: string,
   title: string,
   body: string,
   data: Record<string, unknown> = {},
   _category: NotificationCategory = 'bookings'
-): Promise<void> {
+): Promise<boolean> {
   try {
     const [prefs] = await db
       .select()
@@ -900,7 +903,7 @@ export async function sendPush(
       .where(eq(notificationPreferences.userId, userId));
 
     if (prefs && prefs.pushEnabled === false) {
-      return;
+      return false;
     }
 
     const tokens = await db
@@ -908,7 +911,7 @@ export async function sendPush(
       .from(pushTokens)
       .where(and(eq(pushTokens.userId, userId), eq(pushTokens.isActive, true)));
 
-    if (tokens.length === 0) return;
+    if (tokens.length === 0) return false;
 
     // Defense in depth: even with the (user_id, token) unique constraint in
     // place, dedupe here so any straggler duplicates can never produce more
@@ -924,8 +927,10 @@ export async function sendPush(
     }));
 
     await sendExpoPushNotifications(messages);
+    return true;
   } catch (err) {
     console.error('sendPush error:', err);
+    return false;
   }
 }
 

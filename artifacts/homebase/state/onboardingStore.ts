@@ -37,6 +37,10 @@ interface OnboardingState {
   /** Keys of Getting Started checklist steps the provider has dismissed
    *  from the dashboard. Persisted across launches. */
   dismissedChecklistSteps: string[];
+  /** YYYY-MM strings for months where the recap card has been dismissed.
+   *  Stored as the *current* month (e.g. "2026-06") so the card never
+   *  re-appears in the same calendar month even after a reinstall. */
+  recapDismissedMonths: string[];
   isHydrated: boolean;
 
   setHasCompletedFirstLaunch: (completed: boolean) => void;
@@ -48,6 +52,7 @@ interface OnboardingState {
   startSignupTimer: () => void;
   clearSignupTimer: () => void;
   dismissChecklistStep: (key: string) => void;
+  dismissRecap: (month: string) => void;
   reset: () => void;
   hydrate: () => Promise<void>;
 }
@@ -62,6 +67,7 @@ async function saveToStorage(state: Partial<OnboardingState>) {
       selectedAccountType: state.selectedAccountType,
       signupStartedAt: state.signupStartedAt,
       dismissedChecklistSteps: state.dismissedChecklistSteps,
+      recapDismissedMonths: state.recapDismissedMonths,
     };
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
   } catch (error) {
@@ -78,6 +84,7 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
   pendingOnboardingService: null,
   signupStartedAt: null,
   dismissedChecklistSteps: [],
+  recapDismissedMonths: [],
   isHydrated: false,
 
   setHasCompletedFirstLaunch: (completed: boolean) => {
@@ -127,6 +134,13 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
     saveToStorage(get());
   },
 
+  dismissRecap: (month: string) => {
+    const current = get().recapDismissedMonths;
+    if (current.includes(month)) return;
+    set({ recapDismissedMonths: [...current, month] });
+    saveToStorage(get());
+  },
+
   reset: () => {
     set({
       hasCompletedFirstLaunch: false,
@@ -137,6 +151,7 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
       pendingOnboardingService: null,
       signupStartedAt: null,
       dismissedChecklistSteps: [],
+      recapDismissedMonths: [],
     });
     AsyncStorage.removeItem(STORAGE_KEY);
   },
@@ -153,6 +168,9 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
           signupStartedAt: parsed.signupStartedAt ?? null,
           dismissedChecklistSteps: Array.isArray(parsed.dismissedChecklistSteps)
             ? parsed.dismissedChecklistSteps
+            : [],
+          recapDismissedMonths: Array.isArray(parsed.recapDismissedMonths)
+            ? parsed.recapDismissedMonths
             : [],
           isHydrated: true,
         });

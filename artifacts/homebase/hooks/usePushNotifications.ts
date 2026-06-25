@@ -256,6 +256,11 @@ export function handleNotificationNavigation(
       if (appointmentId) {
         navigation.navigate("Review", { jobId: appointmentId });
       }
+    } else if (screen === "MonthlyRecap") {
+      const month = (data.month as string | undefined) ?? (params?.month as string | undefined);
+      if (month) {
+        navigation.navigate("MonthlyRecap", { month });
+      }
     }
   } catch (err) {
     console.warn("Notification navigation error:", err);

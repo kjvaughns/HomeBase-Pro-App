@@ -20,8 +20,10 @@ import { SectionHeader } from "@/components/SectionHeader";
 import { StatCard } from "@/components/StatCard";
 import { GracePeriodBanner } from "@/components/GracePeriodBanner";
 import { CrewWelcomeBanner } from "@/components/CrewWelcomeBanner";
+import { RecapCard } from "@/components/RecapCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
+import { useSyncProviderTimezone } from "@/hooks/useSyncProviderTimezone";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useProviderStore } from "@/state/providerStore";
@@ -433,6 +435,7 @@ export default function ProviderHomeScreen() {
   const navigation = useNavigation<any>();
   const { theme } = useTheme();
   const { user, providerProfile, createProviderProfile, updateProviderProfile } = useAuthStore();
+  useSyncProviderTimezone();
   const queryClient = useQueryClient();
 
   const providerId = providerProfile?.id;
@@ -922,6 +925,8 @@ export default function ProviderHomeScreen() {
           />
           <CrewWelcomeBanner />
         </View>
+
+        <RecapCard />
 
         {showPublishPrompt ? (
           <Animated.View entering={FadeInDown.delay(50).duration(400)}>

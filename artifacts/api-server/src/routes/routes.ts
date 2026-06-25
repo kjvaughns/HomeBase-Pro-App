@@ -1709,6 +1709,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  // GET /api/provider/recap?month=YYYY-MM — monthly effort summary for the authenticated provider
+  app.get(
+    "/api/provider/recap",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const providerRow = await storage.getProviderByUserId(req.authenticatedUserId!);
+        if (!providerRow) {
+          res.status(404).json({ error: "Provider not found" });
+          return;
+        }
+
+        const monthParam = String(req.query.month ?? "");
+        if (!monthParam || !/^\d{4}-\d{2}$/.test(monthParam)) {
+          res.status(400).json({ error: "month query param required in YYYY-MM format" });
+          return;
+        }
+
+        const [yearStr, monthStr] = monthParam.split("-");
+        const year = parseInt(yearStr, 10);
+        const month = parseInt(monthStr, 10);
+        if (month < 1 || month > 12) {
+          res.status(400).json({ error: "Invalid month value" });
+          return;
+        }
+
+        const { getProviderRecap } = await import("../monthlyRecapService");
+        const recap = await getProviderRecap(providerRow.id, year, month);
+        res.json({ recap });
+      } catch (error) {
+        req.log.error({ error }, "GET /api/provider/recap error");
+        res.status(500).json({ error: "Failed to load recap" });
+      }
+    },
+  );
+
   // PATCH /api/provider/goal — set or update the authenticated provider's monthly earnings goal
   app.patch(
     "/api/provider/goal",
@@ -1736,6 +1772,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         req.log.error({ error }, "PATCH /api/provider/goal error");
         res.status(500).json({ error: "Failed to update monthly goal" });
+      }
+    },
+  );
+
+  // PATCH /api/provider/timezone — persist the device's IANA timezone so the
+  // monthly recap scheduler can send pushes at 9am in the provider's local time.
+  // Called once on login from the mobile app via Intl.DateTimeFormat().resolvedOptions().
+  app.patch(
+    "/api/provider/timezone",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const providerRow = await storage.getProviderByUserId(req.authenticatedUserId!);
+        if (!providerRow) {
+          res.status(404).json({ error: "Provider not found" });
+          return;
+        }
+        const { timezone } = req.body;
+        if (typeof timezone !== "string" || timezone.trim().length === 0) {
+          res.status(400).json({ error: "timezone must be a non-empty IANA string" });
+          return;
+        }
+        const trimmedTz = timezone.trim();
+        // Validate via Intl — rejects any string that Node's ICU database
+        // does not recognise as a valid IANA timezone identifier.
+        try {
+          Intl.DateTimeFormat(undefined, { timeZone: trimmedTz });
+        } catch {
+          res.status(400).json({ error: "timezone is not a recognised IANA identifier" });
+          return;
+        }
+        await db
+          .update(providers)
+          .set({ timezone: trimmedTz })
+          .where(eq(providers.id, providerRow.id));
+        res.json({ success: true, timezone: trimmedTz });
+      } catch (error) {
+        req.log.error({ error }, "PATCH /api/provider/timezone error");
+        res.status(500).json({ error: "Failed to update provider timezone" });
       }
     },
   );

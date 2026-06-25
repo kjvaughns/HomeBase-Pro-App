@@ -67,6 +67,7 @@ import AdminPartnersScreen from "@/screens/provider/AdminPartnersScreen";
 import ReferAProScreen from "@/screens/provider/ReferAProScreen";
 import AchievementsScreen from "@/screens/provider/AchievementsScreen";
 import FirstPaymentCelebrationScreen from "@/screens/provider/FirstPaymentCelebrationScreen";
+import MonthlyRecapScreen from "@/screens/provider/MonthlyRecapScreen";
 import BusinessHubScreen from "@/screens/provider/BusinessHubScreen";
 import CrewScreen from "@/screens/provider/CrewScreen";
 import BookingLinkScreen from "@/screens/provider/BookingLinkScreen";
@@ -210,6 +211,7 @@ export type RootStackParamList = {
   Crew: undefined;
   CrewJobDetail: { jobId: string };
   FirstPaymentCelebration: { amountCents: number };
+  MonthlyRecap: { month: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -758,6 +760,13 @@ export default function RootStackNavigator() {
         component={CrewJobDetailScreen}
         options={{
           headerTitle: "Job",
+        }}
+      />
+      <Stack.Screen
+        name="MonthlyRecap"
+        component={MonthlyRecapScreen}
+        options={{
+          headerTitle: "Monthly Recap",
         }}
       />
       <Stack.Screen
