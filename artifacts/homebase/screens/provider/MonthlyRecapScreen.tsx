@@ -8,8 +8,9 @@ import {
   ActivityIndicator,
   Platform,
 } from "react-native";
-import { captureRef } from "react-native-view-shot";
-import * as Sharing from "expo-sharing";
+// react-native-view-shot and expo-sharing are native modules loaded lazily
+// inside handleShare so a missing native binary (old EAS build, Expo Go)
+// does NOT crash the app at startup when this module is first evaluated.
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, type RouteProp } from "@react-navigation/native";
@@ -128,37 +129,52 @@ export default function MonthlyRecapScreen() {
 
   const handleShare = async () => {
     if (!recap) return;
+    const monthLabel = month ? formatMonthLabel(month) : "Monthly Recap";
     try {
-      const uri = await captureRef(captureViewRef, {
-        format: "jpg",
-        quality: 0.92,
-        result: "tmpfile",
-      });
+      // Lazy-load native modules so the app doesn't crash on startup when
+      // running on an old EAS binary or Expo Go that lacks the native bridge.
+      let captureRef: ((view: any, opts?: any) => Promise<string>) | null = null;
+      let Sharing: { isAvailableAsync: () => Promise<boolean>; shareAsync: (uri: string, opts?: any) => Promise<void> } | null = null;
+      try { captureRef = require("react-native-view-shot").captureRef; } catch { /* not linked */ }
+      try { Sharing = require("expo-sharing"); } catch { /* not available */ }
 
-      if (Platform.OS === "ios") {
-        // iOS: Share.share with url attaches the image to the native sheet
-        await Share.share({ url: uri });
-      } else {
-        // Android: expo-sharing's shareAsync properly presents the system chooser
-        // with the image file attached, rather than sharing a bare file path string
-        const isAvailable = await Sharing.isAvailableAsync();
-        if (isAvailable) {
-          await Sharing.shareAsync(uri, { mimeType: "image/jpeg", dialogTitle: "Share your recap" });
+      if (captureRef && captureViewRef.current) {
+        const uri = await captureRef(captureViewRef, {
+          format: "jpg",
+          quality: 0.92,
+          result: "tmpfile",
+        });
+
+        if (Platform.OS === "ios") {
+          await Share.share({ url: uri });
         } else {
-          // Fallback: share as text on devices where system sharing is unavailable
-          const monthLabel = month ? formatMonthLabel(month) : "Monthly Recap";
-          await Share.share({
-            message:
-              `My ${monthLabel} HomeBase recap 🎉\n` +
-              `✅ ${recap.jobsCompleted} jobs completed\n` +
-              `👥 ${recap.uniqueClients} clients served\n` +
-              `💰 ${formatDollarsFull(recap.totalRevenueCents)} in revenue` +
-              (recap.topService ? `\n⭐ Top service: ${recap.topService}` : ""),
-          });
+          const isAvailable = Sharing ? await Sharing.isAvailableAsync() : false;
+          if (isAvailable && Sharing) {
+            await Sharing.shareAsync(uri, { mimeType: "image/jpeg", dialogTitle: "Share your recap" });
+          } else {
+            await Share.share({
+              message:
+                `My ${monthLabel} HomeBase recap 🎉\n` +
+                `✅ ${recap.jobsCompleted} jobs completed\n` +
+                `👥 ${recap.uniqueClients} clients served\n` +
+                `💰 ${formatDollarsFull(recap.totalRevenueCents)} in revenue` +
+                (recap.topService ? `\n⭐ Top service: ${recap.topService}` : ""),
+            });
+          }
         }
+      } else {
+        // Native module not available — fall back to text share
+        await Share.share({
+          message:
+            `My ${monthLabel} HomeBase recap 🎉\n` +
+            `✅ ${recap.jobsCompleted} jobs completed\n` +
+            `👥 ${recap.uniqueClients} clients served\n` +
+            `💰 ${formatDollarsFull(recap.totalRevenueCents)} in revenue` +
+            (recap.topService ? `\n⭐ Top service: ${recap.topService}` : ""),
+        });
       }
     } catch {
-      // user cancelled
+      // user cancelled or share failed
     }
   };
 
