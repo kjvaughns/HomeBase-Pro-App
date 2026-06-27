@@ -145,7 +145,7 @@ export default function ReviewsScreen() {
           key={star}
           name={star <= count ? "star" : "star-outline"}
           size={size}
-          color={star <= count ? Colors.warning : theme.backgroundTertiary}
+          color={star <= count ? Colors.warning : theme.border}
         />
       ))}
     </View>
@@ -466,7 +466,7 @@ export default function ReviewsScreen() {
         renderItem={renderReview}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{
-          paddingTop: headerHeight + Spacing.lg,
+          paddingTop: headerHeight + insets.top,
           paddingBottom: insets.bottom + Spacing.xl,
           paddingHorizontal: horizontalPadding,
         }}

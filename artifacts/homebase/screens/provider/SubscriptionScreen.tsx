@@ -42,6 +42,21 @@ import {
   type RevenueCatDiagnosticsResult,
 } from "@/lib/revenuecat";
 
+// Loaded synchronously at module initialization time (not inside the handler).
+// require() is evaluated when the module is first imported, so the native
+// module is ready before the user ever taps Subscribe. The platform guard
+// prevents this from running on web where react-native-purchases-ui is
+// unavailable. Falls back to null if the native module fails to link.
+const rcUI: (typeof import("react-native-purchases-ui")) | null = (() => {
+  if (Platform.OS !== "ios" && Platform.OS !== "android") return null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("react-native-purchases-ui") as typeof import("react-native-purchases-ui");
+  } catch {
+    return null;
+  }
+})();
+
 const PRIVACY_URL = "https://homebaseproapp.com/privacy";
 const TERMS_URL = "https://homebaseproapp.com/terms";
 const SUPPORT_URL = "mailto:support@homebaseproapp.com";
@@ -207,12 +222,45 @@ export default function SubscriptionScreen() {
     setBusy(true);
     // Clear any previous failure state when the user retries.
     setPaywallFailure(null);
-    try {
-      // Ensure the SDK is configured before presenting the paywall.
-      await waitForConfiguration();
-      const { default: RevenueCatUI, PAYWALL_RESULT } = await import(
-        "react-native-purchases-ui"
+
+    // Guard: IAP is iOS-only. Show a clear message instead of crashing on
+    // devices/platforms where the SDK is not available.
+    if (!isPurchasesAvailable()) {
+      Alert.alert(
+        "Not available",
+        "Subscription management is not available on this device.",
       );
+      busyRef.current = false;
+      setBusy(false);
+      return;
+    }
+
+    try {
+      // Wait for SDK configuration with a 10 s timeout so the button never
+      // hangs indefinitely if configure() stalls (e.g. no network on first run).
+      await Promise.race([
+        waitForConfiguration(),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("Configuration timed out. Please try again.")),
+            10_000,
+          ),
+        ),
+      ]);
+
+      // rcUI is already loaded at module scope — no dynamic import needed here.
+      const RevenueCatUI = rcUI?.default;
+      const PAYWALL_RESULT = rcUI?.PAYWALL_RESULT;
+
+      // Null guard: if the native module failed to load, surface a clear Alert.
+      if (!RevenueCatUI || !PAYWALL_RESULT) {
+        Alert.alert(
+          "Subscription unavailable",
+          "The subscription screen could not be loaded. Please try again or contact support.",
+        );
+        return;
+      }
+
       const result = await RevenueCatUI.presentPaywall();
       switch (result) {
         case PAYWALL_RESULT.PURCHASED:
@@ -269,6 +317,9 @@ export default function SubscriptionScreen() {
         code === "23"
           ? "Error 23: No products could be fetched from App Store Connect. Verify that the product IDs in RevenueCat match App Store Connect exactly, and that Agreements, Tax & Banking are all Active in App Store Connect."
           : err?.message ?? "Please try again or contact support.";
+      // Always surface an Alert so the user knows what happened, regardless of
+      // whether the inline failure card is also rendered.
+      Alert.alert("Subscription error", msg);
       setPaywallFailure({ code, message: msg });
     } finally {
       busyRef.current = false;
@@ -458,7 +509,7 @@ export default function SubscriptionScreen() {
     <ThemedView style={styles.container}>
       <ScrollView
         contentContainerStyle={{
-          paddingTop: headerHeight + Spacing.xl,
+          paddingTop: headerHeight + insets.top,
           paddingBottom: insets.bottom + Spacing.xl * 2,
           paddingHorizontal: horizontalPadding,
         }}

@@ -119,7 +119,6 @@ const styles = StyleSheet.create({
   logo: {
     width: 80,
     height: 80,
-    borderRadius: BorderRadius.xl,
     marginBottom: Spacing.xs,
   },
   appName: {
