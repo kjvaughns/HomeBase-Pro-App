@@ -1,0 +1,132 @@
+Fix 4 critical UI bugs in HomeBase Pro. Read each issue carefully 
+before touching anything. Do NOT touch server files, Stripe logic, 
+auth, or navigation structure.
+
+---
+
+ISSUE 1 — DARK/LIGHT MODE BROKEN (gray washed-out UI)
+
+Looking at the screenshots, ThemedView and ThemedText are not 
+picking up the correct background/text colors. The UI looks gray 
+and washed out in both modes.
+
+Investigate:
+1. Check constants/theme.ts — confirm backgroundRoot, backgroundDefault, 
+   backgroundElevated are correct for light (#FFFFFF) and dark (#000000 
+   / #1C1C1E)
+2. Check hooks/useTheme.ts — confirm it reads from the correct 
+   Appearance API and returns the right theme object
+3. Check components/ThemedView.tsx and components/ThemedText.tsx — 
+   confirm they use theme.backgroundDefault (or backgroundRoot) 
+   and theme.text correctly
+4. The issue may be that ThemedView is using backgroundSecondary 
+   (#EEEEEE light / #2C2C2E dark) instead of backgroundRoot for 
+   full-screen views, making everything look gray
+
+Fix: ensure full-screen ThemedView containers use the correct root 
+background color for each mode. Do not hardcode colors — use the 
+theme constants.
+
+---
+
+ISSUE 2 — SAFE AREA / STATUS BAR CONTENT CLIPPING
+
+Every screen has content clipping under the status bar or the 
+top of the screen isn't inset properly. The header area bleeds 
+into the notch/dynamic island area.
+
+Investigate:
+1. Check navigation/RootStackNavigator.tsx and all tab navigators 
+   for screenOptions — confirm headerTransparent screens use 
+   useHeaderHeight() correctly in their ScrollView paddingTop
+2. Check if StatusBar is configured correctly in app/_layout.tsx 
+   or the root navigator
+3. Look for screens that use paddingTop: insets.top but the insets 
+   are returning 0 or incorrect values — this happens when 
+   SafeAreaProvider is not at the root or is duplicated
+
+Fix: 
+- Ensure SafeAreaProvider wraps the entire app exactly once at root
+- Screens with transparent headers must use: 
+  paddingTop: headerHeight + insets.top (not just one or the other)
+- Screens without headers must use paddingTop: insets.top
+- Check every screen that uses useHeaderHeight() and make sure 
+  the ScrollView contentContainerStyle uses it correctly
+
+---
+
+ISSUE 3 — IMAGES NOT RENDERING (logo + star icon clipped/invisible)
+
+Two specific problems:
+A) WelcomeScreen: the HomeBase logo (assets/images/icon.png) is 
+   not displaying fully — it's getting clipped or rendered at 
+   wrong size
+B) ReviewsScreen: the star icon in the "No reviews yet" empty 
+   state is not rendering clearly
+
+Investigate:
+1. In screens/auth/WelcomeScreen.tsx — check the Image component 
+   for the logo. Verify the source path is correct, the style 
+   has explicit width/height, and resizeMode="contain" is set
+2. In screens/provider/ReviewsScreen.tsx (or BusinessHub reviews) 
+   — check the empty state icon. If it uses a custom SVG or 
+   Image, verify it renders. If it uses Feather icon, check 
+   size and color against the background
+
+Fix: 
+- Logo: give explicit dimensions (e.g. width: 80, height: 80) 
+  and resizeMode="contain"
+- Star icon: if it's a Feather "star" icon, ensure the color 
+  contrasts with the card background in both light and dark mode
+
+---
+
+ISSUE 4 — PAYWALL CRASHES THE APP (CRITICAL)
+
+When tapping Subscribe on the Subscription screen, the app 
+crashes immediately. The code currently uses 
+RevenueCatUI.presentPaywall() with a dynamic import.
+
+The crash is almost certainly caused by one of:
+A) react-native-purchases-ui not being properly initialized 
+   before presentPaywall() is called
+B) The dynamic import `await import("react-native-purchases-ui")` 
+   failing and the error not being caught
+C) RevenueCat SDK not being configured before waitForConfiguration() 
+   is called
+D) Missing or invalid EXPO_PUBLIC_REVENUECAT_API_KEY env var 
+   causing the SDK to be in an unconfigured state
+
+Investigate:
+1. Check lib/revenuecat.ts — read the full file and find 
+   isPurchasesAvailable(), waitForConfiguration(), and how 
+   RevenueCat is initialized
+2. Check app/index.tsx or app/_layout.tsx — find where 
+   Purchases.configure() is called and confirm it runs before 
+   any screen renders
+3. Check if EXPO_PUBLIC_REVENUECAT_API_KEY is set in the 
+   Replit environment secrets
+
+Fix:
+- Wrap the entire handleNativeSubscribe function body in a 
+  try/catch that catches ANY error (not just specific ones) 
+  and shows an Alert instead of crashing
+- Add a null check: if RevenueCatUI or PAYWALL_RESULT is 
+  undefined after the dynamic import, show a fallback Alert 
+  instead of crashing
+- Add a guard: if !isPurchasesAvailable(), show Alert 
+  "Subscription not available on this device" and return early
+- The dynamic import pattern is risky — consider changing to 
+  a static import at the top of SubscriptionScreen.tsx:
+    import RevenueCatUI, { PAYWALL_RESULT } from 
+    "react-native-purchases-ui";
+  This eliminates the async import crash vector entirely.
+- Make sure waitForConfiguration() has a timeout — if it hangs 
+  indefinitely, the button spins forever or crashes
+
+After all fixes, rebuild server_dist if any server files were 
+touched (they shouldn't be). Do not modify package.json, 
+app.json, eas.json, or any navigation files beyond the safe 
+area fixes.
+
+Tell me exactly which files you changed before committing.
