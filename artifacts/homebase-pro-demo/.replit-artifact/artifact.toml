@@ -1,0 +1,31 @@
+kind = "video"
+previewPath = "/homebase-pro-demo/"
+title = "HomeBase Pro Demo Video"
+version = "1.0.0"
+id = "artifacts/homebase-pro-demo"
+router = "path"
+
+[[integratedSkills]]
+name = "video-js"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/homebase-pro-demo/" ]
+localPort = 26056
+
+[services.development]
+run = "pnpm --filter @workspace/homebase-pro-demo run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/homebase-pro-demo", "run", "build" ]
+publicDir = "artifacts/homebase-pro-demo/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "26056"
+BASE_PATH = "/homebase-pro-demo/"

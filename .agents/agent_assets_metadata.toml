@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "1MuDCZ9iUVVU2BmZUUESr"
+uri = "file://artifacts/homebase-pro-demo/public/audio/bg_music.mp3"
+type = "audio"
+title = "background music"
