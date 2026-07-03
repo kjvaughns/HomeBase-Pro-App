@@ -18,7 +18,7 @@ export function PhoneFrame({ children, delay = 0 }: { children: React.ReactNode;
       </div>
       
       {/* Glow behind phone */}
-      <div className="absolute inset-0 bg-primary/20 blur-[100px] -z-10 rounded-full"></div>
+      <div className="absolute inset-0 bg-accent/20 blur-[100px] -z-10 rounded-full"></div>
     </motion.div>
   );
 }

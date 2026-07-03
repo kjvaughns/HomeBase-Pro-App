@@ -1,100 +1,68 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { Send, Wrench, Package } from 'lucide-react';
 import { PhoneFrame } from '../shared/PhoneFrame';
-import { BookingCard } from '../shared/BookingCard';
+import { Cursor } from '../shared/Cursor';
 
 export function Scene3() {
   const [phase, setPhase] = useState(0);
 
   useEffect(() => {
     const timers = [
-      setTimeout(() => setPhase(1), 200), // eyebrow
-      setTimeout(() => setPhase(2), 600), // phone frame
-      setTimeout(() => setPhase(3), 1200), // booking cards inside
-      setTimeout(() => setPhase(4), 2200), // tagline
-      setTimeout(() => setPhase(5), 4500), // exit
+      setTimeout(() => setPhase(1), 500),
+      setTimeout(() => setPhase(2), 1500),
+      setTimeout(() => setPhase(3), 2500),
+      setTimeout(() => setPhase(4), 3000),
     ];
     return () => timers.forEach(t => clearTimeout(t));
   }, []);
 
   return (
     <motion.div 
-      className="absolute inset-0 flex flex-col items-center justify-center bg-bg text-center px-4"
+      className="absolute inset-0 flex items-center justify-center bg-bg-root"
       initial={{ opacity: 0 }}
-      animate={{ opacity: phase >= 5 ? 0 : 1 }}
+      animate={{ opacity: phase >= 4 ? 0 : 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.5 }}
     >
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={phase >= 1 ? { opacity: 1, y: 0 } : { opacity: 0, y: -20 }}
-        className="text-primary text-sm tracking-[0.15em] uppercase font-bold mb-8"
-      >
-        INTRODUCING HOMEBASE
-      </motion.div>
+      <PhoneFrame>
+        <div className="flex-1 bg-bg-default p-4 pt-12 flex flex-col">
+          <div className="text-text text-2xl font-bold mb-6">Create Invoice</div>
 
-      {phase >= 2 && (
-        <PhoneFrame>
-          <div className="p-5 pt-12 flex flex-col h-full">
-            <div className="mb-6 text-left">
-              <div className="text-white font-bold text-xl mb-1">HomeBase Pro</div>
-              <div className="text-text-muted text-sm">Today's jobs</div>
+          <div className="bg-bg-secondary p-4 rounded-2xl mb-4">
+            <div className="flex justify-between items-center mb-3">
+              <div className="flex items-center gap-2">
+                <Wrench size={14} className="text-accent" />
+                <span className="text-white text-sm">HVAC Repair</span>
+              </div>
+              <span className="text-white font-bold text-sm">$150.00</span>
             </div>
-
-            <div className="flex-1">
-              {phase >= 3 && (
-                <>
-                  <BookingCard
-                    name="Marcus T."
-                    service="Lawn care"
-                    time="Tue 10am"
-                    amount="$280"
-                    status="Confirmed"
-                    delay={0.1}
-                  />
-                  <BookingCard
-                    name="Sarah K."
-                    service="House cleaning"
-                    time="Tue 2pm"
-                    amount="$180"
-                    status="Invoice sent"
-                    delay={0.3}
-                  />
-                </>
-              )}
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <Package size={14} className="text-text-secondary" />
+                <span className="text-white text-sm">Parts</span>
+              </div>
+              <span className="text-white font-bold text-sm">$45.00</span>
             </div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={phase >= 3 ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
-              transition={{ delay: 0.6 }}
-              className="mt-auto border-t border-card-border pt-4 flex justify-between text-xs"
-            >
-              <div className="text-center">
-                <div className="text-white font-bold">$460</div>
-                <div className="text-text-muted">Today</div>
-              </div>
-              <div className="text-center">
-                <div className="text-white font-bold">3</div>
-                <div className="text-text-muted">Jobs</div>
-              </div>
-              <div className="text-center">
-                <div className="text-white font-bold">$0</div>
-                <div className="text-text-muted">Chasing</div>
-              </div>
-            </motion.div>
+            <div className="h-px bg-border my-3" />
+            <div className="flex justify-between items-center">
+              <span className="text-text-secondary text-sm font-semibold">Total</span>
+              <span className="text-white font-bold text-lg">$195.00</span>
+            </div>
           </div>
-        </PhoneFrame>
-      )}
 
-      <motion.div
-        initial={{ opacity: 0, filter: 'blur(5px)' }}
-        animate={phase >= 4 ? { opacity: 1, filter: 'blur(0px)' } : { opacity: 0, filter: 'blur(5px)' }}
-        transition={{ duration: 0.8 }}
-        className="text-[3vw] font-medium text-white mt-8"
-      >
-        Your business. <span className="text-primary">Automated.</span>
-      </motion.div>
+          <div className="flex-1" />
+
+          <motion.div
+            className="bg-accent rounded-xl py-4 flex items-center justify-center gap-2"
+            style={{ borderRadius: 12 }}
+            animate={phase >= 2 ? { scale: 0.95, opacity: 0.85 } : { scale: 1, opacity: 1 }}
+          >
+            <Send size={16} className="text-white" />
+            <span className="text-white font-bold">Send Invoice</span>
+          </motion.div>
+        </div>
+      </PhoneFrame>
+      {phase >= 1 && <Cursor x="50vw" y="80vh" delay={0.2} onTap={phase >= 2} />}
     </motion.div>
   );
 }

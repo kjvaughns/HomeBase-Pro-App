@@ -1,36 +1,39 @@
 @import "tailwindcss";
 
 :root {
-  --color-primary: #22c55e;
-  --color-danger: #e64545;
-  --color-bg: #000000;
-  
-  --color-card-bg: #0d0d0d;
-  --color-card-border: #1e1e1e;
-  
-  --color-pill-bg: #1a0e0e;
-  --color-pill-border: #3a1a1a;
-
-  --color-text-primary: #ffffff;
-  --color-text-muted: #555555;
-  --color-text-ultra-muted: #333333;
+  --color-accent: #38AE5F;
+  --color-accent-light: rgba(56, 174, 95, 0.12);
+  --color-bg-root: #000000;
+  --color-bg-default: #1C1C1E;
+  --color-bg-secondary: #2C2C2E;
+  --color-bg-tertiary: #3A3A3C;
+  --color-text: #FFFFFF;
+  --color-text-secondary: #A0A0A0;
+  --color-text-tertiary: #666666;
+  --color-border: #3A3A3C;
+  --color-info: #60A5FA;
+  --color-warning: #FBBF24;
+  --color-error: #EF4444;
 
   --font-display: 'Inter', sans-serif;
   --font-body: 'Inter', sans-serif;
 }
 
 @theme inline {
-  --color-primary: var(--color-primary);
-  --color-danger: var(--color-danger);
-  --color-bg-dark: var(--color-bg);
-  --color-card-bg: var(--color-card-bg);
-  --color-card-border: var(--color-card-border);
-  --color-pill-bg: var(--color-pill-bg);
-  --color-pill-border: var(--color-pill-border);
+  --color-accent: var(--color-accent);
+  --color-accent-light: var(--color-accent-light);
+  --color-bg-root: var(--color-bg-root);
+  --color-bg-default: var(--color-bg-default);
+  --color-bg-secondary: var(--color-bg-secondary);
+  --color-bg-tertiary: var(--color-bg-tertiary);
   
-  --color-text-primary: var(--color-text-primary);
-  --color-text-muted: var(--color-text-muted);
-  --color-text-ultra-muted: var(--color-text-ultra-muted);
+  --color-text: var(--color-text);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-text-tertiary: var(--color-text-tertiary);
+  --color-border: var(--color-border);
+  --color-info: var(--color-info);
+  --color-warning: var(--color-warning);
+  --color-error: var(--color-error);
 
   --font-display: var(--font-display);
   --font-body: var(--font-body);
@@ -38,8 +41,8 @@
 
 body {
   font-family: var(--font-body);
-  background-color: var(--color-bg);
-  color: var(--color-text-primary);
+  background-color: var(--color-bg-root);
+  color: var(--color-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

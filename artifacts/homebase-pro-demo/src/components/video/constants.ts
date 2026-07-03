@@ -1,14 +1,17 @@
 export const COLORS = {
-  bg: '#000000',
-  primary: '#22c55e',
-  danger: '#e64545',
-  textPrimary: '#ffffff',
-  textMuted: '#555555',
-  textUltraMuted: '#333333',
-  cardBg: '#0d0d0d',
-  cardBorder: '#1e1e1e',
-  pillBg: '#1a0e0e',
-  pillBorder: '#3a1a1a'
+  accent: '#38AE5F',
+  accentLight: 'rgba(56, 174, 95, 0.12)',
+  bgRoot: '#000000',
+  bgDefault: '#1C1C1E',
+  bgSecondary: '#2C2C2E',
+  bgTertiary: '#3A3A3C',
+  text: '#FFFFFF',
+  textSecondary: '#A0A0A0',
+  textTertiary: '#666666',
+  border: '#3A3A3C',
+  info: '#60A5FA',
+  warning: '#FBBF24',
+  error: '#EF4444',
 };
 
 export const SPRING_TRANSITION = {
@@ -24,10 +27,10 @@ export const SPRING_HERO = {
 };
 
 export const SCENE_DURATIONS = {
-  scene1: 3000,
-  scene2: 3000,
-  scene3: 5000,
-  scene4: 4000,
-  scene5: 6000,
-  scene6: 9000
+  scene1: 1500, // Intro
+  scene2: 3500, // Job Detail -> Complete Job
+  scene3: 3500, // Add Invoice -> Send
+  scene4: 2500, // Invoice Sent -> Record Payment
+  scene5: 3500, // Record Payment Sheet -> Record
+  scene6: 4000, // Paid Confirmation + Outro
 };

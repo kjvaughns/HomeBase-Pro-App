@@ -1,62 +1,52 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { FeatureCard } from '../shared/FeatureCard';
+import { Send, DollarSign } from 'lucide-react';
+import { PhoneFrame } from '../shared/PhoneFrame';
+import { Cursor } from '../shared/Cursor';
 
 export function Scene4() {
   const [phase, setPhase] = useState(0);
 
   useEffect(() => {
     const timers = [
-      setTimeout(() => setPhase(1), 300), // headline
-      setTimeout(() => setPhase(2), 800), // grid
-      setTimeout(() => setPhase(3), 3600), // exit
+      setTimeout(() => setPhase(1), 500),
+      setTimeout(() => setPhase(2), 1500),
+      setTimeout(() => setPhase(3), 2000),
     ];
     return () => timers.forEach(t => clearTimeout(t));
   }, []);
 
   return (
     <motion.div 
-      className="absolute inset-0 flex flex-col items-center justify-center bg-bg px-12"
+      className="absolute inset-0 flex items-center justify-center bg-bg-root"
       initial={{ opacity: 0 }}
       animate={{ opacity: phase >= 3 ? 0 : 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.6 }}
     >
-      <motion.div
-        initial={{ opacity: 0, y: -30 }}
-        animate={phase >= 1 ? { opacity: 1, y: 0 } : { opacity: 0, y: -30 }}
-        transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-        className="text-[4.5vw] font-bold text-white mb-12 text-center"
-      >
-        One app. <span className="text-primary">Zero chaos.</span>
-      </motion.div>
+      <PhoneFrame>
+        <div className="flex-1 bg-bg-default p-4 pt-12">
+          <div className="text-center mb-6">
+            <div className="text-text-secondary text-sm font-semibold mb-2">Invoice #INV-001</div>
+            <div className="text-text text-4xl font-bold">$195.00</div>
+            <div className="inline-flex items-center gap-1 bg-info/20 text-info px-3 py-1 rounded-full text-xs font-bold mt-2">
+              <Send size={11} />
+              Sent
+            </div>
+          </div>
 
-      <div className="w-full max-w-[1000px] grid grid-cols-2 gap-6 h-[400px]">
-        {phase >= 2 && (
-          <>
-            <FeatureCard
-              title="Instant Booking"
-              description="Clients book 24/7 without a single call"
-              delay={0.1}
-            />
-            <FeatureCard
-              title="Auto Follow-Up"
-              description="Ghosted quotes come back on their own"
-              delay={0.2}
-            />
-            <FeatureCard
-              title="Instant Invoicing"
-              description="Invoice sent the moment a job is done"
-              delay={0.3}
-            />
-            <FeatureCard
-              title="Get New Clients"
-              description="Homeowners discover you in the marketplace"
-              delay={0.4}
-            />
-          </>
-        )}
-      </div>
+          <div className="flex-1" />
+
+          <motion.div
+            className="bg-bg-secondary rounded-xl py-4 flex items-center justify-center gap-2"
+            style={{ borderRadius: 12 }}
+            animate={phase >= 2 ? { scale: 0.95, opacity: 0.8 } : { scale: 1, opacity: 1 }}
+          >
+            <DollarSign size={16} className="text-white" />
+            <span className="text-white font-bold">Record Payment</span>
+          </motion.div>
+        </div>
+      </PhoneFrame>
+      {phase >= 1 && <Cursor x="50vw" y="80vh" delay={0.2} onTap={phase >= 2} />}
     </motion.div>
   );
 }
