@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { StyleSheet, View, Platform } from "react-native";
+import { StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import NetInfo from "@react-native-community/netinfo";
 import Animated, {
   useSharedValue,
@@ -12,6 +13,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { Spacing, Typography } from "@/constants/theme";
 
 export function OfflineBanner() {
+  const insets = useSafeAreaInsets();
   const [isOffline, setIsOffline] = useState(false);
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(-40);
@@ -45,7 +47,7 @@ export function OfflineBanner() {
   return (
     <Animated.View
       pointerEvents="none"
-      style={[styles.container, animatedStyle]}
+      style={[styles.container, { top: insets.top + Spacing.sm }, animatedStyle]}
       testID="banner-offline"
     >
       <View style={styles.pill}>
@@ -61,7 +63,6 @@ export function OfflineBanner() {
 const styles = StyleSheet.create({
   container: {
     position: "absolute",
-    top: Platform.OS === "ios" ? 60 : 40,
     left: 0,
     right: 0,
     alignItems: "center",

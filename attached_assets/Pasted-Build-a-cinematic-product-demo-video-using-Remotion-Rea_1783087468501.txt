@@ -1,0 +1,113 @@
+Build a cinematic product demo video using Remotion (React-based video framework) for HomeBase Pro App — a two-sided home services marketplace SaaS for home service providers (lawn care, cleaning, HVAC, pressure washing, handymen).
+
+TECH SETUP:
+- Use `npm create video@latest` to scaffold the project
+- Framework: Remotion with React + TypeScript
+- Target: 1080x1920 (9:16 vertical, Instagram/TikTok) OR 1920x1080 (16:9 landscape for website hero). Make it switchable via a constant at the top of the file.
+- FPS: 60
+- Duration: ~30 seconds total
+
+DESIGN SYSTEM:
+- Background: Pure black #000000
+- Primary accent: #22c55e (green — represents money, growth, confirmed bookings)
+- Danger/problem color: #e64545 (red)
+- Text: #ffffff primary, #555555 muted, #333333 ultra-muted
+- Font: Inter (load via @remotion/google-fonts)
+- All animations use spring() and interpolate() from Remotion — no CSS transitions
+- Border radius: 12px cards, 100px pills
+- All cards: background #0d0d0d, border 0.5px solid #1e1e1e
+
+SCENE BREAKDOWN (build each as a separate React component):
+
+--- SCENE 1: Cold Open (0s–3s) ---
+Black screen. A single large stat fades + slides up:
+- Small label: "THE AVERAGE HOME SERVICE BUSINESS" (letter-spaced, gray)
+- Huge number: "$72K" (72px, white, font-weight 900)
+- Subtext: "Lost every year to missed follow-ups. Not to competition. To silence." (14px, #555)
+Use spring() with mass:0.6, damping:15 for the number entrance.
+
+--- SCENE 2: The Problem (3s–6s) ---
+- Red eyebrow label: "THE PROBLEM" slides in from left
+- Headline animates word-by-word: "Running a home service business is chaotic." (the word "chaotic" is red #e64545)
+- 4 pill badges stagger in bottom: "Chasing payments" / "Manual invoices" / "Ghosted quotes" / "No new clients"
+- Each pill: background #1a0e0e, border #3a1a1a, text #e64545, border-radius 100px
+- Stagger delay: 4 frames each
+
+--- SCENE 3: App Reveal (6s–11s) ---
+- Green eyebrow: "INTRODUCING HOMEBASE" slides in
+- iPhone frame (180×320px, border-radius 28px, border 1.5px solid #2a2a2a) scales in from 0.8→1 with spring + slight glow: box-shadow 0 0 60px rgba(34,197,94,0.15)
+- Inside the phone: show the HomeBase dashboard
+  - Header: "HomeBase Pro" / "Today's jobs"
+  - 2 booking cards stagger in (offset by 8 frames each):
+    Card 1: Marcus T. · Lawn care · Tue 10am · $280 · "Confirmed ✓" badge (green)
+    Card 2: Sarah K. · House cleaning · Tue 2pm · $180 · "Invoice sent ✓" badge (green)
+  - Bottom stats row: $460 Today / 3 Jobs / $0 Chasing
+- Tagline below phone fades in: "Your business. Automated." (#555, 13px)
+
+--- SCENE 4: Feature Cards (11s–15s) ---
+- Headline: "One app. Zero chaos." animates in (22px, white, font-weight 700)
+- 2×2 grid of feature cards stagger in (frames: 0, 8, 16, 24):
+  Card 1: 📲 Instant Booking — "Clients book 24/7 without a single call"
+  Card 2: 🔁 Auto Follow-Up — "Ghosted quotes come back on their own"
+  Card 3: 💸 Instant Invoicing — "Invoice sent the moment a job is done"
+  Card 4: 🏠 Get New Clients — "Homeowners discover you in the marketplace"
+- Each card: spring() translateY from +20px, with stagger. Accent words in green.
+- Cards: background #0d0d0d, border 0.5px solid #1e1e1e, border-radius 12px, padding 16px
+
+--- SCENE 5: The Flywheel (15s–21s) ---
+- Green eyebrow: "THE FLYWHEEL"
+- Headline animates in: "Every other app helps you manage clients you have." pause beat "HomeBase gets you new ones." (last sentence in green #22c55e)
+- 4-step vertical timeline with green dots + connector lines:
+  Step 1: "Providers join with existing clients" — They bring their book. The flywheel starts.
+  Step 2: "Homeowners discover other services" — Lawn care client finds a cleaner.
+  Step 3: "Demand pulls in new providers" — More homeowners. More categories.
+  Step 4: "The marketplace compounds" — No competitor can replicate this moat.
+- Each step slides in from left with stagger (12 frames apart)
+- Green dot (8px) with a line that draws downward using interpolate() on stroke-dashoffset
+
+--- SCENE 6: CTA (21s–30s) ---
+- Eyebrow: "AVAILABLE ON iOS" (ultra-muted)
+- Main headline bursts in with scale spring (0.9→1):
+  "Run your business.
+   Get clients." — "Get clients." is green
+- Subtext: "Join the home service providers already on HomeBase Pro." (13px, #555)
+- App Store badge / download button fades in
+- Logo mark: "HOMEBASE PRO APP" (spaced caps, #333, 11px)
+- End on black hold
+
+ANIMATION RULES:
+- Every element entrance: spring({ frame, fps: 60, config: { mass: 0.6, damping: 18, stiffness: 100 } })
+- Scene transitions: cross-fade using interpolate(frame, [startFrame, startFrame+18], [0,1]) for opacity
+- No slide wipes — only fade + translate or scale entrances
+- All text entrances: translateY from +12px → 0 + opacity 0→1
+- Headline "word by word" animation: split headline into spans, each span gets its own spring with +4 frame stagger
+- Use Remotion's <AbsoluteFill> for each scene
+- Use <Sequence from={X} durationInFrames={Y}> to time each scene
+
+AUDIO (optional, mark as TODO):
+- Scene 1–2: No music, just silence (lets the stat breathe)
+- Scene 3+: Suggest adding a subtle lo-fi electronic track at 0.4 volume
+- Add a <Audio> component placeholder with a comment
+
+EXPORT:
+- Add a README with: npx remotion render src/index.ts HomeBaseDemo out/homebase-demo.mp4 --codec=h264
+- Make the composition render-ready at both 1080x1920 and 1920x1080
+
+FILE STRUCTURE:
+src/
+  Root.tsx           — registers all compositions
+  HomeBaseDemo.tsx   — main composition, sequences all scenes
+  scenes/
+    ColdOpen.tsx
+    Problem.tsx
+    AppReveal.tsx
+    Features.tsx
+    Flywheel.tsx
+    CTA.tsx
+  components/
+    PhoneFrame.tsx
+    BookingCard.tsx
+    FeatureCard.tsx
+    FlywheelStep.tsx
+    Pill.tsx
+  constants.ts       — colors, fonts, timing constants

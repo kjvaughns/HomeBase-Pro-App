@@ -68,7 +68,7 @@ export default function FirstLaunchScreen({ navigation }: Props) {
   }, []);
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
+    <View style={[styles.container, { backgroundColor: theme.backgroundRoot, paddingTop: insets.top + Spacing.xl }]}>
       <LinearGradient
         colors={
           isDark
@@ -168,7 +168,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "space-between",
-    paddingTop: 120,
   },
   logoContainer: {
     alignItems: "center",

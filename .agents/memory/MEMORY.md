@@ -1,0 +1,1 @@
+- [Safe-area insets convention](homebase-safe-area-insets.md) — headerTransparent:true means every screen/overlay must self-add insets.top/headerHeight; watch for computed-but-unused vars and hardcoded pixel offsets.
