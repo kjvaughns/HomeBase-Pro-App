@@ -165,7 +165,7 @@ export default function AIChatScreen() {
             <ThemedText
               style={[
                 styles.messageText,
-                isUser ? { color: "#FFFFFF" } : { color: theme.text },
+                isUser ? { color: theme.buttonText } : { color: theme.text },
               ]}
             >
               {item.content}

@@ -32,20 +32,34 @@ interface FeedCardItemProps {
 
 type CardStyle = { icon: React.ComponentProps<typeof Feather>["name"]; color: string; bg: string };
 
-const CARD_CONFIG: Record<string, CardStyle> = {
-  nearby_demand: { icon: "map-pin", color: "#6C63FF", bg: "#6C63FF18" },
-  profile_insight: { icon: "eye", color: Colors.accent, bg: Colors.accentLight },
-  milestone_approaching: { icon: "award", color: "#F59E0B", bg: "#F59E0B18" },
-  optimization_tip: { icon: "zap", color: "#10B981", bg: "#10B98118" },
-  recent_activity: { icon: "trending-up", color: "#EF4444", bg: "#EF444418" },
-};
+function getCardConfig(isDark: boolean, theme: ReturnType<typeof useTheme>["theme"]): Record<string, CardStyle> {
+  return {
+    nearby_demand: {
+      icon: "map-pin",
+      color: isDark ? "#9C97FF" : "#6C63FF",
+      bg: isDark ? "#9C97FF26" : "#6C63FF18",
+    },
+    profile_insight: { icon: "eye", color: Colors.accent, bg: Colors.accentLight },
+    milestone_approaching: { icon: "award", color: theme.warning, bg: `${theme.warning}26` },
+    optimization_tip: {
+      icon: "zap",
+      color: isDark ? "#34D399" : "#10B981",
+      bg: isDark ? "#34D39926" : "#10B98118",
+    },
+    recent_activity: {
+      icon: "trending-up",
+      color: isDark ? "#F87171" : "#EF4444",
+      bg: isDark ? "#F8717126" : "#EF444418",
+    },
+  };
+}
 
 const DEFAULT_CARD_STYLE: CardStyle = { icon: "star", color: Colors.accent, bg: Colors.accentLight };
 
 function FeedCardItem({ card, onDismiss }: FeedCardItemProps) {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const navigation = useNavigation<any>();
-  const cfg = CARD_CONFIG[card.type] ?? DEFAULT_CARD_STYLE;
+  const cfg = getCardConfig(isDark, theme)[card.type] ?? DEFAULT_CARD_STYLE;
 
   const handleCta = () => {
     if (card.ctaScreen) {

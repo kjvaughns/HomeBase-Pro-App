@@ -265,12 +265,12 @@ export default function FirstPaymentCelebrationScreen() {
         animationType="slide"
         onRequestClose={handleDismissReferral}
       >
-        <Pressable style={styles.referralOverlay} onPress={handleDismissReferral}>
+        <Pressable style={[styles.referralOverlay, { backgroundColor: theme.overlay }]} onPress={handleDismissReferral}>
           <Pressable
             style={[styles.referralSheet, { backgroundColor: theme.backgroundRoot }]}
             onPress={(e) => e.stopPropagation()}
           >
-            <View style={styles.referralHandle} />
+            <View style={[styles.referralHandle, { backgroundColor: theme.border }]} />
 
             <View style={[styles.referralIconCircle, { backgroundColor: Colors.accentLight }]}>
               <ThemedText style={styles.referralIconEmoji}>🎁</ThemedText>
@@ -288,8 +288,8 @@ export default function FirstPaymentCelebrationScreen() {
               onPress={handleShareReferral}
               testID="button-referral-prompt-share"
             >
-              <Feather name="share-2" size={16} color="#fff" />
-              <ThemedText style={styles.referralShareBtnText}>Share my link</ThemedText>
+              <Feather name="share-2" size={16} color={theme.buttonText} />
+              <ThemedText style={[styles.referralShareBtnText, { color: theme.buttonText }]}>Share my link</ThemedText>
             </Pressable>
 
             <Pressable
@@ -370,7 +370,6 @@ const styles = StyleSheet.create({
   },
   referralOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-end",
   },
   referralSheet: {
@@ -386,7 +385,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: "rgba(0,0,0,0.15)",
     marginBottom: Spacing.sm,
   },
   referralIconCircle: {
@@ -424,7 +422,6 @@ const styles = StyleSheet.create({
   referralShareBtnText: {
     ...Typography.callout,
     fontWeight: "700",
-    color: "#fff",
   },
   referralDismissBtn: {
     paddingVertical: Spacing.sm,

@@ -255,7 +255,7 @@ function StatusBanner({ status }: StatusBannerProps) {
                   style={[
                     styles.progressDot,
                     isCompleted && { backgroundColor: Colors.accent },
-                    isCurrent && styles.progressDotCurrent,
+                    isCurrent && [styles.progressDotCurrent, { backgroundColor: theme.backgroundRoot }],
                     !isCompleted && { backgroundColor: theme.separator },
                   ]}
                 />
@@ -1693,7 +1693,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 3,
     borderColor: Colors.accent,
-    backgroundColor: "#FFFFFF",
   },
   progressLine: {
     flex: 1,

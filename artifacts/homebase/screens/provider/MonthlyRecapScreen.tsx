@@ -221,7 +221,7 @@ export default function MonthlyRecapScreen() {
                   <View style={styles.headerIconBg}>
                     <Feather name="bar-chart-2" size={26} color={Colors.accent} />
                   </View>
-                  <ThemedText style={styles.headerTitle}>{monthLabel}</ThemedText>
+                  <ThemedText style={[styles.headerTitle, { color: theme.buttonText }]}>{monthLabel}</ThemedText>
                   <ThemedText style={styles.headerSubtitle}>Monthly performance recap</ThemedText>
                 </View>
 
@@ -299,8 +299,8 @@ export default function MonthlyRecapScreen() {
                 onPress={handleShare}
                 testID="button-share-recap"
               >
-                <Feather name="share-2" size={18} color="#fff" />
-                <ThemedText style={styles.shareButtonText}>Share My Recap</ThemedText>
+                <Feather name="share-2" size={18} color={theme.buttonText} />
+                <ThemedText style={[styles.shareButtonText, { color: theme.buttonText }]}>Share My Recap</ThemedText>
               </Pressable>
             </Animated.View>
 
@@ -353,7 +353,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 22,
     fontWeight: "700",
-    color: "#fff",
     textAlign: "center",
   },
   headerSubtitle: {
@@ -428,7 +427,6 @@ const styles = StyleSheet.create({
   shareButtonText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#fff",
   },
   loadingContainer: {
     alignItems: "center",

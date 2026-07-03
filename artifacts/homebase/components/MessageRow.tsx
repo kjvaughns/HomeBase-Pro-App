@@ -66,7 +66,7 @@ export function MessageRow({ message, onPress, testID }: MessageRowProps) {
 
           {message.unreadCount > 0 ? (
             <View style={styles.badge}>
-              <ThemedText type="caption" style={styles.badgeText}>
+              <ThemedText type="caption" style={[styles.badgeText, { color: theme.buttonText }]}>
                 {message.unreadCount}
               </ThemedText>
             </View>
@@ -116,7 +116,6 @@ const styles = StyleSheet.create({
     marginLeft: Spacing.sm,
   },
   badgeText: {
-    color: "#FFFFFF",
     fontWeight: "600",
     fontSize: 11,
   },

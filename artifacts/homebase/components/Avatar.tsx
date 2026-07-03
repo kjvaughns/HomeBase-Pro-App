@@ -85,7 +85,7 @@ export function Avatar({
               styles.initials,
               {
                 fontSize: dimension * 0.35,
-                color: "#FFFFFF",
+                color: theme.buttonText,
               },
             ]}
           >

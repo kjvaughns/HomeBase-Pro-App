@@ -53,9 +53,10 @@ function fmtRevenue(cents: number): string {
 }
 
 function ProgressBar({ progress, target }: { progress: number; target: number }) {
+  const { theme } = useTheme();
   const pct = target > 0 ? Math.min(progress / target, 1) : 1;
   return (
-    <View style={progressStyles.track}>
+    <View style={[progressStyles.track, { backgroundColor: theme.backgroundTertiary }]}>
       <View style={[progressStyles.fill, { width: `${pct * 100}%` as any }]} />
     </View>
   );
@@ -65,7 +66,6 @@ const progressStyles = StyleSheet.create({
   track: {
     height: 6,
     borderRadius: 3,
-    backgroundColor: "rgba(128,128,128,0.15)",
     overflow: "hidden",
     marginTop: Spacing.sm,
   },
@@ -215,8 +215,8 @@ export default function AchievementsScreen() {
           <GlassCard style={styles.statsCard}>
             <View style={styles.statsGrid}>
               <StatCell icon="briefcase" label="Jobs Done" value={String(stats?.completedJobs ?? 0)} color={Colors.accent} />
-              <StatCell icon="dollar-sign" label="Revenue" value={fmtRevenue(stats?.totalRevenueCents ?? 0)} color="#C07A00" />
-              <StatCell icon="users" label="Referrals" value={String(stats?.referralCount ?? 0)} color="#7C3AED" />
+              <StatCell icon="dollar-sign" label="Revenue" value={fmtRevenue(stats?.totalRevenueCents ?? 0)} color={theme.badgeGold} />
+              <StatCell icon="users" label="Referrals" value={String(stats?.referralCount ?? 0)} color={theme.badgePurple} />
               <StatCell icon="star" label="5-Star" value={stats?.hasFiveStar ? "Yes" : "No"} color={Colors.warning} />
             </View>
             {stats?.hasFeaturedPlacement ? (
@@ -228,9 +228,9 @@ export default function AchievementsScreen() {
               </View>
             ) : null}
             {(stats?.permanentDiscountPercent ?? 0) > 0 ? (
-              <View style={[styles.banner, { backgroundColor: "#7C3AED18", marginTop: Spacing.sm }]}>
-                <Ionicons name="pricetag" size={14} color="#7C3AED" />
-                <ThemedText style={[styles.bannerText, { color: "#7C3AED" }]}>
+              <View style={[styles.banner, { backgroundColor: `${theme.badgePurple}26`, marginTop: Spacing.sm }]}>
+                <Ionicons name="pricetag" size={14} color={theme.badgePurple} />
+                <ThemedText style={[styles.bannerText, { color: theme.badgePurple }]}>
                   {stats!.permanentDiscountPercent}% permanent subscription discount
                 </ThemedText>
               </View>

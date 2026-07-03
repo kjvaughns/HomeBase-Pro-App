@@ -338,12 +338,12 @@ function GoalEditModal({
 }) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.goalModalOverlay} onPress={onClose}>
+      <Pressable style={[styles.goalModalOverlay, { backgroundColor: theme.overlay }]} onPress={onClose}>
         <Pressable
           style={[styles.goalModalSheet, { backgroundColor: theme.backgroundRoot }]}
           onPress={(e) => e.stopPropagation()}
         >
-          <View style={styles.goalModalHandle} />
+          <View style={[styles.goalModalHandle, { backgroundColor: theme.border }]} />
           <ThemedText style={styles.goalModalTitle}>Set monthly goal</ThemedText>
           <ThemedText style={[styles.goalModalSubtitle, { color: theme.textSecondary }]}>
             How much do you want to earn this month?
@@ -1485,7 +1485,6 @@ const styles = StyleSheet.create({
   },
   goalModalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-end",
   },
   goalModalSheet: {
@@ -1498,7 +1497,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: "#ccc",
     alignSelf: "center",
     marginBottom: Spacing.lg,
   },

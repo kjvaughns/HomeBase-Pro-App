@@ -447,8 +447,8 @@ export function HomeProfileSection({
                 }}
                 style={styles.primaryActionBtn}
               >
-                <Feather name="download" size={14} color="#fff" />
-                <ThemedText style={styles.primaryActionText}>
+                <Feather name="download" size={14} color={theme.buttonText} />
+                <ThemedText style={[styles.primaryActionText, { color: theme.buttonText }]}>
                   Pull property data
                 </ThemedText>
               </Pressable>
@@ -797,7 +797,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.xs,
     borderRadius: BorderRadius.md,
   },
-  primaryActionText: { color: "#fff", fontWeight: "600", fontSize: 13 },
+  primaryActionText: { fontWeight: "600", fontSize: 13 },
   secondaryActionBtn: {
     flexDirection: "row",
     alignItems: "center",

@@ -71,6 +71,13 @@ export const Colors = {
     glassOverlay: "rgba(245, 245, 245, 0.85)",
     overlay: "rgba(0, 0, 0, 0.4)",
     cardBackground: "#FFFFFF",
+    badgeGold: "#C07A00",
+    badgeBlue: "#2563EB",
+    badgeEmerald: "#16A34A",
+    badgePurple: "#7C3AED",
+    badgeTeal: "#0891B2",
+    badgeOrange: "#EA580C",
+    badgeAmber: "#CA8A04",
   },
   dark: {
     info: "#60A5FA",
@@ -101,6 +108,13 @@ export const Colors = {
     glassOverlay: "rgba(28, 28, 30, 0.9)",
     overlay: "rgba(0, 0, 0, 0.6)",
     cardBackground: "#1C1C1E",
+    badgeGold: "#E0A83D",
+    badgeBlue: "#5B8DEF",
+    badgeEmerald: "#34D399",
+    badgePurple: "#A78BFA",
+    badgeTeal: "#22C3E6",
+    badgeOrange: "#FF8A50",
+    badgeAmber: "#FBBF24",
   },
 };
 
