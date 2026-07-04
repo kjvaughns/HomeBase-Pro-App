@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { withStorageTimeout } from "@/lib/storageTimeout";
 
 export type AccountType = "homeowner" | "provider";
 
@@ -158,7 +159,7 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
 
   hydrate: async () => {
     try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      const stored = await withStorageTimeout(AsyncStorage.getItem(STORAGE_KEY), null);
       if (stored) {
         const parsed = JSON.parse(stored);
         set({

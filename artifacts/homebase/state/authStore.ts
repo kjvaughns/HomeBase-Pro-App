@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApiUrl, queryClient } from "@/lib/query-client";
 import { registerSessionHandlers } from "@/lib/sessionExpiry";
 import { setSessionToken as secureSetSessionToken, getSessionToken as secureGetSessionToken } from "@/lib/secureSession";
+import { withStorageTimeout } from "@/lib/storageTimeout";
 
 export type UserRole = "guest" | "homeowner" | "provider" | "crew";
 export type ProviderStatus = "draft" | "pending" | "approved" | "rejected" | "paused";
@@ -388,10 +389,10 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
   hydrate: async () => {
     try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      const stored = await withStorageTimeout(AsyncStorage.getItem(STORAGE_KEY), null);
       // Prefer the SecureStore-backed session token. Migrate any legacy token
       // that was previously persisted in the AsyncStorage JSON blob.
-      let secureToken = await secureGetSessionToken();
+      let secureToken = await withStorageTimeout(secureGetSessionToken(), null);
       if (stored) {
         const data = JSON.parse(stored);
         if (!secureToken && data.sessionToken) {
