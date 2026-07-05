@@ -939,6 +939,23 @@ export async function runBootMigrations(): Promise<void> {
         ON saved_providers (user_id, provider_id)
     `);
 
+    // ── revenuecat_webhook_events: RevenueCat webhook idempotency ─────────
+    // Mirrors the stripe_webhook_events reserve→handle→commit pattern:
+    // processed_at starts NULL when a handler reserves the row, and only
+    // rows with processed_at IS NOT NULL are treated as duplicates. A
+    // retried/duplicate RevenueCat delivery hits the UNIQUE constraint on
+    // revenuecat_event_id and is skipped.
+    await runSql(
+      "revenuecat_webhook_events.create",
+      `CREATE TABLE IF NOT EXISTS revenuecat_webhook_events (
+        id                   VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        revenuecat_event_id  TEXT NOT NULL UNIQUE,
+        event_type           TEXT NOT NULL,
+        processed_at         TIMESTAMP,
+        payload              TEXT
+      )`,
+    );
+
     // ── stripe_webhook_events: per-endpoint audit columns (Task #239) ────
     await runSql(
       "stripe_webhook_events.endpoint",

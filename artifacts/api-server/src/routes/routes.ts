@@ -9359,7 +9359,73 @@ Respond with JSON only:
         if (!(await assertProviderOwnership(req, req.params.providerId, res)))
           return;
         const clients = await storage.getClients(req.params.providerId);
-        res.json({ clients });
+
+        // Compute lifetime value per client the same way as GET /api/clients/:id:
+        // completed-job final prices + actual amounts collected via payments
+        // (excluding voided payments), batched across all clients in two
+        // grouped queries instead of one round trip per client.
+        let ltvByClientId = new Map<string, number>();
+        if (clients.length > 0) {
+          const clientIds = clients.map((c) => c.id);
+          const [completedJobRows, collectedRows] = await Promise.all([
+            db
+              .select({
+                clientId: jobs.clientId,
+                total: sql<string>`COALESCE(SUM(${jobs.finalPrice}), 0)`,
+              })
+              .from(jobs)
+              .where(
+                and(
+                  inArray(jobs.clientId, clientIds),
+                  eq(jobs.status, "completed"),
+                ),
+              )
+              .groupBy(jobs.clientId),
+            db
+              .select({
+                clientId: invoices.clientId,
+                total: sql<string>`COALESCE(SUM(${payments.amountCents}), 0)`,
+              })
+              .from(payments)
+              .innerJoin(invoices, eq(payments.invoiceId, invoices.id))
+              .where(
+                and(
+                  inArray(invoices.clientId, clientIds),
+                  sql`${payments.voidedAt} IS NULL`,
+                ),
+              )
+              .groupBy(invoices.clientId),
+          ]);
+
+          const completedJobsByClient = new Map<string, number>();
+          for (const row of completedJobRows) {
+            if (!row.clientId) continue;
+            completedJobsByClient.set(row.clientId, parseFloat(row.total) || 0);
+          }
+          const collectedByClient = new Map<string, number>();
+          for (const row of collectedRows) {
+            if (!row.clientId) continue;
+            collectedByClient.set(row.clientId, (parseFloat(row.total) || 0) / 100);
+          }
+
+          ltvByClientId = new Map(
+            clientIds.map((id) => [
+              id,
+              Math.round(
+                ((completedJobsByClient.get(id) ?? 0) +
+                  (collectedByClient.get(id) ?? 0)) *
+                  100,
+              ) / 100,
+            ]),
+          );
+        }
+
+        const clientsWithLtv = clients.map((c) => ({
+          ...c,
+          ltv: ltvByClientId.get(c.id) ?? 0,
+        }));
+
+        res.json({ clients: clientsWithLtv });
       } catch (error) {
         console.error("Get clients error:", error);
         res.status(500).json({ error: "Failed to get clients" });

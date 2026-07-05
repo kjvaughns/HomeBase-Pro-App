@@ -1244,6 +1244,10 @@ export default function ProviderSetupFlow({ navigation }: Props) {
   const [goingBack, setGoingBack] = useState(false);
   const [serviceError, setServiceError] = useState<string | null>(null);
   const [savingService, setSavingService] = useState(false);
+  const [hoursError, setHoursError] = useState<string | null>(null);
+  const [savingHours, setSavingHours] = useState(false);
+  const [bioError, setBioError] = useState<string | null>(null);
+  const [savingBio, setSavingBio] = useState(false);
   const [data, setData] = useState<SetupData>({
     businessName: providerPreSignupData?.businessName || user?.name || "",
     category: providerPreSignupData?.category || "",
@@ -1355,19 +1359,35 @@ export default function ProviderSetupFlow({ navigation }: Props) {
             },
           ])
         );
-        apiRequest("PATCH", `/api/provider/${providerProfile.id}`, {
-          businessHours: dayKeyedHours,
-        }).catch((err) => {
-          console.warn("[ProviderSetupFlow] Failed to persist business hours:", err);
-        });
+        setSavingHours(true);
+        setHoursError(null);
+        try {
+          await apiRequest("PATCH", `/api/provider/${providerProfile.id}`, {
+            businessHours: dayKeyedHours,
+          });
+        } catch (err) {
+          setSavingHours(false);
+          setHoursError("Could not save your business hours. Check your connection and try again.");
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          return;
+        }
+        setSavingHours(false);
       }
     } else if (step === 3) {
       if (providerProfile?.id && data.bio.trim()) {
-        apiRequest("PATCH", `/api/provider/${providerProfile.id}`, {
-          description: data.bio.trim(),
-        }).catch((err) => {
-          console.warn("[ProviderSetupFlow] Failed to persist bio:", err);
-        });
+        setSavingBio(true);
+        setBioError(null);
+        try {
+          await apiRequest("PATCH", `/api/provider/${providerProfile.id}`, {
+            description: data.bio.trim(),
+          });
+        } catch (err) {
+          setSavingBio(false);
+          setBioError("Could not save your bio. Check your connection and try again.");
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          return;
+        }
+        setSavingBio(false);
       }
     }
 
@@ -1456,12 +1476,28 @@ export default function ProviderSetupFlow({ navigation }: Props) {
               {serviceError}
             </ThemedText>
           ) : null}
+          {hoursError && step === 2 ? (
+            <ThemedText
+              style={[styles.serviceErrorText, { color: "#E53E3E" }]}
+              testID="text-hours-error"
+            >
+              {hoursError}
+            </ThemedText>
+          ) : null}
+          {bioError && step === 3 ? (
+            <ThemedText
+              style={[styles.serviceErrorText, { color: "#E53E3E" }]}
+              testID="text-bio-error"
+            >
+              {bioError}
+            </ThemedText>
+          ) : null}
           <PrimaryButton
             onPress={handleContinue}
-            disabled={!canContinue() || savingService}
+            disabled={!canContinue() || savingService || savingHours || savingBio}
             testID="button-continue"
           >
-            {savingService ? "Saving..." : "Continue"}
+            {savingService || savingHours || savingBio ? "Saving..." : "Continue"}
           </PrimaryButton>
         </View>
       ) : null}

@@ -1,1 +1,2 @@
 - [JSX string-attribute newlines](jsx-string-attribute-newlines.md) — `attr="a\nb"` renders literal backslash-n; must use `attr={'a\nb'}` expression syntax for real line breaks.
+- [Recurring date math must use UTC](recurring-date-math-utc.md) — recurringJobsService.ts dedup key is UTC-based; local-timezone Date getters/setters cause off-by-one-day bugs.

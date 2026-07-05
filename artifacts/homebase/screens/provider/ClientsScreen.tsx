@@ -249,6 +249,7 @@ interface ApiClient {
   notes?: string;
   status?: string;
   createdAt: string;
+  ltv?: number;
 }
 
 export default function ClientsScreen() {
@@ -290,7 +291,7 @@ export default function ClientsScreen() {
       ...c,
       name: `${c.firstName} ${c.lastName}`,
       status: (c.status as Client["status"]) || "active",
-      ltv: 0,
+      ltv: c.ltv ?? 0,
       outstandingBalance: 0,
       clientSince: c.createdAt,
     }));

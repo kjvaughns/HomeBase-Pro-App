@@ -2042,18 +2042,33 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
   }
 
   if (payment) {
-    await db
-      .update(payments)
-      .set({ status: "refunded" })
-      .where(eq(payments.id, payment.id));
+    // A `charge.refunded` event fires for both partial and full refunds.
+    // Stripe's own `charge.refunded` boolean (and amount_refunded ===
+    // amount) tells us whether the *entire* charge has now been refunded.
+    // Only a full refund should flip the payment/invoice to "refunded" —
+    // a partial refund must leave the payment "succeeded" and the invoice
+    // in its paid/partially-paid state so the remaining balance still
+    // shows as collected.
+    const isFullRefund =
+      charge.refunded === true ||
+      (typeof charge.amount_refunded === "number" &&
+        typeof charge.amount === "number" &&
+        charge.amount_refunded >= charge.amount);
 
-    await db
-      .update(invoices)
-      .set({
-        status: "refunded",
-        updatedAt: new Date(),
-      })
-      .where(eq(invoices.id, payment.invoiceId));
+    if (isFullRefund) {
+      await db
+        .update(payments)
+        .set({ status: "refunded" })
+        .where(eq(payments.id, payment.id));
+
+      await db
+        .update(invoices)
+        .set({
+          status: "refunded",
+          updatedAt: new Date(),
+        })
+        .where(eq(invoices.id, payment.invoiceId));
+    }
 
     // Upsert refund records for each Stripe refund on this charge
     if (charge.refunds?.data?.length) {
@@ -2832,8 +2847,10 @@ export async function createSubscriptionPortalSession(opts: {
 
 function planTierForStatus(
   status: string | null | undefined,
+  isActive?: boolean,
 ): "free" | "professional" {
   if (!status) return "free";
+  if (isActive !== undefined) return isActive ? "professional" : "free";
   return status === "active" || status === "trialing" ? "professional" : "free";
 }
 
@@ -2921,14 +2938,26 @@ export async function handleSubscriptionUpdated(subscription: Stripe.Subscriptio
   if (!providerId) return;
 
   const status = subscription.status; // active | trialing | past_due | canceled | unpaid | incomplete...
-  const isActive = status === "active" || status === "trialing";
 
   const periodEndUnix = (subscription as any).current_period_end;
   const currentPeriodEnd =
     typeof periodEndUnix === "number" ? new Date(periodEndUnix * 1000) : null;
 
+  // `past_due` means Stripe is still retrying the card (Smart Retries) —
+  // the provider hasn't actually lost access yet. Keep them subscribed
+  // until the current billing period actually ends, mirroring the grace
+  // period we give RevenueCat's BILLING_ISSUE event. Only flip access off
+  // once currentPeriodEnd has passed (or Stripe gives up and moves the
+  // subscription to `canceled`/`unpaid`).
+  const isPastDueInGrace =
+    status === "past_due" &&
+    currentPeriodEnd !== null &&
+    currentPeriodEnd.getTime() > Date.now();
+  const isActive =
+    status === "active" || status === "trialing" || isPastDueInGrace;
+
   await upsertProviderPlanSubscription(providerId, {
-    planTier: planTierForStatus(status),
+    planTier: planTierForStatus(status, isActive),
     isSubscribed: isActive,
     stripeSubscriptionId: subscription.id,
     subscriptionStatus: status,

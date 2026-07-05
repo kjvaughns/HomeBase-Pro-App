@@ -74,12 +74,18 @@ function parseBusinessHours(
   >;
 }
 
+// All occurrence-date logic (dedup keys, day-of-week checks, month math) is
+// computed in UTC exclusively. Mixing local-timezone getters (getDate/getDay)
+// with the UTC-based `toISOString().slice(0, 10)` dedup key could silently
+// shift a day near midnight, causing occurrences to be skipped or
+// double-booked depending on the server's session timezone. Using the UTC*
+// variants everywhere keeps a single, explicit timezone throughout.
 function isClosedDay(
   hours: ReturnType<typeof parseBusinessHours>,
   date: Date,
 ): boolean {
   if (!hours) return false;
-  const day = hours[DAY_KEYS[date.getDay()]];
+  const day = hours[DAY_KEYS[date.getUTCDay()]];
   if (!day) return false;
   return day.enabled === false;
 }
@@ -96,7 +102,7 @@ function isOutsideBusinessHours(
   durationMin: number,
 ): boolean {
   if (!hours || !scheduledTime) return false;
-  const day = hours[DAY_KEYS[date.getDay()]];
+  const day = hours[DAY_KEYS[date.getUTCDay()]];
   if (!day || day.enabled === false) return false;
   const open = parseHHMM(day.open ?? null);
   const close = parseHHMM(day.close ?? null);
@@ -164,14 +170,14 @@ function computeStartN(
     }
     case "monthly": {
       const months =
-        (minDate.getFullYear() - anchor.getFullYear()) * 12 +
-        (minDate.getMonth() - anchor.getMonth());
+        (minDate.getUTCFullYear() - anchor.getUTCFullYear()) * 12 +
+        (minDate.getUTCMonth() - anchor.getUTCMonth());
       return Math.max(1, months);
     }
     case "quarterly": {
       const months =
-        (minDate.getFullYear() - anchor.getFullYear()) * 12 +
-        (minDate.getMonth() - anchor.getMonth());
+        (minDate.getUTCFullYear() - anchor.getUTCFullYear()) * 12 +
+        (minDate.getUTCMonth() - anchor.getUTCMonth());
       return Math.max(1, Math.floor(months / 3));
     }
   }
@@ -190,13 +196,13 @@ export function computeOccurrence(
   const d = new Date(anchor);
   switch (frequency) {
     case "daily":
-      d.setDate(d.getDate() + n);
+      d.setUTCDate(d.getUTCDate() + n);
       return d;
     case "weekly":
-      d.setDate(d.getDate() + 7 * n);
+      d.setUTCDate(d.getUTCDate() + 7 * n);
       return d;
     case "biweekly":
-      d.setDate(d.getDate() + 14 * n);
+      d.setUTCDate(d.getUTCDate() + 14 * n);
       return d;
     case "monthly":
       return shiftMonths(d, n);
@@ -213,11 +219,13 @@ export function computeOccurrence(
  * day to min(originalDay, lastDayOfTargetMonth).
  */
 function shiftMonths(d: Date, months: number): Date {
-  const day = d.getDate();
-  d.setDate(1);
-  d.setMonth(d.getMonth() + months);
-  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-  d.setDate(Math.min(day, lastDay));
+  const day = d.getUTCDate();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() + months);
+  const lastDay = new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  d.setUTCDate(Math.min(day, lastDay));
   return d;
 }
 
@@ -251,7 +259,7 @@ async function adjustToAvailableDay(
     ) {
       return new Date(candidate);
     }
-    candidate.setDate(candidate.getDate() + 1);
+    candidate.setUTCDate(candidate.getUTCDate() + 1);
   }
   return null;
 }
@@ -273,9 +281,9 @@ async function hasConflictingJob(
   },
 ): Promise<boolean> {
   const dayStart = new Date(date);
-  dayStart.setHours(0, 0, 0, 0);
+  dayStart.setUTCHours(0, 0, 0, 0);
   const dayEnd = new Date(dayStart);
-  dayEnd.setDate(dayEnd.getDate() + 1);
+  dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
 
   const sameDay = await db
     .select({
@@ -377,7 +385,7 @@ export async function materializeOccurrences(
 
   const horizonDays = opts.horizonDays ?? HORIZON_DAYS;
   const horizonEnd = new Date();
-  horizonEnd.setDate(horizonEnd.getDate() + horizonDays);
+  horizonEnd.setUTCDate(horizonEnd.getUTCDate() + horizonDays);
 
   // Provider business hours for closed-day skipping.
   const [provider] = await db

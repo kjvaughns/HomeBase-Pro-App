@@ -891,6 +891,20 @@ export const stripeWebhookEvents = pgTable("stripe_webhook_events", {
   payload: text("payload"), // JSON string of event data
 });
 
+// RevenueCat webhook events for idempotency. Mirrors stripe_webhook_events:
+// a row is reserved with processed_at=NULL before the handler runs, then
+// UPDATEd to NOW() once it succeeds. Dedupes retried/duplicate deliveries by
+// RevenueCat's event.id.
+export const revenuecatWebhookEvents = pgTable("revenuecat_webhook_events", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  revenuecatEventId: text("revenuecat_event_id").notNull().unique(),
+  eventType: text("event_type").notNull(),
+  processedAt: timestamp("processed_at"),
+  payload: text("payload"), // JSON string of event data
+});
+
 // Invoice line items (normalized from JSON)
 export const invoiceLineItems = pgTable("invoice_line_items", {
   id: varchar("id")
