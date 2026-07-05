@@ -2,3 +2,4 @@
 - [Recurring date math must use UTC](recurring-date-math-utc.md) — recurringJobsService.ts dedup key is UTC-based; local-timezone Date getters/setters cause off-by-one-day bugs.
 - [notificationService category literal](notification-category-literal.md) — dispatchNotification's category param is a strict union (bookings/invoices/messages/reminders), not free text; check the type before adding new call sites.
 - [Expo web preview renders blank](expo-web-preview-blank.md) — screenshot/Playwright tools against the homebase Expo workflow show a blank page even on a clean build; treat as environment limitation, verify via typecheck + code/DB review instead.
+- [drizzle.config.ts must use SUPABASE_DATABASE_URL](drizzle-config-wrong-db-url.md) — was reading DATABASE_URL (wrong, unused DB); `db push` reported success but silently missed the real app DB.

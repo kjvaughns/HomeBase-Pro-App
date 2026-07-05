@@ -40,6 +40,11 @@ export default function AddClientScreen() {
   const [state, setState] = useState("");
   const [zip, setZip] = useState("");
   const [notes, setNotes] = useState("");
+  const [gateCode, setGateCode] = useState("");
+  const [entryInstructions, setEntryInstructions] = useState("");
+  const [pets, setPets] = useState("");
+  const [parkingNotes, setParkingNotes] = useState("");
+  const [trashDay, setTrashDay] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [housefaxData, setHousefaxData] = useState<EnrichmentData | null>(null);
 
@@ -67,6 +72,11 @@ export default function AddClientScreen() {
       state?: string;
       zip?: string;
       notes?: string;
+      gateCode?: string;
+      entryInstructions?: string;
+      pets?: string;
+      parkingNotes?: string;
+      trashDay?: string;
       housefaxData?: EnrichmentData;
     }) => {
       const response = await apiRequest("POST", "/api/clients", data);
@@ -107,6 +117,11 @@ export default function AddClientScreen() {
       state: state.trim() || undefined,
       zip: zip.trim() || undefined,
       notes: notes.trim() || undefined,
+      gateCode: gateCode.trim() || undefined,
+      entryInstructions: entryInstructions.trim() || undefined,
+      pets: pets.trim() || undefined,
+      parkingNotes: parkingNotes.trim() || undefined,
+      trashDay: trashDay.trim() || undefined,
       housefaxData: housefaxData ?? undefined,
     });
   };
@@ -248,6 +263,51 @@ export default function AddClientScreen() {
             ) : null}
           </GlassCard>
         ) : null}
+
+        {/* Property Details */}
+        <GlassCard style={styles.section}>
+          <FormSectionHeader icon="key" title="Property Details" iconBg={undefined} />
+          <TextField
+            value={gateCode}
+            onChangeText={setGateCode}
+            placeholder="Gate / lockbox code"
+            leftIcon="lock"
+            testID="input-gate-code"
+          />
+          <View style={[styles.divider, { backgroundColor: theme.separator }]} />
+          <TextField
+            value={entryInstructions}
+            onChangeText={setEntryInstructions}
+            placeholder="Entry instructions"
+            multiline
+            numberOfLines={3}
+            testID="input-entry-instructions"
+          />
+          <View style={[styles.divider, { backgroundColor: theme.separator }]} />
+          <TextField
+            value={pets}
+            onChangeText={setPets}
+            placeholder="Pets (e.g. friendly dog in backyard)"
+            leftIcon="heart"
+            testID="input-pets"
+          />
+          <View style={[styles.divider, { backgroundColor: theme.separator }]} />
+          <TextField
+            value={parkingNotes}
+            onChangeText={setParkingNotes}
+            placeholder="Parking notes"
+            leftIcon="truck"
+            testID="input-parking-notes"
+          />
+          <View style={[styles.divider, { backgroundColor: theme.separator }]} />
+          <TextField
+            value={trashDay}
+            onChangeText={setTrashDay}
+            placeholder="Trash day"
+            leftIcon="calendar"
+            testID="input-trash-day"
+          />
+        </GlassCard>
 
         {/* Notes */}
         <GlassCard style={styles.section}>

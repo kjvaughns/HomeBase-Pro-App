@@ -7,17 +7,19 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { StatusPill } from "@/components/StatusPill";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { SecondaryButton } from "@/components/SecondaryButton";
+import { TextField } from "@/components/TextField";
 import { useTheme } from "@/hooks/useTheme";
 import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
-import { getApiUrl } from "@/lib/query-client";
+import { getApiUrl, apiRequest } from "@/lib/query-client";
 import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { RecordPaymentSheet } from "@/components/RecordPaymentSheet";
@@ -31,7 +33,7 @@ interface ProviderMessageRecord {
   createdAt: string;
 }
 
-type TabType = "overview" | "jobs" | "invoices" | "estimates" | "notes" | "home" | "messages";
+type TabType = "overview" | "jobs" | "invoices" | "estimates" | "notes" | "property" | "home" | "messages";
 
 interface ClientRecord {
   id: string;
@@ -45,6 +47,11 @@ interface ClientRecord {
   state: string | null;
   zip: string | null;
   notes: string | null;
+  gateCode: string | null;
+  entryInstructions: string | null;
+  pets: string | null;
+  parkingNotes: string | null;
+  trashDay: string | null;
   createdAt: string;
   updatedAt: string;
   // Computed/extended fields (may not be present in base API response)
@@ -220,10 +227,17 @@ export default function ClientDetailScreen() {
 
   const { providerProfile } = useAuthStore();
   const providerId = providerProfile?.id;
+  const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [paymentSheetOpen, setPaymentSheetOpen] = useState(false);
   const [paymentInvoiceId, setPaymentInvoiceId] = useState<string | null>(null);
+  const [propertyEditing, setPropertyEditing] = useState(false);
+  const [gateCodeInput, setGateCodeInput] = useState("");
+  const [entryInstructionsInput, setEntryInstructionsInput] = useState("");
+  const [petsInput, setPetsInput] = useState("");
+  const [parkingNotesInput, setParkingNotesInput] = useState("");
+  const [trashDayInput, setTrashDayInput] = useState("");
 
   const { data: clientDetailData, isLoading } = useQuery<{
     client: ClientRecord;
@@ -260,6 +274,47 @@ export default function ClientDetailScreen() {
   const client: ClientRecord | null = clientDetailData?.client || null;
   const jobs: JobRecord[] = clientDetailData?.jobs || [];
   const invoices: InvoiceRecord[] = clientDetailData?.invoices || [];
+
+  const updatePropertyMutation = useMutation({
+    mutationFn: async (data: {
+      gateCode?: string;
+      entryInstructions?: string;
+      pets?: string;
+      parkingNotes?: string;
+      trashDay?: string;
+    }) => {
+      const response = await apiRequest("PUT", `/api/clients/${clientId}`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId] });
+      setPropertyEditing(false);
+    },
+    onError: () => {
+      Alert.alert("Couldn't save", "Failed to save property details. Please try again.");
+    },
+  });
+
+  const startPropertyEdit = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setGateCodeInput(client?.gateCode ?? "");
+    setEntryInstructionsInput(client?.entryInstructions ?? "");
+    setPetsInput(client?.pets ?? "");
+    setParkingNotesInput(client?.parkingNotes ?? "");
+    setTrashDayInput(client?.trashDay ?? "");
+    setPropertyEditing(true);
+  };
+
+  const handleSaveProperty = () => {
+    updatePropertyMutation.mutate({
+      gateCode: gateCodeInput.trim(),
+      entryInstructions: entryInstructionsInput.trim(),
+      pets: petsInput.trim(),
+      parkingNotes: parkingNotesInput.trim(),
+      trashDay: trashDayInput.trim(),
+    });
+  };
 
   // Task #296 — fetch estimates for this client (only when the tab is open).
   const { data: clientEstimatesData } = useQuery<{
@@ -723,6 +778,147 @@ export default function ClientDetailScreen() {
     );
   };
 
+  const hasPropertyDetails = !!(
+    client.gateCode ||
+    client.entryInstructions ||
+    client.pets ||
+    client.parkingNotes ||
+    client.trashDay
+  );
+
+  const renderProperty = () => (
+    <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+      <GlassCard style={styles.homePropertyCard}>
+        <View style={styles.notesHeader}>
+          <ThemedText type="label" style={{ color: theme.textSecondary }}>
+            PROPERTY DETAILS
+          </ThemedText>
+          {!propertyEditing ? (
+            <Pressable
+              style={[styles.addNoteButton, { backgroundColor: Colors.accent }]}
+              onPress={startPropertyEdit}
+              testID="button-edit-property-details"
+            >
+              <Feather name="edit-2" size={14} color="#FFFFFF" />
+              <ThemedText type="caption" style={{ color: "#FFFFFF", marginLeft: 4 }}>
+                {hasPropertyDetails ? "Edit" : "Add Details"}
+              </ThemedText>
+            </Pressable>
+          ) : null}
+        </View>
+
+        {propertyEditing ? (
+          <View style={{ marginTop: Spacing.sm }}>
+            <TextField
+              value={gateCodeInput}
+              onChangeText={setGateCodeInput}
+              placeholder="Gate / lockbox code"
+              leftIcon="lock"
+              testID="input-edit-gate-code"
+            />
+            <View style={[styles.divider, { backgroundColor: theme.separator }]} />
+            <TextField
+              value={entryInstructionsInput}
+              onChangeText={setEntryInstructionsInput}
+              placeholder="Entry instructions"
+              multiline
+              numberOfLines={3}
+              testID="input-edit-entry-instructions"
+            />
+            <View style={[styles.divider, { backgroundColor: theme.separator }]} />
+            <TextField
+              value={petsInput}
+              onChangeText={setPetsInput}
+              placeholder="Pets"
+              leftIcon="heart"
+              testID="input-edit-pets"
+            />
+            <View style={[styles.divider, { backgroundColor: theme.separator }]} />
+            <TextField
+              value={parkingNotesInput}
+              onChangeText={setParkingNotesInput}
+              placeholder="Parking notes"
+              leftIcon="truck"
+              testID="input-edit-parking-notes"
+            />
+            <View style={[styles.divider, { backgroundColor: theme.separator }]} />
+            <TextField
+              value={trashDayInput}
+              onChangeText={setTrashDayInput}
+              placeholder="Trash day"
+              leftIcon="calendar"
+              testID="input-edit-trash-day"
+            />
+            <View style={{ flexDirection: "row", gap: Spacing.md, marginTop: Spacing.md }}>
+              <SecondaryButton
+                onPress={() => setPropertyEditing(false)}
+                disabled={updatePropertyMutation.isPending}
+                style={{ flex: 1 }}
+              >
+                Cancel
+              </SecondaryButton>
+              <PrimaryButton
+                onPress={handleSaveProperty}
+                loading={updatePropertyMutation.isPending}
+                style={{ flex: 1 }}
+                testID="button-save-property-details"
+              >
+                Save
+              </PrimaryButton>
+            </View>
+          </View>
+        ) : hasPropertyDetails ? (
+          <View style={{ marginTop: Spacing.sm }}>
+            {client.gateCode ? (
+              <View style={styles.accessRow}>
+                <Feather name="lock" size={16} color="#EF4444" />
+                <ThemedText type="body" style={{ marginLeft: Spacing.sm, flex: 1, color: "#EF4444" }}>
+                  Gate Code: {client.gateCode}
+                </ThemedText>
+              </View>
+            ) : null}
+            {client.entryInstructions ? (
+              <View style={styles.accessRow}>
+                <Feather name="key" size={16} color={theme.textSecondary} />
+                <ThemedText type="body" style={{ marginLeft: Spacing.sm, flex: 1 }}>
+                  {client.entryInstructions}
+                </ThemedText>
+              </View>
+            ) : null}
+            {client.pets ? (
+              <View style={styles.accessRow}>
+                <Feather name="heart" size={16} color={theme.textSecondary} />
+                <ThemedText type="body" style={{ marginLeft: Spacing.sm, flex: 1 }}>
+                  {client.pets}
+                </ThemedText>
+              </View>
+            ) : null}
+            {client.parkingNotes ? (
+              <View style={styles.accessRow}>
+                <Feather name="truck" size={16} color={theme.textSecondary} />
+                <ThemedText type="body" style={{ marginLeft: Spacing.sm, flex: 1 }}>
+                  {client.parkingNotes}
+                </ThemedText>
+              </View>
+            ) : null}
+            {client.trashDay ? (
+              <View style={styles.accessRow}>
+                <Feather name="calendar" size={16} color={theme.textSecondary} />
+                <ThemedText type="body" style={{ marginLeft: Spacing.sm, flex: 1 }}>
+                  Trash day: {client.trashDay}
+                </ThemedText>
+              </View>
+            ) : null}
+          </View>
+        ) : (
+          <ThemedText type="body" style={{ color: theme.textSecondary, marginTop: Spacing.sm }}>
+            No property details on file yet. Add gate codes, entry instructions, pets, parking notes, or trash day so your crew has what they need on-site.
+          </ThemedText>
+        )}
+      </GlassCard>
+    </Animated.View>
+  );
+
   const renderHome = () => {
     const home = client.home;
     
@@ -1009,6 +1205,11 @@ export default function ClientDetailScreen() {
             onPress={() => setActiveTab("notes")}
           />
           <TabButton
+            label="Property"
+            active={activeTab === "property"}
+            onPress={() => setActiveTab("property")}
+          />
+          <TabButton
             label="Home"
             active={activeTab === "home"}
             onPress={() => setActiveTab("home")}
@@ -1026,6 +1227,7 @@ export default function ClientDetailScreen() {
           {activeTab === "invoices" && renderInvoices()}
           {activeTab === "estimates" && renderEstimates()}
           {activeTab === "notes" && renderNotes()}
+          {activeTab === "property" && renderProperty()}
           {activeTab === "home" && renderHome()}
           {activeTab === "messages" && renderMessages()}
         </View>
@@ -1271,6 +1473,10 @@ const styles = StyleSheet.create({
   },
   homePropertyCard: {
     marginBottom: Spacing.md,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: Spacing.xs,
   },
   propertyGrid: {
     flexDirection: "row",

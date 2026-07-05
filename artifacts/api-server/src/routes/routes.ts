@@ -9622,16 +9622,40 @@ Respond with JSON only:
           return;
 
         // Allowlist mutable fields to prevent mass-assignment
-        const { firstName, lastName, email, phone, address, notes, tags } =
-          req.body;
+        const {
+          firstName,
+          lastName,
+          email,
+          phone,
+          address,
+          city,
+          state,
+          zip,
+          notes,
+          tags,
+          gateCode,
+          entryInstructions,
+          pets,
+          parkingNotes,
+          trashDay,
+        } = req.body;
         const update: Record<string, unknown> = {};
         if (firstName !== undefined) update.firstName = firstName;
         if (lastName !== undefined) update.lastName = lastName;
         if (email !== undefined) update.email = email;
         if (phone !== undefined) update.phone = phone;
         if (address !== undefined) update.address = address;
+        if (city !== undefined) update.city = city;
+        if (state !== undefined) update.state = state;
+        if (zip !== undefined) update.zip = zip;
         if (notes !== undefined) update.notes = notes;
         if (tags !== undefined) update.tags = tags;
+        if (gateCode !== undefined) update.gateCode = gateCode;
+        if (entryInstructions !== undefined)
+          update.entryInstructions = entryInstructions;
+        if (pets !== undefined) update.pets = pets;
+        if (parkingNotes !== undefined) update.parkingNotes = parkingNotes;
+        if (trashDay !== undefined) update.trashDay = trashDay;
 
         const client = await storage.updateClient(req.params.id, update);
         if (!client) {
@@ -10013,7 +10037,33 @@ Respond with JSON only:
             recurringFrequency = appt.recurringFrequency ?? null;
           }
         }
-        res.json({ job: { ...job, isRecurring, recurringFrequency } });
+        // Surface structured client property details (gate code, entry
+        // instructions, pets, parking, trash day) so crew can see on-site
+        // reference info without needing access to the full client record.
+        let clientPropertyDetails: {
+          gateCode: string | null;
+          entryInstructions: string | null;
+          pets: string | null;
+          parkingNotes: string | null;
+          trashDay: string | null;
+        } | null = null;
+        if (job.clientId) {
+          const clientRecord = await storage.getClient(job.clientId);
+          if (clientRecord) {
+            clientPropertyDetails = {
+              gateCode: clientRecord.gateCode ?? null,
+              entryInstructions: clientRecord.entryInstructions ?? null,
+              pets: clientRecord.pets ?? null,
+              parkingNotes: clientRecord.parkingNotes ?? null,
+              trashDay: clientRecord.trashDay ?? null,
+            };
+          }
+        }
+
+        res.json({
+          job: { ...job, isRecurring, recurringFrequency },
+          clientPropertyDetails,
+        });
       } catch (error) {
         console.error("Get job error:", error);
         res.status(500).json({ error: "Failed to get job" });

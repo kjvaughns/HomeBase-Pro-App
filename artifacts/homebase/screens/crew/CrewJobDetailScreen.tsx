@@ -38,6 +38,14 @@ interface JobRow {
   description: string | null;
 }
 
+interface ClientPropertyDetails {
+  gateCode: string | null;
+  entryInstructions: string | null;
+  pets: string | null;
+  parkingNotes: string | null;
+  trashDay: string | null;
+}
+
 const STATUS_CONFIG: Record<
   string,
   { label: string; color: string; bg: string }
@@ -90,10 +98,22 @@ export default function CrewJobDetailScreen() {
   const { jobId } = route.params;
   const queryClient = useQueryClient();
 
-  const { data: jobData, isLoading } = useQuery<{ job: JobRow }>({
+  const { data: jobData, isLoading } = useQuery<{
+    job: JobRow;
+    clientPropertyDetails: ClientPropertyDetails | null;
+  }>({
     queryKey: ["/api/jobs", jobId],
   });
   const job = jobData?.job;
+  const clientPropertyDetails = jobData?.clientPropertyDetails ?? null;
+  const hasPropertyDetails = !!(
+    clientPropertyDetails &&
+    (clientPropertyDetails.gateCode ||
+      clientPropertyDetails.entryInstructions ||
+      clientPropertyDetails.pets ||
+      clientPropertyDetails.parkingNotes ||
+      clientPropertyDetails.trashDay)
+  );
 
   const { data: photoData } = useQuery<{ photos: string[] }>({
     queryKey: ["/api/jobs", jobId, "photos"],
@@ -326,6 +346,85 @@ export default function CrewJobDetailScreen() {
           </View>
         ) : null}
 
+        {hasPropertyDetails ? (
+          <View
+            style={[
+              styles.detailCard,
+              { backgroundColor: theme.cardBackground },
+            ]}
+          >
+            <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
+              <View
+                style={[
+                  styles.iconBubble,
+                  { backgroundColor: Colors.accentLight },
+                ]}
+              >
+                <Feather name="key" size={14} color={Colors.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <ThemedText
+                  style={[styles.detailMicro, { color: theme.textTertiary }]}
+                >
+                  PROPERTY DETAILS
+                </ThemedText>
+              </View>
+            </View>
+            {clientPropertyDetails?.gateCode ? (
+              <View style={[styles.propertyDetailRow]}>
+                <Feather name="lock" size={14} color="#EF4444" />
+                <ThemedText
+                  style={[styles.propertyDetailText, { color: "#EF4444" }]}
+                >
+                  Gate Code: {clientPropertyDetails.gateCode}
+                </ThemedText>
+              </View>
+            ) : null}
+            {clientPropertyDetails?.entryInstructions ? (
+              <View style={styles.propertyDetailRow}>
+                <Feather
+                  name="log-in"
+                  size={14}
+                  color={theme.textSecondary}
+                />
+                <ThemedText style={styles.propertyDetailText}>
+                  {clientPropertyDetails.entryInstructions}
+                </ThemedText>
+              </View>
+            ) : null}
+            {clientPropertyDetails?.pets ? (
+              <View style={styles.propertyDetailRow}>
+                <Feather name="heart" size={14} color={theme.textSecondary} />
+                <ThemedText style={styles.propertyDetailText}>
+                  {clientPropertyDetails.pets}
+                </ThemedText>
+              </View>
+            ) : null}
+            {clientPropertyDetails?.parkingNotes ? (
+              <View style={styles.propertyDetailRow}>
+                <Feather name="truck" size={14} color={theme.textSecondary} />
+                <ThemedText style={styles.propertyDetailText}>
+                  {clientPropertyDetails.parkingNotes}
+                </ThemedText>
+              </View>
+            ) : null}
+            {clientPropertyDetails?.trashDay ? (
+              <View
+                style={[styles.propertyDetailRow, { paddingBottom: Spacing.md }]}
+              >
+                <Feather
+                  name="calendar"
+                  size={14}
+                  color={theme.textSecondary}
+                />
+                <ThemedText style={styles.propertyDetailText}>
+                  Trash day: {clientPropertyDetails.trashDay}
+                </ThemedText>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
         <ThemedText
           style={[styles.sectionLabel, { color: theme.textSecondary }]}
         >
@@ -490,6 +589,17 @@ const styles = StyleSheet.create({
   detailValue: {
     ...Typography.body,
     fontWeight: "500",
+  },
+  propertyDetailRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.sm,
+  },
+  propertyDetailText: {
+    ...Typography.body,
+    flex: 1,
   },
 
   sectionLabel: {

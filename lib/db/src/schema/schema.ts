@@ -966,6 +966,14 @@ export const clients = pgTable("clients", {
   state: text("state"),
   zip: text("zip"),
   notes: text("notes"),
+  // Structured on-site/CRM property details — collected directly for clients
+  // without a homeowner account (unrelated to the homeowner-side HouseFax
+  // `homes` table). Crew rely on these at the job site.
+  gateCode: text("gate_code"),
+  entryInstructions: text("entry_instructions"),
+  pets: text("pets"),
+  parkingNotes: text("parking_notes"),
+  trashDay: text("trash_day"),
   stripeCustomerId: text("stripe_customer_id"),
   stripeConnectCustomerId: text("stripe_connect_customer_id"),
   homeData: text("home_data"), // JSON: legacy HouseFax cache (deprecated in favor of homeId)
