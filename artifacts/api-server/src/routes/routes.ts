@@ -93,6 +93,7 @@ import {
   getConnectAccount,
   createInvoicePaymentIntent,
   createStripeCheckoutSession,
+  attemptNoShowFeeCharge,
   createStripeInvoice,
   sendStripeInvoiceEmail,
   resendStripeInvoice,
@@ -11286,6 +11287,119 @@ Respond with JSON only:
     },
   );
 
+  // Task #478: mark a job as a no-show, optionally charging a fee against
+  // the client's saved card or noting an existing deposit as covering it.
+  // Provider-only (not crew) — this is a financial action.
+  app.post(
+    "/api/jobs/:id/no-show",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const existing = await storage.getJob(req.params.id);
+        if (!existing) return res.status(404).json({ error: "Job not found" });
+        if (!(await assertProviderOwnership(req, existing.providerId, res)))
+          return;
+        if (
+          existing.status === "completed" ||
+          existing.status === "cancelled" ||
+          existing.status === "no_show"
+        ) {
+          // Task #478 code review: block re-entry. Without this guard a
+          // provider (or a retried request) could call this endpoint
+          // repeatedly against an already-no-show job and trigger
+          // `attemptNoShowFeeCharge` more than once, overcharging the client.
+          return res.status(409).json({
+            error: `Cannot mark a ${existing.status} job as a no-show`,
+          });
+        }
+
+        const rawFee = Number(req.body?.feeCents);
+        const feeCents =
+          Number.isFinite(rawFee) && rawFee > 0 ? Math.round(rawFee) : 0;
+
+        let feeStatus: "charged_card" | "covered_by_deposit" | "failed" | null =
+          null;
+        let feePaymentIntentId: string | null = null;
+        let feeFailureReason: string | undefined;
+
+        if (feeCents > 0) {
+          const result = await attemptNoShowFeeCharge({
+            jobId: existing.id,
+            clientId: existing.clientId,
+            appointmentId: existing.appointmentId,
+            providerId: existing.providerId,
+            amountCents: feeCents,
+            // Task #478 code review: deterministic idempotency key so a
+            // network retry of this request can never create a second
+            // Stripe PaymentIntent for the same job's no-show fee.
+            idempotencyKey: `no-show-fee:${existing.id}`,
+          });
+          if (result.success) {
+            feeStatus = result.method ?? "charged_card";
+            feePaymentIntentId = result.paymentIntentId ?? null;
+          } else {
+            feeStatus = "failed";
+            feeFailureReason = result.reason;
+          }
+        }
+
+        const job = await db
+          .update(jobs)
+          .set({
+            status: "no_show",
+            noShowAt: new Date(),
+            noShowFeeCents: feeCents > 0 ? feeCents : null,
+            noShowFeeStatus: feeStatus,
+            noShowFeePaymentIntentId: feePaymentIntentId,
+            updatedAt: new Date(),
+          })
+          .where(eq(jobs.id, req.params.id))
+          .returning()
+          .then((rows) => rows[0]);
+        if (!job) return res.status(404).json({ error: "Job not found" });
+
+        // Notify the homeowner (best-effort, non-fatal).
+        (async () => {
+          try {
+            if (!existing.clientId) return;
+            const [client] = await db
+              .select({ homeownerUserId: clients.homeownerUserId })
+              .from(clients)
+              .where(eq(clients.id, existing.clientId));
+            if (!client?.homeownerUserId) return;
+            const feeNote =
+              feeStatus === "charged_card"
+                ? ` A $${(feeCents / 100).toFixed(2)} no-show fee was charged to your card on file.`
+                : feeStatus === "covered_by_deposit"
+                  ? ` Your deposit will cover the no-show fee.`
+                  : "";
+            await dispatchNotification(
+              client.homeownerUserId,
+              "Marked as a no-show",
+              `Your appointment "${job.title}" was marked as a no-show.${feeNote}`,
+              "job.no_show",
+              { jobId: job.id, screen: "JobDetail" },
+              "bookings",
+            );
+          } catch (e) {
+            console.error("no-show notify error:", e);
+          }
+        })();
+
+        res.json({
+          job,
+          fee:
+            feeCents > 0
+              ? { status: feeStatus, amountCents: feeCents, reason: feeFailureReason }
+              : null,
+        });
+      } catch (error) {
+        console.error("No-show job error:", error);
+        res.status(500).json({ error: "Failed to mark job as a no-show" });
+      }
+    },
+  );
+
   app.post(
     "/api/jobs/:id/restore",
     requireAuth,
@@ -11531,6 +11645,137 @@ Respond with JSON only:
               await sendReviewNudge(apptId);
             } catch (e) {
               console.error("review nudge (job complete) error:", e);
+            }
+          })();
+        }
+
+        // Task #478: one-tap auto-invoice. When a provider marks a job
+        // complete, automatically create + send an invoice for the job's
+        // price if one doesn't already exist. Best-effort and non-fatal —
+        // never blocks or fails the job-completion response, since the
+        // provider can always create/send an invoice manually afterward.
+        if (job.providerId && job.clientId && prior?.status !== "completed") {
+          (async () => {
+            try {
+              const providerId = job.providerId!;
+              const [existingInvoice] = await db
+                .select({ id: invoices.id })
+                .from(invoices)
+                .where(eq(invoices.jobId, job.id))
+                .limit(1);
+              if (existingInvoice) return;
+
+              const priceStr = job.finalPrice ?? job.estimatedPrice;
+              const amount = priceStr ? parseFloat(priceStr) : 0;
+              if (!Number.isFinite(amount) || amount <= 0) return;
+
+              const subStatus = await getProviderSubscriptionStatus(providerId);
+              if (subStatus.status === "expired") return;
+
+              const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+              const lineItems = [
+                {
+                  description: job.title || "Service",
+                  quantity: 1,
+                  unitPrice: amount,
+                  total: amount,
+                },
+              ];
+              const subtotalCents = Math.round(amount * 100);
+              const autoPlan = await getProviderPlan(providerId);
+              const autoFee = calculatePlatformFee(
+                subtotalCents,
+                autoPlan.platformFeePercent || "3.00",
+                autoPlan.platformFeeFixedCents || 0,
+              );
+              const invoiceData = {
+                providerId,
+                clientId: job.clientId!,
+                jobId: job.id,
+                invoiceNumber,
+                currency: "usd",
+                subtotalCents,
+                taxCents: 0,
+                discountCents: 0,
+                platformFeeCents: autoFee.totalCents,
+                totalCents: subtotalCents,
+                amount: amount.toFixed(2),
+                total: amount.toFixed(2),
+                lineItems: JSON.stringify(lineItems),
+                notes: null,
+                status: "draft",
+                dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+              };
+              const parsedAuto = insertInvoiceSchema.safeParse(invoiceData);
+              if (!parsedAuto.success) {
+                console.error(
+                  "auto-invoice (job complete): invalid invoice data",
+                  parsedAuto.error.issues,
+                );
+                return;
+              }
+              const autoInvoice = await storage.createInvoice(parsedAuto.data);
+
+              let hostedUrl: string | undefined;
+              const platformResult = await sendStripeInvoiceEmail(
+                autoInvoice.id,
+              ).catch((err: any) => {
+                console.error(
+                  "auto-invoice (job complete): send failed",
+                  err?.message || err,
+                );
+                return null;
+              });
+              if (platformResult?.hostedInvoiceUrl) {
+                hostedUrl = platformResult.hostedInvoiceUrl;
+                const [promoted] = await db
+                  .update(invoices)
+                  .set({
+                    status: "sent",
+                    sentAt: new Date(),
+                    hostedInvoiceUrl: hostedUrl,
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(invoices.id, autoInvoice.id))
+                  .returning();
+
+                const client = await storage.getClient(job.clientId!);
+                const provider = await storage.getProvider(providerId);
+                if (client?.email && provider) {
+                  const clientName =
+                    [client.firstName, client.lastName]
+                      .filter(Boolean)
+                      .join(" ") || "Client";
+                  dispatchWithResult("invoice.sent", {
+                    clientEmail: client.email,
+                    clientName,
+                    providerName:
+                      provider.businessName ||
+                      provider.userId ||
+                      "Service Provider",
+                    invoiceNumber:
+                      autoInvoice.invoiceNumber || invoiceNumber,
+                    amount,
+                    dueDate: "Due on receipt",
+                    lineItems,
+                    paymentLink: hostedUrl,
+                    relatedRecordType: "invoice",
+                    relatedRecordId: autoInvoice.id,
+                  }).catch((e: unknown) =>
+                    console.error("auto-invoice (job complete): email dispatch error:", e),
+                  );
+                  notifyHomeownerInvoiceSent({
+                    invoice: promoted || autoInvoice,
+                    providerName: provider.businessName || "Your Provider",
+                    amount,
+                    clientEmail: client?.email ?? null,
+                  }).catch((e: unknown) =>
+                    console.error("auto-invoice (job complete): homeowner notify failed:", e),
+                  );
+                }
+              }
+            } catch (e) {
+              console.error("auto-invoice (job complete) error:", e);
             }
           })();
         }
@@ -15146,7 +15391,11 @@ Respond with JSON only:
         if (!(await assertInvoiceAccess(req, invoiceId, res))) return;
         // Never accept payerUserId from the request body — bind to the authenticated caller
         const authUserId = req.authenticatedUserId!;
-        const result = await createInvoicePaymentIntent(invoiceId, authUserId);
+        // Task #478: optional gratuity from the homeowner. Sanitize here too
+        // (service layer also clamps) so malformed input never reaches Stripe.
+        const rawTip = Number(req.body?.tipCents);
+        const tipCents = Number.isFinite(rawTip) && rawTip > 0 ? Math.round(rawTip) : 0;
+        const result = await createInvoicePaymentIntent(invoiceId, authUserId, tipCents);
         res.json(result);
       } catch (error: any) {
         console.error("Create payment intent error:", error);
@@ -15559,9 +15808,13 @@ Respond with JSON only:
           remainingCents = undefined;
         }
 
+        // Task #478: optional gratuity from the homeowner.
+        const rawTip = Number(req.body?.tipCents);
+        const tipCents = Number.isFinite(rawTip) && rawTip > 0 ? Math.round(rawTip) : 0;
+
         // Try Connect-backed Checkout Session first (proper deep-link return).
         try {
-          const session = await createStripeCheckoutSession(invoiceId, remainingCents);
+          const session = await createStripeCheckoutSession(invoiceId, remainingCents, tipCents);
           return res.json({
             url: session.checkoutUrl,
             sessionId: session.sessionId,

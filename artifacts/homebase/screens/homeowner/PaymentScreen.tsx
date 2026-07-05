@@ -61,6 +61,11 @@ export default function PaymentScreen() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [openedExternal, setOpenedExternal] = useState(false);
+  // Task #478: gratuity for the provider. Percent presets are computed off
+  // the job subtotal (not the processing fee) so "15%" always means 15% of
+  // the work billed, matching homeowner expectations from restaurant tipping.
+  const [tipPercent, setTipPercent] = useState<number | null>(null);
+  const [customTipCents, setCustomTipCents] = useState<number | null>(null);
   const [showReferralPrompt, setShowReferralPrompt] = useState(false);
   const referralPromptShownRef = useRef(false);
   const [returnNotice, setReturnNotice] = useState<string | null>(
@@ -178,7 +183,7 @@ export default function PaymentScreen() {
           method: "POST",
           headers: { "Content-Type": "application/json", ...getAuthHeaders() },
           credentials: "include",
-          body: JSON.stringify({}),
+          body: JSON.stringify({ tipCents }),
         });
         if (!res.ok) {
           const errBody: { error?: string } = await res
@@ -267,10 +272,20 @@ export default function PaymentScreen() {
   const isPaid = invoice.status === "paid";
 
   const jobCents = invoice.totalCents || Math.round(parseFloat(totalAmount) * 100);
-  const processingFeeCents = Math.round(jobCents * 0.029 + 30);
-  const homeownerTotalCents = jobCents + processingFeeCents;
+  // Task #478: tip is a percentage of the job subtotal, or a custom amount.
+  // Recomputed from jobCents rather than stored directly so switching
+  // presets always reflects the current invoice total.
+  const tipCents =
+    customTipCents !== null
+      ? customTipCents
+      : tipPercent
+      ? Math.round((jobCents * tipPercent) / 100)
+      : 0;
+  const processingFeeCents = Math.round((jobCents + tipCents) * 0.029 + 30);
+  const homeownerTotalCents = jobCents + tipCents + processingFeeCents;
   const homeownerTotal = (homeownerTotalCents / 100).toFixed(2);
   const processingFeeAmount = (processingFeeCents / 100).toFixed(2);
+  const tipAmount = (tipCents / 100).toFixed(2);
   const effectiveJobId = jobId ?? invoice.jobId ?? null;
 
   if (isPaid) {
@@ -385,6 +400,12 @@ export default function PaymentScreen() {
             <ThemedText style={[styles.feeBreakdownLabel, { color: theme.textSecondary }]}>Job Total</ThemedText>
             <ThemedText style={[styles.feeBreakdownValue, { color: theme.textSecondary }]}>${parseFloat(totalAmount).toFixed(2)}</ThemedText>
           </View>
+          {tipCents > 0 ? (
+            <View style={styles.feeBreakdownRow}>
+              <ThemedText style={[styles.feeBreakdownLabel, { color: theme.textSecondary }]}>Tip</ThemedText>
+              <ThemedText style={[styles.feeBreakdownValue, { color: theme.textSecondary }]}>${tipAmount}</ThemedText>
+            </View>
+          ) : null}
           <View style={styles.feeBreakdownRow}>
             <View style={styles.feeBreakdownLabelRow}>
               <ThemedText style={[styles.feeBreakdownLabel, { color: theme.textSecondary }]}>Processing Fee</ThemedText>
@@ -409,6 +430,47 @@ export default function PaymentScreen() {
             <ThemedText style={styles.totalAmount}>${homeownerTotal}</ThemedText>
           </View>
         </GlassCard>
+
+        {!openedExternal ? (
+          <GlassCard style={styles.invoiceCard}>
+            <ThemedText style={styles.invoiceTitle}>Add a Tip</ThemedText>
+            <ThemedText style={[styles.tipSubtitle, { color: theme.textSecondary }]}>
+              100% of your tip goes to your provider.
+            </ThemedText>
+            <View style={styles.tipOptionsRow}>
+              {[0, 10, 15, 20].map((pct) => {
+                const selected = customTipCents === null && tipPercent === pct;
+                return (
+                  <Pressable
+                    key={pct}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setCustomTipCents(null);
+                      setTipPercent(pct === 0 ? null : pct);
+                    }}
+                    style={[
+                      styles.tipOption,
+                      {
+                        backgroundColor: selected ? Colors.accent : theme.backgroundSecondary,
+                        borderColor: selected ? Colors.accent : theme.borderLight,
+                      },
+                    ]}
+                    testID={`button-tip-${pct}`}
+                  >
+                    <ThemedText
+                      style={[
+                        styles.tipOptionText,
+                        { color: selected ? "#FFFFFF" : theme.text },
+                      ]}
+                    >
+                      {pct === 0 ? "No Tip" : `${pct}%`}
+                    </ThemedText>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </GlassCard>
+        ) : null}
 
         {openedExternal ? (
           <View style={[styles.waitingBox, { backgroundColor: theme.cardBackground, borderColor: Colors.accent + "40" }]}>
@@ -445,6 +507,8 @@ export default function PaymentScreen() {
         >
           {openedExternal
             ? `Reopen Stripe to Pay $${homeownerTotal}`
+            : tipCents > 0
+            ? `Pay $${homeownerTotal} (incl. $${tipAmount} tip)`
             : `Pay $${homeownerTotal} on Stripe`}
         </PrimaryButton>
         {paymentError ? (
@@ -537,6 +601,17 @@ const styles = StyleSheet.create({
   successTitle: { ...Typography.title1, fontWeight: "700", marginBottom: Spacing.sm, textAlign: "center" },
   successSubtitle: { ...Typography.body, textAlign: "center", marginBottom: Spacing.xl },
   successBtn: { width: "80%" },
+  tipSubtitle: { ...Typography.caption1, marginTop: -Spacing.xs, marginBottom: Spacing.md },
+  tipOptionsRow: { flexDirection: "row", gap: Spacing.sm },
+  tipOption: {
+    flex: 1,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tipOptionText: { ...Typography.subhead, fontWeight: "600" },
   returnNotice: {
     flexDirection: "row",
     alignItems: "flex-start",

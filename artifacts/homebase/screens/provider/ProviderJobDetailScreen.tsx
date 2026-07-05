@@ -21,11 +21,12 @@ import { useAuthStore } from "@/state/authStore";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { RecordPaymentSheet } from "@/components/RecordPaymentSheet";
+import { NoShowFeeSheet } from "@/components/NoShowFeeSheet";
 import { useNetworkStore } from "@/state/networkStore";
 import { loadScheduleSnapshot } from "@/lib/offline-cache";
 import { recordHappyMoment } from "@/state/appReviewStore";
 
-type JobStatus = "scheduled" | "confirmed" | "on_my_way" | "arrived" | "in_progress" | "completed" | "cancelled" | "weather_held";
+type JobStatus = "scheduled" | "confirmed" | "on_my_way" | "arrived" | "in_progress" | "completed" | "cancelled" | "weather_held" | "no_show";
 
 type DBJobStatus = JobStatus;
 type DisplayStatus = JobStatus;
@@ -177,6 +178,7 @@ const STATUS_CONFIG: Record<DisplayStatus, { label: string; color: string; icon:
   completed: { label: "Completed", color: Colors.accent, icon: "check" },
   cancelled: { label: "Cancelled", color: "#EF4444", icon: "x-circle" },
   weather_held: { label: "Weather Hold", color: "#6B7280", icon: "cloud-rain" },
+  no_show: { label: "No Show", color: "#EF4444", icon: "user-x" },
 };
 
 const STATUS_ORDER: DisplayStatus[] = ["scheduled", "confirmed", "on_my_way", "arrived", "in_progress", "completed"];
@@ -237,14 +239,16 @@ function StatusBanner({ status }: StatusBannerProps) {
               ? "Job finished"
               : status === "cancelled"
                 ? "Job cancelled"
-                : status === "weather_held"
-                  ? "Paused for weather — not counted as a cancellation"
-                  : "In progress"}
+                : status === "no_show"
+                  ? "Client didn't show up for this appointment"
+                  : status === "weather_held"
+                    ? "Paused for weather — not counted as a cancellation"
+                    : "In progress"}
           </ThemedText>
         </View>
       </View>
 
-      {status !== "cancelled" && status !== "weather_held" ? (
+      {status !== "cancelled" && status !== "weather_held" && status !== "no_show" ? (
         <View style={styles.progressBar}>
           {STATUS_ORDER.map((s, index) => {
             const isCompleted = index <= currentIndex;
@@ -899,6 +903,7 @@ export default function ProviderJobDetailScreen() {
       jobInvoice.status === "overdue" ||
       jobInvoice.status === "partially_paid");
   const [paymentSheetOpen, setPaymentSheetOpen] = useState(false);
+  const [noShowSheetOpen, setNoShowSheetOpen] = useState(false);
 
   const requestReviewMutation = useMutation({
     mutationFn: async () => {
@@ -1191,7 +1196,7 @@ export default function ProviderJobDetailScreen() {
           </GlassCard>
         </Animated.View>
 
-        {resolvedDisplayStatus !== "cancelled" && resolvedDisplayStatus !== "completed" ? (
+        {resolvedDisplayStatus !== "cancelled" && resolvedDisplayStatus !== "completed" && resolvedDisplayStatus !== "no_show" ? (
           <Animated.View entering={FadeInDown.delay(400).duration(400)}>
             <ChecklistSection
               checklist={localChecklist}
@@ -1362,7 +1367,7 @@ export default function ProviderJobDetailScreen() {
           </Pressable>
         ) : null}
 
-        {resolvedDisplayStatus !== "cancelled" && resolvedDisplayStatus !== "completed" && resolvedDisplayStatus !== "weather_held" ? (
+        {resolvedDisplayStatus !== "cancelled" && resolvedDisplayStatus !== "completed" && resolvedDisplayStatus !== "weather_held" && resolvedDisplayStatus !== "no_show" ? (
           <>
             <Pressable
               style={[
@@ -1396,6 +1401,23 @@ export default function ProviderJobDetailScreen() {
             <Pressable
               style={[
                 styles.cancelButton,
+                { borderColor: theme.border, opacity: isOnline ? 1 : 0.5 },
+              ]}
+              onPress={() => {
+                if (blockOffline()) return;
+                Haptics.selectionAsync().catch(() => {});
+                setNoShowSheetOpen(true);
+              }}
+              testID="button-no-show-job"
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Feather name="user-x" size={16} color={theme.text} />
+                <ThemedText type="body">No Show</ThemedText>
+              </View>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.cancelButton,
                 { borderColor: "#EF4444", opacity: isOnline ? 1 : 0.5 },
               ]}
               onPress={handleCancel}
@@ -1412,6 +1434,22 @@ export default function ProviderJobDetailScreen() {
           invoiceId={jobInvoice.id}
           providerId={providerId}
           onSuccess={() => setPaymentSheetOpen(false)}
+        />
+      ) : null}
+      {job ? (
+        <NoShowFeeSheet
+          visible={noShowSheetOpen}
+          onClose={() => setNoShowSheetOpen(false)}
+          jobId={job.id}
+          providerId={providerId}
+          suggestedAmountCents={
+            job.finalPrice
+              ? Math.round(parseFloat(job.finalPrice) * 100)
+              : job.estimatedPrice
+              ? Math.round(parseFloat(job.estimatedPrice) * 100)
+              : undefined
+          }
+          onSuccess={() => setDisplayStatus("no_show")}
         />
       ) : null}
       <NativeDatePickerSheet

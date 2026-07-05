@@ -3,3 +3,4 @@
 - [notificationService category literal](notification-category-literal.md) — dispatchNotification's category param is a strict union (bookings/invoices/messages/reminders), not free text; check the type before adding new call sites.
 - [Expo web preview renders blank](expo-web-preview-blank.md) — screenshot/Playwright tools against the homebase Expo workflow show a blank page even on a clean build; treat as environment limitation, verify via typecheck + code/DB review instead.
 - [This project's DB tooling defaults to the wrong database](drizzle-config-wrong-db-url.md) — `db push` AND the agent's `executeSql` tool both hit DATABASE_URL by default; app only uses SUPABASE_DATABASE_URL. Use a direct pg.Pool for migrations/verification.
+- [api-server pre-existing TS error baseline](api-server-preexisting-ts-errors.md) — routes.ts has ~1600 pre-existing TS errors (systemic IdParams/return-value patterns); check specific lines, not total count.

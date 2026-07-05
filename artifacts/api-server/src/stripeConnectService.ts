@@ -361,6 +361,7 @@ export async function reonboardConnectAccount(providerId: string) {
 export async function createInvoicePaymentIntent(
   invoiceId: string,
   payerUserId?: string,
+  tipCents = 0,
 ) {
   const [invoice] = await db
     .select()
@@ -384,8 +385,18 @@ export async function createInvoicePaymentIntent(
     throw new Error("Provider payment processing is not yet enabled");
   }
 
-  const stripeFeeCents = calculateStripePassthroughFee(invoice.totalCents);
-  const homeownerTotalCents = invoice.totalCents + stripeFeeCents;
+  // Task #478: normalize/validate the optional gratuity. Never trust a
+  // negative or non-integer value from the client.
+  const safeTipCents =
+    Number.isFinite(tipCents) && tipCents > 0 ? Math.round(tipCents) : 0;
+
+  // The Stripe processing fee is passed through to the homeowner and is
+  // computed on (job total + tip) since that's the actual amount charged.
+  const stripeFeeCents = calculateStripePassthroughFee(
+    invoice.totalCents + safeTipCents,
+  );
+  const homeownerTotalCents =
+    invoice.totalCents + safeTipCents + stripeFeeCents;
 
   // In the destination-charge model the platform is the merchant of record and
   // pays Stripe's processing fee itself. To make the provider receive
@@ -394,8 +405,9 @@ export async function createInvoicePaymentIntent(
   // passthrough fee. Stripe then transfers (charge - application_fee_amount) to
   // the connected account, which equals the provider's net.
   //   transfer = homeownerTotal - (platformFee + processingFee)
-  //            = (job + processingFee) - platformFee - processingFee
-  //            = job - platformFee  ← provider receives their share
+  //            = (job + tip + processingFee) - platformFee - processingFee
+  //            = job + tip - platformFee  ← provider receives their share
+  //              plus the full tip, untouched by the platform fee.
   const platformFeeCents = invoice.platformFeeCents || 0;
   const destinationAppFee = platformFeeCents + stripeFeeCents;
 
@@ -413,6 +425,7 @@ export async function createInvoicePaymentIntent(
       jobAmountCents: String(invoice.totalCents),
       platformFeeCents: String(platformFeeCents),
       stripeFeeCents: String(stripeFeeCents),
+      tipCents: String(safeTipCents),
     },
   });
 
@@ -420,6 +433,7 @@ export async function createInvoicePaymentIntent(
     .update(invoices)
     .set({
       stripePaymentIntentId: paymentIntent.id,
+      tipCents: safeTipCents,
       updatedAt: new Date(),
     })
     .where(eq(invoices.id, invoiceId));
@@ -432,6 +446,7 @@ export async function createInvoicePaymentIntent(
     method: "stripe",
     status: "requires_payment",
     stripePaymentIntentId: paymentIntent.id,
+    tipCents: safeTipCents,
   });
 
   return {
@@ -440,6 +455,7 @@ export async function createInvoicePaymentIntent(
     amount: homeownerTotalCents,
     jobAmountCents: invoice.totalCents,
     stripeFeeCents,
+    tipCents: safeTipCents,
   };
 }
 
@@ -559,6 +575,149 @@ export async function attemptAutopayCharge(
     success: false,
     reason: `Card requires additional authentication (status: ${paymentIntent.status})`,
     paymentIntentId: paymentIntent.id,
+  };
+}
+
+export interface NoShowFeeChargeResult {
+  success: boolean;
+  /** How the fee was resolved. Mirrors jobs.no_show_fee_status. */
+  method?: "charged_card" | "covered_by_deposit";
+  reason?: string;
+  paymentIntentId?: string;
+}
+
+/**
+ * Task #478: charge a provider-set no-show fee against the client's saved
+ * card, falling back to treating an existing paid booking deposit as
+ * covering the fee (the deposit already sits with the provider — no new
+ * Stripe call is needed in that case). Never throws for expected failure
+ * modes; callers should surface `reason` to the provider rather than a 500.
+ */
+export async function attemptNoShowFeeCharge(params: {
+  jobId: string;
+  clientId: string | null;
+  appointmentId: string | null;
+  providerId: string;
+  amountCents: number;
+  /**
+   * Task #478 code review: pass a deterministic key (e.g. `no-show-fee:<jobId>`)
+   * so a network retry of the calling request can never create a second
+   * Stripe PaymentIntent for the same no-show fee.
+   */
+  idempotencyKey?: string;
+}): Promise<NoShowFeeChargeResult> {
+  const { clientId, appointmentId, providerId, amountCents, idempotencyKey } = params;
+
+  const connectAccount = await getConnectAccount(providerId);
+  if (!connectAccount?.chargesEnabled) {
+    return {
+      success: false,
+      reason: "Provider payment processing is not yet enabled",
+    };
+  }
+
+  // Prefer charging the client's saved card, since that's an active charge
+  // for the exact fee amount the provider specified.
+  let homeownerUserId: string | null = null;
+  if (clientId) {
+    const [client] = await db
+      .select({ homeownerUserId: clients.homeownerUserId })
+      .from(clients)
+      .where(eq(clients.id, clientId));
+    homeownerUserId = client?.homeownerUserId ?? null;
+  }
+
+  let user: { stripeCustomerId: string | null; defaultPaymentMethodId: string | null } | undefined;
+  if (homeownerUserId) {
+    [user] = await db
+      .select({
+        stripeCustomerId: users.stripeCustomerId,
+        defaultPaymentMethodId: users.defaultPaymentMethodId,
+      })
+      .from(users)
+      .where(eq(users.id, homeownerUserId));
+  }
+
+  if (user?.stripeCustomerId && user?.defaultPaymentMethodId) {
+    // No platform fee/tip math here — this is a standalone fee charge, not
+    // tied to an invoice. The full amount is charged to the client; the
+    // application fee is intentionally $0 so the provider keeps the entire
+    // no-show fee (they're the one absorbing the missed-appointment cost).
+    let paymentIntent: Stripe.PaymentIntent;
+    try {
+      paymentIntent = await getStripe().paymentIntents.create(
+        {
+          amount: amountCents,
+          currency: "usd",
+          customer: user.stripeCustomerId,
+          payment_method: user.defaultPaymentMethodId,
+          off_session: true,
+          confirm: true,
+          transfer_data: {
+            destination: connectAccount.stripeAccountId,
+          },
+          metadata: {
+            jobId: params.jobId,
+            providerId,
+            noShowFee: "true",
+          },
+        },
+        idempotencyKey ? { idempotencyKey } : undefined,
+      );
+    } catch (err: any) {
+      const declineReason =
+        err?.raw?.decline_code ||
+        err?.decline_code ||
+        err?.raw?.message ||
+        err?.message ||
+        "Card was declined";
+      return { success: false, reason: String(declineReason) };
+    }
+
+    if (paymentIntent.status === "succeeded") {
+      return {
+        success: true,
+        method: "charged_card",
+        paymentIntentId: paymentIntent.id,
+      };
+    }
+    return {
+      success: false,
+      reason: `Card requires additional authentication (status: ${paymentIntent.status})`,
+      paymentIntentId: paymentIntent.id,
+    };
+  }
+
+  // No saved card — fall back to an already-collected deposit, if any. The
+  // deposit already transferred to the provider's Connect balance when it
+  // was paid, so "charging" it just means the provider keeps it instead of
+  // refunding it; no new Stripe action is required.
+  if (appointmentId) {
+    const [appt] = await db
+      .select({
+        depositStatus: appointments.depositStatus,
+        depositAmountCents: appointments.depositAmountCents,
+      })
+      .from(appointments)
+      .where(eq(appointments.id, appointmentId));
+    const depositAmountCents = appt?.depositAmountCents || 0;
+    if (appt?.depositStatus === "paid" && depositAmountCents > 0) {
+      // Task #478 code review: only report the fee as fully "covered" when
+      // the deposit actually meets or exceeds the requested amount. A
+      // smaller deposit must not be presented as covering the full fee.
+      if (depositAmountCents >= amountCents) {
+        return { success: true, method: "covered_by_deposit" };
+      }
+      return {
+        success: false,
+        reason: `Deposit on file ($${(depositAmountCents / 100).toFixed(2)}) is less than the requested fee ($${(amountCents / 100).toFixed(2)}); no saved card to charge the remainder`,
+      };
+    }
+  }
+
+  return {
+    success: false,
+    reason: "No saved card or deposit on file for this client",
   };
 }
 
@@ -890,6 +1049,7 @@ export async function createStripeInvoice(
 export async function createStripeCheckoutSession(
   invoiceId: string,
   chargeAmountCents?: number,
+  tipCents = 0,
 ) {
   const [invoice] = await db
     .select()
@@ -982,10 +1142,30 @@ export async function createStripeCheckoutSession(
     }
   }
 
+  // Task #478: normalize/validate the optional gratuity. Never trust a
+  // negative or non-integer value from the client. Tips flow 100% to the
+  // provider, so they're added as their own line item and excluded from the
+  // application_fee_amount base below.
+  const safeTipCents =
+    Number.isFinite(tipCents) && tipCents! > 0 ? Math.round(tipCents!) : 0;
+  if (safeTipCents > 0) {
+    stripeLineItems.push({
+      price_data: {
+        currency: invoice.currency || "usd",
+        product_data: { name: "Tip" },
+        unit_amount: safeTipCents,
+      },
+      quantity: 1,
+    });
+  }
+
   // Pass Stripe processing fee through to the homeowner as a visible line item
   // so the provider receives their full quoted amount untouched.
-  // Fee is calculated on the effective charge amount (after any credit reduction).
-  const checkoutStripeFeeCents = calculateStripePassthroughFee(effectiveAmount);
+  // Fee is calculated on the effective charge amount (after any credit
+  // reduction) plus any tip, since that's the actual amount charged.
+  const checkoutStripeFeeCents = calculateStripePassthroughFee(
+    effectiveAmount + safeTipCents,
+  );
   stripeLineItems.push({
     price_data: {
       currency: invoice.currency || "usd",
@@ -996,8 +1176,10 @@ export async function createStripeCheckoutSession(
   });
 
   // Destination-charge model: application_fee_amount = platformFee + processingFee
-  // so the transfer to the connected account = jobAmount - platformFee (e.g. $97).
+  // so the transfer to the connected account = jobAmount + tip - platformFee.
   // Scale platform fee proportionally when credits reduced the charge amount.
+  // The tip is deliberately excluded from this base so it passes through
+  // untouched to the provider.
   const scaledPlatformFee = isPartialCharge
     ? Math.round((invoice.platformFeeCents || 0) * (effectiveAmount / invoice.totalCents))
     : (invoice.platformFeeCents || 0);
@@ -1016,6 +1198,7 @@ export async function createStripeCheckoutSession(
         providerId: invoice.providerId,
         platformFeeCents: String(invoice.platformFeeCents || 0),
         stripeFeeCents: String(checkoutStripeFeeCents),
+        tipCents: String(safeTipCents),
       },
     },
     success_url: `${PUBLIC_REDIRECT_BASE}/payment-success?invoiceId=${encodeURIComponent(invoiceId)}${invoice.jobId ? `&jobId=${encodeURIComponent(invoice.jobId)}` : ""}&session_id={CHECKOUT_SESSION_ID}`,
@@ -1023,6 +1206,7 @@ export async function createStripeCheckoutSession(
     metadata: {
       invoiceId: invoice.id,
       providerId: invoice.providerId,
+      tipCents: String(safeTipCents),
     },
   });
 
@@ -1031,6 +1215,7 @@ export async function createStripeCheckoutSession(
     .set({
       stripeCheckoutSessionId: session.id,
       hostedInvoiceUrl: session.url,
+      tipCents: safeTipCents,
       updatedAt: new Date(),
     })
     .where(eq(invoices.id, invoiceId));
@@ -1251,6 +1436,9 @@ export async function handlePaymentIntentSucceeded(
   // UI (financials/invoice detail) can distinguish auto-charged payments
   // from ones the homeowner confirmed manually via Checkout / in-app.
   const isAutopay = paymentIntent.metadata?.autopay === "true";
+  // Task #478: tip amount stamped in metadata by createInvoicePaymentIntent.
+  const rawTip = Number(paymentIntent.metadata?.tipCents);
+  const tipCents = Number.isFinite(rawTip) && rawTip > 0 ? Math.round(rawTip) : 0;
 
   // UPSERT the payments row keyed on stripe_payment_intent_id (Task #245).
   // First-time webhook delivery → INSERT. In-app PI flow already inserted a
@@ -1269,6 +1457,7 @@ export async function handlePaymentIntentSucceeded(
       stripePaymentIntentId: paymentIntent.id,
       stripeChargeId,
       autoCharged: isAutopay,
+      tipCents,
     })
     .onConflictDoUpdate({
       target: payments.stripePaymentIntentId,
@@ -1276,6 +1465,7 @@ export async function handlePaymentIntentSucceeded(
         status: "succeeded",
         stripeChargeId,
         autoCharged: isAutopay,
+        tipCents,
       },
     });
 
@@ -2401,14 +2591,20 @@ export async function handleCheckoutSessionCompleted(
       .where(eq(invoices.id, invoiceId));
 
     if (invoice) {
+      // Task #478: tip is already reflected in invoice.tipCents (set at
+      // checkout-session creation time) and in the Stripe session's own
+      // amount_total (which includes the tip line item).
+      const tipCents = invoice.tipCents || 0;
+      const amountCents = session.amount_total ?? invoice.totalCents + tipCents;
       await db.insert(payments).values({
         invoiceId,
         providerId: invoice.providerId,
-        amountCents: invoice.totalCents,
-        amount: (invoice.totalCents / 100).toFixed(2),
+        amountCents,
+        amount: (amountCents / 100).toFixed(2),
         method: "stripe",
         status: "succeeded",
         stripePaymentIntentId: paymentIntentId,
+        tipCents,
       });
     }
   }

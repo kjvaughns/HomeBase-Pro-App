@@ -53,6 +53,8 @@ export async function runBootMigrations(): Promise<void> {
       ["invoices.viewed_at",                  `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS viewed_at TIMESTAMP`],
       ["invoices.paid_at",                    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP`],
       ["invoices.updated_at",                 `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW() NOT NULL`],
+      // Task #478: homeowner-added gratuity, passed through 100% to provider.
+      ["invoices.tip_cents",                  `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS tip_cents INTEGER DEFAULT 0`],
     ];
     for (const [label, sql] of invoiceAlters) {
       await runSql(label, sql);
@@ -64,6 +66,9 @@ export async function runBootMigrations(): Promise<void> {
     // ── payments: Stripe fields (charge ID and payment intent ID) ─────────
     await runSql("payments.stripe_charge_id", `ALTER TABLE payments ADD COLUMN IF NOT EXISTS stripe_charge_id TEXT`);
     await runSql("payments.stripe_payment_intent_id", `ALTER TABLE payments ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT`);
+
+    // ── payments: Task #478 tip amount (subset of amount_cents) ───────────
+    await runSql("payments.tip_cents", `ALTER TABLE payments ADD COLUMN IF NOT EXISTS tip_cents INTEGER DEFAULT 0`);
 
     // ── refunds: Stripe charge ID (for matching refunds to charges) ───────
     await runSql("refunds.stripe_charge_id", `ALTER TABLE refunds ADD COLUMN IF NOT EXISTS stripe_charge_id TEXT`);
@@ -1142,6 +1147,28 @@ export async function runBootMigrations(): Promise<void> {
       `ALTER TABLE jobs ADD COLUMN IF NOT EXISTS original_scheduled_at TIMESTAMP`,
     );
 
+    // ── Task #478: no-show status + fee charge tracking ───────────────────
+    await runSql(
+      "job_status.no_show",
+      `ALTER TYPE job_status ADD VALUE IF NOT EXISTS 'no_show'`,
+    );
+    await runSql(
+      "jobs.no_show_at",
+      `ALTER TABLE jobs ADD COLUMN IF NOT EXISTS no_show_at TIMESTAMP`,
+    );
+    await runSql(
+      "jobs.no_show_fee_cents",
+      `ALTER TABLE jobs ADD COLUMN IF NOT EXISTS no_show_fee_cents INTEGER`,
+    );
+    await runSql(
+      "jobs.no_show_fee_status",
+      `ALTER TABLE jobs ADD COLUMN IF NOT EXISTS no_show_fee_status TEXT`,
+    );
+    await runSql(
+      "jobs.no_show_fee_payment_intent_id",
+      `ALTER TABLE jobs ADD COLUMN IF NOT EXISTS no_show_fee_payment_intent_id TEXT`,
+    );
+
     // ── Task #302: crew_members roster + jobs.assigned_crew_member_id ────
     await runSql(
       "table.crew_members",
@@ -1650,6 +1677,13 @@ export async function runBootMigrations(): Promise<void> {
       // Task #411: monthly recap — timezone bucket + idempotency table
       ["providers.timezone column",                `SELECT timezone FROM providers LIMIT 0`],
       ["recap_notifications_sent table",           `SELECT provider_id FROM recap_notifications_sent LIMIT 0`],
+      // Task #478: tips + no-show fee
+      ["invoices.tip_cents column",                 `SELECT tip_cents FROM invoices LIMIT 0`],
+      ["payments.tip_cents column",                 `SELECT tip_cents FROM payments LIMIT 0`],
+      ["jobs.no_show_at column",                    `SELECT no_show_at FROM jobs LIMIT 0`],
+      ["jobs.no_show_fee_cents column",             `SELECT no_show_fee_cents FROM jobs LIMIT 0`],
+      ["jobs.no_show_fee_status column",            `SELECT no_show_fee_status FROM jobs LIMIT 0`],
+      ["jobs.no_show_fee_payment_intent_id column", `SELECT no_show_fee_payment_intent_id FROM jobs LIMIT 0`],
     );
 
     const verificationErrors: string[] = [];

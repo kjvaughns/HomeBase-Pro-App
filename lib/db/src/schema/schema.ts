@@ -41,6 +41,7 @@ export const jobStatusEnum = pgEnum("job_status", [
   "completed",
   "cancelled",
   "weather_held",
+  "no_show",
 ]);
 export const invoiceStatusEnum = pgEnum("invoice_status", [
   "draft",
@@ -1048,6 +1049,15 @@ export const jobs = pgTable("jobs", {
     () => crewMembers.id,
     { onDelete: "set null" },
   ),
+  // Task #478: provider marks the client as a no-show and optionally charges
+  // a fee against the client's saved card (or treats an existing paid
+  // deposit as covering it). Mirrors the appointments cancellation-fee
+  // fields, but scoped to the job since no-show is a job-level action.
+  noShowAt: timestamp("no_show_at"),
+  noShowFeeCents: integer("no_show_fee_cents"),
+  // 'charged_card' | 'covered_by_deposit' | 'failed' | null (no fee attempted)
+  noShowFeeStatus: text("no_show_fee_status"),
+  noShowFeePaymentIntentId: text("no_show_fee_payment_intent_id"),
 });
 
 export const jobsRelations = relations(jobs, ({ one, many }) => ({
@@ -1165,6 +1175,9 @@ export const invoices = pgTable("invoices", {
   discountCents: integer("discount_cents").default(0),
   platformFeeCents: integer("platform_fee_cents").default(0),
   totalCents: integer("total_cents").notNull().default(0),
+  // Task #478: optional gratuity added by the homeowner at payment time.
+  // Passed through 100% to the provider (excluded from platformFeeCents).
+  tipCents: integer("tip_cents").default(0),
 
   // Legacy decimal fields for backwards compatibility
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull().default("0"),
@@ -1316,6 +1329,10 @@ export const payments = pgTable("payments", {
   // Task #474: true when this payment attempt was an automatic off-session
   // charge (autopay) rather than a homeowner-initiated manual payment.
   autoCharged: boolean("auto_charged").notNull().default(false),
+  // Task #478: gratuity portion of this payment, in cents (subset of
+  // amountCents). Informational — the full amountCents is still what's
+  // charged/transferred; this just lets provider-facing UI break it out.
+  tipCents: integer("tip_cents").default(0),
 
   // Stripe fields
   stripePaymentIntentId: text("stripe_payment_intent_id"),
