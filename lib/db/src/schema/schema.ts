@@ -1110,7 +1110,7 @@ export const jobSeries = pgTable("job_series", {
   anchorDate: timestamp("anchor_date").notNull(),
   // Furthest scheduled_date materialized so far (rolling horizon).
   generatedThrough: timestamp("generated_through"),
-  // active | cancelled
+  // active | paused | cancelled
   status: text("status").notNull().default("active"),
   // Task #474: when true, each occurrence's invoice is auto-charged
   // off-session against the client's saved card instead of requiring a
@@ -1119,6 +1119,10 @@ export const jobSeries = pgTable("job_series", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   cancelledAt: timestamp("cancelled_at"),
+  // Task #476: seasonal pause/resume. Set when a provider pauses an active
+  // series (e.g. lawncare going on winter hiatus) and cleared on resume.
+  // Distinct from cancelledAt/status='cancelled', which is permanent.
+  pausedAt: timestamp("paused_at"),
 });
 
 export const jobSeriesRelations = relations(jobSeries, ({ one, many }) => ({

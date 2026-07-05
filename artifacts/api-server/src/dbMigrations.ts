@@ -1082,6 +1082,12 @@ export async function runBootMigrations(): Promise<void> {
       `CREATE INDEX IF NOT EXISTS job_series_provider_status_idx
          ON job_series (provider_id, status)`,
     );
+
+    // ── job_series.paused_at (Task #476: seasonal pause/resume) ───────────
+    await runSql(
+      "job_series.paused_at",
+      `ALTER TABLE job_series ADD COLUMN IF NOT EXISTS paused_at TIMESTAMP`,
+    );
     // Idempotency guard: a series cannot have two occurrences on the same
     // calendar day. Casts to date so timezone-shifted timestamps still
     // collide. Application code already de-dups in-process, but a

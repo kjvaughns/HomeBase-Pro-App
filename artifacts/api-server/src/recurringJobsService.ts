@@ -669,6 +669,107 @@ export async function cancelSeries(seriesId: string): Promise<number> {
   return cancelled;
 }
 
+/**
+ * Pause an active series: no new occurrences will be generated while
+ * paused. Not-yet-touched future occurrences (status scheduled/confirmed)
+ * are removed — along with their paired appointments — so the calendar
+ * doesn't show visits during the hiatus. Past/completed jobs are left
+ * untouched, preserving history.
+ *
+ * `generatedThrough` is rolled back to null so that resumeSeries() re-walks
+ * the horizon from scratch instead of assuming the (now-freed) dates are
+ * already materialized. Returns the number of future jobs removed, or -1 if
+ * the series wasn't active.
+ */
+export async function pauseSeries(seriesId: string): Promise<number> {
+  const [series] = await db
+    .select({ status: jobSeries.status })
+    .from(jobSeries)
+    .where(eq(jobSeries.id, seriesId));
+  if (!series) return -1;
+  if (series.status !== "active") return -1;
+
+  const now = new Date();
+  await db
+    .update(jobSeries)
+    .set({
+      status: "paused",
+      pausedAt: now,
+      generatedThrough: null,
+      updatedAt: now,
+    })
+    .where(eq(jobSeries.id, seriesId));
+
+  const futureJobs = await db
+    .select({
+      id: jobs.id,
+      appointmentId: jobs.appointmentId,
+      status: jobs.status,
+    })
+    .from(jobs)
+    .where(and(eq(jobs.seriesId, seriesId), gte(jobs.scheduledDate, now)));
+
+  let removed = 0;
+  for (const j of futureJobs) {
+    if (j.status !== "scheduled" && j.status !== "confirmed") continue;
+    await db.delete(jobs).where(eq(jobs.id, j.id));
+    if (j.appointmentId) {
+      await db
+        .delete(appointments)
+        .where(eq(appointments.id, j.appointmentId))
+        .catch(() => {});
+    }
+    removed++;
+  }
+  return removed;
+}
+
+/**
+ * Resume a paused series: flips status back to 'active' and immediately
+ * re-materializes the rolling occurrence horizon from today forward using
+ * the series' existing anchor/cadence/settings. Because pauseSeries() reset
+ * generatedThrough to null and removed the freed future occurrences,
+ * materializeOccurrences naturally regenerates from the resume point
+ * without duplicating or skipping any dates.
+ *
+ * Returns null if the series wasn't paused.
+ */
+export async function resumeSeries(
+  seriesId: string,
+): Promise<{ materialized: number } | null> {
+  const [series] = await db
+    .select()
+    .from(jobSeries)
+    .where(eq(jobSeries.id, seriesId));
+  if (!series || series.status !== "paused") return null;
+
+  const now = new Date();
+  await db
+    .update(jobSeries)
+    .set({ status: "active", pausedAt: null, updatedAt: now })
+    .where(eq(jobSeries.id, seriesId));
+
+  const materialized = await materializeOccurrences({
+    id: series.id,
+    providerId: series.providerId,
+    clientId: series.clientId,
+    customServiceId: series.customServiceId,
+    title: series.title,
+    description: series.description,
+    notes: series.notes,
+    estimatedDuration: series.estimatedDuration,
+    frequency: series.frequency,
+    scheduledTime: series.scheduledTime,
+    estimatedPrice: series.estimatedPrice,
+    address: series.address,
+    anchorDate: series.anchorDate,
+    generatedThrough: null,
+    status: "active",
+  });
+
+  return { materialized };
+}
+
 export interface SeriesPatch {
   title?: string;
   description?: string | null;

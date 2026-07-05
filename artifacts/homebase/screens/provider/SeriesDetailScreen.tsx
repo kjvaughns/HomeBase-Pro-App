@@ -49,8 +49,9 @@ interface ApiSeries {
   address: string | null;
   anchorDate: string;
   generatedThrough: string | null;
-  status: "active" | "cancelled";
+  status: "active" | "paused" | "cancelled";
   cancelledAt: string | null;
+  pausedAt: string | null;
   autopayEnabled: boolean;
 }
 
@@ -149,6 +150,57 @@ export default function SeriesDetailScreen() {
     },
   });
 
+  const pauseMutation = useMutation({
+    mutationFn: async () => {
+      const url = new URL(`/api/series/${seriesId}/pause`, getApiUrl());
+      return apiRequest("POST", url.toString(), {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/series", seriesId] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/provider", providerId, "jobs"],
+      });
+    },
+    onError: () => {
+      Alert.alert("Couldn't pause series", "Please try again.");
+    },
+  });
+
+  const resumeMutation = useMutation({
+    mutationFn: async () => {
+      const url = new URL(`/api/series/${seriesId}/resume`, getApiUrl());
+      return apiRequest("POST", url.toString(), {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/series", seriesId] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/provider", providerId, "jobs"],
+      });
+    },
+    onError: () => {
+      Alert.alert("Couldn't resume series", "Please try again.");
+    },
+  });
+
+  const handlePause = useCallback(() => {
+    Alert.alert(
+      "Pause Recurring Series",
+      "Upcoming scheduled visits will be removed from the calendar until you resume. Past and in-progress jobs are kept as-is.",
+      [
+        { text: "Nevermind", style: "cancel" },
+        {
+          text: "Pause Series",
+          style: "destructive",
+          onPress: () => pauseMutation.mutate(),
+        },
+      ],
+    );
+  }, [pauseMutation]);
+
+  const handleResume = useCallback(() => {
+    resumeMutation.mutate();
+  }, [resumeMutation]);
+
   const handleCancel = useCallback(() => {
     Alert.alert(
       "Cancel Recurring Series",
@@ -202,6 +254,7 @@ export default function SeriesDetailScreen() {
   }
 
   const isCancelled = series.status === "cancelled";
+  const isPaused = series.status === "paused";
 
   return (
     <ThemedView style={styles.container}>
@@ -251,6 +304,21 @@ export default function SeriesDetailScreen() {
                   style={[styles.recurringBadgeText, { color: "#9CA3AF" }]}
                 >
                   Cancelled
+                </ThemedText>
+              </View>
+            ) : null}
+            {isPaused ? (
+              <View
+                style={[
+                  styles.recurringBadge,
+                  { backgroundColor: Colors.warning + "22" },
+                ]}
+              >
+                <Feather name="pause-circle" size={11} color={Colors.warning} />
+                <ThemedText
+                  style={[styles.recurringBadgeText, { color: Colors.warning }]}
+                >
+                  Paused
                 </ThemedText>
               </View>
             ) : null}
@@ -383,6 +451,37 @@ export default function SeriesDetailScreen() {
             },
           ]}
         >
+          {isPaused ? (
+            <Pressable
+              style={[styles.cancelButton, { borderColor: Colors.accent, marginBottom: Spacing.sm }]}
+              onPress={handleResume}
+              disabled={resumeMutation.isPending}
+              testID="button-resume-series"
+            >
+              {resumeMutation.isPending ? (
+                <ActivityIndicator size="small" color={Colors.accent} />
+              ) : (
+                <ThemedText type="body" style={{ color: Colors.accent }}>
+                  Resume Series
+                </ThemedText>
+              )}
+            </Pressable>
+          ) : (
+            <Pressable
+              style={[styles.cancelButton, { borderColor: Colors.warning, marginBottom: Spacing.sm }]}
+              onPress={handlePause}
+              disabled={pauseMutation.isPending}
+              testID="button-pause-series"
+            >
+              {pauseMutation.isPending ? (
+                <ActivityIndicator size="small" color={Colors.warning} />
+              ) : (
+                <ThemedText type="body" style={{ color: Colors.warning }}>
+                  Pause Series
+                </ThemedText>
+              )}
+            </Pressable>
+          )}
           <Pressable
             style={[styles.cancelButton, { borderColor: "#EF4444" }]}
             onPress={handleCancel}

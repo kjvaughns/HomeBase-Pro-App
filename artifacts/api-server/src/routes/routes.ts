@@ -168,6 +168,8 @@ import {
 import {
   createSeriesForJob,
   cancelSeries as cancelSeriesService,
+  pauseSeries as pauseSeriesService,
+  resumeSeries as resumeSeriesService,
   applyToFollowing as applyToFollowingService,
   isSupportedFrequency,
 } from "../recurringJobsService";
@@ -11709,6 +11711,67 @@ Respond with JSON only:
       } catch (error) {
         console.error("Cancel series error:", error);
         res.status(500).json({ error: "Failed to cancel series" });
+      }
+    },
+  );
+
+  // Task #476: pause an active series for a seasonal hiatus. Removes
+  // not-yet-touched future occurrences so the calendar doesn't show visits
+  // during the pause; history is preserved.
+  app.post(
+    "/api/series/:id/pause",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const [series] = await db
+          .select({ id: jobSeries.id, providerId: jobSeries.providerId })
+          .from(jobSeries)
+          .where(eq(jobSeries.id, req.params.id));
+        if (!series) {
+          return res.status(404).json({ error: "Series not found" });
+        }
+        if (!(await assertProviderOwnership(req, series.providerId, res)))
+          return;
+        const removedOccurrences = await pauseSeriesService(series.id);
+        if (removedOccurrences < 0) {
+          return res
+            .status(409)
+            .json({ error: "Only active series can be paused" });
+        }
+        res.json({ success: true, removedOccurrences });
+      } catch (error) {
+        console.error("Pause series error:", error);
+        res.status(500).json({ error: "Failed to pause series" });
+      }
+    },
+  );
+
+  // Task #476: resume a paused series. Re-materializes the rolling horizon
+  // from today forward using the series' existing cadence/settings.
+  app.post(
+    "/api/series/:id/resume",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const [series] = await db
+          .select({ id: jobSeries.id, providerId: jobSeries.providerId })
+          .from(jobSeries)
+          .where(eq(jobSeries.id, req.params.id));
+        if (!series) {
+          return res.status(404).json({ error: "Series not found" });
+        }
+        if (!(await assertProviderOwnership(req, series.providerId, res)))
+          return;
+        const result = await resumeSeriesService(series.id);
+        if (!result) {
+          return res
+            .status(409)
+            .json({ error: "Only paused series can be resumed" });
+        }
+        res.json({ success: true, materializedOccurrences: result.materialized });
+      } catch (error) {
+        console.error("Resume series error:", error);
+        res.status(500).json({ error: "Failed to resume series" });
       }
     },
   );
