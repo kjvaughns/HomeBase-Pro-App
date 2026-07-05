@@ -1,6 +1,7 @@
 import app from "./app";
 import { registerRoutes } from "./routes/routes";
 import { startMonthlyRecapScheduler } from "./monthlyRecapService";
+import { startAutopayScheduler } from "./autopayService";
 import { logger } from "./lib/logger";
 
 const rawPort = process.env["PORT"];
@@ -20,6 +21,7 @@ if (Number.isNaN(port) || port <= 0) {
 const httpServer = await registerRoutes(app);
 
 startMonthlyRecapScheduler();
+startAutopayScheduler();
 
 httpServer.listen(port, () => {
   logger.info({ port }, "Server listening");

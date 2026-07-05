@@ -1058,6 +1058,25 @@ export async function runBootMigrations(): Promise<void> {
       "jobs.series_id.index",
       `CREATE INDEX IF NOT EXISTS jobs_series_id_idx ON jobs (series_id)`,
     );
+    // ── job_series.autopay_enabled + invoices/payments autopay fields
+    // (Task #474: Autopay for recurring visits) ───────────────────────────
+    await runSql(
+      "job_series.autopay_enabled",
+      `ALTER TABLE job_series ADD COLUMN IF NOT EXISTS autopay_enabled BOOLEAN NOT NULL DEFAULT FALSE`,
+    );
+    await runSql(
+      "invoices.charge_type",
+      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS charge_type TEXT NOT NULL DEFAULT 'manual'`,
+    );
+    await runSql(
+      "invoices.autopay_failure_reason",
+      `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS autopay_failure_reason TEXT`,
+    );
+    await runSql(
+      "payments.auto_charged",
+      `ALTER TABLE payments ADD COLUMN IF NOT EXISTS auto_charged BOOLEAN NOT NULL DEFAULT FALSE`,
+    );
+
     await runSql(
       "job_series.provider_status.index",
       `CREATE INDEX IF NOT EXISTS job_series_provider_status_idx

@@ -61,6 +61,8 @@ interface Invoice {
   lineItems?: string | LineItemRecord[] | null;
   createdAt: string;
   hostedInvoiceUrl?: string | null;
+  chargeType?: "manual" | "autopay";
+  autopayFailureReason?: string | null;
 }
 
 interface Client {
@@ -469,7 +471,45 @@ export default function InvoiceDetailScreen() {
               label={formatStatusLabel(invoice.status)}
             />
           </View>
+          {invoice.chargeType === "autopay" ? (
+            <View
+              style={[
+                styles.chargeTypeBadge,
+                {
+                  backgroundColor: invoice.autopayFailureReason
+                    ? Colors.warningLight
+                    : Colors.accent + "20",
+                },
+              ]}
+              testID="badge-charge-type"
+            >
+              <Feather
+                name={invoice.autopayFailureReason ? "alert-triangle" : "repeat"}
+                size={12}
+                color={invoice.autopayFailureReason ? Colors.warning : Colors.accent}
+              />
+              <ThemedText
+                style={[
+                  styles.chargeTypeBadgeText,
+                  { color: invoice.autopayFailureReason ? Colors.warning : Colors.accent },
+                ]}
+              >
+                {invoice.autopayFailureReason
+                  ? "Autopay failed — manual invoice sent"
+                  : "Auto-charged"}
+              </ThemedText>
+            </View>
+          ) : null}
         </GlassCard>
+
+        {invoice.chargeType === "autopay" && invoice.autopayFailureReason ? (
+          <View style={[styles.stripeBanner, { backgroundColor: Colors.warningLight, borderColor: Colors.warning }]}>
+            <Feather name="alert-triangle" size={16} color={Colors.warning} />
+            <ThemedText style={styles.stripeBannerText}>
+              Autopay charge failed: {invoice.autopayFailureReason}. This invoice now needs to be paid manually.
+            </ThemedText>
+          </View>
+        ) : null}
 
         {/* Client */}
         <GlassCard style={styles.section}>
@@ -1166,6 +1206,20 @@ const styles = StyleSheet.create({
   },
   stripeBannerCta: {
     fontSize: 12,
+    fontWeight: "600",
+  },
+  chargeTypeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 4,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: 999,
+    marginTop: Spacing.sm,
+  },
+  chargeTypeBadgeText: {
+    fontSize: 11,
     fontWeight: "600",
   },
 });

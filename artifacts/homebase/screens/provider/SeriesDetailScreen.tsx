@@ -13,6 +13,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -50,6 +51,7 @@ interface ApiSeries {
   generatedThrough: string | null;
   status: "active" | "cancelled";
   cancelledAt: string | null;
+  autopayEnabled: boolean;
 }
 
 interface ApiOccurrence {
@@ -131,6 +133,19 @@ export default function SeriesDetailScreen() {
     },
     onError: () => {
       Alert.alert("Couldn't cancel series", "Please try again.");
+    },
+  });
+
+  const autopayMutation = useMutation({
+    mutationFn: async (autopayEnabled: boolean) => {
+      const url = new URL(`/api/series/${seriesId}/autopay`, getApiUrl());
+      return apiRequest("PATCH", url.toString(), { autopayEnabled });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/series", seriesId] });
+    },
+    onError: () => {
+      Alert.alert("Couldn't update autopay", "Please try again.");
     },
   });
 
@@ -282,6 +297,33 @@ export default function SeriesDetailScreen() {
           ) : null}
         </GlassCard>
 
+        {!isCancelled ? (
+          <GlassCard style={styles.section}>
+            <View style={styles.autopayRow}>
+              <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                <ThemedText type="body" style={{ fontWeight: "600" }}>
+                  Autopay
+                </ThemedText>
+                <ThemedText
+                  type="caption"
+                  style={{ color: theme.textSecondary, marginTop: 2 }}
+                >
+                  Auto-charge the client's saved card when each visit's
+                  invoice is due. Falls back to a manual invoice if the
+                  charge fails.
+                </ThemedText>
+              </View>
+              <Switch
+                testID="switch-autopay"
+                value={series.autopayEnabled}
+                onValueChange={(value) => autopayMutation.mutate(value)}
+                disabled={autopayMutation.isPending}
+                trackColor={{ true: Colors.accent }}
+              />
+            </View>
+          </GlassCard>
+        ) : null}
+
         {upcoming.length > 0 ? (
           <GlassCard style={styles.section}>
             <ThemedText
@@ -421,6 +463,11 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   recurringBadgeText: { fontSize: 11, fontWeight: "600" },
+  autopayRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",

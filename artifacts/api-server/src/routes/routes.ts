@@ -11607,6 +11607,38 @@ Respond with JSON only:
     },
   );
 
+  // Task #474: opt a series in/out of autopay. When enabled, each newly
+  // due occurrence is auto-charged off-session against the client's saved
+  // card instead of requiring a manual invoice send.
+  app.patch(
+    "/api/series/:id/autopay",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const [series] = await db
+          .select({ id: jobSeries.id, providerId: jobSeries.providerId })
+          .from(jobSeries)
+          .where(eq(jobSeries.id, req.params.id));
+        if (!series) {
+          return res.status(404).json({ error: "Series not found" });
+        }
+        if (!(await assertProviderOwnership(req, series.providerId, res)))
+          return;
+
+        const autopayEnabled = Boolean(req.body?.autopayEnabled);
+        const [updated] = await db
+          .update(jobSeries)
+          .set({ autopayEnabled, updatedAt: new Date() })
+          .where(eq(jobSeries.id, series.id))
+          .returning();
+        res.json({ series: updated });
+      } catch (error) {
+        console.error("Update series autopay error:", error);
+        res.status(500).json({ error: "Failed to update autopay setting" });
+      }
+    },
+  );
+
   // Cancel a series (and all future not-yet-touched occurrences).
   app.post(
     "/api/series/:id/cancel",

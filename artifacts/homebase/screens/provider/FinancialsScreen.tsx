@@ -98,6 +98,8 @@ interface InvoiceRecord {
   clientId: string | null;
   clientName?: string | null;
   homeownerUserId?: string | null;
+  chargeType?: "manual" | "autopay";
+  autopayFailureReason?: string | null;
 }
 
 type SectionTab = "overview" | "transactions" | "more";
@@ -1682,6 +1684,23 @@ export default function FinancialsScreen() {
             <ThemedText style={[styles.rowSub, { color: theme.textSecondary }]}>
               {item.invoiceNumber}{item.dueDate ? ` \u00b7 Due ${formatDate(item.dueDate)}` : ""}
             </ThemedText>
+            {item.chargeType === "autopay" ? (
+              <View style={styles.chargeTypeRow} testID={`invoice-charge-type-${item.id}`}>
+                <Feather
+                  name={item.autopayFailureReason ? "alert-triangle" : "repeat"}
+                  size={10}
+                  color={item.autopayFailureReason ? Colors.warning : Colors.accent}
+                />
+                <ThemedText
+                  style={[
+                    styles.chargeTypeText,
+                    { color: item.autopayFailureReason ? Colors.warning : Colors.accent },
+                  ]}
+                >
+                  {item.autopayFailureReason ? "Autopay failed" : "Auto-charged"}
+                </ThemedText>
+              </View>
+            ) : null}
           </View>
           <View style={styles.rowRight}>
             <ThemedText style={styles.rowAmount}>{formatCents(item.totalCents)}</ThemedText>
@@ -2654,6 +2673,8 @@ const styles = StyleSheet.create({
   rowInfo: { flex: 1 },
   rowTitle: { ...Typography.callout, fontWeight: "600" },
   rowSub: { ...Typography.caption1, marginTop: 2 },
+  chargeTypeRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
+  chargeTypeText: { fontSize: 11, fontWeight: "600" },
   rowRight: { alignItems: "flex-end", gap: 4 },
   rowAmount: { ...Typography.callout, fontWeight: "700" },
 

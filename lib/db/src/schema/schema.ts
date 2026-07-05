@@ -1104,6 +1104,10 @@ export const jobSeries = pgTable("job_series", {
   generatedThrough: timestamp("generated_through"),
   // active | cancelled
   status: text("status").notNull().default("active"),
+  // Task #474: when true, each occurrence's invoice is auto-charged
+  // off-session against the client's saved card instead of requiring a
+  // manual invoice send. Falls back to manual invoicing on decline.
+  autopayEnabled: boolean("autopay_enabled").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   cancelledAt: timestamp("cancelled_at"),
@@ -1162,6 +1166,15 @@ export const invoices = pgTable("invoices", {
   paymentMethodsAllowed: text("payment_methods_allowed").default(
     "stripe,credits",
   ), // JSON array
+
+  // Task #474: 'manual' (provider sends/collects) | 'autopay' (auto-charged
+  // off-session against the client's saved card because the parent
+  // job_series has autopayEnabled). Set at invoice-creation time.
+  chargeType: text("charge_type").notNull().default("manual"),
+  // Populated when an 'autopay' invoice's off-session charge was declined
+  // or failed and the invoice fell back to a normal manual invoice — shown
+  // to the provider so the silent-failure never happens.
+  autopayFailureReason: text("autopay_failure_reason"),
 
   // Stripe Connect fields
   stripePaymentIntentId: text("stripe_payment_intent_id"),
@@ -1288,6 +1301,9 @@ export const payments = pgTable("payments", {
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull().default("0"), // Legacy
   method: paymentMethodEnum("method").default("stripe"),
   status: paymentStatusEnum("status").default("requires_payment"),
+  // Task #474: true when this payment attempt was an automatic off-session
+  // charge (autopay) rather than a homeowner-initiated manual payment.
+  autoCharged: boolean("auto_charged").notNull().default(false),
 
   // Stripe fields
   stripePaymentIntentId: text("stripe_payment_intent_id"),

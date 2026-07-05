@@ -443,6 +443,125 @@ export async function createInvoicePaymentIntent(
   };
 }
 
+export interface AutopayChargeResult {
+  success: boolean;
+  /** Human-readable reason set whenever success is false — surfaced to the
+   *  provider so the fallback to manual invoicing is never silent. */
+  reason?: string;
+  paymentIntentId?: string;
+}
+
+/**
+ * Task #474: attempt an off-session charge against a client's saved card for
+ * an autopay-generated invoice. Unlike createInvoicePaymentIntent (which
+ * returns a client_secret for the homeowner to confirm in-app), this
+ * confirms immediately server-side with no customer interaction — exactly
+ * the "off_session: true, confirm: true" flow described in the task.
+ *
+ * Never throws for expected failure modes (missing card, decline, provider
+ * not ready) — callers must fall back to a normal manual invoice on any
+ * `success: false` result rather than surfacing a 500.
+ */
+export async function attemptAutopayCharge(
+  invoiceId: string,
+): Promise<AutopayChargeResult> {
+  const [invoice] = await db
+    .select()
+    .from(invoices)
+    .where(eq(invoices.id, invoiceId));
+  if (!invoice) return { success: false, reason: "Invoice not found" };
+  if (invoice.status === "paid") return { success: true };
+
+  const connectAccount = await getConnectAccount(invoice.providerId);
+  if (!connectAccount?.chargesEnabled) {
+    return {
+      success: false,
+      reason: "Provider payment processing is not yet enabled",
+    };
+  }
+
+  if (!invoice.homeownerUserId) {
+    return {
+      success: false,
+      reason:
+        "No homeowner account linked to this client — a saved card is required for autopay",
+    };
+  }
+
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, invoice.homeownerUserId));
+  if (!user?.stripeCustomerId || !user.defaultPaymentMethodId) {
+    return {
+      success: false,
+      reason: "No saved card on file for this client",
+    };
+  }
+
+  // Same fee math as createInvoicePaymentIntent — see comment there.
+  const stripeFeeCents = calculateStripePassthroughFee(invoice.totalCents);
+  const homeownerTotalCents = invoice.totalCents + stripeFeeCents;
+  const platformFeeCents = invoice.platformFeeCents || 0;
+  const destinationAppFee = platformFeeCents + stripeFeeCents;
+
+  let paymentIntent: Stripe.PaymentIntent;
+  try {
+    paymentIntent = await getStripe().paymentIntents.create({
+      amount: homeownerTotalCents,
+      currency: invoice.currency || "usd",
+      customer: user.stripeCustomerId,
+      payment_method: user.defaultPaymentMethodId,
+      off_session: true,
+      confirm: true,
+      application_fee_amount: destinationAppFee,
+      transfer_data: {
+        destination: connectAccount.stripeAccountId,
+      },
+      metadata: {
+        invoiceId: invoice.id,
+        providerId: invoice.providerId,
+        payerUserId: invoice.homeownerUserId,
+        jobAmountCents: String(invoice.totalCents),
+        platformFeeCents: String(platformFeeCents),
+        stripeFeeCents: String(stripeFeeCents),
+        autopay: "true",
+      },
+    });
+  } catch (err: any) {
+    const declineReason =
+      err?.raw?.decline_code ||
+      err?.decline_code ||
+      err?.raw?.message ||
+      err?.message ||
+      "Card was declined";
+    return { success: false, reason: String(declineReason) };
+  }
+
+  await db
+    .update(invoices)
+    .set({ stripePaymentIntentId: paymentIntent.id, updatedAt: new Date() })
+    .where(eq(invoices.id, invoiceId));
+
+  if (paymentIntent.status === "succeeded") {
+    // Mark paid immediately rather than waiting on the async webhook —
+    // handlePaymentIntentSucceeded is idempotent (upserts on PI id) so it's
+    // safe if the webhook also delivers this event later.
+    await handlePaymentIntentSucceeded(paymentIntent);
+    return { success: true, paymentIntentId: paymentIntent.id };
+  }
+
+  // An off-session confirmation should resolve to 'succeeded' or throw; any
+  // other terminal status (e.g. requires_action for a card that turned out
+  // to need 3DS) can't be resolved without the customer present, so treat it
+  // as a failure requiring manual follow-up.
+  return {
+    success: false,
+    reason: `Card requires additional authentication (status: ${paymentIntent.status})`,
+    paymentIntentId: paymentIntent.id,
+  };
+}
+
 export async function createStripeInvoice(
   invoiceId: string,
 ): Promise<{ stripeInvoiceId: string; hostedInvoiceUrl: string }> {
@@ -1127,6 +1246,11 @@ export async function handlePaymentIntentSucceeded(
 
   const amountCents = paymentIntent.amount ?? invForUpsert.totalCents ?? 0;
   const stripeChargeId = paymentIntent.latest_charge?.toString() ?? null;
+  // Task #474: the autopay off-session charge stamps this metadata flag when
+  // it creates the PaymentIntent — surface it on the payment row so provider
+  // UI (financials/invoice detail) can distinguish auto-charged payments
+  // from ones the homeowner confirmed manually via Checkout / in-app.
+  const isAutopay = paymentIntent.metadata?.autopay === "true";
 
   // UPSERT the payments row keyed on stripe_payment_intent_id (Task #245).
   // First-time webhook delivery → INSERT. In-app PI flow already inserted a
@@ -1144,12 +1268,14 @@ export async function handlePaymentIntentSucceeded(
       status: "succeeded",
       stripePaymentIntentId: paymentIntent.id,
       stripeChargeId,
+      autoCharged: isAutopay,
     })
     .onConflictDoUpdate({
       target: payments.stripePaymentIntentId,
       set: {
         status: "succeeded",
         stripeChargeId,
+        autoCharged: isAutopay,
       },
     });
 
@@ -1160,6 +1286,7 @@ export async function handlePaymentIntentSucceeded(
       paidAt: new Date(),
       stripePaymentIntentId: paymentIntent.id,
       updatedAt: new Date(),
+      ...(isAutopay ? { chargeType: "autopay" as const } : {}),
     })
     .where(eq(invoices.id, invoiceId))
     .returning();

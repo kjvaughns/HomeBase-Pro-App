@@ -1,2 +1,4 @@
 - [JSX string-attribute newlines](jsx-string-attribute-newlines.md) — `attr="a\nb"` renders literal backslash-n; must use `attr={'a\nb'}` expression syntax for real line breaks.
 - [Recurring date math must use UTC](recurring-date-math-utc.md) — recurringJobsService.ts dedup key is UTC-based; local-timezone Date getters/setters cause off-by-one-day bugs.
+- [notificationService category literal](notification-category-literal.md) — dispatchNotification's category param is a strict union (bookings/invoices/messages/reminders), not free text; check the type before adding new call sites.
+- [Expo web preview renders blank](expo-web-preview-blank.md) — screenshot/Playwright tools against the homebase Expo workflow show a blank page even on a clean build; treat as environment limitation, verify via typecheck + code/DB review instead.
