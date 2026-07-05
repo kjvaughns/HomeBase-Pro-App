@@ -15,6 +15,7 @@ import HomeownerOnboardingScreen from "@/screens/onboarding/HomeownerOnboardingS
 import ProviderOnboardingScreen from "@/screens/onboarding/ProviderOnboardingScreen";
 import EssentialSetupScreen from "@/screens/onboarding/EssentialSetupScreen";
 import ProviderSetupFlow from "@/screens/onboarding/ProviderSetupFlow";
+import ProviderYouAreLiveScreen from "@/screens/onboarding/ProviderYouAreLiveScreen";
 import WelcomeScreen from "@/screens/auth/WelcomeScreen";
 import LoginScreen from "@/screens/auth/LoginScreen";
 import SignUpScreen from "@/screens/auth/SignUpScreen";
@@ -93,6 +94,7 @@ export type RootStackParamList = {
   ProviderOnboarding: undefined;
   EssentialSetup: undefined;
   ProviderSetupFlow: undefined;
+  ProviderYouAreLive: { businessName: string; providerId: string };
   Welcome: undefined;
   Login: undefined;
   SignUp: undefined;
@@ -192,7 +194,7 @@ export type RootStackParamList = {
   ProviderResources: undefined;
   ProviderAIAssistant: undefined;
   StripeConnect: undefined;
-  BusinessHub: undefined;
+  BusinessHub: { initialTab?: "profile" | "services" | "booking" | "policies" | "reviews" } | undefined;
   BookingLink: undefined;
   SendMessage: {
     clientId: string;
@@ -361,6 +363,11 @@ export default function RootStackNavigator() {
         options={{
           headerTitle: "Become a Provider",
         }}
+      />
+      <Stack.Screen
+        name="ProviderYouAreLive"
+        component={ProviderYouAreLiveScreen}
+        options={{ headerShown: false, gestureEnabled: false }}
       />
       <Stack.Screen
         name="AIChat"

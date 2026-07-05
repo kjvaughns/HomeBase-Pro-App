@@ -14,8 +14,9 @@ import {
 } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
@@ -38,7 +39,6 @@ import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useProviderStore, StripeNotReadyError } from "@/state/providerStore";
 import { apiRequest, getApiUrl, getAuthHeaders } from "@/lib/query-client";
-import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type HubTab = "profile" | "services" | "booking" | "policies" | "reviews";
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -158,6 +158,7 @@ export default function BusinessHubScreen() {
   const tabBarHeight = useFloatingTabBarHeight();
   const { horizontalPadding } = useLayout();
   const navigation = useNavigation<NavigationProp>();
+  const route = useRoute<RouteProp<RootStackParamList, "BusinessHub">>();
   const { theme } = useTheme();
   const { user, providerProfile, createProviderProfile, clearProviderProfile } = useAuthStore();
   const queryClient = useQueryClient();
@@ -166,7 +167,7 @@ export default function BusinessHubScreen() {
   const hydrateAvailableForWork = useProviderStore((s) => s.hydrateAvailableForWork);
   const [availabilitySaving, setAvailabilitySaving] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<HubTab>("profile");
+  const [activeTab, setActiveTab] = useState<HubTab>(route.params?.initialTab ?? "profile");
 
   const cachedProviderId = providerProfile?.id;
 

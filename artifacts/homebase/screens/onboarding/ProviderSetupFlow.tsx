@@ -6,7 +6,6 @@ import {
   TextInput,
   Pressable,
   ActivityIndicator,
-  Share,
   Keyboard,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,12 +14,7 @@ import Animated, {
   FadeInRight,
   FadeInLeft,
   FadeInDown,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withSequence,
 } from "react-native-reanimated";
-import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
@@ -33,47 +27,20 @@ import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, BorderRadius } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useOnboardingStore } from "@/state/onboardingStore";
-import { useAuthStore, ProviderProfile } from "@/state/authStore";
+import { useAuthStore } from "@/state/authStore";
 import { useProviderStore } from "@/state/providerStore";
 import { apiRequest } from "@/lib/query-client";
+import {
+  SERVICE_CATEGORIES,
+  DAYS_OF_WEEK,
+  DURATION_OPTIONS,
+} from "./shared/onboardingConstants";
+import { YouAreLiveStep } from "./shared/YouAreLiveStep";
+import { AvailabilityStep } from "./shared/AvailabilityStep";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ProviderSetupFlow">;
 
 const TOTAL_STEPS = 7;
-
-const SERVICE_CATEGORIES = [
-  { id: "plumbing", label: "Plumbing", icon: "droplet" as const },
-  { id: "electrical", label: "Electrical", icon: "zap" as const },
-  { id: "hvac", label: "HVAC", icon: "wind" as const },
-  { id: "cleaning", label: "Cleaning", icon: "home" as const },
-  { id: "landscaping", label: "Landscaping", icon: "sun" as const },
-  { id: "handyman", label: "Handyman", icon: "tool" as const },
-  { id: "roofing", label: "Roofing", icon: "home" as const },
-  { id: "painting", label: "Painting", icon: "edit-2" as const },
-  { id: "pest", label: "Pest Control", icon: "shield" as const },
-  { id: "other", label: "Other", icon: "more-horizontal" as const },
-];
-
-
-const DURATION_OPTIONS = [
-  { label: "30 min", value: 30 },
-  { label: "1 hr", value: 60 },
-  { label: "2 hrs", value: 120 },
-  { label: "3+ hrs", value: 180 },
-];
-
-const DAYS_OF_WEEK = [
-  { id: "mon", label: "Mon" },
-  { id: "tue", label: "Tue" },
-  { id: "wed", label: "Wed" },
-  { id: "thu", label: "Thu" },
-  { id: "fri", label: "Fri" },
-  { id: "sat", label: "Sat" },
-  { id: "sun", label: "Sun" },
-];
-
-const START_TIMES = ["6:00 AM", "7:00 AM", "8:00 AM", "9:00 AM", "10:00 AM"];
-const END_TIMES = ["4:00 PM", "5:00 PM", "6:00 PM", "7:00 PM", "8:00 PM"];
 
 interface SetupData {
   businessName: string;
@@ -467,185 +434,6 @@ function Step1CreateService({
               </Pressable>
             );
           })}
-        </View>
-      </GlassCard>
-    </ScrollView>
-  );
-}
-
-function Step2Availability({
-  data,
-  onChange,
-}: {
-  data: SetupData;
-  onChange: (updates: Partial<SetupData>) => void;
-}) {
-  const { theme } = useTheme();
-  const { horizontalPadding } = useLayout();
-
-  const toggleDay = (dayId: string) => {
-    Haptics.selectionAsync();
-    const active = data.activeDays.includes(dayId)
-      ? data.activeDays.filter((d) => d !== dayId)
-      : [...data.activeDays, dayId];
-    onChange({ activeDays: active });
-  };
-
-  const useStandardHours = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    onChange({
-      activeDays: ["mon", "tue", "wed", "thu", "fri"],
-      startTime: "8:00 AM",
-      endTime: "6:00 PM",
-    });
-  };
-
-  return (
-    <ScrollView
-      style={styles.stepScroll}
-      contentContainerStyle={[styles.stepScrollContent, { paddingHorizontal: horizontalPadding }]}
-      showsVerticalScrollIndicator={false}
-    >
-      <StepHeader
-        stepNum={2}
-        title="Set Your Availability"
-        subtitle="When are you available to take bookings?"
-      />
-
-      <GlassCard style={styles.card}>
-        <View style={styles.fieldLabelRow}>
-          <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
-            Working Days
-          </ThemedText>
-          <Pressable
-            onPress={useStandardHours}
-            style={[styles.standardHoursBtn, { borderColor: Colors.accent }]}
-            testID="button-standard-hours"
-          >
-            <Feather name="clock" size={12} color={Colors.accent} />
-            <ThemedText type="caption" style={{ color: Colors.accent, fontWeight: "500" }}>
-              Mon–Fri 8am–6pm
-            </ThemedText>
-          </Pressable>
-        </View>
-
-        <View style={styles.daysRow}>
-          {DAYS_OF_WEEK.map((day) => {
-            const active = data.activeDays.includes(day.id);
-            return (
-              <Pressable
-                key={day.id}
-                onPress={() => toggleDay(day.id)}
-                testID={`day-${day.id}`}
-                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                style={[
-                  styles.dayPill,
-                  {
-                    backgroundColor: active ? Colors.accent : theme.backgroundElevated,
-                    borderColor: active ? Colors.accent : theme.borderLight,
-                  },
-                ]}
-              >
-                <ThemedText
-                  style={{
-                    color: active ? "#fff" : theme.text,
-                    fontWeight: active ? "600" : "400",
-                    fontSize: 13,
-                  }}
-                >
-                  {day.label}
-                </ThemedText>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary, marginTop: Spacing.xl }]}>
-          Hours
-        </ThemedText>
-        <View style={styles.hoursRow}>
-          <View style={styles.hoursBlock}>
-            <ThemedText type="caption" style={{ color: theme.textTertiary, marginBottom: Spacing.xs }}>
-              Start
-            </ThemedText>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.timeScroll}
-              contentContainerStyle={{ gap: Spacing.xs }}
-            >
-              {START_TIMES.map((t) => {
-                const selected = data.startTime === t;
-                return (
-                  <Pressable
-                    key={t}
-                    onPress={() => {
-                      Haptics.selectionAsync();
-                      onChange({ startTime: t });
-                    }}
-                    testID={`start-time-${t}`}
-                    style={[
-                      styles.timePill,
-                      {
-                        backgroundColor: selected ? Colors.accent : theme.backgroundElevated,
-                        borderColor: selected ? Colors.accent : theme.borderLight,
-                      },
-                    ]}
-                  >
-                    <ThemedText style={{ color: selected ? "#fff" : theme.text, fontSize: 12 }}>
-                      {t}
-                    </ThemedText>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-
-          <View style={styles.hoursBlock}>
-            <ThemedText type="caption" style={{ color: theme.textTertiary, marginBottom: Spacing.xs }}>
-              End
-            </ThemedText>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.timeScroll}
-              contentContainerStyle={{ gap: Spacing.xs }}
-            >
-              {END_TIMES.map((t) => {
-                const selected = data.endTime === t;
-                return (
-                  <Pressable
-                    key={t}
-                    onPress={() => {
-                      Haptics.selectionAsync();
-                      onChange({ endTime: t });
-                    }}
-                    testID={`end-time-${t}`}
-                    style={[
-                      styles.timePill,
-                      {
-                        backgroundColor: selected ? Colors.accent : theme.backgroundElevated,
-                        borderColor: selected ? Colors.accent : theme.borderLight,
-                      },
-                    ]}
-                  >
-                    <ThemedText style={{ color: selected ? "#fff" : theme.text, fontSize: 12 }}>
-                      {t}
-                    </ThemedText>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </View>
-
-        <View style={[styles.availabilitySummary, { backgroundColor: Colors.accent + "12" }]}>
-          <Feather name="clock" size={16} color={Colors.accent} />
-          <ThemedText type="caption" style={{ color: Colors.accent, flex: 1 }}>
-            {data.activeDays.length > 0
-              ? `${data.activeDays.length} days/week · ${data.startTime} – ${data.endTime}`
-              : "No days selected yet"}
-          </ThemedText>
         </View>
       </GlassCard>
     </ScrollView>
@@ -1093,144 +881,6 @@ function Step6ValuePaywall({ onContinue }: { onContinue: () => void }) {
   );
 }
 
-function Step7YouAreLive({
-  data,
-  providerProfile,
-  onGoToDashboard,
-}: {
-  data: SetupData;
-  providerProfile: ProviderProfile | null;
-  onGoToDashboard: () => void;
-}) {
-  const { theme } = useTheme();
-  const { horizontalPadding } = useLayout();
-  const [copied, setCopied] = useState(false);
-  const scale = useSharedValue(1);
-  const [apiBookingLink, setApiBookingLink] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!providerProfile?.id) return;
-    apiRequest("GET", `/api/providers/${providerProfile.id}/booking-links`)
-      .then((res) => res.json())
-      .then((json) => {
-        const links = json.bookingLinks ?? [];
-        if (links.length > 0 && links[0].slug) {
-          setApiBookingLink(`homebase.app/${links[0].slug}`);
-        }
-      })
-      .catch(() => {});
-  }, [providerProfile?.id]);
-
-  const bookingSlug = data.businessName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "") || "your-business";
-  const bookingLink = apiBookingLink ?? `homebase.app/${bookingSlug}`;
-
-  const handleCopy = async () => {
-    await Clipboard.setStringAsync(`https://${bookingLink}`);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    scale.value = withSequence(
-      withSpring(1.08, { damping: 10 }),
-      withSpring(1, { damping: 15 })
-    );
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
-  };
-
-  const handleShare = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    try {
-      await Share.share({
-        message: `Book ${data.businessName || "my services"} on HomeBase: https://${bookingLink}`,
-        url: `https://${bookingLink}`,
-      });
-    } catch {
-      // ignore
-    }
-  };
-
-  const pulseStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  return (
-    <ScrollView
-      style={styles.stepScroll}
-      contentContainerStyle={[styles.stepScrollContent, { paddingHorizontal: horizontalPadding }]}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.liveContainer}>
-        <Animated.View style={[styles.successCircle, { backgroundColor: Colors.accent + "20" }, pulseStyle]}>
-          <View style={[styles.successCircleInner, { backgroundColor: Colors.accent }]}>
-            <Feather name="check" size={40} color="#fff" />
-          </View>
-        </Animated.View>
-
-        <ThemedText type="h2" style={[styles.liveTitle, { fontWeight: "700" }]}>
-          You're Live
-        </ThemedText>
-        <ThemedText type="body" style={[styles.liveSubtitle, { color: theme.textSecondary }]}>
-          Your booking page is ready. Share your link and get your first booking.
-        </ThemedText>
-      </View>
-
-      <GlassCard style={styles.card}>
-        <ThemedText type="caption" style={[styles.fieldLabel, { color: theme.textSecondary }]}>
-          Your Booking Link
-        </ThemedText>
-        <Animated.View
-          style={[styles.linkBox, { backgroundColor: theme.backgroundElevated, borderColor: Colors.accent + "40" }, pulseStyle]}
-        >
-          <Feather name="link" size={16} color={Colors.accent} />
-          <ThemedText
-            style={{ color: Colors.accent, flex: 1, fontWeight: "500", fontSize: 14 }}
-            numberOfLines={1}
-          >
-            {bookingLink}
-          </ThemedText>
-        </Animated.View>
-
-        <View style={styles.linkActions}>
-          <Pressable
-            onPress={handleCopy}
-            testID="button-copy-link"
-            style={[
-              styles.linkBtn,
-              { backgroundColor: copied ? Colors.accent + "20" : theme.backgroundElevated, borderColor: copied ? Colors.accent : theme.borderLight },
-            ]}
-          >
-            <Feather name={copied ? "check" : "copy"} size={16} color={copied ? Colors.accent : theme.textSecondary} />
-            <ThemedText style={{ color: copied ? Colors.accent : theme.textSecondary, fontWeight: "500", fontSize: 14 }}>
-              {copied ? "Copied!" : "Copy Link"}
-            </ThemedText>
-          </Pressable>
-
-          <Pressable
-            onPress={handleShare}
-            testID="button-share-link"
-            style={[styles.linkBtn, { backgroundColor: Colors.accent + "15", borderColor: Colors.accent }]}
-          >
-            <Feather name="share-2" size={16} color={Colors.accent} />
-            <ThemedText style={{ color: Colors.accent, fontWeight: "600", fontSize: 14 }}>
-              Share Link
-            </ThemedText>
-          </Pressable>
-        </View>
-      </GlassCard>
-
-      <PrimaryButton
-        onPress={onGoToDashboard}
-        style={{ marginTop: Spacing.lg }}
-        testID="button-go-to-dashboard"
-      >
-        Go to Dashboard
-      </PrimaryButton>
-
-      <ThemedText type="caption" style={[styles.dashboardNote, { color: theme.textTertiary }]}>
-        Send your link to get your first booking
-      </ThemedText>
-    </ScrollView>
-  );
-}
-
 export default function ProviderSetupFlow({ navigation }: Props) {
   const { horizontalPadding } = useLayout();
   const { theme } = useTheme();
@@ -1421,7 +1071,24 @@ export default function ProviderSetupFlow({ navigation }: Props) {
       case 1:
         return <Step1CreateService key="s1" data={data} onChange={updateData} category={data.category} />;
       case 2:
-        return <Step2Availability key="s2" data={data} onChange={updateData} />;
+        return (
+          <AvailabilityStep
+            key="s2"
+            header={
+              <StepHeader
+                stepNum={2}
+                title="Set Your Availability"
+                subtitle="When are you available to take bookings?"
+              />
+            }
+            activeDays={data.activeDays}
+            setActiveDays={(v) => updateData({ activeDays: v })}
+            startTime={data.startTime}
+            setStartTime={(v) => updateData({ startTime: v })}
+            endTime={data.endTime}
+            setEndTime={(v) => updateData({ endTime: v })}
+          />
+        );
       case 3:
         return <Step3ProfilePolish key="s3" data={data} onChange={updateData} />;
       case 4:
@@ -1431,7 +1098,14 @@ export default function ProviderSetupFlow({ navigation }: Props) {
       case 6:
         return <Step6ValuePaywall key="s6" onContinue={advanceStep} />;
       case 7:
-        return <Step7YouAreLive key="s7" data={data} providerProfile={providerProfile} onGoToDashboard={handleGoToDashboard} />;
+        return (
+          <YouAreLiveStep
+            key="s7"
+            businessName={data.businessName}
+            providerId={providerProfile?.id}
+            onGoToDashboard={handleGoToDashboard}
+          />
+        );
       default:
         return null;
     }

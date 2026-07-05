@@ -32,6 +32,8 @@ import { useOnboardingStore } from "@/state/onboardingStore";
 import { useAuthStore } from "@/state/authStore";
 import { useProviderStore } from "@/state/providerStore";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
+import { SERVICE_CATEGORIES } from "./shared/onboardingConstants";
+import { AvailabilityStep } from "./shared/AvailabilityStep";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ProviderOnboarding">;
 
@@ -40,35 +42,6 @@ type Props = NativeStackScreenProps<RootStackParamList, "ProviderOnboarding">;
 const TOTAL_STEPS = 9; // 0..8
 const SETUP_STEPS = 8; // 1..8 (shown in progress dots)
 
-const SERVICE_CATEGORIES = [
-  { id: "plumbing", label: "Plumbing", icon: "droplet" as const },
-  { id: "electrical", label: "Electrical", icon: "zap" as const },
-  { id: "hvac", label: "HVAC", icon: "wind" as const },
-  { id: "cleaning", label: "Cleaning", icon: "home" as const },
-  { id: "landscaping", label: "Landscaping", icon: "sun" as const },
-  { id: "handyman", label: "Handyman", icon: "tool" as const },
-  { id: "roofing", label: "Roofing", icon: "umbrella" as const },
-  { id: "painting", label: "Painting", icon: "edit-2" as const },
-  { id: "pest", label: "Pest Control", icon: "shield" as const },
-  { id: "moving", label: "Moving", icon: "truck" as const },
-  { id: "appliance", label: "Appliances", icon: "settings" as const },
-  { id: "other", label: "Other", icon: "more-horizontal" as const },
-];
-
-
-const DAYS_OF_WEEK = [
-  { id: "mon", label: "Mon" },
-  { id: "tue", label: "Tue" },
-  { id: "wed", label: "Wed" },
-  { id: "thu", label: "Thu" },
-  { id: "fri", label: "Fri" },
-  { id: "sat", label: "Sat" },
-  { id: "sun", label: "Sun" },
-];
-
-const START_TIMES = ["6:00 AM", "7:00 AM", "8:00 AM", "9:00 AM", "10:00 AM"];
-const END_TIMES = ["4:00 PM", "5:00 PM", "6:00 PM", "7:00 PM", "8:00 PM"];
-
 export default function ProviderOnboardingScreen({ navigation }: Props) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
@@ -76,12 +49,11 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
 
   const {
     setHasCompletedFirstLaunch,
-    setHasCompletedProviderSetup,
     setProviderPreSignupData,
     pendingOnboardingService,
     setPendingOnboardingService,
   } = useOnboardingStore();
-  const { login, activateProviderMode, setNeedsRoleSelection } = useAuthStore();
+  const { login } = useAuthStore();
   const { addOnboardingService, setProviderAvailability, setProviderBusinessProfile } =
     useProviderStore();
 
@@ -302,9 +274,14 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
         providerProfile,
         token,
       );
-      activateProviderMode();
-      setHasCompletedProviderSetup(true);
-      setNeedsRoleSelection(false);
+
+      // Don't flip into provider mode yet — show the "You're Live" finale
+      // first so the new provider gets their booking link before landing on
+      // the dashboard. That screen finishes activating provider mode.
+      navigation.navigate("ProviderYouAreLive", {
+        businessName: businessName.trim(),
+        providerId,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       if (message.includes("409") || message.includes("exists")) {
@@ -406,8 +383,15 @@ export default function ProviderOnboardingScreen({ navigation }: Props) {
           />
         )}
         {step === 4 && (
-          <ScheduleStep
-            theme={theme}
+          <AvailabilityStep
+            header={
+              <View style={styles.stepHeader}>
+                <ThemedText style={styles.stepTitle}>Your schedule</ThemedText>
+                <ThemedText style={[styles.stepSubtitle, { color: theme.textSecondary }]}>
+                  When are you available to take bookings?
+                </ThemedText>
+              </View>
+            }
             activeDays={activeDays}
             setActiveDays={setActiveDays}
             startTime={startTime}
@@ -853,118 +837,6 @@ function ServiceAreaStep({
 }
 
 // ─── Step 4: Schedule ────────────────────────────────────────────────────────
-
-function ScheduleStep({
-  theme,
-  activeDays,
-  setActiveDays,
-  startTime,
-  setStartTime,
-  endTime,
-  setEndTime,
-}: {
-  theme: ReturnType<typeof useTheme>["theme"];
-  activeDays: string[];
-  setActiveDays: (v: string[]) => void;
-  startTime: string;
-  setStartTime: (v: string) => void;
-  endTime: string;
-  setEndTime: (v: string) => void;
-}) {
-  const { horizontalPadding } = useLayout();
-  const toggleDay = (dayId: string) => {
-    Haptics.selectionAsync();
-    const next = activeDays.includes(dayId)
-      ? activeDays.filter((d) => d !== dayId)
-      : [...activeDays, dayId];
-    setActiveDays(next);
-  };
-
-  return (
-    <ScrollView
-      style={styles.scrollView}
-      contentContainerStyle={[styles.stepScrollContent, { paddingHorizontal: horizontalPadding }]}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.stepHeader}>
-        <ThemedText style={styles.stepTitle}>Your schedule</ThemedText>
-        <ThemedText style={[styles.stepSubtitle, { color: theme.textSecondary }]}>
-          When are you available to take bookings?
-        </ThemedText>
-      </View>
-
-      <GlassCard style={styles.card}>
-        <View style={[styles.fieldLabelRow, { marginBottom: Spacing.sm }]}>
-          <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Working days</ThemedText>
-          <Pressable
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setActiveDays(["mon","tue","wed","thu","fri"]); setStartTime("8:00 AM"); setEndTime("6:00 PM"); }}
-          >
-            <ThemedText style={[styles.captionText, { color: Colors.accent, fontWeight: "600" }]}>Mon-Fri</ThemedText>
-          </Pressable>
-        </View>
-        <View style={styles.daysRow}>
-          {DAYS_OF_WEEK.map((day) => {
-            const active = activeDays.includes(day.id);
-            return (
-              <Pressable
-                key={day.id}
-                onPress={() => toggleDay(day.id)}
-                testID={`day-${day.id}`}
-                style={[
-                  styles.dayChip,
-                  {
-                    backgroundColor: active ? Colors.accent : theme.backgroundElevated,
-                    borderColor: active ? Colors.accent : theme.border,
-                  },
-                ]}
-              >
-                <ThemedText style={{ color: active ? "#fff" : theme.textSecondary, fontSize: 12, fontWeight: active ? "600" : "400" }}>
-                  {day.label}
-                </ThemedText>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary, marginTop: Spacing.lg }]}>Start time</ThemedText>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -Spacing.md }}>
-          <View style={[styles.timeRow, { paddingHorizontal: Spacing.md }]}>
-            {START_TIMES.map((t) => (
-              <Pressable
-                key={t}
-                onPress={() => { Haptics.selectionAsync(); setStartTime(t); }}
-                style={[
-                  styles.timeChip,
-                  { backgroundColor: startTime === t ? Colors.accent : theme.backgroundElevated, borderColor: startTime === t ? Colors.accent : theme.border },
-                ]}
-              >
-                <ThemedText style={{ color: startTime === t ? "#fff" : theme.textSecondary, fontSize: 13, fontWeight: startTime === t ? "600" : "400" }}>{t}</ThemedText>
-              </Pressable>
-            ))}
-          </View>
-        </ScrollView>
-
-        <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary, marginTop: Spacing.lg }]}>End time</ThemedText>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -Spacing.md }}>
-          <View style={[styles.timeRow, { paddingHorizontal: Spacing.md }]}>
-            {END_TIMES.map((t) => (
-              <Pressable
-                key={t}
-                onPress={() => { Haptics.selectionAsync(); setEndTime(t); }}
-                style={[
-                  styles.timeChip,
-                  { backgroundColor: endTime === t ? Colors.accent : theme.backgroundElevated, borderColor: endTime === t ? Colors.accent : theme.border },
-                ]}
-              >
-                <ThemedText style={{ color: endTime === t ? "#fff" : theme.textSecondary, fontSize: 13, fontWeight: endTime === t ? "600" : "400" }}>{t}</ThemedText>
-              </Pressable>
-            ))}
-          </View>
-        </ScrollView>
-      </GlassCard>
-    </ScrollView>
-  );
-}
 
 // ─── Step 5: Bio ─────────────────────────────────────────────────────────────
 

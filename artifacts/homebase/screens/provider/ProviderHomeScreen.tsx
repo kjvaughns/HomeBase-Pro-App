@@ -495,6 +495,15 @@ export default function ProviderHomeScreen() {
     staleTime: 30_000,
   });
 
+  // Getting Started checklist needs the real service count, not the stale
+  // snapshot cached in authStore.providerProfile.services (only ever set at
+  // signup/login time and not kept in sync with later service edits).
+  const { data: servicesChecklistData } = useQuery<{ services: unknown[] }>({
+    queryKey: ["/api/provider", providerId, "custom-services"],
+    enabled: !!providerId,
+    staleTime: 30_000,
+  });
+
   useEffect(() => {
     const p = freshProviderData?.provider;
     if (p && typeof p.isActive === "boolean") {
@@ -749,8 +758,9 @@ export default function ProviderHomeScreen() {
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId] });
     },
   });
-  const hasServices = (providerProfile?.services?.length ?? 0) > 0;
-  const hasMultipleServices = (providerProfile?.services?.length ?? 0) > 1;
+  const servicesCount = servicesChecklistData?.services?.length ?? 0;
+  const hasServices = servicesCount > 0;
+  const hasMultipleServices = servicesCount > 1;
   const hasClients = clients.length > 0;
   const firstBookingLink = bookingLinksData?.bookingLinks?.[0];
   const hasBookingLink = (bookingLinksData?.bookingLinks?.length ?? 0) > 0;
@@ -795,12 +805,12 @@ export default function ProviderHomeScreen() {
 
   const allGettingStartedSteps = [
     {
-      key: "stripe",
-      label: "Set up payments",
-      subtitle: "Connect Stripe to get paid",
-      icon: "credit-card" as const,
-      done: !!isStripeConnected,
-      onPress: () => navigation.navigate("StripeConnect"),
+      key: "booking",
+      label: "Share your booking link",
+      subtitle: "Send clients a link to book online",
+      icon: "link" as const,
+      done: hasBookingLink,
+      onPress: () => navigation.navigate("BookingLink"),
     },
     {
       key: "service",
@@ -808,7 +818,7 @@ export default function ProviderHomeScreen() {
       subtitle: "Define what you offer",
       icon: "tool" as const,
       done: hasServices,
-      onPress: () => navigation.navigate("BusinessHub"),
+      onPress: () => navigation.navigate("BusinessHub", { initialTab: "services" }),
     },
     {
       key: "client",
@@ -819,20 +829,12 @@ export default function ProviderHomeScreen() {
       onPress: () => navigation.navigate("ClientsTab"),
     },
     {
-      key: "booking",
-      label: "Share your booking link",
-      subtitle: "Send clients a link to book online",
-      icon: "link" as const,
-      done: hasBookingLink,
-      onPress: () => navigation.navigate("MoreTab"),
-    },
-    {
       key: "bio",
       label: "Polish your bio",
       subtitle: "AI can draft one in seconds",
       icon: "edit-3" as const,
       done: hasBio,
-      onPress: () => navigation.navigate("BusinessHub"),
+      onPress: () => navigation.navigate("BusinessHub", { initialTab: "profile" }),
     },
     {
       key: "hours",
@@ -840,7 +842,15 @@ export default function ProviderHomeScreen() {
       subtitle: "Tell clients when you're available",
       icon: "clock" as const,
       done: hasBusinessHours,
-      onPress: () => navigation.navigate("BusinessHub"),
+      onPress: () => navigation.navigate("BusinessHub", { initialTab: "profile" }),
+    },
+    {
+      key: "stripe",
+      label: "Set up payments",
+      subtitle: "Connect Stripe to get paid",
+      icon: "credit-card" as const,
+      done: !!isStripeConnected,
+      onPress: () => navigation.navigate("StripeConnect"),
     },
     {
       key: "policies",
@@ -848,7 +858,7 @@ export default function ProviderHomeScreen() {
       subtitle: "Optional — instant booking, deposits, cancellations",
       icon: "shield" as const,
       done: hasCustomPolicies,
-      onPress: () => navigation.navigate("BusinessHub"),
+      onPress: () => navigation.navigate("BusinessHub", { initialTab: "policies" }),
     },
     {
       key: "intake-questions",
