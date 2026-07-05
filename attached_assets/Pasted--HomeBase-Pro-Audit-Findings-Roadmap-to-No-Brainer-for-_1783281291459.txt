@@ -1,0 +1,75 @@
+# HomeBase Pro — Audit Findings & Roadmap to "No-Brainer for Recurring Home Services"
+
+## Context
+
+Full scan of the real app (`/home/user/HomeBase-Pro-App`) — server, payments, recurring-job engine, onboarding, and feature maturity vs Jobber/Housecall Pro — for the ICP: **solo/small CLEANING & LAWNCARE businesses running recurring service.**
+
+**Headline: the app is stronger than its own older audit docs claim.** The provider audits (`provider-mvp-audit-report.md` etc.) list stale "critical" items (Leads orphaned, keyboard bugs) that are already resolved. What's actually real and competitive today: the recurring series engine (`recurringJobsService.ts`), route optimization wired into the schedule (`routeOptimizationService.ts` + `RouteView`), automated 24h/2h reminders + automated review requests (cron in `server/index.ts`), "on my way" texts, per-service checklist templates, and Stripe-enforced deposits. **Don't rebuild these.**
+
+The gap to no-brainer is narrow: a few money-path bugs, and the recurring **money loop** (autopay) + **per-property CRM** depth. This plan fixes the bugs first (they lose money / lock out paying users), then builds the 2-3 features that actually win the ICP, then tightens onboarding.
+
+---
+
+## PART A — Bugs to fix first (money & lockout risks)
+
+**A1 — HIGH: Partial refunds corrupt invoice state.** `server/stripeConnectService.ts:1689-1701` (`handleChargeRefunded`) sets `payments.status`/`invoices.status = "refunded"` for ANY `charge.refunded` event. A $10 refund on a $500 invoice flips the whole invoice to refunded → corrupts revenue reporting and the grace/subscription accounting that keys off paid invoices. **Fix:** only mark `"refunded"` when `charge.refunded === true` (full); otherwise record the refund and use `"partially_refunded"`, leave invoice `"paid"`.
+
+**A2 — HIGH: `past_due` instantly locks out a paying provider.** `stripeConnectService.ts:2472-2492` sets `isSubscribed = (active || trialing)`, so a normal card-retry (`past_due`, ~2-week Stripe dunning) → `computeSubscriptionStatus` returns `expired` → 403 `SUBSCRIPTION_REQUIRED`. `currentPeriodEnd` is stored but never consulted. **Fix:** while `past_due`, keep access until `currentPeriodEnd`.
+
+**A3 — HIGH: RevenueCat `BILLING_ISSUE`/`SUBSCRIPTION_PAUSED` lock out immediately.** `server/revenuecatService.ts:17-22, 212-228` — only `CANCELLATION` checks `stillEntitled`; billing-retry states revoke at once, ignoring `expiration_at_ms`. **Fix:** apply the same `expiresAt > now` guard to `BILLING_ISSUE` and pauses.
+
+**A4 — MEDIUM: RevenueCat webhook has no idempotency / out-of-order protection.** `revenuecatService.ts:139-241` processes every delivery (unlike the Stripe router's `event.id` dedup). A late `EXPIRATION` after a `RENEWAL` flips a paying user to unsubscribed. **Fix:** dedup on RC event id; ignore events older than stored `currentPeriodEnd`.
+
+**A5 — MEDIUM: Recurring occurrence dates mix UTC and session-TZ.** `recurringJobsService.ts:423-427,466` build the in-memory dedup key from UTC (`toISOString().slice(0,10)`) while the DB unique index casts `scheduled_date::date` in session TZ and `adjustToAvailableDay` uses local `getDay()`. If server/DB TZ ≠ UTC, day-boundary occurrences can silently skip a day. **Fix:** normalize all occurrence-date logic to one explicit timezone (ideally the provider's).
+
+**A6 — MEDIUM (data-loss-shaped): Silent fire-and-forget saves in onboarding.** `ProviderSetupFlow.tsx:1358-1362` (hours) and `:1366-1370` (bio) `.catch(console.warn)` — a failed save is swallowed, user advances thinking it saved. **Fix:** await + surface errors like the service save already does.
+
+**A7 — LOW: constant-time secret compare.** `revenuecatService.ts:162` uses `!==`; use `crypto.timingSafeEqual`. And A-misc: client LTV always returns $0 (open across all audits) — server never computes it.
+
+---
+
+## PART B — The features that win the recurring ICP (ranked)
+
+**B1 — Autopay / auto-charge saved card for recurring visits. HIGHEST IMPACT.** The card is already saved (`setup_future_usage: "off_session"`, `server/routes.ts:14287`) but there is **no off-session charge anywhere** — recurring clients get a manual invoice every single visit. This is the #1 reason cleaners/lawncare pros stay on Jobber/Housecall. Build on the existing series engine + saved card: add an off-session `PaymentIntent` (`off_session: true, confirm: true`), an `autopay` opt-in per client/series, and auto-charge on visit completion with a receipt. This single feature is the difference between "nice app" and "no-brainer."
+
+**B2 — Structured per-property CRM fields.** `clients` (`shared/schema.ts:881`) has only name/email/phone/address + one freeform `notes` blob. No gate/lockbox code, entry instructions, pets, parking, "trash day." The rich `homes` data is homeowner-side HouseFax, only linked when the client has a homeowner account — which a typical cleaning/lawncare client does NOT. Add structured property fields on `clients`, surfaced on the crew's job card. Jobber/Housecall both have this; it's the biggest CRM gap.
+
+**B3 — Seasonal pause/resume on a series.** `job_series` is active/cancelled only (`recurringJobsService.ts:633`); no hold state. Lawncare is seasonal — today you cancel-and-recreate, losing history and cadence. Add a `paused` state + resume that re-materializes the horizon.
+
+**B4 — Tips/gratuity + job-completion → one-tap auto-invoice + no-show fee.** No gratuity field in invoices/payments (cleaners get tipped). Completion fires a review nudge but invoicing is multi-step; add auto-invoice on completion and a no-show fee tied to the deposit/saved card.
+
+**B5 — Crew time tracking (clock in/out).** No `timeEntry`/`hoursWorked` in schema; crew screens show jobs but track no labor. Needed for small route-based crews and job costing.
+
+*(B4/B5 are fast-follows; B1-B3 are the core ICP wins.)*
+
+---
+
+## PART C — Onboarding simplicity (the "no-brainer" first 10 minutes)
+
+**C1 — Merge the two duplicate onboarding flows.** `ProviderOnboardingScreen.tsx` (pre-signup, 8 steps, no paywall) and `ProviderSetupFlow.tsx` (post-signup, 7 steps, has a paywall) redefine the same constants with drift and give a materially different first impression depending on entry point. Collapse into shared step components + shared constants.
+
+**C2 — Add the "You're Live + share your booking link" finale to the primary funnel.** The secondary flow's `Step7YouAreLive` is the single best time-to-value moment (live profile + shareable link); the primary funnel most users hit **lacks it** and just dumps them on the dashboard. Reuse it.
+
+**C3 — Make onboarding-collected data mark checklist steps done.** A provider who just set service/hours/bio in onboarding still sees them as incomplete to-dos on the Getting Started checklist (`ProviderHomeScreen.tsx:457-531`) → "did my setup even save?" doubt. Ensure `/api/provider/onboard-complete` populates `hasServices/hasBusinessHours/hasBio`.
+
+**C4 — Reorder the checklist; don't lead with Stripe.** Stripe Connect (external KYC, bank details, jargon) is the highest-friction task and is currently step 1. Lead with "Share your booking link" (zero-friction, instant value); defer payments. Also deep-link the four checklist rows that currently all dump users on `BusinessHub`.
+
+---
+
+## Recommended sequence
+
+- **Sprint 1 (this week): stop the bleeding.** A1, A2, A3 (money + lockout bugs), A6 (silent saves). These protect paying users and revenue integrity. Small, surgical diffs.
+- **Sprint 2: the ICP wins.** B1 (autopay) — the big one — then B2 (per-property CRM fields). This is what makes it a no-brainer for recurring.
+- **Sprint 3: polish + retention.** B3 (seasonal pause), C1-C4 (onboarding), then A4/A5 hardening and B4/B5 fast-follows.
+
+## Verification
+- Bugs: unit-test the webhook handlers with partial-refund and `past_due`/`BILLING_ISSUE` fixtures; assert access is retained until `currentPeriodEnd`. Re-run against Stripe CLI `stripe trigger charge.refunded` (partial) and subscription dunning events.
+- Autopay: end-to-end test — save card → complete a recurring occurrence → assert an off-session PaymentIntent is created, invoice auto-paid, receipt sent; test declined-card path.
+- Onboarding: fresh-install walkthrough, confirm single flow, "You're Live" appears, checklist reflects onboarding data, no silent-save data loss.
+- All changes on a branch off latest `main`; push, PR, and (critical) **pull into Replit** so the two environments stay in sync.
+
+## Not doing / out of scope
+- Rebuilding the recurring engine, route optimization, reminders, or review automation — they're real and competitive.
+- RRULE / customer-facing recurring booking (explicitly deferred in the engine's own header).
+- Homeowner-side tools flagged as mock in prior audits (Budgeter, some Survival Kit tasks) — separate track.
+</content>

@@ -1,0 +1,39 @@
+Yeah — a bunch. These are *net-new* surfaces (not fixes to what exists), picked specifically for a field-based, recurring cleaning/lawncare owner and for standing apart from Jobber/Housecall. I'll flag the "wow" ones vs the quiet wins.
+
+## The signature ideas (these are the differentiators)
+
+**1. A "Today" field mode — the route as a swipeable card stack.** Not the dashboard; a dedicated surface that's just *your next stop*. One big card: client, address, gate code, what to do, and three fat one-handed buttons — **Navigate / On My Way / Complete**. Swipe to the next stop. Field workers live in "where am I going next," and no competitor makes that the hero. This also quietly solves the 8-tap job flow from the last audit by turning it into swipes.
+
+**2. Before/after as a first-class engine.** A drag-to-reveal comparison slider (the photo split you drag across). Cleaners and lawncare *live* on before/after. Capture it in the field → it auto-attaches to the invoice, the review request, AND becomes shareable social proof with your logo. One capture, three outputs. This is the most on-brand "wow" for your exact ICP and it's a marketing flywheel, not just a feature.
+
+**3. "On my way" with a live ETA link.** One tap sends the customer a live map link (like a food-delivery tracker). Kills the "are you coming?" texts, feels premium, builds trust. Pairs perfectly with an **iOS Live Activity / Dynamic Island** ("En route to Sarah's — 8 min") — that alone makes the app feel more modern than anything Jobber/Housecall ships.
+
+**4. Home-screen + lock-screen widgets.** "Next job 10:00 · Sarah K." and "Earned today: $340." A widget is a daily reminder your app exists and a constant premium signal — most SMB tools don't bother.
+
+## Recurring made *visible* (emotional hook for this business type)
+
+**5. A "locked-in revenue" surface.** Recurring businesses are all about predictable income — so *show* it: "Your recurring visits = $4,200/mo booked." A recurring-revenue tile + a forward calendar heatmap of upcoming visits. Nobody makes recurring providers *feel* their MRR. This is a retention and pride hook.
+
+**6. Autopay status as a calm, visible thing.** When you build autopay (the #1 feature gap), the UI matters: a little "Auto-pay on · charges after each visit" badge on recurring clients, and a satisfying auto-receipt. The feeling of "money just happens" is the sell.
+
+## Speed & one-handed (field ergonomics)
+
+**7. Swipe-to-complete on job cards** — gesture instead of taps, glove/wet-hands friendly.
+
+**8. Voice quick-capture.** A mic button: "Add a mow for the Johnsons next Tuesday." Dirty hands, in a truck — talking beats typing, and you already have the AI plumbing to parse it.
+
+**9. Big field checklists.** Job checklists as large, thumb-sized checkable rows (you have per-service checklist templates already — make the *in-field* rendering huge and satisfying).
+
+## Delight & time-to-value
+
+**10. Make getting paid a *moment*.** A "Paid ✓" celebration — haptic + a running "today's earnings" ticker. Dopamine drives daily opens.
+
+**11. Trade starter packs.** On first run: "Lawn Care" or "House Cleaning" → instantly get pre-built services, prices, and checklists. Turns a scary empty app into a working business in 30 seconds — the biggest time-to-value lever you have.
+
+**12. A single "Next best action" card on Home.** Let the AI surface *one* thing — "2 clients due for follow-up — send reminders?" — as a tappable card, instead of the current wall of competing cards.
+
+---
+
+If I had to pick three to build: **the Today/route field mode (#1)**, **the before/after engine (#2)**, and **locked-in recurring revenue (#5)** — daily-use, marketing, and emotional retention, each hitting a lane Jobber/Housecall leave open.
+
+Want me to spec any of these in detail — screens, states, data model — as a doc you can hand to Replit? The before/after engine or the Today mode would be my pick to flesh out first.

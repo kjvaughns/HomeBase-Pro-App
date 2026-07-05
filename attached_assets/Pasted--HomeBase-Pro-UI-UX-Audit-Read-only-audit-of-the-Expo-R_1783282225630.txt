@@ -1,0 +1,128 @@
+# HomeBase Pro — UI/UX Audit
+
+Read-only audit of the Expo/React Native app (`client/`). Findings are grouped by priority and every item cites the file(s) to change. Goal lens: make it the dead-simple, preferred app for a **non-technical cleaning/lawncare owner using a phone one-handed in the field.**
+
+## Overall assessment
+
+The foundation is strong — this is an adoption problem, not a design problem:
+- Design tokens are well-built (`client/constants/theme.ts`: full type scale, semantic + light/dark colors, spacing/radius/shadow ramps).
+- `useTheme()` threaded through 78 of ~99 screens; dark/light is real. `PrimaryButton` in 49 files. Feather icons everywhere (Ionicons only for the star glyph). No emoji-as-iconography. Haptics on state changes. Thoughtful offline handling (read-only pill + per-screen banners that keep call/text/directions live).
+
+Where it breaks down: **410 raw hex colors across 62 screens** and **212 inline `fontSize:` across 41 screens** — so the app looks cohesive on the main tabs but "stitched together" on detail/wizard screens. Plus a few workflow/hierarchy issues that slow the daily operator.
+
+---
+
+## TIER 1 — Fix first (daily-workflow + first-impression impact)
+
+### 1. The job → invoice → paid flow is 8+ taps
+`client/screens/provider/ProviderJobDetailScreen.tsx` (`getNextAction` ~1004-1013; bottom bar 1334-1342). One button steps `scheduled → confirmed → on_my_way → arrived → in_progress → completed`, one state per tap, then completion, invoicing (pushes `AddInvoice` to rebuild+send, line 870), and payment are separate. `on_my_way`/`arrived` are courier micro-states most solo operators don't use.
+**Fix:** Collapse to two states owners care about — **Start** and **Complete**; put the granular states behind a long-press or a secondary "update status" row. On "Complete Job," auto-generate a draft invoice from the job's price/line items and drop them on a pre-filled invoice with one **Send** CTA.
+
+### 2. Completed-job screen has three equal primary buttons
+Same file, 1303-1333: "Record Payment" OR "Create Invoice", plus "Request a Review" — all `PrimaryButton`. No clear single next action.
+**Fix:** One primary (Get Paid / Send Invoice); demote "Request a Review" and any cancel/hold to secondary or an overflow "…" menu (cancel/hold currently sit in the bottom bar at 1363+).
+
+### 3. Two different greens on the "get paid" screen
+Brand green is `Colors.accent = #38AE5F`, but payment/success states hardcode `#16A34A` (plus `#DC2626`, `#22C55E`, `#F0FDF4`, `#92400E`).
+- Worst: `client/screens/provider/InvoiceDetailScreen.tsx` — `#16A34A` appears 7× incl. the "Paid" badge (~588, 607-608, 909, 987), next to buttons using `Colors.accent`.
+- Also `client/screens/homeowner/PaymentScreen.tsx`, `client/screens/homeowner/AppointmentDetailScreen.tsx`.
+**Fix:** Sweep `#16A34A`→`Colors.success`, `#DC2626`→`Colors.error`, amber→`Colors.warning`. Unifies the most emotionally important screen with the brand.
+
+### 4. Provider Home buries today's jobs at the bottom
+`client/screens/provider/ProviderHomeScreen.tsx` order: grace banner → publish banner → greeting → 4-stat grid → leads banner → Getting Started (up to 9 rows) → In Progress → Business Insights (4 StatCards + chart) → Quick Quote → Recent Quotes → **Upcoming Jobs (dead last, 1004-1051)**.
+**Fix:** Move Today's/Upcoming Jobs directly under the stat grid. Push Insights + Quick Quote below the fold. Collapse Getting Started to a single dismissible row once >1 step is done.
+
+### 5. Icon-only buttons are invisible to screen readers
+`accessibilityLabel`/`accessibilityRole` appear in only **5 files** across ~90 screens (2 screens + 3 navigators). Dozens of icon-only close/back/chevron/kebab/filter controls have no text — e.g. `CommunicationsScreen.tsx:381`, `SubscriptionGateModal.tsx:86`, `AccountGateModal.tsx:78`, `ErrorFallback.tsx:105`.
+**Fix:** Add `accessibilityRole="button"` + `accessibilityLabel="Close"` (etc.) to every icon-only touchable. Highest-impact accessibility gap.
+
+### 6. Surface "Message a client" — it's 3-4 taps and not on the FAB
+`client/components/ProviderFAB.tsx` (52-98) offers Ask AI, Quick Quote, Invoice, Job, Client — but **not Message**. Messaging needs Clients tab → open client → ClientDetail (messages lazy-load, `ClientDetailScreen.tsx:248`) → Messages/Text. Client comms is a daily top-3 task.
+**Fix:** Add "Message" to the FAB and/or a contact action on the client row; consider promoting Communications out of More.
+
+---
+
+## TIER 2 — High impact (navigation depth, ergonomics, contrast, copy)
+
+### 7. Finance is tabs-within-tabs-within-tabs
+`client/screens/provider/FinancialsScreen.tsx`: SECTION_TABS = Overview/Transactions/More (1443), and Transactions has TRANS_TABS = Invoices/Payouts (1449), plus a "More" sub-tab menu. Three nested levels before an owner reaches an unpaid-invoice list.
+**Fix:** Promote Invoices and Payouts to top-level Finance segments; delete the "More" sub-tab (fold into Overview or the global More tab).
+
+### 8. Client detail has 7 horizontally-scrolled tabs
+`client/screens/provider/ClientDetailScreen.tsx:34`: `overview | jobs | invoices | estimates | notes | home | messages`. Can't see them all on a phone; jobs/invoices/estimates are all "money history"; some fetch on activation (248, 272) → spinners on tab switch.
+**Fix:** Consolidate to **Overview / Activity (jobs+invoices+estimates timeline) / Messages / Notes**; move "home"/HouseFax into Overview as a card.
+
+### 9. Undersized tap targets (below 44×44pt)
+Bad for a thumb, gloves, or wet hands:
+- Filter chips ≈ 36pt tall (`client/components/FilterChips.tsx:102`) — these are primary list navigation.
+- Modal close buttons 32×32 (`SubscriptionGateModal.tsx:165`, `AccountGateModal.tsx:157`).
+- Header close ≈ 30pt (`CommunicationsScreen.tsx:588`, `ErrorFallback.tsx:226`).
+- `size="small"` Button = 36 (`theme.ts:128`). `hitSlop` used in only 28 files.
+**Fix:** Enforce 44pt min touch area — bump close buttons to 44×44 or add `hitSlop`; give chips `minHeight: 44`.
+
+### 10. Muted text fails WCAG AA contrast on dark (unreadable outdoors)
+`client/constants/theme.ts` (dark, 75-104): `textTertiary #666666` on `#000` ≈ 3.7:1, on `#1C1C1E` ≈ 3.2:1 — below the 4.5:1 minimum. Also the default tab icon color (88). `textSecondary #A0A0A0` is borderline on lighter cards.
+**Fix:** Raise dark `textTertiary` to ~`#8E8E93` (~4.6:1 on black); never use tertiary for anything a user must read in glare.
+
+### 11. De-jargon user-facing copy
+- "Stripe Connect" (`StripeConnectScreen.tsx:253, 539`) → "Get Paid" / "Payment setup"; keep "Stripe" only as a trust line ("Payments securely processed by Stripe").
+- "Series" / "Recurring Series" (`RootStackNavigator.tsx:618`, `SeriesDetailScreen.tsx:354`, `ProviderJobDetailScreen.tsx:825`) → "Repeating job" / "Cancel all repeats."
+- "Smart Intake" / "Dynamic Quote Engine" (`SubscriptionScreen.tsx:681`) → describe the benefit ("Ask customers the right questions automatically").
+- Good model already in the app: `client/components/GracePeriodBanner.tsx:33` translates "grace period" → "X days left in your trial." Do that everywhere.
+
+### 12. Star ratings render in two colors
+Same 5-star widget is **gold** on search/cards (`ProviderCard.tsx:119`, `FindScreen.tsx:449`, etc.) and **green** on profiles (`ProviderProfileScreen.tsx:352`, `ReviewsScreen.tsx:349`, etc.), each re-implementing the loop at its own size (12/14/16/28/32).
+**Fix:** One `<RatingStars>` component (Ionicons star), fixed color (gold is conventional) + size scale. Define `Colors.rating` so it can't drift.
+
+---
+
+## TIER 3 — Consistency & polish (raise the "premium" floor)
+
+### 13. Route all empty states through the shared component
+`client/components/EmptyState.tsx` is used in only 8 screens; **21 screens hand-roll** their own empty blocks (crew screens, homeowner HomeScreen/ProviderListScreen/SavedProviders/ServiceHistory, provider CrewScreen/ProviderHomeScreen/ReviewsScreen/ServicesScreen/PublicProfileScreen). `ClientsScreen` and `FinancialsScreen` do both. An empty Clients list and empty Schedule look like different apps.
+**Fix:** Everything through `<EmptyState>`.
+
+### 14. Standardize loading — skeletons, not full-screen spinners
+Skeletons already exist (`ProviderHomeScreen` insights 846-857; `FinancialsScreen` `SkeletonRow` 784) but Home gates the whole stat grid behind one spinner (652-655) and JobDetail blocks the whole screen. Perceived slowness on cellular between jobs.
+**Fix:** Per-section skeletons; render cached data immediately and refresh in place.
+
+### 15. Inline typography bypasses the type scale
+212 inline `fontSize:` across 41 files; screen titles drift 20/22/24/28 and omit line-heights, so vertical rhythm differs screen-to-screen. Worst: `QuickQuoteScreen` (18), `ServicesScreen` (18), onboarding (`ProviderOnboardingScreen` 27 + `ProviderSetupFlow` 19 — the first impression), `FinancialsScreen` (13).
+**Fix:** Map to `Typography.title2/title3/headline/subhead`. Fix onboarding first.
+
+### 16. Hand-styled containers instead of Card/GlassCard
+`GlassCard` (~50 files) gives the dashboards a premium frosted look, but heavy screens hand-roll flat `View`s with their own bg/radius/shadow, so navigating list→detail shifts aesthetic and mismatches corner radii (12/16/20). Worst: `ClientDetailScreen`, `InvoiceDetailScreen`, `ScheduleScreen`, `ServicesScreen`, `ServiceBlueprintWizardScreen`, `SubscriptionScreen`, `CrewScreen`.
+**Fix:** GlassCard for dashboard/content surfaces, plain `Card` for dense forms — chosen per-context, not per-author.
+
+### 17. Centralize money/date/phone formatting
+`formatCurrency`/`formatCents` are re-implemented in 6+ files with different input units (dollars vs cents) — risk of `$1,200` vs `$1200.00` across screens. No shared phone/date formatter.
+**Fix:** `client/lib/format.ts` with `formatMoney`/`formatDate`/`formatPhone` (Intl); replace local copies. Consistent money display is a trust factor on invoices sent to customers.
+
+### 18. One bottom-sheet convention
+The app mixes iOS `Alert.alert` (JobDetail cancel/hold/reschedule 478/588/769/833), custom center-modals (`ProviderMoreScreen` crew picker 410-448), the FAB fan modal, and a payment bottom sheet — inconsistent dismissal affordances.
+**Fix:** One bottom-sheet component for all pick/confirm; reserve `Alert` for truly destructive confirmations; standardize scrim-tap-to-dismiss + visible close.
+
+### 19. Home CTAs route to tabs, not forms
+`ProviderHomeScreen.tsx`: "Add a Job" → `ScheduleTab` (1042), "Add your first client" → `ClientsTab` (480), "Share your booking link" → `MoreTab` (488) — each costs an extra orienting tap and hunt.
+**Fix:** Point directly at `AddJob`, `AddClient`, `BookingLink`.
+
+### 20. Dynamic Type will clip text
+`allowFontScaling` is never disabled (good, fonts scale) but every `Typography` entry pairs fixed `fontSize` with fixed `lineHeight` (`theme.ts:162-275`), and control heights are fixed (`buttonHeight:50`, `listRowHeight:56`, `inputHeight:48`). At large text sizes, lines clip and text overflows rows.
+**Fix:** Use a lineHeight multiplier (or drop it) and switch fixed heights to `minHeight`. Test at 200% type.
+
+### 21. Two theme-breaking hardcoded backgrounds
+`client/screens/provider/ProviderJobDetailScreen.tsx` and `client/screens/homeowner/ProviderListScreen.tsx` hardcode a light `backgroundColor` that won't flip in dark mode (the only two found — background theming is otherwise clean).
+**Fix:** Use `theme.background*`.
+
+---
+
+## Suggested execution order (highest ROI first)
+1. Collapse the job status stepper + auto-invoice on complete (Tier 1 #1-2) — the daily money workflow.
+2. Kill the second green; add `accessibilityLabel` to icon-only buttons; fix chip/close tap targets (#3, #5, #9).
+3. Reorder Provider Home; add Message to the FAB (#4, #6).
+4. Flatten Finance + Client tabs (#7, #8).
+5. Raise dark tertiary-text contrast; de-jargon Stripe/Series (#10, #11).
+6. `RatingStars` + `EmptyState` everywhere; centralize formatting; onboarding typography (#12, #13, #15, #17).
+
+## Strengths — don't spend effort here
+Design-token file, theme threading, Feather icon language, `PrimaryButton`/`StatusPill` adoption, haptics, offline handling, keyboard-avoidance (38 files) and safe-area (89 files) coverage, and the `GracePeriodBanner` plain-language model. The gap is adoption + a few workflow/hierarchy fixes — not a redesign.
