@@ -1,24 +1,38 @@
 import { motion } from 'framer-motion';
+import { SPRING_CONFIG } from '../constants';
+import { StatusBar } from './StatusBar';
+import { BottomNav } from './BottomNav';
 
-export function PhoneFrame({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
+export function PhoneFrame({ 
+  children, 
+  activeTab, 
+  isEntering = false,
+  isExiting = false,
+  delay = 0 
+}: { 
+  children: React.ReactNode; 
+  activeTab?: string;
+  isEntering?: boolean;
+  isExiting?: boolean;
+  delay?: number;
+}) {
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.8, y: 50 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={{ delay, type: 'spring', stiffness: 200, damping: 20 }}
-      className="relative w-[320px] h-[650px] rounded-[40px] border-[8px] border-[#111] bg-black overflow-hidden shadow-2xl z-10"
+      initial={isEntering ? { y: 80, opacity: 0 } : false}
+      animate={isExiting ? { y: 100, opacity: 0 } : { y: 0, opacity: 1 }}
+      transition={{ ...SPRING_CONFIG, delay: isEntering ? delay : 0 }}
+      className="relative w-[340px] h-[680px] rounded-[44px] bg-[#0a0a0a] border-[1.5px] border-[#222222] shadow-[0_0_120px_rgba(0,0,0,0.9),0_0_40px_rgba(34,197,94,0.06)] overflow-hidden flex flex-col mx-auto"
     >
-      {/* Top Notch/Dynamic Island simulated */}
-      <div className="absolute top-0 inset-x-0 flex justify-center z-20">
-        <div className="w-[120px] h-[30px] bg-[#111] rounded-b-[20px]"></div>
-      </div>
+      {/* Top notch */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[100px] h-[24px] bg-[#000] rounded-b-[16px] z-50"></div>
       
-      <div className="w-full h-full relative z-10 bg-[#050505]">
+      <StatusBar />
+      
+      <div className="flex-1 relative overflow-hidden bg-[#000]">
         {children}
       </div>
-      
-      {/* Glow behind phone */}
-      <div className="absolute inset-0 bg-accent/20 blur-[100px] -z-10 rounded-full"></div>
+
+      {activeTab && <BottomNav activeTab={activeTab} />}
     </motion.div>
   );
 }

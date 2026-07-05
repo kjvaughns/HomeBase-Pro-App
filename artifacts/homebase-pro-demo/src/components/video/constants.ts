@@ -1,36 +1,32 @@
 export const COLORS = {
-  accent: '#38AE5F',
-  accentLight: 'rgba(56, 174, 95, 0.12)',
-  bgRoot: '#000000',
-  bgDefault: '#1C1C1E',
-  bgSecondary: '#2C2C2E',
-  bgTertiary: '#3A3A3C',
-  text: '#FFFFFF',
-  textSecondary: '#A0A0A0',
-  textTertiary: '#666666',
-  border: '#3A3A3C',
-  info: '#60A5FA',
-  warning: '#FBBF24',
-  error: '#EF4444',
+  bg: '#000000',
+  surface: '#0d0d0d',
+  card: '#111111',
+  border: '#1e1e1e',
+  green: '#22c55e',
+  greenDim: '#0d2a1a',
+  greenBorder: '#1a3a1a',
+  white: '#ffffff',
+  muted: '#555555',
+  ultraMuted: '#2a2a2a',
+  red: '#ef4444',
+  amber: '#f59e0b',
 };
 
-export const SPRING_TRANSITION = {
+export const SPRING_CONFIG = {
   type: 'spring',
-  stiffness: 300,
-  damping: 25
-};
-
-export const SPRING_HERO = {
-  type: 'spring',
-  stiffness: 200,
-  damping: 20
-};
+  mass: 0.6,
+  damping: 18,
+  stiffness: 100
+} as const;
 
 export const SCENE_DURATIONS = {
-  scene1: 1500, // Intro
-  scene2: 3500, // Job Detail -> Complete Job
-  scene3: 3500, // Add Invoice -> Send
-  scene4: 2500, // Invoice Sent -> Record Payment
-  scene5: 3500, // Record Payment Sheet -> Record
-  scene6: 4000, // Paid Confirmation + Outro
+  scene1: 2667,
+  scene2: 5667,
+  scene3: 4333,
+  scene4: 5000,
+  scene5: 4000,
+  scene6: 3667,
+  scene7: 2667,
+  scene8: 2000,
 };

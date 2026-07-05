@@ -1,1 +1,1 @@
-- [Safe-area insets convention](homebase-safe-area-insets.md) — headerTransparent:true means every screen/overlay must self-add insets.top/headerHeight; watch for computed-but-unused vars and hardcoded pixel offsets.
+- [JSX string-attribute newlines](jsx-string-attribute-newlines.md) — `attr="a\nb"` renders literal backslash-n; must use `attr={'a\nb'}` expression syntax for real line breaks.

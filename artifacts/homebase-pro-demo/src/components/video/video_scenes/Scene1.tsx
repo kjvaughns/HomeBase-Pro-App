@@ -1,41 +1,62 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { SPRING_CONFIG } from '../constants';
 
 export function Scene1() {
   const [phase, setPhase] = useState(0);
 
   useEffect(() => {
     const timers = [
-      setTimeout(() => setPhase(1), 200),
-      setTimeout(() => setPhase(2), 1200),
+      setTimeout(() => setPhase(1), 0),
     ];
     return () => timers.forEach(t => clearTimeout(t));
   }, []);
 
   return (
     <motion.div
-      className="absolute inset-0 flex flex-col items-center justify-center bg-bg-root text-center px-4"
+      className="absolute inset-0 flex items-center justify-center bg-black text-center"
       initial={{ opacity: 0 }}
-      animate={{ opacity: phase >= 2 ? 0 : 1 }}
+      animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.4 }}
+      transition={{ duration: 20 / 60 }}
     >
-      <motion.img
-        src={`${import.meta.env.BASE_URL}images/homebase-logo.png`}
-        alt="HomeBase Pro"
-        className="w-[14vw] h-[14vw] object-contain"
-        initial={{ opacity: 0, scale: 0.6 }}
-        animate={phase >= 1 ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.6 }}
-        transition={{ type: 'spring', stiffness: 260, damping: 20 }}
-      />
-      <motion.div
-        className="text-white text-[2.2vw] font-bold tracking-tight mt-4"
-        initial={{ opacity: 0, y: 10 }}
-        animate={phase >= 1 ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }}
-        transition={{ delay: 0.15, duration: 0.4 }}
-      >
-        HomeBase Pro
-      </motion.div>
+      <div className="flex flex-col items-center justify-center">
+        <motion.div
+          initial={{ y: 14, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ ...SPRING_CONFIG }}
+          className="text-[10px] text-[#333] tracking-[0.2em] font-bold"
+        >
+          EVERY HOME SERVICE PROVIDER
+        </motion.div>
+        
+        <motion.div
+          initial={{ scale: 0.85, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ ...SPRING_CONFIG, delay: 0.1 }}
+          className="text-[80px] font-[900] text-white leading-none my-2"
+        >
+          $72,000
+        </motion.div>
+
+        <motion.div
+          initial={{ y: 14, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ ...SPRING_CONFIG, delay: 0.2 }}
+          className="text-[14px] text-[#555] mt-2"
+        >
+          lost every year to missed follow-ups,
+        </motion.div>
+        
+        <motion.div
+          initial={{ y: 14, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ ...SPRING_CONFIG, delay: 0.3 }}
+          className="text-[14px] text-[#555]"
+        >
+          manual invoicing, and chasing payments.
+        </motion.div>
+      </div>
     </motion.div>
   );
 }

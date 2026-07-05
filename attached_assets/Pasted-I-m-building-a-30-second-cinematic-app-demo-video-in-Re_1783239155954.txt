@@ -1,0 +1,236 @@
+I'm building a 30-second cinematic app demo video in Remotion for HomeBase Pro App — a dark-mode iOS marketplace app connecting home service providers (lawn care, cleaning, HVAC, handymen) with homeowners.
+
+Build me a complete, production-ready Remotion project with the following spec.
+
+---
+
+COMPOSITION SETTINGS:
+- Width: 1920, Height: 1080 (16:9 landscape)
+- FPS: 60
+- Duration: 1800 frames (30 seconds)
+- Name: "HomeBaseDemo"
+
+DESIGN SYSTEM:
+const COLORS = {
+  bg: '#000000',
+  surface: '#0d0d0d',
+  card: '#111111',
+  border: '#1e1e1e',
+  green: '#22c55e',
+  greenDim: '#0d2a1a',
+  greenBorder: '#1a3a1a',
+  white: '#ffffff',
+  muted: '#555555',
+  ultraMuted: '#2a2a2a',
+  red: '#ef4444',
+  amber: '#f59e0b',
+}
+
+Font: Inter (load via @remotion/google-fonts/Inter)
+All springs: spring({ frame, fps, config: { mass: 0.6, damping: 18, stiffness: 100 } })
+All text entrances: translateY +14px → 0 + opacity 0 → 1
+Card entrances: translateY +20px → 0 + opacity 0 → 1, stagger 8 frames apart
+Scene transitions: opacity cross-fade over 20 frames
+
+---
+
+IPHONE FRAME COMPONENT (components/PhoneFrame.tsx):
+- Outer: 340px wide, 680px tall, border-radius: 44px, background: #0a0a0a, border: 1.5px solid #222222
+- Box shadow: 0 0 120px rgba(0,0,0,0.9), 0 0 40px rgba(34,197,94,0.06)
+- Top notch: 100px wide, 24px tall, border-radius: 0 0 16px 16px, background: #000, centered
+- Screen area: fills remaining height below notch, overflow hidden
+- Status bar inside screen: "9:41" left, "●●● ▌" right, 10px font, white, padding 5px 14px
+- Bottom nav bar: 5 tabs — Home, Calendar, Messages, Clients, Money. Active tab icon + label in #22c55e, inactive in #333. 28px font for icons, 8px for labels.
+- Props: activeTab (string), children (screen content)
+
+---
+
+CAPTION COMPONENT (components/Caption.tsx):
+- Position: absolute, bottom 60px, left 0, right 0, text-align center
+- Eyebrow: 10px, letter-spacing 0.2em, color #22c55e, uppercase, animates in at frame 0
+- Headline: 22px, font-weight 800, color white, line-height 1.2, animates in at frame 6
+- Accent spans within headline: color #22c55e
+- Sub: 11px, color #555555, margin-top 6px, animates in at frame 12
+- All use spring() translateY + opacity entrance
+
+---
+
+TOAST COMPONENT (components/Toast.tsx):
+- Position: absolute top 30px, left 14px, right 14px
+- Background #111, border 0.5px solid #222, border-radius 12px, padding 10px 12px
+- Left icon box: 26px square, border-radius 7px, background #0d2a1a, emoji inside
+- Title: 10px font-weight 700 white. Body: 9px color #aaa
+- Entrance: spring translateY -30px → 0 + opacity, auto exit after 70 frames
+
+---
+
+SCENE 1 — COLD OPEN (frames 0–160):
+Full black screen. No phone.
+Centered text block animates in:
+- Small label: "EVERY HOME SERVICE PROVIDER" — 10px, #333, letter-spacing 0.2em
+- Big number: "$72,000" — 80px, font-weight 900, white, spring scale 0.85→1
+- Below: "lost every year to missed follow-ups," — 14px, #555
+- Below: "manual invoicing, and chasing payments." — 14px, #555
+Hold 1 second then fade to black.
+
+---
+
+SCENE 2 — PROVIDER DASHBOARD (frames 160–500):
+Phone slides up from y+80 with spring. Centered on screen.
+Caption: eyebrow "MEET MARCUS", headline "His entire business.\nOne screen.", sub "Lawn care · Dallas, TX"
+
+Phone screen — Dashboard:
+Header: "Good morning, Marcus 👋" (13px bold white) + "Tuesday · 3 jobs today" (9px #555) + green avatar "M" right side
+Stat row (3 boxes, stagger in): "$1,240 This Week" / "8 Jobs" / "$0 Overdue"
+3 job cards stagger in (8f apart):
+  Card 1: "Sarah K." · $280 · "Lawn Care · 10:00 AM" · green badge "● Confirmed"
+  Card 2: "James R." · $350 · "HVAC · 1:30 PM" · amber badge "⏰ In 3h"
+  Card 3: "Diana M." · $195 · "Pressure Wash · Wed 9am" · blue badge "📅 Tomorrow"
+Active tab: Home
+
+---
+
+SCENE 3 — MARKETPLACE (frames 500–760):
+Phone screen cross-fades to marketplace (homeowner POV).
+Caption: eyebrow "THE MARKETPLACE", headline "A homeowner finds Marcus\nin 30 seconds.", sub "Free for homeowners · forever"
+
+Screen — Explore:
+Header: "Find a service" + search bar "🔍 Lawn care near Dallas..."
+Section label: "TOP PROVIDERS NEAR YOU"
+Provider card 1 (springs in):
+  Green leaf emoji avatar · "Marcus's Lawn Co." · ★★★★★ 4.9 · 127 reviews · $65/visit
+  Tags: Lawn Care · Edging · Cleanup
+  Full-width green "Book Now" button
+Provider card 2 (stagger 10f):
+  House emoji · "ProClean Services" · ★★★★☆ 4.7 · 89 reviews · $120/visit
+Active tab: Explore
+
+---
+
+SCENE 4 — BOOKING FLOW (frames 760–1060):
+Screen cross-fades to booking calendar.
+Caption: eyebrow "INSTANT BOOKING", headline "Pick a time.\nDeposit captured.\nDone.", sub "No calls. No back-and-forth."
+
+Screen — Book Marcus's Lawn Co.:
+Month header "July 2026" with prev/next arrows
+7-column calendar grid. Day "10" highlighted with green circle + scale spring
+Time slots row: "10:00 AM" selected (green bg, green border), others gray
+Booking summary card slides up:
+  "Lawn Care — Standard" / "Thu Jul 10 · 10:00 AM · ~1.5h"
+  Row: "Deposit (25%)" — "$16.25 due now" in amber
+Green "Confirm & Pay Deposit →" button pulses (scale 1→1.02→1 loop)
+
+At frame 980: Toast slides in — icon 🎉 — title "Booking Confirmed!" — body "Marcus's Lawn Co. · Jul 10 · 10:00 AM"
+
+---
+
+SCENE 5 — IN-APP CHAT (frames 1060–1300):
+Screen cross-fades to chat.
+Caption: eyebrow "NO PHONE TAG", headline "Gate code. Photos.\nInvoice. All in one thread.", sub "Real-time messaging built in"
+
+Screen — Chat with Marcus's Lawn Co.:
+Header with green leaf avatar, "Marcus's Lawn Co.", "Online now" subtext
+Chat bubbles stagger in (12f apart):
+  In (gray #151515): "Confirmed for Thu Jul 10 at 10am! 🌿"
+  Out (green #22c55e, black text): "Gate code is 4821. Dog's friendly 😄"
+  In: "Got it! I'll send before & after photos 📸"
+  In: "Job complete ✅  Invoice sent — $48.75 remaining"
+Message composer bar at bottom (static)
+
+---
+
+SCENE 6 — INVOICE + PAYMENT (frames 1300–1520):
+Screen cross-fades to invoice.
+Caption: eyebrow "GET PAID INSTANTLY", headline "Invoice sent.\nTwo taps.\nMoney moved.", sub "Stripe · Apple Pay · 256-bit encrypted"
+
+Screen — Invoice #HB-2847:
+Big green amount block: "$48.75" (24px bold green) + "BALANCE DUE" label
+Line items stagger in:
+  Service: Lawn Care — Standard
+  Completed: Thu Jul 10, 2026
+  Deposit paid: -$16.25
+  Balance: $48.75
+"Pay $48.75 with Apple Pay 🍎" button — full width, white bg, black text
+
+At frame 1440: screen flashes briefly, then shows green checkmark (scale spring 0→1.2→1) + "Paid ✓" badge
+
+---
+
+SCENE 7 — PAYOUT (frames 1520–1680):
+Phone screen cross-fades to Money tab.
+Caption: eyebrow "INSTANT PAYOUT", headline "$1,885 hits his bank.\n30 minutes.", sub "Stripe Connect · No waiting"
+
+Screen — Money tab:
+Stat row: "$1,885 Available" / "$6,240 This Month"
+Dark green payout card:
+  Label: "READY TO WITHDRAW"
+  Amount: "$1,885.00" (26px bold green)
+  Button: "Instant Payout → Bank" (green bg)
+  Subtext: "Arrives in ~30 min" (#555)
+Recent payouts (2 cards stagger): Jul 9 +$910 ✓ Deposited / Jul 7 +$640 ✓ Deposited
+
+At frame 1600: Toast — ⚡ "Payout Sent" — "$1,885.00 → Chase ••4821 · ~30 min"
+
+---
+
+SCENE 8 — LOGO END CARD (frames 1680–1800):
+Phone slides down and off screen (spring translateY 0→+100, opacity 1→0).
+Black screen.
+Center:
+  "Run your business." — 48px, font-weight 300, white, fades in
+  "Get clients." — 48px, font-weight 900, #22c55e, fades in 10f later with scale spring 0.9→1
+  Spacer
+  "HomeBase Pro" — 13px, letter-spacing 0.15em, #333, uppercase, fades in
+  "Available on iOS  ·  homebaseproapp.com" — 10px, #2a2a2a
+Hold to end.
+
+---
+
+FILE STRUCTURE:
+src/
+  Root.tsx                    ← registers composition
+  HomeBaseDemo.tsx            ← main composition, all 8 scenes sequenced with <Sequence>
+  components/
+    PhoneFrame.tsx
+    Caption.tsx
+    Toast.tsx
+    StatusBar.tsx
+    BottomNav.tsx
+  screens/
+    Dashboard.tsx
+    Marketplace.tsx
+    BookingFlow.tsx
+    Chat.tsx
+    Invoice.tsx
+    Payout.tsx
+  constants.ts                ← COLORS, SPRING_CONFIG, all frame offsets as named constants
+
+constants.ts must export:
+  COLORS (object above)
+  SPRING = { mass: 0.6, damping: 18, stiffness: 100 }
+  FRAMES = { scene1Start: 0, scene2Start: 160, scene3Start: 500, ... } for every scene
+
+---
+
+ANIMATION RULES (enforce strictly):
+- Every entrance uses spring() from remotion, never CSS transition or keyframe
+- interpolate() for opacity: interpolate(frame, [startF, startF+18], [0, 1], { extrapolateRight: 'clamp' })
+- Text: translateY spring from +14→0, opacity 0→1
+- Cards: translateY spring from +20→0, stagger 8f each
+- Phone: translateY spring from +80→0 on enter, reverse on exit
+- Toast: translateY spring from -30→0 on enter
+- Scene cross-fades: opacity interpolate over 20 frames at scene boundaries
+- Checkmark/badge: scale spring from 0→1.2→1 (overshoot feel)
+- Never use Math.random() — Remotion must be deterministic
+
+---
+
+PACKAGES TO INSTALL:
+npm install @remotion/google-fonts
+
+---
+
+RENDER COMMAND (add to README):
+npx remotion render src/index.ts HomeBaseDemo out/homebase-demo.mp4 --codec=h264 --crf=16
+
+Make all code clean, well-commented, and modular. Every scene in its own file. Easy to edit frame offsets from constants.ts without touching scene files.
