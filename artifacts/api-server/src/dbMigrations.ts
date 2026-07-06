@@ -1631,6 +1631,45 @@ export async function runBootMigrations(): Promise<void> {
       )`,
     );
 
+    // Task #479: crew time tracking (clock in/out). One row per clock-in;
+    // clock_out_at is NULL while a crew member is still on the clock.
+    await runSql(
+      "crew_time_entries.table",
+      `CREATE TABLE IF NOT EXISTS crew_time_entries (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        job_id VARCHAR NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+        crew_member_id VARCHAR NOT NULL REFERENCES crew_members(id) ON DELETE CASCADE,
+        provider_id VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+        clock_in_at TIMESTAMP NOT NULL,
+        clock_out_at TIMESTAMP,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )`,
+    );
+    await runSql(
+      "crew_time_entries.job_idx",
+      `CREATE INDEX IF NOT EXISTS crew_time_entries_job_idx
+         ON crew_time_entries (job_id)`,
+    );
+    await runSql(
+      "crew_time_entries.provider_idx",
+      `CREATE INDEX IF NOT EXISTS crew_time_entries_provider_idx
+         ON crew_time_entries (provider_id)`,
+    );
+    await runSql(
+      "crew_time_entries.crew_member_idx",
+      `CREATE INDEX IF NOT EXISTS crew_time_entries_crew_member_idx
+         ON crew_time_entries (crew_member_id)`,
+    );
+    // Enforce at most one open (not-yet-clocked-out) entry per crew member
+    // per job, closing the race window between the app-level 409 check and
+    // the insert.
+    await runSql(
+      "crew_time_entries.one_open_entry_idx",
+      `CREATE UNIQUE INDEX IF NOT EXISTS crew_time_entries_one_open_idx
+         ON crew_time_entries (job_id, crew_member_id)
+         WHERE clock_out_at IS NULL`,
+    );
+
     verifications.push(
       ["providers.referral_code column",         `SELECT referral_code FROM providers LIMIT 0`],
       ["provider_referrals table",               `SELECT id FROM provider_referrals LIMIT 0`],
@@ -1684,6 +1723,8 @@ export async function runBootMigrations(): Promise<void> {
       ["jobs.no_show_fee_cents column",             `SELECT no_show_fee_cents FROM jobs LIMIT 0`],
       ["jobs.no_show_fee_status column",            `SELECT no_show_fee_status FROM jobs LIMIT 0`],
       ["jobs.no_show_fee_payment_intent_id column", `SELECT no_show_fee_payment_intent_id FROM jobs LIMIT 0`],
+      // Task #479: crew time tracking (clock in/out)
+      ["crew_time_entries table",                   `SELECT id FROM crew_time_entries LIMIT 0`],
     );
 
     const verificationErrors: string[] = [];

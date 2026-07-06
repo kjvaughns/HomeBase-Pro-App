@@ -1083,7 +1083,60 @@ export const jobsRelations = relations(jobs, ({ one, many }) => ({
     fields: [jobs.seriesId],
     references: [jobSeries.id],
   }),
+  timeEntries: many(crewTimeEntries),
 }));
+
+// ─── Crew Time Tracking (Task #479) ─────────────────────────────────────────
+// Simple clock-in/clock-out entries for a crew member on a job. No GPS or
+// payroll integration — just timestamps used for hours-worked/job-costing
+// visibility on the provider side. A crew member may only have one open
+// entry (clockOutAt IS NULL) per job at a time; enforced in the route layer,
+// not the schema, since Drizzle doesn't support partial unique indexes here.
+export const crewTimeEntries = pgTable("crew_time_entries", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id")
+    .notNull()
+    .references(() => jobs.id, { onDelete: "cascade" }),
+  crewMemberId: varchar("crew_member_id")
+    .notNull()
+    .references(() => crewMembers.id, { onDelete: "cascade" }),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  clockInAt: timestamp("clock_in_at").notNull(),
+  clockOutAt: timestamp("clock_out_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const crewTimeEntriesRelations = relations(
+  crewTimeEntries,
+  ({ one }) => ({
+    job: one(jobs, {
+      fields: [crewTimeEntries.jobId],
+      references: [jobs.id],
+    }),
+    crewMember: one(crewMembers, {
+      fields: [crewTimeEntries.crewMemberId],
+      references: [crewMembers.id],
+    }),
+    provider: one(providers, {
+      fields: [crewTimeEntries.providerId],
+      references: [providers.id],
+    }),
+  }),
+);
+
+export const insertCrewTimeEntrySchema = createInsertSchema(
+  crewTimeEntries,
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type CrewTimeEntry = typeof crewTimeEntries.$inferSelect;
+export type InsertCrewTimeEntry = z.infer<typeof insertCrewTimeEntrySchema>;
 
 // ─── Recurring Job Series ────────────────────────────────────────────────────
 // Materializes recurring service bookings onto the calendar. The originating

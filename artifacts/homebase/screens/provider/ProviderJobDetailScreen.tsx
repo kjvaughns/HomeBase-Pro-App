@@ -1122,6 +1122,8 @@ export default function ProviderJobDetailScreen() {
           }
         />
 
+        <TimeTrackingCard jobId={job.id} isOnline={isOnline} />
+
         <Animated.View entering={FadeInDown.delay(200).duration(400)}>
           <GlassCard style={styles.section}>
             <ThemedText type="label" style={{ color: theme.textSecondary, marginBottom: Spacing.sm }}>
@@ -1689,6 +1691,73 @@ function CrewAssignmentCard({
           </Pressable>
         </Pressable>
       </Modal>
+    </Animated.View>
+  );
+}
+
+interface JobTimeEntry {
+  id: string;
+  crewMemberId: string;
+  crewMemberName: string;
+  clockInAt: string;
+  clockOutAt: string | null;
+}
+
+function formatHoursMinutes(ms: number): string {
+  const totalMinutes = Math.max(0, Math.round(ms / 60000));
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
+function formatTimeOfDay(iso: string): string {
+  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+function TimeTrackingCard({ jobId, isOnline }: { jobId: string; isOnline: boolean }) {
+  const { theme } = useTheme();
+  const { data } = useQuery<{ timeEntries: JobTimeEntry[] }>({
+    queryKey: ["/api/jobs", jobId, "time-entries"],
+    enabled: isOnline,
+  });
+  const entries = data?.timeEntries ?? [];
+  if (entries.length === 0) return null;
+
+  const totalMs = entries.reduce((sum, e) => {
+    const end = e.clockOutAt ? new Date(e.clockOutAt).getTime() : Date.now();
+    return sum + (end - new Date(e.clockInAt).getTime());
+  }, 0);
+  const isAnyOpen = entries.some((e) => !e.clockOutAt);
+
+  return (
+    <Animated.View entering={FadeInDown.delay(170).duration(400)}>
+      <GlassCard style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <ThemedText type="label" style={{ color: theme.textSecondary }}>
+            TIME LOGGED
+          </ThemedText>
+          <ThemedText type="body" style={{ fontWeight: "700", color: isAnyOpen ? Colors.accent : theme.text }}>
+            {formatHoursMinutes(totalMs)}
+            {isAnyOpen ? " · active" : ""}
+          </ThemedText>
+        </View>
+        {entries.map((entry) => {
+          const durationMs = (entry.clockOutAt ? new Date(entry.clockOutAt).getTime() : Date.now()) - new Date(entry.clockInAt).getTime();
+          return (
+            <View key={entry.id} style={[styles.detailRow, { justifyContent: "space-between", marginTop: Spacing.sm }]}>
+              <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+                {entry.crewMemberName} · {formatTimeOfDay(entry.clockInAt)}
+                {entry.clockOutAt ? ` – ${formatTimeOfDay(entry.clockOutAt)}` : " – now"}
+              </ThemedText>
+              <ThemedText type="caption" style={{ fontWeight: "600" }}>
+                {formatHoursMinutes(durationMs)}
+              </ThemedText>
+            </View>
+          );
+        })}
+      </GlassCard>
     </Animated.View>
   );
 }

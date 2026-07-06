@@ -103,6 +103,28 @@ export default function CrewScreen() {
   });
   const crew = data?.crew ?? [];
 
+  const { data: timeData } = useQuery<{
+    timeEntries: { crewMemberId: string; clockInAt: string; clockOutAt: string | null }[];
+  }>({
+    queryKey: ["/api/provider", providerId, "time-entries"],
+    enabled: !!providerId,
+  });
+  const hoursByCrewMember = (timeData?.timeEntries ?? []).reduce<Record<string, number>>((acc, entry) => {
+    const end = entry.clockOutAt ? new Date(entry.clockOutAt).getTime() : Date.now();
+    const ms = end - new Date(entry.clockInAt).getTime();
+    acc[entry.crewMemberId] = (acc[entry.crewMemberId] ?? 0) + ms;
+    return acc;
+  }, {});
+
+  const formatTotalHours = (ms: number): string => {
+    const totalMinutes = Math.max(0, Math.round(ms / 60000));
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    if (h === 0) return `${m}m`;
+    if (m === 0) return `${h}h`;
+    return `${h}h ${m}m`;
+  };
+
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "crew"] });
   };
@@ -252,6 +274,14 @@ export default function CrewScreen() {
                     <ThemedText style={[styles.sub, { color: theme.textSecondary }]} numberOfLines={1}>
                       {[m.phone, m.email].filter(Boolean).join("  ·  ")}
                     </ThemedText>
+                  ) : null}
+                  {hoursByCrewMember[m.id] ? (
+                    <View style={styles.hoursRow}>
+                      <Feather name="clock" size={11} color={theme.textTertiary} />
+                      <ThemedText style={[styles.hoursText, { color: theme.textTertiary }]}>
+                        {formatTotalHours(hoursByCrewMember[m.id])} logged
+                      </ThemedText>
+                    </View>
                   ) : null}
                 </View>
 
@@ -463,6 +493,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   badgeText: { fontSize: 11, fontWeight: "600" },
+  hoursRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 1 },
+  hoursText: { fontSize: 11, fontWeight: "500" },
 
   actions: { flexDirection: "row", alignItems: "center", gap: 6 },
   inviteBtn: {

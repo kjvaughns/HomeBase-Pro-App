@@ -46,6 +46,23 @@ interface ClientPropertyDetails {
   trashDay: string | null;
 }
 
+interface TimeEntry {
+  id: string;
+  jobId: string;
+  crewMemberId: string;
+  crewMemberName: string;
+  clockInAt: string;
+  clockOutAt: string | null;
+}
+
+function formatDuration(ms: number): string {
+  const totalMinutes = Math.max(0, Math.floor(ms / 60000));
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  if (h === 0) return `${m}m`;
+  return `${h}h ${m}m`;
+}
+
 const STATUS_CONFIG: Record<
   string,
   { label: string; color: string; bg: string }
@@ -119,6 +136,51 @@ export default function CrewJobDetailScreen() {
     queryKey: ["/api/jobs", jobId, "photos"],
   });
   const photos = photoData?.photos ?? [];
+
+  const { data: timeData } = useQuery<{ timeEntries: TimeEntry[] }>({
+    queryKey: ["/api/jobs", jobId, "time-entries"],
+  });
+  const timeEntries = timeData?.timeEntries ?? [];
+  const openEntry = timeEntries.find((e) => !e.clockOutAt) ?? null;
+  const completedEntries = timeEntries.filter((e) => e.clockOutAt);
+  const totalCompletedMs = completedEntries.reduce(
+    (sum, e) => sum + (new Date(e.clockOutAt!).getTime() - new Date(e.clockInAt).getTime()),
+    0,
+  );
+
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!openEntry) return;
+    const interval = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(interval);
+  }, [openEntry]);
+
+  const runningMs = openEntry
+    ? now - new Date(openEntry.clockInAt).getTime()
+    : 0;
+  const totalMs = totalCompletedMs + runningMs;
+
+  const invalidateTimeEntries = () =>
+    queryClient.invalidateQueries({
+      queryKey: ["/api/jobs", jobId, "time-entries"],
+    });
+
+  const clockInMutation = useMutation({
+    mutationFn: () =>
+      apiRequest("POST", `/api/jobs/${jobId}/clock-in`).then((r) => r.json()),
+    onSuccess: () => {
+      setNow(Date.now());
+      invalidateTimeEntries();
+    },
+    onError: (e: Error) => Alert.alert("Couldn't clock in", e.message),
+  });
+
+  const clockOutMutation = useMutation({
+    mutationFn: () =>
+      apiRequest("POST", `/api/jobs/${jobId}/clock-out`).then((r) => r.json()),
+    onSuccess: invalidateTimeEntries,
+    onError: (e: Error) => Alert.alert("Couldn't clock out", e.message),
+  });
 
   const [notes, setNotes] = useState("");
   const [notesEdited, setNotesEdited] = useState(false);
@@ -424,6 +486,60 @@ export default function CrewJobDetailScreen() {
             ) : null}
           </View>
         ) : null}
+
+        <View
+          style={[
+            styles.detailCard,
+            { backgroundColor: theme.cardBackground },
+          ]}
+        >
+          <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
+            <View
+              style={[
+                styles.iconBubble,
+                {
+                  backgroundColor: openEntry
+                    ? Colors.accentLight
+                    : theme.backgroundSecondary,
+                },
+              ]}
+            >
+              <Feather
+                name="clock"
+                size={14}
+                color={openEntry ? Colors.accent : theme.textSecondary}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <ThemedText
+                style={[styles.detailMicro, { color: theme.textTertiary }]}
+              >
+                TIME ON JOB
+              </ThemedText>
+              <ThemedText style={styles.detailValue}>
+                {formatDuration(totalMs)}
+                {openEntry ? " · clocked in" : ""}
+              </ThemedText>
+            </View>
+            {openEntry ? (
+              <SecondaryButton
+                onPress={() => clockOutMutation.mutate()}
+                loading={clockOutMutation.isPending}
+                testID="button-clock-out"
+              >
+                Clock Out
+              </SecondaryButton>
+            ) : (
+              <PrimaryButton
+                onPress={() => clockInMutation.mutate()}
+                loading={clockInMutation.isPending}
+                testID="button-clock-in"
+              >
+                Clock In
+              </PrimaryButton>
+            )}
+          </View>
+        </View>
 
         <ThemedText
           style={[styles.sectionLabel, { color: theme.textSecondary }]}

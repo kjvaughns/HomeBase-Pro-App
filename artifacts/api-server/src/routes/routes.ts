@@ -165,6 +165,7 @@ import {
   jobSeries,
   providerReferrals,
   providerBadges,
+  crewTimeEntries,
 } from "@workspace/db";
 import {
   createSeriesForJob,
@@ -3555,6 +3556,166 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
       } catch (error) {
         console.error("Job photos upload error:", error);
         res.status(500).json({ error: "Failed to upload photos" });
+      }
+    },
+  );
+
+  // ============ CREW TIME TRACKING ROUTES (Task #479) ============
+  // Simple clock-in/clock-out for a crew member on a job. No GPS, no
+  // payroll integration — just timestamps for hours-worked/job-costing
+  // visibility on the provider side.
+
+  // GET /api/jobs/:id/time-entries - list time entries for a job (provider
+  // OR the assigned crew member). Includes crewMemberName for display.
+  app.get(
+    "/api/jobs/:id/time-entries",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const gate = await requireCrewOrProviderForJob(req, req.params.id, res);
+        if (!gate) return;
+        const rows = await db
+          .select({
+            id: crewTimeEntries.id,
+            jobId: crewTimeEntries.jobId,
+            crewMemberId: crewTimeEntries.crewMemberId,
+            crewMemberName: crewMembers.name,
+            clockInAt: crewTimeEntries.clockInAt,
+            clockOutAt: crewTimeEntries.clockOutAt,
+          })
+          .from(crewTimeEntries)
+          .innerJoin(crewMembers, eq(crewMembers.id, crewTimeEntries.crewMemberId))
+          .where(eq(crewTimeEntries.jobId, gate.job.id))
+          .orderBy(desc(crewTimeEntries.clockInAt));
+        res.json({ timeEntries: rows });
+      } catch (error) {
+        console.error("Get job time entries error:", error);
+        res.status(500).json({ error: "Failed to load time entries" });
+      }
+    },
+  );
+
+  // POST /api/jobs/:id/clock-in - crew member clocks in on a job. Only the
+  // assigned crew member may clock in (a provider has no crewMemberId to
+  // attribute hours to).
+  app.post(
+    "/api/jobs/:id/clock-in",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const gate = await requireCrewOrProviderForJob(req, req.params.id, res);
+        if (!gate) return;
+        if (gate.role !== "crew" || !gate.crewMemberId) {
+          return res
+            .status(400)
+            .json({ error: "Only the assigned crew member can clock in" });
+        }
+        const [openEntry] = await db
+          .select({ id: crewTimeEntries.id })
+          .from(crewTimeEntries)
+          .where(
+            and(
+              eq(crewTimeEntries.jobId, gate.job.id),
+              eq(crewTimeEntries.crewMemberId, gate.crewMemberId),
+              isNull(crewTimeEntries.clockOutAt),
+            ),
+          );
+        if (openEntry) {
+          return res
+            .status(409)
+            .json({ error: "You're already clocked in on this job" });
+        }
+        const [created] = await db
+          .insert(crewTimeEntries)
+          .values({
+            jobId: gate.job.id,
+            crewMemberId: gate.crewMemberId,
+            providerId: gate.job.providerId,
+            clockInAt: new Date(),
+          })
+          .returning();
+        res.json({ timeEntry: created });
+      } catch (error) {
+        console.error("Clock in error:", error);
+        res.status(500).json({ error: "Failed to clock in" });
+      }
+    },
+  );
+
+  // POST /api/jobs/:id/clock-out - crew member clocks out of their open
+  // time entry on this job.
+  app.post(
+    "/api/jobs/:id/clock-out",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const gate = await requireCrewOrProviderForJob(req, req.params.id, res);
+        if (!gate) return;
+        if (gate.role !== "crew" || !gate.crewMemberId) {
+          return res
+            .status(400)
+            .json({ error: "Only the assigned crew member can clock out" });
+        }
+        const [openEntry] = await db
+          .select()
+          .from(crewTimeEntries)
+          .where(
+            and(
+              eq(crewTimeEntries.jobId, gate.job.id),
+              eq(crewTimeEntries.crewMemberId, gate.crewMemberId),
+              isNull(crewTimeEntries.clockOutAt),
+            ),
+          )
+          .orderBy(desc(crewTimeEntries.clockInAt))
+          .limit(1);
+        if (!openEntry) {
+          return res
+            .status(409)
+            .json({ error: "You're not clocked in on this job" });
+        }
+        const [updated] = await db
+          .update(crewTimeEntries)
+          .set({ clockOutAt: new Date() })
+          .where(eq(crewTimeEntries.id, openEntry.id))
+          .returning();
+        res.json({ timeEntry: updated });
+      } catch (error) {
+        console.error("Clock out error:", error);
+        res.status(500).json({ error: "Failed to clock out" });
+      }
+    },
+  );
+
+  // GET /api/provider/:providerId/time-entries - all time entries for a
+  // provider's crew, joined with job title + crew member name, for hours
+  // worked per job / per crew member costing views.
+  app.get(
+    "/api/provider/:providerId/time-entries",
+    requireAuth,
+    async (req: Request<ProviderIdParams>, res: Response) => {
+      try {
+        if (!(await assertProviderOwnership(req, req.params.providerId, res)))
+          return;
+        const rows = await db
+          .select({
+            id: crewTimeEntries.id,
+            jobId: crewTimeEntries.jobId,
+            jobTitle: jobs.title,
+            crewMemberId: crewTimeEntries.crewMemberId,
+            crewMemberName: crewMembers.name,
+            crewMemberColor: crewMembers.color,
+            clockInAt: crewTimeEntries.clockInAt,
+            clockOutAt: crewTimeEntries.clockOutAt,
+          })
+          .from(crewTimeEntries)
+          .innerJoin(jobs, eq(jobs.id, crewTimeEntries.jobId))
+          .innerJoin(crewMembers, eq(crewMembers.id, crewTimeEntries.crewMemberId))
+          .where(eq(crewTimeEntries.providerId, req.params.providerId))
+          .orderBy(desc(crewTimeEntries.clockInAt));
+        res.json({ timeEntries: rows });
+      } catch (error) {
+        console.error("Get provider time entries error:", error);
+        res.status(500).json({ error: "Failed to load time entries" });
       }
     },
   );
