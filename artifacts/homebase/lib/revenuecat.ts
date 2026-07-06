@@ -78,6 +78,28 @@ let configurePromise: Promise<void> | null = null;
 let currentAppUserId: string | null = null;
 let purchasesPromise: Promise<PurchasesNamespace | null> | null = null;
 
+// CRASH FIX (P0): the native RevenueCat SDK (and RevenueCatUI) accesses a
+// `Purchases.shared`-style singleton internally. Calling ANY native SDK
+// method (presentPaywall, restorePurchases, getOfferings, logIn, logOut,
+// getCustomerInfo, ...) before `Purchases.configure()` has actually
+// succeeded causes a **native-level crash** that a JS try/catch cannot
+// intercept — it happens below the JS bridge. `configurePromise` resolving
+// is NOT sufficient proof that configuration succeeded: it also resolves
+// (without ever calling `Purchases.configure()`) when the API key is
+// missing or the native module failed to load. `purchasesConfigured` is the
+// single source of truth for "it is safe to call into the native SDK now".
+let purchasesConfigured = false;
+
+/**
+ * True only after `Purchases.configure()` has been called successfully.
+ * Every function below MUST check this (via `ensureConfigured()`) before
+ * invoking any native SDK/UI method — otherwise a tap can crash the app
+ * natively instead of surfacing a JS-catchable error.
+ */
+export function isPurchasesConfigured(): boolean {
+  return purchasesConfigured;
+}
+
 /**
  * RevenueCat IAP currently runs on iOS only. Android is not yet configured
  * in the RevenueCat dashboard (no `goog_…` key, no Play Billing products),
@@ -120,13 +142,25 @@ export async function configurePurchases(
     console.warn(
       "[revenuecat] EXPO_PUBLIC_REVENUECAT_API_KEY not set — IAP disabled",
     );
+    // configurePromise intentionally stays null (not set to a resolved
+    // promise) — see the timeout/retry comment above `ensureConfigured`.
+    // purchasesConfigured stays false, so every caller downstream will
+    // treat purchases as unavailable and refuse to touch the native SDK.
     return;
   }
   if (configurePromise) return configurePromise;
 
   configurePromise = (async () => {
-    const Purchases = await loadPurchases();
-    if (!Purchases) return;
+    let Purchases: PurchasesNamespace | null = null;
+    try {
+      Purchases = await loadPurchases();
+    } catch (err) {
+      console.error("[revenuecat] failed to load native module:", err);
+    }
+    if (!Purchases) {
+      configurePromise = null;
+      return;
+    }
     try {
       const { LOG_LEVEL } = await import("react-native-purchases");
       // Use DEBUG in dev builds so the full StoreKit trace (including product
@@ -136,6 +170,10 @@ export async function configurePurchases(
         apiKey: REVENUECAT_API_KEY,
         appUserID: appUserId || null,
       });
+      // Only flip to "configured" once `Purchases.configure()` has returned
+      // without throwing — this is the one and only place it is safe to
+      // start calling other native SDK/UI methods.
+      purchasesConfigured = true;
       currentAppUserId = appUserId || null;
       if (__DEV__) {
         console.log(
@@ -148,6 +186,7 @@ export async function configurePurchases(
     } catch (err) {
       // Reset so a subsequent call can retry configuration.
       configurePromise = null;
+      purchasesConfigured = false;
       console.error("[revenuecat] configure error:", err);
     }
   })();
@@ -161,6 +200,12 @@ export async function configurePurchases(
  * before App.tsx auth state resolves), this triggers configuration with no
  * app user ID so the SDK is at least usable anonymously, rather than silently
  * no-oping and leaving callers blocked on a null promise.
+ *
+ * IMPORTANT: this Promise resolving does NOT mean the SDK is actually
+ * configured — it also resolves when the API key is missing or the native
+ * module failed to load. Callers that are about to invoke a native SDK/UI
+ * method MUST check `isPurchasesConfigured()` (or use `ensureConfigured()`)
+ * afterwards, not just await this function.
  */
 export async function waitForConfiguration(): Promise<void> {
   if (!configurePromise) {
@@ -169,9 +214,25 @@ export async function waitForConfiguration(): Promise<void> {
   return configurePromise;
 }
 
+/**
+ * Await configuration and return whether it is now actually safe to call
+ * native RevenueCat SDK/UI methods. This is the guard every function below
+ * uses so a tap can never reach a native call while unconfigured — the
+ * single most common source of an uncatchable native crash in this SDK.
+ */
+async function ensureConfigured(): Promise<boolean> {
+  if (!isPurchasesAvailable()) return false;
+  try {
+    await waitForConfiguration();
+  } catch (err) {
+    console.error("[revenuecat] waitForConfiguration error:", err);
+  }
+  return purchasesConfigured;
+}
+
 export async function loginPurchasesUser(appUserId: string): Promise<void> {
-  if (!isPurchasesAvailable()) return;
-  await waitForConfiguration();
+  const ready = await ensureConfigured();
+  if (!ready) return;
   if (currentAppUserId === appUserId) return;
   const Purchases = await loadPurchases();
   if (!Purchases) return;
@@ -185,7 +246,7 @@ export async function loginPurchasesUser(appUserId: string): Promise<void> {
 
 export async function logoutPurchasesUser(): Promise<void> {
   if (!isPurchasesAvailable()) return;
-  if (!configurePromise) return;
+  if (!purchasesConfigured) return;
   const Purchases = await loadPurchases();
   if (!Purchases) return;
   try {
@@ -204,7 +265,14 @@ export async function restorePurchases(): Promise<PurchaseResult> {
       errorMessage: "Purchases unavailable on this platform",
     };
   }
-  await waitForConfiguration();
+  const ready = await ensureConfigured();
+  if (!ready) {
+    return {
+      success: false,
+      errorMessage:
+        "In-app purchases are not available right now. Please try again later or contact support.",
+    };
+  }
   const Purchases = await loadPurchases();
   if (!Purchases) {
     return {
@@ -222,8 +290,8 @@ export async function restorePurchases(): Promise<PurchaseResult> {
 }
 
 export async function getCustomerInfo(): Promise<CustomerInfo | null> {
-  if (!isPurchasesAvailable()) return null;
-  await waitForConfiguration();
+  const ready = await ensureConfigured();
+  if (!ready) return null;
   const Purchases = await loadPurchases();
   if (!Purchases) return null;
   try {
@@ -262,8 +330,8 @@ export function getManageSubscriptionUrl(): string {
  * Returns null on any failure so callers can fall back to static copy.
  */
 export async function getRevenueCatLivePrice(): Promise<string | null> {
-  if (!isPurchasesAvailable()) return null;
-  await waitForConfiguration();
+  const ready = await ensureConfigured();
+  if (!ready) return null;
   const Purchases = await loadPurchases();
   if (!Purchases) return null;
   try {
@@ -318,7 +386,10 @@ export async function getRevenueCatDiagnostics(): Promise<RevenueCatDiagnosticsR
     return { ...empty, error: "IAP not available on this platform" };
   }
 
-  await waitForConfiguration();
+  const ready = await ensureConfigured();
+  if (!ready) {
+    return { ...empty, error: "Purchases SDK is not configured" };
+  }
   const Purchases = await loadPurchases();
   if (!Purchases) {
     return { ...empty, error: "Native purchases module failed to load" };

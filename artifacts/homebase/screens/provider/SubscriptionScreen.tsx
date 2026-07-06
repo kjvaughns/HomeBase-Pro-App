@@ -33,6 +33,7 @@ import { apiRequest } from "@/lib/query-client";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import {
   isPurchasesAvailable,
+  isPurchasesConfigured,
   restorePurchases,
   getManageSubscriptionUrl,
   isProEntitled,
@@ -247,6 +248,21 @@ export default function SubscriptionScreen() {
           ),
         ),
       ]);
+
+      // CRASH FIX (P0): `waitForConfiguration()` resolving does NOT guarantee
+      // `Purchases.configure()` actually ran (it also resolves when the API
+      // key is missing or the native module failed to load). Calling
+      // `RevenueCatUI.presentPaywall()` while the underlying SDK is
+      // unconfigured triggers a native-level crash below the JS bridge that
+      // no try/catch here can intercept. `isPurchasesConfigured()` is the
+      // only reliable signal that it's safe to proceed.
+      if (!isPurchasesConfigured()) {
+        Alert.alert(
+          "Subscriptions unavailable",
+          "In-app purchases could not be set up on this device. Please check your connection and try again, or contact support.",
+        );
+        return;
+      }
 
       // rcUI is already loaded at module scope — no dynamic import needed here.
       const RevenueCatUI = rcUI?.default;
