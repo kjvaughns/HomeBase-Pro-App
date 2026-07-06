@@ -59,13 +59,13 @@ const STATUS_CONFIG: Record<
   },
   cancelled: {
     label: "Cancelled",
-    color: "#EF4444",
+    color: Colors.error,
     bg: "rgba(239,68,68,0.12)",
   },
   weather_held: {
     label: "Weather Hold",
-    color: "#F59E0B",
-    bg: "rgba(245,158,11,0.12)",
+    color: Colors.warning,
+    bg: Colors.warningLight,
   },
 };
 

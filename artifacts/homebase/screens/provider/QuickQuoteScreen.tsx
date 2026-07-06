@@ -379,8 +379,8 @@ export default function QuickQuoteScreen() {
 
         {formError ? (
           <View style={styles.errorBox}>
-            <Feather name="alert-circle" size={16} color="#EF4444" />
-            <ThemedText style={{ color: "#EF4444", marginLeft: 8 }}>{formError}</ThemedText>
+            <Feather name="alert-circle" size={16} color={Colors.error} />
+            <ThemedText style={{ color: Colors.error, marginLeft: 8 }}>{formError}</ThemedText>
           </View>
         ) : null}
 
@@ -459,6 +459,8 @@ export default function QuickQuoteScreen() {
               <Pressable
                 style={[styles.actionBtn, { backgroundColor: Colors.accent }]}
                 onPress={handleCopy}
+                accessibilityRole="button"
+                accessibilityLabel="Copy quote"
                 testID="button-copy-quote"
               >
                 <Feather name="copy" size={16} color="#fff" />
@@ -467,6 +469,8 @@ export default function QuickQuoteScreen() {
               <Pressable
                 style={[styles.actionBtn, { backgroundColor: theme.backgroundSecondary }]}
                 onPress={() => setPhoneSheetOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Text quote to client"
                 testID="button-sms-quote"
               >
                 <Feather name="message-square" size={16} color={Colors.accent} />
@@ -477,6 +481,8 @@ export default function QuickQuoteScreen() {
               <Pressable
                 style={[styles.actionBtn, { backgroundColor: theme.backgroundSecondary }]}
                 onPress={handlePromoteToEstimate}
+                accessibilityRole="button"
+                accessibilityLabel="Promote quote to estimate"
                 testID="button-promote-estimate"
               >
                 <Feather name="file-text" size={16} color={Colors.accent} />

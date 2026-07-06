@@ -262,6 +262,8 @@ export function QuickAddJobSheet({
             <Pressable
               onPress={onClose}
               hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
               testID="quick-add-close"
               style={[
                 styles.closeBtn,
@@ -361,6 +363,8 @@ export function QuickAddJobSheet({
                       { borderTopColor: theme.separator },
                     ]}
                     onPress={handleNewClient}
+                    accessibilityRole="button"
+                    accessibilityLabel="Add new client"
                     testID="quick-add-new-client"
                   >
                     <Feather name="plus" size={14} color={Colors.accent} />

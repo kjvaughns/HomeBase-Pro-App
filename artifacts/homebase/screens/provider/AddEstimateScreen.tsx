@@ -334,8 +334,8 @@ export default function AddEstimateScreen() {
 
         {formError ? (
           <View style={styles.errorBox}>
-            <Feather name="alert-circle" size={16} color="#EF4444" />
-            <ThemedText style={{ color: "#EF4444", marginLeft: 8 }}>{formError}</ThemedText>
+            <Feather name="alert-circle" size={16} color={Colors.error} />
+            <ThemedText style={{ color: Colors.error, marginLeft: 8 }}>{formError}</ThemedText>
           </View>
         ) : null}
 
@@ -378,7 +378,12 @@ export default function AddEstimateScreen() {
         <ThemedView style={{ flex: 1, padding: Spacing.lg }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
             <ThemedText style={{ fontSize: 18, fontWeight: "700" }}>Select client</ThemedText>
-            <Pressable onPress={() => setClientPickerOpen(false)} hitSlop={8}>
+            <Pressable
+              onPress={() => setClientPickerOpen(false)}
+              hitSlop={11}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+            >
               <Feather name="x" size={22} color={theme.textSecondary} />
             </Pressable>
           </View>

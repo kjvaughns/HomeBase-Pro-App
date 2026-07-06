@@ -536,7 +536,7 @@ export default function HouseFaxScreen() {
                   <ThemedText style={[styles.assetDetailLabel, { color: theme.textSecondary }]}>Next Due</ThemedText>
                   <ThemedText style={[
                     styles.assetDetailValue,
-                    new Date(asset.nextDue) < new Date() ? { color: "#EF4444" } : { color: Colors.accent }
+                    new Date(asset.nextDue) < new Date() ? { color: Colors.error } : { color: Colors.accent }
                   ]}>
                     {formatDate(asset.nextDue)}
                   </ThemedText>
@@ -629,7 +629,7 @@ export default function HouseFaxScreen() {
               {asset.nextDue ? (
                 <ThemedText style={[
                   styles.assetAge,
-                  new Date(asset.nextDue) < new Date() ? { color: "#EF4444" } : { color: theme.textTertiary }
+                  new Date(asset.nextDue) < new Date() ? { color: Colors.error } : { color: theme.textTertiary }
                 ]}>
                   {new Date(asset.nextDue) < new Date() ? "Due now" : `Due ${formatDate(asset.nextDue)}`}
                 </ThemedText>

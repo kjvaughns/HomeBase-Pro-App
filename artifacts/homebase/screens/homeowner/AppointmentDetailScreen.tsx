@@ -582,7 +582,7 @@ export default function AppointmentDetailScreen() {
               case "skipped_no_stripe":
                 return { label: "Waived", color: theme.textSecondary };
               case "failed":
-                return { label: "Failed", color: "#DC2626" };
+                return { label: "Failed", color: Colors.error };
               default:
                 return { label: s ?? "—", color: theme.textSecondary };
             }

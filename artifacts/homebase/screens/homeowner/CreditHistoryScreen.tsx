@@ -190,13 +190,13 @@ export default function CreditHistoryScreen() {
                   <View
                     style={[
                       styles.historyIconCircle,
-                      { backgroundColor: entry.isCredit ? Colors.accentLight : "#FEE2E2" },
+                      { backgroundColor: entry.isCredit ? Colors.accentLight : Colors.errorLight },
                     ]}
                   >
                     <Feather
                       name={getIcon(entry.label, entry.isCredit)}
                       size={16}
-                      color={entry.isCredit ? Colors.accent : "#DC2626"}
+                      color={entry.isCredit ? Colors.accent : Colors.error}
                     />
                   </View>
                   <View style={styles.historyInfo}>
@@ -208,7 +208,7 @@ export default function CreditHistoryScreen() {
                   <ThemedText
                     style={[
                       styles.historyAmount,
-                      { color: entry.isCredit ? Colors.accent : "#DC2626" },
+                      { color: entry.isCredit ? Colors.accent : Colors.error },
                     ]}
                   >
                     {entry.isCredit ? "+" : "-"}${(entry.amountCents / 100).toFixed(2)}

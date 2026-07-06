@@ -43,13 +43,13 @@ function getCardConfig(isDark: boolean, theme: ReturnType<typeof useTheme>["them
     milestone_approaching: { icon: "award", color: theme.warning, bg: `${theme.warning}26` },
     optimization_tip: {
       icon: "zap",
-      color: isDark ? "#34D399" : "#10B981",
-      bg: isDark ? "#34D39926" : "#10B98118",
+      color: Colors.success,
+      bg: Colors.successLight,
     },
     recent_activity: {
       icon: "trending-up",
-      color: isDark ? "#F87171" : "#EF4444",
-      bg: isDark ? "#F8717126" : "#EF444418",
+      color: isDark ? Colors.error : Colors.error,
+      bg: isDark ? Colors.error + "26" : Colors.error + "18",
     },
   };
 }
@@ -78,6 +78,7 @@ function FeedCardItem({ card, onDismiss }: FeedCardItemProps) {
           hitSlop={10}
           style={styles.dismissBtn}
           testID={`feed-dismiss-${card.id}`}
+          accessibilityRole="button"
           accessibilityLabel="Dismiss card"
         >
           <Feather name="x" size={14} color={theme.textTertiary} />

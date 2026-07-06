@@ -76,6 +76,9 @@ export function AccountGateModal({
           <View style={styles.content}>
             <Pressable
               onPress={handleClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              hitSlop={8}
               style={({ pressed }) => [
                 styles.closeButton,
                 {

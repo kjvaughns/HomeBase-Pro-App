@@ -4,7 +4,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Feather } from "@expo/vector-icons";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
-import { BorderRadius, Spacing, Typography } from "@/constants/theme";
+import { BorderRadius, Colors, Spacing, Typography } from "@/constants/theme";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 import { useAuthStore } from "@/state/authStore";
 
@@ -40,8 +40,8 @@ export function CrewWelcomeBanner() {
   if (dismissed) return null;
 
   const bg = isDark ? "#1a2f1a" : "#f0fdf4";
-  const border = "#22c55e";
-  const accent = isDark ? "#86efac" : "#16a34a";
+  const border = Colors.success;
+  const accent = Colors.success;
 
   return (
     <View
@@ -62,6 +62,7 @@ export function CrewWelcomeBanner() {
       <Pressable
         onPress={handleDismiss}
         hitSlop={12}
+        accessibilityRole="button"
         accessibilityLabel="Dismiss"
         testID="banner-crew-welcome-dismiss"
       >

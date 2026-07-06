@@ -90,7 +90,9 @@ export const Colors = {
     neutralLight: "rgba(160, 160, 160, 0.18)",
     text: "#FFFFFF",
     textSecondary: "#A0A0A0",
-    textTertiary: "#666666",
+    // Raised from #666666 (contrast ~3.9:1 on backgroundRoot) to meet WCAG AA
+    // (4.5:1 minimum) for text a user must read, including outdoors.
+    textTertiary: "#8A8A8E",
     buttonText: "#FFFFFF",
     tabIconDefault: "#666666",
     tabIconSelected: "#38AE5F",

@@ -5,7 +5,7 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
-import { BorderRadius, Spacing, Typography } from "@/constants/theme";
+import { BorderRadius, Colors, Spacing, Typography } from "@/constants/theme";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -33,8 +33,8 @@ export function GracePeriodBanner({ firstPaymentAmountCents }: GracePeriodBanner
     : isDark
       ? "#3a2f1a"
       : "#fffbeb";
-  const border = isUrgent ? "#ef4444" : "#f59e0b";
-  const accent = isUrgent ? "#dc2626" : "#b45309";
+  const border = isUrgent ? Colors.error : Colors.warning;
+  const accent = isUrgent ? Colors.error : Colors.warning;
 
   const title =
     days === 1 ? "1 day left in your trial" : `${days} days left in your trial`;

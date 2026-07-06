@@ -180,7 +180,12 @@ function ServicePreviewModal({
             <Feather name="eye" size={14} color={Colors.accent} />
             <ThemedText style={[previewStyles.bannerText, { color: Colors.accent }]}>Customer Preview</ThemedText>
           </View>
-          <Pressable onPress={onClose} style={previewStyles.closeBtn}>
+          <Pressable
+            onPress={onClose}
+            style={previewStyles.closeBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Close preview"
+          >
             <Feather name="x" size={22} color={theme.text} />
           </Pressable>
         </View>

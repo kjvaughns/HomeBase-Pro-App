@@ -41,7 +41,7 @@ const CREW_COLOR_PALETTE = [
   "#38AE5F",
   "#3B82F6",
   "#F59E0B",
-  "#EF4444",
+  Colors.error,
   "#8B5CF6",
   "#EC4899",
   "#14B8A6",
@@ -88,6 +88,8 @@ export default function CrewScreen() {
         <Pressable
           onPress={openCreate}
           hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Add crew member"
           style={styles.headerBtn}
           testID="button-add-crew"
         >
@@ -236,6 +238,8 @@ export default function CrewScreen() {
             <Pressable
               style={[styles.emptyAddBtn, { backgroundColor: Colors.accent }]}
               onPress={openCreate}
+              accessibilityRole="button"
+              accessibilityLabel="Add crew member"
               testID="button-add-crew-empty"
             >
               <Feather name="plus" size={16} color="#FFF" />

@@ -36,8 +36,8 @@ const STATUS_CONFIG: Record<string, { color: string; bg: string }> = {
   confirmed: { color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
   in_progress: { color: Colors.accent, bg: Colors.accentLight },
   completed: { color: "#6B7280", bg: "rgba(107,114,128,0.12)" },
-  cancelled: { color: "#EF4444", bg: "rgba(239,68,68,0.12)" },
-  weather_held: { color: "#F59E0B", bg: "rgba(245,158,11,0.12)" },
+  cancelled: { color: Colors.error, bg: "rgba(239,68,68,0.12)" },
+  weather_held: { color: Colors.warning, bg: Colors.warningLight },
 };
 
 function dateKey(d: Date): string {

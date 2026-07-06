@@ -106,15 +106,17 @@ export function ReferralPromptModal({ visible, onDismiss }: Props) {
                 </View>
                 <Pressable
                   onPress={handleCopy}
-                  style={[styles.copyBtn, { backgroundColor: copied ? "#D1FAE5" : Colors.accentLight }]}
+                  style={[styles.copyBtn, { backgroundColor: copied ? Colors.successLight : Colors.accentLight }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={copied ? "Referral link copied" : "Copy referral link"}
                   testID="button-copy-referral-link"
                 >
                   <Feather
                     name={copied ? "check" : "copy"}
                     size={16}
-                    color={copied ? "#065F46" : Colors.accent}
+                    color={copied ? Colors.success : Colors.accent}
                   />
-                  <ThemedText style={[styles.copyText, { color: copied ? "#065F46" : Colors.accent }]}>
+                  <ThemedText style={[styles.copyText, { color: copied ? Colors.success : Colors.accent }]}>
                     {copied ? "Copied!" : "Copy link"}
                   </ThemedText>
                 </Pressable>

@@ -483,15 +483,15 @@ export default function SeriesDetailScreen() {
             </Pressable>
           )}
           <Pressable
-            style={[styles.cancelButton, { borderColor: "#EF4444" }]}
+            style={[styles.cancelButton, { borderColor: Colors.error }]}
             onPress={handleCancel}
             disabled={cancelMutation.isPending}
             testID="button-cancel-series"
           >
             {cancelMutation.isPending ? (
-              <ActivityIndicator size="small" color="#EF4444" />
+              <ActivityIndicator size="small" color={Colors.error} />
             ) : (
-              <ThemedText type="body" style={{ color: "#EF4444" }}>
+              <ThemedText type="body" style={{ color: Colors.error }}>
                 Cancel Recurring Series
               </ThemedText>
             )}

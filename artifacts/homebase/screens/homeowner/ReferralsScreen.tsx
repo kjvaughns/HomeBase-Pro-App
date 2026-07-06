@@ -149,16 +149,16 @@ export default function ReferralsScreen() {
                       onPress={handleCopy}
                       style={[
                         styles.copyBtn,
-                        { backgroundColor: copied ? "#D1FAE5" : Colors.accentLight },
+                        { backgroundColor: copied ? Colors.successLight : Colors.accentLight },
                       ]}
                       testID="button-copy-referral-link"
                     >
                       <Feather
                         name={copied ? "check" : "copy"}
                         size={16}
-                        color={copied ? "#065F46" : Colors.accent}
+                        color={copied ? Colors.success : Colors.accent}
                       />
-                      <ThemedText style={[styles.copyBtnText, { color: copied ? "#065F46" : Colors.accent }]}>
+                      <ThemedText style={[styles.copyBtnText, { color: copied ? Colors.success : Colors.accent }]}>
                         {copied ? "Copied!" : "Copy link"}
                       </ThemedText>
                     </Pressable>

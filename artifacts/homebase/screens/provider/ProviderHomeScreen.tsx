@@ -381,7 +381,13 @@ function GoalEditModal({
                 returnKeyType="done"
                 onSubmitEditing={onCustomConfirm}
               />
-              <Pressable onPress={onCustomConfirm} disabled={loading} hitSlop={12}>
+              <Pressable
+                onPress={onCustomConfirm}
+                disabled={loading}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="Confirm goal"
+              >
                 <Feather name="check" size={20} color={Colors.accent} />
               </Pressable>
             </View>
@@ -1203,6 +1209,7 @@ export default function ProviderHomeScreen() {
                       style={styles.checklistDismiss}
                       hitSlop={10}
                       testID={`checklist-dismiss-${step.key}`}
+                      accessibilityRole="button"
                       accessibilityLabel={`Dismiss ${step.label}`}
                     >
                       <Feather name="x" size={14} color={theme.textTertiary} />

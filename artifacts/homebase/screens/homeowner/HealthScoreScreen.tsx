@@ -626,7 +626,13 @@ export default function HealthScoreScreen() {
       <Modal visible={showWizard} animationType="slide" presentationStyle="pageSheet">
         <ThemedView style={styles.wizardContainer}>
           <View style={[styles.wizardHeader, { paddingTop: insets.top + Spacing.md }]}>
-            <Pressable onPress={handleWizardBack} style={styles.wizardBackButton}>
+            <Pressable
+              onPress={handleWizardBack}
+              style={styles.wizardBackButton}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+            >
               <Feather name="arrow-left" size={24} color={theme.text} />
             </Pressable>
             <View style={styles.wizardProgress}>

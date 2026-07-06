@@ -59,7 +59,12 @@ function SuccessBanner({ message, onDismiss }: { message: string; onDismiss: () 
       <ThemedText type="body" style={{ color: Colors.success, flex: 1, marginLeft: Spacing.sm }}>
         {message}
       </ThemedText>
-      <Pressable onPress={onDismiss}>
+      <Pressable
+        onPress={onDismiss}
+        hitSlop={14}
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss"
+      >
         <Feather name="x" size={16} color={Colors.success} />
       </Pressable>
     </Animated.View>
@@ -378,7 +383,12 @@ export default function CommunicationsScreen() {
         <ThemedView style={styles.pickerModal}>
           <View style={[styles.pickerHeader, { paddingHorizontal: horizontalPadding }]}>
             <ThemedText type="h2">Select Client</ThemedText>
-            <Pressable onPress={() => setShowClientPicker(false)} style={styles.closeButton}>
+            <Pressable
+              onPress={() => setShowClientPicker(false)}
+              style={styles.closeButton}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+            >
               <Feather name="x" size={22} color={theme.text} />
             </Pressable>
           </View>

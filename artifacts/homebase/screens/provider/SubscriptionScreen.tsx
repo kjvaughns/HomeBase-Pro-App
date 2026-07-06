@@ -465,7 +465,7 @@ export default function SubscriptionScreen() {
         return {
           iconName: "lock",
           iconBg: isDark ? "#3a1f1f" : "#fef2f2",
-          iconColor: "#dc2626",
+          iconColor: Colors.error,
           title: "Trial ended",
           body: "Subscribe to reactivate job and invoice creation. Your existing data, clients, and bookings are safe.",
         };
@@ -741,14 +741,14 @@ export default function SubscriptionScreen() {
               styles.failureCard,
               {
                 backgroundColor: isDark ? "#2a1a1a" : "#fff5f5",
-                borderColor: "#dc262640",
+                borderColor: Colors.error + "40",
               },
             ]}
             testID="paywall-failure-card"
           >
             <View style={styles.failureHeader}>
-              <Feather name="alert-circle" size={16} color="#dc2626" />
-              <ThemedText style={[styles.failureTitle, { color: "#dc2626" }]}>
+              <Feather name="alert-circle" size={16} color={Colors.error} />
+              <ThemedText style={[styles.failureTitle, { color: Colors.error }]}>
                 {paywallFailure.code
                   ? `Couldn't open subscription (error ${paywallFailure.code})`
                   : "Couldn't open subscription"}
@@ -994,7 +994,7 @@ export default function SubscriptionScreen() {
                   Offerings diagnostics
                 </ThemedText>
                 <ThemedText
-                  style={[styles.debugLine, { color: diagnostics.offeringsAvailable ? Colors.accent : "#dc2626" }]}
+                  style={[styles.debugLine, { color: diagnostics.offeringsAvailable ? Colors.accent : Colors.error }]}
                   testID="text-debug-offerings-available"
                 >
                   Offerings available: {diagnostics.offeringsAvailable ? "YES" : "NO"}
@@ -1031,7 +1031,7 @@ export default function SubscriptionScreen() {
                 </ThemedText>
                 {diagnostics.error ? (
                   <ThemedText
-                    style={[styles.debugLine, { color: "#dc2626" }]}
+                    style={[styles.debugLine, { color: Colors.error }]}
                     testID="text-debug-error"
                   >
                     Error {diagnostics.errorCode ? `(code ${diagnostics.errorCode})` : ""}: {diagnostics.error}

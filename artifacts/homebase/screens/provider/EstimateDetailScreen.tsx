@@ -57,9 +57,9 @@ interface ClientLite {
 
 function toneColor(tone: ReturnType<typeof estimateStatusTone>): string {
   switch (tone) {
-    case "success": return "#10b981";
-    case "danger": return "#ef4444";
-    case "info": return "#3b82f6";
+    case "success": return Colors.success;
+    case "danger": return Colors.error;
+    case "info": return Colors.info;
     default: return "#6b7280";
   }
 }
@@ -345,7 +345,7 @@ export default function EstimateDetailScreen() {
               style={{ alignItems: "center", paddingVertical: Spacing.md }}
               testID="button-delete-estimate"
             >
-              <ThemedText style={{ color: "#EF4444", fontWeight: "600" }}>Delete Draft</ThemedText>
+              <ThemedText style={{ color: Colors.error, fontWeight: "600" }}>Delete Draft</ThemedText>
             </Pressable>
           ) : null}
         </View>
@@ -392,7 +392,7 @@ function ConfirmModal({
               onPress={onConfirm}
               style={[
                 styles.confirmBtn,
-                { backgroundColor: confirmDestructive ? "#EF4444" : Colors.accent },
+                { backgroundColor: confirmDestructive ? Colors.error : Colors.accent },
               ]}
             >
               <ThemedText style={{ color: "#fff", fontWeight: "700" }}>{confirmLabel}</ThemedText>

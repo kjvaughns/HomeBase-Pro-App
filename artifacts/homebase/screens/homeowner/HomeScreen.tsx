@@ -252,10 +252,10 @@ export default function HomeScreen() {
               <GlassCard style={styles.healthCard}>
                 <View style={styles.healthCardContent}>
                   <View style={[styles.healthScoreRing, {
-                    borderColor: healthScore >= 70 ? "#16A34A" : healthScore >= 40 ? "#CA8A04" : "#DC2626",
+                    borderColor: healthScore >= 70 ? Colors.success : healthScore >= 40 ? Colors.warning : Colors.error,
                   }]}>
                     <ThemedText style={[styles.healthScoreValue, {
-                      color: healthScore >= 70 ? "#16A34A" : healthScore >= 40 ? "#CA8A04" : "#DC2626",
+                      color: healthScore >= 70 ? Colors.success : healthScore >= 40 ? Colors.warning : Colors.error,
                     }]}>{healthScore}</ThemedText>
                   </View>
                   <View style={styles.healthTextContainer}>
@@ -277,19 +277,19 @@ export default function HomeScreen() {
                           <>
                             {good > 0 && (
                               <View style={styles.healthStatusChip}>
-                                <View style={[styles.healthDot, { backgroundColor: "#16A34A" }]} />
+                                <View style={[styles.healthDot, { backgroundColor: Colors.success }]} />
                                 <ThemedText style={[styles.healthDotLabel, { color: theme.textSecondary }]}>{good} Good</ThemedText>
                               </View>
                             )}
                             {dueSoon > 0 && (
                               <View style={styles.healthStatusChip}>
-                                <View style={[styles.healthDot, { backgroundColor: "#CA8A04" }]} />
+                                <View style={[styles.healthDot, { backgroundColor: Colors.warning }]} />
                                 <ThemedText style={[styles.healthDotLabel, { color: theme.textSecondary }]}>{dueSoon} Due</ThemedText>
                               </View>
                             )}
                             {overdue > 0 && (
                               <View style={styles.healthStatusChip}>
-                                <View style={[styles.healthDot, { backgroundColor: "#DC2626" }]} />
+                                <View style={[styles.healthDot, { backgroundColor: Colors.error }]} />
                                 <ThemedText style={[styles.healthDotLabel, { color: theme.textSecondary }]}>{overdue} Overdue</ThemedText>
                               </View>
                             )}

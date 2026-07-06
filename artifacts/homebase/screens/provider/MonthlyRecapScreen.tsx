@@ -70,7 +70,7 @@ function Delta({ current, prev, format }: { current: number; prev: number; forma
   }
   const pct = Math.round(((current - prev) / prev) * 100);
   const up = pct >= 0;
-  const color = up ? Colors.accent : "#ef4444";
+  const color = up ? Colors.accent : Colors.error;
   return (
     <View style={styles.deltaRow}>
       <Feather name={up ? "trending-up" : "trending-down"} size={13} color={color} />

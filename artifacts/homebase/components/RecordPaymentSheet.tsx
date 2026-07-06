@@ -388,7 +388,9 @@ export function RecordPaymentSheet({
               <Pressable
                 onPress={clearPhoto}
                 style={[styles.photoRemove, { backgroundColor: theme.cardBackground }]}
-                hitSlop={8}
+                hitSlop={15}
+                accessibilityRole="button"
+                accessibilityLabel="Remove receipt photo"
                 testID="button-remove-payment-photo"
               >
                 <Feather name="x" size={14} color={theme.text} />

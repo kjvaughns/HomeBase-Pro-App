@@ -567,7 +567,9 @@ function InlineDateRangePicker({
         </View>
         <Pressable
           onPress={onClose}
-          hitSlop={12}
+          hitSlop={15}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
           style={[inlinePickerStyles.closeBtn, { backgroundColor: theme.separator }]}
         >
           <Feather name="x" size={14} color={theme.textSecondary} />
@@ -579,7 +581,9 @@ function InlineDateRangePicker({
         <Pressable
           style={[inlinePickerStyles.navBtn, { backgroundColor: theme.backgroundRoot }]}
           onPress={goToPrevMonth}
-          hitSlop={10}
+          hitSlop={14}
+          accessibilityRole="button"
+          accessibilityLabel="Previous month"
         >
           <Feather name="chevron-left" size={16} color={theme.text} />
         </Pressable>
@@ -593,8 +597,10 @@ function InlineDateRangePicker({
             !canGoNext() && { opacity: 0.3 },
           ]}
           onPress={canGoNext() ? goToNextMonth : undefined}
-          hitSlop={10}
+          hitSlop={14}
           disabled={!canGoNext()}
+          accessibilityRole="button"
+          accessibilityLabel="Next month"
         >
           <Feather name="chevron-right" size={16} color={theme.text} />
         </Pressable>
@@ -1096,7 +1102,13 @@ function HowPayoutsModal({
         >
           <View style={howModalStyles.headerRow}>
             <ThemedText style={howModalStyles.title}>How payouts work</ThemedText>
-            <Pressable onPress={onClose} hitSlop={10} testID="button-close-how-payouts">
+            <Pressable
+              onPress={onClose}
+              hitSlop={14}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              testID="button-close-how-payouts"
+            >
               <Feather name="x" size={20} color={theme.textSecondary} />
             </Pressable>
           </View>

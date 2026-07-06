@@ -226,7 +226,12 @@ export function HomeSelector({ selectedHome, onSelectHome, onAddNew, compact = f
       <View style={styles.selectorHeader}>
         <ThemedText style={styles.selectorTitle}>Select Home</ThemedText>
         {onAddNew ? (
-          <Pressable onPress={onAddNew}>
+          <Pressable
+            onPress={onAddNew}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="Add new home"
+          >
             <Feather name="plus" size={20} color={Colors.accent} />
           </Pressable>
         ) : null}
@@ -242,6 +247,8 @@ export function HomeSelector({ selectedHome, onSelectHome, onAddNew, compact = f
             <Pressable 
               style={[styles.addButton, { backgroundColor: Colors.accent }]}
               onPress={onAddNew}
+              accessibilityRole="button"
+              accessibilityLabel="Add home"
             >
               <Feather name="plus" size={18} color="#FFFFFF" />
               <ThemedText style={styles.addButtonText}>Add Home</ThemedText>

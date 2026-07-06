@@ -593,8 +593,8 @@ export default function AddInvoiceScreen() {
 
         {formError ? (
           <View style={[styles.errorBox, { backgroundColor: "#FEF2F2" }]}>
-            <Feather name="alert-circle" size={16} color="#EF4444" />
-            <ThemedText style={[styles.errorText, { color: "#EF4444" }]}>{formError}</ThemedText>
+            <Feather name="alert-circle" size={16} color={Colors.error} />
+            <ThemedText style={[styles.errorText, { color: Colors.error }]}>{formError}</ThemedText>
           </View>
         ) : null}
 
@@ -723,7 +723,13 @@ function ClientPickerModal({
 
         <View style={[modalStyles.sheetHeader, { paddingHorizontal: horizontalPadding }]}>
           <ThemedText style={modalStyles.sheetTitle}>Select Client</ThemedText>
-          <Pressable onPress={onClose} hitSlop={12} testID="button-close-client-picker">
+          <Pressable
+            onPress={onClose}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            testID="button-close-client-picker"
+          >
             <Feather name="x" size={22} color={theme.textSecondary} />
           </Pressable>
         </View>
@@ -838,7 +844,13 @@ function ServicePickerModal({
 
         <View style={[modalStyles.sheetHeader, { paddingHorizontal: horizontalPadding }]}>
           <ThemedText style={modalStyles.sheetTitle}>Add Service</ThemedText>
-          <Pressable onPress={onClose} hitSlop={12} testID="button-close-service-picker">
+          <Pressable
+            onPress={onClose}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            testID="button-close-service-picker"
+          >
             <Feather name="x" size={22} color={theme.textSecondary} />
           </Pressable>
         </View>

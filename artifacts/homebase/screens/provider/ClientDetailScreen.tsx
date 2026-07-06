@@ -414,12 +414,12 @@ export default function ClientDetailScreen() {
       {(client.outstandingBalance ?? 0) > 0 ? (
         <GlassCard style={styles.alertCard}>
           <View style={styles.alertRow}>
-            <Feather name="alert-circle" size={20} color="#EF4444" />
+            <Feather name="alert-circle" size={20} color={Colors.error} />
             <View style={styles.alertContent}>
               <ThemedText type="body" style={{ fontWeight: "600" }}>
                 Outstanding Balance
               </ThemedText>
-              <ThemedText type="body" style={{ color: "#EF4444" }}>
+              <ThemedText type="body" style={{ color: Colors.error }}>
                 {formatCurrency(client.outstandingBalance ?? 0)}
               </ThemedText>
             </View>
@@ -558,11 +558,11 @@ export default function ClientDetailScreen() {
                   <View style={styles.invoiceHeaderRight}>
                     <View style={[
                       styles.invoiceStatus,
-                      { backgroundColor: isPaid ? Colors.accent + "20" : "#EF4444" + "20" }
+                      { backgroundColor: isPaid ? Colors.accent + "20" : Colors.error + "20" }
                     ]}>
                       <ThemedText
                         type="caption"
-                        style={{ color: isPaid ? Colors.accent : "#EF4444", fontWeight: "600" }}
+                        style={{ color: isPaid ? Colors.accent : Colors.error, fontWeight: "600" }}
                       >
                         {(invoice.status || "draft").toUpperCase()}
                       </ThemedText>
@@ -610,9 +610,9 @@ export default function ClientDetailScreen() {
       {estimates.length > 0 ? (
         estimates.map((est) => {
           const tone =
-            est.status === "accepted" || est.status === "converted" ? "#10b981"
-            : est.status === "declined" || est.status === "expired" ? "#ef4444"
-            : est.status === "sent" || est.status === "viewed" ? "#3b82f6"
+            est.status === "accepted" || est.status === "converted" ? Colors.success
+            : est.status === "declined" || est.status === "expired" ? Colors.error
+            : est.status === "sent" || est.status === "viewed" ? Colors.info
             : "#6b7280";
           return (
             <Pressable
@@ -871,8 +871,8 @@ export default function ClientDetailScreen() {
           <View style={{ marginTop: Spacing.sm }}>
             {client.gateCode ? (
               <View style={styles.accessRow}>
-                <Feather name="lock" size={16} color="#EF4444" />
-                <ThemedText type="body" style={{ marginLeft: Spacing.sm, flex: 1, color: "#EF4444" }}>
+                <Feather name="lock" size={16} color={Colors.error} />
+                <ThemedText type="body" style={{ marginLeft: Spacing.sm, flex: 1, color: Colors.error }}>
                   Gate Code: {client.gateCode}
                 </ThemedText>
               </View>
@@ -1063,8 +1063,8 @@ export default function ClientDetailScreen() {
             ) : null}
             {home.gateCode ? (
               <View style={styles.accessRow}>
-                <Feather name="lock" size={16} color="#EF4444" />
-                <ThemedText type="body" style={{ marginLeft: Spacing.sm, flex: 1, color: "#EF4444" }}>
+                <Feather name="lock" size={16} color={Colors.error} />
+                <ThemedText type="body" style={{ marginLeft: Spacing.sm, flex: 1, color: Colors.error }}>
                   Gate Code: {home.gateCode}
                 </ThemedText>
               </View>

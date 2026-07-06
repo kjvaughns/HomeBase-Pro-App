@@ -438,6 +438,8 @@ export default function PublicProfileScreen() {
               <Pressable
                 style={[styles.linkActionBtn, { backgroundColor: Colors.accentLight }]}
                 onPress={handleCopyLink}
+                accessibilityRole="button"
+                accessibilityLabel="Copy profile link"
               >
                 <Feather name="copy" size={14} color={Colors.accent} />
                 <ThemedText style={[styles.linkActionText, { color: Colors.accent }]}>Copy</ThemedText>
@@ -445,6 +447,8 @@ export default function PublicProfileScreen() {
               <Pressable
                 style={[styles.linkActionBtn, { backgroundColor: theme.backgroundSecondary }]}
                 onPress={handleShare}
+                accessibilityRole="button"
+                accessibilityLabel="Share profile link"
               >
                 <Feather name="share-2" size={14} color={theme.textSecondary} />
                 <ThemedText style={[styles.linkActionText, { color: theme.textSecondary }]}>Share</ThemedText>

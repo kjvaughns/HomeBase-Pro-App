@@ -185,7 +185,7 @@ function ClientCard({ client, onPress, onCall, onMessage, lastMessage }: ClientC
               <ThemedText type="caption" style={{ color: theme.textSecondary }}>
                 Outstanding
               </ThemedText>
-              <ThemedText type="body" style={{ fontWeight: "500", color: "#EF4444" }}>
+              <ThemedText type="body" style={{ fontWeight: "500", color: Colors.error }}>
                 {formatCurrency(client.outstandingBalance ?? 0)}
               </ThemedText>
             </View>
@@ -509,6 +509,8 @@ export default function ClientsScreen() {
             <Pressable
               onPress={() => setShowSortMenu(!showSortMenu)}
               style={[styles.sortButton, { backgroundColor: theme.cardBackground }]}
+              accessibilityRole="button"
+              accessibilityLabel="Sort clients"
               testID="sort-button"
             >
               <Feather name="sliders" size={18} color={theme.text} />

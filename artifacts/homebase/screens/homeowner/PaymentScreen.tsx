@@ -291,8 +291,8 @@ export default function PaymentScreen() {
   if (isPaid) {
     return (
       <ThemedView style={[styles.container, styles.centered]}>
-        <View style={[styles.successIconCircle, { backgroundColor: "#D1FAE5" }]}>
-          <Feather name="check-circle" size={56} color="#065F46" />
+        <View style={[styles.successIconCircle, { backgroundColor: Colors.successLight }]}>
+          <Feather name="check-circle" size={56} color={Colors.success} />
         </View>
         <ThemedText style={styles.successTitle}>Payment Complete</ThemedText>
         <ThemedText style={[styles.successSubtitle, { color: theme.textSecondary }]}>
@@ -340,7 +340,7 @@ export default function PaymentScreen() {
             style={[
               styles.returnNotice,
               {
-                backgroundColor: status === "cancelled" ? "#FEF3C7" : "#D1FAE5",
+                backgroundColor: status === "cancelled" ? Colors.warningLight : Colors.successLight,
                 borderColor: status === "cancelled" ? Colors.warning : Colors.success,
               },
             ]}
@@ -349,12 +349,12 @@ export default function PaymentScreen() {
             <Feather
               name={status === "cancelled" ? "alert-circle" : "check-circle"}
               size={18}
-              color={status === "cancelled" ? "#92400E" : "#065F46"}
+              color={status === "cancelled" ? Colors.warning : Colors.success}
             />
             <ThemedText
               style={[
                 styles.returnNoticeText,
-                { color: status === "cancelled" ? "#92400E" : "#065F46" },
+                { color: status === "cancelled" ? Colors.warning : Colors.success },
               ]}
             >
               {returnNotice}
@@ -512,8 +512,8 @@ export default function PaymentScreen() {
             : `Pay $${homeownerTotal} on Stripe`}
         </PrimaryButton>
         {paymentError ? (
-          <View style={[styles.errorBox, { borderColor: "#EF4444", marginTop: Spacing.sm }]} testID="text-payment-error">
-            <Feather name="alert-circle" size={16} color="#EF4444" />
+          <View style={[styles.errorBox, { borderColor: Colors.error, marginTop: Spacing.sm }]} testID="text-payment-error">
+            <Feather name="alert-circle" size={16} color={Colors.error} />
             <ThemedText style={styles.errorBoxText}>{paymentError}</ThemedText>
           </View>
         ) : null}
@@ -585,7 +585,7 @@ const styles = StyleSheet.create({
   infoBox: { flexDirection: "row", gap: Spacing.sm, alignItems: "flex-start", paddingHorizontal: Spacing.xs, marginBottom: Spacing.md },
   infoText: { ...Typography.body, flex: 1 },
   errorBox: { flexDirection: "row", gap: Spacing.sm, alignItems: "flex-start", padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, backgroundColor: "#FEF2F2" },
-  errorBoxText: { ...Typography.body, color: "#EF4444", flex: 1 },
+  errorBoxText: { ...Typography.body, color: Colors.error, flex: 1 },
   bottomBar: {
     position: "absolute",
     bottom: 0,

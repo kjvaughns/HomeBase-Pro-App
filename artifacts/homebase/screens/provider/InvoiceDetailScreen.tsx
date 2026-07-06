@@ -625,7 +625,7 @@ export default function InvoiceDetailScreen() {
         {(invoice.status === "sent" || invoice.status === "overdue") ? (
           <GlassCard style={styles.section}>
             <View style={styles.paymentLinkHeader}>
-              <Feather name="link" size={16} color={activePaymentUrl ? "#16A34A" : theme.textSecondary} />
+              <Feather name="link" size={16} color={activePaymentUrl ? Colors.success : theme.textSecondary} />
               <ThemedText style={styles.sectionTitle}>Payment Link</ThemedText>
             </View>
             {activePaymentUrl ? (
@@ -644,8 +644,8 @@ export default function InvoiceDetailScreen() {
                     onPress={() => handleCopyLink(activePaymentUrl)}
                     style={[styles.linkActionBtn, { backgroundColor: theme.backgroundSecondary }]}
                   >
-                    <Feather name={copied ? "check" : "copy"} size={15} color={copied ? "#16A34A" : theme.textSecondary} />
-                    <ThemedText style={[styles.linkActionText, { color: copied ? "#16A34A" : theme.textSecondary }]}>
+                    <Feather name={copied ? "check" : "copy"} size={15} color={copied ? Colors.success : theme.textSecondary} />
+                    <ThemedText style={[styles.linkActionText, { color: copied ? Colors.success : theme.textSecondary }]}>
                       {copied ? "Copied" : "Copy"}
                     </ThemedText>
                   </Pressable>
@@ -753,7 +753,7 @@ export default function InvoiceDetailScreen() {
                             style={{
                               paddingHorizontal: 8,
                               paddingVertical: 4,
-                              backgroundColor: "#EF4444",
+                              backgroundColor: Colors.error,
                               borderRadius: 6,
                             }}
                             testID={`button-confirm-void-${p.id}`}
@@ -946,7 +946,7 @@ function ActionButton({
     }
   }, [done]);
 
-  const bg = done ? "#16A34A" : theme.backgroundSecondary;
+  const bg = done ? Colors.success : theme.backgroundSecondary;
   const textColor = done ? "#fff" : theme.text;
 
   return (
@@ -998,7 +998,7 @@ function InlineConfirm({
         </Pressable>
         <Pressable
           onPress={onConfirm}
-          style={[styles.inlineBtn, styles.inlineBtnConfirm, { backgroundColor: destructive ? "#DC2626" : Colors.accent }]}
+          style={[styles.inlineBtn, styles.inlineBtnConfirm, { backgroundColor: destructive ? Colors.error : Colors.accent }]}
           disabled={loading}
         >
           {loading ? (
@@ -1024,7 +1024,7 @@ const styles = StyleSheet.create({
     zIndex: 100,
     alignItems: "center",
     paddingBottom: 12,
-    backgroundColor: "#16A34A",
+    backgroundColor: Colors.success,
   },
   bannerInner: {
     flexDirection: "row",
@@ -1201,7 +1201,7 @@ const styles = StyleSheet.create({
   stripeBannerText: {
     flex: 1,
     fontSize: 12,
-    color: "#92400E",
+    color: Colors.warning,
     lineHeight: 16,
   },
   stripeBannerCta: {

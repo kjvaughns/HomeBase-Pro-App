@@ -89,13 +89,13 @@ const STATUS_CONFIG: Record<
   },
   cancelled: {
     label: "Cancelled",
-    color: "#EF4444",
+    color: Colors.error,
     bg: "rgba(239,68,68,0.12)",
   },
   weather_held: {
     label: "Weather Hold",
-    color: "#F59E0B",
-    bg: "rgba(245,158,11,0.12)",
+    color: Colors.warning,
+    bg: Colors.warningLight,
   },
 };
 
@@ -434,9 +434,9 @@ export default function CrewJobDetailScreen() {
             </View>
             {clientPropertyDetails?.gateCode ? (
               <View style={[styles.propertyDetailRow]}>
-                <Feather name="lock" size={14} color="#EF4444" />
+                <Feather name="lock" size={14} color={Colors.error} />
                 <ThemedText
-                  style={[styles.propertyDetailText, { color: "#EF4444" }]}
+                  style={[styles.propertyDetailText, { color: Colors.error }]}
                 >
                   Gate Code: {clientPropertyDetails.gateCode}
                 </ThemedText>

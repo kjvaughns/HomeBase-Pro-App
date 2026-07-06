@@ -356,8 +356,8 @@ export default function BookingLinkScreen() {
 
           <Animated.View entering={FadeInDown.delay(400).duration(400)}>
             {showDeleteConfirm ? (
-              <GlassCard style={StyleSheet.flatten([styles.section, { borderColor: "#EF444440", borderWidth: 1 }])}>
-                <ThemedText style={[styles.sectionTitle, { color: "#EF4444", marginBottom: Spacing.xs }]}>
+              <GlassCard style={StyleSheet.flatten([styles.section, { borderColor: Colors.error + "40", borderWidth: 1 }])}>
+                <ThemedText style={[styles.sectionTitle, { color: Colors.error, marginBottom: Spacing.xs }]}>
                   Delete Booking Link?
                 </ThemedText>
                 <ThemedText style={[styles.settingDesc, { color: theme.textSecondary, marginBottom: Spacing.md }]}>
@@ -372,7 +372,7 @@ export default function BookingLinkScreen() {
                     <ThemedText style={styles.actionBtnLabel}>Cancel</ThemedText>
                   </Pressable>
                   <Pressable
-                    style={[styles.confirmBtn, { backgroundColor: "#EF4444", flex: 1 }]}
+                    style={[styles.confirmBtn, { backgroundColor: Colors.error, flex: 1 }]}
                     onPress={handleDelete}
                     disabled={isDeleting}
                     testID="button-confirm-delete"
@@ -385,12 +385,12 @@ export default function BookingLinkScreen() {
               </GlassCard>
             ) : (
               <Pressable
-                style={[styles.deleteBtn, { borderColor: "#EF444450" }]}
+                style={[styles.deleteBtn, { borderColor: Colors.error + "50" }]}
                 onPress={() => setShowDeleteConfirm(true)}
                 testID="button-delete-link"
               >
-                <Feather name="trash-2" size={16} color="#EF4444" />
-                <ThemedText style={[styles.deleteBtnLabel, { color: "#EF4444" }]}>Delete Booking Link</ThemedText>
+                <Feather name="trash-2" size={16} color={Colors.error} />
+                <ThemedText style={[styles.deleteBtnLabel, { color: Colors.error }]}>Delete Booking Link</ThemedText>
               </Pressable>
             )}
           </Animated.View>

@@ -177,9 +177,9 @@ const STATUS_CONFIG: Record<DisplayStatus, { label: string; color: string; icon:
   arrived: { label: "Arrived", color: Colors.warning, icon: "map-pin" },
   in_progress: { label: "In Progress", color: Colors.warning, icon: "tool" },
   completed: { label: "Completed", color: Colors.accent, icon: "check" },
-  cancelled: { label: "Cancelled", color: "#EF4444", icon: "x-circle" },
+  cancelled: { label: "Cancelled", color: Colors.error, icon: "x-circle" },
   weather_held: { label: "Weather Hold", color: "#6B7280", icon: "cloud-rain" },
-  no_show: { label: "No Show", color: "#EF4444", icon: "user-x" },
+  no_show: { label: "No Show", color: Colors.error, icon: "user-x" },
 };
 
 const STATUS_ORDER: DisplayStatus[] = ["scheduled", "confirmed", "on_my_way", "arrived", "in_progress", "completed"];
@@ -377,13 +377,17 @@ function ChecklistSection({ checklist, onToggle, onAddStep, loading, isOnline = 
           <Pressable
             onPress={submitNewStep}
             disabled={!newStepText.trim()}
-            hitSlop={8}
+            hitSlop={11}
+            accessibilityRole="button"
+            accessibilityLabel="Confirm add step"
             testID="button-confirm-add-step"
           >
             <Feather name="check" size={20} color={newStepText.trim() ? Colors.accent : theme.textTertiary} />
           </Pressable>
           <Pressable
             onPress={() => { setAdding(false); setNewStepText(""); }}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel add step"
             hitSlop={8}
             testID="button-cancel-add-step"
           >
@@ -1142,15 +1146,30 @@ export default function ProviderJobDetailScreen() {
             </View>
 
             <View style={[styles.contactRow, { borderTopColor: theme.separator }]}>
-              <Pressable style={styles.contactButton} onPress={handleCall}>
+              <Pressable
+                style={styles.contactButton}
+                onPress={handleCall}
+                accessibilityRole="button"
+                accessibilityLabel="Call client"
+              >
                 <Feather name="phone" size={18} color={Colors.accent} />
                 <ThemedText type="caption" style={{ color: Colors.accent, marginLeft: 4 }}>Call</ThemedText>
               </Pressable>
-              <Pressable style={styles.contactButton} onPress={handleMessage}>
+              <Pressable
+                style={styles.contactButton}
+                onPress={handleMessage}
+                accessibilityRole="button"
+                accessibilityLabel="Text client"
+              >
                 <Feather name="message-circle" size={18} color={Colors.accent} />
                 <ThemedText type="caption" style={{ color: Colors.accent, marginLeft: 4 }}>Text</ThemedText>
               </Pressable>
-              <Pressable style={styles.contactButton} onPress={handleNavigate}>
+              <Pressable
+                style={styles.contactButton}
+                onPress={handleNavigate}
+                accessibilityRole="button"
+                accessibilityLabel="Get directions to client"
+              >
                 <Feather name="navigation" size={18} color={Colors.accent} />
                 <ThemedText type="caption" style={{ color: Colors.accent, marginLeft: 4 }}>Directions</ThemedText>
               </Pressable>
@@ -1497,11 +1516,11 @@ export default function ProviderJobDetailScreen() {
             <Pressable
               style={[
                 styles.cancelButton,
-                { borderColor: "#EF4444", opacity: isOnline ? 1 : 0.5 },
+                { borderColor: Colors.error, opacity: isOnline ? 1 : 0.5 },
               ]}
               onPress={handleCancel}
             >
-              <ThemedText type="body" style={{ color: "#EF4444" }}>Cancel Job</ThemedText>
+              <ThemedText type="body" style={{ color: Colors.error }}>Cancel Job</ThemedText>
             </Pressable>
           </>
         ) : null}

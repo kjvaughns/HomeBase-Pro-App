@@ -535,7 +535,12 @@ export function HomeProfileSection({
               <ThemedText style={styles.modalTitle}>
                 Edit {editingSection?.title}
               </ThemedText>
-              <Pressable onPress={cancelEdit} hitSlop={8}>
+              <Pressable
+                onPress={cancelEdit}
+                hitSlop={11}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
+              >
                 <Feather name="x" size={22} color={theme.text} />
               </Pressable>
             </View>

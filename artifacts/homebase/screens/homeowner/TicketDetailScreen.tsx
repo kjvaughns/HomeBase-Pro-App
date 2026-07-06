@@ -269,11 +269,11 @@ export default function TicketDetailScreen() {
                 <View
                   style={[
                     styles.errBanner,
-                    { backgroundColor: "#fee2e2", borderColor: "#fca5a5" },
+                    { backgroundColor: Colors.errorLight, borderColor: Colors.error },
                   ]}
                 >
-                  <Feather name="alert-circle" size={14} color="#dc2626" />
-                  <ThemedText style={[styles.errBannerText, { color: "#dc2626" }]}>
+                  <Feather name="alert-circle" size={14} color={Colors.error} />
+                  <ThemedText style={[styles.errBannerText, { color: Colors.error }]}>
                     {sendError}
                   </ThemedText>
                 </View>

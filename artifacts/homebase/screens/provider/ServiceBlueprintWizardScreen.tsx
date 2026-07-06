@@ -1120,7 +1120,12 @@ export default function ServiceBlueprintWizardScreen() {
                   Common upgrades for {serviceName}
                 </ThemedText>
               </View>
-              <Pressable onPress={() => setSuggestionsAVisible(false)} hitSlop={8}>
+              <Pressable
+                onPress={() => setSuggestionsAVisible(false)}
+                hitSlop={13}
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss suggestions"
+              >
                 <Feather name="x" size={14} color={theme.textTertiary} />
               </Pressable>
             </View>
@@ -1302,7 +1307,12 @@ export default function ServiceBlueprintWizardScreen() {
                   Suggested for {serviceName}
                 </ThemedText>
               </View>
-              <Pressable onPress={() => setSuggestionsCVisible(false)} hitSlop={8}>
+              <Pressable
+                onPress={() => setSuggestionsCVisible(false)}
+                hitSlop={13}
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss suggestions"
+              >
                 <Feather name="x" size={14} color={theme.textTertiary} />
               </Pressable>
             </View>
@@ -1643,7 +1653,12 @@ export default function ServiceBlueprintWizardScreen() {
               <Feather name="eye" size={14} color={Colors.accent} />
               <ThemedText style={[styles.previewBannerText, { color: Colors.accent }]}>Customer View</ThemedText>
             </View>
-            <Pressable onPress={() => setPreviewVisible(false)} style={styles.previewClose}>
+            <Pressable
+              onPress={() => setPreviewVisible(false)}
+              style={styles.previewClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close preview"
+            >
               <Feather name="x" size={22} color={theme.text} />
             </Pressable>
           </View>
