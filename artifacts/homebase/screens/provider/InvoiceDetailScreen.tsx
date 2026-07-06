@@ -33,6 +33,7 @@ import { useLayout } from "@/hooks/useLayout";
 import { apiRequest } from "@/lib/query-client";
 import { recordHappyMoment } from "@/state/appReviewStore";
 import { RecordPaymentSheet, type ExistingPayment } from "@/components/RecordPaymentSheet";
+import { BeforeAfterSlider } from "@/components/BeforeAfterSlider";
 
 type RouteParams = {
   InvoiceDetail: { invoiceId: string };
@@ -72,6 +73,14 @@ interface Client {
   lastName: string;
   email?: string;
   phone?: string;
+}
+
+interface JobPhotoPair {
+  id: string;
+  beforePhotoUrl: string;
+  afterPhotoUrl: string;
+  label: string | null;
+  createdAt: string;
 }
 
 function parseLineItems(raw: Invoice["lineItems"]): LineItemRecord[] {
@@ -261,6 +270,20 @@ export default function InvoiceDetailScreen() {
   const invoice = invoiceData?.invoice;
   const clients = clientsData?.clients || [];
   const lineItems = invoice ? parseLineItems(invoice.lineItems) : [];
+
+  // Task #485: before/after photo pairs auto-attach to the invoice for the
+  // same job — fetched independently so this route doesn't need changes.
+  const invoiceJobId = invoice?.jobId;
+  const { data: photoPairsData } = useQuery<{ pairs: JobPhotoPair[] }>({
+    queryKey: ["/api/jobs", invoiceJobId, "photo-pairs"],
+    enabled: !!invoiceJobId,
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/jobs/${invoiceJobId}/photo-pairs`);
+      if (!res.ok) throw new Error("Failed to load photo pairs");
+      return res.json();
+    },
+  });
+  const photoPairs = photoPairsData?.pairs ?? [];
 
   const getClientName = (clientId: string): string => {
     const client = clients.find((c) => c.id === clientId);
@@ -508,6 +531,23 @@ export default function InvoiceDetailScreen() {
               Autopay charge failed: {invoice.autopayFailureReason}. This invoice now needs to be paid manually.
             </ThemedText>
           </View>
+        ) : null}
+
+        {photoPairs.length > 0 ? (
+          <GlassCard style={styles.headerCard} testID="card-before-after">
+            <ThemedText style={[styles.sectionTitle, { marginBottom: Spacing.sm }]}>
+              Before &amp; After
+            </ThemedText>
+            {photoPairs.map((pair) => (
+              <View key={pair.id} style={{ marginBottom: Spacing.sm }}>
+                <BeforeAfterSlider
+                  beforeUri={pair.beforePhotoUrl}
+                  afterUri={pair.afterPhotoUrl}
+                  height={200}
+                />
+              </View>
+            ))}
+          </GlassCard>
         ) : null}
 
         {/* Client */}

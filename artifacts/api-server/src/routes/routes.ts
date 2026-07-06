@@ -166,6 +166,7 @@ import {
   providerReferrals,
   providerBadges,
   crewTimeEntries,
+  jobPhotoPairs,
 } from "@workspace/db";
 import {
   createSeriesForJob,
@@ -3560,6 +3561,198 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
     },
   );
 
+  // ============ BEFORE/AFTER PHOTO PAIRS (Task #485) ============
+  // A single capture action feeds three surfaces: the job's invoice, the
+  // client's review request, and a branded shareable comparison image.
+
+  const PAIR_MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB per image
+  const PAIR_ALLOWED_MIME_PREFIXES = [
+    "data:image/jpeg;base64,",
+    "data:image/png;base64,",
+    "data:image/webp;base64,",
+  ];
+
+  async function uploadJobPhotoBase64(
+    jobId: string,
+    photo: string,
+    req: Request,
+  ): Promise<string> {
+    const isDev = process.env.NODE_ENV === "development";
+    const prefix = PAIR_ALLOWED_MIME_PREFIXES.find((p) => photo.startsWith(p));
+    if (!prefix) {
+      throw new Error("Only JPEG, PNG, and WebP images are allowed");
+    }
+    const base64Data = photo.slice(prefix.length);
+    const sizeBytes = Math.ceil((base64Data.length * 3) / 4);
+    if (sizeBytes > PAIR_MAX_PHOTO_BYTES) {
+      throw new Error("Each photo must be smaller than 5 MB");
+    }
+    const ext = prefix.includes("jpeg")
+      ? "jpg"
+      : prefix.includes("png")
+        ? "png"
+        : "webp";
+    const mimeType = prefix.includes("jpeg")
+      ? "image/jpeg"
+      : prefix.includes("png")
+        ? "image/png"
+        : "image/webp";
+    const buffer = Buffer.from(base64Data, "base64");
+    const filename = `${jobId}-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+    let supabaseClient: typeof import("../lib/supabase").supabase | null = null;
+    try {
+      supabaseClient = (await import("../lib/supabase")).supabase;
+    } catch (importErr) {
+      if (!isDev) {
+        throw new Error(
+          "Photo storage is not configured. Please set SUPABASE_SERVICE_KEY and EXPO_PUBLIC_SUPABASE_URL.",
+        );
+      }
+    }
+
+    if (supabaseClient) {
+      const { error: uploadError } = await supabaseClient.storage
+        .from("job-photos")
+        .upload(`photos/${filename}`, buffer, {
+          contentType: mimeType,
+          upsert: false,
+        });
+      if (uploadError) {
+        console.error("Supabase upload error:", uploadError);
+        throw new Error("Failed to upload photo to storage");
+      }
+      const { data: publicUrlData } = supabaseClient.storage
+        .from("job-photos")
+        .getPublicUrl(`photos/${filename}`);
+      return publicUrlData.publicUrl;
+    }
+
+    if (isDev) {
+      const uploadDir = path.resolve(process.cwd(), "uploads", "photos");
+      if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+      const filePath = path.join(uploadDir, filename);
+      fs.writeFileSync(filePath, buffer);
+      const protocol = req.protocol;
+      const host = req.get("host") || "";
+      return `${protocol}://${host}/uploads/photos/${filename}`;
+    }
+
+    throw new Error("Photo storage is not available. Please configure Supabase Storage.");
+  }
+
+  // GET /api/jobs/:id/photo-pairs - list before/after pairs for a job.
+  // Readable by the provider, assigned crew, OR the homeowner on the job's
+  // linked appointment (Task #485: photos are attached to the review
+  // request sent to the customer, so the customer must be able to view them).
+  app.get(
+    "/api/jobs/:id/photo-pairs",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const authUserId = req.authenticatedUserId!;
+        const job = await storage.getJob(req.params.id);
+        if (!job) return res.status(404).json({ error: "Job not found" });
+
+        let isHomeowner = false;
+        if (job.appointmentId) {
+          const appointment = await storage.getAppointment(job.appointmentId);
+          isHomeowner = !!appointment && appointment.userId === authUserId;
+        }
+
+        if (!isHomeowner) {
+          const gate = await requireCrewOrProviderForJob(req, req.params.id, res);
+          if (!gate) return;
+        }
+
+        const pairs = await db
+          .select()
+          .from(jobPhotoPairs)
+          .where(eq(jobPhotoPairs.jobId, job.id))
+          .orderBy(desc(jobPhotoPairs.createdAt));
+        res.json({ pairs });
+      } catch (error) {
+        console.error("Get job photo pairs error:", error);
+        res.status(500).json({ error: "Failed to load photo pairs" });
+      }
+    },
+  );
+
+  // POST /api/jobs/:id/photo-pairs - capture a before/after pair for a job.
+  // Accepts base64-encoded before + after images, uploads both to Supabase
+  // Storage, and stores the pair against the job record.
+  app.post(
+    "/api/jobs/:id/photo-pairs",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const gate = await requireCrewOrProviderForJob(req, req.params.id, res);
+        if (!gate) return;
+        const job = gate.job;
+
+        const { beforePhoto, afterPhoto, label } = req.body as {
+          beforePhoto?: string;
+          afterPhoto?: string;
+          label?: string;
+        };
+        if (!beforePhoto || !afterPhoto) {
+          return res.status(400).json({
+            error: "Both beforePhoto and afterPhoto are required",
+          });
+        }
+
+        const [beforeUrl, afterUrl] = await Promise.all([
+          uploadJobPhotoBase64(job.id, beforePhoto, req),
+          uploadJobPhotoBase64(job.id, afterPhoto, req),
+        ]);
+
+        const [pair] = await db
+          .insert(jobPhotoPairs)
+          .values({
+            jobId: job.id,
+            providerId: job.providerId,
+            beforePhotoUrl: beforeUrl,
+            afterPhotoUrl: afterUrl,
+            label: label?.trim() || null,
+          })
+          .returning();
+
+        res.status(201).json({ pair });
+      } catch (error) {
+        console.error("Create job photo pair error:", error);
+        res.status(500).json({
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to save before/after photos",
+        });
+      }
+    },
+  );
+
+  // DELETE /api/job-photo-pairs/:id - remove a before/after pair (provider only).
+  app.delete(
+    "/api/job-photo-pairs/:id",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const authUserId = req.authenticatedUserId!;
+        const [pair] = await db
+          .select()
+          .from(jobPhotoPairs)
+          .where(eq(jobPhotoPairs.id, req.params.id))
+          .limit(1);
+        if (!pair) return res.status(404).json({ error: "Photo pair not found" });
+        if (!(await assertProviderOwnership(req, pair.providerId, res))) return;
+        await db.delete(jobPhotoPairs).where(eq(jobPhotoPairs.id, pair.id));
+        res.json({ success: true });
+      } catch (error) {
+        console.error("Delete job photo pair error:", error);
+        res.status(500).json({ error: "Failed to delete photo pair" });
+      }
+    },
+  );
+
   // ============ CREW TIME TRACKING ROUTES (Task #479) ============
   // Simple clock-in/clock-out for a crew member on a job. No GPS, no
   // payroll integration — just timestamps for hours-worked/job-costing
@@ -5789,7 +5982,21 @@ Give actionable, specific recommendations. Be brief (1 sentence each).`;
           .from(reviews)
           .where(eq(reviews.appointmentId, appointment.id))
           .limit(1);
-        res.json({ appointment, provider: providerInfo, review: reviewRow ?? null });
+        // Task #485: surface the linked job's id so the client can
+        // independently fetch before/after photo pairs to render alongside
+        // the review request, without this route needing to know about
+        // photo pairs itself.
+        const [jobRow] = await db
+          .select({ id: jobs.id })
+          .from(jobs)
+          .where(eq(jobs.appointmentId, appointment.id))
+          .limit(1);
+        res.json({
+          appointment,
+          provider: providerInfo,
+          review: reviewRow ?? null,
+          job: jobRow ?? null,
+        });
       } catch (error) {
         console.error("Get appointment error:", error);
         res.status(500).json({ error: "Failed to get appointment" });

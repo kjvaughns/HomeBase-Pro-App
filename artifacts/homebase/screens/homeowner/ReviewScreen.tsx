@@ -24,6 +24,7 @@ import { apiRequest, getApiUrl, getAuthHeaders } from "@/lib/query-client";
 import { RatingStars } from "@/components/RatingStars";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { recordHappyMoment } from "@/state/appReviewStore";
+import { BeforeAfterSlider } from "@/components/BeforeAfterSlider";
 
 type ScreenRouteProp = RouteProp<RootStackParamList, "Review">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -47,6 +48,15 @@ interface AppointmentData {
     providerReplyAt?: string | null;
     providerReplyUpdatedAt?: string | null;
   } | null;
+  job?: { id: string } | null;
+}
+
+interface JobPhotoPair {
+  id: string;
+  beforePhotoUrl: string;
+  afterPhotoUrl: string;
+  label: string | null;
+  createdAt: string;
 }
 
 export default function ReviewScreen() {
@@ -81,6 +91,20 @@ export default function ReviewScreen() {
       return res.json();
     },
   });
+
+  // Task #485: fetch any before/after photo pairs the provider captured for
+  // this job so the homeowner sees them while leaving a review.
+  const linkedJobId = data?.job?.id;
+  const { data: photoPairsData } = useQuery<{ pairs: JobPhotoPair[] }>({
+    queryKey: ["/api/jobs", linkedJobId, "photo-pairs"],
+    enabled: !!linkedJobId,
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/jobs/${linkedJobId}/photo-pairs`);
+      if (!res.ok) throw new Error("Failed to load photo pairs");
+      return res.json();
+    },
+  });
+  const photoPairs = photoPairsData?.pairs ?? [];
 
   useEffect(() => {
     if (!showSuccess) return;
@@ -263,6 +287,23 @@ export default function ReviewScreen() {
               </View>
             ) : null}
           </GlassCard>
+
+          {photoPairs.length > 0 ? (
+            <GlassCard style={styles.providerCard} testID="card-before-after">
+              <ThemedText style={[styles.sectionTitleLeft, { marginBottom: Spacing.sm }]}>
+                Before &amp; After
+              </ThemedText>
+              {photoPairs.map((pair) => (
+                <View key={pair.id} style={{ marginBottom: Spacing.sm }}>
+                  <BeforeAfterSlider
+                    beforeUri={pair.beforePhotoUrl}
+                    afterUri={pair.afterPhotoUrl}
+                    height={200}
+                  />
+                </View>
+              ))}
+            </GlassCard>
+          ) : null}
         </KeyboardAwareScrollViewCompat>
       </ThemedView>
     );
@@ -293,6 +334,23 @@ export default function ReviewScreen() {
             </View>
           </View>
         </GlassCard>
+
+        {photoPairs.length > 0 ? (
+          <GlassCard style={styles.sectionCard} testID="card-before-after">
+            <ThemedText style={[styles.sectionTitleLeft, { marginBottom: Spacing.sm }]}>
+              Before &amp; After
+            </ThemedText>
+            {photoPairs.map((pair) => (
+              <View key={pair.id} style={{ marginBottom: Spacing.sm }}>
+                <BeforeAfterSlider
+                  beforeUri={pair.beforePhotoUrl}
+                  afterUri={pair.afterPhotoUrl}
+                  height={200}
+                />
+              </View>
+            ))}
+          </GlassCard>
+        ) : null}
 
         <GlassCard style={styles.sectionCard}>
           <View style={styles.ratingSection}>

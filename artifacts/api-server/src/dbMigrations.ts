@@ -346,6 +346,27 @@ export async function runBootMigrations(): Promise<void> {
       )
     `);
 
+    // ── job_photo_pairs: Task #485 before/after photo engine ─────────────
+    await runSql("table.job_photo_pairs", `
+      CREATE TABLE IF NOT EXISTS job_photo_pairs (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+        job_id VARCHAR NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+        provider_id VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+        before_photo_url TEXT NOT NULL,
+        after_photo_url TEXT NOT NULL,
+        label TEXT,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+    await runSql("job_photo_pairs.job_id_idx", `
+      CREATE INDEX IF NOT EXISTS job_photo_pairs_job_id_idx
+        ON job_photo_pairs (job_id, created_at DESC)
+    `);
+    await runSql("job_photo_pairs.provider_id_idx", `
+      CREATE INDEX IF NOT EXISTS job_photo_pairs_provider_id_idx
+        ON job_photo_pairs (provider_id, created_at DESC)
+    `);
+
     // ── refunds: create table if missing (stripe Connect refunds) ────────
     await runSql("table.refunds", `
       CREATE TABLE IF NOT EXISTS refunds (
@@ -1725,6 +1746,8 @@ export async function runBootMigrations(): Promise<void> {
       ["jobs.no_show_fee_payment_intent_id column", `SELECT no_show_fee_payment_intent_id FROM jobs LIMIT 0`],
       // Task #479: crew time tracking (clock in/out)
       ["crew_time_entries table",                   `SELECT id FROM crew_time_entries LIMIT 0`],
+      // Task #485: before/after photo engine
+      ["job_photo_pairs table",                     `SELECT id FROM job_photo_pairs LIMIT 0`],
     );
 
     const verificationErrors: string[] = [];

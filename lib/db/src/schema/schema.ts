@@ -2122,6 +2122,44 @@ export const insertHousefaxEntrySchema = createInsertSchema(
 export type HousefaxEntry = typeof housefaxEntries.$inferSelect;
 export type InsertHousefaxEntry = z.infer<typeof insertHousefaxEntrySchema>;
 
+// ─── Before/After Photo Pairs (Task #485) ───────────────────────────────────
+// A single captured before/after pair for a job. Feeds three surfaces from
+// one capture action: the job's invoice, the client's review request, and a
+// branded shareable comparison image the provider can post as marketing.
+export const jobPhotoPairs = pgTable("job_photo_pairs", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id")
+    .notNull()
+    .references(() => jobs.id, { onDelete: "cascade" }),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  beforePhotoUrl: text("before_photo_url").notNull(),
+  afterPhotoUrl: text("after_photo_url").notNull(),
+  label: text("label"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const jobPhotoPairsRelations = relations(jobPhotoPairs, ({ one }) => ({
+  job: one(jobs, { fields: [jobPhotoPairs.jobId], references: [jobs.id] }),
+  provider: one(providers, {
+    fields: [jobPhotoPairs.providerId],
+    references: [providers.id],
+  }),
+}));
+
+export const insertJobPhotoPairSchema = createInsertSchema(
+  jobPhotoPairs,
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type JobPhotoPair = typeof jobPhotoPairs.$inferSelect;
+export type InsertJobPhotoPair = z.infer<typeof insertJobPhotoPairSchema>;
+
 // ─── Support Tickets ──────────────────────────────────────────────────────────
 
 export const supportTickets = pgTable("support_tickets", {

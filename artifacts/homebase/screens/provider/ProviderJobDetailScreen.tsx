@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { StyleSheet, View, ScrollView, Pressable, Linking, Alert, ActivityIndicator, Image, Platform, TextInput, Modal } from "react-native";
+import { StyleSheet, View, ScrollView, Pressable, Linking, Alert, ActivityIndicator, Image, Platform, TextInput, Modal, Share } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, RouteProp, useNavigation } from "@react-navigation/native";
@@ -28,6 +28,7 @@ import { HomeProfileSection, type HomeProfile } from "@/components/HomeProfileSe
 import { useNetworkStore } from "@/state/networkStore";
 import { loadScheduleSnapshot } from "@/lib/offline-cache";
 import { recordHappyMoment } from "@/state/appReviewStore";
+import { BeforeAfterSlider } from "@/components/BeforeAfterSlider";
 
 type JobStatus = "scheduled" | "confirmed" | "on_my_way" | "arrived" | "in_progress" | "completed" | "cancelled" | "weather_held" | "no_show";
 
@@ -439,7 +440,7 @@ export default function ProviderJobDetailScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<{ ProviderJobDetail: { jobId: string } }, "ProviderJobDetail">>();
   const { jobId } = route.params;
-  const { providerProfile } = useAuthStore();
+  const { providerProfile, user } = useAuthStore();
   const providerId = providerProfile?.id;
   const queryClient = useQueryClient();
 
@@ -447,6 +448,13 @@ export default function ProviderJobDetailScreen() {
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
   const checklistFetched = useRef(false);
+
+  // Task #485: before/after photo pair capture state.
+  const [beforeAfterCaptureVisible, setBeforeAfterCaptureVisible] = useState(false);
+  const [capturedBeforeUri, setCapturedBeforeUri] = useState<string | null>(null);
+  const [capturedAfterUri, setCapturedAfterUri] = useState<string | null>(null);
+  const [isCapturingPair, setIsCapturingPair] = useState(false);
+  const [sharingPairId, setSharingPairId] = useState<string | null>(null);
 
   const [rescheduleSheetVisible, setRescheduleSheetVisible] = useState(false);
   const [rescheduleDate, setRescheduleDate] = useState<Date | null>(null);
@@ -895,6 +903,27 @@ export default function ProviderJobDetailScreen() {
     status: string;
     invoiceNumber: string | null;
   }
+  // Task #485: before/after photo pairs captured for this job. Feeds the
+  // job detail slider, and is fetched independently by the invoice and
+  // review screens so the pairs auto-attach without touching those routes.
+  interface JobPhotoPair {
+    id: string;
+    beforePhotoUrl: string;
+    afterPhotoUrl: string;
+    label: string | null;
+    createdAt: string;
+  }
+  const { data: photoPairsData } = useQuery<{ pairs: JobPhotoPair[] }>({
+    queryKey: ["/api/jobs", jobId, "photo-pairs"],
+    enabled: !!jobId && isOnline,
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/jobs/${jobId}/photo-pairs`);
+      if (!res.ok) throw new Error("Failed to load photo pairs");
+      return res.json();
+    },
+  });
+  const photoPairs = photoPairsData?.pairs ?? [];
+
   const { data: jobInvoiceData } = useQuery<{ invoice: JobInvoice | null }>({
     queryKey: ["/api/jobs", jobId, "invoice"],
     enabled: !!jobId && isOnline,
@@ -999,6 +1028,131 @@ export default function ProviderJobDetailScreen() {
       setIsUploadingPhotos(false);
     }
   }, [jobId, blockOffline]);
+
+  // Task #485: capture a single before/after photo. Opens the camera twice
+  // (before, then after) and submits both together to the photo-pairs API,
+  // which auto-attaches the pair to this job's invoice and review request.
+  const pickPhotoForPair = useCallback(async (): Promise<string | null> => {
+    const permResult = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permResult.granted) {
+      const libraryPerm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!libraryPerm.granted) {
+        Alert.alert("Permission Required", "Please allow camera or photo library access to capture before/after photos.");
+        return null;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.7,
+        base64: true,
+      });
+      if (result.canceled || !result.assets?.[0]?.base64) return null;
+      return `data:image/jpeg;base64,${result.assets[0].base64}`;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      quality: 0.7,
+      base64: true,
+    });
+    if (result.canceled || !result.assets?.[0]?.base64) return null;
+    return `data:image/jpeg;base64,${result.assets[0].base64}`;
+  }, []);
+
+  const handleCaptureBefore = useCallback(async () => {
+    if (blockOffline()) return;
+    if (Platform.OS === "web") {
+      Alert.alert("Not Available", "Camera capture is available on mobile devices.");
+      return;
+    }
+    const uri = await pickPhotoForPair();
+    if (uri) setCapturedBeforeUri(uri);
+  }, [pickPhotoForPair, blockOffline]);
+
+  const handleCaptureAfter = useCallback(async () => {
+    if (blockOffline()) return;
+    if (Platform.OS === "web") {
+      Alert.alert("Not Available", "Camera capture is available on mobile devices.");
+      return;
+    }
+    const uri = await pickPhotoForPair();
+    if (uri) setCapturedAfterUri(uri);
+  }, [pickPhotoForPair, blockOffline]);
+
+  const savePhotoPairMutation = useMutation({
+    mutationFn: async () => {
+      if (!capturedBeforeUri || !capturedAfterUri) throw new Error("Capture both photos first");
+      const res = await apiRequest("POST", `/api/jobs/${jobId}/photo-pairs`, {
+        beforePhoto: capturedBeforeUri,
+        afterPhoto: capturedAfterUri,
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(errorData.error || "Failed to save before/after photos");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId, "photo-pairs"] });
+      setBeforeAfterCaptureVisible(false);
+      setCapturedBeforeUri(null);
+      setCapturedAfterUri(null);
+    },
+    onError: (err: any) => {
+      Alert.alert("Couldn't save photos", err?.message || "Please try again.");
+    },
+  });
+
+  const handleSaveBeforeAfterPair = useCallback(() => {
+    if (blockOffline()) return;
+    savePhotoPairMutation.mutate();
+  }, [savePhotoPairMutation, blockOffline]);
+
+  // Task #485: branded share/export. Renders an off-screen side-by-side
+  // composite (with provider logo/name footer) and captures it as an image
+  // for sharing, mirroring the MonthlyRecapScreen share pattern.
+  const shareCaptureRef = useRef<View>(null);
+  const [pairPendingShare, setPairPendingShare] = useState<JobPhotoPair | null>(null);
+
+  const handleSharePhotoPair = useCallback(async (pair: JobPhotoPair) => {
+    if (Platform.OS === "web") {
+      Alert.alert("Not Available", "Sharing is available on mobile devices.");
+      return;
+    }
+    try {
+      setSharingPairId(pair.id);
+      setPairPendingShare(pair);
+      await new Promise<void>((resolve) => setTimeout(resolve, 500));
+
+      let captureRef: ((view: any, opts?: any) => Promise<string>) | null = null;
+      let Sharing: { isAvailableAsync: () => Promise<boolean>; shareAsync: (uri: string, opts?: any) => Promise<void> } | null = null;
+      try { captureRef = require("react-native-view-shot").captureRef; } catch { /* not linked */ }
+      try { Sharing = require("expo-sharing"); } catch { /* not available */ }
+
+      if (captureRef && shareCaptureRef.current) {
+        const uri = await captureRef(shareCaptureRef, {
+          format: "jpg",
+          quality: 0.92,
+          result: "tmpfile",
+        });
+        if (Platform.OS === "ios") {
+          await Share.share({ url: uri });
+        } else {
+          const isAvailable = Sharing ? await Sharing.isAvailableAsync() : false;
+          if (isAvailable && Sharing) {
+            await Sharing.shareAsync(uri, { mimeType: "image/jpeg", dialogTitle: "Share before & after" });
+          } else {
+            await Share.share({ message: "Check out this before & after from " + (providerProfile?.businessName || "my job") });
+          }
+        }
+      } else {
+        Alert.alert("Not Available", "Photo sharing needs a development build (not available in Expo Go).");
+      }
+    } catch (e: any) {
+      Alert.alert("Couldn't share", e?.message || "Please try again.");
+    } finally {
+      setSharingPairId(null);
+      setPairPendingShare(null);
+    }
+  }, [providerProfile]);
 
   if ((isLoading || (!isOnline && !offlineHydrated)) && !job) {
     return <JobDetailSkeleton />;
@@ -1335,6 +1489,68 @@ export default function ProviderJobDetailScreen() {
             </GlassCard>
           </Animated.View>
         ) : null}
+
+        {resolvedDisplayStatus === "completed" ? (
+          <Animated.View entering={FadeInDown.delay(720).duration(400)}>
+            <GlassCard style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <ThemedText type="label" style={{ color: theme.textSecondary }}>
+                  BEFORE &amp; AFTER
+                </ThemedText>
+                <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+                  {photoPairs.length} captured
+                </ThemedText>
+              </View>
+              <ThemedText type="caption" style={{ color: theme.textSecondary, marginBottom: Spacing.sm }}>
+                Drag to reveal — auto-attached to the invoice and review request
+              </ThemedText>
+
+              {photoPairs.map((pair) => (
+                <View key={pair.id} style={{ marginBottom: Spacing.md }}>
+                  <BeforeAfterSlider
+                    beforeUri={pair.beforePhotoUrl}
+                    afterUri={pair.afterPhotoUrl}
+                    height={200}
+                  />
+                  <Pressable
+                    testID={`button-share-photo-pair-${pair.id}`}
+                    style={[styles.photoUploadButton, { borderColor: Colors.accent, marginTop: Spacing.sm }]}
+                    onPress={() => handleSharePhotoPair(pair)}
+                    disabled={sharingPairId === pair.id}
+                  >
+                    {sharingPairId === pair.id ? (
+                      <ActivityIndicator size="small" color={Colors.accent} />
+                    ) : (
+                      <Feather name="share-2" size={16} color={Colors.accent} />
+                    )}
+                    <ThemedText type="caption" style={{ color: Colors.accent, marginLeft: Spacing.xs }}>
+                      {sharingPairId === pair.id ? "Preparing..." : "Share Comparison"}
+                    </ThemedText>
+                  </Pressable>
+                </View>
+              ))}
+
+              <Pressable
+                testID="button-capture-before-after"
+                style={[
+                  styles.photoUploadButton,
+                  { borderColor: Colors.accent, opacity: isOnline ? 1 : 0.5 },
+                ]}
+                onPress={() => {
+                  if (blockOffline()) return;
+                  setCapturedBeforeUri(null);
+                  setCapturedAfterUri(null);
+                  setBeforeAfterCaptureVisible(true);
+                }}
+              >
+                <Feather name="image" size={18} color={Colors.accent} />
+                <ThemedText type="caption" style={{ color: Colors.accent, marginLeft: Spacing.xs }}>
+                  Capture Before/After
+                </ThemedText>
+              </Pressable>
+            </GlassCard>
+          </Animated.View>
+        ) : null}
       </ScrollView>
 
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing.md, backgroundColor: theme.backgroundRoot, paddingHorizontal: horizontalPadding }]}>
@@ -1610,6 +1826,94 @@ export default function ProviderJobDetailScreen() {
         }}
         onCancel={() => setRescheduleStep("closed")}
       />
+
+      <Modal
+        visible={beforeAfterCaptureVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setBeforeAfterCaptureVisible(false)}
+      >
+        <View style={styles.captureModalOverlay}>
+          <View style={[styles.captureModalCard, { backgroundColor: theme.backgroundRoot }]}>
+            <View style={styles.sectionHeader}>
+              <ThemedText type="h3">Capture Before &amp; After</ThemedText>
+              <Pressable onPress={() => setBeforeAfterCaptureVisible(false)} testID="button-close-before-after-capture">
+                <Feather name="x" size={22} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+            <View style={styles.captureRow}>
+              <Pressable
+                testID="button-capture-before-photo"
+                style={[styles.capturePane, { borderColor: Colors.accent }]}
+                onPress={handleCaptureBefore}
+              >
+                {capturedBeforeUri ? (
+                  <Image source={{ uri: capturedBeforeUri }} style={styles.capturePaneImage} resizeMode="cover" />
+                ) : (
+                  <>
+                    <Feather name="camera" size={22} color={Colors.accent} />
+                    <ThemedText type="caption" style={{ color: Colors.accent, marginTop: Spacing.xs }}>Before</ThemedText>
+                  </>
+                )}
+              </Pressable>
+              <Pressable
+                testID="button-capture-after-photo"
+                style={[styles.capturePane, { borderColor: Colors.accent }]}
+                onPress={handleCaptureAfter}
+              >
+                {capturedAfterUri ? (
+                  <Image source={{ uri: capturedAfterUri }} style={styles.capturePaneImage} resizeMode="cover" />
+                ) : (
+                  <>
+                    <Feather name="camera" size={22} color={Colors.accent} />
+                    <ThemedText type="caption" style={{ color: Colors.accent, marginTop: Spacing.xs }}>After</ThemedText>
+                  </>
+                )}
+              </Pressable>
+            </View>
+            <PrimaryButton
+              onPress={handleSaveBeforeAfterPair}
+              disabled={!capturedBeforeUri || !capturedAfterUri || savePhotoPairMutation.isPending}
+              loading={savePhotoPairMutation.isPending}
+              style={{ marginTop: Spacing.lg }}
+              testID="button-save-before-after"
+            >
+              Save Comparison
+            </PrimaryButton>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Off-screen composite used only to render a branded share image via
+          react-native-view-shot; kept out of the visible layout. */}
+      {pairPendingShare ? (
+        <View style={styles.shareCaptureOffscreen} pointerEvents="none">
+          <View ref={shareCaptureRef} style={styles.shareCaptureCard} collapsable={false}>
+            <View style={styles.shareCaptureImages}>
+              <View style={styles.shareCaptureImageWrap}>
+                <Image source={{ uri: pairPendingShare.beforePhotoUrl }} style={styles.shareCaptureImage} resizeMode="cover" />
+                <View style={styles.shareCaptureBadge}>
+                  <ThemedText style={styles.shareCaptureBadgeText}>BEFORE</ThemedText>
+                </View>
+              </View>
+              <View style={styles.shareCaptureImageWrap}>
+                <Image source={{ uri: pairPendingShare.afterPhotoUrl }} style={styles.shareCaptureImage} resizeMode="cover" />
+                <View style={styles.shareCaptureBadge}>
+                  <ThemedText style={styles.shareCaptureBadgeText}>AFTER</ThemedText>
+                </View>
+              </View>
+            </View>
+            <View style={styles.shareCaptureFooter}>
+              {user?.avatarUrl ? (
+                <Image source={{ uri: user.avatarUrl }} style={styles.shareCaptureLogo} />
+              ) : null}
+              <ThemedText style={styles.shareCaptureFooterText} numberOfLines={1}>
+                {providerProfile?.businessName || "HomeBase Pro"}
+              </ThemedText>
+            </View>
+          </View>
+        </View>
+      ) : null}
     </ThemedView>
   );
 }
@@ -2053,5 +2357,89 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     borderStyle: "dashed",
     gap: Spacing.xs,
+  },
+  captureModalOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  captureModalCard: {
+    borderTopLeftRadius: BorderRadius.lg,
+    borderTopRightRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    paddingBottom: Spacing.xl,
+  },
+  captureRow: {
+    flexDirection: "row",
+    gap: Spacing.md,
+    marginTop: Spacing.md,
+  },
+  capturePane: {
+    flex: 1,
+    height: 160,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  capturePaneImage: {
+    width: "100%",
+    height: "100%",
+  },
+  shareCaptureOffscreen: {
+    position: "absolute",
+    top: -9999,
+    left: -9999,
+  },
+  shareCaptureCard: {
+    width: 1080,
+    backgroundColor: "#000",
+  },
+  shareCaptureImages: {
+    flexDirection: "row",
+  },
+  shareCaptureImageWrap: {
+    flex: 1,
+    height: 720,
+    position: "relative",
+  },
+  shareCaptureImage: {
+    width: "100%",
+    height: "100%",
+  },
+  shareCaptureBadge: {
+    position: "absolute",
+    top: 24,
+    left: 24,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  shareCaptureBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 22,
+    fontWeight: "700",
+    letterSpacing: 1,
+  },
+  shareCaptureFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    backgroundColor: "#111111",
+  },
+  shareCaptureLogo: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+  },
+  shareCaptureFooterText: {
+    color: "#FFFFFF",
+    fontSize: 22,
+    fontWeight: "700",
   },
 });

@@ -6,3 +6,4 @@
 - [api-server pre-existing TS error baseline](api-server-preexisting-ts-errors.md) — routes.ts has ~1600 pre-existing TS errors (systemic IdParams/return-value patterns); check specific lines, not total count.
 - [Sed-based JSX attribute substitution breaks syntax](sed-jsx-attribute-substitution.md) — replacing `attr="value"` with an identifier via sed needs `{}` braces or it produces invalid JSX; verify with tsc after any bulk sweep.
 - [Parallel subagent refactors need a dedicated verification pass](parallel-subagent-refactor-verification.md) — multi-file "adopt shared util" sweeps reliably leave dangling imports/refs; budget real time for a full typecheck + fix pass, not a formality.
+- [HomeBase test account passwords](homebase-test-account-passwords.md) — seeded users' passwords are unknown; reset via bcrypt hash update in DB to enable curl-based API verification when Expo web preview is blank.
