@@ -57,6 +57,7 @@ import { useAuthStore } from "@/state/authStore";
 import { useProviderStore } from "@/state/providerStore";
 import { useOnboardingStore } from "@/state/onboardingStore";
 import { isUpcomingJob } from "@/lib/jobUtils";
+import { syncProviderWidgetData } from "@/lib/widgetData";
 import { ProviderFeed, type FeedCardData } from "@/components/FeedCard";
 
 type BusinessHourEntry = { enabled?: boolean; open?: string; close?: string };
@@ -679,6 +680,14 @@ export default function ProviderHomeScreen() {
     await Promise.all([refetchStats(), refetchJobs(), refetchFeed()]);
     setRefreshing(false);
   };
+
+  // Keep the "Next Job" / "Earned Today" home & lock screen widgets fresh
+  // whenever the underlying jobs or stats data changes (job created/updated,
+  // invoice paid, etc.). No-op on non-iOS platforms.
+  useEffect(() => {
+    if (!providerId || jobsLoading || statsLoading) return;
+    syncProviderWidgetData(providerId);
+  }, [providerId, jobs, stats.revenueMTD, jobsLoading, statsLoading]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();

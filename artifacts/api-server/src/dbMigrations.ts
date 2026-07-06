@@ -1642,6 +1642,20 @@ export async function runBootMigrations(): Promise<void> {
       "providers.timezone",
       `ALTER TABLE providers ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT 'America/New_York'`,
     );
+    // Task #487: home/lock-screen iOS widgets — opaque token letting the
+    // WidgetKit extension refresh its own timeline via a public endpoint
+    // without holding a session/JWT.
+    await runSql(
+      "providers.widget_access_token",
+      `ALTER TABLE providers ADD COLUMN IF NOT EXISTS widget_access_token TEXT`,
+    );
+    await runSql(
+      "providers.widget_access_token.unique",
+      `DO $$ BEGIN
+        ALTER TABLE providers ADD CONSTRAINT providers_widget_access_token_unique UNIQUE (widget_access_token);
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$;`,
+    );
     await runSql(
       "recap_notifications_sent.table",
       `CREATE TABLE IF NOT EXISTS recap_notifications_sent (

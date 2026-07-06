@@ -69,6 +69,7 @@ import { db, pool } from "./db";
 import { eq, and, or, desc, asc, sql, gte, lte, ilike, inArray, lt, SQL } from "drizzle-orm";
 import { getProviderReadinessSet } from "./stripeConnectService";
 import { hash, compare } from "bcryptjs";
+import { randomBytes } from "crypto";
 
 const SALT_ROUNDS = 10;
 
@@ -111,6 +112,13 @@ export interface IStorage {
   getActiveJobTrackingSession(jobId: string): Promise<JobTrackingSession | undefined>;
   updateJobTrackingSessionLocation(id: string, lat: number, lng: number): Promise<JobTrackingSession | undefined>;
   endActiveJobTrackingSessions(jobId: string): Promise<void>;
+
+  getOrCreateProviderWidgetToken(providerId: string): Promise<string>;
+  getProviderByWidgetToken(token: string): Promise<Provider | undefined>;
+  getProviderWidgetSnapshot(providerId: string): Promise<{
+    nextJob: { scheduledDate: string; scheduledTime: string | null; clientName: string } | null;
+    earnedTodayCents: number;
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -399,6 +407,90 @@ export class DatabaseStorage implements IStorage {
   async updateProvider(id: string, data: Partial<Provider>): Promise<Provider | undefined> {
     const [provider] = await db.update(providers).set(data).where(eq(providers.id, id)).returning();
     return provider || undefined;
+  }
+
+  // Task #487: home/lock-screen widgets — lazily issue an opaque token the
+  // iOS WidgetKit extension can present to the public widget-snapshot route
+  // instead of a full session/JWT.
+  async getOrCreateProviderWidgetToken(providerId: string): Promise<string> {
+    const provider = await this.getProvider(providerId);
+    if (provider?.widgetAccessToken) return provider.widgetAccessToken;
+    const token = randomBytes(24).toString("hex");
+    const [updated] = await db
+      .update(providers)
+      .set({ widgetAccessToken: token })
+      .where(eq(providers.id, providerId))
+      .returning({ widgetAccessToken: providers.widgetAccessToken });
+    return updated?.widgetAccessToken || token;
+  }
+
+  async getProviderByWidgetToken(token: string): Promise<Provider | undefined> {
+    const [provider] = await db
+      .select()
+      .from(providers)
+      .where(eq(providers.widgetAccessToken, token));
+    return provider || undefined;
+  }
+
+  // Minimal snapshot for the Next Job / Earnings widgets — next upcoming job
+  // (time + client first name) and today's paid-invoice total. Mirrors the
+  // upcoming-job ordering in client/lib/jobUtils.ts and the paid-invoice
+  // sum used by getProviderStats, but scoped to "today" and a single row.
+  async getProviderWidgetSnapshot(providerId: string): Promise<{
+    nextJob: { scheduledDate: string; scheduledTime: string | null; clientName: string } | null;
+    earnedTodayCents: number;
+  }> {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+
+    const [nextJobRow] = await db
+      .select({
+        scheduledDate: jobs.scheduledDate,
+        scheduledTime: jobs.scheduledTime,
+        status: jobs.status,
+        clientFirstName: clients.firstName,
+        clientLastName: clients.lastName,
+      })
+      .from(jobs)
+      .leftJoin(clients, eq(jobs.clientId, clients.id))
+      .where(
+        and(
+          eq(jobs.providerId, providerId),
+          or(
+            eq(jobs.status, "in_progress"),
+            and(eq(jobs.status, "scheduled"), gte(jobs.scheduledDate, startOfToday)),
+          ),
+        ),
+      )
+      .orderBy(asc(jobs.scheduledDate))
+      .limit(1);
+
+    const nextJob = nextJobRow
+      ? {
+          scheduledDate: new Date(nextJobRow.scheduledDate).toISOString(),
+          scheduledTime: nextJobRow.scheduledTime,
+          clientName: [nextJobRow.clientFirstName, nextJobRow.clientLastName]
+            .filter(Boolean)
+            .join(" ") || "Client",
+        }
+      : null;
+
+    const paidToday = await db
+      .select({ total: invoices.totalCents })
+      .from(invoices)
+      .where(
+        and(
+          eq(invoices.providerId, providerId),
+          eq(invoices.status, "paid"),
+          gte(invoices.paidAt, startOfToday),
+          lte(invoices.paidAt, endOfToday),
+        ),
+      );
+    const earnedTodayCents = paidToday.reduce((sum, inv) => sum + (inv.total || 0), 0);
+
+    return { nextJob, earnedTodayCents };
   }
 
   // Client methods

@@ -24,6 +24,11 @@
         "NSPhotoLibraryAddUsageDescription": "HomeBase saves photos related to your home projects and service records to your photo library.",
         "NSLocationWhenInUseUsageDescription": "HomeBase uses your location to find nearby service providers and verify service addresses.",
         "NSUserNotificationsUsageDescription": "HomeBase sends you appointment reminders, booking confirmations, and service updates."
+      },
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.homebasepro.app.widgets"
+        ]
       }
     },
     "android": {
@@ -88,7 +93,8 @@
           "merchantIdentifier": "merchant.com.homebasepro.app"
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "@bacons/apple-targets"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -319,6 +319,10 @@ export const providers = pgTable("providers", {
   lastStreakDate: timestamp("last_streak_date"),
   // IANA timezone for local-time push scheduling (defaults to Eastern)
   timezone: text("timezone").notNull().default("America/New_York"),
+  // Task #487: opaque long-lived token scoped only to the public, unauthenticated
+  // widget snapshot endpoint (next job + earned today) so the iOS WidgetKit
+  // extension can refresh itself without holding a full session/JWT.
+  widgetAccessToken: text("widget_access_token").unique(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

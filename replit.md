@@ -67,6 +67,13 @@ User email replies feed back into the ticket thread automatically via a Resend i
 
 **Handler:** `artifacts/api-server/src/inboundEmailHandler.ts`
 
+## iOS widgets (Next Job / Earned Today)
+
+- Native WidgetKit extension lives in `artifacts/homebase/targets/widgets/` (Swift, built via the `@bacons/apple-targets` Expo config plugin — no bare ejection). Two widgets in one `WidgetBundle`: `NextJobWidget` and `EarningsWidget`, both supporting home-screen (`.systemSmall`) and lock-screen (`.accessoryRectangular`/`.accessoryInline`) families.
+- Data flow is hybrid: `artifacts/homebase/lib/widgetData.ts` (`syncProviderWidgetData`) writes the latest snapshot to shared App Group storage (`group.com.homebasepro.app.widgets`) via `ExtensionStorage` whenever job/stats data changes in `ProviderHomeScreen.tsx`, AND the widget's own Swift `TimelineProvider` independently polls `GET /api/public/widget-snapshot` (~30 min cadence) so it stays fresh even if the app isn't opened.
+- Backend: `POST /api/provider/:id/widget-token` (authed) issues/returns an opaque per-provider token; `GET /api/public/widget-snapshot?providerId=&token=` (unauthenticated, token+rate-limit guarded) returns `{ businessName, nextJob, earnedTodayCents }`. Token stored in `providers.widgetAccessToken`.
+- **This environment cannot build/run the native widget** — no Xcode/macOS available. The Swift code is best-effort scaffolding, never compiled locally. Before it can run on a device: set `ios.appleTeamId` in `app.json` (Expo prints a warning without it), run `npx expo prebuild -p ios` (or an EAS build) on a machine/service with Xcode, and verify the widget target in Xcode.
+
 ## Gotchas
 
 - **Never run `pnpm dev` at workspace root** — individual workflows handle env vars (PORT, BASE_PATH).

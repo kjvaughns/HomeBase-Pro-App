@@ -460,6 +460,20 @@ const supportTicketRateLimit = createIpRateLimit({
     "Too many support requests. Please wait an hour and try again.",
 });
 
+// Task #487: iOS WidgetKit extensions poll this on their own timeline
+// schedule (roughly every 15-30 min per iOS's budget), so allow a generous
+// per-IP ceiling while still bounding abuse of the token-guessing surface.
+const widgetSnapshotRateLimitMap = new Map<
+  string,
+  { count: number; resetAt: number }
+>();
+const widgetSnapshotRateLimit = createIpRateLimit({
+  bucket: widgetSnapshotRateLimitMap,
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 30,
+  message: "Too many widget refresh requests. Please try again shortly.",
+});
+
 const publicBookingRateLimitMap = new Map<
   string,
   { count: number; resetAt: number }
@@ -8746,6 +8760,62 @@ Respond with JSON only:
       } catch (error) {
         console.error("Get provider stats error:", error);
         res.status(500).json({ error: "Failed to get provider stats" });
+      }
+    },
+  );
+
+  // Task #487: Home/lock-screen iOS widgets. The app fetches (or creates) a
+  // long-lived opaque token, then embeds {providerId, token} into the shared
+  // App Group storage the WidgetKit extension reads from — the extension
+  // presents that token to the public snapshot route below instead of a
+  // full session/JWT so it can refresh itself without the app running.
+  app.post(
+    "/api/provider/:id/widget-token",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const providerRow = await storage.getProviderByUserId(
+          req.authenticatedUserId!,
+        );
+        if (!providerRow || providerRow.id !== req.params.id) {
+          res.status(403).json({ error: "Forbidden" });
+          return;
+        }
+        const token = await storage.getOrCreateProviderWidgetToken(req.params.id);
+        res.json({ token });
+      } catch (error) {
+        console.error("Get widget token error:", error);
+        res.status(500).json({ error: "Failed to get widget token" });
+      }
+    },
+  );
+
+  // Public, unauthenticated: guarded only by the opaque per-provider token
+  // above. Returns the minimal fields the Next Job / Earnings widgets show.
+  app.get(
+    "/api/public/widget-snapshot",
+    widgetSnapshotRateLimit,
+    async (req: Request, res: Response) => {
+      try {
+        const providerId = String(req.query.providerId || "");
+        const token = String(req.query.token || "");
+        if (!providerId || !token) {
+          res.status(400).json({ error: "providerId and token are required" });
+          return;
+        }
+        const provider = await storage.getProviderByWidgetToken(token);
+        if (!provider || provider.id !== providerId) {
+          res.status(401).json({ error: "Invalid widget token" });
+          return;
+        }
+        const snapshot = await storage.getProviderWidgetSnapshot(providerId);
+        res.json({
+          businessName: provider.businessName,
+          ...snapshot,
+        });
+      } catch (error) {
+        console.error("Get widget snapshot error:", error);
+        res.status(500).json({ error: "Failed to get widget snapshot" });
       }
     },
   );
