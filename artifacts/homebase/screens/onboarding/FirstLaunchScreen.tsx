@@ -8,7 +8,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { useLayout } from "@/hooks/useLayout";
-import { Colors, BorderRadius, Spacing } from "@/constants/theme";
+import { Colors, BorderRadius, Spacing, Typography } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useOnboardingStore } from "@/state/onboardingStore";
 
@@ -176,14 +176,14 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
   },
   brand: {
-    fontSize: 28,
+    ...Typography.title1,
     fontWeight: "700",
     letterSpacing: -0.4,
     marginTop: Spacing.lg,
     textAlign: "center",
   },
   tagline: {
-    fontSize: 15,
+    ...Typography.subhead,
     marginTop: 6,
   },
   ctaArea: {
@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: "#FFFFFF",
-    fontSize: 17,
+    ...Typography.headline,
     fontWeight: "600",
     letterSpacing: -0.2,
   },
@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   loginButtonText: {
-    fontSize: 16,
+    ...Typography.callout,
     fontWeight: "600",
     letterSpacing: -0.2,
   },

@@ -9,6 +9,7 @@ import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 
+import { formatMoney, formatDate } from "@/lib/format";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
@@ -201,17 +202,6 @@ export default function HouseFaxScreen() {
     }, [selectedHome?.id, fetchHouseFaxData, fetchHomeProfile])
   );
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
-
-  const formatDate = (iso: string) => {
-    return new Date(iso).toLocaleDateString("en-US", { month: "short", year: "numeric" });
-  };
 
   const getSystemIcon = (system: string): keyof typeof Feather.glyphMap => {
     return SYSTEM_ICONS[system] || "tool";
@@ -277,7 +267,7 @@ export default function HouseFaxScreen() {
             {housefaxData?.entries.length ?? 0} jobs logged
           </ThemedText>
           <ThemedText style={[styles.scoreMetaItem, { color: Colors.accent }]}>
-            {formatCurrency(totalSpent)} spent
+            {formatMoney(totalSpent, { showCents: false })} spent
           </ThemedText>
         </View>
       </View>
@@ -349,11 +339,11 @@ export default function HouseFaxScreen() {
                 <View style={styles.timelineContent}>
                   <ThemedText style={styles.timelineTitle}>{entry.serviceName}</ThemedText>
                   <ThemedText style={[styles.timelineDate, { color: theme.textSecondary }]}>
-                    {formatDate(entry.completedAt)}
+                    {formatDate(entry.completedAt, { style: "monthYear" })}
                   </ThemedText>
                 </View>
                 {entry.costCents > 0 ? (
-                  <ThemedText style={styles.timelineAmount}>{formatCurrency(entry.costCents / 100)}</ThemedText>
+                  <ThemedText style={styles.timelineAmount}>{formatMoney(entry.costCents, { cents: true, showCents: false })}</ThemedText>
                 ) : null}
               </View>
             ))}
@@ -454,7 +444,7 @@ export default function HouseFaxScreen() {
                   <View style={styles.historyHeader}>
                     <ThemedText style={styles.historyTitle}>{entry.serviceName}</ThemedText>
                     <ThemedText style={[styles.historyDate, { color: theme.textSecondary }]}>
-                      {formatDate(entry.completedAt)}
+                      {formatDate(entry.completedAt, { style: "monthYear" })}
                     </ThemedText>
                   </View>
                   {entry.aiSummary ? (
@@ -473,7 +463,7 @@ export default function HouseFaxScreen() {
                     ) : null}
                     {entry.costCents > 0 ? (
                       <ThemedText style={[styles.historyAmount, { color: Colors.accent }]}>
-                        {formatCurrency(entry.costCents / 100)}
+                        {formatMoney(entry.costCents, { cents: true, showCents: false })}
                       </ThemedText>
                     ) : null}
                   </View>
@@ -529,7 +519,7 @@ export default function HouseFaxScreen() {
             <View style={styles.assetDetailGrid}>
               <View style={styles.assetDetailItem}>
                 <ThemedText style={[styles.assetDetailLabel, { color: theme.textSecondary }]}>Last Serviced</ThemedText>
-                <ThemedText style={styles.assetDetailValue}>{formatDate(asset.lastServiced)}</ThemedText>
+                <ThemedText style={styles.assetDetailValue}>{formatDate(asset.lastServiced, { style: "monthYear" })}</ThemedText>
               </View>
               {asset.nextDue ? (
                 <View style={styles.assetDetailItem}>
@@ -538,7 +528,7 @@ export default function HouseFaxScreen() {
                     styles.assetDetailValue,
                     new Date(asset.nextDue) < new Date() ? { color: Colors.error } : { color: Colors.accent }
                   ]}>
-                    {formatDate(asset.nextDue)}
+                    {formatDate(asset.nextDue, { style: "monthYear" })}
                   </ThemedText>
                 </View>
               ) : null}
@@ -566,7 +556,7 @@ export default function HouseFaxScreen() {
               <ThemedText style={styles.sectionTitle}>Service History</ThemedText>
               {assetEntries.map(entry => (
                 <View key={entry.id} style={styles.assetHistoryItem}>
-                  <ThemedText style={styles.assetHistoryDate}>{formatDate(entry.completedAt)}</ThemedText>
+                  <ThemedText style={styles.assetHistoryDate}>{formatDate(entry.completedAt, { style: "monthYear" })}</ThemedText>
                   <ThemedText style={styles.assetHistoryName}>{entry.serviceName}</ThemedText>
                   {entry.aiSummary ? (
                     <ThemedText style={[styles.assetHistorySummary, { color: theme.textSecondary }]}>
@@ -624,14 +614,14 @@ export default function HouseFaxScreen() {
               </View>
               <ThemedText style={styles.assetName}>{asset.system}</ThemedText>
               <ThemedText style={[styles.assetCategory, { color: theme.textSecondary }]}>
-                Last: {formatDate(asset.lastServiced)}
+                Last: {formatDate(asset.lastServiced, { style: "monthYear" })}
               </ThemedText>
               {asset.nextDue ? (
                 <ThemedText style={[
                   styles.assetAge,
                   new Date(asset.nextDue) < new Date() ? { color: Colors.error } : { color: theme.textTertiary }
                 ]}>
-                  {new Date(asset.nextDue) < new Date() ? "Due now" : `Due ${formatDate(asset.nextDue)}`}
+                  {new Date(asset.nextDue) < new Date() ? "Due now" : `Due ${formatDate(asset.nextDue, { style: "monthYear" })}`}
                 </ThemedText>
               ) : (
                 <ThemedText style={[styles.assetAge, { color: theme.textTertiary }]}>
@@ -671,7 +661,7 @@ export default function HouseFaxScreen() {
             <ThemedText style={[styles.docDate, { color: theme.textTertiary }]}>{doc.date}</ThemedText>
             {doc.amount > 0 ? (
               <ThemedText style={[styles.docAmount, { color: Colors.accent }]}>
-                {formatCurrency(doc.amount)}
+                {formatMoney(doc.amount, { showCents: false })}
               </ThemedText>
             ) : null}
           </GlassCard>

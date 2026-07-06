@@ -9,6 +9,7 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { formatMoney, formatDate } from "@/lib/format";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
@@ -126,19 +127,6 @@ function getInitials(name: string | undefined | null): string {
     .slice(0, 2) || "??";
 }
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
 
 interface ActionButtonProps {
   icon: keyof typeof Feather.glyphMap;
@@ -156,7 +144,7 @@ function ActionButton({ icon, label, onPress, primary }: ActionButtonProps) {
         styles.actionButton,
         primary
           ? { backgroundColor: Colors.accent }
-          : { backgroundColor: theme.cardBackground },
+          : { backgroundColor: theme.backgroundSecondary },
       ]}
       onPress={onPress}
     >
@@ -406,9 +394,9 @@ export default function ClientDetailScreen() {
   const renderOverview = () => (
     <Animated.View entering={FadeInDown.delay(100).duration(400)}>
       <View style={styles.kpiRow}>
-        <KPICard label="Lifetime Value" value={formatCurrency(client.ltv ?? 0)} color={Colors.accent} />
+        <KPICard label="Lifetime Value" value={formatMoney(client.ltv ?? 0, { showCents: false })} color={Colors.accent} />
         <KPICard label="Total Jobs" value={(client.jobCount ?? 0).toString()} />
-        <KPICard label="Avg Ticket" value={formatCurrency(client.avgTicket ?? 0)} />
+        <KPICard label="Avg Ticket" value={formatMoney(client.avgTicket ?? 0, { showCents: false })} />
       </View>
       
       {(client.outstandingBalance ?? 0) > 0 ? (
@@ -420,7 +408,7 @@ export default function ClientDetailScreen() {
                 Outstanding Balance
               </ThemedText>
               <ThemedText type="body" style={{ color: Colors.error }}>
-                {formatCurrency(client.outstandingBalance ?? 0)}
+                {formatMoney(client.outstandingBalance ?? 0, { showCents: false })}
               </ThemedText>
             </View>
             <Pressable
@@ -530,7 +518,7 @@ export default function ClientDetailScreen() {
                 </ThemedText>
                 <View style={styles.jobFooter}>
                   <ThemedText type="body" style={{ color: Colors.accent }}>
-                    {price ? formatCurrency(parseFloat(price)) : "TBD"}
+                    {price ? formatMoney(price, { showCents: false }) : "TBD"}
                   </ThemedText>
                   <Feather name="chevron-right" size={16} color={theme.textSecondary} />
                 </View>
@@ -583,7 +571,7 @@ export default function ClientDetailScreen() {
                 </View>
                 <View style={styles.invoiceDetails}>
                   <ThemedText type="body" style={{ color: Colors.accent }}>
-                    {total ? formatCurrency(parseFloat(total)) : "TBD"}
+                    {total ? formatMoney(total, { showCents: false }) : "TBD"}
                   </ThemedText>
                   {invoice.dueDate ? (
                     <ThemedText type="caption" style={{ color: theme.textSecondary }}>
@@ -646,7 +634,7 @@ export default function ClientDetailScreen() {
                 </View>
                 <View style={styles.invoiceDetails}>
                   <ThemedText type="body" style={{ color: Colors.accent }}>
-                    {formatCurrency((est.totalCents ?? 0) / 100)}
+                    {formatMoney(est.totalCents ?? 0, { cents: true })}
                   </ThemedText>
                   {est.expiresAt ? (
                     <ThemedText type="caption" style={{ color: theme.textSecondary }}>
@@ -1016,7 +1004,7 @@ export default function ClientDetailScreen() {
               ESTIMATED ANNUAL MAINTENANCE
             </ThemedText>
             <ThemedText type="h2" style={{ color: Colors.accent }}>
-              {formatCurrency(home.survivalKitEstimate.min)} - {formatCurrency(home.survivalKitEstimate.max)}
+              {formatMoney(home.survivalKitEstimate.min, { showCents: false })} - {formatMoney(home.survivalKitEstimate.max, { showCents: false })}
             </ThemedText>
           </GlassCard>
         ) : null}

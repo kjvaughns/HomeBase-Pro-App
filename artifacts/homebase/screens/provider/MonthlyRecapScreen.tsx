@@ -19,6 +19,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/query-client";
 
+import { formatMoney } from "@/lib/format";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
@@ -40,15 +41,6 @@ interface RecapData {
   prevTotalRevenueCents: number;
 }
 
-function formatDollarsFull(cents: number): string {
-  const dollars = cents / 100;
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(dollars);
-}
 
 function formatMonthLabel(monthStr: string): string {
   const [year, month] = monthStr.split("-").map(Number);
@@ -157,7 +149,7 @@ export default function MonthlyRecapScreen() {
                 `My ${monthLabel} HomeBase recap 🎉\n` +
                 `✅ ${recap.jobsCompleted} jobs completed\n` +
                 `👥 ${recap.uniqueClients} clients served\n` +
-                `💰 ${formatDollarsFull(recap.totalRevenueCents)} in revenue` +
+                `💰 ${formatMoney(recap.totalRevenueCents, { cents: true })} in revenue` +
                 (recap.topService ? `\n⭐ Top service: ${recap.topService}` : ""),
             });
           }
@@ -169,7 +161,7 @@ export default function MonthlyRecapScreen() {
             `My ${monthLabel} HomeBase recap 🎉\n` +
             `✅ ${recap.jobsCompleted} jobs completed\n` +
             `👥 ${recap.uniqueClients} clients served\n` +
-            `💰 ${formatDollarsFull(recap.totalRevenueCents)} in revenue` +
+            `💰 ${formatMoney(recap.totalRevenueCents, { cents: true })} in revenue` +
             (recap.topService ? `\n⭐ Top service: ${recap.topService}` : ""),
         });
       }
@@ -261,12 +253,12 @@ export default function MonthlyRecapScreen() {
                     <StatRow
                       icon="dollar-sign"
                       label="Revenue Processed"
-                      value={formatDollarsFull(recap.totalRevenueCents)}
+                      value={formatMoney(recap.totalRevenueCents, { cents: true })}
                     />
                     <Delta
                       current={recap.totalRevenueCents}
                       prev={recap.prevTotalRevenueCents}
-                      format={(n) => formatDollarsFull(n)}
+                      format={(n) => formatMoney(n, { cents: true })}
                     />
                   </View>
 

@@ -28,6 +28,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { RatingStars } from "@/components/RatingStars";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest, getApiUrl } from "@/lib/query-client";
 
@@ -286,13 +287,7 @@ export default function ServiceHistoryScreen() {
           <View style={styles.providerInfo}>
             <ThemedText style={styles.providerName}>{provider.name}</ThemedText>
             <ThemedText style={[styles.providerCategory, { color: theme.textSecondary }]}>{provider.category}</ThemedText>
-            <View style={styles.providerRating}>
-              <Ionicons name="star" size={14} color={Colors.warning} />
-              <ThemedText style={styles.providerRatingText}>{provider.rating}</ThemedText>
-              <ThemedText style={[styles.providerJobs, { color: theme.textSecondary }]}>
-                {provider.jobsCompleted} jobs
-              </ThemedText>
-            </View>
+            <RatingStars rating={provider.rating} size="small" showValue />
           </View>
           <View style={styles.providerSpend}>
             <ThemedText style={[styles.spendLabel, { color: theme.textSecondary }]}>Total Spent</ThemedText>

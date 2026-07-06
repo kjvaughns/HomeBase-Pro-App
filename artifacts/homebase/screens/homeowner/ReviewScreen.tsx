@@ -21,6 +21,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, Typography } from "@/constants/theme";
 import { apiRequest, getApiUrl, getAuthHeaders } from "@/lib/query-client";
+import { RatingStars } from "@/components/RatingStars";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { recordHappyMoment } from "@/state/appReviewStore";
 
@@ -217,14 +218,7 @@ export default function ReviewScreen() {
 
           <GlassCard style={styles.providerCard} testID="card-existing-review">
             <View style={styles.starsRowSmall}>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <Ionicons
-                  key={star}
-                  name={star <= existingReview.rating ? "star" : "star-outline"}
-                  size={20}
-                  color={star <= existingReview.rating ? Colors.accent : theme.borderLight}
-                />
-              ))}
+              <RatingStars rating={existingReview.rating} size="medium" />
               <ThemedText style={[styles.reviewMetaText, { color: theme.textTertiary }]}>
                 {`· ${formatReviewDate(existingReview.createdAt)}`}
               </ThemedText>
@@ -304,22 +298,19 @@ export default function ReviewScreen() {
           <View style={styles.ratingSection}>
             <ThemedText style={styles.sectionTitle}>How was your experience?</ThemedText>
 
-            <View style={styles.starsRow}>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <Pressable key={star} onPress={() => handleStarPress(star)} style={styles.starButton} testID={`button-star-${star}`}>
-                  <Ionicons
-                    name={star <= rating ? "star" : "star-outline"}
-                    size={40}
-                    color={star <= rating ? Colors.accent : theme.textTertiary}
-                  />
-                </Pressable>
-              ))}
-            </View>
+            <RatingStars
+              rating={rating}
+              interactive
+              size="large"
+              onChange={handleStarPress}
+              testID="rating-picker"
+            />
 
             <ThemedText
               style={[
                 styles.ratingLabel,
                 { color: rating > 0 ? Colors.accent : theme.textSecondary },
+                { marginTop: Spacing.sm }
               ]}
             >
               {getRatingLabel()}

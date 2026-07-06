@@ -23,6 +23,7 @@ import { SubscriptionGateModal } from "@/components/SubscriptionGateModal";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 import { useLayout } from "@/hooks/useLayout";
 
+import { formatMoney, formatDate } from "@/lib/format";
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
 import { TextField } from "@/components/TextField";
@@ -99,12 +100,12 @@ interface PricingSuggestion {
 function getPriceDisplay(svc: CustomService): string {
   const p = svc.pricingType;
   if ((p === "fixed" || p === "service_call") && svc.basePrice) {
-    return `$${parseFloat(svc.basePrice).toFixed(0)}`;
+    return formatMoney(svc.basePrice, { showCents: false });
   }
   if (p === "variable") {
     if (svc.priceFrom && svc.priceTo)
-      return `$${parseFloat(svc.priceFrom).toFixed(0)}–$${parseFloat(svc.priceTo).toFixed(0)}`;
-    if (svc.priceFrom) return `From $${parseFloat(svc.priceFrom).toFixed(0)}`;
+      return `${formatMoney(svc.priceFrom, { showCents: false })}–${formatMoney(svc.priceTo, { showCents: false })}`;
+    if (svc.priceFrom) return `From ${formatMoney(svc.priceFrom, { showCents: false })}`;
   }
   return "Quote";
 }
@@ -500,12 +501,6 @@ export default function AddJobScreen() {
     }
   }, [pricingSuggestion]);
 
-  const formatDate = (date: Date) =>
-    date.toLocaleDateString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-    });
 
   const formatTime = (time: string) => {
     const [hours, minutes] = time.split(":");
@@ -871,7 +866,7 @@ export default function AddJobScreen() {
                 Date
               </ThemedText>
               <ThemedText style={styles.schedulePillValue}>
-                {formatDate(scheduledDate)}
+                {formatDate(scheduledDate, { style: "weekday" })}
               </ThemedText>
             </Pressable>
             <Pressable

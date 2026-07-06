@@ -27,9 +27,10 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { GlassCard } from "@/components/GlassCard";
+import { formatMoney, formatDate } from "@/lib/format";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
+import { GlassCard } from "@/components/GlassCard";
 import { Colors, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/useTheme";
 import { useLayout } from "@/hooks/useLayout";
@@ -80,14 +81,6 @@ const STATUS_COLOR: Record<string, string> = {
   cancelled: "#9CA3AF",
 };
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
 
 function formatTime(time?: string | null): string {
   if (!time) return "";
@@ -330,7 +323,7 @@ export default function SeriesDetailScreen() {
               type="caption"
               style={{ color: theme.textSecondary, marginLeft: Spacing.xs }}
             >
-              Started {formatDate(series.anchorDate)}
+              Started {formatDate(series.anchorDate, { style: "weekday" })}
               {series.scheduledTime
                 ? ` · ${formatTime(series.scheduledTime)}`
                 : ""}
@@ -347,7 +340,7 @@ export default function SeriesDetailScreen() {
                 type="caption"
                 style={{ color: theme.textSecondary, marginLeft: Spacing.xs }}
               >
-                ${parseFloat(series.estimatedPrice).toFixed(0)} per visit
+                {formatMoney(series.estimatedPrice, { showCents: false })} per visit
               </ThemedText>
             </View>
           ) : null}
@@ -519,7 +512,7 @@ function OccurrenceRow({ occurrence, onPress }: OccurrenceRowProps) {
       <View style={[styles.statusDot, { backgroundColor: color }]} />
       <View style={{ flex: 1 }}>
         <ThemedText type="body" style={{ fontWeight: "600" }}>
-          {formatDate(occurrence.scheduledDate)}
+          {formatDate(occurrence.scheduledDate, { style: "weekday" })}
         </ThemedText>
         <ThemedText type="caption" style={{ color: theme.textSecondary }}>
           {occurrence.scheduledTime
@@ -533,10 +526,7 @@ function OccurrenceRow({ occurrence, onPress }: OccurrenceRowProps) {
           type="body"
           style={{ color: Colors.accent, marginRight: Spacing.sm }}
         >
-          $
-          {parseFloat(
-            occurrence.finalPrice || occurrence.estimatedPrice || "0",
-          ).toFixed(0)}
+          {formatMoney(occurrence.finalPrice || occurrence.estimatedPrice || "0", { showCents: false })}
         </ThemedText>
       ) : null}
       <Feather name="chevron-right" size={16} color={theme.textTertiary} />

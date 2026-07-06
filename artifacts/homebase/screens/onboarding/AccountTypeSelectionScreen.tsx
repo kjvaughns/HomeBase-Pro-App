@@ -9,7 +9,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { useLayout } from "@/hooks/useLayout";
-import { Spacing, Colors, BorderRadius } from "@/constants/theme";
+import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useOnboardingStore } from "@/state/onboardingStore";
 import { recordHappyMoment } from "@/state/appReviewStore";
@@ -302,14 +302,14 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   headline: {
-    fontSize: 30,
+    ...Typography.display,
     fontWeight: "700",
     letterSpacing: -0.4,
     lineHeight: 36,
     marginBottom: Spacing.sm,
   },
   subheadline: {
-    fontSize: 15,
+    ...Typography.subhead,
     lineHeight: 22,
   },
   cards: {
@@ -341,13 +341,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cardTitle: {
-    fontSize: 16,
+    ...Typography.callout,
     fontWeight: "600",
     letterSpacing: -0.2,
     marginBottom: 3,
   },
   cardSubtitle: {
-    fontSize: 13,
+    ...Typography.footnote,
     lineHeight: 18,
   },
   footer: {
@@ -359,7 +359,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
   },
   signInText: {
-    fontSize: 13,
+    ...Typography.footnote,
   },
   loginButton: {
     flexDirection: "row",
@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   loginButtonText: {
-    fontSize: 16,
+    ...Typography.callout,
     fontWeight: "600",
     letterSpacing: -0.2,
   },

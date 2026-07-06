@@ -17,7 +17,11 @@ export const Colors = {
   amberLight: "rgba(245, 158, 11, 0.12)",
   neutral: "#808080",
   neutralLight: "rgba(128, 128, 128, 0.12)",
-  
+
+  // Fixed rating-star color — intentionally does NOT flip between light/dark
+  // (a gold star reads the same in both themes), used by <RatingStars>.
+  rating: "#F5A623",
+
   chart: [
     "#38AE5F",
     "#3B82F6",
@@ -173,119 +177,146 @@ export const BorderRadius = {
   iconContainer: 10,
   avatar: 9999,
   modal: 20,
+  sheet: 24,
 };
 
+// Each entry keeps a static `lineHeight` (used by call sites that spread
+// Typography.xxx directly into a style, e.g. `...Typography.body`) alongside
+// a `lineHeightMultiplier` (lineHeight / fontSize) that <ThemedText> uses to
+// recompute lineHeight against the OS Dynamic Type scale factor at render
+// time. Without this, a hard-coded pixel lineHeight doesn't grow when
+// fontSize is scaled up for accessibility, and descenders/ascenders clip.
 export const Typography = {
   largeTitle: {
     fontSize: 34,
     lineHeight: 41,
+    lineHeightMultiplier: 1.21,
     fontWeight: "700" as const,
     letterSpacing: 0.37,
   },
   title1: {
     fontSize: 28,
     lineHeight: 34,
+    lineHeightMultiplier: 1.21,
     fontWeight: "700" as const,
     letterSpacing: 0.36,
   },
   title2: {
     fontSize: 22,
     lineHeight: 28,
+    lineHeightMultiplier: 1.27,
     fontWeight: "700" as const,
     letterSpacing: 0.35,
   },
   title3: {
     fontSize: 20,
     lineHeight: 25,
+    lineHeightMultiplier: 1.25,
     fontWeight: "600" as const,
     letterSpacing: 0.38,
   },
   headline: {
     fontSize: 17,
     lineHeight: 22,
+    lineHeightMultiplier: 1.29,
     fontWeight: "600" as const,
     letterSpacing: -0.41,
   },
   body: {
     fontSize: 17,
     lineHeight: 22,
+    lineHeightMultiplier: 1.29,
     fontWeight: "400" as const,
     letterSpacing: -0.41,
   },
   callout: {
     fontSize: 16,
     lineHeight: 21,
+    lineHeightMultiplier: 1.31,
     fontWeight: "400" as const,
     letterSpacing: -0.32,
   },
   subhead: {
     fontSize: 15,
     lineHeight: 20,
+    lineHeightMultiplier: 1.33,
     fontWeight: "400" as const,
     letterSpacing: -0.24,
   },
   footnote: {
     fontSize: 13,
     lineHeight: 18,
+    lineHeightMultiplier: 1.38,
     fontWeight: "400" as const,
     letterSpacing: -0.08,
   },
   caption1: {
     fontSize: 12,
     lineHeight: 16,
+    lineHeightMultiplier: 1.33,
     fontWeight: "400" as const,
     letterSpacing: 0,
   },
   caption2: {
     fontSize: 11,
     lineHeight: 13,
+    lineHeightMultiplier: 1.18,
     fontWeight: "400" as const,
     letterSpacing: 0.07,
   },
-  
+
   display: {
     fontSize: 32,
     lineHeight: 40,
+    lineHeightMultiplier: 1.25,
     fontWeight: "700" as const,
   },
   h1: {
     fontSize: 24,
     lineHeight: 32,
+    lineHeightMultiplier: 1.33,
     fontWeight: "700" as const,
   },
   h2: {
     fontSize: 20,
     lineHeight: 28,
+    lineHeightMultiplier: 1.4,
     fontWeight: "600" as const,
   },
   h3: {
     fontSize: 18,
     lineHeight: 24,
+    lineHeightMultiplier: 1.33,
     fontWeight: "600" as const,
   },
   h4: {
     fontSize: 16,
     lineHeight: 22,
+    lineHeightMultiplier: 1.375,
     fontWeight: "600" as const,
   },
   small: {
     fontSize: 14,
     lineHeight: 20,
+    lineHeightMultiplier: 1.43,
     fontWeight: "400" as const,
   },
   caption: {
     fontSize: 12,
     lineHeight: 16,
+    lineHeightMultiplier: 1.33,
     fontWeight: "400" as const,
   },
   label: {
     fontSize: 14,
     lineHeight: 20,
+    lineHeightMultiplier: 1.43,
     fontWeight: "500" as const,
   },
   link: {
     fontSize: 16,
     lineHeight: 22,
+    lineHeightMultiplier: 1.375,
     fontWeight: "400" as const,
   },
 };

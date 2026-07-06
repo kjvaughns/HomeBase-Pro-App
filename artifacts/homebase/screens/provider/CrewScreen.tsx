@@ -19,6 +19,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { TextField } from "@/components/TextField";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { SecondaryButton } from "@/components/SecondaryButton";
+import { EmptyState } from "@/components/EmptyState";
 import { Spacing, Typography, Colors, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { useTheme } from "@/hooks/useTheme";
@@ -227,25 +228,15 @@ export default function CrewScreen() {
             <ActivityIndicator color={Colors.accent} />
           </View>
         ) : crew.length === 0 ? (
-          <View style={styles.emptyState}>
-            <View style={[styles.emptyIconWrap, { backgroundColor: Colors.accentLight }]}>
-              <Feather name="users" size={32} color={Colors.accent} />
-            </View>
-            <ThemedText style={styles.emptyTitle}>No crew yet</ThemedText>
-            <ThemedText style={[styles.emptyBody, { color: theme.textSecondary }]}>
-              Add team members so you can assign them to jobs and track who's doing what.
-            </ThemedText>
-            <Pressable
-              style={[styles.emptyAddBtn, { backgroundColor: Colors.accent }]}
-              onPress={openCreate}
-              accessibilityRole="button"
-              accessibilityLabel="Add crew member"
-              testID="button-add-crew-empty"
-            >
-              <Feather name="plus" size={16} color="#FFF" />
-              <ThemedText style={styles.emptyAddBtnText}>Add crew member</ThemedText>
-            </Pressable>
-          </View>
+          <EmptyState
+            icon="users"
+            title="No crew yet"
+            description="Add team members so you can assign them to jobs and track who's doing what."
+            primaryAction={{
+              label: "Add crew member",
+              onPress: openCreate,
+            }}
+          />
         ) : (
           <View style={styles.list}>
             {crew.map((m) => (
@@ -417,45 +408,6 @@ const styles = StyleSheet.create({
   scroll: {},
   center: { paddingTop: Spacing["3xl"], alignItems: "center" },
   headerBtn: { paddingHorizontal: Spacing.sm },
-
-  emptyState: {
-    alignItems: "center",
-    paddingTop: Spacing["2xl"],
-    gap: Spacing.md,
-  },
-  emptyIconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: Spacing.sm,
-  },
-  emptyTitle: {
-    ...Typography.h3,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-  emptyBody: {
-    ...Typography.body,
-    textAlign: "center",
-    lineHeight: 22,
-    maxWidth: 280,
-  },
-  emptyAddBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: 12,
-    borderRadius: BorderRadius.md,
-    marginTop: Spacing.sm,
-  },
-  emptyAddBtnText: {
-    ...Typography.body,
-    color: "#FFF",
-    fontWeight: "600",
-  },
 
   list: { gap: Spacing.sm },
   card: {

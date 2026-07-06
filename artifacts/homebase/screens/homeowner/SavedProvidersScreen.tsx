@@ -21,6 +21,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { Avatar } from "@/components/Avatar";
+import { RatingStars } from "@/components/RatingStars";
 import { useTheme } from "@/hooks/useTheme";
 import { useLayout } from "@/hooks/useLayout";
 import { Colors, Spacing, Typography, BorderRadius } from "@/constants/theme";
@@ -122,13 +123,7 @@ export default function SavedProvidersScreen() {
           <View style={styles.providerInfo}>
             <ThemedText style={styles.providerName}>{item.name}</ThemedText>
             <ThemedText style={[styles.providerCategory, { color: theme.textSecondary }]}>{item.category}</ThemedText>
-            <View style={styles.ratingRow}>
-              <Ionicons name="star" size={14} color={Colors.warning} />
-              <ThemedText style={styles.ratingText}>{item.rating}</ThemedText>
-              <ThemedText style={[styles.reviewCount, { color: theme.textSecondary }]}>
-                ({item.reviewCount} reviews)
-              </ThemedText>
-            </View>
+            <RatingStars rating={item.rating} reviewCount={item.reviewCount} size="small" showValue />
             <ThemedText style={[styles.serviceArea, { color: theme.textSecondary }]} numberOfLines={1}>
               {item.serviceArea}
             </ThemedText>

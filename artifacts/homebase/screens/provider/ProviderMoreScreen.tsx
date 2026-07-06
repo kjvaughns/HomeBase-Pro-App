@@ -21,6 +21,7 @@ import { StatusPill } from "@/components/StatusPill";
 import { PartnerBadge } from "@/components/PartnerBadge";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
+import { RatingStars } from "@/components/RatingStars";
 import { useAuthStore } from "@/state/authStore";
 import { useProviderStore, StripeNotReadyError } from "@/state/providerStore";
 import { useThemeStore } from "@/state/themeStore";
@@ -173,12 +174,11 @@ export default function ProviderMoreScreen() {
                     size="small"
                   />
                   {providerProfile?.isPartner ? <PartnerBadge size="small" /> : null}
-                  <View style={styles.ratingRow}>
-                    <Ionicons name="star" size={14} color={Colors.warning} />
-                    <ThemedText style={styles.ratingText}>
-                      {providerProfile?.rating ? Number(providerProfile.rating).toFixed(1) : "New"}
-                    </ThemedText>
-                  </View>
+                  <RatingStars
+                    rating={providerProfile?.rating ? Number(providerProfile.rating) : 0}
+                    compact
+                    size="small"
+                  />
                 </View>
               </View>
               <Feather name="chevron-right" size={20} color={theme.textTertiary} />

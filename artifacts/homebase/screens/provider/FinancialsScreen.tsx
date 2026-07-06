@@ -25,6 +25,7 @@ import * as Haptics from "expo-haptics";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, getAuthHeaders, getApiUrl } from "@/lib/query-client";
 
+import { formatMoney, formatDate } from "@/lib/format";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
@@ -136,31 +137,6 @@ type DateRange = "week" | "month" | "quarter" | "year" | "custom";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function formatCents(cents: number): string {
-  return (cents / 100).toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-  });
-}
-
-function formatDollars(amount: number | null | undefined): string {
-  const n = amount ?? 0;
-  return n.toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  });
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
 
 function formatArrivalDate(iso: string | null): string {
   if (!iso) return "Pending";
@@ -345,7 +321,7 @@ function BarChart({
                   }}
                   numberOfLines={1}
                 >
-                  {formatDollars(item.value)}
+                  {formatMoney(item.value, { showCents: false })}
                 </ThemedText>
               ) : null}
 
@@ -949,7 +925,7 @@ function NextPayoutCard({
           </ThemedText>
           <ThemedText style={[nextPayoutStyles.summaryLine, { opacity: 0.6 }]}>
             {pendingCents > 0
-              ? `${formatCents(pendingCents)} ready`
+              ? `${formatMoney(pendingCents, { cents: true })} ready`
               : "Funds ready"}
           </ThemedText>
           <ThemedText style={[nextPayoutStyles.helpLink, { color: Colors.accent }]}>
@@ -982,7 +958,7 @@ function NextPayoutCard({
           <ThemedText style={nextPayoutStyles.label}>No payout scheduled</ThemedText>
           <ThemedText style={nextPayoutStyles.summaryLine}>
             {pendingCents > 0
-              ? `New payments since your last payout: ${formatCents(pendingCents)}.`
+              ? `New payments since your last payout: ${formatMoney(pendingCents, { cents: true })}.`
               : "Pending payments will appear here."}
             {bankLine ? ` \u2192 ${bankLine}` : ""}
           </ThemedText>
@@ -1023,7 +999,7 @@ function NextPayoutCard({
       <View style={{ flex: 1 }}>
         <ThemedText style={nextPayoutStyles.label}>Next Payout</ThemedText>
         <ThemedText style={nextPayoutStyles.summaryLine} testID="text-next-payout-summary">
-          {formatPayoutLongDate(next.arrivalDate)} \u2014 {formatCents(next.amountCents)}
+          {formatPayoutLongDate(next.arrivalDate)} \u2014 {formatMoney(next.amountCents, { cents: true })}
           {bankLine ? ` \u2192 ${bankLine}` : ""}
         </ThemedText>
         {/* Inner Pressable — RN's responder system grants the touch to the
@@ -1650,7 +1626,7 @@ export default function FinancialsScreen() {
             </ThemedText>
           </View>
           <View style={styles.rowRight}>
-            <ThemedText style={styles.rowAmount}>{formatCents(est.totalCents)}</ThemedText>
+            <ThemedText style={styles.rowAmount}>{formatMoney(est.totalCents, { cents: true })}</ThemedText>
             <StatusPill status={estimateToneToStatus(tone)} label={label} size="small" />
           </View>
         </Pressable>
@@ -1703,7 +1679,7 @@ export default function FinancialsScreen() {
             ) : null}
           </View>
           <View style={styles.rowRight}>
-            <ThemedText style={styles.rowAmount}>{formatCents(item.totalCents)}</ThemedText>
+            <ThemedText style={styles.rowAmount}>{formatMoney(item.totalCents, { cents: true })}</ThemedText>
             <StatusPill
               status={invoiceStatusType(effectiveStatus)}
               label={invoiceStatusLabel(effectiveStatus)}
@@ -1764,7 +1740,7 @@ export default function FinancialsScreen() {
                 isVoided ? { textDecorationLine: "line-through", color: theme.textTertiary } : undefined,
               ]}
             >
-              {formatCents(item.amountCents)}
+              {formatMoney(item.amountCents, { cents: true })}
             </ThemedText>
             <View
               style={{
@@ -1820,7 +1796,7 @@ export default function FinancialsScreen() {
             </ThemedText>
           </View>
           <View style={styles.rowRight}>
-            <ThemedText style={styles.rowAmount}>{formatCents(item.amountCents)}</ThemedText>
+            <ThemedText style={styles.rowAmount}>{formatMoney(item.amountCents, { cents: true })}</ThemedText>
             <StatusPill
               status={payoutStatusType(item.status)}
               label={payoutStatusLabel(item.status)}
@@ -2035,7 +2011,7 @@ export default function FinancialsScreen() {
                 <View style={[styles.skeletonLine, { backgroundColor: theme.separator, width: 140, height: 36, marginTop: 4 }]} />
               ) : (
                 <ThemedText style={styles.revenueValue}>
-                  {formatDollars(stats.revenueMTD ?? 0)}
+                  {formatMoney(stats.revenueMTD ?? 0, { showCents: false })}
                 </ThemedText>
               )}
             </View>
@@ -2080,7 +2056,7 @@ export default function FinancialsScreen() {
           <View style={[styles.statCard, { backgroundColor: theme.cardBackground }]}>
             <Feather name="trending-up" size={18} color={Colors.accent} />
             <ThemedText style={styles.statCardValue}>
-              {statsLoading ? "-" : formatDollars(stats.averageJobValue ?? 0)}
+              {statsLoading ? "-" : formatMoney(stats.averageJobValue ?? 0, { showCents: false })}
             </ThemedText>
             <ThemedText style={[styles.statCardLabel, { color: theme.textSecondary }]}>
               Avg Job
@@ -2116,7 +2092,7 @@ export default function FinancialsScreen() {
               <ThemedText style={{ fontWeight: "600" }}>Estimates</ThemedText>
               <ThemedText style={{ color: theme.textSecondary, fontSize: 13 }}>
                 {estimates.filter((e) => e.status !== "converted").length} total · {estimatesOutstandingCents > 0
-                  ? `${formatCents(estimatesOutstandingCents)} pending`
+                  ? `${formatMoney(estimatesOutstandingCents, { cents: true })} pending`
                   : "no pending"}
               </ThemedText>
             </View>
@@ -2142,7 +2118,7 @@ export default function FinancialsScreen() {
               <ThemedText style={{ fontWeight: "600" }}>Manual Payments</ThemedText>
               <ThemedText style={{ color: theme.textSecondary, fontSize: 13 }}>
                 {manualPaymentsThisMonth.count} total · {manualPaymentsThisMonth.totalCents > 0
-                  ? `${formatCents(manualPaymentsThisMonth.totalCents)} this month`
+                  ? `${formatMoney(manualPaymentsThisMonth.totalCents, { cents: true })} this month`
                   : "none this month"}
               </ThemedText>
             </View>

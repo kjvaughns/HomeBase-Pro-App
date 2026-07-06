@@ -10,6 +10,7 @@ import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
+import { formatMoney, formatDate } from "@/lib/format";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
@@ -23,6 +24,7 @@ import { apiRequest, getApiUrl } from "@/lib/query-client";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { RecordPaymentSheet } from "@/components/RecordPaymentSheet";
 import { NoShowFeeSheet } from "@/components/NoShowFeeSheet";
+import { HomeProfileSection, type HomeProfile } from "@/components/HomeProfileSection";
 import { useNetworkStore } from "@/state/networkStore";
 import { loadScheduleSnapshot } from "@/lib/offline-cache";
 import { recordHappyMoment } from "@/state/appReviewStore";
@@ -32,7 +34,31 @@ type JobStatus = "scheduled" | "confirmed" | "on_my_way" | "arrived" | "in_progr
 type DBJobStatus = JobStatus;
 type DisplayStatus = JobStatus;
 
-import { HomeProfileSection, type HomeProfile } from "@/components/HomeProfileSection";
+import { SkeletonLoader, SkeletonCard, SkeletonListRow } from "@/components/SkeletonLoader";
+
+function JobDetailSkeleton() {
+  const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
+  const { horizontalPadding } = useLayout();
+
+  return (
+    <ThemedView style={styles.container}>
+      <ScrollView
+        contentContainerStyle={{
+          paddingTop: headerHeight + Spacing.md,
+          paddingBottom: insets.bottom + 100,
+          paddingHorizontal: horizontalPadding,
+        }}
+      >
+        <SkeletonLoader height={140} style={{ marginBottom: Spacing.md }} borderRadius={BorderRadius.lg} />
+        <SkeletonCard />
+        <SkeletonCard />
+        <SkeletonCard />
+      </ScrollView>
+    </ThemedView>
+  );
+}
+import { BottomSheet } from "@/components/BottomSheet";
 import { NativeDatePickerSheet } from "@/components/NativeDatePickerSheet";
 
 export function HomeownerNotesBanner({ homeId }: { homeId: string }) {
@@ -65,16 +91,17 @@ export function HomeownerNotesBanner({ homeId }: { homeId: string }) {
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
         <Feather name="alert-circle" size={14} color={Colors.warning} />
-        <ThemedText style={{ fontWeight: "700", fontSize: 13 }}>
+        <ThemedText style={{ fontWeight: "700", fontSize: 13, color: Colors.warning }}>
           Homeowner notes for you
         </ThemedText>
       </View>
-      <ThemedText style={{ fontSize: 14, lineHeight: 20 }}>{notes}</ThemedText>
+      <ThemedText style={{ fontSize: 14, lineHeight: 20, color: Colors.warning }}>{notes}</ThemedText>
     </View>
   );
 }
 
 function ProviderHomeProfile({ homeId }: { homeId: string }) {
+  const { theme } = useTheme();
   const [home, setHome] = useState<HomeProfile | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -96,8 +123,8 @@ function ProviderHomeProfile({ homeId }: { homeId: string }) {
         onPress={() => setExpanded(true)}
         style={{
           padding: 14,
-          borderRadius: 12,
-          backgroundColor: "rgba(0,0,0,0.04)",
+          borderRadius: BorderRadius.md,
+          backgroundColor: theme.backgroundSecondary,
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
@@ -105,12 +132,12 @@ function ProviderHomeProfile({ homeId }: { homeId: string }) {
         }}
       >
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
-          <Feather name="home" size={16} />
+          <Feather name="home" size={16} color={theme.text} />
           <ThemedText style={{ fontWeight: "600" }}>
             Home profile{home.knownIssues ? " · Notes from homeowner" : ""}
           </ThemedText>
         </View>
-        <Feather name="chevron-down" size={18} />
+        <Feather name="chevron-down" size={18} color={theme.text} />
       </Pressable>
     );
   }
@@ -120,7 +147,7 @@ function ProviderHomeProfile({ homeId }: { homeId: string }) {
         onPress={() => setExpanded(false)}
         style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}
       >
-        <Feather name="chevron-up" size={16} />
+        <Feather name="chevron-up" size={16} color={theme.text} />
         <ThemedText style={{ fontWeight: "600" }}>Hide home profile</ThemedText>
       </Pressable>
       <HomeProfileSection home={home} editable={false} highlightKnownIssues />
@@ -184,19 +211,6 @@ const STATUS_CONFIG: Record<DisplayStatus, { label: string; color: string; icon:
 
 const STATUS_ORDER: DisplayStatus[] = ["scheduled", "confirmed", "on_my_way", "arrived", "in_progress", "completed"];
 
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-}
-
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
 
 function getInitials(name: string): string {
   return name
@@ -243,7 +257,7 @@ function StatusBanner({ status }: StatusBannerProps) {
                 : status === "no_show"
                   ? "Client didn't show up for this appointment"
                   : status === "weather_held"
-                    ? "Paused for weather — not counted as a cancellation"
+                    ? "Paused for weather"
                     : "In progress"}
           </ThemedText>
         </View>
@@ -433,6 +447,12 @@ export default function ProviderJobDetailScreen() {
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
   const checklistFetched = useRef(false);
+
+  const [rescheduleSheetVisible, setRescheduleSheetVisible] = useState(false);
+  const [rescheduleDate, setRescheduleDate] = useState<Date | null>(null);
+  const [weatherHoldSheetVisible, setWeatherHoldSheetVisible] = useState(false);
+  const [weatherHoldDate, setWeatherHoldDate] = useState<Date | null>(null);
+  const [cancelSeriesSheetVisible, setCancelSeriesSheetVisible] = useState(false);
 
   const isOnline = useNetworkStore((s) => s.isOnline);
 
@@ -688,23 +708,8 @@ export default function ProviderJobDetailScreen() {
       // For series jobs, ask the provider whether the change should apply to
       // just this occurrence or to this and every following occurrence.
       if (job.seriesId) {
-        Alert.alert(
-          "Apply to which occurrences?",
-          "Update only this date, or shift this and all following occurrences by the same amount?",
-          [
-            { text: "Cancel", style: "cancel" },
-            {
-              text: "This Occurrence",
-              onPress: () =>
-                rescheduleMutation.mutate({ newDate, scope: "single" }),
-            },
-            {
-              text: "This + Following",
-              onPress: () =>
-                rescheduleMutation.mutate({ newDate, scope: "following" }),
-            },
-          ],
-        );
+        setRescheduleDate(newDate);
+        setRescheduleSheetVisible(true);
       } else {
         rescheduleMutation.mutate({ newDate, scope: "single" });
       }
@@ -784,21 +789,8 @@ export default function ProviderJobDetailScreen() {
       month: "short",
       day: "numeric",
     });
-    Alert.alert(
-      "Hold for weather?",
-      `We'll let your customer know:\n\n"Heads up — weather is moving us. We've placed your appointment on a weather hold and will reschedule shortly."\n\nWould you also like to move it to ${niceDate} (same time) now?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Hold only",
-          onPress: () => weatherHoldMutation.mutate({}),
-        },
-        {
-          text: `Hold & move to ${niceDate.split(",")[0]}`,
-          onPress: () => weatherHoldMutation.mutate({ newDate: nextWeek }),
-        },
-      ],
-    );
+    setWeatherHoldDate(nextWeek);
+    setWeatherHoldSheetVisible(true);
   }, [job, weatherHoldMutation, blockOffline]);
 
   const handleRestore = useCallback(() => {
@@ -830,22 +822,7 @@ export default function ProviderJobDetailScreen() {
     // they're cancelling just this occurrence or the whole series. For
     // one-offs, keep the original two-button confirm.
     if (job?.seriesId) {
-      Alert.alert(
-        "Cancel Repeating Job",
-        "Cancel just this visit, or all future repeats?",
-        [
-          { text: "Nevermind", style: "cancel" },
-          {
-            text: "This Visit",
-            onPress: () => updateJobMutation.mutate("cancelled"),
-          },
-          {
-            text: "Cancel All Repeats",
-            style: "destructive",
-            onPress: () => cancelSeriesMutation.mutate(),
-          },
-        ],
-      );
+      setCancelSeriesSheetVisible(true);
       return;
     }
     Alert.alert(
@@ -1024,13 +1001,7 @@ export default function ProviderJobDetailScreen() {
   }, [jobId, blockOffline]);
 
   if ((isLoading || (!isOnline && !offlineHydrated)) && !job) {
-    return (
-      <ThemedView style={styles.container}>
-        <View style={[styles.notFound, { paddingTop: headerHeight + Spacing.xl }]}>
-          <ActivityIndicator size="large" color={Colors.accent} />
-        </View>
-      </ThemedView>
-    );
+    return <JobDetailSkeleton />;
   }
 
   if (!job) {
@@ -1226,7 +1197,7 @@ export default function ProviderJobDetailScreen() {
             <View style={styles.detailRow}>
               <Feather name="calendar" size={16} color={theme.textSecondary} />
               <ThemedText type="body" style={{ marginLeft: Spacing.sm }}>
-                {formatDate(job.scheduledDate)}
+                {formatDate(job.scheduledDate, { style: "weekday" })}
                 {job.scheduledTime ? ` at ${job.scheduledTime}` : ""}
               </ThemedText>
             </View>
@@ -1287,7 +1258,7 @@ export default function ProviderJobDetailScreen() {
                   {job.finalPrice ? "Final Price" : "Estimated"}
                 </ThemedText>
                 <ThemedText type="h3" style={{ color: Colors.accent }}>
-                  {formatCurrency(parseFloat(price))}
+                  {formatMoney(price, { showCents: false })}
                 </ThemedText>
               </View>
             ) : (
@@ -1550,6 +1521,62 @@ export default function ProviderJobDetailScreen() {
           onSuccess={() => setDisplayStatus("no_show")}
         />
       ) : null}
+
+      <BottomSheet
+        visible={rescheduleSheetVisible}
+        title="Apply to which occurrences?"
+        message="Update only this date, or shift this and all following occurrences by the same amount?"
+        onClose={() => setRescheduleSheetVisible(false)}
+        options={[
+          { key: "single", label: "This Occurrence", icon: "calendar" },
+          { key: "following", label: "This + Following", icon: "repeat" },
+        ]}
+        onSelect={(key) => {
+          setRescheduleSheetVisible(false);
+          if (rescheduleDate) {
+            rescheduleMutation.mutate({ newDate: rescheduleDate, scope: key as "single" | "following" });
+          }
+        }}
+      />
+
+      <BottomSheet
+        visible={weatherHoldSheetVisible}
+        title="Hold for weather?"
+        message={`We'll let your customer know:\n\n"Heads up — weather is moving us. We've placed your appointment on a weather hold and will reschedule shortly."\n\nWould you also like to move it to ${weatherHoldDate?.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })} (same time) now?`}
+        onClose={() => setWeatherHoldSheetVisible(false)}
+        options={[
+          { key: "hold_only", label: "Hold only", icon: "cloud-rain" },
+          { key: "hold_move", label: `Hold & move to ${weatherHoldDate?.toLocaleDateString("en-US", { weekday: "long" }).split(",")[0]}`, icon: "calendar" },
+        ]}
+        onSelect={(key) => {
+          setWeatherHoldSheetVisible(false);
+          if (key === "hold_only") {
+            weatherHoldMutation.mutate({});
+          } else if (key === "hold_move" && weatherHoldDate) {
+            weatherHoldMutation.mutate({ newDate: weatherHoldDate });
+          }
+        }}
+      />
+
+      <BottomSheet
+        visible={cancelSeriesSheetVisible}
+        title="Cancel Repeating Job"
+        message="Cancel just this visit, or all future repeats?"
+        onClose={() => setCancelSeriesSheetVisible(false)}
+        options={[
+          { key: "visit", label: "This Visit", icon: "x-circle" },
+          { key: "series", label: "Cancel All Repeats", icon: "trash-2", destructive: true },
+        ]}
+        onSelect={(key) => {
+          setCancelSeriesSheetVisible(false);
+          if (key === "visit") {
+            updateJobMutation.mutate("cancelled");
+          } else {
+            cancelSeriesMutation.mutate();
+          }
+        }}
+      />
+
       <NativeDatePickerSheet
         visible={rescheduleStep === "date"}
         value={rescheduleDraft}

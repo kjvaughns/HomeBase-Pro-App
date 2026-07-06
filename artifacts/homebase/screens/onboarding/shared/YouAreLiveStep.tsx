@@ -15,7 +15,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { GlassCard } from "@/components/GlassCard";
 import { useTheme } from "@/hooks/useTheme";
 import { useLayout } from "@/hooks/useLayout";
-import { Spacing, Colors, BorderRadius } from "@/constants/theme";
+import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { apiRequest } from "@/lib/query-client";
 
 // Shared "You're Live" finale used by both provider onboarding entry points:
@@ -113,7 +113,8 @@ export function YouAreLiveStep({
         >
           <Feather name="link" size={16} color={Colors.accent} />
           <ThemedText
-            style={{ color: Colors.accent, flex: 1, fontWeight: "500", fontSize: 14 }}
+            type="label"
+            style={{ color: Colors.accent, flex: 1, fontWeight: "500" }}
             numberOfLines={1}
           >
             {bookingLink}
@@ -130,7 +131,7 @@ export function YouAreLiveStep({
             ]}
           >
             <Feather name={copied ? "check" : "copy"} size={16} color={copied ? Colors.accent : theme.textSecondary} />
-            <ThemedText style={{ color: copied ? Colors.accent : theme.textSecondary, fontWeight: "500", fontSize: 14 }}>
+            <ThemedText type="label" style={{ color: copied ? Colors.accent : theme.textSecondary, fontWeight: "500" }}>
               {copied ? "Copied!" : "Copy Link"}
             </ThemedText>
           </Pressable>
@@ -141,7 +142,7 @@ export function YouAreLiveStep({
             style={[styles.linkBtn, { backgroundColor: Colors.accent + "15", borderColor: Colors.accent }]}
           >
             <Feather name="share-2" size={16} color={Colors.accent} />
-            <ThemedText style={{ color: Colors.accent, fontWeight: "600", fontSize: 14 }}>
+            <ThemedText type="label" style={{ color: Colors.accent, fontWeight: "600" }}>
               Share Link
             </ThemedText>
           </Pressable>
@@ -173,7 +174,7 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     marginTop: Spacing.lg,
   },
-  fieldLabel: { fontSize: 13, fontWeight: "500", marginBottom: Spacing.sm },
+  fieldLabel: { ...Typography.footnote, fontWeight: "500", marginBottom: Spacing.sm },
   liveContainer: { alignItems: "center", marginTop: Spacing.xl, marginBottom: Spacing.md },
   successCircle: {
     width: 96,
@@ -190,8 +191,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  liveTitle: { fontSize: 28, letterSpacing: -0.5, marginBottom: Spacing.sm, textAlign: "center" },
-  liveSubtitle: { fontSize: 15, lineHeight: 22, textAlign: "center", paddingHorizontal: Spacing.md },
+  liveTitle: { ...Typography.title1, letterSpacing: -0.5, marginBottom: Spacing.sm, textAlign: "center" },
+  liveSubtitle: { ...Typography.subhead, lineHeight: 22, textAlign: "center", paddingHorizontal: Spacing.md },
   linkBox: {
     flexDirection: "row",
     alignItems: "center",

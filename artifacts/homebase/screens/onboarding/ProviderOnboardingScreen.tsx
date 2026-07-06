@@ -25,7 +25,7 @@ import { ZipCodeAreaInput } from "@/components/ZipCodeAreaInput";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
 import { useLayout } from "@/hooks/useLayout";
-import { Spacing, Colors, BorderRadius } from "@/constants/theme";
+import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import type { OnboardingServiceData } from "@/state/onboardingStore";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useOnboardingStore } from "@/state/onboardingStore";
@@ -718,7 +718,7 @@ function ServiceBuilderStep({
               Service configured
             </ThemedText>
           </View>
-          <ThemedText style={[{ fontSize: 17, fontWeight: "600", color: theme.text, marginBottom: 4 }]}>
+          <ThemedText type="headline" style={[{ color: theme.text, marginBottom: 4 }]}>
             {pendingService.name}
           </ThemedText>
           {pendingService.description ? (
@@ -772,14 +772,14 @@ function ServiceBuilderStep({
             <View style={[styles.serviceIconBadge, { backgroundColor: Colors.accent + "18", marginBottom: Spacing.md }]}>
               <Feather name="tool" size={24} color={Colors.accent} />
             </View>
-            <ThemedText style={[{ fontSize: 16, fontWeight: "600", color: theme.text, marginBottom: 6 }]}>
+            <ThemedText type="callout" style={[{ fontWeight: "600", color: theme.text, marginBottom: 6 }]}>
               Open Service Builder
             </ThemedText>
             <ThemedText style={[styles.captionText, { color: theme.textSecondary, textAlign: "center" }]}>
               Build a complete service profile with AI assistance — pricing, duration, add-ons, and a custom booking form.
             </ThemedText>
             <View style={[styles.builderCTA, { backgroundColor: Colors.accent, marginTop: Spacing.lg }]}>
-              <ThemedText style={{ color: "#fff", fontWeight: "600", fontSize: 14 }}>Build My First Service</ThemedText>
+              <ThemedText type="label" style={{ color: "#fff", fontWeight: "600" }}>Build My First Service</ThemedText>
               <Feather name="arrow-right" size={16} color="#fff" />
             </View>
           </GlassCard>
@@ -1116,7 +1116,7 @@ function MonthlyGoalStep({
 
       {customMode ? (
         <View style={[styles.inputWrapper, { backgroundColor: theme.backgroundSecondary, borderColor: Colors.accent, marginBottom: Spacing.sm }]}>
-          <ThemedText style={{ color: theme.textSecondary, fontSize: 17, marginRight: 4 }}>$</ThemedText>
+          <ThemedText type="headline" style={{ color: theme.textSecondary, marginRight: 4 }}>$</ThemedText>
           <TextInput
             style={[styles.textInput, { color: theme.text }]}
             placeholder="Enter amount"
@@ -1315,7 +1315,7 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.sm,
   },
   navButton: { width: 48, alignItems: "flex-start", justifyContent: "center" },
-  signInText: { fontSize: 13 },
+  signInText: { ...Typography.footnote },
   progressRow: {
     flex: 1,
     flexDirection: "row",
@@ -1357,14 +1357,14 @@ const styles = StyleSheet.create({
   },
   hookHeadlines: { alignItems: "center", marginBottom: Spacing.lg },
   hookLine: {
-    fontSize: 32,
+    ...Typography.display,
     fontWeight: "700",
     lineHeight: 42,
     letterSpacing: -0.5,
     textAlign: "center",
   },
   hookSubtext: {
-    fontSize: 15,
+    ...Typography.subhead,
     lineHeight: 22,
     textAlign: "center",
     marginBottom: Spacing.xl,
@@ -1380,7 +1380,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
   },
-  hookPillText: { fontSize: 12, fontWeight: "500" },
+  hookPillText: { ...Typography.caption, fontWeight: "500" },
   // Pricing step (Step 6)
   pricingCard: {
     padding: Spacing.xl,
@@ -1394,12 +1394,13 @@ const styles = StyleSheet.create({
   },
   pricingAmountLeft: {},
   pricingAmount: {
+    ...Typography.largeTitle,
     fontSize: 40,
     fontWeight: "800",
     letterSpacing: -1,
   },
   pricingAmountUnit: {
-    fontSize: 18,
+    ...Typography.h3,
     fontWeight: "400",
   },
   pricingFreeBadge: {
@@ -1409,12 +1410,12 @@ const styles = StyleSheet.create({
   },
   pricingFreeBadgeText: {
     color: "#fff",
-    fontSize: 11,
+    ...Typography.caption2,
     fontWeight: "700",
     letterSpacing: 1.2,
   },
   pricingFreeNote: {
-    fontSize: 13,
+    ...Typography.footnote,
     lineHeight: 19,
     marginBottom: Spacing.lg,
   },
@@ -1429,12 +1430,12 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   pricingFeeText: {
-    fontSize: 13,
+    ...Typography.footnote,
     lineHeight: 19,
     flex: 1,
   },
   pricingCancelNote: {
-    fontSize: 12,
+    ...Typography.caption,
     fontWeight: "400",
     marginTop: Spacing.xs,
   },
@@ -1454,7 +1455,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   pricingBenefitText: {
-    fontSize: 15,
+    ...Typography.subhead,
     fontWeight: "500",
     flex: 1,
   },
@@ -1476,7 +1477,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   goalPresetLabel: {
-    fontSize: 18,
+    ...Typography.h3,
     letterSpacing: -0.3,
   },
   goalSelectedBadge: {
@@ -1492,10 +1493,10 @@ const styles = StyleSheet.create({
 
   // Steps
   stepHeader: { marginBottom: Spacing.xl },
-  stepTitle: { fontSize: 28, fontWeight: "700", letterSpacing: -0.5, lineHeight: 36, marginBottom: Spacing.sm },
-  stepSubtitle: { fontSize: 15, lineHeight: 22 },
+  stepTitle: { ...Typography.title1, fontWeight: "700", letterSpacing: -0.5, lineHeight: 36, marginBottom: Spacing.sm },
+  stepSubtitle: { ...Typography.subhead, lineHeight: 22 },
 
-  fieldLabel: { fontSize: 13, fontWeight: "500", marginBottom: Spacing.sm },
+  fieldLabel: { ...Typography.footnote, fontWeight: "500", marginBottom: Spacing.sm },
   fieldLabelRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
 
   inputWrapper: {
@@ -1507,7 +1508,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
   },
-  textInput: { flex: 1, fontSize: 15 },
+  textInput: { flex: 1, ...Typography.subhead },
 
   // Category grid
   categoryGrid: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm },
@@ -1519,7 +1520,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     gap: Spacing.xs,
   },
-  categoryLabel: { fontSize: 11, textAlign: "center" },
+  categoryLabel: { ...Typography.caption2, textAlign: "center" },
 
   // GlassCard / service
   card: { padding: Spacing.lg, marginBottom: Spacing.md },
@@ -1561,7 +1562,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginTop: Spacing.md,
   },
-  captionText: { fontSize: 12 },
+  captionText: { ...Typography.caption },
 
   descriptionPreview: {
     marginTop: Spacing.sm,
@@ -1605,8 +1606,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: "hidden",
   },
-  currencySymbol: { paddingLeft: Spacing.md, fontSize: 15, fontWeight: "500" },
-  priceInput: { flex: 1, padding: Spacing.md, fontSize: 15 },
+  currencySymbol: { paddingLeft: Spacing.md, ...Typography.subhead, fontWeight: "500" },
+  priceInput: { flex: 1, padding: Spacing.md, ...Typography.subhead },
   priceHint: {
     flexDirection: "row",
     alignItems: "center",
@@ -1648,7 +1649,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     padding: Spacing.md,
   },
-  bioInput: { fontSize: 15, minHeight: 120, lineHeight: 22 },
+  bioInput: { ...Typography.subhead, minHeight: 120, lineHeight: 22 },
 
   // Create Account
   formGap: { gap: Spacing.lg },
@@ -1663,7 +1664,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xs,
   },
   legalText: {
-    fontSize: 12,
+    ...Typography.caption,
     lineHeight: 18,
     textAlign: "center",
   },

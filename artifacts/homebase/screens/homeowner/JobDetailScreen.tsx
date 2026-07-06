@@ -10,6 +10,7 @@ import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { formatMoney, formatDate } from "@/lib/format";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
@@ -95,20 +96,6 @@ const STATUS_CONFIG: Record<string, { label: string; status: "success" | "info" 
   cancelled: { label: "Cancelled", status: "neutral" },
 };
 
-function formatDate(dateStr: string): string {
-  if (!dateStr) return "TBD";
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
-}
-
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
 
 export default function JobDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -331,7 +318,7 @@ export default function JobDetailScreen() {
                 <View style={styles.detailRow}>
                   <Feather name="calendar" size={18} color={theme.textSecondary} />
                   <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Date</ThemedText>
-                  <ThemedText style={styles.detailValue}>{formatDate(appointment.scheduledDate)}</ThemedText>
+                  <ThemedText style={styles.detailValue}>{formatDate(appointment.scheduledDate, { style: "weekday" })}</ThemedText>
                 </View>
               ) : null}
               {appointment.scheduledTime ? (
@@ -377,7 +364,7 @@ export default function JobDetailScreen() {
                     {appointment.finalPrice ? "Final Price" : "Estimated"}
                   </ThemedText>
                   <ThemedText style={[styles.detailValue, { color: Colors.accent }]}>
-                    {formatCurrency(parseFloat(price))}
+                    {formatMoney(parseFloat(price))}
                   </ThemedText>
                 </View>
               </View>
@@ -402,12 +389,12 @@ export default function JobDetailScreen() {
                     </ThemedText>
                   </View>
                   <ThemedText style={styles.invoiceAmount}>
-                    {formatCurrency(parseFloat(invoice.total || invoice.amount || invoice.totalAmount || "0"))}
+                    {formatMoney(parseFloat(invoice.total || invoice.amount || invoice.totalAmount || "0"))}
                   </ThemedText>
                 </View>
                 {invoice.dueDate ? (
                   <ThemedText style={[styles.dueDateText, { color: theme.textSecondary }]}>
-                    Due: {formatDate(invoice.dueDate)}
+                    Due: {formatDate(invoice.dueDate, { style: "short" })}
                   </ThemedText>
                 ) : null}
                 {showInvoiceCta ? (
@@ -455,7 +442,7 @@ export default function JobDetailScreen() {
               </View>
               {appointment.completedAt ? (
                 <ThemedText type="caption" style={{ color: theme.textSecondary, marginTop: 4 }}>
-                  {formatDate(appointment.completedAt)}
+                  {formatDate(appointment.completedAt, { style: "short" })}
                 </ThemedText>
               ) : null}
               {canReview ? (

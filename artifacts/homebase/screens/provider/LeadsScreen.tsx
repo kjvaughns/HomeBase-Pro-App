@@ -23,6 +23,7 @@ import { Feather } from "@expo/vector-icons";
 
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
+import { BottomSheet } from "@/components/BottomSheet";
 import { LeadCard } from "@/components/LeadCard";
 import { FilterChips, FilterOption } from "@/components/FilterChips";
 import { EmptyState } from "@/components/EmptyState";
@@ -98,6 +99,15 @@ export default function LeadsScreen() {
     lead: null,
     scheduledDate: "",
     notes: "",
+  });
+
+  const [bookingSuccessSheet, setBookingSuccessSheet] = useState<{ visible: boolean; clientId: string }>({
+    visible: false,
+    clientId: "",
+  });
+  const [leadSuccessSheet, setLeadSuccessSheet] = useState<{ visible: boolean; clientId: string }>({
+    visible: false,
+    clientId: "",
   });
 
   const { data, isLoading, refetch, isRefetching } = useQuery<{ leads: Lead[] }>({
@@ -182,17 +192,7 @@ export default function LeadsScreen() {
       queryClient.invalidateQueries({ queryKey: ["/api/providers", providerId, "leads"] });
       refetchSubmissions();
       setAcceptModal({ visible: false, submission: null, scheduledDate: "", notes: "" });
-      Alert.alert(
-        "Booking Accepted",
-        "A client and job have been created successfully.",
-        [
-          { text: "Done", style: "cancel" },
-          {
-            text: "View Client",
-            onPress: () => (navigation as any).navigate("ClientDetail", { clientId: data.clientId }),
-          },
-        ]
-      );
+      setBookingSuccessSheet({ visible: true, clientId: data.clientId });
     },
     onError: (err: Error) => {
       Alert.alert("Error", err.message || "Failed to accept booking.");
@@ -227,17 +227,7 @@ export default function LeadsScreen() {
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "clients"] });
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "jobs"] });
       setLeadAcceptModal({ visible: false, lead: null, scheduledDate: "", notes: "" });
-      Alert.alert(
-        "Lead Accepted",
-        "A client and job have been created successfully.",
-        [
-          { text: "Done", style: "cancel" },
-          {
-            text: "View Client",
-            onPress: () => (navigation as any).navigate("ClientDetail", { clientId: data.clientId }),
-          },
-        ]
-      );
+      setLeadSuccessSheet({ visible: true, clientId: data.clientId });
     },
     onError: (err: Error) => {
       Alert.alert("Error", err.message || "Failed to accept lead.");
@@ -459,6 +449,42 @@ export default function LeadsScreen() {
             tintColor={Colors.accent}
           />
         }
+      />
+
+      <BottomSheet
+        visible={bookingSuccessSheet.visible}
+        title="Booking Accepted"
+        message="A client and job have been created successfully."
+        onClose={() => setBookingSuccessSheet({ visible: false, clientId: "" })}
+        options={[
+          { key: "view", label: "View Client", icon: "user" },
+          { key: "done", label: "Done" },
+        ]}
+        onSelect={(key) => {
+          const clientId = bookingSuccessSheet.clientId;
+          setBookingSuccessSheet({ visible: false, clientId: "" });
+          if (key === "view") {
+            (navigation as any).navigate("ClientDetail", { clientId });
+          }
+        }}
+      />
+
+      <BottomSheet
+        visible={leadSuccessSheet.visible}
+        title="Lead Accepted"
+        message="A client and job have been created successfully."
+        onClose={() => setLeadSuccessSheet({ visible: false, clientId: "" })}
+        options={[
+          { key: "view", label: "View Client", icon: "user" },
+          { key: "done", label: "Done" },
+        ]}
+        onSelect={(key) => {
+          const clientId = leadSuccessSheet.clientId;
+          setLeadSuccessSheet({ visible: false, clientId: "" });
+          if (key === "view") {
+            (navigation as any).navigate("ClientDetail", { clientId });
+          }
+        }}
       />
 
       <Modal

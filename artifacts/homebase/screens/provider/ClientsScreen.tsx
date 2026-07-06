@@ -9,6 +9,7 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useQuery } from "@tanstack/react-query";
 
+import { formatMoney, formatDate } from "@/lib/format";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { EmptyState } from "@/components/EmptyState";
@@ -73,20 +74,6 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
-function formatDate(dateStr?: string): string {
-  if (!dateStr) return "";
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
 
 interface LastMessagePreview {
   clientId: string;
@@ -177,7 +164,7 @@ function ClientCard({ client, onPress, onCall, onMessage, lastMessage }: ClientC
               Lifetime
             </ThemedText>
             <ThemedText type="body" style={{ fontWeight: "500", color: Colors.accent }}>
-              {formatCurrency(client.ltv)}
+              {formatMoney(client.ltv, { showCents: false })}
             </ThemedText>
           </View>
           {(client.outstandingBalance ?? 0) > 0 ? (
@@ -186,7 +173,7 @@ function ClientCard({ client, onPress, onCall, onMessage, lastMessage }: ClientC
                 Outstanding
               </ThemedText>
               <ThemedText type="body" style={{ fontWeight: "500", color: Colors.error }}>
-                {formatCurrency(client.outstandingBalance ?? 0)}
+                {formatMoney(client.outstandingBalance ?? 0, { showCents: false })}
               </ThemedText>
             </View>
           ) : null}

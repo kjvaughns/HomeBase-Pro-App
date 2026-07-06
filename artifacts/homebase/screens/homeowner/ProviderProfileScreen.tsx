@@ -15,9 +15,11 @@ import { GlassCard } from "@/components/GlassCard";
 import { Avatar } from "@/components/Avatar";
 import { SkeletonCard, SkeletonLoader } from "@/components/SkeletonLoader";
 import { StatusPill } from "@/components/StatusPill";
+import { BottomSheet } from "@/components/BottomSheet";
 import { PartnerBadge } from "@/components/PartnerBadge";
 import { MilestoneBadge, type BadgeType } from "@/components/MilestoneBadge";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { RatingStars } from "@/components/RatingStars";
 import { useTheme } from "@/hooks/useTheme";
 import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
@@ -390,23 +392,6 @@ export default function ProviderProfileScreen() {
     }
   };
 
-  const renderStars = (rating: number) => {
-    const safe = isNaN(rating) ? 0 : rating;
-    const stars = [];
-    const fullStars = Math.floor(safe);
-    const hasHalf = safe - fullStars >= 0.5;
-    for (let i = 0; i < 5; i++) {
-      if (i < fullStars) {
-        stars.push(<Ionicons key={i} name="star" size={16} color={Colors.accent} />);
-      } else if (i === fullStars && hasHalf) {
-        stars.push(<Ionicons key={i} name="star-half" size={16} color={Colors.accent} />);
-      } else {
-        stars.push(<Ionicons key={i} name="star-outline" size={16} color={theme.borderLight} />);
-      }
-    }
-    return stars;
-  };
-
   const rawProvider = apiData?.provider;
   const businessHours = rawProvider?.businessHours;
   const serviceCities = rawProvider?.serviceCities ?? [];
@@ -657,7 +642,7 @@ export default function ProviderProfileScreen() {
           >
             <View style={styles.reviewHeader}>
               <ThemedText style={styles.reviewerName}>{review.homeownerName}</ThemedText>
-              <View style={styles.reviewStars}>{renderStars(review.rating)}</View>
+              <RatingStars rating={review.rating} size="small" />
             </View>
             <ThemedText style={[styles.reviewComment, { color: theme.textSecondary }]}>
               {review.comment}
@@ -718,12 +703,7 @@ export default function ProviderProfileScreen() {
                     </ThemedText>
                   ) : null;
                 })()}
-                <View style={styles.ratingRow}>
-                  {renderStars(safeRating)}
-                  <ThemedText style={styles.ratingText}>
-                    {safeRating.toFixed(1)} ({provider.reviewCount ?? 0})
-                  </ThemedText>
-                </View>
+                <RatingStars rating={safeRating} reviewCount={provider.reviewCount ?? 0} showValue />
                 {neighborCount > 0 ? (
                   <View style={[styles.neighborRow, { backgroundColor: Colors.accentLight }]}>
                     <Feather name="users" size={13} color={Colors.accent} />
@@ -808,44 +788,17 @@ export default function ProviderProfileScreen() {
         onSignUp={handleSignUp}
       />
 
-      <Modal
+      <BottomSheet
         visible={reportingReviewId !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setReportingReviewId(null)}
-      >
-        <Pressable style={styles.reportBackdrop} onPress={() => setReportingReviewId(null)}>
-          <Pressable
-            style={[styles.reportSheet, { backgroundColor: theme.cardBackground }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <ThemedText style={styles.reportTitle}>Report this review</ThemedText>
-            <ThemedText style={[styles.reportSubtitle, { color: theme.textSecondary }]}>
-              Why are you reporting it? A moderator will review within 24 hours.
-            </ThemedText>
-            {REPORT_REASONS.map((reason) => (
-              <Pressable
-                key={reason}
-                style={[styles.reportOption, { borderBottomColor: theme.borderLight }]}
-                onPress={() => submitReport(reason)}
-                disabled={reportSubmitting}
-                testID={`button-report-reason-${reason.replace(/\s+/g, "-").toLowerCase()}`}
-              >
-                <ThemedText style={styles.reportOptionText}>{reason}</ThemedText>
-              </Pressable>
-            ))}
-            <Pressable
-              style={styles.reportCancel}
-              onPress={() => setReportingReviewId(null)}
-              disabled={reportSubmitting}
-            >
-              <ThemedText style={[styles.reportCancelText, { color: Colors.accent }]}>
-                {reportSubmitting ? "Submitting…" : "Cancel"}
-              </ThemedText>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        title="Report this review"
+        message="Why are you reporting it? A moderator will review within 24 hours."
+        onClose={() => setReportingReviewId(null)}
+        options={REPORT_REASONS.map((reason) => ({
+          key: reason,
+          label: reason,
+        }))}
+        onSelect={(key) => submitReport(key)}
+      />
     </ThemedView>
   );
 }
@@ -1076,42 +1029,6 @@ const styles = StyleSheet.create({
   },
   reportLinkText: {
     ...Typography.caption2,
-  },
-  reportBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "flex-end",
-  },
-  reportSheet: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.xl,
-    borderTopLeftRadius: BorderRadius.lg,
-    borderTopRightRadius: BorderRadius.lg,
-  },
-  reportTitle: {
-    ...Typography.title3,
-    marginBottom: Spacing.xs,
-  },
-  reportSubtitle: {
-    ...Typography.subhead,
-    marginBottom: Spacing.md,
-  },
-  reportOption: {
-    paddingVertical: Spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  reportOptionText: {
-    ...Typography.body,
-  },
-  reportCancel: {
-    paddingVertical: Spacing.md,
-    alignItems: "center",
-    marginTop: Spacing.sm,
-  },
-  reportCancelText: {
-    ...Typography.body,
-    fontWeight: "600",
   },
   emptyReviews: {
     paddingVertical: Spacing.xl,

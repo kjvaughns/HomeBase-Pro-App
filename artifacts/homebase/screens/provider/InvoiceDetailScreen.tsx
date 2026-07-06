@@ -20,6 +20,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 
 import { ThemedView } from "@/components/ThemedView";
+import { formatMoney, formatDate } from "@/lib/format";
 import { ThemedText } from "@/components/ThemedText";
 import { GlassCard } from "@/components/GlassCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -385,8 +386,6 @@ export default function InvoiceDetailScreen() {
       ? "Partially Paid"
       : status.charAt(0).toUpperCase() + status.slice(1);
 
-  const formatDate = (dateStr: string) =>
-    new Date(dateStr).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
   if (isLoading) {
     return (
@@ -463,7 +462,7 @@ export default function InvoiceDetailScreen() {
                 {invoice.invoiceNumber || `INV-${invoice.id.slice(0, 8).toUpperCase()}`}
               </ThemedText>
               <ThemedText style={styles.amountDisplay}>
-                ${parseFloat(displayAmount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {formatMoney(displayAmount)}
               </ThemedText>
             </View>
             <StatusPill
@@ -552,12 +551,12 @@ export default function InvoiceDetailScreen() {
                     <ThemedText style={styles.lineItemName}>{item.description}</ThemedText>
                     {item.quantity !== 1 ? (
                       <ThemedText style={[styles.lineItemMeta, { color: theme.textTertiary }]}>
-                        {item.quantity} x ${item.unitPrice.toFixed(2)}
+                        {item.quantity} x {formatMoney(item.unitPrice)}
                       </ThemedText>
                     ) : null}
                   </View>
                   <ThemedText style={[styles.lineItemTotal, { color: theme.text }]}>
-                    ${item.total.toFixed(2)}
+                    {formatMoney(item.total)}
                   </ThemedText>
                 </View>
               </View>
@@ -565,7 +564,7 @@ export default function InvoiceDetailScreen() {
             <View style={[styles.subtotalRow, { borderTopColor: theme.separator }]}>
               <ThemedText style={[styles.subtotalLabel, { color: theme.textSecondary }]}>Total</ThemedText>
               <ThemedText style={[styles.subtotalAmount, { color: Colors.accent }]}>
-                ${parseFloat(displayAmount).toFixed(2)}
+                {formatMoney(displayAmount)}
               </ThemedText>
             </View>
           </GlassCard>

@@ -21,6 +21,7 @@ import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { Avatar } from "@/components/Avatar";
+import { EmptyState } from "@/components/EmptyState";
 import { useTheme } from "@/hooks/useTheme";
 import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, BorderRadius } from "@/constants/theme";
@@ -408,10 +409,11 @@ export default function CommunicationsScreen() {
 
           {filteredClients.length === 0 ? (
             <View style={styles.emptyPicker}>
-              <Feather name="users" size={32} color={theme.textSecondary} />
-              <ThemedText type="body" style={{ color: theme.textSecondary, marginTop: Spacing.md }}>
-                No clients found
-              </ThemedText>
+              <EmptyState
+                icon="users"
+                title="No clients found"
+                description={clientSearch.trim() ? `No results for "${clientSearch}"` : "You haven't added any clients yet."}
+              />
             </View>
           ) : (
             <FlatList

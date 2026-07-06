@@ -34,6 +34,7 @@ import { SkeletonLoader } from "@/components/SkeletonLoader";
 import { EmptyState } from "@/components/EmptyState";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
+import { RatingStars } from "@/components/RatingStars";
 import { useAuthStore } from "@/state/authStore";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useHomeownerStore } from "@/state/homeownerStore";
@@ -509,17 +510,7 @@ export default function FindScreen() {
                     >
                       {provider.businessName}
                     </ThemedText>
-                    <View style={styles.savedProviderRating}>
-                      <Ionicons name="star" size={12} color={Colors.warning} />
-                      <ThemedText
-                        style={[
-                          styles.savedProviderRatingText,
-                          { color: theme.textSecondary },
-                        ]}
-                      >
-                        {provider.rating.toFixed(1)}
-                      </ThemedText>
-                    </View>
+                    <RatingStars rating={provider.rating} compact size="small" />
                   </Pressable>
                 ))}
               </ScrollView>

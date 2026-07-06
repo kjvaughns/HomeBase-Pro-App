@@ -111,13 +111,13 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    height: Spacing.inputHeight,
+    minHeight: Spacing.inputHeight,
     borderRadius: BorderRadius.input,
     paddingHorizontal: Spacing.md,
   },
   inputContainerMultiline: {
     alignItems: "flex-start",
-    height: undefined,
+    minHeight: undefined,
     paddingVertical: Spacing.sm,
   },
   leftIcon: {
@@ -126,7 +126,6 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     ...Typography.body,
-    height: "100%",
   },
   inputMultiline: {
     height: undefined,

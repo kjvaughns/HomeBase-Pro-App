@@ -26,6 +26,8 @@ import { Avatar } from "@/components/Avatar";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
+import { RatingStars } from "@/components/RatingStars";
+import { EmptyState } from "@/components/EmptyState";
 import { useAuthStore } from "@/state/authStore";
 import { apiRequest } from "@/lib/query-client";
 import { recordHappyMoment } from "@/state/appReviewStore";
@@ -138,19 +140,6 @@ export default function ReviewsScreen() {
     });
   };
 
-  const renderStars = (count: number, size = 14) => (
-    <View style={styles.starsRow}>
-      {[1, 2, 3, 4, 5].map((star) => (
-        <Ionicons
-          key={star}
-          name={star <= count ? "star" : "star-outline"}
-          size={size}
-          color={star <= count ? Colors.warning : theme.border}
-        />
-      ))}
-    </View>
-  );
-
   const getRatingCount = (stars: number) =>
     allReviews.filter((r) => r.rating === stars).length;
 
@@ -231,7 +220,7 @@ export default function ReviewsScreen() {
             <View style={styles.reviewInfo}>
               <ThemedText style={styles.reviewerName}>{item.reviewerName}</ThemedText>
               <View style={styles.reviewMeta}>
-                {renderStars(item.rating)}
+                <RatingStars rating={item.rating} size="small" />
                 <ThemedText style={[styles.reviewDate, { color: theme.textTertiary }]}>
                   {formatDate(item.createdAt)}
                 </ThemedText>
@@ -344,15 +333,11 @@ export default function ReviewsScreen() {
     if (isLoading) return null;
     return (
       <Animated.View entering={FadeInDown.delay(100).duration(300)}>
-        <View style={[styles.emptyState, { backgroundColor: theme.cardBackground }]}>
-          <View style={[styles.emptyIcon, { backgroundColor: Colors.accentLight }]}>
-            <Ionicons name="star" size={28} color={Colors.accent} />
-          </View>
-          <ThemedText style={styles.emptyTitle}>No reviews yet</ThemedText>
-          <ThemedText style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
-            Reviews from completed bookings will appear here. Deliver great service and they'll come!
-          </ThemedText>
-        </View>
+        <EmptyState
+          icon="star"
+          title="No reviews yet"
+          description="Reviews from completed bookings will appear here. Deliver great service and they'll come!"
+        />
       </Animated.View>
     );
   };
@@ -366,7 +351,7 @@ export default function ReviewsScreen() {
               {rating > 0 ? rating.toFixed(1) : "—"}
             </ThemedText>
             <View style={styles.summaryInfo}>
-              {renderStars(Math.round(rating), 20)}
+              <RatingStars rating={rating} />
               <ThemedText style={[styles.reviewCountText, { color: theme.textSecondary }]}>
                 {reviewCount > 0
                   ? `Based on ${reviewCount} review${reviewCount !== 1 ? "s" : ""}`
@@ -517,7 +502,7 @@ export default function ReviewsScreen() {
                   <ThemedText style={styles.modalReviewerName}>
                     {activeReview.reviewerName}
                   </ThemedText>
-                  {renderStars(activeReview.rating, 12)}
+                  <RatingStars rating={activeReview.rating} size="small" />
                 </View>
                 {activeReview.comment ? (
                   <ThemedText
@@ -769,22 +754,6 @@ const styles = StyleSheet.create({
   },
   replyButtonText: { ...Typography.caption1, fontWeight: "600" },
   loadingContainer: { paddingVertical: Spacing.xl, alignItems: "center" },
-  emptyState: {
-    borderRadius: BorderRadius.lg,
-    padding: Spacing["2xl"],
-    alignItems: "center",
-    marginTop: Spacing.sm,
-  },
-  emptyIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: BorderRadius.xl,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: Spacing.lg,
-  },
-  emptyTitle: { ...Typography.title3, marginBottom: Spacing.sm, textAlign: "center" },
-  emptySubtitle: { ...Typography.body, textAlign: "center", lineHeight: 22 },
   modalRoot: { flex: 1, justifyContent: "flex-end" },
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,

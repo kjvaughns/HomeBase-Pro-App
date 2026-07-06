@@ -17,6 +17,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 
+import { formatMoney } from "@/lib/format";
 import { ThemedText } from "./ThemedText";
 import { PrimaryButton } from "./PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
@@ -65,10 +66,6 @@ const METHODS: { key: ManualPaymentMethod; label: string; icon: keyof typeof Fea
   { key: "other", label: "Other", icon: "more-horizontal" },
 ];
 
-function formatCentsInput(cents: number): string {
-  if (!Number.isFinite(cents) || cents <= 0) return "";
-  return (cents / 100).toFixed(2);
-}
 
 function isoDate(date: Date): string {
   const y = date.getFullYear();
@@ -105,7 +102,7 @@ export function RecordPaymentSheet({
   useEffect(() => {
     if (!visible) return;
     if (existing) {
-      setAmount(formatCentsInput(existing.amountCents));
+      setAmount((existing.amountCents / 100).toFixed(2));
       setMethod(
         (METHODS.find((m) => m.key === existing.method)?.key ??
           "other") as ManualPaymentMethod,
@@ -123,7 +120,7 @@ export function RecordPaymentSheet({
     } else {
       setAmount(
         suggestedAmountCents && suggestedAmountCents > 0
-          ? formatCentsInput(suggestedAmountCents)
+          ? (suggestedAmountCents / 100).toFixed(2)
           : "",
       );
       setMethod("cash");

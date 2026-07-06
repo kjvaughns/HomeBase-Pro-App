@@ -13,6 +13,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 
 import { ThemedView } from "@/components/ThemedView";
+import { formatMoney, formatDate } from "@/lib/format";
 import { ThemedText } from "@/components/ThemedText";
 import { GlassCard } from "@/components/GlassCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -64,16 +65,10 @@ function toneColor(tone: ReturnType<typeof estimateStatusTone>): string {
   }
 }
 
-function formatCents(cents: number | null | undefined): string {
-  return ((cents ?? 0) / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
-}
 
 function formatDateTime(d: string | null | undefined): string {
   if (!d) return "";
-  return new Date(d).toLocaleString("en-US", {
-    month: "short", day: "numeric", year: "numeric",
-    hour: "numeric", minute: "2-digit",
-  });
+  return formatDate(d, { style: "weekday" });
 }
 
 export default function EstimateDetailScreen() {
@@ -266,15 +261,15 @@ export default function EstimateDetailScreen() {
               <View style={{ flex: 1 }}>
                 <ThemedText style={{ fontWeight: "600" }}>{li.name}</ThemedText>
                 <ThemedText style={{ color: theme.textSecondary, fontSize: 13 }}>
-                  {Number(li.quantity)} × {formatCents(li.unitPriceCents)}
+                  {Number(li.quantity)} × {formatMoney(li.unitPriceCents, { cents: true })}
                 </ThemedText>
               </View>
-              <ThemedText style={{ fontWeight: "600" }}>{formatCents(li.amountCents)}</ThemedText>
+              <ThemedText style={{ fontWeight: "600" }}>{formatMoney(li.amountCents, { cents: true })}</ThemedText>
             </View>
           ))}
           <View style={[styles.totalRow, { borderTopColor: theme.separator }]}>
             <ThemedText style={{ color: theme.textSecondary }}>Total</ThemedText>
-            <ThemedText style={{ fontSize: 20, fontWeight: "700" }}>{formatCents(estimate.totalCents)}</ThemedText>
+            <ThemedText style={{ fontSize: 20, fontWeight: "700" }}>{formatMoney(estimate.totalCents, { cents: true })}</ThemedText>
           </View>
           {estimate.notes ? (
             <View style={{ marginTop: Spacing.md }}>

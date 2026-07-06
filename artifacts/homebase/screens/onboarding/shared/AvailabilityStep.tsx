@@ -7,7 +7,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { GlassCard } from "@/components/GlassCard";
 import { useLayout } from "@/hooks/useLayout";
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, Colors, BorderRadius } from "@/constants/theme";
+import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { DAYS_OF_WEEK, START_TIMES, END_TIMES } from "./onboardingConstants";
 
 // Shared by both the pre-signup provider onboarding funnel
@@ -95,10 +95,10 @@ export function AvailabilityStep({
                 ]}
               >
                 <ThemedText
+                  type="footnote"
                   style={{
                     color: active ? "#fff" : theme.text,
                     fontWeight: active ? "600" : "400",
-                    fontSize: 13,
                   }}
                 >
                   {day.label}
@@ -145,7 +145,7 @@ export function AvailabilityStep({
                       },
                     ]}
                   >
-                    <ThemedText style={{ color: selected ? "#fff" : theme.text, fontSize: 12 }}>
+                    <ThemedText type="caption" style={{ color: selected ? "#fff" : theme.text }}>
                       {t}
                     </ThemedText>
                   </Pressable>
@@ -185,7 +185,7 @@ export function AvailabilityStep({
                       },
                     ]}
                   >
-                    <ThemedText style={{ color: selected ? "#fff" : theme.text, fontSize: 12 }}>
+                    <ThemedText type="caption" style={{ color: selected ? "#fff" : theme.text }}>
                       {t}
                     </ThemedText>
                   </Pressable>
@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
   },
   card: { marginBottom: Spacing.lg },
   fieldLabel: {
-    fontSize: 13,
+    ...Typography.footnote,
     fontWeight: "500",
     marginBottom: Spacing.sm,
   },

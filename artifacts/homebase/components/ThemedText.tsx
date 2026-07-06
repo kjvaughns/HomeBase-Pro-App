@@ -1,4 +1,4 @@
-import { Text, type TextProps } from "react-native";
+import { Text, PixelRatio, type TextProps } from "react-native";
 
 import { useTheme } from "@/hooks/useTheme";
 import { Typography } from "@/constants/theme";
@@ -79,7 +79,24 @@ export function ThemedText({
     return theme.text;
   };
 
+  const baseStyle = TYPE_TO_STYLE[type] as {
+    fontSize?: number;
+    lineHeightMultiplier?: number;
+  };
+  const dynamicLineHeight =
+    baseStyle.fontSize && baseStyle.lineHeightMultiplier
+      ? baseStyle.fontSize * baseStyle.lineHeightMultiplier * PixelRatio.getFontScale()
+      : undefined;
+
   return (
-    <Text style={[{ color: getColor() }, TYPE_TO_STYLE[type], style]} {...rest} />
+    <Text
+      style={[
+        { color: getColor() },
+        baseStyle,
+        dynamicLineHeight ? { lineHeight: dynamicLineHeight } : null,
+        style,
+      ]}
+      {...rest}
+    />
   );
 }

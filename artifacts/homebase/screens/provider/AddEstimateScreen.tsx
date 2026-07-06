@@ -15,6 +15,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 
+import { formatMoney, formatDate } from "@/lib/format";
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
@@ -169,8 +170,6 @@ export default function AddEstimateScreen() {
   const handleSend = () => { if (validate()) createMutation.mutate(true); };
   const handleDraft = () => { if (validate()) createMutation.mutate(false); };
 
-  const formatDate = (d: Date) =>
-    d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
   return (
     <ThemedView style={styles.container}>
@@ -311,7 +310,7 @@ export default function AddEstimateScreen() {
           >
             <Feather name="calendar" size={15} color={expiresAt ? Colors.accent : theme.textTertiary} />
             <ThemedText style={{ marginLeft: 8, color: expiresAt ? theme.text : theme.textTertiary, flex: 1 }}>
-              {expiresAt ? formatDate(expiresAt) : "Optional expiration date"}
+              {expiresAt ? formatDate(expiresAt, { style: "weekday" }) : "Optional expiration date"}
             </ThemedText>
             {expiresAt ? (
               <Pressable onPress={() => setExpiresAt(null)} hitSlop={8}>

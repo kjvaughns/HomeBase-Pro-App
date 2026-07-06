@@ -20,6 +20,7 @@ import { getApiUrl } from "@/lib/query-client";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
+import { EmptyState } from "@/components/EmptyState";
 import { useTheme } from "@/hooks/useTheme";
 import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
@@ -274,67 +275,45 @@ export default function ProviderResourcesScreen() {
 
     if (showOffline) {
       return (
-        <GlassCard style={styles.statusCard} testID="resources-offline">
-          <View style={[styles.statusIcon, { backgroundColor: theme.textSecondary + "15" }]}>
-            <Feather name="wifi-off" size={24} color={theme.textSecondary} />
-          </View>
-          <ThemedText style={styles.statusTitle}>You&apos;re offline</ThemedText>
-          <ThemedText style={[styles.statusText, { color: theme.textSecondary }]}>
-            Reconnect to the internet to load the latest guides, articles, and tools from our marketing team.
-          </ThemedText>
-        </GlassCard>
+        <View style={styles.statusCard}>
+          <EmptyState
+            icon="wifi-off"
+            title="You're offline"
+            description="Reconnect to the internet to load the latest guides, articles, and tools from our marketing team."
+          />
+        </View>
       );
     }
 
     if (showError) {
       return (
-        <GlassCard style={styles.statusCard} testID="resources-error">
-          <View style={[styles.statusIcon, { backgroundColor: Colors.error + "15" }]}>
-            <Feather name="alert-circle" size={24} color={Colors.error} />
-          </View>
-          <ThemedText style={styles.statusTitle}>Couldn&apos;t load resources</ThemedText>
-          <ThemedText style={[styles.statusText, { color: theme.textSecondary }]}>
-            Something went wrong loading the latest guides and articles. Please try again.
-          </ThemedText>
-          <Pressable
-            testID="button-retry-resources"
-            onPress={() => refetch()}
-            style={[styles.retryButton, { backgroundColor: Colors.accent }]}
-            disabled={isFetching}
-          >
-            {isFetching ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <ThemedText style={styles.retryButtonText}>Try Again</ThemedText>
-            )}
-          </Pressable>
-        </GlassCard>
+        <View style={styles.statusCard}>
+          <EmptyState
+            icon="alert-circle"
+            title="Couldn't load resources"
+            description="Something went wrong loading the latest guides and articles. Please try again."
+            primaryAction={{
+              label: "Try Again",
+              onPress: () => refetch(),
+            }}
+          />
+        </View>
       );
     }
 
     if (showEmpty) {
       return (
-        <GlassCard style={styles.statusCard} testID="resources-empty">
-          <View style={[styles.statusIcon, { backgroundColor: theme.textSecondary + "15" }]}>
-            <Feather name="inbox" size={24} color={theme.textSecondary} />
-          </View>
-          <ThemedText style={styles.statusTitle}>No resources yet</ThemedText>
-          <ThemedText style={[styles.statusText, { color: theme.textSecondary }]}>
-            New guides and articles from our marketing team will appear here. Check back soon.
-          </ThemedText>
-          <Pressable
-            testID="button-refresh-resources"
-            onPress={() => refetch()}
-            style={[styles.retryButton, { backgroundColor: Colors.accent }]}
-            disabled={isFetching}
-          >
-            {isFetching ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <ThemedText style={styles.retryButtonText}>Refresh</ThemedText>
-            )}
-          </Pressable>
-        </GlassCard>
+        <View style={styles.statusCard}>
+          <EmptyState
+            icon="inbox"
+            title="No resources yet"
+            description="New guides and articles from our marketing team will appear here. Check back soon."
+            primaryAction={{
+              label: "Refresh",
+              onPress: () => refetch(),
+            }}
+          />
+        </View>
       );
     }
 
@@ -508,39 +487,6 @@ const styles = StyleSheet.create({
     padding: Spacing.xl,
     alignItems: "center",
     marginBottom: Spacing.xl,
-  },
-  statusIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: BorderRadius.full,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: Spacing.md,
-  },
-  statusTitle: {
-    ...Typography.headline,
-    fontWeight: "600",
-    marginBottom: Spacing.xs,
-    textAlign: "center",
-  },
-  statusText: {
-    ...Typography.subhead,
-    textAlign: "center",
-    lineHeight: 20,
-    marginBottom: Spacing.md,
-  },
-  retryButton: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    minWidth: 120,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  retryButtonText: {
-    color: "#FFFFFF",
-    fontWeight: "600",
-    fontSize: 14,
   },
   quickLinksCard: {
     marginBottom: Spacing.xl,

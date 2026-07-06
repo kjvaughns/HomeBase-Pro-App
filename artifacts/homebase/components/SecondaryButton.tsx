@@ -90,7 +90,7 @@ export function SecondaryButton({
 
 const styles = StyleSheet.create({
   button: {
-    height: Spacing.buttonHeight,
+    minHeight: Spacing.buttonHeight,
     borderRadius: BorderRadius.button,
     borderWidth: 1,
     alignItems: "center",

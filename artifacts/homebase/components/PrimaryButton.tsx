@@ -88,7 +88,7 @@ export function PrimaryButton({
 
 const styles = StyleSheet.create({
   button: {
-    height: Spacing.buttonHeight,
+    minHeight: Spacing.buttonHeight,
     borderRadius: BorderRadius.button,
     alignItems: "center",
     justifyContent: "center",

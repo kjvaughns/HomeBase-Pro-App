@@ -18,6 +18,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
+import { EmptyState } from "@/components/EmptyState";
 import { useTheme } from "@/hooks/useTheme";
 import { useLayout } from "@/hooks/useLayout";
 import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
@@ -197,15 +198,11 @@ export default function ReferAProScreen() {
               </Animated.View>
             ) : (
               <Animated.View entering={FadeInDown.delay(140).duration(220)}>
-                <View style={[styles.emptyCard, { backgroundColor: theme.cardBackground }]}>
-                  <Feather name="users" size={32} color={theme.textTertiary} />
-                  <ThemedText style={[styles.emptyTitle, { color: theme.text }]}>
-                    No referrals yet
-                  </ThemedText>
-                  <ThemedText style={[styles.emptyBody, { color: theme.textSecondary }]}>
-                    Share your code with other pros and you'll see them appear here.
-                  </ThemedText>
-                </View>
+                <EmptyState
+                  icon="users"
+                  title="No referrals yet"
+                  description="Share your code with other pros and you'll see them appear here."
+                />
               </Animated.View>
             )}
 
@@ -427,21 +424,6 @@ const styles = StyleSheet.create({
   statusLabel: {
     ...Typography.caption1,
     fontWeight: "600",
-  },
-  emptyCard: {
-    borderRadius: BorderRadius.card,
-    padding: Spacing.xl,
-    alignItems: "center",
-    gap: Spacing.sm,
-    marginBottom: Spacing.xl,
-  },
-  emptyTitle: {
-    ...Typography.callout,
-    fontWeight: "600",
-  },
-  emptyBody: {
-    ...Typography.subhead,
-    textAlign: "center",
   },
   howCard: {
     borderRadius: BorderRadius.card,

@@ -11,17 +11,45 @@ import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/query-client";
 import * as Haptics from "expo-haptics";
 
+import { formatMoney } from "@/lib/format";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { Avatar } from "@/components/Avatar";
 import { GlassCard } from "@/components/GlassCard";
 import { JobCard } from "@/components/JobCard";
 import { SectionHeader } from "@/components/SectionHeader";
-import { StatCard } from "@/components/StatCard";
+import { SkeletonLoader, SkeletonCard, SkeletonListRow } from "@/components/SkeletonLoader";
+
+function StatsSkeleton() {
+  const { theme } = useTheme();
+  return (
+    <View style={styles.statsGrid}>
+      {[1, 2, 3, 4].map((i) => (
+        <View key={i} style={[styles.statCard, { backgroundColor: theme.cardBackground }]}>
+          <SkeletonLoader width={32} height={32} borderRadius={16} />
+          <SkeletonLoader width={40} height={24} style={{ marginTop: Spacing.xs }} />
+          <SkeletonLoader width={60} height={14} style={{ marginTop: Spacing.xs }} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function JobsSkeleton() {
+  return (
+    <View style={{ gap: Spacing.md }}>
+      {[1, 2].map((i) => (
+        <SkeletonCard key={i} />
+      ))}
+    </View>
+  );
+}
 import { GracePeriodBanner } from "@/components/GracePeriodBanner";
 import { CrewWelcomeBanner } from "@/components/CrewWelcomeBanner";
 import { RecapCard } from "@/components/RecapCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { StatCard } from "@/components/StatCard";
+import { EmptyState } from "@/components/EmptyState";
 import { useTheme } from "@/hooks/useTheme";
 import { useSyncProviderTimezone } from "@/hooks/useSyncProviderTimezone";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
@@ -66,14 +94,6 @@ interface ProviderInsights {
   hasAnyData: boolean;
 }
 
-function formatDollarsCompact(amount: number): string {
-  if (amount >= 1000) {
-    const k = amount / 1000;
-    const rounded = k >= 10 ? Math.round(k) : Math.round(k * 10) / 10;
-    return `$${rounded}K`;
-  }
-  return `$${Math.round(amount)}`;
-}
 
 function MiniBarChart({
   data,
@@ -257,7 +277,7 @@ function MonthlyGoalCard({
           <View style={{ flex: 1 }}>
             <ThemedText style={styles.goalTitle}>Monthly Goal</ThemedText>
             <ThemedText style={[styles.goalSubtitle, { color: theme.textSecondary }]}>
-              ${revenueMTDDollars.toLocaleString()} of ${goalDollars.toLocaleString()} goal
+              {formatMoney(revenueMTDDollars, { showCents: false })} of {formatMoney(goalDollars, { showCents: false })} goal
             </ThemedText>
           </View>
           <Pressable
@@ -411,25 +431,16 @@ function GoalEditModal({
 }
 
 function ProfileMissingCTA({ navigation }: { navigation: any }) {
-  const { theme } = useTheme();
   return (
-    <ThemedView style={styles.container}>
-      <View style={styles.centerContent}>
-        <View style={[styles.missingIcon, { backgroundColor: Colors.accentLight }]}>
-          <Feather name="user-x" size={32} color={Colors.accent} />
-        </View>
-        <ThemedText style={styles.missingTitle}>Profile setup needed</ThemedText>
-        <ThemedText style={[styles.missingSubtitle, { color: theme.textSecondary }]}>
-          Your provider profile isn't set up yet. Complete setup to start taking jobs and managing clients.
-        </ThemedText>
-        <PrimaryButton
-          onPress={() => navigation.navigate("ProviderSetup")}
-          style={styles.setupButton}
-        >
-          Complete Provider Setup
-        </PrimaryButton>
-      </View>
-    </ThemedView>
+    <EmptyState
+      icon="user-x"
+      title="Profile setup needed"
+      description="Your provider profile isn't set up yet. Complete setup to start taking jobs and managing clients."
+      primaryAction={{
+        label: "Complete Provider Setup",
+        onPress: () => navigation.navigate("ProviderSetup"),
+      }}
+    />
   );
 }
 
@@ -902,12 +913,21 @@ export default function ProviderHomeScreen() {
   if (!providerId && profileLoading) {
     return (
       <ThemedView style={styles.container}>
-        <View style={styles.centerContent}>
-          <ActivityIndicator size="large" color={Colors.accent} />
-          <ThemedText style={[styles.loadingText, { color: theme.textSecondary }]}>
-            Loading your profile...
-          </ThemedText>
-        </View>
+        <ScrollView
+          contentContainerStyle={{
+            paddingTop: headerHeight + Spacing.lg,
+            paddingBottom: tabBarHeight + Spacing.xl,
+            paddingHorizontal: horizontalPadding,
+          }}
+          showsVerticalScrollIndicator={false}
+        >
+          <SkeletonLoader width={120} height={24} style={{ marginBottom: Spacing.md }} />
+          <StatsSkeleton />
+          <View style={{ marginTop: Spacing.xl }}>
+            <SkeletonLoader width={140} height={24} style={{ marginBottom: Spacing.md }} />
+            <JobsSkeleton />
+          </View>
+        </ScrollView>
       </ThemedView>
     );
   }
@@ -1042,9 +1062,7 @@ export default function ProviderHomeScreen() {
 
         <Animated.View entering={FadeInDown.delay(200).duration(400)}>
           {isLoading ? (
-            <GlassCard style={styles.todaySummary}>
-              <ActivityIndicator size="small" color={Colors.accent} />
-            </GlassCard>
+            <StatsSkeleton />
           ) : (
             <View style={styles.statsGrid}>
               <Pressable
@@ -1119,9 +1137,7 @@ export default function ProviderHomeScreen() {
 
         {isLoading ? (
           <Animated.View entering={FadeInDown.delay(280).duration(400)}>
-            <GlassCard style={styles.emptyCard}>
-              <ActivityIndicator size="small" color={Colors.accent} />
-            </GlassCard>
+            <JobsSkeleton />
           </Animated.View>
         ) : upcomingJobs.length > 0 ? (
           upcomingJobs.map((job, index) => (
@@ -1139,19 +1155,15 @@ export default function ProviderHomeScreen() {
         ) : (
           <Animated.View entering={FadeInDown.delay(280).duration(400)}>
             <GlassCard style={styles.emptyCard}>
-              <Feather name="calendar" size={32} color={theme.textSecondary} style={{ marginBottom: Spacing.sm }} />
-              <ThemedText style={[styles.emptyText, { color: theme.textSecondary }]}>
-                No upcoming jobs scheduled
-              </ThemedText>
-              <Pressable
-                style={[styles.addJobButton, { backgroundColor: Colors.accentLight }]}
-                onPress={() => navigation.navigate("AddJob")}
-              >
-                <Feather name="plus" size={16} color={Colors.accent} />
-                <ThemedText style={[styles.addJobText, { color: Colors.accent }]}>
-                  Add a Job
-                </ThemedText>
-              </Pressable>
+              <EmptyState
+                icon="calendar"
+                title="No upcoming jobs"
+                description="You don't have any jobs scheduled for today or the future."
+                primaryAction={{
+                  label: "Add a Job",
+                  onPress: () => navigation.navigate("AddJob"),
+                }}
+              />
             </GlassCard>
           </Animated.View>
         )}
@@ -1341,23 +1353,26 @@ export default function ProviderHomeScreen() {
             </View>
           ) : insightsError || !insightsData?.insights ? (
             <GlassCard style={styles.insightsEmptyCard}>
-              <ThemedText style={[styles.insightsEmptyText, { color: theme.textSecondary }]}>
-                Insights are temporarily unavailable. Pull to refresh.
-              </ThemedText>
+              <EmptyState
+                icon="alert-circle"
+                title="Insights unavailable"
+                description="We had trouble loading your business analytics. Pull down to refresh."
+              />
             </GlassCard>
           ) : !insightsData.insights.hasAnyData ? (
             <GlassCard style={styles.insightsEmptyCard}>
-              <Feather name="bar-chart-2" size={28} color={theme.textSecondary} style={{ marginBottom: Spacing.sm }} />
-              <ThemedText style={[styles.insightsEmptyText, { color: theme.textSecondary }]}>
-                Your first numbers will show up here as you complete jobs.
-              </ThemedText>
+              <EmptyState
+                icon="bar-chart-2"
+                title="No data yet"
+                description="Your business insights will appear here once you complete your first few jobs."
+              />
             </GlassCard>
           ) : (
             <View>
               <View style={styles.insightGridRow}>
                 <StatCard
                   title="Revenue MTD"
-                  value={formatDollarsCompact(insightsData.insights.revenueMtd)}
+                  value={formatMoney(insightsData.insights.revenueMtd, { cents: true, compact: true })}
                   icon="dollar-sign"
                   trend={
                     insightsData.insights.revenueMtdDelta !== null
@@ -1398,7 +1413,7 @@ export default function ProviderHomeScreen() {
                 />
                 <StatCard
                   title="Avg Job Value"
-                  value={formatDollarsCompact(insightsData.insights.avgJobValue)}
+                  value={formatMoney(insightsData.insights.avgJobValue, { cents: true, compact: true })}
                   icon="trending-up"
                   trend={
                     insightsData.insights.avgJobValueDelta !== null
@@ -1491,6 +1506,9 @@ export default function ProviderHomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  insightsEmptyCard: {
+    paddingVertical: Spacing.sm,
+  },
   // Monthly Goal card
   goalCard: {
     marginBottom: Spacing.lg,
@@ -1631,37 +1649,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  centerContent: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: Spacing.xl,
-  },
   loadingText: {
     ...Typography.body,
     marginTop: Spacing.md,
-  },
-  missingIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: BorderRadius.xl,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: Spacing.lg,
-  },
-  missingTitle: {
-    ...Typography.title2,
-    marginBottom: Spacing.sm,
-    textAlign: "center",
-  },
-  missingSubtitle: {
-    ...Typography.body,
-    textAlign: "center",
-    marginBottom: Spacing.xl,
-    lineHeight: 22,
-  },
-  setupButton: {
-    width: "100%",
   },
   greetingCard: {
     marginBottom: Spacing.lg,
@@ -1733,22 +1723,6 @@ const styles = StyleSheet.create({
   emptyCard: {
     alignItems: "center",
     paddingVertical: Spacing.xl,
-  },
-  emptyText: {
-    ...Typography.body,
-    marginBottom: Spacing.md,
-  },
-  addJobButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    gap: Spacing.xs,
-  },
-  addJobText: {
-    ...Typography.callout,
-    fontWeight: "600",
   },
   checklistCard: {
     padding: 0,
@@ -1825,14 +1799,6 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.card,
     opacity: 0.4,
     marginTop: Spacing.xs,
-  },
-  insightsEmptyCard: {
-    alignItems: "center",
-    paddingVertical: Spacing.xl,
-  },
-  insightsEmptyText: {
-    ...Typography.body,
-    textAlign: "center",
   },
   insightChartCard: {
     marginTop: Spacing.xs,

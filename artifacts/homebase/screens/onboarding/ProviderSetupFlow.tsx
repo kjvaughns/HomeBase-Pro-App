@@ -24,7 +24,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { GlassCard } from "@/components/GlassCard";
 import { useTheme } from "@/hooks/useTheme";
 import { useLayout } from "@/hooks/useLayout";
-import { Spacing, Colors, BorderRadius } from "@/constants/theme";
+import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useOnboardingStore } from "@/state/onboardingStore";
 import { useAuthStore } from "@/state/authStore";
@@ -326,7 +326,7 @@ function Step1CreateService({
             testID="segment-fixed-price"
           >
             <Feather name="dollar-sign" size={13} color={!data.quoteRequired ? "#fff" : theme.textSecondary} />
-            <ThemedText style={{ color: !data.quoteRequired ? "#fff" : theme.textSecondary, fontWeight: "600", fontSize: 13 }}>
+            <ThemedText type="footnote" style={{ color: !data.quoteRequired ? "#fff" : theme.textSecondary, fontWeight: "600" }}>
               Fixed Price
             </ThemedText>
           </Pressable>
@@ -342,7 +342,7 @@ function Step1CreateService({
             testID="toggle-quote-required"
           >
             <Feather name="file-text" size={13} color={data.quoteRequired ? "#fff" : theme.textSecondary} />
-            <ThemedText style={{ color: data.quoteRequired ? "#fff" : theme.textSecondary, fontWeight: "600", fontSize: 13 }}>
+            <ThemedText type="footnote" style={{ color: data.quoteRequired ? "#fff" : theme.textSecondary, fontWeight: "600" }}>
               Quote Only
             </ThemedText>
           </Pressable>
@@ -423,10 +423,10 @@ function Step1CreateService({
                 ]}
               >
                 <ThemedText
+                  type="footnote"
                   style={{
                     color: selected ? "#fff" : theme.text,
                     fontWeight: selected ? "600" : "400",
-                    fontSize: 13,
                   }}
                 >
                   {opt.label}
@@ -561,7 +561,7 @@ function Step3ProfilePolish({
           ) : (
             <Feather name="zap" size={14} color={Colors.accent} />
           )}
-          <ThemedText style={{ color: Colors.accent, fontWeight: "600", fontSize: 13 }}>
+          <ThemedText type="footnote" style={{ color: Colors.accent, fontWeight: "600" }}>
             {improving ? "Improving..." : "Improve with AI"}
           </ThemedText>
         </Pressable>
@@ -689,7 +689,7 @@ function Step4BookingPreview({ data }: { data: SetupData }) {
           ) : null}
 
           <View style={[styles.previewBookBtn, { backgroundColor: Colors.accent }]}>
-            <ThemedText style={{ color: "#fff", fontWeight: "600", fontSize: 15 }}>
+            <ThemedText type="subhead" style={{ color: "#fff", fontWeight: "600" }}>
               Book Now
             </ThemedText>
           </View>
@@ -1226,12 +1226,12 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xl,
   },
   stepHeader: { marginBottom: Spacing.xl },
-  stepLabel: { fontSize: 12, fontWeight: "600", letterSpacing: 0.5, marginBottom: Spacing.xs },
+  stepLabel: { ...Typography.caption, fontWeight: "600", letterSpacing: 0.5, marginBottom: Spacing.xs },
   stepTitle: { fontWeight: "700", marginBottom: Spacing.xs },
   stepSubtitle: {},
   card: { marginBottom: Spacing.lg },
   fieldLabel: {
-    fontSize: 13,
+    ...Typography.footnote,
     fontWeight: "500",
     marginBottom: Spacing.sm,
   },
@@ -1246,7 +1246,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.sm,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm + 2,
-    fontSize: 15,
+    ...Typography.subhead,
     marginBottom: Spacing.xs,
   },
   categoryGrid: {
@@ -1321,7 +1321,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   currencySymbol: {
-    fontSize: 18,
+    ...Typography.h3,
     fontWeight: "600",
     marginRight: Spacing.xs,
   },
@@ -1331,7 +1331,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.sm,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm + 2,
-    fontSize: 15,
+    ...Typography.subhead,
   },
   priceHint: {
     flexDirection: "row",
@@ -1396,7 +1396,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.sm,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
-    fontSize: 15,
+    ...Typography.subhead,
     minHeight: 120,
     lineHeight: 22,
   },
@@ -1493,7 +1493,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.md,
   },
-  comingSoonBadgeText: { fontWeight: "600", fontSize: 15 },
+  comingSoonBadgeText: { ...Typography.subhead, fontWeight: "600" },
   comingSoonText: { textAlign: "center", lineHeight: 22 },
   comingSoonBenefits: { width: "100%", gap: Spacing.md },
   valueRow: {
@@ -1581,7 +1581,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
   },
   serviceErrorText: {
-    fontSize: 13,
+    ...Typography.footnote,
     lineHeight: 18,
     textAlign: "center",
   },

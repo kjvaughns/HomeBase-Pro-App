@@ -13,8 +13,9 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useQuery } from "@tanstack/react-query";
 import { Feather } from "@expo/vector-icons";
 
-import { ThemedView } from "@/components/ThemedView";
+import { formatMoney, formatDate } from "@/lib/format";
 import { ThemedText } from "@/components/ThemedText";
+import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { EmptyState } from "@/components/EmptyState";
 import { Spacing, Colors, BorderRadius } from "@/constants/theme";
@@ -45,21 +46,6 @@ interface ClientLite {
   lastName: string;
 }
 
-function formatCents(cents: number): string {
-  return (cents / 100).toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-  });
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
 
 export default function ManualPaymentsListScreen() {
   const insets = useSafeAreaInsets();
@@ -150,7 +136,7 @@ export default function ManualPaymentsListScreen() {
                 isVoided ? { textDecorationLine: "line-through", color: theme.textTertiary } : undefined,
               ]}
             >
-              {formatCents(item.amountCents)}
+              {formatMoney(item.amountCents, { cents: true })}
             </ThemedText>
             <View
               style={{

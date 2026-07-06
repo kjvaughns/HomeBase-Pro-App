@@ -30,6 +30,7 @@ import * as Haptics from "expo-haptics";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
+import { EmptyState } from "@/components/EmptyState";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
@@ -1842,56 +1843,26 @@ export default function ScheduleScreen() {
               if (item.type === "empty") {
                 return (
                   <Animated.View entering={FadeInDown.delay(80).duration(300)}>
-                    <View style={styles.emptyBox}>
-                      <View
-                        style={[
-                          styles.emptyIcon,
-                          { backgroundColor: theme.backgroundSecondary },
-                        ]}
-                      >
-                        <Feather
-                          name="calendar"
-                          size={28}
-                          color={theme.textTertiary}
-                        />
-                      </View>
-                      <ThemedText
-                        style={[
-                          styles.emptyTitle,
-                          { color: theme.textSecondary },
-                        ]}
-                      >
-                        {!isOnline && !offlineSnapshot
+                    <EmptyState
+                      icon="calendar"
+                      title={
+                        !isOnline && !offlineSnapshot
                           ? "No cached schedule"
                           : statusFilter === "all"
                             ? "Nothing scheduled"
-                            : `No ${statusFilter} jobs`}
-                      </ThemedText>
-                      <ThemedText
-                        style={[
-                          styles.emptySubtitle,
-                          { color: theme.textTertiary },
-                        ]}
-                      >
-                        {!isOnline && !offlineSnapshot
+                            : `No ${statusFilter} jobs`
+                      }
+                      description={
+                        !isOnline && !offlineSnapshot
                           ? "You're offline. Reconnect to load your schedule."
-                          : formatDateLabel(selectedDate)}
-                      </ThemedText>
-                      {isOnline ? (
-                        <Pressable
-                          style={[
-                            styles.emptyAddBtn,
-                            { backgroundColor: Colors.accent },
-                          ]}
-                          onPress={handleAddJob}
-                        >
-                          <Feather name="plus" size={16} color="#FFFFFF" />
-                          <ThemedText style={styles.emptyAddText}>
-                            Add Job
-                          </ThemedText>
-                        </Pressable>
-                      ) : null}
-                    </View>
+                          : formatDateLabel(selectedDate)
+                      }
+                      primaryAction={
+                        isOnline
+                          ? { label: "Add Job", onPress: handleAddJob }
+                          : undefined
+                      }
+                    />
                   </Animated.View>
                 );
               }
@@ -2303,43 +2274,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#FFFFFF",
     letterSpacing: 0.2,
-  },
-
-  // Empty State
-  emptyBox: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: Spacing.xl * 2,
-    gap: Spacing.sm,
-  },
-  emptyIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: BorderRadius.xl,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: Spacing.sm,
-  },
-  emptyTitle: {
-    ...Typography.title3,
-    fontWeight: "600",
-  },
-  emptySubtitle: {
-    ...Typography.body,
-  },
-  emptyAddBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.xs,
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    marginTop: Spacing.sm,
-  },
-  emptyAddText: {
-    ...Typography.subhead,
-    fontWeight: "700",
-    color: "#FFFFFF",
   },
 
   // Time Slot Grid

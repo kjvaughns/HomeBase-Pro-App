@@ -63,6 +63,8 @@ export default function ProviderListScreen() {
   const { horizontalPadding } = useLayout();
   const { categoryId } = route.params;
 
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
   const userCoords = useLocationStore((s) => s.coords);
 
   const { data: apiData, isLoading: providersLoading } = useQuery<{ providers: any[] }>({
@@ -554,7 +556,7 @@ export default function ProviderListScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -587,7 +589,7 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: "#fff",
+    backgroundColor: theme.backgroundRoot,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,

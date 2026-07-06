@@ -36,6 +36,7 @@ import { ZipCodeAreaInput } from "@/components/ZipCodeAreaInput";
 import { useTheme } from "@/hooks/useTheme";
 import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
+import { RatingStars } from "@/components/RatingStars";
 import { useAuthStore } from "@/state/authStore";
 import { useProviderStore, StripeNotReadyError } from "@/state/providerStore";
 import { apiRequest, getApiUrl, getAuthHeaders } from "@/lib/query-client";
@@ -850,12 +851,12 @@ export default function BusinessHubScreen() {
           </View>
           <View style={styles.infoRow}>
             <ThemedText style={[styles.infoLabel, { color: theme.textSecondary }]}>Rating</ThemedText>
-            <View style={styles.ratingRow}>
-              <Ionicons name="star" size={14} color={Colors.warning} />
-              <ThemedText style={styles.infoValue}>
-                {provider?.rating ? Number(provider.rating).toFixed(1) : "New"}
-              </ThemedText>
-            </View>
+            <RatingStars
+              rating={provider?.rating ? Number(provider.rating) : 0}
+              compact
+              size="small"
+              testID="provider-rating"
+            />
           </View>
         </GlassCard>
 

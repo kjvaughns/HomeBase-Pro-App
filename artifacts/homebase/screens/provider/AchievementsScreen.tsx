@@ -11,6 +11,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { MilestoneBadge, type BadgeType } from "@/components/MilestoneBadge";
+import { EmptyState } from "@/components/EmptyState";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, Colors, BorderRadius } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
@@ -244,8 +245,10 @@ export default function AchievementsScreen() {
             Badges
           </ThemedText>
           {isLoading ? (
-            <GlassCard style={styles.emptyCard}>
-              <ThemedText style={[styles.emptyText, { color: theme.textTertiary }]}>Loading…</ThemedText>
+            <GlassCard>
+              <ThemedText style={{ textAlign: "center", padding: Spacing.lg, color: theme.textTertiary }}>
+                Loading…
+              </ThemedText>
             </GlassCard>
           ) : badges.length > 0 ? (
             <GlassCard>
@@ -271,12 +274,11 @@ export default function AchievementsScreen() {
               ))}
             </GlassCard>
           ) : (
-            <GlassCard style={styles.emptyCard}>
-              <Ionicons name="ribbon-outline" size={32} color={theme.textTertiary} />
-              <ThemedText style={[styles.emptyText, { color: theme.textTertiary }]}>
-                Complete milestones to earn badges
-              </ThemedText>
-            </GlassCard>
+            <EmptyState
+              icon="award"
+              title="No badges yet"
+              description="Complete milestones to earn badges and unlock rewards."
+            />
           )}
         </Animated.View>
 
@@ -360,6 +362,4 @@ const styles = StyleSheet.create({
     padding: Spacing.cardPadding,
   },
   earnedDate: { fontSize: 12 },
-  emptyCard: { alignItems: "center", padding: Spacing.xl, gap: Spacing.sm },
-  emptyText: { fontSize: 14, textAlign: "center" },
 });

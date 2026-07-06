@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { CommonActions, useNavigation } from "@react-navigation/native";
 
+import { formatMoney, formatDate } from "@/lib/format";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { TextField } from "@/components/TextField";
@@ -119,13 +120,6 @@ export default function OnboardingScreen() {
     }
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
 
   const formatNumber = (value: number) => {
     return new Intl.NumberFormat("en-US").format(value);
@@ -279,7 +273,7 @@ export default function OnboardingScreen() {
                     Estimated Value
                   </ThemedText>
                   <ThemedText style={[styles.valueAmount, { color: Colors.accent }]}>
-                    {formatCurrency(propertyInfo.estimatedValue)}
+                    {formatMoney(propertyInfo.estimatedValue, { showCents: false })}
                   </ThemedText>
                 </View>
               ) : null}

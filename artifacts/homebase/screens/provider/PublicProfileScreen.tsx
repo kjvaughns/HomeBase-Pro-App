@@ -23,7 +23,9 @@ import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { Avatar } from "@/components/Avatar";
 import { StatusPill } from "@/components/StatusPill";
+import { EmptyState } from "@/components/EmptyState";
 import { MilestoneBadge, type BadgeType } from "@/components/MilestoneBadge";
+import { RatingStars } from "@/components/RatingStars";
 import { useTheme } from "@/hooks/useTheme";
 import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, Typography, BorderRadius } from "@/constants/theme";
@@ -255,23 +257,6 @@ export default function PublicProfileScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setCopyFeedback(true);
     setTimeout(() => setCopyFeedback(false), 2500);
-  };
-
-  const renderStars = (rating: number) => {
-    const safe = isNaN(rating) ? 0 : rating;
-    const stars = [];
-    const fullStars = Math.floor(safe);
-    const hasHalf = safe - fullStars >= 0.5;
-    for (let i = 0; i < 5; i++) {
-      if (i < fullStars) {
-        stars.push(<Ionicons key={i} name="star" size={16} color={Colors.accent} />);
-      } else if (i === fullStars && hasHalf) {
-        stars.push(<Ionicons key={i} name="star-half" size={16} color={Colors.accent} />);
-      } else {
-        stars.push(<Ionicons key={i} name="star-outline" size={16} color={theme.borderLight} />);
-      }
-    }
-    return stars;
   };
 
   const renderAboutTab = () => {
@@ -539,23 +524,15 @@ export default function PublicProfileScreen() {
     return (
       <Animated.View entering={FadeInDown.duration(300)}>
         <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Services Offered</ThemedText>
-        <View style={styles.emptyState}>
-          <Feather name="tool" size={32} color={theme.textTertiary} />
-          <ThemedText style={[styles.emptyTitle, { color: theme.textSecondary }]}>
-            No services added yet
-          </ThemedText>
-          <ThemedText style={[styles.emptyBody, { color: theme.textTertiary }]}>
-            Add services in Business Hub so clients know what you offer.
-          </ThemedText>
-          <Pressable
-            style={[styles.emptyBtn, { backgroundColor: Colors.accentLight }]}
-            onPress={handleEditHub}
-          >
-            <ThemedText style={[styles.emptyBtnText, { color: Colors.accent }]}>
-              Go to Business Hub
-            </ThemedText>
-          </Pressable>
-        </View>
+        <EmptyState
+          icon="tool"
+          title="No services added yet"
+          description="Add services in Business Hub so clients know what you offer."
+          primaryAction={{
+            label: "Go to Business Hub",
+            onPress: handleEditHub,
+          }}
+        />
       </Animated.View>
     );
   };
@@ -576,7 +553,7 @@ export default function PublicProfileScreen() {
           >
             <View style={styles.reviewHeader}>
               <ThemedText style={styles.reviewerName}>{review.reviewerName}</ThemedText>
-              <View style={styles.reviewStars}>{renderStars(review.rating)}</View>
+              <RatingStars rating={review.rating} size="small" />
             </View>
             {review.comment ? (
               <ThemedText style={[styles.reviewComment, { color: theme.textSecondary }]}>
@@ -589,15 +566,15 @@ export default function PublicProfileScreen() {
           </View>
         ))
       ) : (
-        <View style={styles.emptyState}>
-          <Ionicons name="star" size={32} color={theme.textTertiary} />
-          <ThemedText style={[styles.emptyTitle, { color: theme.textSecondary }]}>
-            No reviews yet
-          </ThemedText>
-          <ThemedText style={[styles.emptyBody, { color: theme.textTertiary }]}>
-            Reviews appear here once clients rate your work.
-          </ThemedText>
-        </View>
+        <EmptyState
+          icon="star"
+          title="No reviews yet"
+          description="Reviews appear here once clients rate your work. Share your booking link to build your reputation."
+          primaryAction={profileUrl ? {
+            label: "Share Booking Link",
+            onPress: handleShare,
+          } : undefined}
+        />
       )}
     </Animated.View>
   );
@@ -668,7 +645,7 @@ export default function PublicProfileScreen() {
                   ) : null;
                 })()}
                 <View style={styles.ratingRow}>
-                  {renderStars(safeRating)}
+                  <RatingStars rating={safeRating} size="small" />
                   <ThemedText style={styles.ratingText}>
                     {safeRating.toFixed(1)} ({provider?.reviewCount ?? 0})
                   </ThemedText>
@@ -1023,30 +1000,6 @@ const styles = StyleSheet.create({
   priceValue: {
     ...Typography.title3,
     fontWeight: "700",
-  },
-  emptyState: {
-    paddingVertical: Spacing.xl,
-    alignItems: "center",
-    gap: Spacing.sm,
-  },
-  emptyTitle: {
-    ...Typography.subhead,
-    fontWeight: "600",
-  },
-  emptyBody: {
-    ...Typography.footnote,
-    textAlign: "center",
-    maxWidth: 260,
-  },
-  emptyBtn: {
-    marginTop: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md,
-  },
-  emptyBtnText: {
-    ...Typography.subhead,
-    fontWeight: "600",
   },
   reviewCard: {
     padding: Spacing.md,

@@ -21,6 +21,7 @@ import { NativeDatePickerSheet } from "@/components/NativeDatePickerSheet";
 import { SubscriptionGateModal } from "@/components/SubscriptionGateModal";
 import { useSubscriptionStatus } from "@/hooks/useSubscriptionStatus";
 
+import { formatMoney, formatDate } from "@/lib/format";
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
@@ -322,8 +323,6 @@ export default function AddInvoiceScreen() {
     setClientSearch("");
   };
 
-  const formatDate = (date: Date) =>
-    date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
   const anyLoading = createMutation.isPending;
 
@@ -566,7 +565,7 @@ export default function AddInvoiceScreen() {
             <Feather name="calendar" size={15} color={dueDate ? Colors.accent : theme.textTertiary} />
             <ThemedText style={[styles.datePillText, { color: dueDate ? theme.text : theme.textTertiary }]}>
               {dueDate
-                ? formatDate(dueDate)
+                ? formatDate(dueDate, { style: "weekday" })
                 : sendAsEstimate
                   ? "Optional expiration date"
                   : "Select due date (optional)"}

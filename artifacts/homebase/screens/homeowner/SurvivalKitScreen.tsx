@@ -7,6 +7,7 @@ import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown, FadeInRight, FadeOutLeft, SlideInRight, SlideOutLeft } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 
+import { formatMoney, formatDate } from "@/lib/format";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
@@ -586,13 +587,6 @@ export default function SurvivalKitScreen() {
     return { min: Math.round(base * 0.8), max: Math.round(base * 1.2) };
   }, [wizardData]);
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
 
   const renderOptionButton = (
     id: string,
@@ -1165,7 +1159,7 @@ export default function SurvivalKitScreen() {
                 Estimated Yearly Maintenance
               </ThemedText>
               <ThemedText style={styles.summaryValue}>
-                {formatCurrency(estimatedCost.min)} - {formatCurrency(estimatedCost.max)}
+                {formatMoney(estimatedCost.min, { showCents: false })} - {formatMoney(estimatedCost.max, { showCents: false })}
               </ThemedText>
               
               <View style={styles.costDrivers}>
@@ -1209,7 +1203,7 @@ export default function SurvivalKitScreen() {
               <Feather name="trending-down" size={24} color={Colors.accent} />
               <ThemedText style={styles.savingsTitle}>Potential Savings</ThemedText>
               <ThemedText style={[styles.savingsValue, { color: Colors.accent }]}>
-                {formatCurrency(Math.round(estimatedCost.max * 0.2))} - {formatCurrency(Math.round(estimatedCost.max * 0.35))}
+                {formatMoney(Math.round(estimatedCost.max * 0.2), { showCents: false })} - {formatMoney(Math.round(estimatedCost.max * 0.35), { showCents: false })}
               </ThemedText>
               <ThemedText style={[styles.savingsSubtext, { color: theme.textSecondary }]}>
                 with proactive maintenance
@@ -1299,7 +1293,7 @@ export default function SurvivalKitScreen() {
                 <View key={item.category} style={styles.costRow}>
                   <View style={[styles.costDot, { backgroundColor: item.color }]} />
                   <ThemedText style={styles.costCategory}>{item.category}</ThemedText>
-                  <ThemedText style={styles.costAmount}>{formatCurrency(item.amount)}</ThemedText>
+                  <ThemedText style={styles.costAmount}>{formatMoney(item.amount, { showCents: false })}</ThemedText>
                 </View>
               ))}
             </GlassCard>

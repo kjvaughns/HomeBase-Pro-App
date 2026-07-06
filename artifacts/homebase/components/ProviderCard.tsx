@@ -15,6 +15,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { StatusPill } from "@/components/StatusPill";
 import { PartnerBadge } from "@/components/PartnerBadge";
 import { MilestoneBadge } from "@/components/MilestoneBadge";
+import { RatingStars } from "@/components/RatingStars";
 import { type BadgeType } from "@/state/types";
 import { useTheme } from "@/hooks/useTheme";
 import { BorderRadius, Spacing, Colors, Animation, GlassEffect } from "@/constants/theme";
@@ -124,26 +125,18 @@ export function ProviderCard({
         </View>
 
         <View style={[styles.meta, { borderTopColor: theme.separator }]}>
-          <View style={styles.ratingContainer}>
-            <Ionicons name="star" size={14} color={Colors.warning} />
-            <ThemedText type="label" style={styles.rating}>
-              {rating.toFixed(1)}
-            </ThemedText>
-            <ThemedText type="small" style={{ color: theme.textSecondary }}>
-              ({reviewCount})
-            </ThemedText>
-            {typeof distance === "number" ? (
-              <>
-                <ThemedText type="small" style={{ color: theme.textTertiary, marginLeft: Spacing.sm }}>
-                  •
-                </ThemedText>
-                <Feather name="map-pin" size={12} color={theme.textSecondary} style={{ marginLeft: Spacing.xs }} />
-                <ThemedText type="small" style={{ color: theme.textSecondary, marginLeft: 2 }}>
-                  {distance.toFixed(1)} mi away
-                </ThemedText>
-              </>
-            ) : null}
-          </View>
+          <RatingStars rating={rating} reviewCount={reviewCount} size="small" />
+          {typeof distance === "number" ? (
+            <View style={styles.distanceContainer}>
+              <ThemedText type="small" style={{ color: theme.textTertiary }}>
+                •
+              </ThemedText>
+              <Feather name="map-pin" size={12} color={theme.textSecondary} style={{ marginLeft: Spacing.xs }} />
+              <ThemedText type="small" style={{ color: theme.textSecondary, marginLeft: 2 }}>
+                {distance.toFixed(1)} mi away
+              </ThemedText>
+            </View>
+          ) : null}
 
           <View style={styles.priceContainer}>
             <ThemedText type="h4" style={{ color: Colors.accent }}>
@@ -207,13 +200,10 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  ratingContainer: {
+  distanceContainer: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.xs,
-  },
-  rating: {
-    marginLeft: 2,
+    marginLeft: Spacing.xs,
   },
   priceContainer: {
     flexDirection: "row",

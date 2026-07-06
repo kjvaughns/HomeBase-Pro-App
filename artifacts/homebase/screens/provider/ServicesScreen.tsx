@@ -21,6 +21,7 @@ import * as Haptics from "expo-haptics";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { ThemedText } from "@/components/ThemedText";
+import { EmptyState } from "@/components/EmptyState";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { useTheme } from "@/hooks/useTheme";
@@ -644,43 +645,34 @@ export default function ServicesScreen() {
         </View>
       );
     }
+
     if (searchQuery.trim() || selectedCategory !== "All") {
       return (
-        <View style={styles.noResultsContainer}>
-          <View style={[styles.noResultsIcon, { backgroundColor: theme.backgroundElevated }]}>
-            <Feather name="search" size={28} color={theme.textTertiary} />
-          </View>
-          <ThemedText type="h3" style={[styles.noResultsTitle, { color: theme.textSecondary }]}>
-            No matching services
-          </ThemedText>
-          <ThemedText type="caption" style={{ color: theme.textTertiary, textAlign: "center" }}>
-            Try a different search or category filter.
-          </ThemedText>
-        </View>
+        <EmptyState
+          icon="search"
+          title="No matching services"
+          description="Try a different search or category filter to find what you're looking for."
+          primaryAction={{
+            label: "Clear filters",
+            onPress: () => {
+              setSearchQuery("");
+              setSelectedCategory("All");
+            },
+          }}
+        />
       );
     }
+
     return (
-      <GlassCard style={[styles.emptyCard, { borderStyle: "dashed", borderColor: Colors.accent + "40", borderWidth: 1.5 }]}>
-        <View style={[styles.emptyIconCircle, { backgroundColor: Colors.accent + "15" }]}>
-          <Feather name="package" size={32} color={Colors.accent} />
-        </View>
-        <ThemedText type="h3" style={{ fontWeight: "700", marginBottom: Spacing.xs, textAlign: "center" }}>
-          No services yet
-        </ThemedText>
-        <ThemedText type="body" style={{ color: theme.textSecondary, textAlign: "center", lineHeight: 22 }}>
-          Add your first service to start receiving bookings. Each service you create will appear here.
-        </ThemedText>
-        <Pressable
-          style={[styles.emptyAddBtn, { backgroundColor: Colors.accent }]}
-          onPress={handleAddService}
-          testID="button-empty-add-service"
-        >
-          <Feather name="plus" size={16} color="#fff" />
-          <ThemedText style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>
-            Add Your First Service
-          </ThemedText>
-        </Pressable>
-      </GlassCard>
+      <EmptyState
+        icon="package"
+        title="No services yet"
+        description="Add your first service to start receiving bookings. Each service you create will appear here."
+        primaryAction={{
+          label: "Add Your First Service",
+          onPress: handleAddService,
+        }}
+      />
     );
   };
 
@@ -921,44 +913,5 @@ const styles = StyleSheet.create({
   loadingContainer: {
     padding: Spacing["2xl"],
     alignItems: "center",
-  },
-  emptyCard: {
-    padding: Spacing.xl,
-    alignItems: "center",
-    gap: Spacing.md,
-  },
-  emptyIconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: Spacing.xs,
-  },
-  emptyAddBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.xs,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.full,
-    marginTop: Spacing.xs,
-  },
-  noResultsContainer: {
-    alignItems: "center",
-    paddingVertical: Spacing["2xl"],
-    paddingHorizontal: Spacing.xl,
-    gap: Spacing.sm,
-  },
-  noResultsIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: Spacing.xs,
-  },
-  noResultsTitle: {
-    fontWeight: "600",
   },
 });

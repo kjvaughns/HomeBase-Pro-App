@@ -5,3 +5,4 @@
 - [This project's DB tooling defaults to the wrong database](drizzle-config-wrong-db-url.md) — `db push` AND the agent's `executeSql` tool both hit DATABASE_URL by default; app only uses SUPABASE_DATABASE_URL. Use a direct pg.Pool for migrations/verification.
 - [api-server pre-existing TS error baseline](api-server-preexisting-ts-errors.md) — routes.ts has ~1600 pre-existing TS errors (systemic IdParams/return-value patterns); check specific lines, not total count.
 - [Sed-based JSX attribute substitution breaks syntax](sed-jsx-attribute-substitution.md) — replacing `attr="value"` with an identifier via sed needs `{}` braces or it produces invalid JSX; verify with tsc after any bulk sweep.
+- [Parallel subagent refactors need a dedicated verification pass](parallel-subagent-refactor-verification.md) — multi-file "adopt shared util" sweeps reliably leave dangling imports/refs; budget real time for a full typecheck + fix pass, not a formality.

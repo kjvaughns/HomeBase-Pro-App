@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 
+import { formatMoney } from "@/lib/format";
 import { ThemedText } from "./ThemedText";
 import { PrimaryButton } from "./PrimaryButton";
 import { useTheme } from "@/hooks/useTheme";
@@ -35,10 +36,6 @@ export interface NoShowFeeSheetProps {
   onSuccess?: () => void;
 }
 
-function formatCentsInput(cents: number): string {
-  if (!Number.isFinite(cents) || cents <= 0) return "";
-  return (cents / 100).toFixed(2);
-}
 
 export function NoShowFeeSheet({
   visible,
@@ -59,7 +56,7 @@ export function NoShowFeeSheet({
     if (!visible) return;
     setAmount(
       suggestedAmountCents && suggestedAmountCents > 0
-        ? formatCentsInput(suggestedAmountCents)
+        ? (suggestedAmountCents / 100).toFixed(2)
         : "",
     );
     setChargeFee(true);
