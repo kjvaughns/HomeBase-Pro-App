@@ -59,6 +59,7 @@ import { useOnboardingStore } from "@/state/onboardingStore";
 import { isUpcomingJob } from "@/lib/jobUtils";
 import { syncProviderWidgetData } from "@/lib/widgetData";
 import { ProviderFeed, type FeedCardData } from "@/components/FeedCard";
+import { NextBestActionCard, type NextBestActionData } from "@/components/NextBestActionCard";
 import { RecurringRevenueCard } from "@/components/RecurringRevenueCard";
 
 type BusinessHourEntry = { enabled?: boolean; open?: string; close?: string };
@@ -599,6 +600,13 @@ export default function ProviderHomeScreen() {
     enabled: !!providerId,
     staleTime: 0,
   });
+
+  const { data: nextBestActionData } = useQuery<{ action: NextBestActionData | null }>({
+    queryKey: ["/api/provider", providerId, "next-best-action"],
+    enabled: !!providerId,
+    staleTime: 0,
+  });
+  const nextBestAction = nextBestActionData?.action ?? null;
 
   const [dismissedFeedCards, setDismissedFeedCards] = useState<Set<string>>(new Set());
 
@@ -1201,6 +1209,12 @@ export default function ProviderHomeScreen() {
             </GlassCard>
           </Animated.View>
         )}
+
+        {nextBestAction ? (
+          <Animated.View entering={FadeInDown.delay(310).duration(400)}>
+            <NextBestActionCard action={nextBestAction} />
+          </Animated.View>
+        ) : null}
 
         {visibleFeedCards.length > 0 ? (
           <Animated.View entering={FadeInDown.delay(320).duration(400)}>

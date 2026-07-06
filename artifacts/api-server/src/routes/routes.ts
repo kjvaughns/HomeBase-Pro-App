@@ -180,6 +180,9 @@ import {
 import { checkAndAwardMilestones } from "../milestoneService";
 import { updateProviderStreak, effectiveStreak } from "../streakService";
 import { getProviderFeed, dismissFeedCard } from "../feedService";
+import { getNextBestAction } from "../nextBestActionService";
+import { parseVoiceJobRequest } from "../voiceQuickCaptureService";
+import { speechToText, ensureCompatibleFormat } from "../replit_integrations/audio/client";
 import { computeHomeHealth } from "../homeHealthService";
 import {
   buildRoute,
@@ -8931,6 +8934,95 @@ Respond with JSON only:
       } catch (error) {
         req.log.error({ error }, "Dismiss feed card error");
         res.status(500).json({ error: "Failed to dismiss feed card" });
+      }
+    },
+  );
+
+  // Task #489: single highest-priority "next best action" suggestion for the
+  // provider home screen (e.g. an overdue-invoice nudge or a stale-client
+  // follow-up reminder). Returns { action: null } when nothing is worth
+  // surfacing right now.
+  app.get(
+    "/api/provider/:id/next-best-action",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const providerRow = await storage.getProviderByUserId(
+          req.authenticatedUserId!,
+        );
+        if (!providerRow || providerRow.id !== req.params.id) {
+          res.status(403).json({ error: "Forbidden" });
+          return;
+        }
+        const action = await getNextBestAction(req.params.id);
+        res.json({ action });
+      } catch (error) {
+        req.log.error({ error }, "Get next best action error");
+        res.status(500).json({ error: "Failed to get next best action" });
+      }
+    },
+  );
+
+  // Task #489: voice quick-capture. Provider speaks a job/appointment
+  // request; we transcribe it and ask AI to parse it into a draft job for
+  // the provider to review/edit before saving (via the existing POST
+  // /api/jobs endpoint). This never creates a job directly — it only
+  // returns a draft.
+  app.post(
+    "/api/provider/:id/voice-quick-capture",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const providerRow = await storage.getProviderByUserId(
+          req.authenticatedUserId!,
+        );
+        if (!providerRow || providerRow.id !== req.params.id) {
+          res.status(403).json({ error: "Forbidden" });
+          return;
+        }
+
+        const { audio } = req.body as { audio?: string };
+        if (!audio || typeof audio !== "string") {
+          res.status(400).json({ error: "audio (base64) is required" });
+          return;
+        }
+
+        const base64Data = audio.includes(",") ? audio.split(",", 2)[1] : audio;
+        const rawBuffer = Buffer.from(base64Data, "base64");
+
+        const MAX_AUDIO_BYTES = 8 * 1024 * 1024; // 8 MB, generous for a short voice clip
+        if (rawBuffer.length === 0) {
+          res.status(400).json({ error: "Empty audio" });
+          return;
+        }
+        if (rawBuffer.length > MAX_AUDIO_BYTES) {
+          res.status(413).json({ error: "Audio is too large (max 8 MB)" });
+          return;
+        }
+
+        const { buffer, format } = await ensureCompatibleFormat(rawBuffer);
+        const transcript = await speechToText(buffer, format);
+
+        if (!transcript || !transcript.trim()) {
+          res.status(422).json({ error: "Could not transcribe audio. Please try again." });
+          return;
+        }
+
+        const providerClients = await storage.getClients(req.params.id);
+
+        const draft = await parseVoiceJobRequest({
+          transcript,
+          clients: providerClients.map((c) => ({
+            id: c.id,
+            firstName: c.firstName,
+            lastName: c.lastName,
+          })),
+        });
+
+        res.json({ transcript, draft });
+      } catch (error) {
+        req.log.error({ error }, "Voice quick-capture error");
+        res.status(500).json({ error: "Failed to process voice request" });
       }
     },
   );
