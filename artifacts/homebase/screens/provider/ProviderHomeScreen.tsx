@@ -1052,6 +1052,30 @@ export default function ProviderHomeScreen() {
           </GlassCard>
         </Animated.View>
 
+        {inProgressJobs.length > 0 || upcomingJobsAll.length > 0 ? (
+          <Animated.View entering={FadeInDown.delay(150).duration(400)}>
+            <Pressable
+              onPress={() => navigation.navigate("ProviderToday")}
+              testID="banner-today"
+            >
+              <GlassCard style={[styles.greetingCard, { borderColor: Colors.accent, borderWidth: 1 }]}>
+                <View style={styles.publishRow}>
+                  <View style={[styles.publishIcon, { backgroundColor: Colors.accentLight }]}>
+                    <Feather name="navigation" size={20} color={Colors.accent} />
+                  </View>
+                  <View style={styles.publishText}>
+                    <ThemedText style={styles.publishTitle}>Today's Stops</ThemedText>
+                    <ThemedText style={[styles.publishSubtitle, { color: theme.textSecondary }]}>
+                      Swipe through your route, navigate, and check off jobs.
+                    </ThemedText>
+                  </View>
+                  <Feather name="chevron-right" size={18} color={theme.textTertiary} />
+                </View>
+              </GlassCard>
+            </Pressable>
+          </Animated.View>
+        ) : null}
+
         <MonthlyGoalCard
           providerId={providerId}
           revenueMTDDollars={stats.revenueMTD}

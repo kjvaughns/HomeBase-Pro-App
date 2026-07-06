@@ -57,6 +57,7 @@ import ServiceBlueprintWizardScreen from "@/screens/provider/ServiceBlueprintWiz
 import ServiceSummaryScreen from "@/screens/provider/ServiceSummaryScreen";
 import PublicProfileScreen from "@/screens/provider/PublicProfileScreen";
 import ProviderJobDetailScreen from "@/screens/provider/ProviderJobDetailScreen";
+import ProviderTodayScreen from "@/screens/provider/ProviderTodayScreen";
 import SeriesDetailScreen from "@/screens/provider/SeriesDetailScreen";
 import LeadsScreen from "@/screens/provider/LeadsScreen";
 import ReviewsScreen from "@/screens/provider/ReviewsScreen";
@@ -188,6 +189,7 @@ export type RootStackParamList = {
   MyTickets: undefined;
   TicketDetail: { ticketId: string };
   ProviderJobDetail: { jobId: string };
+  ProviderToday: undefined;
   SeriesDetail: { seriesId: string };
   Leads: undefined;
   Reviews: undefined;
@@ -646,6 +648,13 @@ export default function RootStackNavigator() {
         component={ProviderJobDetailScreen}
         options={{
           headerTitle: "Job Details",
+        }}
+      />
+      <Stack.Screen
+        name="ProviderToday"
+        component={ProviderTodayScreen}
+        options={{
+          headerTitle: "Today",
         }}
       />
       <Stack.Screen
