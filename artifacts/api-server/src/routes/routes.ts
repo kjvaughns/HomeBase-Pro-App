@@ -11810,138 +11810,88 @@ Respond with JSON only:
           })();
         }
 
-        // Task #478: one-tap auto-invoice. When a provider marks a job
-        // complete, automatically create + send an invoice for the job's
-        // price if one doesn't already exist. Best-effort and non-fatal —
-        // never blocks or fails the job-completion response, since the
-        // provider can always create/send an invoice manually afterward.
+        // Task #480: one-tap auto-draft invoice. When a provider marks a job
+        // complete, automatically create a DRAFT invoice for the job's price
+        // if one doesn't already exist, so the mobile app can route the
+        // provider straight into it instead of rebuilding one in AddInvoice.
+        // Sending is intentionally NOT triggered here — the provider must
+        // explicitly tap "Send Invoice" on InvoiceDetail (the single-action
+        // send flow), so drafts are never emailed to clients without review.
+        let autoInvoiceId: string | null = null;
         if (job.providerId && job.clientId && prior?.status !== "completed") {
-          (async () => {
-            try {
-              const providerId = job.providerId!;
-              const [existingInvoice] = await db
-                .select({ id: invoices.id })
-                .from(invoices)
-                .where(eq(invoices.jobId, job.id))
-                .limit(1);
-              if (existingInvoice) return;
+          try {
+            const providerId = job.providerId!;
+            const [existingInvoice] = await db
+              .select({ id: invoices.id })
+              .from(invoices)
+              .where(eq(invoices.jobId, job.id))
+              .limit(1);
 
+            if (existingInvoice) {
+              autoInvoiceId = existingInvoice.id;
+            } else {
               const priceStr = job.finalPrice ?? job.estimatedPrice;
               const amount = priceStr ? parseFloat(priceStr) : 0;
-              if (!Number.isFinite(amount) || amount <= 0) return;
+              const subStatus = Number.isFinite(amount) && amount > 0
+                ? await getProviderSubscriptionStatus(providerId)
+                : null;
 
-              const subStatus = await getProviderSubscriptionStatus(providerId);
-              if (subStatus.status === "expired") return;
-
-              const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-              const lineItems = [
-                {
-                  description: job.title || "Service",
-                  quantity: 1,
-                  unitPrice: amount,
-                  total: amount,
-                },
-              ];
-              const subtotalCents = Math.round(amount * 100);
-              const autoPlan = await getProviderPlan(providerId);
-              const autoFee = calculatePlatformFee(
-                subtotalCents,
-                autoPlan.platformFeePercent || "3.00",
-                autoPlan.platformFeeFixedCents || 0,
-              );
-              const invoiceData = {
-                providerId,
-                clientId: job.clientId!,
-                jobId: job.id,
-                invoiceNumber,
-                currency: "usd",
-                subtotalCents,
-                taxCents: 0,
-                discountCents: 0,
-                platformFeeCents: autoFee.totalCents,
-                totalCents: subtotalCents,
-                amount: amount.toFixed(2),
-                total: amount.toFixed(2),
-                lineItems: JSON.stringify(lineItems),
-                notes: null,
-                status: "draft",
-                dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-              };
-              const parsedAuto = insertInvoiceSchema.safeParse(invoiceData);
-              if (!parsedAuto.success) {
-                console.error(
-                  "auto-invoice (job complete): invalid invoice data",
-                  parsedAuto.error.issues,
+              if (Number.isFinite(amount) && amount > 0 && subStatus?.status !== "expired") {
+                const invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+                const lineItems = [
+                  {
+                    description: job.title || "Service",
+                    quantity: 1,
+                    unitPrice: amount,
+                    total: amount,
+                  },
+                ];
+                const subtotalCents = Math.round(amount * 100);
+                const autoPlan = await getProviderPlan(providerId);
+                const autoFee = calculatePlatformFee(
+                  subtotalCents,
+                  autoPlan.platformFeePercent || "3.00",
+                  autoPlan.platformFeeFixedCents || 0,
                 );
-                return;
-              }
-              const autoInvoice = await storage.createInvoice(parsedAuto.data);
-
-              let hostedUrl: string | undefined;
-              const platformResult = await sendStripeInvoiceEmail(
-                autoInvoice.id,
-              ).catch((err: any) => {
-                console.error(
-                  "auto-invoice (job complete): send failed",
-                  err?.message || err,
-                );
-                return null;
-              });
-              if (platformResult?.hostedInvoiceUrl) {
-                hostedUrl = platformResult.hostedInvoiceUrl;
-                const [promoted] = await db
-                  .update(invoices)
-                  .set({
-                    status: "sent",
-                    sentAt: new Date(),
-                    hostedInvoiceUrl: hostedUrl,
-                    updatedAt: new Date(),
-                  })
-                  .where(eq(invoices.id, autoInvoice.id))
-                  .returning();
-
-                const client = await storage.getClient(job.clientId!);
-                const provider = await storage.getProvider(providerId);
-                if (client?.email && provider) {
-                  const clientName =
-                    [client.firstName, client.lastName]
-                      .filter(Boolean)
-                      .join(" ") || "Client";
-                  dispatchWithResult("invoice.sent", {
-                    clientEmail: client.email,
-                    clientName,
-                    providerName:
-                      provider.businessName ||
-                      provider.userId ||
-                      "Service Provider",
-                    invoiceNumber:
-                      autoInvoice.invoiceNumber || invoiceNumber,
-                    amount,
-                    dueDate: "Due on receipt",
-                    lineItems,
-                    paymentLink: hostedUrl,
-                    relatedRecordType: "invoice",
-                    relatedRecordId: autoInvoice.id,
-                  }).catch((e: unknown) =>
-                    console.error("auto-invoice (job complete): email dispatch error:", e),
+                const invoiceData = {
+                  providerId,
+                  clientId: job.clientId!,
+                  jobId: job.id,
+                  invoiceNumber,
+                  currency: "usd",
+                  subtotalCents,
+                  taxCents: 0,
+                  discountCents: 0,
+                  platformFeeCents: autoFee.totalCents,
+                  totalCents: subtotalCents,
+                  amount: amount.toFixed(2),
+                  total: amount.toFixed(2),
+                  lineItems: JSON.stringify(lineItems),
+                  notes: null,
+                  status: "draft",
+                  dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                };
+                const parsedAuto = insertInvoiceSchema.safeParse(invoiceData);
+                if (!parsedAuto.success) {
+                  console.error(
+                    "auto-invoice (job complete): invalid invoice data",
+                    parsedAuto.error.issues,
                   );
-                  notifyHomeownerInvoiceSent({
-                    invoice: promoted || autoInvoice,
-                    providerName: provider.businessName || "Your Provider",
-                    amount,
-                    clientEmail: client?.email ?? null,
-                  }).catch((e: unknown) =>
-                    console.error("auto-invoice (job complete): homeowner notify failed:", e),
-                  );
+                } else {
+                  const autoInvoice = await storage.createInvoice(parsedAuto.data);
+                  autoInvoiceId = autoInvoice.id;
+                  // Intentionally no Stripe send / notification here — the
+                  // invoice stays a draft until the provider explicitly taps
+                  // "Send Invoice" on InvoiceDetail.
                 }
               }
-            } catch (e) {
-              console.error("auto-invoice (job complete) error:", e);
             }
-          })();
+          } catch (e) {
+            console.error("auto-invoice (job complete) error:", e);
+          }
         }
 
-        res.json({ job });
+        res.json({ job, invoiceId: autoInvoiceId });
       } catch (error) {
         console.error("Complete job error:", error);
         res.status(500).json({ error: "Failed to complete job" });

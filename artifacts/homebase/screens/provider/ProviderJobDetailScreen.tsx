@@ -14,6 +14,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { GlassCard } from "@/components/GlassCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { SecondaryButton } from "@/components/SecondaryButton";
 import { useTheme } from "@/hooks/useTheme";
 import { useLayout } from "@/hooks/useLayout";
 import { Spacing, Colors, BorderRadius, Typography } from "@/constants/theme";
@@ -597,9 +598,16 @@ export default function ProviderJobDetailScreen() {
   const completeJobMutation = useMutation({
     mutationFn: async () => {
       const url = new URL(`/api/jobs/${jobId}/complete`, getApiUrl());
-      return apiRequest("POST", url.toString(), { finalPrice: job?.estimatedPrice });
+      const res = await apiRequest("POST", url.toString(), { finalPrice: job?.estimatedPrice });
+      return (await res.json()) as { job: ApiJob; invoiceId?: string | null };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // Task #480: route straight into the auto-drafted invoice instead of
+      // leaving the provider to rebuild one via AddInvoice.
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId, "invoice"] });
+      if (data?.invoiceId) {
+        navigation.navigate("InvoiceDetail", { invoiceId: data.invoiceId });
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
       queryClient.invalidateQueries({ queryKey: ["/api/provider", providerId, "jobs"] });
       setDisplayStatus("completed");
@@ -877,6 +885,28 @@ export default function ProviderJobDetailScreen() {
     }
   }, [job, navigation, blockOffline]);
 
+  // Task #480: secondary "update status" control — the primary button only
+  // drives Start/Complete now, so the granular courier-style states
+  // (confirmed/on_my_way/arrived/in_progress) live behind this menu instead.
+  const handleOpenStatusMenu = useCallback(() => {
+    if (!job) return;
+    if (blockOffline()) return;
+    const options: DisplayStatus[] = ["confirmed", "on_my_way", "arrived", "in_progress"];
+    Alert.alert(
+      "Update Status",
+      "Pick a more specific status for this job.",
+      [
+        ...options
+          .filter((s) => s !== resolvedDisplayStatus)
+          .map((s) => ({
+            text: STATUS_CONFIG[s].label,
+            onPress: () => updateJobMutation.mutate(s),
+          })),
+        { text: "Cancel", style: "cancel" as const },
+      ],
+    );
+  }, [job, resolvedDisplayStatus, updateJobMutation, blockOffline]);
+
   // Task #295: surface manual payment recording on completed jobs that have
   // a generated invoice — providers often collect cash/check on-site.
   interface JobInvoice {
@@ -902,8 +932,19 @@ export default function ProviderJobDetailScreen() {
     (jobInvoice.status === "sent" ||
       jobInvoice.status === "overdue" ||
       jobInvoice.status === "partially_paid");
+  const jobInvoiceIsDraft = !!jobInvoice && jobInvoice.status === "draft";
   const [paymentSheetOpen, setPaymentSheetOpen] = useState(false);
   const [noShowSheetOpen, setNoShowSheetOpen] = useState(false);
+
+  // Task #480: instead of sending the provider back into AddInvoice to
+  // rebuild an invoice from scratch, open the auto-drafted invoice that was
+  // already created for this job on completion (see /api/jobs/:id/complete).
+  const handleViewJobInvoice = useCallback(() => {
+    if (blockOffline()) return;
+    if (jobInvoice) {
+      navigation.navigate("InvoiceDetail", { invoiceId: jobInvoice.id });
+    }
+  }, [jobInvoice, navigation, blockOffline]);
 
   const requestReviewMutation = useMutation({
     mutationFn: async () => {
@@ -1008,13 +1049,19 @@ export default function ProviderJobDetailScreen() {
     );
   }
 
+  // Task #480: collapse the primary action to two effective states — Start
+  // and Complete. The granular courier-style states (confirmed/on_my_way/
+  // arrived) are still available via the secondary "Update Status" menu
+  // below, but no longer gate progress through the main button.
   const getNextAction = (): { label: string; status: DisplayStatus } | null => {
     switch (resolvedDisplayStatus) {
-      case "scheduled": return { label: "Confirm Job", status: "confirmed" };
-      case "confirmed": return { label: "On My Way", status: "on_my_way" };
-      case "on_my_way": return { label: "I've Arrived", status: "arrived" };
-      case "arrived": return { label: "Start Work", status: "in_progress" };
-      case "in_progress": return { label: "Complete Job", status: "completed" };
+      case "scheduled":
+      case "confirmed":
+      case "on_my_way":
+      case "arrived":
+        return { label: "Start Job", status: "in_progress" };
+      case "in_progress":
+        return { label: "Complete Job", status: "completed" };
       default: return null;
     }
   };
@@ -1311,6 +1358,11 @@ export default function ProviderJobDetailScreen() {
         ) : null}
         {resolvedDisplayStatus === "completed" ? (
           <>
+            {/* Task #480: exactly one primary CTA on the completed-job screen —
+                Send Invoice (draft auto-created on completion), Get Paid (an
+                invoice is already out and awaiting payment), or Create Invoice
+                as a fallback for the rare case no invoice exists at all
+                (e.g. subscription expired when the job was completed). */}
             {canRecordPayment ? (
               <PrimaryButton
                 onPress={() => {
@@ -1320,17 +1372,26 @@ export default function ProviderJobDetailScreen() {
                 style={[styles.actionButton, !isOnline && { opacity: 0.5 }]}
                 testID="button-record-payment-job"
               >
-                Record Payment
+                Get Paid
               </PrimaryButton>
-            ) : (
+            ) : jobInvoiceIsDraft ? (
+              <PrimaryButton
+                onPress={handleViewJobInvoice}
+                style={[styles.actionButton, !isOnline && { opacity: 0.5 }]}
+                testID="button-send-job-invoice"
+              >
+                Send Invoice
+              </PrimaryButton>
+            ) : jobInvoice ? null : (
               <PrimaryButton
                 onPress={handleCreateInvoice}
                 style={[styles.actionButton, !isOnline && { opacity: 0.5 }]}
+                testID="button-create-invoice-job"
               >
                 Create Invoice
               </PrimaryButton>
             )}
-            <PrimaryButton
+            <SecondaryButton
               onPress={handleRequestReview}
               style={[styles.actionButton, !isOnline && { opacity: 0.5 }]}
               loading={requestReviewMutation.isPending}
@@ -1338,16 +1399,32 @@ export default function ProviderJobDetailScreen() {
               testID="button-request-review-job"
             >
               Request a Review
-            </PrimaryButton>
+            </SecondaryButton>
           </>
         ) : nextAction ? (
-          <PrimaryButton
-            onPress={() => handleUpdateStatus(nextAction.status)}
-            style={[styles.actionButton, !isOnline && { opacity: 0.5 }]}
-            disabled={updateJobMutation.isPending || completeJobMutation.isPending}
-          >
-            {(updateJobMutation.isPending || completeJobMutation.isPending) ? "Updating..." : nextAction.label}
-          </PrimaryButton>
+          <>
+            <PrimaryButton
+              onPress={() => handleUpdateStatus(nextAction.status)}
+              style={[styles.actionButton, !isOnline && { opacity: 0.5 }]}
+              disabled={updateJobMutation.isPending || completeJobMutation.isPending}
+            >
+              {(updateJobMutation.isPending || completeJobMutation.isPending) ? "Updating..." : nextAction.label}
+            </PrimaryButton>
+            <Pressable
+              style={[
+                styles.cancelButton,
+                { borderColor: theme.border, opacity: isOnline ? 1 : 0.5 },
+              ]}
+              onPress={handleOpenStatusMenu}
+              disabled={updateJobMutation.isPending}
+              testID="button-update-status-menu"
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Feather name={STATUS_CONFIG[resolvedDisplayStatus].icon} size={16} color={theme.text} />
+                <ThemedText type="body">Update Status ({STATUS_CONFIG[resolvedDisplayStatus].label})</ThemedText>
+              </View>
+            </Pressable>
+          </>
         ) : null}
 
         {resolvedDisplayStatus === "weather_held" ? (
