@@ -783,6 +783,7 @@ export class DatabaseStorage implements IStorage {
     upcomingJobs: number;
     averageJobValue: number;
     revenueByPeriod: { label: string; value: number }[];
+    revenueTodayCents: number;
   }> {
     const start = startDate ?? (() => {
       const d = new Date();
@@ -876,7 +877,26 @@ export class DatabaseStorage implements IStorage {
       );
     const upcomingJobs = upcomingJobsList.length;
 
-    return { revenueMTD, jobsCompleted, activeClients, upcomingJobs, averageJobValue, revenueByPeriod };
+    // Task #490: "today's earnings" ticker on Provider Home — sum of paid
+    // invoices with paidAt falling on the current calendar day (server tz).
+    const endOfToday = new Date(startOfToday);
+    endOfToday.setDate(endOfToday.getDate() + 1);
+    const paidTodayInvoices = await db
+      .select({ total: invoices.total })
+      .from(invoices)
+      .where(
+        and(
+          eq(invoices.providerId, providerId),
+          eq(invoices.status, "paid"),
+          gte(invoices.paidAt, startOfToday),
+          lt(invoices.paidAt, endOfToday),
+        ),
+      );
+    const revenueTodayCents = Math.round(
+      paidTodayInvoices.reduce((sum, inv) => sum + parseFloat(inv.total || "0"), 0) * 100,
+    );
+
+    return { revenueMTD, jobsCompleted, activeClients, upcomingJobs, averageJobValue, revenueByPeriod, revenueTodayCents };
   }
 
   // Provider business insights — real numbers for the dashboard metric grid

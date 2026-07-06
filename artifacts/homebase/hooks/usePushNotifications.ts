@@ -8,6 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiRequest } from "@/lib/query-client";
 import { useAuthStore } from "@/state/authStore";
+import { useCelebrationStore } from "@/state/celebrationStore";
 
 export const CURRENT_PUSH_TOKEN_STORAGE_KEY = "@homebase/current_push_token";
 
@@ -63,9 +64,10 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
 }
 
 export function usePushNotifications() {
-  const { user, sessionToken } = useAuthStore();
+  const { user, sessionToken, providerProfile, activeRole } = useAuthStore();
   const navigation = useNavigation<any>();
   const queryClient = useQueryClient();
+  const triggerPaidCelebration = useCelebrationStore((s) => s.triggerPaidCelebration);
   const notificationListener = useRef<Notifications.EventSubscription | null>(null);
   const responseListener = useRef<Notifications.EventSubscription | null>(null);
 
@@ -106,6 +108,12 @@ export function usePushNotifications() {
       // Finances, Jobs, AppointmentDetail) refresh without manual pull.
       const data = notification.request.content.data as Record<string, unknown>;
       invalidateQueriesForNotification(data, queryClient);
+      // Task #490: fire the "Paid" celebration from this global listener too,
+      // not just InvoiceDetailScreen's local poll — this is what covers the
+      // provider getting paid while on Home (or anywhere else in the app).
+      // InvoiceDetailScreen's own trigger and this one dedupe by invoiceId in
+      // celebrationStore, so seeing both for the same payment is harmless.
+      maybeTriggerCelebrationFromPush(data, providerProfile?.id, activeRole, triggerPaidCelebration);
     });
 
     responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
@@ -113,6 +121,7 @@ export function usePushNotifications() {
       // Same invalidation on tap-through, before navigating, so the destination
       // screen always sees fresh data.
       invalidateQueriesForNotification(data, queryClient);
+      maybeTriggerCelebrationFromPush(data, providerProfile?.id, activeRole, triggerPaidCelebration);
       handleNotificationNavigation(data, navigation);
     });
 
@@ -129,7 +138,7 @@ export function usePushNotifications() {
         responseListener.current.remove();
       }
     };
-  }, [user?.id, sessionToken]);
+  }, [user?.id, sessionToken, providerProfile?.id, activeRole, triggerPaidCelebration]);
 }
 
 /**
@@ -209,12 +218,65 @@ export function invalidateQueriesForNotification(
         });
       }
       queryClient.invalidateQueries({ queryKey: ["/api/appointments"] });
+      // Task #490: also refresh the provider stats query (revenueTodayCents)
+      // so the "Earned Today" ticker on Provider Home updates the moment a
+      // payment lands, even if the provider isn't on the invoice screen.
+      queryClient.invalidateQueries({
+        predicate: (q) => {
+          const k = q.queryKey;
+          return (
+            Array.isArray(k) &&
+            k[0] === "/api/provider" &&
+            k.includes("stats")
+          );
+        },
+      });
     }
 
     // Always refresh the notification center when any push arrives.
     queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
   } catch (err) {
     console.warn("invalidateQueriesForNotification error:", err);
+  }
+}
+
+/**
+ * Task #490: fire the provider's "Paid" celebration from a global push
+ * listener, not just InvoiceDetailScreen's local poll — this is what makes
+ * the celebration show up regardless of which screen the provider is on
+ * (Home, Jobs, another invoice, etc.) when a payment completes.
+ *
+ * The `invoice_paid` push fans out to both the provider (who should
+ * celebrate) and the homeowner (who should not), and the payload doesn't
+ * currently include the payment amount, so we gate on the current user
+ * actually being the provider role and fetch the invoice to read its total.
+ */
+export async function maybeTriggerCelebrationFromPush(
+  data: Record<string, unknown> | undefined,
+  currentProviderId: string | undefined,
+  activeRole: string | undefined,
+  triggerPaidCelebration: (amountCents: number, invoiceId?: string) => void,
+) {
+  try {
+    if (!data) return;
+    const type = (data.type as string | undefined) ?? "";
+    if (type !== "invoice_paid") return;
+    if (activeRole !== "provider" || !currentProviderId) return;
+
+    const invoiceId = data.invoiceId as string | undefined;
+    if (!invoiceId) return;
+
+    const response = await apiRequest("GET", `/api/invoices/${invoiceId}`);
+    const invoice = (await response.json())?.invoice as
+      | { providerId?: string; total?: string }
+      | undefined;
+    if (!invoice || invoice.providerId !== currentProviderId) return;
+
+    const amountCents = Math.round(parseFloat(invoice.total || "0") * 100);
+    if (!Number.isFinite(amountCents) || amountCents <= 0) return;
+    triggerPaidCelebration(amountCents, invoiceId);
+  } catch (err) {
+    console.warn("maybeTriggerCelebrationFromPush error:", err);
   }
 }
 

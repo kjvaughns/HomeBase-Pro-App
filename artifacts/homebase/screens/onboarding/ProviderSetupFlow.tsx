@@ -35,12 +35,13 @@ import {
   DAYS_OF_WEEK,
   DURATION_OPTIONS,
 } from "./shared/onboardingConstants";
+import { STARTER_PACKS, type StarterPack } from "./shared/starterPacks";
 import { YouAreLiveStep } from "./shared/YouAreLiveStep";
 import { AvailabilityStep } from "./shared/AvailabilityStep";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ProviderSetupFlow">;
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 8;
 
 interface SetupData {
   businessName: string;
@@ -55,6 +56,10 @@ interface SetupData {
   startTime: string;
   endTime: string;
   bio: string;
+  // Task #490: "pending" until the provider makes a choice on the trade
+  // starter-pack step; "skip" means set up services manually; otherwise a
+  // StarterPack id whose services/checklists get applied automatically.
+  tradeChoice: "pending" | "skip" | string;
 }
 
 function ProgressBar({ currentStep }: { currentStep: number }) {
@@ -99,6 +104,114 @@ function StepHeader({
         {subtitle}
       </ThemedText>
     </View>
+  );
+}
+
+function StepChooseTrade({
+  data,
+  onChange,
+}: {
+  data: SetupData;
+  onChange: (updates: Partial<SetupData>) => void;
+}) {
+  const { theme } = useTheme();
+  const { horizontalPadding } = useLayout();
+
+  const selectPack = (pack: StarterPack) => {
+    Haptics.selectionAsync();
+    onChange({ tradeChoice: pack.id, category: pack.category });
+  };
+
+  const selectSkip = () => {
+    Haptics.selectionAsync();
+    onChange({ tradeChoice: "skip" });
+  };
+
+  return (
+    <ScrollView
+      style={styles.stepScroll}
+      contentContainerStyle={[styles.stepScrollContent, { paddingHorizontal: horizontalPadding }]}
+      showsVerticalScrollIndicator={false}
+    >
+      <StepHeader
+        stepNum={1}
+        title="Pick Your Trade"
+        subtitle="We'll instantly set up ready-to-book services and prices for you"
+      />
+
+      {STARTER_PACKS.map((pack) => {
+        const selected = data.tradeChoice === pack.id;
+        return (
+          <Pressable
+            key={pack.id}
+            onPress={() => selectPack(pack)}
+            testID={`starter-pack-${pack.id}`}
+          >
+            <GlassCard
+              style={[
+                styles.card,
+                selected ? { borderColor: Colors.accent, borderWidth: 2 } : null,
+              ]}
+            >
+              <View style={styles.tradeRow}>
+                <View
+                  style={[
+                    styles.tradeIcon,
+                    { backgroundColor: selected ? Colors.accent : theme.backgroundElevated },
+                  ]}
+                >
+                  <Feather
+                    name={pack.icon}
+                    size={20}
+                    color={selected ? "#fff" : theme.text}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <ThemedText style={styles.tradeLabel}>{pack.label}</ThemedText>
+                  <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+                    {pack.tagline}
+                  </ThemedText>
+                  <ThemedText type="caption" style={{ color: Colors.accent, marginTop: 4 }}>
+                    {pack.services.length} services pre-built
+                  </ThemedText>
+                </View>
+                {selected ? (
+                  <Feather name="check-circle" size={22} color={Colors.accent} />
+                ) : (
+                  <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+                )}
+              </View>
+            </GlassCard>
+          </Pressable>
+        );
+      })}
+
+      <Pressable onPress={selectSkip} testID="starter-pack-skip" style={{ marginTop: Spacing.sm }}>
+        <GlassCard
+          style={[
+            styles.card,
+            data.tradeChoice === "skip" ? { borderColor: Colors.accent, borderWidth: 2 } : null,
+          ]}
+        >
+          <View style={styles.tradeRow}>
+            <View style={[styles.tradeIcon, { backgroundColor: theme.backgroundElevated }]}>
+              <Feather name="edit-3" size={20} color={theme.text} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <ThemedText style={styles.tradeLabel}>I'll set this up myself</ThemedText>
+              <ThemedText type="caption" style={{ color: theme.textSecondary }}>
+                Skip the starter pack and build your own service
+              </ThemedText>
+            </View>
+            {data.tradeChoice === "skip" ? (
+              <Feather name="check-circle" size={22} color={Colors.accent} />
+            ) : (
+              <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+            )}
+          </View>
+        </GlassCard>
+      </Pressable>
+    </ScrollView>
   );
 }
 
@@ -206,7 +319,7 @@ function Step1CreateService({
       keyboardShouldPersistTaps="handled"
     >
       <StepHeader
-        stepNum={1}
+        stepNum={2}
         title="Create Your First Service"
         subtitle="Define what you offer so customers can book you"
       />
@@ -497,7 +610,7 @@ function Step3ProfilePolish({
       keyboardShouldPersistTaps="handled"
     >
       <StepHeader
-        stepNum={3}
+        stepNum={4}
         title="Polish Your Profile"
         subtitle="A great bio earns trust before you say a word"
       />
@@ -610,7 +723,7 @@ function Step4BookingPreview({ data }: { data: SetupData }) {
       showsVerticalScrollIndicator={false}
     >
       <StepHeader
-        stepNum={4}
+        stepNum={5}
         title="Booking Preview"
         subtitle="This is what customers will see when they find you"
       />
@@ -727,7 +840,7 @@ function Step5Payments({ navigation }: { navigation: Props["navigation"] }) {
       showsVerticalScrollIndicator={false}
     >
       <StepHeader
-        stepNum={5}
+        stepNum={6}
         title="Payments Setup"
         subtitle="Get paid directly through HomeBase via Stripe"
       />
@@ -816,7 +929,7 @@ function Step6ValuePaywall({ onContinue }: { onContinue: () => void }) {
       showsVerticalScrollIndicator={false}
     >
       <StepHeader
-        stepNum={6}
+        stepNum={7}
         title="Everything you need to grow your business"
         subtitle="The tools to get booked, stay organized, and get paid"
       />
@@ -911,7 +1024,11 @@ export default function ProviderSetupFlow({ navigation }: Props) {
     startTime: "8:00 AM",
     endTime: "6:00 PM",
     bio: "",
+    tradeChoice: "pending",
   });
+
+  const [applyingPack, setApplyingPack] = useState(false);
+  const [packError, setPackError] = useState<string | null>(null);
 
   const updateData = (updates: Partial<SetupData>) => {
     setData((prev) => ({ ...prev, ...updates }));
@@ -920,11 +1037,13 @@ export default function ProviderSetupFlow({ navigation }: Props) {
   const canContinue = () => {
     switch (step) {
       case 1:
-        return data.serviceName.trim().length > 0;
+        return data.tradeChoice !== "pending";
       case 2:
-        return data.activeDays.length > 0;
+        return data.serviceName.trim().length > 0;
       case 3:
+        return data.activeDays.length > 0;
       case 4:
+      case 5:
         return true;
       default:
         return true;
@@ -941,6 +1060,62 @@ export default function ProviderSetupFlow({ navigation }: Props) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     if (step === 1) {
+      // Task #490: trade starter packs — apply pre-built services/prices/
+      // checklists in one shot, then skip straight past the manual
+      // create-service step. "Skip" (or no provider profile yet, e.g. the
+      // pre-signup funnel) falls through to the normal manual flow.
+      const pack = STARTER_PACKS.find((p) => p.id === data.tradeChoice);
+      if (pack && providerProfile?.id) {
+        setApplyingPack(true);
+        setPackError(null);
+        try {
+          for (const svc of pack.services) {
+            await apiRequest("POST", `/api/provider/${providerProfile.id}/custom-services`, {
+              name: svc.name,
+              category: pack.category,
+              description: svc.description,
+              pricingType: svc.pricingType,
+              basePrice: svc.basePrice,
+              duration: svc.duration,
+              checklistTemplateJson: svc.checklist.map((label, i) => ({
+                id: `${pack.id}-${i}`,
+                label,
+              })),
+            });
+            addOnboardingService({
+              id: `svc-${Date.now()}-${svc.name}`,
+              name: svc.name,
+              price: svc.basePrice ? parseFloat(svc.basePrice) : null,
+              quoteRequired: svc.pricingType === "quote",
+              durationMinutes: svc.duration,
+            });
+          }
+          setProviderBusinessProfile({
+            businessName: data.businessName.trim(),
+            category: pack.category,
+            serviceArea: data.serviceArea.trim(),
+          });
+        } catch {
+          setApplyingPack(false);
+          setPackError("Could not set up your starter services. Check your connection and try again.");
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          return;
+        }
+        setApplyingPack(false);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Keyboard.dismiss();
+        // Skip step 2 (manual create-service) entirely — the pack already
+        // created services — and land on Availability.
+        setGoingBack(false);
+        setStep(3);
+        return;
+      }
+      // "Skip" (or pack chosen but no provider profile yet): fall through to
+      // the manual create-service step, same as the pre-pack flow.
+      Keyboard.dismiss();
+      advanceStep();
+      return;
+    } else if (step === 2) {
       setProviderBusinessProfile({
         businessName: data.businessName.trim(),
         category: data.category,
@@ -992,7 +1167,7 @@ export default function ProviderSetupFlow({ navigation }: Props) {
       } else {
         addOnboardingService(service);
       }
-    } else if (step === 2) {
+    } else if (step === 3) {
       setProviderAvailability({
         activeDays: data.activeDays,
         startTime: data.startTime,
@@ -1023,7 +1198,7 @@ export default function ProviderSetupFlow({ navigation }: Props) {
         }
         setSavingHours(false);
       }
-    } else if (step === 3) {
+    } else if (step === 4) {
       if (providerProfile?.id && data.bio.trim()) {
         setSavingBio(true);
         setBioError(null);
@@ -1069,14 +1244,16 @@ export default function ProviderSetupFlow({ navigation }: Props) {
   const renderStep = () => {
     switch (step) {
       case 1:
-        return <Step1CreateService key="s1" data={data} onChange={updateData} category={data.category} />;
+        return <StepChooseTrade key="s0" data={data} onChange={updateData} />;
       case 2:
+        return <Step1CreateService key="s1" data={data} onChange={updateData} category={data.category} />;
+      case 3:
         return (
           <AvailabilityStep
             key="s2"
             header={
               <StepHeader
-                stepNum={2}
+                stepNum={3}
                 title="Set Your Availability"
                 subtitle="When are you available to take bookings?"
               />
@@ -1089,15 +1266,15 @@ export default function ProviderSetupFlow({ navigation }: Props) {
             setEndTime={(v) => updateData({ endTime: v })}
           />
         );
-      case 3:
-        return <Step3ProfilePolish key="s3" data={data} onChange={updateData} />;
       case 4:
-        return <Step4BookingPreview key="s4" data={data} />;
+        return <Step3ProfilePolish key="s3" data={data} onChange={updateData} />;
       case 5:
-        return <Step5Payments key="s5" navigation={navigation} />;
+        return <Step4BookingPreview key="s4" data={data} />;
       case 6:
-        return <Step6ValuePaywall key="s6" onContinue={advanceStep} />;
+        return <Step5Payments key="s5" navigation={navigation} />;
       case 7:
+        return <Step6ValuePaywall key="s6" onContinue={advanceStep} />;
+      case 8:
         return (
           <YouAreLiveStep
             key="s7"
@@ -1111,8 +1288,8 @@ export default function ProviderSetupFlow({ navigation }: Props) {
     }
   };
 
-  const showFooterContinue = step < TOTAL_STEPS && step !== 5 && step !== 6 && step !== 7;
-  const showFooterSkip = step === 5;
+  const showFooterContinue = step < TOTAL_STEPS && step !== 6 && step !== 7 && step !== 8;
+  const showFooterSkip = step === 6;
 
   return (
     <ThemedView style={styles.container}>
@@ -1150,7 +1327,7 @@ export default function ProviderSetupFlow({ navigation }: Props) {
               {serviceError}
             </ThemedText>
           ) : null}
-          {hoursError && step === 2 ? (
+          {hoursError && step === 3 ? (
             <ThemedText
               style={[styles.serviceErrorText, { color: "#E53E3E" }]}
               testID="text-hours-error"
@@ -1158,7 +1335,7 @@ export default function ProviderSetupFlow({ navigation }: Props) {
               {hoursError}
             </ThemedText>
           ) : null}
-          {bioError && step === 3 ? (
+          {bioError && step === 4 ? (
             <ThemedText
               style={[styles.serviceErrorText, { color: "#E53E3E" }]}
               testID="text-bio-error"
@@ -1166,12 +1343,24 @@ export default function ProviderSetupFlow({ navigation }: Props) {
               {bioError}
             </ThemedText>
           ) : null}
+          {packError && step === 1 ? (
+            <ThemedText
+              style={[styles.serviceErrorText, { color: "#E53E3E" }]}
+              testID="text-pack-error"
+            >
+              {packError}
+            </ThemedText>
+          ) : null}
           <PrimaryButton
             onPress={handleContinue}
-            disabled={!canContinue() || savingService || savingHours || savingBio}
+            disabled={!canContinue() || savingService || savingHours || savingBio || applyingPack}
             testID="button-continue"
           >
-            {savingService || savingHours || savingBio ? "Saving..." : "Continue"}
+            {applyingPack
+              ? "Setting up your services..."
+              : savingService || savingHours || savingBio
+              ? "Saving..."
+              : "Continue"}
           </PrimaryButton>
         </View>
       ) : null}
@@ -1230,6 +1419,23 @@ const styles = StyleSheet.create({
   stepTitle: { fontWeight: "700", marginBottom: Spacing.xs },
   stepSubtitle: {},
   card: { marginBottom: Spacing.lg },
+  tradeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  tradeIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tradeLabel: {
+    ...Typography.body,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
   fieldLabel: {
     ...Typography.footnote,
     fontWeight: "500",

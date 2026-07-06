@@ -6,7 +6,7 @@ import { useFloatingTabBarHeight } from "@/hooks/useFloatingTabBarHeight";
 import { useLayout } from "@/hooks/useLayout";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
-import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withSpring, withSequence } from "react-native-reanimated";
+import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withSpring, withSequence, withTiming, useDerivedValue, runOnJS } from "react-native-reanimated";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/query-client";
 import * as Haptics from "expo-haptics";
@@ -82,6 +82,7 @@ interface ProviderStats {
   jobsCompleted: number;
   activeClients: number;
   upcomingJobs: number;
+  revenueTodayCents?: number;
 }
 
 interface ProviderInsights {
@@ -184,6 +185,69 @@ const GOAL_PRESETS_DASHBOARD = [
   { label: "$5K", cents: 500_000 },
   { label: "$10K", cents: 1_000_000 },
 ];
+
+// Task #490: running "today's earnings" ticker. Animates a count-up whenever
+// revenueTodayCents increases (a new payment lands) so the number visibly
+// climbs instead of jump-cutting — a small, cheap way to make getting paid
+// feel good without a full celebration replay on every render.
+function TodaysEarningsTicker({
+  revenueTodayCents,
+  theme,
+}: {
+  revenueTodayCents: number;
+  theme: ReturnType<typeof useTheme>["theme"];
+}) {
+  const animatedCents = useSharedValue(revenueTodayCents);
+  const prevRef = useRef(revenueTodayCents);
+  const pulse = useSharedValue(1);
+
+  useEffect(() => {
+    if (revenueTodayCents !== prevRef.current) {
+      animatedCents.value = withTiming(revenueTodayCents, { duration: 700 });
+      if (revenueTodayCents > prevRef.current) {
+        pulse.value = withSequence(
+          withSpring(1.08, { damping: 5, stiffness: 260 }),
+          withSpring(1, { damping: 8, stiffness: 200 }),
+        );
+      }
+      prevRef.current = revenueTodayCents;
+    }
+  }, [revenueTodayCents]);
+
+  const [displayCents, setDisplayCents] = useState(revenueTodayCents);
+  useDerivedValue(() => {
+    runOnJS(setDisplayCents)(Math.round(animatedCents.value));
+  }, [animatedCents]);
+
+  const pulseStyle = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }] }));
+
+  if (revenueTodayCents <= 0 && prevRef.current <= 0) return null;
+
+  return (
+    <Animated.View
+      entering={FadeInDown.duration(400)}
+      style={[
+        styles.earningsTicker,
+        { backgroundColor: theme.cardBackground, borderColor: Colors.accent + "30" },
+      ]}
+      testID="ticker-todays-earnings"
+    >
+      <View style={[styles.publishIcon, { backgroundColor: Colors.accentLight }]}>
+        <Feather name="trending-up" size={18} color={Colors.accent} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>
+          Earned Today
+        </ThemedText>
+        <Animated.View style={pulseStyle}>
+          <ThemedText style={[styles.earningsTickerValue, { color: Colors.accent }]}>
+            {formatMoney(displayCents / 100)}
+          </ThemedText>
+        </Animated.View>
+      </View>
+    </Animated.View>
+  );
+}
 
 function MonthlyGoalCard({
   providerId,
@@ -1102,6 +1166,11 @@ export default function ProviderHomeScreen() {
           queryClient={queryClient}
         />
 
+        <TodaysEarningsTicker
+          revenueTodayCents={stats.revenueTodayCents ?? 0}
+          theme={theme}
+        />
+
         <Animated.View entering={FadeInDown.delay(200).duration(400)}>
           {isLoading ? (
             <StatsSkeleton />
@@ -1771,6 +1840,19 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     ...Typography.caption1,
+  },
+  earningsTicker: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    borderRadius: BorderRadius.card,
+    borderWidth: 1,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  earningsTickerValue: {
+    ...Typography.title2,
+    fontWeight: "800",
   },
   emptyCard: {
     alignItems: "center",

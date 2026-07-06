@@ -9,3 +9,4 @@
 - [HomeBase test account passwords](homebase-test-account-passwords.md) — seeded users' passwords are unknown; reset via bcrypt hash update in DB to enable curl-based API verification when Expo web preview is blank.
 - [WidgetKit via @bacons/apple-targets](apple-targets-widgetkit-expo.md) — adds native iOS widgets to Expo without ejecting; ExtensionStorage no-ops safely when native module absent; requires Xcode to build/test.
 - [expo-audio + expo-file-system v55 recording API](expo-audio-voice-capture.md) — use hook-based `useAudioRecorder`/`AudioModule` and `new File(uri).base64()`, not legacy expo-av / readAsStringAsync.
+- [api-server dev script is build-then-run](api-server-build-then-run.md) — backend code changes need a workflow restart to take effect; the dev script bundles once, it's not a watch server.

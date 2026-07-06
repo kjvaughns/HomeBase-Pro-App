@@ -7,6 +7,7 @@ import * as Updates from "expo-updates";
 
 import RootStackNavigator from "@/navigation/RootStackNavigator";
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { PaidCelebrationOverlay } from "@/components/PaidCelebrationOverlay";
 import { useThemeStore } from "@/state/themeStore";
 import { useOnboardingStore } from "@/state/onboardingStore";
 import { initAppReviewTracker } from "@/state/appReviewStore";
@@ -101,6 +102,7 @@ export default function AppIndex() {
     <>
       <AppContent />
       <OfflineBanner />
+      <PaidCelebrationOverlay />
     </>
   );
 }

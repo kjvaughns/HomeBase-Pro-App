@@ -32,6 +32,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useLayout } from "@/hooks/useLayout";
 import { apiRequest } from "@/lib/query-client";
 import { recordHappyMoment } from "@/state/appReviewStore";
+import { useCelebrationStore } from "@/state/celebrationStore";
 import { RecordPaymentSheet, type ExistingPayment } from "@/components/RecordPaymentSheet";
 import { BeforeAfterSlider } from "@/components/BeforeAfterSlider";
 
@@ -132,6 +133,7 @@ export default function InvoiceDetailScreen() {
   const queryClient = useQueryClient();
   const { providerProfile } = useAuthStore();
   const { theme } = useTheme();
+  const triggerPaidCelebration = useCelebrationStore((s) => s.triggerPaidCelebration);
 
   // Task #289: deep-link safety — `route.params` is undefined when this
   // screen is opened via a bare `/invoice/` URL without an id, which threw
@@ -185,17 +187,36 @@ export default function InvoiceDetailScreen() {
   useEffect(() => {
     if (!providerId) return;
     const currentStatus = invoiceData?.invoice?.status;
+    const previousStatus = prevStatusRef.current;
     if (
       currentStatus &&
-      prevStatusRef.current !== currentStatus &&
+      previousStatus !== currentStatus &&
       INVOICE_TERMINAL_STATUSES.has(currentStatus)
     ) {
       queryClient.invalidateQueries({
         queryKey: ["/api/provider", providerId, "invoices"],
       });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/provider", providerId, "stats"],
+      });
+    }
+    // Task #490: fire the "Paid" celebration on a genuine transition into
+    // "paid" (previous status known + non-paid). Covers the mark-paid
+    // button, a manual payment completing the balance, and a homeowner
+    // finishing Stripe Checkout while the provider is elsewhere in the app
+    // — all funnel through this single poll/refetch-driven status check, so
+    // we don't need to duplicate the trigger in every mutation.
+    if (
+      currentStatus === "paid" &&
+      previousStatus &&
+      previousStatus !== "paid" &&
+      !INVOICE_TERMINAL_STATUSES.has(previousStatus)
+    ) {
+      const paidAmountCents = Math.round(parseFloat(invoiceData?.invoice?.total || "0") * 100);
+      triggerPaidCelebration(paidAmountCents, invoiceId);
     }
     prevStatusRef.current = currentStatus;
-  }, [invoiceData?.invoice?.status, providerId, queryClient]);
+  }, [invoiceData?.invoice?.status, invoiceData?.invoice?.total, providerId, queryClient, triggerPaidCelebration]);
 
   // Task #235: also refetch on focus so coming back from another screen (or
   // tapping a push notification) immediately reflects the latest status.
