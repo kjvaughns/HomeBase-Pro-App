@@ -64,6 +64,7 @@ import {
   jobTrackingSessions,
   type JobTrackingSession,
   type InsertJobTrackingSession,
+  jobSeries,
 } from "@workspace/db";
 import { db, pool } from "./db";
 import { eq, and, or, desc, asc, sql, gte, lte, ilike, inArray, lt, SQL } from "drizzle-orm";
@@ -1048,6 +1049,87 @@ export class DatabaseStorage implements IStorage {
       clientGrowthPct,
       rating: providerRow?.rating ?? "0",
       reviewCount: providerRow?.reviewCount ?? 0,
+    };
+  }
+
+  // Task #488: "locked-in" recurring revenue — normalizes every active,
+  // non-paused job_series to a monthly-equivalent dollar amount so providers
+  // running weekly/biweekly/quarterly recurring visits can see one combined
+  // "booked per month" number, plus a forward calendar of upcoming
+  // materialized occurrences for the heatmap visual.
+  async getRecurringRevenueSummary(
+    providerId: string,
+    horizonDays = 60,
+  ): Promise<{
+    monthlyRevenue: number;
+    activeSeriesCount: number;
+    calendar: { date: string; count: number; revenue: number }[];
+  }> {
+    const FREQUENCY_TO_MONTHLY: Record<string, number> = {
+      weekly: 4.345,
+      biweekly: 2.1725,
+      monthly: 1,
+      quarterly: 1 / 3,
+    };
+
+    const activeSeries = await db
+      .select({
+        id: jobSeries.id,
+        frequency: jobSeries.frequency,
+        estimatedPrice: jobSeries.estimatedPrice,
+      })
+      .from(jobSeries)
+      .where(
+        and(eq(jobSeries.providerId, providerId), eq(jobSeries.status, "active")),
+      );
+
+    const monthlyRevenue = activeSeries.reduce((sum, s) => {
+      const price = parseFloat(s.estimatedPrice || "0") || 0;
+      const multiplier = FREQUENCY_TO_MONTHLY[s.frequency] ?? 0;
+      return sum + price * multiplier;
+    }, 0);
+
+    const now = new Date();
+    const horizonEnd = new Date(now);
+    horizonEnd.setDate(horizonEnd.getDate() + horizonDays);
+
+    const upcomingOccurrences = await db
+      .select({
+        scheduledDate: jobs.scheduledDate,
+        finalPrice: jobs.finalPrice,
+        estimatedPrice: jobs.estimatedPrice,
+      })
+      .from(jobs)
+      .innerJoin(jobSeries, eq(jobs.seriesId, jobSeries.id))
+      .where(
+        and(
+          eq(jobs.providerId, providerId),
+          eq(jobSeries.status, "active"),
+          gte(jobs.scheduledDate, now),
+          lte(jobs.scheduledDate, horizonEnd),
+          sql`${jobs.status} != 'cancelled'`,
+        ),
+      );
+
+    const byDate = new Map<string, { count: number; revenue: number }>();
+    for (const occ of upcomingOccurrences) {
+      const dateKey = new Date(occ.scheduledDate).toISOString().slice(0, 10);
+      const price =
+        parseFloat(occ.finalPrice || occ.estimatedPrice || "0") || 0;
+      const existing = byDate.get(dateKey) ?? { count: 0, revenue: 0 };
+      existing.count += 1;
+      existing.revenue += price;
+      byDate.set(dateKey, existing);
+    }
+
+    const calendar = Array.from(byDate.entries())
+      .map(([date, v]) => ({ date, count: v.count, revenue: v.revenue }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    return {
+      monthlyRevenue: Math.round(monthlyRevenue * 100) / 100,
+      activeSeriesCount: activeSeries.length,
+      calendar,
     };
   }
 

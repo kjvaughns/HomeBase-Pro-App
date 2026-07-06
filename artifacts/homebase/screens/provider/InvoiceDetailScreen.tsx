@@ -533,6 +533,27 @@ export default function InvoiceDetailScreen() {
           </View>
         ) : null}
 
+        {/* Task #488: satisfying auto-generated receipt for a completed
+            autopay charge — a calmer, self-explanatory moment since the
+            homeowner didn't tap "pay" themselves. */}
+        {invoice.chargeType === "autopay" && !invoice.autopayFailureReason && invoice.status === "paid" ? (
+          <GlassCard style={styles.receiptCard} testID="card-autopay-receipt">
+            <View style={[styles.receiptIcon, { backgroundColor: Colors.successLight }]}>
+              <Feather name="check-circle" size={22} color={Colors.success} />
+            </View>
+            <ThemedText style={[styles.receiptTitle, { color: Colors.success }]}>
+              Auto-pay receipt
+            </ThemedText>
+            <ThemedText style={[styles.receiptAmount]}>
+              {formatMoney(displayAmount)}
+            </ThemedText>
+            <ThemedText style={[styles.receiptSubtitle, { color: theme.textSecondary }]}>
+              Charged automatically to the card on file
+              {invoice.paidAt ? ` on ${formatDate(invoice.paidAt)}` : ""} — no action needed.
+            </ThemedText>
+          </GlassCard>
+        ) : null}
+
         {photoPairs.length > 0 ? (
           <GlassCard style={styles.headerCard} testID="card-before-after">
             <ThemedText style={[styles.sectionTitle, { marginBottom: Spacing.sm }]}>
@@ -1260,5 +1281,34 @@ const styles = StyleSheet.create({
   chargeTypeBadgeText: {
     fontSize: 11,
     fontWeight: "600",
+  },
+  receiptCard: {
+    alignItems: "center",
+    paddingVertical: Spacing.lg,
+  },
+  receiptIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.sm,
+  },
+  receiptTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+    marginBottom: 4,
+  },
+  receiptAmount: {
+    fontSize: 30,
+    fontWeight: "800",
+    marginBottom: Spacing.xs,
+  },
+  receiptSubtitle: {
+    fontSize: 13,
+    textAlign: "center",
+    paddingHorizontal: Spacing.lg,
   },
 });

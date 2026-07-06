@@ -65,6 +65,8 @@ interface ClientRecord {
   clientSince?: string | null;
   avatar?: string | null;
   home?: HomeDetailRecord | null;
+  // Task #488: active recurring series autopay status, computed server-side.
+  autopay?: { enabled: boolean; frequency: string | null } | null;
 }
 
 interface HomeDetailRecord {
@@ -1127,6 +1129,21 @@ export default function ClientDetailScreen() {
               : "Potential client"}
           </ThemedText>
 
+          {client.autopay?.enabled ? (
+            <View
+              style={[
+                styles.autopayBadge,
+                { backgroundColor: theme.backgroundSecondary, borderColor: theme.separator },
+              ]}
+              testID="badge-autopay-on"
+            >
+              <Feather name="check-circle" size={13} color={Colors.success} />
+              <ThemedText style={[styles.autopayBadgeText, { color: theme.textSecondary }]}>
+                Auto-pay on · charges after each visit
+              </ThemedText>
+            </View>
+          ) : null}
+
           <View style={styles.actionButtons}>
             <ActionButton icon="briefcase" label="New Job" onPress={handleNewJob} primary />
             <ActionButton icon="file-text" label="Invoice" onPress={handleSendInvoice} />
@@ -1268,6 +1285,21 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
   },
   statusText: {
+    ...Typography.caption2,
+    fontWeight: "600",
+  },
+  autopayBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  autopayBadgeText: {
     ...Typography.caption2,
     fontWeight: "600",
   },

@@ -1638,24 +1638,39 @@ export async function handlePaymentIntentSucceeded(
             invoiceId,
             invoiceNumber: updatedInvoice.invoiceNumber,
           };
+          let jobTitle: string | null = null;
           if (updatedInvoice.jobId) {
             const jobRows = await db
-              .select({ appointmentId: jobs.appointmentId })
+              .select({ appointmentId: jobs.appointmentId, title: jobs.title })
               .from(jobs)
               .where(eq(jobs.id, updatedInvoice.jobId))
               .limit(1)
-              .catch((): { appointmentId: string | null }[] => []);
+              .catch((): { appointmentId: string | null; title: string | null }[] => []);
             const appointmentId = jobRows[0]?.appointmentId ?? null;
+            jobTitle = jobRows[0]?.title ?? null;
             if (appointmentId) {
               data.screen = "AppointmentDetail";
               data.params = { appointmentId };
               data.appointmentId = appointmentId;
             }
           }
+          // Task #488: autopay charges are a distinct, calmer "receipt"
+          // moment rather than a generic payment-confirmed alert — the
+          // homeowner didn't just tap "pay," so the copy should make clear
+          // this was an automatic, expected charge for a completed visit.
+          const isAutopayReceipt = updatedInvoice.chargeType === "autopay";
+          if (isAutopayReceipt) {
+            data.isAutopayReceipt = true;
+            data.serviceName = jobTitle;
+          }
+          const title = isAutopayReceipt ? "Auto-pay receipt" : "Payment confirmed";
+          const body = isAutopayReceipt
+            ? `${jobTitle ? `${jobTitle} — ` : ""}$${amountStr} was automatically charged to your card on file for ${provider?.businessName || "your provider"}.`
+            : `Your $${amountStr} payment to ${provider?.businessName || "your provider"} was received.`;
           dispatchNotification(
             updatedInvoice.homeownerUserId,
-            "Payment confirmed",
-            `Your $${amountStr} payment to ${provider?.businessName || "your provider"} was received.`,
+            title,
+            body,
             "invoice_paid",
             data,
             "invoices",

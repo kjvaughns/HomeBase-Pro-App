@@ -12,3 +12,5 @@ Use `@bacons/apple-targets` to add a WidgetKit extension target to an Expo-manag
 **How to apply:** When wiring app data into a widget, write to shared storage from the RN side on data changes, and independently give the widget's own Swift `TimelineProvider` a network fallback (e.g. polling a small public/token-guarded API endpoint) so it can refresh even when the app hasn't been opened recently.
 
 **Environment limitation:** In a Linux/no-Xcode environment, none of this can be built or run — `expo prebuild -p ios`, opening Xcode, and EAS iOS builds are unavailable. Expo will print `ios.appleTeamId` warnings at dev-server start once the plugin is added; this is expected, not a bug. Treat the Swift/plugin code as best-effort scaffolding that requires a real Xcode environment to validate.
+
+**Workflow fails with "Failed to resolve plugin for module @bacons/apple-targets":** this means `node_modules` is stale/pruned relative to `package.json` (not a code bug) — run `pnpm install` at the workspace root, then restart the `homebase: expo` workflow.

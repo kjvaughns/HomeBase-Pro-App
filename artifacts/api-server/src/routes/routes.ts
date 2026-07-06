@@ -8857,6 +8857,33 @@ Respond with JSON only:
     },
   );
 
+  // Task #488: locked-in recurring revenue tile + forward calendar heatmap
+  // data. Authenticated user must own this provider record.
+  app.get(
+    "/api/provider/:id/recurring-revenue",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const providerRow = await storage.getProviderByUserId(
+          req.authenticatedUserId!,
+        );
+        if (!providerRow || providerRow.id !== req.params.id) {
+          res.status(403).json({ error: "Forbidden" });
+          return;
+        }
+        const summary = await storage.getRecurringRevenueSummary(
+          req.params.id,
+        );
+        res.json(summary);
+      } catch (error) {
+        req.log.error({ error }, "Get recurring revenue summary error");
+        res
+          .status(500)
+          .json({ error: "Failed to get recurring revenue summary" });
+      }
+    },
+  );
+
   // Provider variable-reward home feed (Task #410)
   // Returns 1–3 rotating highlight cards for the provider's home screen.
   // Card types rotate so no two consecutive visits show the same type.
@@ -9941,7 +9968,28 @@ Respond with JSON only:
         }
         const ltv = Math.round((completedJobsTotal + collectedTotal) * 100) / 100;
 
-        res.json({ client: { ...client, home, ltv }, jobs, invoices });
+        // Task #488: surface autopay status for this client's active
+        // recurring series so the detail screen can show a calm
+        // "Auto-pay on" badge instead of leaving it invisible.
+        const [autopaySeries] = await db
+          .select({
+            frequency: jobSeries.frequency,
+            autopayEnabled: jobSeries.autopayEnabled,
+          })
+          .from(jobSeries)
+          .where(
+            and(
+              eq(jobSeries.clientId, req.params.id),
+              eq(jobSeries.status, "active"),
+              eq(jobSeries.autopayEnabled, true),
+            ),
+          )
+          .limit(1);
+        const autopay = autopaySeries
+          ? { enabled: true, frequency: autopaySeries.frequency }
+          : { enabled: false, frequency: null };
+
+        res.json({ client: { ...client, home, ltv, autopay }, jobs, invoices });
       } catch (error) {
         console.error("Get client error:", error);
         res.status(500).json({ error: "Failed to get client" });

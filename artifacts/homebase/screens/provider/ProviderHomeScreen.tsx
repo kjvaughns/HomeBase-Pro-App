@@ -59,6 +59,7 @@ import { useOnboardingStore } from "@/state/onboardingStore";
 import { isUpcomingJob } from "@/lib/jobUtils";
 import { syncProviderWidgetData } from "@/lib/widgetData";
 import { ProviderFeed, type FeedCardData } from "@/components/FeedCard";
+import { RecurringRevenueCard } from "@/components/RecurringRevenueCard";
 
 type BusinessHourEntry = { enabled?: boolean; open?: string; close?: string };
 type BusinessHoursMap = Record<string, BusinessHourEntry | undefined>;
@@ -1369,6 +1370,10 @@ export default function ProviderHomeScreen() {
             )}
           </Animated.View>
         ) : null}
+
+        <Animated.View entering={FadeInDown.delay(375).duration(400)}>
+          <RecurringRevenueCard providerId={providerId} />
+        </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(400).duration(400)}>
           <SectionHeader title="Business Insights" />
