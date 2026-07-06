@@ -21,8 +21,7 @@ export default function EstimatesListScreen() {
                 {
                   name: "FinancialsTab",
                   params: {
-                    initialSection: "transactions",
-                    initialTransactionTab: "invoices",
+                    initialSection: "invoices",
                     initialTransactionFilter: "estimates",
                   },
                 },

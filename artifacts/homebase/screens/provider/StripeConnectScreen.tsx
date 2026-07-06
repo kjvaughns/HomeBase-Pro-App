@@ -250,7 +250,7 @@ export default function StripeConnectScreen() {
           <GlassCard style={styles.section}>
             <View style={styles.sectionHeader}>
               <Feather name="credit-card" size={24} color={Colors.accent} />
-              <ThemedText type="h3">Stripe Connect Status</ThemedText>
+              <ThemedText type="h3">Payment Setup Status</ThemedText>
             </View>
 
             <View style={styles.statusRow}>
@@ -536,14 +536,14 @@ export default function StripeConnectScreen() {
             <Feather name="info" size={18} color={theme.textSecondary} />
             <View style={styles.infoContent}>
               <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-                How Stripe Connect Works:
+                How getting paid works:
               </ThemedText>
               <ThemedText type="caption" style={{ color: theme.textSecondary, marginTop: 4 }}>
-                1. Complete Stripe onboarding to enable payments{"\n"}
+                1. Finish payment setup{"\n"}
                 2. Create invoices for your clients{"\n"}
                 3. Send invoices - clients receive email notification{"\n"}
-                4. Clients pay via Stripe Checkout{"\n"}
-                5. Funds (minus platform fee) go to your Stripe account
+                4. Clients pay securely online{"\n"}
+                5. Funds (minus platform fee) go to your bank account
               </ThemedText>
             </View>
           </View>

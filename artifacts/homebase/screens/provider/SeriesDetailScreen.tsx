@@ -184,12 +184,12 @@ export default function SeriesDetailScreen() {
 
   const handlePause = useCallback(() => {
     Alert.alert(
-      "Pause Recurring Series",
+      "Pause Repeating Job",
       "Upcoming scheduled visits will be removed from the calendar until you resume. Past and in-progress jobs are kept as-is.",
       [
         { text: "Nevermind", style: "cancel" },
         {
-          text: "Pause Series",
+          text: "Pause",
           style: "destructive",
           onPress: () => pauseMutation.mutate(),
         },
@@ -203,12 +203,12 @@ export default function SeriesDetailScreen() {
 
   const handleCancel = useCallback(() => {
     Alert.alert(
-      "Cancel Recurring Series",
-      "All future occurrences will be cancelled. Past and in-progress jobs are kept as-is.",
+      "Cancel Repeating Job",
+      "All future repeats will be cancelled. Past and in-progress jobs are kept as-is.",
       [
         { text: "Nevermind", style: "cancel" },
         {
-          text: "Cancel Series",
+          text: "Cancel All Repeats",
           style: "destructive",
           onPress: () => cancelMutation.mutate(),
         },
@@ -247,7 +247,7 @@ export default function SeriesDetailScreen() {
     return (
       <ThemedView style={styles.container}>
         <View style={[styles.center, { paddingTop: headerHeight }]}>
-          <ThemedText type="h2">Series not found</ThemedText>
+          <ThemedText type="h2">Repeating job not found</ThemedText>
         </View>
       </ThemedView>
     );
@@ -462,7 +462,7 @@ export default function SeriesDetailScreen() {
                 <ActivityIndicator size="small" color={Colors.accent} />
               ) : (
                 <ThemedText type="body" style={{ color: Colors.accent }}>
-                  Resume Series
+                  Resume
                 </ThemedText>
               )}
             </Pressable>
@@ -477,7 +477,7 @@ export default function SeriesDetailScreen() {
                 <ActivityIndicator size="small" color={Colors.warning} />
               ) : (
                 <ThemedText type="body" style={{ color: Colors.warning }}>
-                  Pause Series
+                  Pause
                 </ThemedText>
               )}
             </Pressable>
@@ -492,7 +492,7 @@ export default function SeriesDetailScreen() {
               <ActivityIndicator size="small" color={Colors.error} />
             ) : (
               <ThemedText type="body" style={{ color: Colors.error }}>
-                Cancel Recurring Series
+                Cancel All Repeats
               </ThemedText>
             )}
           </Pressable>

@@ -1110,7 +1110,7 @@ const PARTNER_PERKS: Array<{
   },
   {
     icon: "cpu",
-    title: "Smart Intake, AI Smart Match, and Dynamic Quote Engine",
+    title: "Instant lead capture, matching, and pricing",
     body: "Every AI workflow is on so leads come in qualified and priced.",
   },
   {

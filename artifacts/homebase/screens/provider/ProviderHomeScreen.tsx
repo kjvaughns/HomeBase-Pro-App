@@ -832,7 +832,7 @@ export default function ProviderHomeScreen() {
       subtitle: "Build your client list",
       icon: "user-plus" as const,
       done: hasClients,
-      onPress: () => navigation.navigate("ClientsTab"),
+      onPress: () => navigation.navigate("AddClient"),
     },
     {
       key: "bio",
@@ -852,8 +852,8 @@ export default function ProviderHomeScreen() {
     },
     {
       key: "stripe",
-      label: "Set up payments",
-      subtitle: "Connect Stripe to get paid",
+      label: "Get paid",
+      subtitle: "Set up payments to start getting paid",
       icon: "credit-card" as const,
       done: !!isStripeConnected,
       onPress: () => navigation.navigate("StripeConnect"),
@@ -888,7 +888,15 @@ export default function ProviderHomeScreen() {
   const gettingStartedSteps = allGettingStartedSteps.filter(
     (s) => !s.done && !dismissedChecklistSteps.includes(s.key),
   );
-  const showGettingStarted = !isLoading && gettingStartedSteps.length > 0;
+  const completedStepsCount = allGettingStartedSteps.filter((s) => s.done).length;
+  const dismissedChecklistCard = useOnboardingStore((s) => s.dismissedChecklistCard);
+  const dismissChecklistCard = useOnboardingStore((s) => s.dismissChecklistCard);
+  const showGettingStarted =
+    !isLoading && gettingStartedSteps.length > 0 && !dismissedChecklistCard;
+  // Once the provider has made real progress (more than one step done),
+  // collapse the full checklist into a single dismissible summary row so it
+  // doesn't dominate the dashboard.
+  const showCollapsedChecklist = showGettingStarted && completedStepsCount > 1;
 
   // Loading — trying to recover the provider profile from API
   if (!providerId && profileLoading) {
@@ -1085,8 +1093,71 @@ export default function ProviderHomeScreen() {
           )}
         </Animated.View>
 
-        {visibleFeedCards.length > 0 ? (
+        {inProgressJobs.length > 0 ? (
           <Animated.View entering={FadeInDown.delay(220).duration(400)}>
+            <SectionHeader title="In Progress" />
+            {inProgressJobs.map((job) => (
+              <JobCard
+                key={job.id}
+                job={formatJobForCard(job)}
+                onPress={() => navigation.navigate("ProviderJobDetail", { jobId: job.id })}
+                testID={`job-${job.id}`}
+              />
+            ))}
+          </Animated.View>
+        ) : null}
+
+        <Animated.View
+          entering={FadeInDown.delay(inProgressJobs.length > 0 ? 260 : 230).duration(400)}
+        >
+          <SectionHeader
+            title="Upcoming Jobs"
+            actionLabel="See All"
+            onAction={() => navigation.navigate("ScheduleTab")}
+          />
+        </Animated.View>
+
+        {isLoading ? (
+          <Animated.View entering={FadeInDown.delay(280).duration(400)}>
+            <GlassCard style={styles.emptyCard}>
+              <ActivityIndicator size="small" color={Colors.accent} />
+            </GlassCard>
+          </Animated.View>
+        ) : upcomingJobs.length > 0 ? (
+          upcomingJobs.map((job, index) => (
+            <Animated.View
+              key={job.id}
+              entering={FadeInDown.delay((inProgressJobs.length > 0 ? 300 : 260) + index * 100).duration(400)}
+            >
+              <JobCard
+                job={formatJobForCard(job)}
+                onPress={() => navigation.navigate("ProviderJobDetail", { jobId: job.id })}
+                testID={`job-${job.id}`}
+              />
+            </Animated.View>
+          ))
+        ) : (
+          <Animated.View entering={FadeInDown.delay(280).duration(400)}>
+            <GlassCard style={styles.emptyCard}>
+              <Feather name="calendar" size={32} color={theme.textSecondary} style={{ marginBottom: Spacing.sm }} />
+              <ThemedText style={[styles.emptyText, { color: theme.textSecondary }]}>
+                No upcoming jobs scheduled
+              </ThemedText>
+              <Pressable
+                style={[styles.addJobButton, { backgroundColor: Colors.accentLight }]}
+                onPress={() => navigation.navigate("AddJob")}
+              >
+                <Feather name="plus" size={16} color={Colors.accent} />
+                <ThemedText style={[styles.addJobText, { color: Colors.accent }]}>
+                  Add a Job
+                </ThemedText>
+              </Pressable>
+            </GlassCard>
+          </Animated.View>
+        )}
+
+        {visibleFeedCards.length > 0 ? (
+          <Animated.View entering={FadeInDown.delay(320).duration(400)}>
             <ProviderFeed
               cards={visibleFeedCards}
               onDismiss={handleDismissFeedCard}
@@ -1095,7 +1166,7 @@ export default function ProviderHomeScreen() {
         ) : null}
 
         {newLeadCount > 0 ? (
-          <Animated.View entering={FadeInDown.delay(250).duration(400)}>
+          <Animated.View entering={FadeInDown.delay(340).duration(400)}>
             <Pressable
               testID="card-leads-banner"
               onPress={() => navigation.navigate("Leads")}
@@ -1156,86 +1227,105 @@ export default function ProviderHomeScreen() {
         ) : null}
 
         {showGettingStarted ? (
-          <Animated.View entering={FadeInDown.delay(300).duration(400)}>
-            <SectionHeader title="Getting Started" />
-            <GlassCard style={styles.checklistCard}>
-              {gettingStartedSteps.map((step, index) => (
-                <View
-                  key={step.key}
-                  style={[
-                    styles.checklistRow,
-                    index < gettingStartedSteps.length - 1 && {
-                      borderBottomWidth: StyleSheet.hairlineWidth,
-                      borderBottomColor: theme.separator,
-                    },
-                  ]}
+          <Animated.View entering={FadeInDown.delay(360).duration(400)}>
+            {showCollapsedChecklist ? (
+              <View style={styles.checklistCollapsedRow}>
+                <Pressable
+                  style={[styles.checklistCollapsedMain, { backgroundColor: theme.cardBackground }]}
+                  onPress={gettingStartedSteps[0]?.onPress}
+                  testID="checklist-collapsed-summary"
                 >
-                  <Pressable
-                    style={styles.checklistRowMain}
-                    onPress={step.done ? undefined : step.onPress}
-                    testID={`checklist-${step.key}`}
-                  >
+                  <View style={[styles.checklistIcon, { backgroundColor: Colors.accentLight }]}>
+                    <Feather name="check-circle" size={16} color={Colors.accent} />
+                  </View>
+                  <View style={styles.checklistText}>
+                    <ThemedText style={styles.checklistLabel}>Finish setting up</ThemedText>
+                    <ThemedText style={[styles.checklistSubtitle, { color: theme.textSecondary }]}>
+                      {gettingStartedSteps.length} {gettingStartedSteps.length === 1 ? "step" : "steps"} left
+                    </ThemedText>
+                  </View>
+                  <Feather name="chevron-right" size={16} color={theme.textTertiary} />
+                </Pressable>
+                <Pressable
+                  onPress={dismissChecklistCard}
+                  style={styles.checklistDismiss}
+                  hitSlop={10}
+                  testID="checklist-dismiss-card"
+                  accessibilityRole="button"
+                  accessibilityLabel="Dismiss getting started"
+                >
+                  <Feather name="x" size={14} color={theme.textTertiary} />
+                </Pressable>
+              </View>
+            ) : (
+              <>
+                <SectionHeader title="Getting Started" />
+                <GlassCard style={styles.checklistCard}>
+                  {gettingStartedSteps.map((step, index) => (
                     <View
+                      key={step.key}
                       style={[
-                        styles.checklistIcon,
-                        { backgroundColor: step.done ? Colors.accentLight : theme.backgroundSecondary },
+                        styles.checklistRow,
+                        index < gettingStartedSteps.length - 1 && {
+                          borderBottomWidth: StyleSheet.hairlineWidth,
+                          borderBottomColor: theme.separator,
+                        },
                       ]}
                     >
-                      <Feather
-                        name={step.done ? "check" : step.icon}
-                        size={16}
-                        color={step.done ? Colors.accent : theme.textSecondary}
-                      />
-                    </View>
-                    <View style={styles.checklistText}>
-                      <ThemedText
-                        style={[styles.checklistLabel, step.done && { color: theme.textSecondary }]}
+                      <Pressable
+                        style={styles.checklistRowMain}
+                        onPress={step.done ? undefined : step.onPress}
+                        testID={`checklist-${step.key}`}
                       >
-                        {step.label}
-                      </ThemedText>
-                      <ThemedText style={[styles.checklistSubtitle, { color: theme.textSecondary }]}>
-                        {step.subtitle}
-                      </ThemedText>
+                        <View
+                          style={[
+                            styles.checklistIcon,
+                            { backgroundColor: step.done ? Colors.accentLight : theme.backgroundSecondary },
+                          ]}
+                        >
+                          <Feather
+                            name={step.done ? "check" : step.icon}
+                            size={16}
+                            color={step.done ? Colors.accent : theme.textSecondary}
+                          />
+                        </View>
+                        <View style={styles.checklistText}>
+                          <ThemedText
+                            style={[styles.checklistLabel, step.done && { color: theme.textSecondary }]}
+                          >
+                            {step.label}
+                          </ThemedText>
+                          <ThemedText style={[styles.checklistSubtitle, { color: theme.textSecondary }]}>
+                            {step.subtitle}
+                          </ThemedText>
+                        </View>
+                        {step.done ? (
+                          <ThemedText style={[styles.doneLabel, { color: Colors.accent }]}>Done</ThemedText>
+                        ) : (
+                          <Feather name="chevron-right" size={16} color={theme.textTertiary} />
+                        )}
+                      </Pressable>
+                      {!step.done ? (
+                        <Pressable
+                          onPress={() => dismissChecklistStep(step.key)}
+                          style={styles.checklistDismiss}
+                          hitSlop={10}
+                          testID={`checklist-dismiss-${step.key}`}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Dismiss ${step.label}`}
+                        >
+                          <Feather name="x" size={14} color={theme.textTertiary} />
+                        </Pressable>
+                      ) : null}
                     </View>
-                    {step.done ? (
-                      <ThemedText style={[styles.doneLabel, { color: Colors.accent }]}>Done</ThemedText>
-                    ) : (
-                      <Feather name="chevron-right" size={16} color={theme.textTertiary} />
-                    )}
-                  </Pressable>
-                  {!step.done ? (
-                    <Pressable
-                      onPress={() => dismissChecklistStep(step.key)}
-                      style={styles.checklistDismiss}
-                      hitSlop={10}
-                      testID={`checklist-dismiss-${step.key}`}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Dismiss ${step.label}`}
-                    >
-                      <Feather name="x" size={14} color={theme.textTertiary} />
-                    </Pressable>
-                  ) : null}
-                </View>
-              ))}
-            </GlassCard>
+                  ))}
+                </GlassCard>
+              </>
+            )}
           </Animated.View>
         ) : null}
 
-        {inProgressJobs.length > 0 ? (
-          <Animated.View entering={FadeInDown.delay(400).duration(400)}>
-            <SectionHeader title="In Progress" />
-            {inProgressJobs.map((job) => (
-              <JobCard
-                key={job.id}
-                job={formatJobForCard(job)}
-                onPress={() => navigation.navigate("ProviderJobDetail", { jobId: job.id })}
-                testID={`job-${job.id}`}
-              />
-            ))}
-          </Animated.View>
-        ) : null}
-
-        <Animated.View entering={FadeInDown.delay(inProgressJobs.length > 0 ? 450 : 350).duration(400)}>
+        <Animated.View entering={FadeInDown.delay(400).duration(400)}>
           <SectionHeader title="Business Insights" />
           {insightsLoading ? (
             <View>
@@ -1395,54 +1485,6 @@ export default function ProviderHomeScreen() {
           </Animated.View>
         ) : null}
 
-        <Animated.View
-          entering={FadeInDown.delay(inProgressJobs.length > 0 ? 500 : 400).duration(400)}
-        >
-          <SectionHeader
-            title="Upcoming Jobs"
-            actionLabel="See All"
-            onAction={() => navigation.navigate("ScheduleTab")}
-          />
-        </Animated.View>
-
-        {isLoading ? (
-          <Animated.View entering={FadeInDown.delay(500).duration(400)}>
-            <GlassCard style={styles.emptyCard}>
-              <ActivityIndicator size="small" color={Colors.accent} />
-            </GlassCard>
-          </Animated.View>
-        ) : upcomingJobs.length > 0 ? (
-          upcomingJobs.map((job, index) => (
-            <Animated.View
-              key={job.id}
-              entering={FadeInDown.delay((inProgressJobs.length > 0 ? 600 : 500) + index * 100).duration(400)}
-            >
-              <JobCard
-                job={formatJobForCard(job)}
-                onPress={() => navigation.navigate("ProviderJobDetail", { jobId: job.id })}
-                testID={`job-${job.id}`}
-              />
-            </Animated.View>
-          ))
-        ) : (
-          <Animated.View entering={FadeInDown.delay(500).duration(400)}>
-            <GlassCard style={styles.emptyCard}>
-              <Feather name="calendar" size={32} color={theme.textSecondary} style={{ marginBottom: Spacing.sm }} />
-              <ThemedText style={[styles.emptyText, { color: theme.textSecondary }]}>
-                No upcoming jobs scheduled
-              </ThemedText>
-              <Pressable
-                style={[styles.addJobButton, { backgroundColor: Colors.accentLight }]}
-                onPress={() => navigation.navigate("ScheduleTab")}
-              >
-                <Feather name="plus" size={16} color={Colors.accent} />
-                <ThemedText style={[styles.addJobText, { color: Colors.accent }]}>
-                  Add a Job
-                </ThemedText>
-              </Pressable>
-            </GlassCard>
-          </Animated.View>
-        )}
       </ScrollView>
     </ThemedView>
   );
@@ -1711,6 +1753,21 @@ const styles = StyleSheet.create({
   checklistCard: {
     padding: 0,
     overflow: "hidden",
+  },
+  checklistCollapsedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: BorderRadius.md,
+    overflow: "hidden",
+  },
+  checklistCollapsedMain: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingLeft: Spacing.md,
+    paddingVertical: Spacing.md,
+    gap: Spacing.sm,
+    borderRadius: BorderRadius.md,
   },
   checklistRow: {
     flexDirection: "row",

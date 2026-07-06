@@ -760,7 +760,7 @@ function Step5Payments({ navigation }: { navigation: Props["navigation"] }) {
               style={{ marginTop: Spacing.xl }}
               testID="button-connect-stripe"
             >
-              Connect Stripe
+              Set Up Payments
             </PrimaryButton>
           </>
         ) : (

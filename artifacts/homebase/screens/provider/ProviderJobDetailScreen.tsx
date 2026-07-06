@@ -831,16 +831,16 @@ export default function ProviderJobDetailScreen() {
     // one-offs, keep the original two-button confirm.
     if (job?.seriesId) {
       Alert.alert(
-        "Cancel Recurring Job",
-        "Cancel just this occurrence, or the entire recurring series?",
+        "Cancel Repeating Job",
+        "Cancel just this visit, or all future repeats?",
         [
           { text: "Nevermind", style: "cancel" },
           {
-            text: "This Occurrence",
+            text: "This Visit",
             onPress: () => updateJobMutation.mutate("cancelled"),
           },
           {
-            text: "Entire Series",
+            text: "Cancel All Repeats",
             style: "destructive",
             onPress: () => cancelSeriesMutation.mutate(),
           },

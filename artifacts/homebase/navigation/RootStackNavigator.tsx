@@ -652,7 +652,7 @@ export default function RootStackNavigator() {
         name="SeriesDetail"
         component={SeriesDetailScreen}
         options={{
-          headerTitle: "Recurring Series",
+          headerTitle: "Repeating Job",
         }}
       />
       <Stack.Screen

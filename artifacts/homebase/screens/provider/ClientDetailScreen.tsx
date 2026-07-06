@@ -33,7 +33,7 @@ interface ProviderMessageRecord {
   createdAt: string;
 }
 
-type TabType = "overview" | "jobs" | "invoices" | "estimates" | "notes" | "property" | "home" | "messages";
+type TabType = "overview" | "activity" | "messages" | "notes";
 
 interface ClientRecord {
   id: string;
@@ -324,7 +324,7 @@ export default function ClientDetailScreen() {
     }[];
   }>({
     queryKey: ["/api/clients", clientId, "estimates"],
-    enabled: !!clientId && activeTab === "estimates",
+    enabled: !!clientId && activeTab === "activity",
     queryFn: async () => {
       const url = new URL(`/api/clients/${clientId}/estimates`, getApiUrl());
       const res = await fetch(url.toString(), {
@@ -484,7 +484,18 @@ export default function ClientDetailScreen() {
           No recent activity
         </ThemedText>
       )}
+
+      {renderProperty()}
+      {renderHome()}
     </Animated.View>
+  );
+
+  const renderActivity = () => (
+    <>
+      {renderJobs()}
+      {renderInvoices()}
+      {renderEstimates()}
+    </>
   );
 
   const renderJobs = () => (
@@ -1185,50 +1196,26 @@ export default function ClientDetailScreen() {
             onPress={() => setActiveTab("overview")}
           />
           <TabButton
-            label="Jobs"
-            active={activeTab === "jobs"}
-            onPress={() => setActiveTab("jobs")}
-          />
-          <TabButton
-            label="Invoices"
-            active={activeTab === "invoices"}
-            onPress={() => setActiveTab("invoices")}
-          />
-          <TabButton
-            label="Estimates"
-            active={activeTab === "estimates"}
-            onPress={() => setActiveTab("estimates")}
-          />
-          <TabButton
-            label="Notes"
-            active={activeTab === "notes"}
-            onPress={() => setActiveTab("notes")}
-          />
-          <TabButton
-            label="Property"
-            active={activeTab === "property"}
-            onPress={() => setActiveTab("property")}
-          />
-          <TabButton
-            label="Home"
-            active={activeTab === "home"}
-            onPress={() => setActiveTab("home")}
+            label="Activity"
+            active={activeTab === "activity"}
+            onPress={() => setActiveTab("activity")}
           />
           <TabButton
             label="Messages"
             active={activeTab === "messages"}
             onPress={() => setActiveTab("messages")}
           />
+          <TabButton
+            label="Notes"
+            active={activeTab === "notes"}
+            onPress={() => setActiveTab("notes")}
+          />
         </ScrollView>
 
         <View style={styles.tabContent}>
           {activeTab === "overview" && renderOverview()}
-          {activeTab === "jobs" && renderJobs()}
-          {activeTab === "invoices" && renderInvoices()}
-          {activeTab === "estimates" && renderEstimates()}
+          {activeTab === "activity" && renderActivity()}
           {activeTab === "notes" && renderNotes()}
-          {activeTab === "property" && renderProperty()}
-          {activeTab === "home" && renderHome()}
           {activeTab === "messages" && renderMessages()}
         </View>
       </ScrollView>

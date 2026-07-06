@@ -102,8 +102,7 @@ interface InvoiceRecord {
   autopayFailureReason?: string | null;
 }
 
-type SectionTab = "overview" | "transactions" | "more";
-type TransactionTab = "invoices" | "payouts";
+type SectionTab = "overview" | "invoices" | "payouts";
 
 type UnifiedTxRow =
   | { kind: "invoice"; date: string; data: InvoiceRecord }
@@ -1171,8 +1170,7 @@ const howModalStyles = StyleSheet.create({
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 type FinancialsTabParams = {
-  initialSection?: "overview" | "transactions" | "more";
-  initialTransactionTab?: "invoices" | "payouts";
+  initialSection?: "overview" | "invoices" | "payouts";
   initialTransactionFilter?: "all" | "invoices" | "estimates";
 };
 type FinancialsRouteParamList = { FinancialsTab: FinancialsTabParams | undefined };
@@ -1190,7 +1188,6 @@ export default function FinancialsScreen() {
 
   const providerId = providerProfile?.id ?? "";
   const [sectionTab, setSectionTab] = useState<SectionTab>(route.params?.initialSection ?? "overview");
-  const [transactionTab, setTransactionTab] = useState<TransactionTab>(route.params?.initialTransactionTab ?? "invoices");
   const [transactionFilter, setTransactionFilter] = useState<"all" | "invoices" | "estimates">(
     route.params?.initialTransactionFilter ?? "all",
   );
@@ -1199,12 +1196,10 @@ export default function FinancialsScreen() {
     const p = route.params;
     if (!p) return;
     if (p.initialSection) setSectionTab(p.initialSection);
-    if (p.initialTransactionTab) setTransactionTab(p.initialTransactionTab);
     if (p.initialTransactionFilter) setTransactionFilter(p.initialTransactionFilter);
-    if (p.initialSection || p.initialTransactionTab || p.initialTransactionFilter) {
+    if (p.initialSection || p.initialTransactionFilter) {
       navigation.setParams({
         initialSection: undefined,
-        initialTransactionTab: undefined,
         initialTransactionFilter: undefined,
       } as Partial<NonNullable<typeof p>>);
     }
@@ -1518,8 +1513,7 @@ export default function FinancialsScreen() {
   const handleNextPayoutPress = useCallback(() => {
     Haptics.selectionAsync();
     const targetId = nextPayoutData?.nextPayout?.id ?? null;
-    setSectionTab("transactions");
-    setTransactionTab("payouts");
+    setSectionTab("payouts");
     setPendingScrollPayoutId(targetId);
   }, [nextPayoutData?.nextPayout?.id]);
 
@@ -1537,7 +1531,7 @@ export default function FinancialsScreen() {
   const stripePayoutsLoaded = !payoutsLoading;
   useEffect(() => {
     if (!pendingScrollPayoutId) return;
-    if (sectionTab !== "transactions" || transactionTab !== "payouts") return;
+    if (sectionTab !== "payouts") return;
     if (!stripePayoutsLoaded) return;
     const list = payoutsData?.payouts ?? [];
     const idx = list.findIndex((p) => p.id === pendingScrollPayoutId);
@@ -1565,18 +1559,12 @@ export default function FinancialsScreen() {
   }, [
     pendingScrollPayoutId,
     sectionTab,
-    transactionTab,
     stripePayoutsLoaded,
     payoutsData?.payouts,
   ]);
 
   const SECTION_TABS: { key: SectionTab; label: string }[] = [
     { key: "overview", label: "Overview" },
-    { key: "transactions", label: "Transactions" },
-    { key: "more", label: "More" },
-  ];
-
-  const TRANS_TABS: { key: TransactionTab; label: string }[] = [
     { key: "invoices", label: "Invoices" },
     { key: "payouts", label: "Payouts" },
   ];
@@ -2115,8 +2103,7 @@ export default function FinancialsScreen() {
         <Pressable
           onPress={() => {
             Haptics.selectionAsync();
-            setSectionTab("transactions");
-            setTransactionTab("invoices");
+            setSectionTab("invoices");
             setTransactionFilter("estimates");
           }}
           testID="tile-estimates-summary"
@@ -2163,16 +2150,11 @@ export default function FinancialsScreen() {
           </GlassCard>
         </Pressable>
       </Animated.View>
-    </View>
-  );
 
-  // ── More tab content (Stripe settings) ─────────────────────────────────────
-
-  const MoreContent = () => (
-    <View>
-      <Animated.View entering={FadeInDown.delay(60).duration(400)}>
-        <ThemedText style={[styles.moreSectionTitle, { color: theme.textSecondary }]}>
-          Payments
+      {/* Get Paid — payment setup card, folded in from the removed "More" tab */}
+      <Animated.View entering={FadeInDown.delay(180).duration(400)}>
+        <ThemedText style={[styles.moreSectionTitle, { color: theme.textSecondary, marginTop: Spacing.md }]}>
+          Get Paid
         </ThemedText>
         <Pressable
           style={[
@@ -2201,14 +2183,14 @@ export default function FinancialsScreen() {
               {isConnected
                 ? "Payouts Enabled"
                 : stripeStatus?.onboardingStatus === "pending"
-                ? "Stripe Setup Pending"
-                : "Set Up Stripe Payouts"}
+                ? "Payment Setup Pending"
+                : "Set Up Payments"}
             </ThemedText>
             <ThemedText style={[styles.stripeSettingsSub, { color: theme.textSecondary }]}>
               {isConnected
-                ? "Manage your Stripe account and payout settings"
+                ? "Manage your payment setup and payouts"
                 : stripeStatus?.onboardingStatus === "pending"
-                ? "Complete onboarding to enable payouts"
+                ? "Complete setup to enable payouts"
                 : "Connect your bank account to get paid"}
             </ThemedText>
           </View>
@@ -2218,86 +2200,59 @@ export default function FinancialsScreen() {
     </View>
   );
 
-  // ── Transactions header content ─────────────────────────────────────────────
+  // ── Invoices / Payouts header content ───────────────────────────────────────
 
   const TransactionsHeader = () => (
     <View>
-      <Animated.View entering={FadeInDown.delay(60).duration(400)}>
-        <View style={styles.transHeaderRow}>
-          <View style={[styles.transTabBar, { borderColor: theme.separator }]}>
-            {TRANS_TABS.map((tab) => {
-              const isActive = transactionTab === tab.key;
-              return (
-                <Pressable
-                  key={tab.key}
-                  style={[
-                    styles.transTabItem,
-                    isActive && { backgroundColor: theme.cardBackground },
-                  ]}
-                  onPress={() => { Haptics.selectionAsync(); setTransactionTab(tab.key); }}
-                  testID={`trans-tab-${tab.key}`}
-                >
-                  <ThemedText
-                    style={[
-                      styles.transTabLabel,
-                      isActive
-                        ? { color: Colors.accent, fontWeight: "700" }
-                        : { color: theme.textSecondary },
-                    ]}
-                  >
-                    {tab.label}
-                  </ThemedText>
-                </Pressable>
-              );
-            })}
-          </View>
+      {sectionTab === "invoices" ? (
+        <>
+          <Animated.View entering={FadeInDown.delay(60).duration(400)}>
+            <View style={styles.transHeaderRow}>
+              <View style={{ flex: 1 }} />
+              <Pressable
+                style={[styles.addInvoiceBtn, { backgroundColor: Colors.accentLight }]}
+                onPress={() => { Haptics.selectionAsync(); navigation.navigate("AddInvoice"); }}
+                testID="button-add-invoice"
+              >
+                <Feather name="plus" size={15} color={Colors.accent} />
+              </Pressable>
+            </View>
+          </Animated.View>
 
-          {transactionTab === "invoices" ? (
-            <Pressable
-              style={[styles.addInvoiceBtn, { backgroundColor: Colors.accentLight }]}
-              onPress={() => { Haptics.selectionAsync(); navigation.navigate("AddInvoice"); }}
-              testID="button-add-invoice"
-            >
-              <Feather name="plus" size={15} color={Colors.accent} />
-            </Pressable>
-          ) : null}
-        </View>
-      </Animated.View>
-
-      {transactionTab === "invoices" ? (
-        <Animated.View entering={FadeInDown.delay(70).duration(400)}>
-          <View style={[styles.transTabBar, { borderColor: theme.separator, marginTop: Spacing.sm }]}>
-            {(["all", "invoices", "estimates"] as const).map((key) => {
-              const label = key === "all" ? "All" : key === "invoices" ? "Invoices" : "Estimates";
-              const isActive = transactionFilter === key;
-              return (
-                <Pressable
-                  key={key}
-                  style={[
-                    styles.transTabItem,
-                    isActive && { backgroundColor: theme.cardBackground },
-                  ]}
-                  onPress={() => { Haptics.selectionAsync(); setTransactionFilter(key); }}
-                  testID={`trans-filter-${key}`}
-                >
-                  <ThemedText
+          <Animated.View entering={FadeInDown.delay(70).duration(400)}>
+            <View style={[styles.transTabBar, { borderColor: theme.separator, marginTop: Spacing.sm }]}>
+              {(["all", "invoices", "estimates"] as const).map((key) => {
+                const label = key === "all" ? "All" : key === "invoices" ? "Invoices" : "Estimates";
+                const isActive = transactionFilter === key;
+                return (
+                  <Pressable
+                    key={key}
                     style={[
-                      styles.transTabLabel,
-                      isActive
-                        ? { color: Colors.accent, fontWeight: "700" }
-                        : { color: theme.textSecondary },
+                      styles.transTabItem,
+                      isActive && { backgroundColor: theme.cardBackground },
                     ]}
+                    onPress={() => { Haptics.selectionAsync(); setTransactionFilter(key); }}
+                    testID={`trans-filter-${key}`}
                   >
-                    {label}
-                  </ThemedText>
-                </Pressable>
-              );
-            })}
-          </View>
-        </Animated.View>
+                    <ThemedText
+                      style={[
+                        styles.transTabLabel,
+                        isActive
+                          ? { color: Colors.accent, fontWeight: "700" }
+                          : { color: theme.textSecondary },
+                      ]}
+                    >
+                      {label}
+                    </ThemedText>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Animated.View>
+        </>
       ) : null}
 
-      {transactionTab === "payouts" && !isConnected ? (
+      {sectionTab === "payouts" && !isConnected ? (
         <Animated.View entering={FadeInDown.delay(80).duration(400)}>
           <Pressable
             style={[styles.stripeNudge, { backgroundColor: theme.cardBackground, borderColor: Colors.accent + "30" }]}
@@ -2308,7 +2263,7 @@ export default function FinancialsScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <ThemedText style={[styles.stripeNudgeTitle, { color: Colors.accent }]}>
-                Connect Stripe to see payouts
+                Set up payments to see your payouts
               </ThemedText>
               <ThemedText style={[styles.stripeNudgeSub, { color: theme.textSecondary }]}>
                 Set up your bank account to receive payments
@@ -2326,13 +2281,7 @@ export default function FinancialsScreen() {
   const SharedHeader = () => (
     <View style={styles.sharedHeaderWrapper}>
       <SectionTabBar />
-      {sectionTab === "overview" ? (
-        <OverviewContent />
-      ) : sectionTab === "more" ? (
-        <MoreContent />
-      ) : (
-        <TransactionsHeader />
-      )}
+      {sectionTab === "overview" ? <OverviewContent /> : <TransactionsHeader />}
     </View>
   );
 
@@ -2355,7 +2304,7 @@ export default function FinancialsScreen() {
     />
   );
 
-  if (sectionTab === "overview" || sectionTab === "more") {
+  if (sectionTab === "overview") {
     return (
       <ThemedView style={styles.container}>
         {howModal}
@@ -2382,8 +2331,8 @@ export default function FinancialsScreen() {
     );
   }
 
-  // Transactions — Invoices tab (unified: invoices + estimates)
-  if (transactionTab === "invoices") {
+  // Invoices tab (unified: invoices + estimates)
+  if (sectionTab === "invoices") {
     const IncomeEmpty = () => {
       if (invoicesLoading || estimatesLoading) {
         return <View>{SKELETON_KEYS.map((k) => <SkeletonRow key={k} theme={theme} />)}</View>;
@@ -2434,7 +2383,7 @@ export default function FinancialsScreen() {
     );
   }
 
-  // Transactions — Payouts tab
+  // Payouts tab
   const PayoutsEmpty = () => {
     if (payoutsLoading) {
       return <View>{SKELETON_KEYS.map((k) => <SkeletonRow key={k} theme={theme} />)}</View>;
