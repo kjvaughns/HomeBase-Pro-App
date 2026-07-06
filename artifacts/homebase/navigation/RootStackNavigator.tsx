@@ -63,7 +63,6 @@ import LeadsScreen from "@/screens/provider/LeadsScreen";
 import ReviewsScreen from "@/screens/provider/ReviewsScreen";
 import ProviderResourcesScreen from "@/screens/provider/ProviderResourcesScreen";
 import ProviderAIAssistantScreen from "@/screens/provider/ProviderAIAssistantScreen";
-import VoiceQuickCaptureScreen from "@/screens/provider/VoiceQuickCaptureScreen";
 import StripeConnectScreen from "@/screens/provider/StripeConnectScreen";
 import SubscriptionScreen from "@/screens/provider/SubscriptionScreen";
 import AdminPartnersScreen from "@/screens/provider/AdminPartnersScreen";
@@ -196,7 +195,6 @@ export type RootStackParamList = {
   Reviews: undefined;
   ProviderResources: undefined;
   ProviderAIAssistant: undefined;
-  VoiceQuickCapture: undefined;
   StripeConnect: undefined;
   BusinessHub: { initialTab?: "profile" | "services" | "booking" | "policies" | "reviews" } | undefined;
   BookingLink: undefined;
@@ -692,13 +690,6 @@ export default function RootStackNavigator() {
         component={ProviderAIAssistantScreen}
         options={{
           headerTitle: "Business Assistant",
-        }}
-      />
-      <Stack.Screen
-        name="VoiceQuickCapture"
-        component={VoiceQuickCaptureScreen}
-        options={{
-          headerTitle: "Voice Quick Capture",
         }}
       />
       <Stack.Screen

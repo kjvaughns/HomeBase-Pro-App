@@ -51,15 +51,6 @@ export default function ProviderFAB() {
 
   const actions: FABAction[] = [
     {
-      id: "voice",
-      label: "Voice Capture",
-      icon: "mic",
-      onPress: () => {
-        handleClose();
-        navigation.navigate("VoiceQuickCapture");
-      },
-    },
-    {
       id: "ai",
       label: "Ask AI",
       icon: "message-circle",

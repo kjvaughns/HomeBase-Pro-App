@@ -8,17 +8,29 @@ import {
   FlatList,
   Platform,
   ActivityIndicator,
+  Animated,
 } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { Feather } from "@expo/vector-icons";
 import * as Speech from "expo-speech";
+import * as Haptics from "expo-haptics";
+import {
+  useAudioRecorder,
+  useAudioRecorderState,
+  RecordingPresets,
+  AudioModule,
+  setAudioModeAsync,
+} from "expo-audio";
+import { File } from "expo-file-system";
 
 import { useTheme } from "@/hooks/useTheme";
 import { Colors, Spacing, BorderRadius, Typography, Shadows } from "@/constants/theme";
 import { useAuthStore } from "@/state/authStore";
 import { getApiUrl, apiRequest } from "@/lib/query-client";
+
+type VoiceCaptureState = "idle" | "recording" | "processing";
 
 interface Message {
   id: string;
@@ -60,8 +72,129 @@ export default function ProviderAIAssistantScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
+  // Voice capture (Task #518): dictate into the chat input via the same
+  // record -> transcribe pipeline that used to power the standalone
+  // Voice Quick Capture screen. We only use the transcript here, not the
+  // AI-parsed job draft.
+  const [voiceState, setVoiceState] = useState<VoiceCaptureState>("idle");
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(recorder);
+  const voiceStartedAtRef = useRef<number>(0);
+  const isRecordingRef = useRef(false);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
   // Cache business context so we don't re-fetch on every message send
   const cachedContextRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (voiceState === "recording") {
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.15,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      loop.start();
+      return () => loop.stop();
+    }
+    pulseAnim.setValue(1);
+  }, [voiceState, pulseAnim]);
+
+  // Ensure we never leave a dangling recording session if the user
+  // navigates away from the screen mid-recording.
+  useEffect(() => {
+    return () => {
+      if (isRecordingRef.current) {
+        recorder.stop().catch(() => {});
+        isRecordingRef.current = false;
+      }
+    };
+  }, [recorder]);
+
+  const startVoiceCapture = async () => {
+    try {
+      setVoiceError(null);
+      const permission = await AudioModule.requestRecordingPermissionsAsync();
+      if (!permission.granted) {
+        setVoiceError("Microphone permission is required to use voice input.");
+        return;
+      }
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+      });
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+      isRecordingRef.current = true;
+      voiceStartedAtRef.current = Date.now();
+      setVoiceState("recording");
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch (error) {
+      setVoiceError("Could not start recording. Please check microphone permissions.");
+      setVoiceState("idle");
+    }
+  };
+
+  const stopVoiceCapture = async () => {
+    try {
+      const elapsed = Date.now() - voiceStartedAtRef.current;
+      await recorder.stop();
+      isRecordingRef.current = false;
+
+      if (elapsed < 500) {
+        setVoiceError("Recording was too short. Please try again.");
+        setVoiceState("idle");
+        return;
+      }
+      const uri = recorder.uri;
+      if (!uri) {
+        setVoiceError("No audio was captured. Please try again.");
+        setVoiceState("idle");
+        return;
+      }
+      if (!providerId) {
+        setVoiceError("Unable to transcribe: missing provider profile.");
+        setVoiceState("idle");
+        return;
+      }
+
+      setVoiceState("processing");
+      const file = new File(uri);
+      const base64Audio = await file.base64();
+      const response = await apiRequest(
+        "POST",
+        `/api/provider/${providerId}/voice-quick-capture`,
+        { audio: base64Audio },
+      );
+      const data = (await response.json()) as { transcript: string };
+      setInputText((prev) => {
+        const trimmedPrev = prev.trim();
+        return trimmedPrev ? `${trimmedPrev} ${data.transcript}` : data.transcript;
+      });
+      setVoiceState("idle");
+    } catch (error) {
+      isRecordingRef.current = false;
+      setVoiceError("Something went wrong while processing your recording. Please try again.");
+      setVoiceState("idle");
+    }
+  };
+
+  const handleMicPress = () => {
+    if (voiceState === "recording") {
+      stopVoiceCapture();
+    } else if (voiceState === "idle") {
+      startVoiceCapture();
+    }
+  };
 
   const getBusinessContext = async (): Promise<string> => {
     // Return cached context if available (avoids refetching on every message)
@@ -338,6 +471,33 @@ Provider Business Context:
           },
         ]}
       >
+        {voiceState === "recording" ? (
+          <View style={styles.voiceStatusRow}>
+            <View style={[styles.voiceDot, { backgroundColor: Colors.error }]} />
+            <Text style={[styles.voiceStatusText, { color: theme.textSecondary }]}>
+              Listening... {Math.floor(recorderState.durationMillis / 1000)}s
+            </Text>
+          </View>
+        ) : null}
+
+        {voiceState === "processing" ? (
+          <View style={styles.voiceStatusRow}>
+            <ActivityIndicator size="small" color={Colors.accent} />
+            <Text style={[styles.voiceStatusText, { color: theme.textSecondary }]}>
+              Transcribing...
+            </Text>
+          </View>
+        ) : null}
+
+        {voiceError ? (
+          <View style={styles.voiceStatusRow}>
+            <Feather name="alert-circle" size={14} color={Colors.error} />
+            <Text style={[styles.voiceStatusText, { color: Colors.error }]}>
+              {voiceError}
+            </Text>
+          </View>
+        ) : null}
+
         <View style={styles.inputRow}>
           <TextInput
             style={[
@@ -357,7 +517,46 @@ Provider Business Context:
             maxLength={1000}
             testID="chat-input"
           />
-          
+
+          <Pressable
+            onPress={handleMicPress}
+            disabled={voiceState === "processing"}
+            style={({ pressed }) => [
+              styles.micButton,
+              {
+                backgroundColor:
+                  voiceState === "recording"
+                    ? Colors.error
+                    : isDark
+                    ? theme.backgroundSecondary
+                    : theme.backgroundDefault,
+              },
+              pressed && { opacity: 0.7 },
+            ]}
+            testID="voice-input-button"
+          >
+            {voiceState === "processing" ? (
+              <ActivityIndicator
+                size="small"
+                color={isDark ? theme.text : theme.textSecondary}
+              />
+            ) : (
+              <Animated.View
+                style={
+                  voiceState === "recording"
+                    ? { transform: [{ scale: pulseAnim }] }
+                    : undefined
+                }
+              >
+                <Feather
+                  name={voiceState === "recording" ? "square" : "mic"}
+                  size={18}
+                  color={voiceState === "recording" ? "#FFFFFF" : theme.textSecondary}
+                />
+              </Animated.View>
+            )}
+          </Pressable>
+
           <Pressable
             onPress={() => sendMessage(inputText)}
             disabled={!inputText.trim() || isLoading}
@@ -434,6 +633,28 @@ const styles = StyleSheet.create({
     marginTop: Spacing.xs,
     alignSelf: "flex-end",
     padding: Spacing.xs,
+  },
+  voiceStatusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    paddingBottom: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
+  },
+  voiceDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  voiceStatusText: {
+    ...Typography.footnote,
+  },
+  micButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
   },
   emptyContainer: {
     alignItems: "center",
