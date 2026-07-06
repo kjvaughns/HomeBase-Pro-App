@@ -516,7 +516,7 @@ function InlineDateRangePicker({
     <View
       style={[
         inlinePickerStyles.container,
-        { backgroundColor: theme.backgroundSecondary, borderColor: theme.separator },
+        { backgroundColor: theme.cardBackground, borderColor: theme.separator },
       ]}
     >
       {/* Header row: selected range + close */}
@@ -1917,7 +1917,7 @@ export default function FinancialsScreen() {
 
       {/* Date range toggler */}
       <Animated.View entering={FadeInDown.delay(60).duration(400)}>
-        <View style={[styles.dateRangeBar, { backgroundColor: theme.backgroundSecondary }]}>
+        <View style={[styles.dateRangeBar, { backgroundColor: theme.cardBackground }]}>
           {DATE_RANGE_OPTIONS.map((opt) => {
             const isActive = dateRange === opt.key;
             return (

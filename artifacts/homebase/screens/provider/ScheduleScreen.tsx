@@ -1605,7 +1605,7 @@ export default function ScheduleScreen() {
               styles.offlineBanner,
               {
                 borderColor: theme.border,
-                backgroundColor: theme.backgroundSecondary,
+                backgroundColor: theme.cardBackground,
                 marginHorizontal: isRouteMode ? 0 : Spacing.lg,
                 marginBottom: Spacing.sm,
               },
@@ -1645,7 +1645,7 @@ export default function ScheduleScreen() {
                   paddingHorizontal: Spacing.lg,
                   paddingVertical: Spacing.sm,
                   borderRadius: BorderRadius.md,
-                  backgroundColor: theme.backgroundSecondary,
+                  backgroundColor: theme.cardBackground,
                   borderWidth: 1,
                   borderColor: theme.border,
                 }}
@@ -1740,7 +1740,7 @@ export default function ScheduleScreen() {
                           onPress={() => setDismissedBackfill(true)}
                           style={[
                             styles.backfillBtn,
-                            { backgroundColor: theme.backgroundSecondary },
+                            { backgroundColor: theme.cardBackground },
                           ]}
                         >
                           <ThemedText style={styles.backfillBtnText}>
@@ -1772,7 +1772,7 @@ export default function ScheduleScreen() {
                     <View
                       style={[
                         styles.offlineBanner,
-                        { borderColor: theme.border, backgroundColor: theme.backgroundSecondary },
+                        { borderColor: theme.border, backgroundColor: theme.cardBackground },
                       ]}
                       testID="banner-schedule-offline"
                     >
