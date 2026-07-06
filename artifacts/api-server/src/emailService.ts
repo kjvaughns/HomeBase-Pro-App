@@ -1211,6 +1211,7 @@ export async function sendJobStatusChangedEmail(data: {
   scheduledTime?: string;
   wasRescheduled?: boolean;
   notes?: string;
+  trackingUrl?: string;
 }): Promise<SendResult> {
   const formattedSlot = (() => {
     if (!data.scheduledDate) return undefined;
@@ -1325,15 +1326,21 @@ export async function sendJobStatusChangedEmail(data: {
       : "") +
     paragraph(closing);
 
+  // Task #486: for on_my_way, the CTA button points at the live tracking
+  // link (works without the app installed) instead of the generic homepage.
+  const ctaLabel =
+    data.newStatus === "on_my_way" && data.trackingUrl
+      ? "Track live location"
+      : "View in HomeBase";
+  const ctaUrl =
+    data.newStatus === "on_my_way" && data.trackingUrl
+      ? data.trackingUrl
+      : "https://homebaseproapp.com";
+
   return sendEmail(
     data.clientEmail,
     subject,
-    buildEmailBase(
-      headline,
-      body,
-      "View in HomeBase",
-      "https://homebaseproapp.com",
-    ),
+    buildEmailBase(headline, body, ctaLabel, ctaUrl),
   );
 }
 

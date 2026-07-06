@@ -1691,6 +1691,54 @@ export async function runBootMigrations(): Promise<void> {
          WHERE clock_out_at IS NULL`,
     );
 
+    // Task #486: live "On My Way" tracking sessions. One row per share
+    // session; created when a job transitions to on_my_way and ended on
+    // any other status change (or once expires_at passes, as a backstop
+    // if the provider never advances the job).
+    await runSql(
+      "job_tracking_sessions.table",
+      `CREATE TABLE IF NOT EXISTS job_tracking_sessions (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        job_id VARCHAR NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+        provider_id VARCHAR NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+        token VARCHAR NOT NULL UNIQUE,
+        status TEXT NOT NULL DEFAULT 'active',
+        last_lat DECIMAL(10, 7),
+        last_lng DECIMAL(10, 7),
+        last_location_at TIMESTAMP,
+        started_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        ended_at TIMESTAMP,
+        expires_at TIMESTAMP NOT NULL
+      )`,
+    );
+    await runSql(
+      "job_tracking_sessions.job_idx",
+      `CREATE INDEX IF NOT EXISTS job_tracking_sessions_job_idx
+         ON job_tracking_sessions (job_id)`,
+    );
+    await runSql(
+      "job_tracking_sessions.provider_idx",
+      `CREATE INDEX IF NOT EXISTS job_tracking_sessions_provider_idx
+         ON job_tracking_sessions (provider_id)`,
+    );
+    // Public token lookups are the hot path for the shareable link — token
+    // already has a UNIQUE constraint (which Postgres backs with an index),
+    // this just makes the intent explicit for anyone reading the schema.
+    await runSql(
+      "job_tracking_sessions.token_idx",
+      `CREATE INDEX IF NOT EXISTS job_tracking_sessions_token_idx
+         ON job_tracking_sessions (token)`,
+    );
+    // At most one active session per job — the app-level create/end logic
+    // already enforces this, but a partial unique index closes the race
+    // window if two status-change requests land concurrently.
+    await runSql(
+      "job_tracking_sessions.one_active_idx",
+      `CREATE UNIQUE INDEX IF NOT EXISTS job_tracking_sessions_one_active_idx
+         ON job_tracking_sessions (job_id)
+         WHERE status = 'active'`,
+    );
+
     verifications.push(
       ["providers.referral_code column",         `SELECT referral_code FROM providers LIMIT 0`],
       ["provider_referrals table",               `SELECT id FROM provider_referrals LIMIT 0`],
@@ -1704,6 +1752,8 @@ export async function runBootMigrations(): Promise<void> {
       ["jobs.assigned_crew_member_id",      `SELECT assigned_crew_member_id FROM jobs LIMIT 0`],
       ["estimates table",                   `SELECT id FROM estimates LIMIT 0`],
       ["estimate_line_items table",         `SELECT id FROM estimate_line_items LIMIT 0`],
+      // Task #486: live "On My Way" tracking sessions
+      ["job_tracking_sessions table",       `SELECT id FROM job_tracking_sessions LIMIT 0`],
       // Task #376: Admin Portal tables and columns
       ["support_tickets.priority column",          `SELECT priority FROM support_tickets LIMIT 0`],
       ["support_tickets.updated_at column",        `SELECT updated_at FROM support_tickets LIMIT 0`],

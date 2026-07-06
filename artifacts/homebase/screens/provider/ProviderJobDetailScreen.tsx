@@ -8,6 +8,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
+import * as Location from "expo-location";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { formatMoney, formatDate } from "@/lib/format";
@@ -462,6 +463,12 @@ export default function ProviderJobDetailScreen() {
   const [weatherHoldDate, setWeatherHoldDate] = useState<Date | null>(null);
   const [cancelSeriesSheetVisible, setCancelSeriesSheetVisible] = useState(false);
 
+  // Task #486: live "On My Way" tracking — shareable link + background
+  // location watch while the job is in the on_my_way state.
+  const [trackingUrl, setTrackingUrl] = useState<string | null>(null);
+  const [isSharingLocation, setIsSharingLocation] = useState(false);
+  const locationSubscriptionRef = useRef<Location.LocationSubscription | null>(null);
+
   const isOnline = useNetworkStore((s) => s.isOnline);
 
   const { data: jobData, isLoading } = useQuery<{ job: ApiJob }>({
@@ -665,6 +672,92 @@ export default function ProviderJobDetailScreen() {
       updateJobMutation.mutate(newDisplayStatus);
     }
   }, [job, updateJobMutation, completeJobMutation, blockOffline]);
+
+  // Task #486: while the job is "on_my_way", fetch the live tracking link
+  // and stream location updates to the server so the shared page can show
+  // a live map + ETA. Stops automatically (and ends server-side) once the
+  // status advances past on_my_way — the server also enforces a timeout,
+  // this just tears down the local watcher/UI in step with it.
+  useEffect(() => {
+    if (resolvedDisplayStatus !== "on_my_way" || !jobId || !isOnline) {
+      setTrackingUrl(null);
+      setIsSharingLocation(false);
+      locationSubscriptionRef.current?.remove();
+      locationSubscriptionRef.current = null;
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const url = new URL(`/api/jobs/${jobId}/tracking`, getApiUrl());
+        const res = await apiRequest("GET", url.toString());
+        const data = (await res.json()) as { active: boolean; trackingUrl?: string };
+        if (!cancelled && data.active && data.trackingUrl) {
+          setTrackingUrl(data.trackingUrl);
+        }
+      } catch {
+        // Best-effort — the share link is a bonus affordance, not required
+        // for the homeowner to receive the link (it also goes out via the
+        // status-changed push/email/SMS).
+      }
+    })();
+
+    (async () => {
+      try {
+        const { status, canAskAgain } = await Location.getForegroundPermissionsAsync();
+        let granted = status === Location.PermissionStatus.GRANTED;
+        if (!granted && canAskAgain) {
+          const req = await Location.requestForegroundPermissionsAsync();
+          granted = req.status === Location.PermissionStatus.GRANTED;
+        }
+        if (!granted || cancelled) return;
+
+        setIsSharingLocation(true);
+        const subscription = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.Balanced,
+            timeInterval: 15000,
+            distanceInterval: 50,
+          },
+          (pos) => {
+            const trackUrl = new URL(`/api/jobs/${jobId}/tracking/location`, getApiUrl());
+            apiRequest("POST", trackUrl.toString(), {
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+            }).catch(() => {
+              // transient network errors are fine — the next tick retries
+            });
+          },
+        );
+        if (cancelled) {
+          subscription.remove();
+          return;
+        }
+        locationSubscriptionRef.current = subscription;
+      } catch {
+        // permission/hardware failure — sharing simply won't happen; the
+        // provider can still share the link once it's fetched above.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      locationSubscriptionRef.current?.remove();
+      locationSubscriptionRef.current = null;
+      setIsSharingLocation(false);
+    };
+  }, [resolvedDisplayStatus, jobId, isOnline]);
+
+  const handleShareTrackingLink = useCallback(() => {
+    if (!trackingUrl) return;
+    Haptics.selectionAsync().catch(() => {});
+    Share.share({
+      message: `Track my live location and ETA: ${trackingUrl}`,
+      url: trackingUrl,
+    }).catch(() => {});
+  }, [trackingUrl]);
 
   const [rescheduleStep, setRescheduleStep] = useState<"closed" | "date" | "time">(
     "closed",
@@ -1631,6 +1724,29 @@ export default function ProviderJobDetailScreen() {
               </View>
             </Pressable>
           </>
+        ) : null}
+
+        {resolvedDisplayStatus === "on_my_way" ? (
+          <Pressable
+            style={[
+              styles.cancelButton,
+              { borderColor: Colors.accent, opacity: trackingUrl ? 1 : 0.5 },
+            ]}
+            onPress={handleShareTrackingLink}
+            disabled={!trackingUrl}
+            testID="button-share-tracking-link"
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Feather name="map-pin" size={16} color={Colors.accent} />
+              <ThemedText type="body" style={{ color: Colors.accent }}>
+                {trackingUrl
+                  ? isSharingLocation
+                    ? "Share live tracking link"
+                    : "Share tracking link"
+                  : "Preparing tracking link…"}
+              </ThemedText>
+            </View>
+          </Pressable>
         ) : null}
 
         {resolvedDisplayStatus === "weather_held" ? (

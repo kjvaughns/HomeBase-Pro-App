@@ -107,6 +107,9 @@ export interface DispatchPayload {
   newStatus?: string;
   scheduledDate?: string;
   notes?: string;
+  // Task #486: live "On My Way" tracking link, attached to job.status_changed
+  // when newStatus === 'on_my_way'.
+  trackingUrl?: string;
   rebookLink?: string;
   // Auth/onboarding fields
   onboardingUrl?: string;
@@ -566,7 +569,7 @@ async function _dispatch(event: NotificationEvent, payload: DispatchPayload): Pr
     }
 
     case 'job.status_changed': {
-      const { clientEmail, clientName, providerName, serviceName, newStatus, scheduledDate, scheduledTime, wasRescheduled, notes } = payload;
+      const { clientEmail, clientName, providerName, serviceName, newStatus, scheduledDate, scheduledTime, wasRescheduled, notes, trackingUrl } = payload;
       if (!providerName || !serviceName || !newStatus) {
         console.log('[notification] job.status_changed skipped — missing provider/service/status');
         break;
@@ -576,7 +579,7 @@ async function _dispatch(event: NotificationEvent, payload: DispatchPayload): Pr
       type PushCopy = { title: string; body: string };
       const pushCopy: Record<string, PushCopy> = {
         confirmed:   { title: 'Appointment confirmed', body: `${providerName} confirmed your ${serviceName} appointment.` },
-        on_my_way:   { title: `${providerName} is on the way`, body: `Your ${serviceName} provider is heading to you now.` },
+        on_my_way:   { title: `${providerName} is on the way`, body: trackingUrl ? `Your ${serviceName} provider is heading to you now. Track live: ${trackingUrl}` : `Your ${serviceName} provider is heading to you now.` },
         arrived:     { title: `${providerName} has arrived`, body: `Your provider just arrived for your ${serviceName} appointment.` },
         in_progress: { title: 'Work has started', body: `${providerName} has started your ${serviceName}.` },
         completed:   { title: 'Service complete', body: `${providerName} finished your ${serviceName}. Thank you!` },
@@ -604,7 +607,7 @@ async function _dispatch(event: NotificationEvent, payload: DispatchPayload): Pr
             relatedRecordId: payload.relatedRecordId,
           });
           try {
-            const result = await sendJobStatusChangedEmail({ clientEmail, clientName, providerName, serviceName, newStatus, scheduledDate, scheduledTime, wasRescheduled, notes });
+            const result = await sendJobStatusChangedEmail({ clientEmail, clientName, providerName, serviceName, newStatus, scheduledDate, scheduledTime, wasRescheduled, notes, trackingUrl });
             await updateDelivery(deliveryId, result.success ? 'sent' : 'failed', result.messageId, result.error);
             console.log(`[notification] job.status_changed(${newStatus}) email ${result.success ? 'sent' : 'failed'} to ${clientEmail}`);
           } catch (err: any) {

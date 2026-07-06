@@ -1060,6 +1060,64 @@ export const jobs = pgTable("jobs", {
   noShowFeePaymentIntentId: text("no_show_fee_payment_intent_id"),
 });
 
+// ─── Live "On My Way" tracking sessions (Task #486) ──────────────────────────
+// Time-boxed location-sharing session created when a provider marks a job
+// "on my way." Backs a public, token-based web link the homeowner can open
+// without the app to see the provider's live position and ETA. Ends when the
+// job advances past on_my_way (arrived/in_progress/etc.), is cancelled, or
+// expiresAt passes — whichever comes first.
+export const jobTrackingSessions = pgTable("job_tracking_sessions", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id")
+    .notNull()
+    .references(() => jobs.id, { onDelete: "cascade" }),
+  providerId: varchar("provider_id")
+    .notNull()
+    .references(() => providers.id, { onDelete: "cascade" }),
+  // Opaque, unguessable public token used in the shareable link. Not the
+  // primary key so we can rotate it independently of the row id if needed.
+  token: varchar("token").notNull().unique(),
+  status: text("status").notNull().default("active"), // 'active' | 'ended'
+  lastLat: decimal("last_lat", { precision: 10, scale: 7 }),
+  lastLng: decimal("last_lng", { precision: 10, scale: 7 }),
+  lastLocationAt: timestamp("last_location_at"),
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  endedAt: timestamp("ended_at"),
+  // Hard timeout backstop in case the provider never advances the job status
+  // (app killed, forgot to update, etc.) so a stale link doesn't stay "live"
+  // forever.
+  expiresAt: timestamp("expires_at").notNull(),
+});
+
+export const jobTrackingSessionsRelations = relations(
+  jobTrackingSessions,
+  ({ one }) => ({
+    job: one(jobs, {
+      fields: [jobTrackingSessions.jobId],
+      references: [jobs.id],
+    }),
+    provider: one(providers, {
+      fields: [jobTrackingSessions.providerId],
+      references: [providers.id],
+    }),
+  }),
+);
+
+export const insertJobTrackingSessionSchema = createInsertSchema(
+  jobTrackingSessions,
+).omit({
+  id: true,
+  startedAt: true,
+  endedAt: true,
+});
+
+export type JobTrackingSession = typeof jobTrackingSessions.$inferSelect;
+export type InsertJobTrackingSession = z.infer<
+  typeof insertJobTrackingSessionSchema
+>;
+
 export const jobsRelations = relations(jobs, ({ one, many }) => ({
   provider: one(providers, {
     fields: [jobs.providerId],

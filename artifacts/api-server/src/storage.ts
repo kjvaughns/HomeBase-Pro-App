@@ -61,6 +61,9 @@ import {
   type SupportTicket,
   type SupportTicketMessage,
   type AdminBroadcast,
+  jobTrackingSessions,
+  type JobTrackingSession,
+  type InsertJobTrackingSession,
 } from "@workspace/db";
 import { db, pool } from "./db";
 import { eq, and, or, desc, asc, sql, gte, lte, ilike, inArray, lt, SQL } from "drizzle-orm";
@@ -102,6 +105,12 @@ export interface IStorage {
 
   getNotificationPreferences(userId: string): Promise<NotificationPreference | undefined>;
   upsertNotificationPreferences(userId: string, data: Partial<NotificationPreference>): Promise<NotificationPreference>;
+
+  createJobTrackingSession(data: InsertJobTrackingSession): Promise<JobTrackingSession>;
+  getJobTrackingSessionByToken(token: string): Promise<JobTrackingSession | undefined>;
+  getActiveJobTrackingSession(jobId: string): Promise<JobTrackingSession | undefined>;
+  updateJobTrackingSessionLocation(id: string, lat: number, lng: number): Promise<JobTrackingSession | undefined>;
+  endActiveJobTrackingSessions(jobId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1121,6 +1130,44 @@ export class DatabaseStorage implements IStorage {
       .values({ userId, ...data })
       .returning();
     return created;
+  }
+
+  // ─── Live "On My Way" tracking sessions (Task #486) ───────────────────────
+
+  async createJobTrackingSession(data: InsertJobTrackingSession): Promise<JobTrackingSession> {
+    const [session] = await db.insert(jobTrackingSessions).values(data).returning();
+    return session;
+  }
+
+  async getJobTrackingSessionByToken(token: string): Promise<JobTrackingSession | undefined> {
+    const [session] = await db.select().from(jobTrackingSessions).where(eq(jobTrackingSessions.token, token));
+    return session || undefined;
+  }
+
+  async getActiveJobTrackingSession(jobId: string): Promise<JobTrackingSession | undefined> {
+    const [session] = await db
+      .select()
+      .from(jobTrackingSessions)
+      .where(and(eq(jobTrackingSessions.jobId, jobId), eq(jobTrackingSessions.status, "active")))
+      .orderBy(desc(jobTrackingSessions.startedAt))
+      .limit(1);
+    return session || undefined;
+  }
+
+  async updateJobTrackingSessionLocation(id: string, lat: number, lng: number): Promise<JobTrackingSession | undefined> {
+    const [session] = await db
+      .update(jobTrackingSessions)
+      .set({ lastLat: String(lat), lastLng: String(lng), lastLocationAt: new Date() })
+      .where(eq(jobTrackingSessions.id, id))
+      .returning();
+    return session || undefined;
+  }
+
+  async endActiveJobTrackingSessions(jobId: string): Promise<void> {
+    await db
+      .update(jobTrackingSessions)
+      .set({ status: "ended", endedAt: new Date() })
+      .where(and(eq(jobTrackingSessions.jobId, jobId), eq(jobTrackingSessions.status, "active")));
   }
 
   // ─── Admin Storage Helpers ────────────────────────────────────────────────

@@ -80,6 +80,7 @@ import {
   enrichPropertyData,
   buildHouseFaxContext,
 } from "../housefaxService";
+import { buildTrackingPageHtml } from "../trackingPage";
 import {
   updateHomeWithChangeLog,
   getHomeFieldChanges,
@@ -10757,11 +10758,59 @@ Respond with JSON only:
     },
   );
 
+  // Task #486: how long a live "On My Way" tracking session stays active
+  // if the job status never advances (safety timeout).
+  const TRACKING_SESSION_TIMEOUT_MS = 3 * 60 * 60 * 1000; // 3 hours
+
+  function getPublicBaseUrl(): string {
+    return process.env.REPLIT_DEV_DOMAIN
+      ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+      : "https://homebaseproapp.com";
+  }
+
+  // Task #486: manage the lifecycle of live-location tracking sessions
+  // alongside job status changes. Called from every status-changing code
+  // path via dispatchJobStatusEmail so it can't be missed by a new route.
+  // Returns the shareable tracking URL when a new session is started.
+  async function syncJobTrackingSession(
+    job: Job,
+    newStatus: string,
+  ): Promise<string | undefined> {
+    try {
+      if (newStatus === "on_my_way") {
+        const existingSession = await storage.getActiveJobTrackingSession(
+          job.id,
+        );
+        if (existingSession) {
+          return `${getPublicBaseUrl()}/api/track/${existingSession.token}/page`;
+        }
+        const token = (require("crypto").randomBytes(16) as Buffer).toString(
+          "hex",
+        );
+        const session = await storage.createJobTrackingSession({
+          jobId: job.id,
+          providerId: job.providerId,
+          token,
+          status: "active",
+          expiresAt: new Date(Date.now() + TRACKING_SESSION_TIMEOUT_MS),
+        });
+        return `${getPublicBaseUrl()}/api/track/${session.token}/page`;
+      }
+      // Any other status transition ends live sharing for this job.
+      await storage.endActiveJobTrackingSessions(job.id);
+      return undefined;
+    } catch (e) {
+      console.error("[tracking] syncJobTrackingSession error:", e);
+      return undefined;
+    }
+  }
+
   async function dispatchJobStatusEmail(
     job: Job,
     newStatus: string,
     extra?: { wasRescheduled?: boolean },
   ): Promise<void> {
+    const trackingUrl = await syncJobTrackingSession(job, newStatus);
     if (!job.clientId || !job.providerId) return;
     const [client] = await db
       .select()
@@ -10789,6 +10838,7 @@ Respond with JSON only:
       scheduledTime: job.scheduledTime ?? undefined,
       notes: job.notes ?? undefined,
       wasRescheduled: extra?.wasRescheduled,
+      trackingUrl,
       relatedRecordType: "job",
       relatedRecordId: job.id,
       recipientUserId: client.homeownerUserId ?? undefined,
@@ -12142,6 +12192,210 @@ Respond with JSON only:
         console.error("Start job error:", error);
         res.status(500).json({ error: "Failed to start job" });
       }
+    },
+  );
+
+  // --- Task #486: Live ETA "On My Way" tracking -----------------------
+
+  // Provider/crew fetch the current tracking session for a job so the app
+  // can show a "Share tracking link" affordance without waiting on the
+  // status-change notification.
+  app.get(
+    "/api/jobs/:id/tracking",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const gate = await requireCrewOrProviderForJob(req, req.params.id, res);
+        if (!gate) return;
+        const session = await storage.getActiveJobTrackingSession(
+          req.params.id,
+        );
+        if (!session) {
+          return res.json({ active: false });
+        }
+        res.json({
+          active: true,
+          trackingUrl: `${getPublicBaseUrl()}/api/track/${session.token}/page`,
+          expiresAt: session.expiresAt,
+        });
+      } catch (error) {
+        console.error("Get job tracking error:", error);
+        res.status(500).json({ error: "Failed to load tracking session" });
+      }
+    },
+  );
+
+  // Provider/crew post their current GPS location while "On My Way" so the
+  // public tracking page can render a live map + ETA. No-ops (200) if
+  // there's no active session (e.g. it already expired/ended) so the
+  // client's periodic location watcher doesn't need special-case handling.
+  app.post(
+    "/api/jobs/:id/tracking/location",
+    requireAuth,
+    async (req: Request<IdParams>, res: Response) => {
+      try {
+        const gate = await requireCrewOrProviderForJob(req, req.params.id, res);
+        if (!gate) return;
+        const { lat, lng } = req.body ?? {};
+        if (typeof lat !== "number" || typeof lng !== "number") {
+          return res.status(400).json({ error: "lat and lng are required numbers" });
+        }
+        const session = await storage.getActiveJobTrackingSession(
+          req.params.id,
+        );
+        if (!session) {
+          return res.json({ active: false });
+        }
+        if (session.expiresAt && session.expiresAt.getTime() < Date.now()) {
+          await storage.endActiveJobTrackingSessions(req.params.id);
+          return res.json({ active: false, expired: true });
+        }
+        await storage.updateJobTrackingSessionLocation(session.id, lat, lng);
+        res.json({ active: true });
+      } catch (error) {
+        console.error("Update tracking location error:", error);
+        res.status(500).json({ error: "Failed to update location" });
+      }
+    },
+  );
+
+  // Resolve the {lat,lng,address} of a job's destination for ETA math on
+  // the public tracking page. Mirrors the geocode-on-demand pattern used
+  // by routeOptimizationService.geocodeJobs, but for a single job.
+  async function resolveJobDestination(
+    job: Job,
+  ): Promise<{ lat: number; lng: number; address: string } | null> {
+    const address = job.address?.trim();
+    if (!address || address.length < 3) return null;
+    const g = await geocodeAddress(address);
+    if (!g) return null;
+    return { lat: g.latitude, lng: g.longitude, address: g.formattedAddress };
+  }
+
+  async function computeTrackingEta(
+    from: { lat: number; lng: number },
+    to: { lat: number; lng: number },
+  ): Promise<{ etaMinutes: number; distanceMiles: number; source: "google" | "haversine" }> {
+    const apiKey = process.env.GOOGLE_API_KEY;
+    if (apiKey) {
+      try {
+        const url = new URL(
+          "https://maps.googleapis.com/maps/api/distancematrix/json",
+        );
+        url.searchParams.set("origins", `${from.lat},${from.lng}`);
+        url.searchParams.set("destinations", `${to.lat},${to.lng}`);
+        url.searchParams.set("units", "imperial");
+        url.searchParams.set("key", apiKey);
+        const r = await fetch(url.toString());
+        const data = (await r.json()) as {
+          status?: string;
+          rows?: { elements?: { status?: string; distance?: { value: number }; duration?: { value: number } }[] }[];
+        };
+        const el = data.rows?.[0]?.elements?.[0];
+        if (data.status === "OK" && el?.status === "OK" && el.distance && el.duration) {
+          return {
+            distanceMiles: el.distance.value / 1609.344,
+            etaMinutes: el.duration.value / 60,
+            source: "google",
+          };
+        }
+      } catch (err) {
+        console.error("[tracking] Distance Matrix error:", err);
+      }
+    }
+    const FALLBACK_SPEED_MPH = 30;
+    const FALLBACK_DETOUR_FACTOR = 1.35;
+    const miles = haversineMiles(from.lat, from.lng, to.lat, to.lng) * FALLBACK_DETOUR_FACTOR;
+    return {
+      distanceMiles: miles,
+      etaMinutes: (miles / FALLBACK_SPEED_MPH) * 60,
+      source: "haversine",
+    };
+  }
+
+  // Public, unauthenticated JSON endpoint backing the tracking page. No
+  // app install or login required — the token itself is the credential
+  // (time-boxed + single-purpose, so this is an acceptable capability URL).
+  app.get(
+    "/api/track/:token",
+    async (req: Request<{ token: string }>, res: Response) => {
+      try {
+        const session = await storage.getJobTrackingSessionByToken(
+          req.params.token,
+        );
+        if (!session) {
+          return res.status(404).json({ error: "Tracking link not found" });
+        }
+        const isExpired =
+          session.status !== "active" ||
+          (session.expiresAt ? session.expiresAt.getTime() < Date.now() : false);
+        if (isExpired && session.status === "active") {
+          await storage.endActiveJobTrackingSessions(session.jobId);
+        }
+        const job = await storage.getJob(session.jobId);
+        if (!job) {
+          return res.status(404).json({ error: "Job not found" });
+        }
+        const [provider] = await db
+          .select({ businessName: providers.businessName })
+          .from(providers)
+          .where(eq(providers.id, session.providerId))
+          .catch(() => [null]);
+
+        const base = {
+          active: !isExpired,
+          providerName: provider?.businessName ?? "Your provider",
+          serviceName: job.title ?? "your appointment",
+          jobStatus: job.status,
+          destinationAddress: job.address ?? null,
+        };
+
+        if (isExpired) {
+          return res.json({ ...base, active: false });
+        }
+
+        if (session.lastLat == null || session.lastLng == null) {
+          return res.json({
+            ...base,
+            hasLocation: false,
+          });
+        }
+
+        const destination = await resolveJobDestination(job);
+        let eta: Awaited<ReturnType<typeof computeTrackingEta>> | null = null;
+        if (destination) {
+          eta = await computeTrackingEta(
+            { lat: session.lastLat, lng: session.lastLng },
+            destination,
+          );
+        }
+
+        res.json({
+          ...base,
+          hasLocation: true,
+          providerLat: session.lastLat,
+          providerLng: session.lastLng,
+          lastLocationAt: session.lastLocationAt,
+          destinationLat: destination?.lat ?? null,
+          destinationLng: destination?.lng ?? null,
+          etaMinutes: eta ? Math.round(eta.etaMinutes) : null,
+          distanceMiles: eta ? Math.round(eta.distanceMiles * 10) / 10 : null,
+        });
+      } catch (error) {
+        console.error("Get tracking session error:", error);
+        res.status(500).json({ error: "Failed to load tracking session" });
+      }
+    },
+  );
+
+  // Public HTML page: a lightweight Leaflet/OpenStreetMap view that polls
+  // the JSON endpoint above. No API key or app install required.
+  app.get(
+    "/api/track/:token/page",
+    async (req: Request<{ token: string }>, res: Response) => {
+      const token = req.params.token.replace(/[^a-zA-Z0-9]/g, "");
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.send(buildTrackingPageHtml(token));
     },
   );
 
